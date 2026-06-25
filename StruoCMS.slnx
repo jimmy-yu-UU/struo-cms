@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Struo.Api/Struo.Api.csproj" />
+    <Project Path="src/Struo.Application/Struo.Application.csproj" />
+    <Project Path="src/Struo.Domain/Struo.Domain.csproj" />
+    <Project Path="src/Struo.Infrastructure/Struo.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Struo.Tests/Struo.Tests.csproj" />
+  </Folder>
+</Solution>
