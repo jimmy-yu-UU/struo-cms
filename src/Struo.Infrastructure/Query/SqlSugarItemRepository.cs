@@ -10,72 +10,74 @@ namespace Struo.Infrastructure.Query;
 public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry registry) : IItemRepository
 {
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
-    private static readonly MethodInfo RunQueryDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(RunQuery),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int)])!;
+    // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
-    private static readonly MethodInfo GetByIdGenericDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(GetByIdGeneric),
+    private static readonly MethodInfo RunQueryAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(RunQueryAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object)])!;
+            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo CreateGenericDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(CreateGeneric),
+    private static readonly MethodInfo GetByIdGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(GetByIdGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object)])!;
 
-    private static readonly MethodInfo UpdateGenericDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(UpdateGeneric),
+    private static readonly MethodInfo CreateGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(CreateGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object)])!;
 
-    private static readonly MethodInfo DeleteGenericDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGeneric),
+    private static readonly MethodInfo UpdateGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(UpdateGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object)])!;
+            [typeof(object), typeof(CancellationToken)])!;
 
-    public Task<QueryResult> QueryAsync(string collection, QueryModel query,
+    private static readonly MethodInfo DeleteGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(object), typeof(CancellationToken)])!;
+
+    public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
         var conditionals = ConditionalModelTranslator.Translate(query.Filter, query.Search, searchableFields, d, db);
         var orderBy = BuildOrderBy(query.Sort, d);
-        var result = (QueryResult)RunQueryDef.MakeGenericMethod(d.EntityType)
-            .Invoke(this, [conditionals, orderBy, query.Limit, query.Offset])!;
-        return Task.FromResult(result);
+        var method = RunQueryAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<QueryResult>)method.Invoke(this, [conditionals, orderBy, query.Limit, query.Offset, ct])!;
     }
 
-    private QueryResult RunQuery<T>(List<IConditionalModel> conditionals, string? orderBy, int limit, int offset)
+    private async Task<QueryResult> RunQueryAsync<T>(
+        List<IConditionalModel> conditionals, string? orderBy, int limit, int offset, CancellationToken ct)
         where T : class, new()
     {
         var pageNumber = (offset / Math.Max(1, limit)) + 1;
-        var total = 0;
+        var total = new RefAsync<int>();
         var queryable = db.Queryable<T>().Where(conditionals);
         if (!string.IsNullOrWhiteSpace(orderBy)) queryable = queryable.OrderBy(orderBy);
-        var rows = queryable.ToPageList(pageNumber, limit, ref total);
-        return new QueryResult(rows.Cast<object>().ToList(), total);
+        var rows = await queryable.ToPageListAsync(pageNumber, limit, total, ct);
+        return new QueryResult(rows.Cast<object>().ToList(), total.Value);
     }
 
-    public Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default)
+    public async Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        return Task.FromResult(
-            (object?)GetByIdGenericDef.MakeGenericMethod(d.EntityType).Invoke(this, [ConvertId(id, d)]));
+        var method = GetByIdGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<object?>)method.Invoke(this, [ConvertId(id, d)])!;
     }
 
-    private object? GetByIdGeneric<T>(object id) where T : class, new() =>
-        db.Queryable<T>().InSingle(id);
+    private async Task<object?> GetByIdGenericAsync<T>(object id) where T : class, new() =>
+        await db.Queryable<T>().InSingleAsync(id);
 
-    public Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default)
+    public async Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        var created = CreateGenericDef.MakeGenericMethod(d.EntityType).Invoke(this, [entity])!;
-        return Task.FromResult(created);
+        var method = CreateGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<object>)method.Invoke(this, [entity])!;
     }
 
-    private object CreateGeneric<T>(object entity) where T : class, new() =>
-        db.Insertable((T)entity).ExecuteReturnEntity()!;
+    private async Task<object> CreateGenericAsync<T>(object entity) where T : class, new() =>
+        (await db.Insertable((T)entity).ExecuteReturnEntityAsync())!;
 
     public async Task<object?> UpdateAsync(string collection, string id, object entity,
         CancellationToken ct = default)
@@ -87,24 +89,28 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
         // Clone so the caller's object is never mutated.
         var clone = CloneEntity(entity, d.EntityType);
         d.EntityType.GetProperty(d.IdProperty)!.SetValue(clone, ConvertId(id, d));
-        UpdateGenericDef.MakeGenericMethod(d.EntityType).Invoke(this, [clone]);
+
+        var method = UpdateGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        await (Task)method.Invoke(this, [clone, ct])!;
         return await GetByIdAsync(collection, id, ct);
     }
 
-    private void UpdateGeneric<T>(object entity) where T : class, new() =>
-        db.Updateable((T)entity).ExecuteCommand();
+    private async Task UpdateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new() =>
+        await db.Updateable((T)entity).ExecuteCommandAsync(ct);
 
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
         var existing = await GetByIdAsync(collection, id, ct);
         if (existing is null) return false;
-        DeleteGenericDef.MakeGenericMethod(d.EntityType).Invoke(this, [ConvertId(id, d)]);
+
+        var method = DeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        await (Task)method.Invoke(this, [ConvertId(id, d), ct])!;
         return true;
     }
 
-    private void DeleteGeneric<T>(object id) where T : class, new() =>
-        db.Deleteable<T>().In(id).ExecuteCommand();
+    private async Task DeleteGenericAsync<T>(object id, CancellationToken ct) where T : class, new() =>
+        await db.Deleteable<T>().In(id).ExecuteCommandAsync(ct);
 
     private EntityDescriptor Descriptor(string collection) =>
         registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
@@ -132,7 +138,13 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
         }
     }
 
-    /// <summary>Shallow-clones an entity to avoid mutating the caller's object.</summary>
+    /// <summary>
+    /// Shallow-clones an entity by copying each public read/write property by value.
+    /// This is suitable for the project's value-typed DTO entities where all properties
+    /// hold primitives, strings, or value types. It is NOT safe for entities that hold
+    /// <see cref="IDisposable"/> references or mutable reference-shared state, because
+    /// both the original and the clone would share the same reference.
+    /// </summary>
     private static object CloneEntity(object entity, Type entityType)
     {
         var clone = Activator.CreateInstance(entityType)!;
