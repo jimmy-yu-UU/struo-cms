@@ -1,6 +1,6 @@
 // tests/Struo.Tests/Api/EndpointSmokeTests.cs
 using System.Net;
-using FluentAssertions;
+using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
 

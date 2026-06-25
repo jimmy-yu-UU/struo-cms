@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Persistence;
 using Xunit;
