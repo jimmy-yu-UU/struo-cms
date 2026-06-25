@@ -23,6 +23,14 @@ namespace Struo.Tests.Metadata
             public string Name { get; set; } = "";
         }
 
+        [CmsCollection("MalformedOptions")]
+        private sealed class MalformedOptions
+        {
+            [CmsField(Interface = FieldInterface.Select)]
+            [CmsOptions("noColonHere")]
+            public string Status { get; set; } = "";
+        }
+
         [Fact]
         public void Throws_on_duplicate_collection_name()
         {
@@ -43,6 +51,13 @@ namespace Struo.Tests.Metadata
         {
             var act = () => MetadataScanner.ScanTypes([typeof(BadOptions)]);
             act.Should().Throw<MetadataException>().WithMessage("*not an option type*");
+        }
+
+        [Fact]
+        public void Throws_when_cms_options_entry_is_malformed()
+        {
+            var act = () => MetadataScanner.ScanTypes([typeof(MalformedOptions)]);
+            act.Should().Throw<MetadataException>().WithMessage("*value:label*");
         }
     }
 }
