@@ -1,6 +1,14 @@
 @Struo.Api_HostAddress = http://localhost:5221
 
-GET {{Struo.Api_HostAddress}}/weatherforecast/
+### Ping (API surface smoke check)
+GET {{Struo.Api_HostAddress}}/api/ping
 Accept: application/json
 
-###
+### Liveness probe
+GET {{Struo.Api_HostAddress}}/health/live
+
+### Readiness probe (checks DB connectivity)
+GET {{Struo.Api_HostAddress}}/health/ready
+
+### API reference (Scalar, non-production only)
+GET {{Struo.Api_HostAddress}}/scalar
