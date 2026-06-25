@@ -32,10 +32,17 @@ try
     app.UseSerilogRequestLogging();
 
     app.MapControllers();
-    app.MapOpenApi();
-    app.MapScalarApiReference(options =>
-        options.WithTheme(ScalarTheme.Mars)
-               .WithDefaultHttpClient(ScalarTarget.JavaScript, ScalarClient.Axios));
+
+    // API schema + interactive explorer are exposed in non-production only.
+    // Production exposure would publish the full API surface unauthenticated;
+    // revisit once authn/authz lands (Phase 6) if prod docs are desired.
+    if (!app.Environment.IsProduction())
+    {
+        app.MapOpenApi();
+        app.MapScalarApiReference(options =>
+            options.WithTheme(ScalarTheme.Mars)
+                   .WithDefaultHttpClient(ScalarTarget.JavaScript, ScalarClient.Axios));
+    }
 
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
     app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
