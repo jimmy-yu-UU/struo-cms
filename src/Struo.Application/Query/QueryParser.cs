@@ -43,6 +43,8 @@ public static class QueryParser
 
     private static FilterNode ParseFilter(JsonElement obj)
     {
+        var nodes = new List<FilterNode>();
+
         foreach (var prop in obj.EnumerateObject())
         {
             if (prop.NameEquals("_and") || prop.NameEquals("_or"))
@@ -51,20 +53,32 @@ public static class QueryParser
                 if (prop.Value.ValueKind != JsonValueKind.Array)
                     throw new QueryException($"'{prop.Name}' must be an array.");
                 var children = prop.Value.EnumerateArray().Select(ParseFilter).ToList();
-                return new LogicalFilter(op, children);
+                nodes.Add(new LogicalFilter(op, children));
+                continue;
             }
 
             var field = prop.Name;
             if (prop.Value.ValueKind != JsonValueKind.Object)
                 throw new QueryException($"Filter for field '{field}' must be an object of operators.");
-            var inner = prop.Value.EnumerateObject().FirstOrDefault();
-            if (inner.Value.ValueKind == JsonValueKind.Undefined)
+
+            var hasOperator = false;
+            foreach (var inner in prop.Value.EnumerateObject())
+            {
+                if (!Operators.TryGetValue(inner.Name, out var qop))
+                    throw new QueryException($"Unknown operator '{inner.Name}'.");
+                nodes.Add(new ComparisonFilter(field, qop, ReadValue(inner.Value)));
+                hasOperator = true;
+            }
+            if (!hasOperator)
                 throw new QueryException($"Filter for field '{field}' has no operator.");
-            if (!Operators.TryGetValue(inner.Name, out var qop))
-                throw new QueryException($"Unknown operator '{inner.Name}'.");
-            return new ComparisonFilter(field, qop, ReadValue(inner.Value));
         }
-        throw new QueryException("Empty filter object.");
+
+        return nodes.Count switch
+        {
+            0 => throw new QueryException("Empty filter object."),
+            1 => nodes[0],
+            _ => new LogicalFilter(LogicalOperator.And, nodes)
+        };
     }
 
     private static object? ReadValue(JsonElement v) => v.ValueKind switch

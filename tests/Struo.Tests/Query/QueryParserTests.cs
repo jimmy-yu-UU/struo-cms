@@ -74,4 +74,51 @@ public class QueryParserTests
         var act = () => QueryParser.ParseEnvelope(json);
         act.Should().Throw<QueryException>();
     }
+
+    [Fact]
+    public void Envelope_multiple_top_level_fields_become_and()
+    {
+        var json = JsonDocument.Parse("""
+        { "filter": { "status": { "_eq": "published" }, "title": { "_contains": "x" } } }
+        """).RootElement;
+
+        var q = QueryParser.ParseEnvelope(json);
+        var logical = q.Filter.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Op.Should().Be(LogicalOperator.And);
+        logical.Children.Should().HaveCount(2);
+        logical.Children.Should().AllBeOfType<ComparisonFilter>();
+        logical.Children.Cast<ComparisonFilter>().Select(c => c.FieldPath)
+            .Should().BeEquivalentTo(["status", "title"]);
+    }
+
+    [Fact]
+    public void Envelope_multiple_operators_on_one_field_become_and()
+    {
+        var json = JsonDocument.Parse("""
+        { "filter": { "createdAt": { "_gt": 1, "_lt": 10 } } }
+        """).RootElement;
+
+        var q = QueryParser.ParseEnvelope(json);
+        var logical = q.Filter.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Op.Should().Be(LogicalOperator.And);
+        logical.Children.Should().HaveCount(2);
+        logical.Children.Should().AllBeOfType<ComparisonFilter>();
+        var cmps = logical.Children.Cast<ComparisonFilter>().ToList();
+        cmps.Should().AllSatisfy(c => c.FieldPath.Should().Be("createdAt"));
+        cmps.Select(c => c.Op).Should().BeEquivalentTo([QueryOperator.Gt, QueryOperator.Lt]);
+    }
+
+    [Fact]
+    public void Envelope_parses_or_group()
+    {
+        var json = JsonDocument.Parse("""
+        { "filter": { "_or": [ { "status": { "_eq": "a" } }, { "status": { "_eq": "b" } } ] } }
+        """).RootElement;
+
+        var q = QueryParser.ParseEnvelope(json);
+        var logical = q.Filter.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Op.Should().Be(LogicalOperator.Or);
+        logical.Children.Should().HaveCount(2);
+        logical.Children.Should().AllBeOfType<ComparisonFilter>();
+    }
 }
