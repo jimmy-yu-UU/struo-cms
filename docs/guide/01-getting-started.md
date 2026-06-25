@@ -59,7 +59,7 @@ For CI or container environments, supply the keys as environment variables (doub
 
 ```bash
 Database__DbType=PostgreSQL
-Database__ConnectionString="Host=db;Port=5432;Database=struo;Username=app;Password=secret"
+Database__ConnectionString="Host=db;Port=5432;Database=struo;Username=YOUR_USER;Password=YOUR_PASSWORD"
 ```
 
 ---
@@ -132,7 +132,7 @@ The test suite (`tests/Struo.Tests`) uses:
 - **FluentAssertions** for assertions
 - **SQLite temp file** as the database — a unique temporary file path is generated per test run via `Path.GetTempFileName()`, so tests are fully isolated and require no external services or Postgres instance
 
-All 16 tests should pass with 0 failures.
+All tests should pass with 0 failures.
 
 To run with verbose output:
 
