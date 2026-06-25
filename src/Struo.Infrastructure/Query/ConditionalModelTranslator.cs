@@ -54,7 +54,7 @@ public static class ConditionalModelTranslator
                 {
                     FieldName = Column(d, db, c.FieldPath),
                     ConditionalType = MapOperator(c.Op),
-                    FieldValue = ToFieldValue(c.Value)
+                    FieldValue = ToFieldValue(c.Op, c.Value)
                 };
 
             case LogicalFilter l:
@@ -62,8 +62,7 @@ public static class ConditionalModelTranslator
                 return new ConditionalCollections
                 {
                     ConditionalList = l.Children
-                        .Select(ch => new KeyValuePair<WhereType, ConditionalModel>(
-                            wt, (ConditionalModel)ToModel(ch, d, db)))
+                        .Select(ch => new KeyValuePair<WhereType, ConditionalModel>(wt, ToLeafModel(ch, d, db)))
                         .ToList()
                 };
 
@@ -72,19 +71,43 @@ public static class ConditionalModelTranslator
         }
     }
 
+    /// <summary>
+    /// Converts a child node to a <see cref="ConditionalModel"/>.
+    /// Nested <see cref="LogicalFilter"/> inside a <see cref="LogicalFilter"/> is not supported
+    /// in Phase 2 (SqlSugar's ConditionalCollections cannot be nested).
+    /// </summary>
+    private static ConditionalModel ToLeafModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
+    {
+        if (node is not ComparisonFilter)
+            throw new NotSupportedException(
+                $"Nested logical filters are not supported in Phase 2. Got: {node.GetType().Name}");
+
+        return (ConditionalModel)ToModel(node, d, db);
+    }
+
     private static string Column(EntityDescriptor d, ISqlSugarClient db, string field)
     {
-        var property = d.FieldToProperty.TryGetValue(field, out var p) ? p : field;
+        if (!d.FieldToProperty.TryGetValue(field, out var property))
+            throw new ArgumentException(
+                $"Unknown field path '{field}' for entity '{d.EntityType.Name}'.", nameof(field));
+
         return db.EntityMaintenance.GetDbColumnName(property, d.EntityType);
     }
 
-    private static string? ToFieldValue(object? value) => value switch
+    private static string? ToFieldValue(QueryOperator op, object? value)
     {
-        null => null,
-        System.Collections.IEnumerable list when value is not string =>
-            string.Join(",", list.Cast<object?>().Select(v => v?.ToString())),
-        _ => value.ToString()
-    };
+        // IsNullOrEmpty / IsNot do not use FieldValue; always pass null.
+        if (op is QueryOperator.Null or QueryOperator.NNull)
+            return null;
+
+        return value switch
+        {
+            null => null,
+            System.Collections.IEnumerable list when value is not string =>
+                string.Join(",", list.Cast<object?>().Select(v => v?.ToString())),
+            _ => value.ToString()
+        };
+    }
 
     private static ConditionalType MapOperator(QueryOperator op) => op switch
     {
