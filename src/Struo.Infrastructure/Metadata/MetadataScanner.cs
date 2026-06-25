@@ -52,13 +52,14 @@ public static class MetadataScanner
             .Select(g => new FieldGroupMetadata(g.Name, g.Label, g.Sort))
             .ToList();
 
+        var isAuditable = typeof(IAuditable).IsAssignableFrom(type);
         var fields = new List<(int order, FieldMetadata field)>();
         var order = 0;
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             order++;
             var fieldAttr = prop.GetCustomAttribute<CmsFieldAttribute>();
-            var isAudit = AuditFieldNames.Contains(prop.Name);
+            var isAudit = isAuditable && AuditFieldNames.Contains(prop.Name);
 
             if (fieldAttr is not null)
                 fields.Add((order, BuildField(prop, fieldAttr)));
