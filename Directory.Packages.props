@@ -3,7 +3,16 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Suppress transitive SQLitePCLRaw.lib.e_sqlite3 high-severity advisory pulled in by SqlSugarCore -->
+    <!--
+      ACCEPTED RISK (approved 2026-06-25). GHSA-2m69-gcr7-jv3q / CVE-2025-6965 (High, CVSS 7.2):
+      memory-corruption flaw inside SQLite, exploitable only via crafted/arbitrary SQL.
+      Pulled in transitively as SQLitePCLRaw.lib.e_sqlite3 2.1.11 by SqlSugarCore. No patched
+      NuGet release exists (needs SQLite >= 3.50.2; 2.1.11 is latest). The native engine loads
+      only when DbType=Sqlite, which here is test/dev-only (production = PostgreSQL/MySQL/etc.),
+      and there is no raw-SQL path (ORM + whitelist-validated DSL). Suppression is scoped to this
+      single advisory URL.
+      REMOVE THIS once SQLitePCLRaw ships a release bundling SQLite >= 3.50.2.
+    -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
   </ItemGroup>
   <ItemGroup>
