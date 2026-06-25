@@ -49,5 +49,7 @@ public class AuditAopTests
         after.CreatedBy.Should().Be("alice");           // unchanged
         after.UpdatedBy.Should().Be("bob");             // restamped
         after.CreatedAt.Should().BeCloseTo(original.CreatedAt, TimeSpan.FromSeconds(1));
+        after.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1)); // restamped
+        after.UpdatedAt.Should().BeOnOrAfter(original.UpdatedAt);
     }
 }
