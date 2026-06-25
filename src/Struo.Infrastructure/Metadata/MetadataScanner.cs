@@ -83,7 +83,7 @@ public static class MetadataScanner
             .Select(f => f.field)
             .ToList();
 
-        var name = Camel(type.Name);
+        var name = Camel(attr.Name);
         var defaultDisplay = attr.DefaultDisplayField is null ? null : Camel(attr.DefaultDisplayField);
         if (defaultDisplay is not null && ordered.All(f => f.Name != defaultDisplay))
             throw new MetadataException(
@@ -92,7 +92,7 @@ public static class MetadataScanner
         return new CollectionMetadata
         {
             Name = name,
-            Label = attr.Label,
+            Label = attr.Label ?? attr.Name,
             Icon = attr.Icon,
             Group = attr.Group,
             DefaultDisplayField = defaultDisplay,
