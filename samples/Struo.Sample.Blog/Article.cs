@@ -7,7 +7,7 @@ namespace Struo.Sample.Blog;
 public sealed class Article : IAuditable
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-    public int Id { get; set; }
+    public long Id { get; set; }
 
     public string Title { get; set; } = string.Empty;
 
