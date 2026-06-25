@@ -5,4 +5,8 @@
     <ProjectReference Include="..\Struo.Domain\Struo.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="SqlSugarCore" />
+  </ItemGroup>
+
 </Project>
