@@ -97,7 +97,7 @@ public static class ConditionalModelTranslator
 
     private static string? ToFieldValue(QueryOperator op, object? value)
     {
-        // IsNullOrEmpty / IsNot do not use FieldValue; always pass null.
+        // EqualNull (_null) / IsNot (_nnull) do not use FieldValue; always pass null.
         if (op is QueryOperator.Null or QueryOperator.NNull)
             return null;
 
@@ -123,7 +123,10 @@ public static class ConditionalModelTranslator
         QueryOperator.Lte        => ConditionalType.LessThanOrEqual,
         QueryOperator.Gt         => ConditionalType.GreaterThan,
         QueryOperator.Gte        => ConditionalType.GreaterThanOrEqual,
-        QueryOperator.Null       => ConditionalType.IsNullOrEmpty,
+        // Portable null checks. EqualNull renders pure "col IS NULL"; IsNot renders
+        // pure "col IS NOT NULL". IsNullOrEmpty would emit "OR col = ''", which throws
+        // a type error on PostgreSQL for non-text columns (bigint, timestamptz).
+        QueryOperator.Null       => ConditionalType.EqualNull,
         QueryOperator.NNull      => ConditionalType.IsNot,
         _ => throw new InvalidOperationException($"Unmapped operator: {op}")
     };

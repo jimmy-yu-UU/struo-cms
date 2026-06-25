@@ -22,7 +22,7 @@ public class ConditionalModelTranslatorTests
             new TestCurrentUserAccessor("system"));
         db.CodeFirst.InitTables<Article>();
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            { ["title"] = "Title", ["status"] = "Status" };
+            { ["title"] = "Title", ["status"] = "Status", ["publishedAt"] = "PublishedAt" };
         var d = new EntityDescriptor(typeof(Article), fieldToProp, "Id");
         return (db, d, file);
     }
@@ -99,4 +99,48 @@ public class ConditionalModelTranslatorTests
             cm.FieldValue.Should().Be("a,b");
         }
     }
+
+    [Fact]
+    public void Null_operator_generates_is_null_without_empty_string()
+    {
+        // _null must emit a portable "IS NULL" with no "= ''" comparand. IsNullOrEmpty
+        // would emit "OR col = ''", which throws a type error on PostgreSQL for the
+        // non-text PublishedAt (timestamptz) column.
+        var (db, d, file) = Setup();
+        using (file)
+        {
+            var list = ConditionalModelTranslator.Translate(
+                new ComparisonFilter("publishedAt", QueryOperator.Null, null), null, [], d, db);
+
+            // SqlSugar emits irregular internal whitespace (e.g. "  IS NOT  NULL"), so
+            // collapse runs of whitespace to single spaces before asserting on phrasing.
+            var sql = Normalize(db.Queryable<Article>().Where(list).ToSqlString());
+
+            sql.Should().ContainEquivalentOf("IS NULL");
+            sql.Should().NotContain("= ''");
+            sql.Should().NotContain("=''");
+        }
+    }
+
+    [Fact]
+    public void NotNull_operator_generates_is_not_null()
+    {
+        var (db, d, file) = Setup();
+        using (file)
+        {
+            var list = ConditionalModelTranslator.Translate(
+                new ComparisonFilter("publishedAt", QueryOperator.NNull, null), null, [], d, db);
+
+            var sql = Normalize(db.Queryable<Article>().Where(list).ToSqlString());
+
+            sql.Should().ContainEquivalentOf("IS NOT NULL");
+            sql.Should().NotContain("= ''");
+            sql.Should().NotContain("=''");
+        }
+    }
+
+    /// <summary>Collapses runs of whitespace to a single space so SQL-phrase assertions
+    /// are not defeated by SqlSugar's irregular internal spacing.</summary>
+    private static string Normalize(string sql) =>
+        System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ");
 }
