@@ -1,5 +1,4 @@
 // tests/Struo.Tests/Query/ItemServiceTests.cs
-#pragma warning disable CS0618 // AllowAllPermissionService is intentionally used in tests
 using AwesomeAssertions;
 using Struo.Application.Configuration;
 using Struo.Application.Query;
