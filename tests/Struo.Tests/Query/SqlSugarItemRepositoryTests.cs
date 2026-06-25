@@ -65,6 +65,8 @@ public class SqlSugarItemRepositoryTests : IDisposable
         var updated = (Article?)await _repo.UpdateAsync("article", created.Id.ToString(),
             new Article { Title = "New", Status = "published" });
         updated!.Title.Should().Be("New");
+        // Audit AOP must stamp UpdatedBy on the persisted row.
+        updated.UpdatedBy.Should().Be("tester");
 
         (await _repo.DeleteAsync("article", created.Id.ToString())).Should().BeTrue();
         (await _repo.GetByIdAsync("article", created.Id.ToString())).Should().BeNull();
