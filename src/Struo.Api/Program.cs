@@ -46,13 +46,19 @@ try
         try { await next(); }
         catch (Struo.Domain.Query.CollectionNotFoundException ex)
         {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            }
         }
         catch (Struo.Domain.Query.QueryException ex)
         {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            }
         }
     });
 
