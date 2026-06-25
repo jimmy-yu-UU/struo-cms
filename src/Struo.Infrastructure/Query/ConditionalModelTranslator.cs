@@ -79,8 +79,9 @@ public static class ConditionalModelTranslator
     private static ConditionalModel ToLeafModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
     {
         if (node is not ComparisonFilter)
-            throw new NotSupportedException(
-                $"Nested logical filters are not supported in Phase 2. Got: {node.GetType().Name}");
+            throw new InvalidOperationException(
+                $"Nested logical filter reached the translator for node type '{node.GetType().Name}'; " +
+                "this should have been rejected by QueryValidator before reaching this point.");
 
         return (ConditionalModel)ToModel(node, d, db);
     }

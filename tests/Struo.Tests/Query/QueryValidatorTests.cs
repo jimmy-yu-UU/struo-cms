@@ -92,20 +92,24 @@ public class QueryValidatorTests
     [Fact]
     public void Nested_conditions_exceeding_cap_throw()
     {
-        // Build groups of ComparisonFilters, each wrapped in a LogicalFilter(And, [...]),
-        // summing to MaxFilterConditions + 1 leaves total across nested levels.
-        var groupSize = Opts.MaxFilterConditions / 2 + 1;
-        var group1 = new LogicalFilter(LogicalOperator.And,
-            Enumerable.Range(0, groupSize)
-                .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
-                .ToList());
-        var group2 = new LogicalFilter(LogicalOperator.And,
-            Enumerable.Range(0, groupSize)
-                .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
-                .ToList());
-        var outer = new LogicalFilter(LogicalOperator.Or, [group1, group2]);
-        var q = new QueryModel(null, outer, [], 0, 0, null);
+        // A flat LogicalFilter with more than MaxFilterConditions leaf comparisons still throws.
+        var many = Enumerable.Range(0, Opts.MaxFilterConditions + 1)
+            .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
+            .ToList();
+        var q = new QueryModel(null, new LogicalFilter(LogicalOperator.And, many), [], 0, 0, null);
         var act = () => QueryValidator.Validate(q, Meta(), Opts);
         act.Should().Throw<QueryException>().WithMessage("*conditions*");
+    }
+
+    [Fact]
+    public void Nested_logical_groups_throw()
+    {
+        // A LogicalFilter whose child is another LogicalFilter (depth >= 2) is rejected as Phase-2 limitation.
+        var inner = new LogicalFilter(LogicalOperator.Or,
+            [new ComparisonFilter("title", QueryOperator.Eq, "x")]);
+        var outer = new LogicalFilter(LogicalOperator.And, [inner]);
+        var q = new QueryModel(null, outer, [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts);
+        act.Should().Throw<QueryException>().WithMessage("*Nested*");
     }
 }

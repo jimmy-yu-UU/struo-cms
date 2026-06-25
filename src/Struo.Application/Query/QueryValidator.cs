@@ -20,7 +20,7 @@ public static class QueryValidator
         }
 
         var conditionCount = 0;
-        void Walk(FilterNode? node)
+        void Walk(FilterNode? node, int logicalDepth)
         {
             switch (node)
             {
@@ -32,12 +32,16 @@ public static class QueryValidator
                     CheckField(c.FieldPath);
                     break;
                 case LogicalFilter l:
-                    foreach (var child in l.Children) Walk(child);
+                    if (logicalDepth >= 2)
+                        throw new QueryException(
+                            "Nested logical groups are not supported in Phase 2; " +
+                            "use a single level of _and/_or over field conditions.");
+                    foreach (var child in l.Children) Walk(child, logicalDepth + 1);
                     break;
             }
         }
 
-        Walk(q.Filter);
+        Walk(q.Filter, 1);
 
         foreach (var s in q.Sort) CheckField(s.Field);
         if (q.Fields is not null) foreach (var f in q.Fields) CheckField(f);
