@@ -67,4 +67,28 @@ public class ItemsEndpointTests(ApiFactory factory)
         var client = _factory.CreateClient();
         (await client.GetAsync("/api/items/nope")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Filter_by_id_returns_the_row()
+    {
+        var client = _factory.CreateClient();
+
+        var create = await client.PostAsJsonAsync("/api/items/article", new { title = "IdFilterTest", status = "draft" });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+
+        var resp = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}&fields=id,title");
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
+        data.GetArrayLength().Should().Be(1);
+        data[0].GetProperty("id").GetInt64().Should().Be(id);
+    }
+
+    [Fact]
+    public async Task Sort_by_id_descending_succeeds()
+    {
+        var client = _factory.CreateClient();
+        var resp = await client.GetAsync("/api/items/article?sort=-id&limit=2");
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }
