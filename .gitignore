@@ -1,0 +1,9 @@
+bin/
+obj/
+*.user
+appsettings.Development.json
+.vs/
+node_modules/
+dist/
+logs/
+*.log
