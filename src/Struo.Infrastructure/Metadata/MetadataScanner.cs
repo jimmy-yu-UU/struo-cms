@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
+using SqlSugar;
+using Struo.Application.Metadata;
 using Struo.Domain.Auditing;
 using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
@@ -42,6 +44,27 @@ public static class MetadataScanner
         }
 
         return collections;
+    }
+
+    public static IReadOnlyDictionary<string, EntityDescriptor> ScanDescriptors(IEnumerable<Type> types)
+    {
+        var map = new Dictionary<string, EntityDescriptor>(StringComparer.OrdinalIgnoreCase);
+        foreach (var type in types)
+        {
+            if (type.GetCustomAttribute<CmsCollectionAttribute>() is null) continue;
+
+            var collection = Camel(type.Name);
+            var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var idProperty = "Id";
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                fieldToProp[Camel(prop.Name)] = prop.Name;
+                if (prop.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
+                    idProperty = prop.Name;
+            }
+            map[collection] = new EntityDescriptor(type, fieldToProp, idProperty);
+        }
+        return map;
     }
 
     private static string Camel(string name) => JsonNamingPolicy.CamelCase.ConvertName(name);
