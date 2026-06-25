@@ -1,23 +1,61 @@
-var builder = WebApplication.CreateBuilder(args);
+// src/Struo.Api/Program.cs
+using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Scalar.AspNetCore;
+using Serilog;
+using SqlSugar;
+using Struo.Infrastructure.DependencyInjection;
+using Struo.Infrastructure.Health;
+using Struo.Infrastructure.Persistence;
+using Struo.Sample.Blog;
 
-// Add services to the container.
+Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger();
 
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+try
 {
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseSerilog((context, services, configuration) =>
+        configuration.ReadFrom.Configuration(context.Configuration).ReadFrom.Services(services));
+
+    builder.Services
+        .AddControllers()
+        .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+
+    builder.Services.AddOpenApi();
+    builder.Services.AddStruoInfrastructure(builder.Configuration);
+    builder.Services.AddHealthChecks()
+        .AddCheck<DbReadinessCheck>("database", tags: ["ready"]);
+
+    var app = builder.Build();
+
+    app.UseSerilogRequestLogging();
+
+    app.MapControllers();
     app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+        options.WithTheme(ScalarTheme.Mars)
+               .WithDefaultHttpClient(ScalarTarget.JavaScript, ScalarClient.Axios));
+
+    app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+
+    if (app.Environment.IsDevelopment())
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, typeof(Article));
+    }
+
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "StruoCMS host terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
 }
 
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
+public partial class Program;
