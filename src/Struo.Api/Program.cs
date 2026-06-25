@@ -32,6 +32,7 @@ try
     builder.Services.AddOpenApi();
     builder.Services.AddStruoInfrastructure(builder.Configuration);
     builder.Services.AddStruoMetadata(typeof(Article).Assembly);
+    builder.Services.AddStruoData(builder.Configuration);
     builder.Services.AddScoped<SchemaService>();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"]);
@@ -39,6 +40,21 @@ try
     var app = builder.Build();
 
     app.UseSerilogRequestLogging();
+
+    app.Use(async (context, next) =>
+    {
+        try { await next(); }
+        catch (Struo.Domain.Query.CollectionNotFoundException ex)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+        }
+        catch (Struo.Domain.Query.QueryException ex)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+        }
+    });
 
     app.MapControllers();
 

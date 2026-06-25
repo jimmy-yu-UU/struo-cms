@@ -15,6 +15,8 @@ public static class QueryValidator
         {
             if (path.Contains('.'))
                 throw new QueryException($"Relation path '{path}' is not supported until Phase 3.");
+            // "id" is always projected (PK); it is not in meta.Fields but is always valid.
+            if (string.Equals(path, "id", StringComparison.OrdinalIgnoreCase)) return;
             if (!known.Contains(path))
                 throw new QueryException($"Unknown field '{path}' on collection '{meta.Name}'.");
         }
