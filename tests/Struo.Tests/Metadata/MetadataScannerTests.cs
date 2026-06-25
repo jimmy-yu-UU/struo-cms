@@ -81,4 +81,20 @@ public class MetadataScannerTests
     {
         ArticleMeta().Fields.Single(f => f.Name == "title").Options.Should().BeNull();
     }
+
+    [Fact]
+    public void Does_not_emit_audit_fields_for_non_iauditable_types()
+    {
+        var fields = MetadataScanner.ScanTypes([typeof(NoAuditEntity)]).Single().Fields;
+        fields.Should().Contain(f => f.Name == "name");
+        fields.Should().NotContain(f => f.Name == "createdAt");
+    }
+
+    [Struo.Domain.Metadata.Attributes.CmsCollection("NoAudit")]
+    private sealed class NoAuditEntity
+    {
+        [Struo.Domain.Metadata.Attributes.CmsField(Interface = Struo.Domain.Metadata.Enums.FieldInterface.Text)]
+        public string Name { get; set; } = "";
+        public System.DateTime CreatedAt { get; set; }   // NOT IAuditable -> must be ignored
+    }
 }
