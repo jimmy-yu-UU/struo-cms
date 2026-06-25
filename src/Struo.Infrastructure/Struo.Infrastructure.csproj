@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Struo.Application\Struo.Application.csproj" />
+    <ProjectReference Include="..\Struo.Domain\Struo.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
