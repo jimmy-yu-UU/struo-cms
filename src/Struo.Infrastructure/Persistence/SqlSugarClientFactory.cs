@@ -8,12 +8,32 @@ public static class SqlSugarClientFactory
 {
     public static ISqlSugarClient Create(DatabaseOptions options, ICurrentUserAccessor currentUser)
     {
-        var client = new SqlSugarClient(new ConnectionConfig
+        var dbType = DbTypeMapper.Map(options.DbType);
+        var config = new ConnectionConfig
         {
             ConnectionString = options.ConnectionString,
-            DbType = DbTypeMapper.Map(options.DbType),
+            DbType = dbType,
             IsAutoCloseConnection = true
-        });
+        };
+
+        if (dbType == SqlSugar.DbType.Sqlite)
+        {
+            config.ConfigureExternalServices = new ConfigureExternalServices
+            {
+                EntityService = (property, column) =>
+                {
+                    // SQLite only auto-increments an INTEGER (rowid alias).
+                    // Rewrite identity PK columns so CodeFirst emits INTEGER
+                    // instead of BIGINT, keeping the entity field as long.
+                    if (column.IsPrimarykey && column.IsIdentity)
+                    {
+                        column.DataType = "INTEGER";
+                    }
+                }
+            };
+        }
+
+        var client = new SqlSugarClient(config);
 
         AuditAop.Register(client, currentUser);
         return client;
