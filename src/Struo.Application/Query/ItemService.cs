@@ -34,6 +34,7 @@ public sealed class ItemService(
     public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, CancellationToken ct = default)
     {
         var meta = Meta(collection);
+        if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
         var entity = await repository.GetByIdAsync(collection, id, ct);
         return entity is null ? null : Project(entity, meta, null);
     }

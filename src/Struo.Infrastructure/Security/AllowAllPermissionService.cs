@@ -3,10 +3,9 @@ using Struo.Application.Security;
 namespace Struo.Infrastructure.Security;
 
 /// <summary>
-/// Development/test scaffold that grants every permission unconditionally.
-/// DO NOT register in production — use a real <see cref="IPermissionService"/> implementation instead.
+/// Phase 2 allow-all permission policy (no gating). Replaced by real RBAC in Phase 6;
+/// not intended for production use.
 /// </summary>
-[Obsolete("Development scaffold only — do not register in production.")]
 public sealed class AllowAllPermissionService : IPermissionService
 {
     public bool CanRead(string collection) => true;
