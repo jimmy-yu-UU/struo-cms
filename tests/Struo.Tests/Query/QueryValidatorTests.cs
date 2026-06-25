@@ -72,4 +72,40 @@ public class QueryValidatorTests
         var act = () => QueryValidator.Validate(q, Meta(), Opts);
         act.Should().Throw<QueryException>().WithMessage("*conditions*");
     }
+
+    [Fact]
+    public void SearchableFields_returns_only_searchable()
+    {
+        var fields = QueryValidator.SearchableFields(Meta());
+        fields.Should().Contain("title");
+        fields.Should().NotContain("status");
+        fields.Should().NotContain("createdAt");
+    }
+
+    [Fact]
+    public void Negative_offset_is_clamped_to_zero()
+    {
+        var result = QueryValidator.Validate(new QueryModel(null, null, [], 0, -5, null), Meta(), Opts);
+        result.Offset.Should().Be(0);
+    }
+
+    [Fact]
+    public void Nested_conditions_exceeding_cap_throw()
+    {
+        // Build groups of ComparisonFilters, each wrapped in a LogicalFilter(And, [...]),
+        // summing to MaxFilterConditions + 1 leaves total across nested levels.
+        var groupSize = Opts.MaxFilterConditions / 2 + 1;
+        var group1 = new LogicalFilter(LogicalOperator.And,
+            Enumerable.Range(0, groupSize)
+                .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
+                .ToList());
+        var group2 = new LogicalFilter(LogicalOperator.And,
+            Enumerable.Range(0, groupSize)
+                .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
+                .ToList());
+        var outer = new LogicalFilter(LogicalOperator.Or, [group1, group2]);
+        var q = new QueryModel(null, outer, [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts);
+        act.Should().Throw<QueryException>().WithMessage("*conditions*");
+    }
 }
