@@ -6,7 +6,8 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-public class EndpointSmokeTests(ApiFactory factory) : IClassFixture<ApiFactory>
+[Collection("ApiIntegration")]
+public class EndpointSmokeTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
 

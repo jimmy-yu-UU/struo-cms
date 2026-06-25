@@ -1,9 +1,11 @@
 // src/Struo.Api/Program.cs
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
 using Serilog;
 using SqlSugar;
+using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
 using Struo.Infrastructure.Persistence;
@@ -20,10 +22,17 @@ try
 
     builder.Services
         .AddControllers()
-        .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+        .AddJsonOptions(o =>
+        {
+            o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            o.JsonSerializerOptions.Converters.Add(
+                new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        });
 
     builder.Services.AddOpenApi();
     builder.Services.AddStruoInfrastructure(builder.Configuration);
+    builder.Services.AddStruoMetadata(typeof(Article).Assembly);
+    builder.Services.AddScoped<SchemaService>();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"]);
 
@@ -51,7 +60,7 @@ try
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, typeof(Article));
+        DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, typeof(Article), typeof(Tag));
     }
 
     app.Run();
