@@ -32,10 +32,20 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
         ValidateLocale(locale);
+
+        // Compute the effective query locale: explicit locale ?? collection default ?? global default.
+        // Only meaningful when the collection has a translation sidecar.
+        var queryLocale = meta.Translation is not null
+            ? (locale ?? languages.DefaultCode())
+            : null;
+
         var validated = QueryValidator.Validate(raw, meta, options, graph, metadata);
-        validated = validated with { Filter = await relationFilter.RewriteAsync(collection, validated.Filter, ct) };
+        validated = validated with
+        {
+            Filter = await relationFilter.RewriteAsync(collection, validated.Filter, queryLocale, ct)
+        };
         var searchable = QueryValidator.SearchableFields(meta);
-        var result = await repository.QueryAsync(collection, validated, searchable, ct);
+        var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, ct);
 
         var entities = result.Rows;
         var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();

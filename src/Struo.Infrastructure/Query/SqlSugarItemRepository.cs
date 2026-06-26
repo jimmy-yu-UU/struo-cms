@@ -64,6 +64,11 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)])!;
 
+    private static readonly MethodInfo QueryTranslationParentIdsGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(QueryTranslationParentIdsGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(string), typeof(string), typeof(string), typeof(List<IConditionalModel>), typeof(CancellationToken)])!;
+
     private static readonly MethodInfo SyncTranslationsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SyncTranslationsGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -71,11 +76,81 @@ public sealed class SqlSugarItemRepository(
              typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)])!;
 
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
-        IReadOnlyList<string> searchableFields, CancellationToken ct = default)
+        IReadOnlyList<string> searchableFields, string? queryLocale = null, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        var conditionals = ConditionalModelTranslator.Translate(query.Filter, query.Search, searchableFields, d, db);
-        var orderBy = BuildOrderBy(query.Sort, d, collection);
+        var collMeta = metadata.GetCollection(collection);
+        var translatableFields = collMeta?.Translation?.Fields ?? [];
+
+        // Split searchable fields: non-translatable go into the normal LIKE OR group;
+        // translatable ones are resolved to parent id sets via the translation sidecar.
+        var nonTranslatableSearchable = searchableFields
+            .Where(f => !translatableFields.Any(t => string.Equals(t, f, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var conditionals = ConditionalModelTranslator.Translate(query.Filter, query.Search, nonTranslatableSearchable, d, db);
+
+        // Translatable search: union parent ids from each translatable searchable field at the query locale.
+        if (!string.IsNullOrWhiteSpace(query.Search) && queryLocale is not null)
+        {
+            var translatableSearchable = searchableFields
+                .Where(f => translatableFields.Any(t => string.Equals(t, f, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (translatableSearchable.Count > 0 && collMeta?.Translation is not null)
+            {
+                var tm = collMeta.Translation;
+                var allParentIds = new HashSet<string>();
+                foreach (var field in translatableSearchable)
+                {
+                    var fieldCondition = new ComparisonFilter(field, QueryOperator.Contains, query.Search);
+                    var parentIds = await QueryTranslationParentIdsAsync(
+                        tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty,
+                        queryLocale, fieldCondition, ct);
+                    foreach (var pid in parentIds)
+                        allParentIds.Add(pid?.ToString() ?? "");
+                }
+                allParentIds.Remove("");
+
+                if (allParentIds.Count > 0)
+                {
+                    // Combine with existing conditionals using OR (non-translatable OR translatable parent id match).
+                    var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
+                    var translationIdModel = new ConditionalModel
+                    {
+                        FieldName = idColumn,
+                        ConditionalType = SqlSugar.ConditionalType.In,
+                        FieldValue = string.Join(",", allParentIds)
+                    };
+
+                    if (nonTranslatableSearchable.Count > 0)
+                    {
+                        // Both non-translatable LIKE group and translatable id-IN need to be OR'd together.
+                        // The LIKE group is already the last element in conditionals as a ConditionalCollections.
+                        // Wrap them in an OR ConditionalCollections.
+                        var likeGroup = conditionals.Count > 0 ? conditionals[^1] : null;
+                        if (likeGroup is SqlSugar.ConditionalCollections likeCollection)
+                        {
+                            // Add the translatable id match as an OR entry in the existing collection.
+                            likeCollection.ConditionalList.Add(
+                                new KeyValuePair<SqlSugar.WhereType, SqlSugar.ConditionalModel>(
+                                    SqlSugar.WhereType.Or, translationIdModel));
+                        }
+                        else
+                        {
+                            conditionals.Add(translationIdModel);
+                        }
+                    }
+                    else
+                    {
+                        // No non-translatable searchable fields — just add the IN condition.
+                        conditionals.Add(translationIdModel);
+                    }
+                }
+            }
+        }
+
+        var orderBy = BuildOrderBy(query.Sort, d, collection, queryLocale);
         var method = RunQueryAsyncDef.MakeGenericMethod(d.EntityType);
         return await (Task<QueryResult>)method.Invoke(this, [conditionals, orderBy, query.Limit, query.Offset, ct])!;
     }
@@ -316,6 +391,79 @@ public sealed class SqlSugarItemRepository(
         return rows.Cast<object>().ToList();
     }
 
+    public async Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        string locale,
+        FilterNode fieldCondition,
+        CancellationToken ct = default)
+    {
+        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
+        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
+
+        // Build a fake EntityDescriptor for the translation type so ConditionalModelTranslator
+        // can map camelCase field names to DB columns.
+        var translationDescriptor = BuildTranslationDescriptor(translationType);
+
+        // Locale equality filter (AND'd with the field condition below).
+        var localeConditional = new ConditionalModel
+        {
+            FieldName = localeColumn,
+            ConditionalType = ConditionalType.Equal,
+            FieldValue = locale
+        };
+
+        // Field condition translated via the translation entity's column map.
+        var fieldConditionals = ConditionalModelTranslator.Translate(fieldCondition, null, [], translationDescriptor, db);
+
+        // Combine: locale AND field.  SqlSugar AND's consecutive IConditionalModel items.
+        var conditionals = new List<IConditionalModel> { localeConditional };
+        conditionals.AddRange(fieldConditionals);
+
+        var method = QueryTranslationParentIdsGenericAsyncDef.MakeGenericMethod(translationType);
+        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [fkColumn, fkProperty, localeColumn, locale, conditionals, ct])!;
+    }
+
+    private async Task<IReadOnlyList<object>> QueryTranslationParentIdsGenericAsync<T>(
+        string fkColumn, string fkProperty, string localeColumn, string locale,
+        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
+    {
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        var fkProp = typeof(T).GetProperty(fkProperty,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (fkProp is null) return [];
+        return rows
+            .Select(r => fkProp.GetValue(r))
+            .Where(v => v is not null)
+            .Distinct()
+            .ToList()!;
+    }
+
+    /// <summary>
+    /// Builds a minimal <see cref="EntityDescriptor"/> for a translation entity type so that
+    /// <see cref="ConditionalModelTranslator"/> can resolve camelCase field names to DB columns.
+    /// Only the <c>FieldToProperty</c> map and <c>IdProperty</c> are needed.
+    /// </summary>
+    private static EntityDescriptor BuildTranslationDescriptor(Type translationType)
+    {
+        // Build a camelCase -> CLR property name map for all public instance properties.
+        var map = translationType
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .ToDictionary(
+                p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..],
+                p => p.Name,
+                StringComparer.OrdinalIgnoreCase);
+
+        // Id property: first property decorated with IsPrimaryKey, fall back to "Id".
+        var idProp = translationType
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
+            ?.Name ?? "Id";
+
+        return new EntityDescriptor(translationType, map, idProp);
+    }
+
     public async Task SyncTranslationsAsync(
         Type translationType,
         string fkProperty,
@@ -467,18 +615,65 @@ public sealed class SqlSugarItemRepository(
         return clone;
     }
 
-    private string? BuildOrderBy(IReadOnlyList<SortField> sort, EntityDescriptor d, string collection)
+    private string? BuildOrderBy(IReadOnlyList<SortField> sort, EntityDescriptor d, string collection, string? queryLocale = null)
     {
         if (sort.Count == 0) return null;
+        var collMeta = metadata.GetCollection(collection);
+        var translatableFields = collMeta?.Translation?.Fields ?? [];
+
         var parts = sort.Select(s =>
         {
             if (RelationPath.IsRelationPath(s.Field))
                 return $"{RelationOrderExpr(collection, s.Field)} {(s.Descending ? "DESC" : "ASC")}";
+
+            // Translatable sort field: emit a locale-scoped correlated subquery.
+            if (queryLocale is not null
+                && translatableFields.Any(f => string.Equals(f, s.Field, StringComparison.OrdinalIgnoreCase))
+                && collMeta?.Translation is not null)
+            {
+                return $"{TranslatableOrderExpr(collection, s.Field, collMeta.Translation, queryLocale, d)} {(s.Descending ? "DESC" : "ASC")}";
+            }
+
             var prop = d.FieldToProperty.TryGetValue(s.Field, out var p) ? p : s.Field;
             var col = db.EntityMaintenance.GetDbColumnName(prop, d.EntityType);
             return $"{col} {(s.Descending ? "DESC" : "ASC")}";
         });
         return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Builds a locale-scoped correlated subquery ORDER BY expression for a translatable field:
+    /// <c>(SELECT t.{fieldCol} FROM {translationTable} t WHERE t.{fk} = {parentTable}.{id} AND t.{localeCol} = '{locale}')</c>
+    /// Mirrors the <see cref="RelationOrderExpr"/> form used for cross-relation sort.
+    /// </summary>
+    private string TranslatableOrderExpr(
+        string collection, string fieldName,
+        Domain.Metadata.Models.TranslationMetadata tm,
+        string queryLocale,
+        EntityDescriptor parentDesc)
+    {
+        var translationType = tm.TranslationEntityType;
+
+        // Translation table name and column names via EntityMaintenance (no raw SQL names hardcoded).
+        var translationTable = db.EntityMaintenance.GetTableName(translationType);
+        var fkCol = db.EntityMaintenance.GetDbColumnName(tm.ForeignKeyProperty, translationType);
+        var localeCol = db.EntityMaintenance.GetDbColumnName(tm.LocaleProperty, translationType);
+
+        // Resolve camelCase field name -> CLR property -> DB column on the translation entity.
+        var fieldClr = translationType
+            .GetProperty(fieldName, System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.Instance |
+                                    System.Reflection.BindingFlags.IgnoreCase)?.Name ?? fieldName;
+        var fieldCol = db.EntityMaintenance.GetDbColumnName(fieldClr, translationType);
+
+        // Parent table and its PK column.
+        var parentTable = db.EntityMaintenance.GetTableName(parentDesc.EntityType);
+        var parentIdCol = db.EntityMaintenance.GetDbColumnName(parentDesc.IdProperty, parentDesc.EntityType);
+
+        // Locale is validated upstream (IsEnabled check in ItemService.ValidateLocale). Use a
+        // string literal embedded in the subquery expression — the same pattern as RelationOrderExpr
+        // injects table/column names. Single-quotes are standard SQL string delimiters.
+        return $"(SELECT t.{fieldCol} FROM {translationTable} t WHERE t.{fkCol} = {parentTable}.{parentIdCol} AND t.{localeCol} = '{queryLocale}')";
     }
 
     /// <summary>
