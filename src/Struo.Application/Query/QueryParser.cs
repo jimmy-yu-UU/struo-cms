@@ -38,7 +38,35 @@ public static class QueryParser
         var offset = env.TryGetProperty("offset", out var o) && o.TryGetInt32(out var oi) ? oi : 0;
         var search = env.TryGetProperty("search", out var se) ? se.GetString() : null;
 
-        return new QueryModel(fields, filter, sort, limit, offset, search);
+        var model = new QueryModel(fields, filter, sort, limit, offset, search);
+        return model with { Deep = ParseDeepEnvelope(env) };
+    }
+
+    private static DeepSpec? ParseDeepEnvelope(JsonElement env)
+    {
+        if (!env.TryGetProperty("deep", out var d) || d.ValueKind != JsonValueKind.Object) return null;
+        var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in d.EnumerateObject())
+        {
+            IReadOnlyList<string>? fields = null;
+            int? limit = null;
+            if (rel.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (rel.Value.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
+                    fields = f.EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                if (rel.Value.TryGetProperty("limit", out var l) && l.TryGetInt32(out var li)) limit = li;
+            }
+            map[rel.Name] = new DeepRelationSpec(fields, limit);
+        }
+        return map.Count == 0 ? null : new DeepSpec(map);
+    }
+
+    private static DeepSpec? ParseDeepQueryString(IReadOnlyDictionary<string, string?> query)
+    {
+        if (!query.TryGetValue("deep", out var dv) || string.IsNullOrWhiteSpace(dv)) return null;
+        var map = dv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToDictionary(n => n, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase);
+        return map.Count == 0 ? null : new DeepSpec(map);
     }
 
     private static FilterNode ParseFilter(JsonElement obj)
@@ -136,6 +164,7 @@ public static class QueryParser
         var offset = query.TryGetValue("offset", out var ov) && int.TryParse(ov, out var oi) ? oi : 0;
         var search = query.TryGetValue("search", out var se) ? se : null;
 
-        return new QueryModel(fields, filter, sort, limit, offset, search);
+        var model = new QueryModel(fields, filter, sort, limit, offset, search);
+        return model with { Deep = ParseDeepQueryString(query) };
     }
 }

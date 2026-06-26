@@ -16,6 +16,8 @@ public sealed class ItemService(
     IMetadataProvider metadata,
     IEntityRegistry registry,
     IPermissionService permissions,
+    IRelationshipGraph graph,
+    IRelationExpander expander,
     StruoQueryOptions options)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
@@ -27,17 +29,84 @@ public sealed class ItemService(
         var validated = QueryValidator.Validate(raw, meta, options);
         var searchable = QueryValidator.SearchableFields(meta);
         var result = await repository.QueryAsync(collection, validated, searchable, ct);
-        var rows = result.Rows.Select(r => Project(r, meta, validated.Fields)).ToList();
+
+        var entities = result.Rows;
+        var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();
+        await ExpandDeepAsync(collection, raw.Deep, entities, rows, ct);
         return new PagedResult(rows, result.Total, validated.Limit, validated.Offset);
     }
 
-    public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, CancellationToken ct = default)
+    public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(
+        string collection, string id, DeepSpec? deep = null, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
         var entity = await repository.GetByIdAsync(collection, id, ct);
-        return entity is null ? null : Project(entity, meta, null);
+        if (entity is null) return null;
+
+        var projected = (Dictionary<string, object?>)Project(entity, meta, null);
+        await ExpandDeepAsync(collection, deep, [entity], [projected], ct);
+        return projected;
     }
+
+    /// <summary>
+    /// Validates the requested deep relations against the relationship graph and the
+    /// configured <see cref="StruoQueryOptions.MaxRelationDepth"/>, then nests the expanded
+    /// (batched) relation rows into each projected parent dictionary. No-op when
+    /// <paramref name="deep"/> is null/empty or there are no parent rows.
+    /// </summary>
+    private async Task ExpandDeepAsync(
+        string collection, DeepSpec? deep,
+        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
+        CancellationToken ct)
+    {
+        if (deep is null || deep.Relations.Count == 0 || entities.Count == 0) return;
+
+        // Validate: deep expansion is single-level here, so MaxRelationDepth caps the number
+        // of relations expanded in one request (each adds one level of nesting / one batch query).
+        if (deep.Relations.Count > options.MaxRelationDepth)
+            throw new QueryException(
+                $"Too many deep relations requested ({deep.Relations.Count}); the maximum is {options.MaxRelationDepth}.");
+        foreach (var relName in deep.Relations.Keys)
+        {
+            if (graph.Resolve(collection, relName) is null)
+                throw new QueryException($"Unknown relation '{relName}' on '{collection}'.");
+        }
+
+        var parentDesc = registry.Get(collection)!;
+
+        object ParentId(object entity) =>
+            ReadProp(entity, parentDesc.IdProperty)
+            ?? throw new QueryException($"Cannot expand relations: a '{collection}' row has no id.");
+
+        var nested = await expander.ExpandAsync(
+            collection, entities, deep, ProjectFor, ParentId, ReadProp, ct);
+
+        for (var i = 0; i < entities.Count; i++)
+        {
+            var pid = ParentId(entities[i]);
+            if (!nested.TryGetValue(pid, out var relMap)) continue;
+            var dict = (Dictionary<string, object?>)rows[i];
+            foreach (var (relName, value) in relMap) dict[relName] = value;
+        }
+    }
+
+    /// <summary>Reuses the metadata projection for an arbitrary target collection.</summary>
+    private IReadOnlyDictionary<string, object?> ProjectFor(
+        string collectionName, object entity, IReadOnlyList<string>? fields) =>
+        Project(entity, Meta(collectionName), fields);
+
+    /// <summary>
+    /// Reads a property value off an entity by name. The name may be a CLR property name
+    /// (e.g. junction <c>ArticleId</c>) or a camelCase field name (e.g. <c>authorId</c>, <c>id</c>),
+    /// so the lookup is case-insensitive.
+    /// </summary>
+    private static object? ReadProp(object entity, string propertyName) =>
+        entity.GetType()
+            .GetProperty(propertyName,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.IgnoreCase)
+            ?.GetValue(entity);
 
     public async Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct = default)
     {

@@ -7,4 +7,8 @@ public sealed record QueryModel(
     IReadOnlyList<SortField> Sort,
     int Limit,
     int Offset,
-    string? Search);
+    string? Search)
+{
+    /// <summary>Optional read-time relation expansion request.</summary>
+    public DeepSpec? Deep { get; init; }
+}

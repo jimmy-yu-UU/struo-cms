@@ -37,6 +37,11 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
 
+    private static readonly MethodInfo WhereInGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
+
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, CancellationToken ct = default)
     {
@@ -111,6 +116,46 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
 
     private async Task DeleteGenericAsync<T>(object id, CancellationToken ct) where T : class, new() =>
         await db.Deleteable<T>().In(id).ExecuteCommandAsync(ct);
+
+    public Task<IReadOnlyList<object>> QueryWhereInAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
+    {
+        var d = Descriptor(collection);
+        // Map camelCase field name -> CLR property name (fall back to the raw name, e.g. "id").
+        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
+        return QueryEntityWhereInAsync(d.EntityType, clrProperty, values, ct);
+    }
+
+    public async Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
+        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default)
+    {
+        // Empty value set -> never emit an "IN ()"; return empty.
+        if (values.Count == 0) return [];
+
+        var column = db.EntityMaintenance.GetDbColumnName(propertyName, entityType);
+        var method = WhereInGenericAsyncDef.MakeGenericMethod(entityType);
+        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [column, values, ct])!;
+    }
+
+    private async Task<IReadOnlyList<object>> WhereInGenericAsync<T>(
+        string column, IReadOnlyList<object> values, CancellationToken ct) where T : class, new()
+    {
+        // Use a ConditionalModel (ConditionalType.In) rather than the typed .In(string, ...)
+        // overload: SqlSugar's In(string, FieldType[]) is value-typed/array-bound and brittle
+        // across heterogeneous CLR id types. The comma-joined value form matches how the
+        // Phase-2 ConditionalModelTranslator emits IN clauses.
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.In,
+                FieldValue = string.Join(",", values.Select(v => v?.ToString()))
+            }
+        };
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        return rows.Cast<object>().ToList();
+    }
 
     private EntityDescriptor Descriptor(string collection) =>
         registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
