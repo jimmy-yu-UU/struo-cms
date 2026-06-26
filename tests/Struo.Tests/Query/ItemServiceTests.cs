@@ -25,10 +25,22 @@ public class ItemServiceTests : IDisposable
             new TestCurrentUserAccessor("tester"));
         db.CodeFirst.InitTables<Article>();
 
-        var provider = new CachedMetadataProvider(MetadataScanner.Scan(typeof(Article).Assembly));
-        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(Article), typeof(Tag)]));
+        var collections = MetadataScanner.Scan(typeof(Article).Assembly);
+        var provider = new CachedMetadataProvider(collections);
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
+            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag)]));
         var repo = new SqlSugarItemRepository(db, registry);
-        _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(), new StruoQueryOptions());
+        var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["article"] = typeof(Article),
+            ["tag"] = typeof(Tag),
+            ["author"] = typeof(Author),
+            ["category"] = typeof(Category),
+        };
+        var graph = new RelationshipGraph(collections, collectionTypes);
+        var expander = new RelationExpander(repo, graph);
+        _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
+            graph, expander, new StruoQueryOptions());
     }
 
     public void Dispose() => _file.Dispose();

@@ -29,7 +29,9 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(string collection, string id, CancellationToken ct)
     {
-        var item = await items.GetAsync(collection, id, ct);
+        var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
+        var deep = QueryParser.ParseQueryString(qs).Deep;
+        var item = await items.GetAsync(collection, id, deep, ct);
         return item is null ? NotFound() : Ok(new { data = item });
     }
 
