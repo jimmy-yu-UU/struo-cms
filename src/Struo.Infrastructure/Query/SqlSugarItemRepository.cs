@@ -185,7 +185,6 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
         IReadOnlyList<object> targetIds,
         CancellationToken ct) where T : class, new()
     {
-        // Delete all existing junction rows for this parent.
         var deleteConditionals = new List<IConditionalModel>
         {
             new ConditionalModel
@@ -195,11 +194,8 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
                 FieldValue = parentId.ToString()
             }
         };
-        await db.Deleteable<T>().Where(deleteConditionals).ExecuteCommandAsync(ct);
 
-        // Insert one row per target id, in order.
-        if (targetIds.Count == 0) return;
-
+        // Build new rows before opening the transaction so reflection work stays outside the tx.
         var type = typeof(T);
         var parentProp = type.GetProperty(parentFkProperty, BindingFlags.Public | BindingFlags.Instance)!;
         var targetProp = type.GetProperty(targetFkProperty, BindingFlags.Public | BindingFlags.Instance)!;
@@ -210,13 +206,29 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
         for (var i = 0; i < targetIds.Count; i++)
         {
             var row = new T();
-            parentProp.SetValue(row, Convert.ChangeType(parentId,   parentProp.PropertyType));
+            parentProp.SetValue(row, Convert.ChangeType(parentId,    parentProp.PropertyType));
             targetProp.SetValue(row, Convert.ChangeType(targetIds[i], targetProp.PropertyType));
-            sortProp?.SetValue(row, i);
+            // Use Convert.ChangeType so the sort index (int) is coerced to whatever numeric
+            // type the sort column declares (e.g. int, long, short).
+            sortProp?.SetValue(row, Convert.ChangeType(i, sortProp.PropertyType));
             rows.Add(row);
         }
 
-        await db.Insertable(rows).ExecuteCommandAsync(ct);
+        // Delete + insert in a single transaction so a failed insert never leaves the parent
+        // with zero junction rows.
+        try
+        {
+            await db.Ado.BeginTranAsync();
+            await db.Deleteable<T>().Where(deleteConditionals).ExecuteCommandAsync(ct);
+            if (rows.Count > 0)
+                await db.Insertable(rows).ExecuteCommandAsync(ct);
+            await db.Ado.CommitTranAsync();
+        }
+        catch
+        {
+            await db.Ado.RollbackTranAsync();
+            throw;
+        }
     }
 
     private EntityDescriptor Descriptor(string collection) =>
