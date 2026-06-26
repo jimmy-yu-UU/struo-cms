@@ -1,5 +1,6 @@
 // src/Struo.Application/Query/QueryValidator.cs
 using Struo.Application.Configuration;
+using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -7,14 +8,23 @@ namespace Struo.Application.Query;
 
 public static class QueryValidator
 {
-    public static QueryModel Validate(QueryModel q, CollectionMetadata meta, StruoQueryOptions opts)
+    public static QueryModel Validate(
+        QueryModel q, CollectionMetadata meta, StruoQueryOptions opts,
+        IRelationshipGraph graph, IMetadataProvider metadata)
     {
         var known = meta.Fields.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        void CheckField(string path)
+        void CheckField(string path, bool forSort = false, bool allowRelation = true)
         {
-            if (path.Contains('.'))
-                throw new QueryException($"Relation path '{path}' is not supported until Phase 3b.");
+            if (RelationPath.IsRelationPath(path))
+            {
+                if (!allowRelation)
+                    throw new QueryException($"Relation paths are not supported in field selection: '{path}'.");
+                var rp = RelationPath.Parse(meta.Name, path, graph, metadata, opts.MaxRelationDepth);
+                if (forSort && !rp.IsSortable)
+                    throw new QueryException($"Sort across to-many relations is not supported: '{path}'.");
+                return;
+            }
             // "id" is always projected (PK); it is not in meta.Fields but is always valid.
             if (string.Equals(path, "id", StringComparison.OrdinalIgnoreCase)) return;
             if (!known.Contains(path))
@@ -45,8 +55,8 @@ public static class QueryValidator
 
         Walk(q.Filter, 1);
 
-        foreach (var s in q.Sort) CheckField(s.Field);
-        if (q.Fields is not null) foreach (var f in q.Fields) CheckField(f);
+        foreach (var s in q.Sort) CheckField(s.Field, forSort: true);
+        if (q.Fields is not null) foreach (var f in q.Fields) CheckField(f, allowRelation: false);
 
         var limit = q.Limit <= 0 ? opts.DefaultLimit : Math.Min(q.Limit, opts.MaxLimit);
         var offset = Math.Max(0, q.Offset);

@@ -27,7 +27,7 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
-        var validated = QueryValidator.Validate(raw, meta, options);
+        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata);
         var searchable = QueryValidator.SearchableFields(meta);
         var result = await repository.QueryAsync(collection, validated, searchable, ct);
 
