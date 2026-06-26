@@ -176,11 +176,34 @@ public sealed class ItemService(
         }
     }
 
-    public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
+    public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
         _ = Meta(collection);
         if (!permissions.CanDelete(collection)) throw new QueryException("Delete not permitted.");
-        return repository.DeleteAsync(collection, id, ct);
+
+        // Enforce OnDelete.Restrict: for each inbound M2O relation with Restrict semantics,
+        // check whether any row in the source collection still references this id.
+        var targetDesc = registry.Get(collection);
+        foreach (var (sourceCollection, foreignKey) in graph.InboundRestrict(collection))
+        {
+            // Coerce the string id to the FK's CLR type so QueryWhereInAsync receives a typed value.
+            // Both the target PK and M2O FK are long; fall back to string if coercion fails.
+            object typedId = id;
+            if (targetDesc is not null)
+            {
+                var pkProp = targetDesc.EntityType.GetProperty(targetDesc.IdProperty,
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                if (pkProp is not null)
+                    typedId = Convert.ChangeType(id, pkProp.PropertyType);
+            }
+
+            var refs = await repository.QueryWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
+            if (refs.Count > 0)
+                throw new RelationConflictException(
+                    $"Cannot delete '{collection}/{id}': referenced by '{sourceCollection}'.");
+        }
+
+        return await repository.DeleteAsync(collection, id, ct);
     }
 
     /// <summary>

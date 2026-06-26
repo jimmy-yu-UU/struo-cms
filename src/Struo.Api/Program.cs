@@ -52,6 +52,14 @@ try
                 await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
             }
         }
+        catch (Struo.Domain.Query.RelationConflictException ex)
+        {
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            }
+        }
         catch (Struo.Domain.Query.QueryException ex)
         {
             if (!context.Response.HasStarted)

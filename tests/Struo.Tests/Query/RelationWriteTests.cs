@@ -50,4 +50,23 @@ public class RelationWriteTests(ApiFactory factory)
         Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("tags").GetArrayLength().Should().Be(0);
     }
+
+    [Fact]
+    public async Task Delete_author_referenced_by_article_is_blocked_409()
+    {
+        var c = _factory.CreateClient();
+        var authorId = await Id(await c.PostAsJsonAsync("/api/items/author", new { name = "Ref" }));
+        await c.PostAsJsonAsync("/api/items/article", new { title = "R", status = "draft", authorId });
+
+        (await c.DeleteAsync($"/api/items/author/{authorId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Delete_unreferenced_author_returns_204()
+    {
+        var c = _factory.CreateClient();
+        var authorId = await Id(await c.PostAsJsonAsync("/api/items/author", new { name = "Unreferenced" }));
+
+        (await c.DeleteAsync($"/api/items/author/{authorId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+    }
 }
