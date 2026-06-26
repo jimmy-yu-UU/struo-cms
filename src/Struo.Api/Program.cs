@@ -91,7 +91,9 @@ try
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment,
-            typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag));
+            typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag),
+            typeof(Struo.Infrastructure.Localization.Language));
+        await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
     }
 
     app.Run();

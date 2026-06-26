@@ -11,10 +11,15 @@ public static class MetadataServiceCollectionExtensions
     public static IServiceCollection AddStruoMetadata(
         this IServiceCollection services, params Assembly[] assemblies)
     {
-        // Eager scan at registration -> immutable singleton. No per-request reflection.
-        var allTypes = assemblies.SelectMany(a => a.GetTypes()).ToList();
+        // Include the framework's own assembly (Language and other built-ins) alongside caller assemblies.
+        var allAssemblies = assemblies
+            .Append(typeof(MetadataServiceCollectionExtensions).Assembly)
+            .Distinct().ToArray();
 
-        var collections = MetadataScanner.Scan(assemblies);
+        // Eager scan at registration -> immutable singleton. No per-request reflection.
+        var allTypes = allAssemblies.SelectMany(a => a.GetTypes()).ToList();
+
+        var collections = MetadataScanner.Scan(allAssemblies);
         services.AddSingleton<IMetadataProvider>(new CachedMetadataProvider(collections));
 
         var descriptors = MetadataScanner.ScanDescriptors(allTypes);
