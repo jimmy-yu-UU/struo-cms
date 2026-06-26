@@ -10,4 +10,7 @@ public sealed record CollectionMetadata
     public required IReadOnlyList<FieldGroupMetadata> FieldGroups { get; init; }
     public required IReadOnlyList<FieldMetadata> Fields { get; init; }
     public IReadOnlyList<RelationMetadata> Relations { get; init; } = [];
+
+    /// <summary>Translation sidecar metadata, or null when the collection has no translatable fields.</summary>
+    public TranslationMetadata? Translation { get; init; }
 }
