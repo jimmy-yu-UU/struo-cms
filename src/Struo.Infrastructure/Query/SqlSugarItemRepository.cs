@@ -335,7 +335,8 @@ public sealed class SqlSugarItemRepository(
 
         string FkCol(EntityDescriptor d, string camelFk)
         {
-            var clr = d.FieldToProperty.TryGetValue(camelFk, out var p) ? p : Capitalize(camelFk);
+            var clr = d.FieldToProperty.TryGetValue(camelFk, out var p) ? p
+                : throw new QueryException($"Foreign key '{camelFk}' is not a known property on '{d.EntityType.Name}'.");
             return db.EntityMaintenance.GetDbColumnName(clr, d.EntityType);
         }
 
@@ -368,5 +369,4 @@ public sealed class SqlSugarItemRepository(
         return sb.ToString();
     }
 
-    private static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1..];
 }

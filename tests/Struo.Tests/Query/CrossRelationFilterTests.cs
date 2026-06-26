@@ -133,4 +133,57 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var data = Root(await (await c.PostAsJsonAsync("/api/items/category/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
         data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).Should().Contain(cat);
     }
+
+    [Fact]
+    public async Task Filter_empty_relation_under_or_keeps_scalar_match()
+    {
+        // _or: relation branch matches nothing, scalar branch matches one article.
+        // The empty relation branch must contribute zero ids — not swallow the whole OR.
+        var c = _factory.CreateClient();
+        var author = await Post(c, "author", new { name = "A6" });
+        var hit = await Post(c, "article", new { title = "OrEmptyUnique", status = "draft", authorId = author });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object>
+            {
+                ["_or"] = new object[]
+                {
+                    new Dictionary<string, object> { ["category.name"] = Eq("NoSuchCat_or") },
+                    new Dictionary<string, object> { ["title"] = Eq("OrEmptyUnique") }
+                }
+            }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        resp.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        var ids = Root(await resp.Content.ReadAsStringAsync())
+            .GetProperty("data").EnumerateArray()
+            .Select(r => r.GetProperty("id").GetInt64()).ToList();
+        ids.Should().Contain(hit);
+    }
+
+    [Fact]
+    public async Task Filter_empty_relation_under_and_returns_zero()
+    {
+        // _and: relation branch matches nothing, so the whole AND must return 0 rows
+        // even though the scalar branch would match.
+        var c = _factory.CreateClient();
+        var author = await Post(c, "author", new { name = "A7" });
+        await Post(c, "article", new { title = "AndEmptyUnique", status = "draft", authorId = author });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object>
+            {
+                ["_and"] = new object[]
+                {
+                    new Dictionary<string, object> { ["category.name"] = Eq("NoSuchCat_and") },
+                    new Dictionary<string, object> { ["title"] = Eq("AndEmptyUnique") }
+                }
+            }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        resp.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
+    }
 }
