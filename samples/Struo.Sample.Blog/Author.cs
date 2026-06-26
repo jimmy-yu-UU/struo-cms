@@ -5,20 +5,15 @@ using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Sample.Blog;
 
-[SugarTable("tags")]
-[CmsCollection("Tag", Icon = "tag", Group = "Content", DefaultDisplayField = nameof(Name))]
-public sealed class Tag : IAuditable
+[SugarTable("authors")]
+[CmsCollection("Author", Icon = "person", Group = "Content", DefaultDisplayField = nameof(Name))]
+public sealed class Author : IAuditable
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
     public long Id { get; set; }
 
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Name { get; set; } = string.Empty;
-
-    [Navigate(typeof(ArticleTag), nameof(ArticleTag.TagId), nameof(ArticleTag.ArticleId))]
-    [CmsRelation(Interface = RelationInterface.RelatedList, DisplayTemplate = "{Title}")]
-    [SugarColumn(IsIgnore = true)]
-    public List<Article> Articles { get; set; } = [];
 
     public DateTime CreatedAt { get; set; }
     [SugarColumn(IsNullable = true)] public string? CreatedBy { get; set; }

@@ -37,6 +37,27 @@ public sealed class Article : IAuditable, ISeoMeta
     [SugarColumn(IsNullable = true)] public string? SeoMetaDescription { get; set; }
     [SugarColumn(IsNullable = true)] public long? SeoOgImageId { get; set; }
 
+    // --- relations (Phase 3a) ---
+    public long AuthorId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(AuthorId))]
+    [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.Restrict)]
+    [SugarColumn(IsIgnore = true)]
+    public Author? Author { get; set; }
+
+    [SugarColumn(IsNullable = true)]
+    public long? CategoryId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(CategoryId))]
+    [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull)]
+    [SugarColumn(IsIgnore = true)]
+    public Category? Category { get; set; }
+
+    [Navigate(typeof(ArticleTag), nameof(ArticleTag.ArticleId), nameof(ArticleTag.TagId))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(ArticleTag.SortOrder))]
+    [SugarColumn(IsIgnore = true)]
+    public List<Tag> Tags { get; set; } = [];
+
     // IAuditable
     public DateTime CreatedAt { get; set; }
     [SugarColumn(IsNullable = true)] public string? CreatedBy { get; set; }
