@@ -101,6 +101,9 @@ public static class MetadataScanner
                 groups.Add(new FieldGroupMetadata("SEO", "SEO", groups.Count + 1));
         }
 
+        var (translation, translatableFields) = ScanTranslations(type);
+        foreach (var tf in translatableFields) fields.Add((++order, tf));
+
         var ordered = fields
             .OrderBy(f => f.field.Sort)
             .ThenBy(f => f.order)
@@ -122,8 +125,56 @@ public static class MetadataScanner
             DefaultDisplayField = defaultDisplay,
             FieldGroups = groups,
             Fields = ordered,
-            Relations = ScanRelations(type)
+            Relations = ScanRelations(type),
+            Translation = translation
         };
+    }
+
+    /// <summary>
+    /// Scans <paramref name="type"/> for a <c>[CmsTranslations(typeof(T))]</c> property. When present,
+    /// validates the sidecar translation entity (Id PK, <c>{Parent}Id</c> FK, string <c>Locale</c>,
+    /// at least one <c>[CmsField]</c>) and returns its <see cref="TranslationMetadata"/> together with
+    /// the translatable fields (built from T's <c>[CmsField]</c>s, marked <c>Translatable=true</c>)
+    /// to be merged into the parent collection's field list. Throws <see cref="MetadataException"/>
+    /// on any violation (fail-fast at scan).
+    /// </summary>
+    private static (TranslationMetadata? meta, List<FieldMetadata> translatableFields) ScanTranslations(Type type)
+    {
+        var prop = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.GetCustomAttribute<CmsTranslationsAttribute>() is not null);
+        if (prop is null) return (null, []);
+
+        var tType = prop.GetCustomAttribute<CmsTranslationsAttribute>()!.TranslationEntityType;
+        var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        var hasId = tProps.Any(p => string.Equals(p.Name, "Id", StringComparison.Ordinal));
+        var fkName = type.Name + "Id";   // convention {Parent}Id
+        var fkProp = tProps.FirstOrDefault(p => string.Equals(p.Name, fkName, StringComparison.Ordinal));
+        var localeProp = tProps.FirstOrDefault(p =>
+            string.Equals(p.Name, "Locale", StringComparison.Ordinal) && p.PropertyType == typeof(string));
+        var fieldProps = tProps.Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null).ToList();
+
+        if (!hasId)
+            throw new MetadataException($"Translation entity '{tType.Name}' must have an 'Id' primary key.");
+        if (fkProp is null)
+            throw new MetadataException($"Translation entity '{tType.Name}' must have foreign key '{fkName}'.");
+        if (localeProp is null)
+            throw new MetadataException($"Translation entity '{tType.Name}' must have a string 'Locale' property.");
+        if (fieldProps.Count == 0)
+            throw new MetadataException($"Translation entity '{tType.Name}' must declare at least one [CmsField].");
+
+        var fields = fieldProps
+            .Select(p => BuildField(p, p.GetCustomAttribute<CmsFieldAttribute>()!) with { Translatable = true })
+            .ToList();
+
+        var meta = new TranslationMetadata
+        {
+            TranslationEntityType = tType,
+            ForeignKeyProperty = fkName,
+            LocaleProperty = "Locale",
+            Fields = fields.Select(f => f.Name).ToList()
+        };
+        return (meta, fields);
     }
 
     private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr)
