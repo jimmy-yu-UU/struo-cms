@@ -29,7 +29,6 @@ public class ItemServiceTests : IDisposable
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
             [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag)]));
-        var repo = new SqlSugarItemRepository(db, registry);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["article"] = typeof(Article),
@@ -38,6 +37,7 @@ public class ItemServiceTests : IDisposable
             ["category"] = typeof(Category),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
+        var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
         var expander = new RelationExpander(repo, graph);
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),

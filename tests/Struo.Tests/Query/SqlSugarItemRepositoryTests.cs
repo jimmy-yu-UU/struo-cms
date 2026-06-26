@@ -25,8 +25,19 @@ public class SqlSugarItemRepositoryTests : IDisposable
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor("tester"));
         _db.CodeFirst.InitTables<Article>();
+        var collections = MetadataScanner.Scan(typeof(Article).Assembly);
+        var provider = new CachedMetadataProvider(collections);
         var descriptors = MetadataScanner.ScanDescriptors([typeof(Article)]);
-        _repo = new SqlSugarItemRepository(_db, new EntityRegistry(descriptors));
+        var registry = new EntityRegistry(descriptors);
+        var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["article"]  = typeof(Article),
+            ["tag"]      = typeof(Tag),
+            ["author"]   = typeof(Author),
+            ["category"] = typeof(Category),
+        };
+        var graph = new RelationshipGraph(collections, collectionTypes);
+        _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
     }
 
     public void Dispose() => _file.Dispose();
