@@ -265,16 +265,34 @@ public sealed class ItemService(
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
     /// <c>translations</c> object, validates each locale (enabled), each field key (⊆ translatable
     /// fields), and required fields, then delegates to
-    /// <see cref="IItemRepository.SyncTranslationsAsync"/>. On create the default-locale translation
-    /// must be present. Absent <c>translations</c> key is skipped (partial updates supported).
+    /// <see cref="IItemRepository.SyncTranslationsAsync"/>.
+    /// <para>
+    /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory
+    /// (Spec §10): an absent <c>translations</c> key, a non-object value, an empty object, or an
+    /// object lacking the default locale all throw <see cref="QueryException"/> (→ 400). On update
+    /// an absent/non-object <c>translations</c> payload is a no-op (partial updates supported) and
+    /// the default locale is NOT forced.
+    /// </para>
     /// </summary>
     private async Task SyncTranslationsAsync(
         CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct)
     {
         var tm = meta.Translation;
         if (tm is null) return;
-        if (!body.TryGetProperty("translations", out var trElem)) return;
-        if (trElem.ValueKind != JsonValueKind.Object) return;
+
+        var hasTranslations = body.TryGetProperty("translations", out var trElem)
+                              && trElem.ValueKind == JsonValueKind.Object;
+
+        // On create the default-locale translation is required. Reject an absent/non-object
+        // `translations` payload HERE, before returning early — otherwise a body with no
+        // `translations` key would silently create a row with zero translation rows (Spec §10).
+        if (!hasTranslations)
+        {
+            if (isCreate)
+                throw new QueryException(
+                    $"A translation for the default locale '{languages.DefaultCode()}' is required.");
+            return; // update: absent/non-object translations = no-op partial update
+        }
 
         var allowed = tm.Fields.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var requiredFields = meta.Fields
