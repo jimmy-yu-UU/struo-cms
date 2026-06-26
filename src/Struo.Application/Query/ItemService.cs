@@ -183,24 +183,29 @@ public sealed class ItemService(
 
         // Enforce OnDelete.Restrict: for each inbound M2O relation with Restrict semantics,
         // check whether any row in the source collection still references this id.
-        var targetDesc = registry.Get(collection);
-        foreach (var (sourceCollection, foreignKey) in graph.InboundRestrict(collection))
+        var inbound = graph.InboundRestrict(collection);
+        if (inbound.Count > 0)
         {
-            // Coerce the string id to the FK's CLR type so QueryWhereInAsync receives a typed value.
-            // Both the target PK and M2O FK are long; fall back to string if coercion fails.
-            object typedId = id;
-            if (targetDesc is not null)
-            {
-                var pkProp = targetDesc.EntityType.GetProperty(targetDesc.IdProperty,
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                if (pkProp is not null)
-                    typedId = Convert.ChangeType(id, pkProp.PropertyType);
-            }
+            // Coerce the string id to the PK's CLR type ONCE so QueryWhereInAsync receives a
+            // typed value that matches the FK column. Fail loudly on misconfiguration / bad id —
+            // a silent fallback would make the IN comparison miss and skip a real Restrict block.
+            var targetDesc = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
+            var pkProp = targetDesc.EntityType.GetProperty(targetDesc.IdProperty,
+                             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                         ?? throw new InvalidOperationException(
+                             $"Collection '{collection}' has no primary-key property '{targetDesc.IdProperty}'.");
+            object typedId;
+            try { typedId = Convert.ChangeType(id, pkProp.PropertyType); }
+            catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+            { throw new QueryException($"Invalid id '{id}' for collection '{collection}'."); }
 
-            var refs = await repository.QueryWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
-            if (refs.Count > 0)
-                throw new RelationConflictException(
-                    $"Cannot delete '{collection}/{id}': referenced by '{sourceCollection}'.");
+            foreach (var (sourceCollection, foreignKey) in inbound)
+            {
+                var refs = await repository.QueryWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
+                if (refs.Count > 0)
+                    throw new RelationConflictException(
+                        $"Cannot delete '{collection}/{id}': referenced by '{sourceCollection}'.");
+            }
         }
 
         return await repository.DeleteAsync(collection, id, ct);
