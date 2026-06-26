@@ -29,7 +29,9 @@ public class EntityRegistryTests
     public void Maps_camel_field_names_to_clr_properties()
     {
         var d = Build().Get("article")!;
-        d.FieldToProperty["title"].Should().Be("Title");
+        // title/body moved to the ArticleTranslation sidecar; the parent descriptor maps only
+        // own-collection CLR properties.
+        d.FieldToProperty["status"].Should().Be("Status");
         d.FieldToProperty["seoTitle"].Should().Be("SeoTitle");
         d.FieldToProperty["createdAt"].Should().Be("CreatedAt");
     }

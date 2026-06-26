@@ -48,4 +48,36 @@ public interface IItemRepository
         object parentId,
         IReadOnlyList<object> targetIds,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Loads sidecar translation rows of <paramref name="translationType"/> whose
+    /// <paramref name="fkProperty"/> (CLR name, e.g. <c>"ArticleId"</c>) is in
+    /// <paramref name="parentIds"/>. When <paramref name="locale"/> is non-null, only rows whose
+    /// <paramref name="localeProperty"/> equals it (case-insensitive) are returned. Empty
+    /// <paramref name="parentIds"/> returns an empty list without issuing a query.
+    /// </summary>
+    Task<IReadOnlyList<object>> LoadTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<object> parentIds,
+        string? locale,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Upserts translation rows for a single parent. For each entry in <paramref name="perLocale"/>
+    /// (locale → camelField → value), deletes the existing row for that
+    /// <c>(parentId, locale)</c> and inserts a fresh one with <paramref name="fieldProperties"/>
+    /// (CLR property names) set from the provided values. Locales not present in
+    /// <paramref name="perLocale"/> are left untouched (partial updates supported). The whole
+    /// operation is transaction-wrapped.
+    /// </summary>
+    Task SyncTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct = default);
 }

@@ -1,6 +1,7 @@
 // src/Struo.Application/Query/ItemService.cs
 using System.Text.Json;
 using Struo.Application.Configuration;
+using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Security;
 using Struo.Domain.Metadata.Models;
@@ -20,14 +21,17 @@ public sealed class ItemService(
     IRelationExpander expander,
     IM2MDescriptorSource m2mSource,
     IRelationFilterResolver relationFilter,
+    ILanguageProvider languages,
     StruoQueryOptions options)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
-    public async Task<PagedResult> QueryAsync(string collection, QueryModel raw, CancellationToken ct = default)
+    public async Task<PagedResult> QueryAsync(
+        string collection, QueryModel raw, string? locale = null, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
+        ValidateLocale(locale);
         var validated = QueryValidator.Validate(raw, meta, options, graph, metadata);
         validated = validated with { Filter = await relationFilter.RewriteAsync(collection, validated.Filter, ct) };
         var searchable = QueryValidator.SearchableFields(meta);
@@ -36,20 +40,95 @@ public sealed class ItemService(
         var entities = result.Rows;
         var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();
         await ExpandDeepAsync(collection, raw.Deep, entities, rows, ct);
+        await OverlayTranslationsAsync(meta, entities, rows, locale, ct);
         return new PagedResult(rows, result.Total, validated.Limit, validated.Offset);
     }
 
     public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(
-        string collection, string id, DeepSpec? deep = null, CancellationToken ct = default)
+        string collection, string id, DeepSpec? deep = null, string? locale = null, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
+        ValidateLocale(locale);
         var entity = await repository.GetByIdAsync(collection, id, ct);
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)Project(entity, meta, null);
         await ExpandDeepAsync(collection, deep, [entity], [projected], ct);
+        await OverlayTranslationsAsync(meta, [entity], [projected], locale, ct);
         return projected;
+    }
+
+    private void ValidateLocale(string? locale)
+    {
+        if (locale is not null && !languages.IsEnabled(locale))
+            throw new QueryException($"Unknown or disabled locale '{locale}'.");
+    }
+
+    /// <summary>
+    /// When <paramref name="meta"/> declares a translation sidecar, batch-loads the translation
+    /// rows for all parent ids (optionally filtered to <paramref name="locale"/>), groups them by
+    /// the parent FK, and attaches a <c>translations</c> map
+    /// (<c>{ locale: { camelField: value } }</c>) onto each projected row.
+    /// </summary>
+    private async Task OverlayTranslationsAsync(
+        CollectionMetadata meta,
+        IReadOnlyList<object> entities,
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
+        string? locale,
+        CancellationToken ct)
+    {
+        var tm = meta.Translation;
+        if (tm is null || entities.Count == 0) return;
+
+        var d = registry.Get(meta.Name)!;
+        var idProp = d.IdProperty;
+
+        var ids = entities
+            .Select(e => ReadProp(e, idProp))
+            .Where(v => v is not null)
+            .Select(v => v!)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0) return;
+
+        var tRows = await repository.LoadTranslationsAsync(
+            tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, ids, locale, ct);
+
+        // Map camelCase translatable field -> CLR property name on the translation entity.
+        var camelToClr = tm.Fields.ToDictionary(
+            f => f,
+            f => tm.TranslationEntityType
+                     .GetProperty(f, System.Reflection.BindingFlags.Public |
+                                     System.Reflection.BindingFlags.Instance |
+                                     System.Reflection.BindingFlags.IgnoreCase)?.Name ?? f,
+            StringComparer.OrdinalIgnoreCase);
+
+        // Group translation rows by parent id (string-keyed for cross-type comparison safety).
+        var grouped = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>();
+        foreach (var tr in tRows)
+        {
+            var fk = ReadProp(tr, tm.ForeignKeyProperty);
+            var loc = ReadProp(tr, tm.LocaleProperty) as string;
+            if (fk is null || loc is null) continue;
+            var key = fk.ToString()!;
+            if (!grouped.TryGetValue(key, out var byLocale))
+                grouped[key] = byLocale = new Dictionary<string, Dictionary<string, object?>>();
+
+            var fieldMap = new Dictionary<string, object?>();
+            foreach (var (camel, clr) in camelToClr)
+                fieldMap[camel] = ReadProp(tr, clr);
+            byLocale[loc] = fieldMap;
+        }
+
+        for (var i = 0; i < entities.Count; i++)
+        {
+            var pid = ReadProp(entities[i], idProp)?.ToString();
+            var dict = (Dictionary<string, object?>)rows[i];
+            dict["translations"] = pid is not null && grouped.TryGetValue(pid, out var byLocale)
+                ? byLocale
+                : new Dictionary<string, Dictionary<string, object?>>();
+        }
     }
 
     /// <summary>
@@ -120,6 +199,8 @@ public sealed class ItemService(
         var d = registry.Get(collection)!;
         var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
         await SyncM2MAsync(collection, body, createdId, ct);
+        await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+        InvalidateLanguagesIfNeeded(collection);
         return Project(created, meta, null);
     }
 
@@ -133,8 +214,99 @@ public sealed class ItemService(
         var d = registry.Get(collection)!;
         var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
         await SyncM2MAsync(collection, body, updatedId, ct);
+        await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
+        InvalidateLanguagesIfNeeded(collection);
         return Project(updated, meta, null);
     }
+
+    private void InvalidateLanguagesIfNeeded(string collection)
+    {
+        if (string.Equals(collection, "language", StringComparison.OrdinalIgnoreCase))
+            languages.Invalidate();
+    }
+
+    /// <summary>
+    /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
+    /// <c>translations</c> object, validates each locale (enabled), each field key (⊆ translatable
+    /// fields), and required fields, then delegates to
+    /// <see cref="IItemRepository.SyncTranslationsAsync"/>. On create the default-locale translation
+    /// must be present. Absent <c>translations</c> key is skipped (partial updates supported).
+    /// </summary>
+    private async Task SyncTranslationsAsync(
+        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct)
+    {
+        var tm = meta.Translation;
+        if (tm is null) return;
+        if (!body.TryGetProperty("translations", out var trElem)) return;
+        if (trElem.ValueKind != JsonValueKind.Object) return;
+
+        var allowed = tm.Fields.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var requiredFields = meta.Fields
+            .Where(f => f.Translatable && f.Required)
+            .Select(f => f.Name)
+            .ToList();
+
+        var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var localeProp in trElem.EnumerateObject())
+        {
+            var locale = localeProp.Name;
+            if (!languages.IsEnabled(locale))
+                throw new QueryException($"Unknown or disabled locale '{locale}'.");
+            if (localeProp.Value.ValueKind != JsonValueKind.Object)
+                throw new QueryException($"Translation for locale '{locale}' must be an object.");
+
+            var fieldValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in localeProp.Value.EnumerateObject())
+            {
+                if (!allowed.Contains(field.Name))
+                    throw new QueryException(
+                        $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
+                fieldValues[field.Name] = JsonValue(field.Value);
+            }
+
+            // Required: every required translatable field must be present and non-empty.
+            foreach (var rf in requiredFields)
+            {
+                var has = fieldValues.TryGetValue(rf, out var v);
+                if (!has || v is null || (v is string s && string.IsNullOrWhiteSpace(s)))
+                    throw new QueryException(
+                        $"Required translation field '{rf}' is missing for locale '{locale}'.");
+            }
+
+            perLocale[locale] = fieldValues;
+        }
+
+        // On create, the default locale's translation must be supplied.
+        if (isCreate)
+        {
+            var def = languages.DefaultCode();
+            if (!perLocale.Keys.Any(k => string.Equals(k, def, StringComparison.OrdinalIgnoreCase)))
+                throw new QueryException($"A translation for the default locale '{def}' is required.");
+        }
+
+        if (perLocale.Count == 0) return;
+
+        await repository.SyncTranslationsAsync(
+            tm.TranslationEntityType,
+            tm.ForeignKeyProperty,
+            tm.LocaleProperty,
+            tm.Fields,
+            parentId,
+            perLocale,
+            ct);
+    }
+
+    /// <summary>Converts a JSON value to a CLR primitive for translation field storage.</summary>
+    private static object? JsonValue(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.String => e.GetString(),
+        JsonValueKind.Number => e.TryGetInt64(out var l) ? l : e.GetDouble(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Null => null,
+        _ => e.GetRawText()
+    };
 
     /// <summary>
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
@@ -244,15 +416,19 @@ public sealed class ItemService(
         // Strip M2M relation keys (e.g. "tags": [1,2]) from the body before deserializing into
         // the entity type — those keys hold id arrays, not nested objects, so JSON deserialization
         // would fail trying to convert a long into the target entity type.
-        var m2mNames = m2mSource.M2MDescriptors(collection)
+        var stripNames = m2mSource.M2MDescriptors(collection)
             .Select(r => r.RelationName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // The translation sidecar payload ("translations": { locale: {...} }) is not a parent
+        // property — strip it so deserialization into the parent entity doesn't choke on it.
+        if (meta.Translation is not null) stripNames.Add("translations");
+
         object entity;
-        if (m2mNames.Count > 0)
+        if (stripNames.Count > 0)
         {
             // Parse into a using-scoped document so the ArrayPool buffer is returned promptly.
-            using var stripped = JsonDocument.Parse(StripKeys(body, m2mNames));
+            using var stripped = JsonDocument.Parse(StripKeys(body, stripNames));
             entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
                      ?? throw new QueryException("Request body could not be parsed.");
         }
@@ -272,8 +448,9 @@ public sealed class ItemService(
             if (canBeNull) pi.SetValue(entity, null);
         }
 
-        // required validation
-        foreach (var field in meta.Fields.Where(f => f.Required))
+        // required validation — skip translatable fields (they live on the sidecar entity and
+        // are validated per-locale in SyncTranslationsAsync, not on the parent).
+        foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
         {
             var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.EntityType.GetProperty(prop) : null;
             var value = pi?.GetValue(entity);

@@ -23,7 +23,7 @@ public class RelationWriteTests(ApiFactory factory)
         var t1 = await Id(await c.PostAsJsonAsync("/api/items/tag", new { name = "t1" }));
         var t2 = await Id(await c.PostAsJsonAsync("/api/items/tag", new { name = "t2" }));
 
-        var id = await Id(await c.PostAsJsonAsync("/api/items/article", new { title = "M2M", status = "draft", authorId, tags = new[] { t1, t2 } }));
+        var id = await Id(await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, tags = new[] { t1, t2 }, translations = new { en = new { title = "M2M" } } }));
 
         var tags = Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("tags");
@@ -37,14 +37,14 @@ public class RelationWriteTests(ApiFactory factory)
         var authorId = await Id(await c.PostAsJsonAsync("/api/items/author", new { name = "B" }));
         var t1 = await Id(await c.PostAsJsonAsync("/api/items/tag", new { name = "c1" }));
         var t2 = await Id(await c.PostAsJsonAsync("/api/items/tag", new { name = "c2" }));
-        var id = await Id(await c.PostAsJsonAsync("/api/items/article", new { title = "Clear", status = "draft", authorId, tags = new[] { t1, t2 } }));
+        var id = await Id(await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, tags = new[] { t1, t2 }, translations = new { en = new { title = "Clear" } } }));
 
         // sanity: 2 tags assigned
         Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("tags").GetArrayLength().Should().Be(2);
 
         // update with an explicit empty tags array -> junction cleared
-        (await c.PutAsJsonAsync($"/api/items/article/{id}", new { title = "Clear", status = "draft", authorId, tags = Array.Empty<long>() }))
+        (await c.PutAsJsonAsync($"/api/items/article/{id}", new { status = "draft", authorId, tags = Array.Empty<long>(), translations = new { en = new { title = "Clear" } } }))
             .EnsureSuccessStatusCode();
 
         Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
@@ -56,7 +56,7 @@ public class RelationWriteTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
         var authorId = await Id(await c.PostAsJsonAsync("/api/items/author", new { name = "Ref" }));
-        await c.PostAsJsonAsync("/api/items/article", new { title = "R", status = "draft", authorId });
+        await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, translations = new { en = new { title = "R" } } });
 
         (await c.DeleteAsync($"/api/items/author/{authorId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.Conflict);
     }
@@ -81,7 +81,7 @@ public class RelationWriteTests(ApiFactory factory)
 
         // assign in a deliberate, non-ascending order; SortOrder must preserve it
         var id = await Id(await c.PostAsJsonAsync("/api/items/article",
-            new { title = "Ord", status = "draft", authorId, tags = new[] { t3, t1, t2 } }));
+            new { status = "draft", authorId, tags = new[] { t3, t1, t2 }, translations = new { en = new { title = "Ord" } } }));
 
         var tags = Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("tags");
@@ -90,7 +90,7 @@ public class RelationWriteTests(ApiFactory factory)
 
         // reassign a different set/order -> order updates
         (await c.PutAsJsonAsync($"/api/items/article/{id}",
-            new { title = "Ord", status = "draft", authorId, tags = new[] { t2, t3 } })).EnsureSuccessStatusCode();
+            new { status = "draft", authorId, tags = new[] { t2, t3 }, translations = new { en = new { title = "Ord" } } })).EnsureSuccessStatusCode();
         Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("tags").EnumerateArray()
             .Select(t => t.GetProperty("name").GetString()).Should().ContainInOrder("second", "third");
@@ -103,7 +103,7 @@ public class RelationWriteTests(ApiFactory factory)
         // Article.categoryId is OnDelete.SetNull (not Restrict), so deleting a referenced category is permitted.
         var categoryId = await Id(await c.PostAsJsonAsync("/api/items/category", new { name = "Doomed" }));
         var authorId = await Id(await c.PostAsJsonAsync("/api/items/author", new { name = "CatAuthor" }));
-        await c.PostAsJsonAsync("/api/items/article", new { title = "InCat", status = "draft", authorId, categoryId });
+        await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, categoryId, translations = new { en = new { title = "InCat" } } });
 
         (await c.DeleteAsync($"/api/items/category/{categoryId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
     }

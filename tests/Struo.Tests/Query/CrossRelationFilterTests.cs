@@ -26,8 +26,8 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var author = await Post(c, "author", new { name = "A1" });
         var news = await Post(c, "category", new { name = "FilterNews" });
         var other = await Post(c, "category", new { name = "FilterOther" });
-        var hit = await Post(c, "article", new { title = "HIT", status = "draft", authorId = author, categoryId = news });
-        await Post(c, "article", new { title = "MISS", status = "draft", authorId = author, categoryId = other });
+        var hit = await Post(c, "article", new { status = "draft", authorId = author, categoryId = news, translations = new { en = new { title = "HIT" } } });
+        var miss = await Post(c, "article", new { status = "draft", authorId = author, categoryId = other, translations = new { en = new { title = "MISS" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -37,9 +37,9 @@ public class CrossRelationFilterTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
+        // title is now translatable (sidecar); assert by id rather than top-level title.
         ids.Should().Contain(hit);
-        foreach (var r in data.EnumerateArray())
-            r.GetProperty("title").GetString().Should().Be("HIT");
+        ids.Should().NotContain(miss);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var author = await Post(c, "author", new { name = "A2" });
         var parent = await Post(c, "category", new { name = "ParentCat" });
         var child = await Post(c, "category", new { name = "ChildCat", parentId = parent });
-        var hit = await Post(c, "article", new { title = "DEEPHIT", status = "draft", authorId = author, categoryId = child });
+        var hit = await Post(c, "article", new { status = "draft", authorId = author, categoryId = child, translations = new { en = new { title = "DEEPHIT" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -78,8 +78,9 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var c = _factory.CreateClient();
         var author = await Post(c, "author", new { name = "A3" });
         var cat = await Post(c, "category", new { name = "OrCat" });
-        var byCat = await Post(c, "article", new { title = "ZZZ", status = "draft", authorId = author, categoryId = cat });
-        var byTitle = await Post(c, "article", new { title = "OrTitleUnique", status = "draft", authorId = author });
+        var byCat = await Post(c, "article", new { status = "draft", authorId = author, categoryId = cat, translations = new { en = new { title = "ZZZ" } } });
+        // title is translatable now; the scalar OR branch filters by a non-translatable own field (id) instead.
+        var byId = await Post(c, "article", new { status = "draft", authorId = author, translations = new { en = new { title = "OrIdUnique" } } });
 
         // _or over a relation-path condition and a scalar condition
         var envelope = JsonSerializer.SerializeToElement(new
@@ -89,13 +90,13 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 ["_or"] = new object[]
                 {
                     new Dictionary<string, object> { ["category.name"] = Eq("OrCat") },
-                    new Dictionary<string, object> { ["title"] = Eq("OrTitleUnique") }
+                    new Dictionary<string, object> { ["id"] = Eq(byId) }
                 }
             }
         });
         var ids = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync())
             .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
-        ids.Should().Contain(byCat).And.Contain(byTitle);
+        ids.Should().Contain(byCat).And.Contain(byId);
     }
 
     [Fact]
@@ -104,8 +105,8 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var c = _factory.CreateClient();
         var author = await Post(c, "author", new { name = "A4" });
         var tag = await Post(c, "tag", new { name = "CSharpTag" });
-        var hit = await Post(c, "article", new { title = "TAGGED", status = "draft", authorId = author, tags = new[] { tag } });
-        await Post(c, "article", new { title = "UNTAGGED", status = "draft", authorId = author });
+        var hit = await Post(c, "article", new { status = "draft", authorId = author, tags = new[] { tag }, translations = new { en = new { title = "TAGGED" } } });
+        var untagged = await Post(c, "article", new { status = "draft", authorId = author, translations = new { en = new { title = "UNTAGGED" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -113,22 +114,25 @@ public class CrossRelationFilterTests(ApiFactory factory)
         });
         var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
+        // title is translatable now; assert by id rather than top-level title.
         ids.Should().Contain(hit);
-        foreach (var r in data.EnumerateArray())
-            r.GetProperty("title").GetString().Should().Be("TAGGED");
+        ids.Should().NotContain(untagged);
     }
 
     [Fact]
-    public async Task Filter_o2m_category_by_article_title()
+    public async Task Filter_o2m_category_by_article_id()
     {
+        // NOTE: filtering an o2m relation by the child's translatable `title` is locale-aware
+        // relation querying (Task 5). Here we filter the o2m relation by the child's
+        // non-translatable own-collection field (id) to exercise the same two-phase resolution.
         var c = _factory.CreateClient();
         var author = await Post(c, "author", new { name = "A5" });
         var cat = await Post(c, "category", new { name = "O2MFilterCat" });
-        await Post(c, "article", new { title = "UniqueChildTitle", status = "draft", authorId = author, categoryId = cat });
+        var childArticle = await Post(c, "article", new { status = "draft", authorId = author, categoryId = cat, translations = new { en = new { title = "UniqueChildTitle" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
-            filter = new Dictionary<string, object> { ["articles.title"] = Eq("UniqueChildTitle") }
+            filter = new Dictionary<string, object> { ["articles.id"] = Eq(childArticle) }
         });
         var data = Root(await (await c.PostAsJsonAsync("/api/items/category/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
         data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).Should().Contain(cat);
@@ -141,7 +145,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // The empty relation branch must contribute zero ids — not swallow the whole OR.
         var c = _factory.CreateClient();
         var author = await Post(c, "author", new { name = "A6" });
-        var hit = await Post(c, "article", new { title = "OrEmptyUnique", status = "draft", authorId = author });
+        var hit = await Post(c, "article", new { status = "draft", authorId = author, translations = new { en = new { title = "OrEmptyUnique" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -150,7 +154,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 ["_or"] = new object[]
                 {
                     new Dictionary<string, object> { ["category.name"] = Eq("NoSuchCat_or") },
-                    new Dictionary<string, object> { ["title"] = Eq("OrEmptyUnique") }
+                    new Dictionary<string, object> { ["id"] = Eq(hit) }
                 }
             }
         });
@@ -169,7 +173,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // even though the scalar branch would match.
         var c = _factory.CreateClient();
         var author = await Post(c, "author", new { name = "A7" });
-        await Post(c, "article", new { title = "AndEmptyUnique", status = "draft", authorId = author });
+        var art = await Post(c, "article", new { status = "draft", authorId = author, translations = new { en = new { title = "AndEmptyUnique" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -178,7 +182,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 ["_and"] = new object[]
                 {
                     new Dictionary<string, object> { ["category.name"] = Eq("NoSuchCat_and") },
-                    new Dictionary<string, object> { ["title"] = Eq("AndEmptyUnique") }
+                    new Dictionary<string, object> { ["id"] = Eq(art) }
                 }
             }
         });

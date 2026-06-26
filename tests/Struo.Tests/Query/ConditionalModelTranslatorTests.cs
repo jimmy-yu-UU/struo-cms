@@ -21,8 +21,9 @@ public class ConditionalModelTranslatorTests
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
             new TestCurrentUserAccessor("system"));
         db.CodeFirst.InitTables<Article>();
+        // title moved to the translation sidecar; use own-collection fields (status/publishedAt).
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            { ["title"] = "Title", ["status"] = "Status", ["publishedAt"] = "PublishedAt" };
+            { ["status"] = "Status", ["publishedAt"] = "PublishedAt" };
         var d = new EntityDescriptor(typeof(Article), fieldToProp, "Id");
         return (db, d, file);
     }
@@ -51,7 +52,7 @@ public class ConditionalModelTranslatorTests
         using (file)
         {
             var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("title", QueryOperator.Contains, "x"), null, [], d, db);
+                new ComparisonFilter("status", QueryOperator.Contains, "x"), null, [], d, db);
             ((ConditionalModel)list[0]).ConditionalType.Should().Be(ConditionalType.Like);
         }
     }
@@ -62,7 +63,7 @@ public class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(null, "hello", ["title"], d, db);
+            var list = ConditionalModelTranslator.Translate(null, "hello", ["status"], d, db);
             list.Should().ContainSingle();
             list[0].Should().BeOfType<ConditionalCollections>();
         }

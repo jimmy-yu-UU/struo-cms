@@ -20,7 +20,8 @@ public class MetadataScannerTests
         article.Name.Should().Be("article");
         article.Label.Should().Be("Article");
         article.Group.Should().Be("Content");
-        article.DefaultDisplayField.Should().Be("title");
+        // Title moved to the translation sidecar (Phase 4); display field is now Status.
+        article.DefaultDisplayField.Should().Be("status");
     }
 
     [Fact]

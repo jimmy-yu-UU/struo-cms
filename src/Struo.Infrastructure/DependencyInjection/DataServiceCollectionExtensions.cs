@@ -3,8 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
+using Struo.Application.Localization;
 using Struo.Application.Query;
 using Struo.Application.Security;
+using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Security;
 
@@ -20,6 +22,8 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<IItemRepository, SqlSugarItemRepository>();
         services.AddScoped<IRelationExpander, RelationExpander>();
         services.AddScoped<IRelationFilterResolver, RelationFilterResolver>();
+        // Scoped to match ISqlSugarClient's lifetime (the cache is per-request).
+        services.AddScoped<ILanguageProvider, LanguageProvider>();
         services.AddScoped<ItemService>();
         return services;
     }

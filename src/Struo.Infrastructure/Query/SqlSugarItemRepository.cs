@@ -59,6 +59,17 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(string), typeof(string), typeof(string), typeof(object), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
+    private static readonly MethodInfo LoadTranslationsGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(LoadTranslationsGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)])!;
+
+    private static readonly MethodInfo SyncTranslationsGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(SyncTranslationsGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
+             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)])!;
+
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, CancellationToken ct = default)
     {
@@ -259,6 +270,157 @@ public sealed class SqlSugarItemRepository(
             await db.Ado.RollbackTranAsync();
             throw;
         }
+    }
+
+    public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<object> parentIds,
+        string? locale,
+        CancellationToken ct = default)
+    {
+        if (parentIds.Count == 0) return [];
+
+        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
+        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
+        var method = LoadTranslationsGenericAsyncDef.MakeGenericMethod(translationType);
+        return await (Task<IReadOnlyList<object>>)method.Invoke(
+            this, [fkColumn, parentIds, localeColumn, locale, ct])!;
+    }
+
+    private async Task<IReadOnlyList<object>> LoadTranslationsGenericAsync<T>(
+        string fkColumn, IReadOnlyList<object> parentIds, string localeColumn, string? locale,
+        CancellationToken ct) where T : class, new()
+    {
+        // ConditionalType.In on the FK keeps "bigint IN (...)" Postgres-safe (no text coercion).
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = fkColumn,
+                ConditionalType = ConditionalType.In,
+                FieldValue = string.Join(",", parentIds.Select(v => v?.ToString()))
+            }
+        };
+        if (locale is not null)
+        {
+            conditionals.Add(new ConditionalModel
+            {
+                FieldName = localeColumn,
+                ConditionalType = ConditionalType.Equal,
+                FieldValue = locale
+            });
+        }
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        return rows.Cast<object>().ToList();
+    }
+
+    public async Task SyncTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct = default)
+    {
+        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
+        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
+        var method = SyncTranslationsGenericAsyncDef.MakeGenericMethod(translationType);
+        await (Task)method.Invoke(
+            this, [fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct])!;
+    }
+
+    private async Task SyncTranslationsGenericAsync<T>(
+        string fkColumn,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct) where T : class, new()
+    {
+        if (perLocale.Count == 0) return;
+
+        var type = typeof(T);
+        var fkProp = type.GetProperty(fkProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var fieldProps = fieldProperties.ToDictionary(
+            f => f,
+            f => type.GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                 ?? throw new InvalidOperationException(
+                     $"Translation entity '{type.Name}' has no field property '{f}'."),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Build the rows + per-locale delete models outside the transaction (reflection only).
+        var inserts = new List<T>(perLocale.Count);
+        var deletes = new List<List<IConditionalModel>>(perLocale.Count);
+        foreach (var (locale, values) in perLocale)
+        {
+            var row = new T();
+            fkProp.SetValue(row, Convert.ChangeType(parentId, fkProp.PropertyType));
+            localeProp.SetValue(row, locale);
+            foreach (var (fieldName, prop) in fieldProps)
+            {
+                if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
+                    prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
+            }
+            inserts.Add(row);
+
+            // ConditionalType.In on the FK (Postgres-safe), Equal on the string locale.
+            deletes.Add(
+            [
+                new ConditionalModel
+                {
+                    FieldName = fkColumn,
+                    ConditionalType = ConditionalType.In,
+                    FieldValue = parentId.ToString()
+                },
+                new ConditionalModel
+                {
+                    FieldName = db.EntityMaintenance.GetDbColumnName(localeProperty, type),
+                    ConditionalType = ConditionalType.Equal,
+                    FieldValue = locale
+                }
+            ]);
+        }
+
+        try
+        {
+            await db.Ado.BeginTranAsync();
+            foreach (var del in deletes)
+                await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
+            await db.Insertable(inserts).ExecuteCommandAsync(ct);
+            await db.Ado.CommitTranAsync();
+        }
+        catch
+        {
+            await db.Ado.RollbackTranAsync();
+            throw;
+        }
+    }
+
+    private static bool TryGetValueCaseInsensitive(
+        IReadOnlyDictionary<string, object?> dict, string key, out object? value)
+    {
+        if (dict.TryGetValue(key, out value)) return true;
+        foreach (var (k, v) in dict)
+        {
+            if (string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) { value = v; return true; }
+        }
+        value = null;
+        return false;
+    }
+
+    private static object? CoerceValue(object? raw, Type targetType)
+    {
+        if (raw is null) return null;
+        var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (underlying.IsInstanceOfType(raw)) return raw;
+        try { return Convert.ChangeType(raw, underlying); }
+        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
+        { return raw; }
     }
 
     private EntityDescriptor Descriptor(string collection) =>

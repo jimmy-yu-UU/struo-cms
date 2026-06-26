@@ -14,7 +14,7 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     {
         var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
         var raw = QueryParser.ParseQueryString(qs);
-        var result = await items.QueryAsync(collection, raw, ct);
+        var result = await items.QueryAsync(collection, raw, Locale(), ct);
         return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
     }
 
@@ -22,7 +22,7 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     public async Task<IActionResult> Query(string collection, [FromBody] JsonElement body, CancellationToken ct)
     {
         var raw = QueryParser.ParseEnvelope(body);
-        var result = await items.QueryAsync(collection, raw, ct);
+        var result = await items.QueryAsync(collection, raw, Locale(), ct);
         return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
     }
 
@@ -31,9 +31,14 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     {
         var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
         var deep = QueryParser.ParseQueryString(qs).Deep;
-        var item = await items.GetAsync(collection, id, deep, ct);
+        var item = await items.GetAsync(collection, id, deep, Locale(), ct);
         return item is null ? NotFound() : Ok(new { data = item });
     }
+
+    private string? Locale() =>
+        Request.Query.TryGetValue("locale", out var lv) && !string.IsNullOrWhiteSpace(lv)
+            ? lv.ToString()
+            : null;
 
     [HttpPost]
     public async Task<IActionResult> Create(string collection, [FromBody] JsonElement body, CancellationToken ct)

@@ -5,6 +5,7 @@ using Struo.Application.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
+using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Security;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -24,6 +25,9 @@ public class ItemServiceTests : IDisposable
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor("tester"));
         db.CodeFirst.InitTables<Article>();
+        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<Language>();
+        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.Scan(typeof(Article).Assembly);
         var provider = new CachedMetadataProvider(collections);
@@ -40,8 +44,9 @@ public class ItemServiceTests : IDisposable
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
         var expander = new RelationExpander(repo, graph);
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
+        var languages = new LanguageProvider(db);
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, resolver, new StruoQueryOptions());
+            graph, expander, graph, resolver, languages, new StruoQueryOptions());
     }
 
     public void Dispose() => _file.Dispose();
@@ -49,11 +54,12 @@ public class ItemServiceTests : IDisposable
     [Fact]
     public async Task Create_projects_id_audit_and_camelCase_fields()
     {
-        using var body = System.Text.Json.JsonDocument.Parse("""{"title":"Hello","status":"draft"}""");
+        using var body = System.Text.Json.JsonDocument.Parse(
+            """{"status":"draft","translations":{"en":{"title":"Hello"}}}""");
         var dict = await _svc.CreateAsync("article", body.RootElement);
 
         dict.Should().ContainKey("id");
-        dict["title"].Should().Be("Hello");
+        dict["status"].Should().Be("draft");
         dict.Should().ContainKey("createdAt");
         dict.Should().ContainKey("seoTitle");
     }
