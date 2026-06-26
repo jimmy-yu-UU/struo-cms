@@ -38,8 +38,13 @@ public class DeepExpansionTests(ApiFactory factory)
     public async Task List_without_deep_has_no_relation_keys()
     {
         var c = _factory.CreateClient();
-        var data = Root(await (await c.GetAsync("/api/items/article?limit=1")).Content.ReadAsStringAsync()).GetProperty("data");
-        if (data.GetArrayLength() > 0) data[0].TryGetProperty("author", out _).Should().BeFalse();
+        var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "NoDeep" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+        await c.PostAsJsonAsync("/api/items/article", new { title = "NoDeep", status = "draft", authorId });
+
+        var data = Root(await (await c.GetAsync("/api/items/article?limit=50")).Content.ReadAsStringAsync()).GetProperty("data");
+        data.GetArrayLength().Should().BeGreaterThan(0);                 // at least the one we created
+        foreach (var row in data.EnumerateArray())
+            row.TryGetProperty("author", out _).Should().BeFalse();      // no relation keys without ?deep
     }
 
     [Fact]
