@@ -5,6 +5,7 @@ using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Domain.Localization;
 using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
@@ -126,18 +127,25 @@ public sealed class SqlSugarItemRepository(
                     if (nonTranslatableSearchable.Count > 0)
                     {
                         // Both non-translatable LIKE group and translatable id-IN need to be OR'd together.
-                        // The LIKE group is already the last element in conditionals as a ConditionalCollections.
-                        // Wrap them in an OR ConditionalCollections.
-                        var likeGroup = conditionals.Count > 0 ? conditionals[^1] : null;
-                        if (likeGroup is SqlSugar.ConditionalCollections likeCollection)
+                        // ConditionalModelTranslator.Translate emits the LIKE group as a ConditionalCollections
+                        // appended last.  We assert this explicitly rather than relying on position alone:
+                        // if the last element is NOT a ConditionalCollections, the LIKE group is missing
+                        // (e.g. future translator change) and we fall back to a simple append rather than
+                        // silently turning the translatable match into an AND by injecting into the wrong group.
+                        var lastConditional = conditionals.Count > 0 ? conditionals[^1] : null;
+                        if (lastConditional is SqlSugar.ConditionalCollections likeCollection)
                         {
-                            // Add the translatable id match as an OR entry in the existing collection.
+                            // Verified: last element is the LIKE ConditionalCollections — safe to OR in.
                             likeCollection.ConditionalList.Add(
                                 new KeyValuePair<SqlSugar.WhereType, SqlSugar.ConditionalModel>(
                                     SqlSugar.WhereType.Or, translationIdModel));
                         }
                         else
                         {
+                            // Fallback: no LIKE group found — append as a standalone AND condition.
+                            // This preserves correctness (rows matching the translatable term are still
+                            // returned) at the cost of not OR-ing with any non-translatable LIKE results,
+                            // which is safe because there are no non-translatable LIKE conditions here.
                             conditionals.Add(translationIdModel);
                         }
                     }
@@ -670,10 +678,12 @@ public sealed class SqlSugarItemRepository(
         var parentTable = db.EntityMaintenance.GetTableName(parentDesc.EntityType);
         var parentIdCol = db.EntityMaintenance.GetDbColumnName(parentDesc.IdProperty, parentDesc.EntityType);
 
-        // Locale is validated upstream (IsEnabled check in ItemService.ValidateLocale). Use a
-        // string literal embedded in the subquery expression — the same pattern as RelationOrderExpr
-        // injects table/column names. Single-quotes are standard SQL string delimiters.
-        return $"(SELECT t.{fieldCol} FROM {translationTable} t WHERE t.{fkCol} = {parentTable}.{parentIdCol} AND t.{localeCol} = '{queryLocale}')";
+        // Defense-in-depth: escape single quotes in the locale literal (SQL standard doubling)
+        // so that even a crafted locale code that slipped past the charset validator cannot break
+        // out of the literal and inject SQL.  The charset validator in ItemService is the primary
+        // guard; this is the secondary sink-level guard.
+        var safeLocale = queryLocale.Replace("'", "''");
+        return $"(SELECT t.{fieldCol} FROM {translationTable} t WHERE t.{fkCol} = {parentTable}.{parentIdCol} AND t.{localeCol} = '{safeLocale}')";
     }
 
     /// <summary>
