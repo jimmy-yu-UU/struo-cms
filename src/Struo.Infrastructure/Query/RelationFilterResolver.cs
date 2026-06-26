@@ -74,10 +74,20 @@ public sealed class RelationFilterResolver(
                 var parents = await repository.QueryEntityWhereInAsync(declaringType, fkClr, targetIds, ct);
                 return ReadIds(parents, "id");
             }
-            // OneToMany and ManyToMany are added in Task 4.
+            case RelationKind.OneToMany:
+            {
+                // target(child) rows whose id IN targetIds -> read the reverse FK -> declaring (parent) ids
+                var children = await repository.QueryWhereInAsync(seg.Relation.TargetCollection, "id", targetIds, ct);
+                return ReadIds(children, desc.ReverseForeignKeyProperty!);
+            }
+            case RelationKind.ManyToMany:
+            {
+                // junction rows whose targetFk IN targetIds -> read parentFk -> declaring ids
+                var junctions = await repository.QueryEntityWhereInAsync(desc.JunctionType!, desc.JunctionTargetFk!, targetIds, ct);
+                return ReadIds(junctions, desc.JunctionParentFk!);
+            }
             default:
-                throw new QueryException(
-                    $"Cross-relation filter for kind '{seg.Relation.Kind}' is not implemented yet.");
+                throw new QueryException($"Unsupported relation kind '{seg.Relation.Kind}'.");
         }
     }
 
