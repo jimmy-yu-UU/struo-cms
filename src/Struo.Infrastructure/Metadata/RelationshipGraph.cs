@@ -1,4 +1,5 @@
 using System.Reflection;
+using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Enums;
@@ -108,7 +109,7 @@ public sealed class RelationshipGraph : IRelationshipGraph
                 StringComparison.OrdinalIgnoreCase));
 
         var navData = prop.CustomAttributes
-            .First(a => a.AttributeType.FullName == "SqlSugar.Navigate");
+            .First(a => a.AttributeType == typeof(Navigate));
 
         if (r.Kind == RelationKind.ManyToMany)
         {
