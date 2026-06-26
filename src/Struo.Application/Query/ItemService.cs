@@ -18,6 +18,7 @@ public sealed class ItemService(
     IPermissionService permissions,
     IRelationshipGraph graph,
     IRelationExpander expander,
+    IM2MDescriptorSource m2mSource,
     StruoQueryOptions options)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
@@ -114,6 +115,9 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
         var entity = Deserialize(collection, body, meta);
         var created = await repository.CreateAsync(collection, entity, ct);
+        var d = registry.Get(collection)!;
+        var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
+        await SyncM2MAsync(collection, body, createdId, ct);
         return Project(created, meta, null);
     }
 
@@ -123,7 +127,53 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
         var entity = Deserialize(collection, body, meta);
         var updated = await repository.UpdateAsync(collection, id, entity, ct);
-        return updated is null ? null : Project(updated, meta, null);
+        if (updated is null) return null;
+        var d = registry.Get(collection)!;
+        var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
+        await SyncM2MAsync(collection, body, updatedId, ct);
+        return Project(updated, meta, null);
+    }
+
+    /// <summary>
+    /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
+    /// from <paramref name="body"/> under the relation's camelCase name (e.g. <c>"tags"</c>).
+    /// If the key is present, validates every id exists in the target collection, then delegates
+    /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to replace the junction rows.
+    /// Absent keys are silently skipped (partial updates are supported).
+    /// </summary>
+    private async Task SyncM2MAsync(string collection, JsonElement body, object parentId, CancellationToken ct)
+    {
+        var descs = m2mSource.M2MDescriptors(collection);
+        if (descs.Count == 0) return;
+
+        foreach (var desc in descs)
+        {
+            // Only sync when the relation key is present in the request body.
+            if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
+            if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+
+            var targetIds = idsElem.EnumerateArray()
+                .Select(e => (object)e.GetInt64())
+                .ToList();
+
+            // Validate all target ids exist.
+            if (targetIds.Count > 0)
+            {
+                var found = await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
+                if (found.Count != targetIds.Count)
+                    throw new QueryException(
+                        $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
+            }
+
+            await repository.SyncManyToManyAsync(
+                desc.JunctionType,
+                desc.ParentFkProperty,
+                desc.TargetFkProperty,
+                desc.SortProperty,
+                parentId,
+                targetIds,
+                ct);
+        }
     }
 
     public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
@@ -133,13 +183,47 @@ public sealed class ItemService(
         return repository.DeleteAsync(collection, id, ct);
     }
 
+    /// <summary>
+    /// Returns a new <see cref="JsonElement"/> (backed by a pooled <see cref="JsonDocument"/>)
+    /// that is identical to <paramref name="source"/> but with any top-level key in
+    /// <paramref name="keysToRemove"/> omitted. Used to strip M2M id-array keys before
+    /// the entity deserializer runs so it does not try to map <c>long[]</c> into navigation
+    /// properties typed as <c>List&lt;TargetEntity&gt;</c>.
+    /// </summary>
+    private static JsonElement StripKeys(JsonElement source, IReadOnlySet<string> keysToRemove)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var prop in source.EnumerateObject())
+            {
+                if (!keysToRemove.Contains(prop.Name))
+                    prop.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+        // Parse into a new document; the caller owns it via the returned JsonElement.
+        return JsonDocument.Parse(ms.ToArray()).RootElement;
+    }
+
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);
 
     private object Deserialize(string collection, JsonElement body, CollectionMetadata meta)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
-        var entity = body.Deserialize(d.EntityType, JsonOpts)
+
+        // Strip M2M relation keys (e.g. "tags": [1,2]) from the body before deserializing into
+        // the entity type — those keys hold id arrays, not nested objects, so JSON deserialization
+        // would fail trying to convert a long into the target entity type.
+        var m2mNames = m2mSource.M2MDescriptors(collection)
+            .Select(r => r.RelationName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var scalarBody = m2mNames.Count > 0 ? StripKeys(body, m2mNames) : body;
+
+        var entity = scalarBody.Deserialize(d.EntityType, JsonOpts)
                      ?? throw new QueryException("Request body could not be parsed.");
 
         // strip system/read-only fields (audit AOP / identity own them); only nullable props can be nulled

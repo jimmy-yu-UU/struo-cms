@@ -40,7 +40,7 @@ public class ItemServiceTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var expander = new RelationExpander(repo, graph);
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, new StruoQueryOptions());
+            graph, expander, graph, new StruoQueryOptions());
     }
 
     public void Dispose() => _file.Dispose();

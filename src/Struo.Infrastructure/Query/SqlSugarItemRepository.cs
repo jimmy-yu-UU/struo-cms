@@ -42,6 +42,11 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
+    private static readonly MethodInfo SyncM2MGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(SyncM2MGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(string), typeof(string), typeof(string), typeof(object), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
+
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, CancellationToken ct = default)
     {
@@ -155,6 +160,63 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
         };
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();
+    }
+
+    public async Task SyncManyToManyAsync(
+        Type junctionType,
+        string parentFkProperty,
+        string targetFkProperty,
+        string? sortProperty,
+        object parentId,
+        IReadOnlyList<object> targetIds,
+        CancellationToken ct = default)
+    {
+        var parentColumn = db.EntityMaintenance.GetDbColumnName(parentFkProperty, junctionType);
+        var method = SyncM2MGenericAsyncDef.MakeGenericMethod(junctionType);
+        await (Task)method.Invoke(this, [parentColumn, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct])!;
+    }
+
+    private async Task SyncM2MGenericAsync<T>(
+        string parentColumn,
+        string parentFkProperty,
+        string targetFkProperty,
+        string? sortProperty,
+        object parentId,
+        IReadOnlyList<object> targetIds,
+        CancellationToken ct) where T : class, new()
+    {
+        // Delete all existing junction rows for this parent.
+        var deleteConditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = parentColumn,
+                ConditionalType = ConditionalType.Equal,
+                FieldValue = parentId.ToString()
+            }
+        };
+        await db.Deleteable<T>().Where(deleteConditionals).ExecuteCommandAsync(ct);
+
+        // Insert one row per target id, in order.
+        if (targetIds.Count == 0) return;
+
+        var type = typeof(T);
+        var parentProp = type.GetProperty(parentFkProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var targetProp = type.GetProperty(targetFkProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var sortProp   = sortProperty is null ? null
+            : type.GetProperty(sortProperty, BindingFlags.Public | BindingFlags.Instance)!;
+
+        var rows = new List<T>(targetIds.Count);
+        for (var i = 0; i < targetIds.Count; i++)
+        {
+            var row = new T();
+            parentProp.SetValue(row, Convert.ChangeType(parentId,   parentProp.PropertyType));
+            targetProp.SetValue(row, Convert.ChangeType(targetIds[i], targetProp.PropertyType));
+            sortProp?.SetValue(row, i);
+            rows.Add(row);
+        }
+
+        await db.Insertable(rows).ExecuteCommandAsync(ct);
     }
 
     private EntityDescriptor Descriptor(string collection) =>

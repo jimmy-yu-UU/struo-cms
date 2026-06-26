@@ -28,9 +28,10 @@ public static class MetadataServiceCollectionExtensions
                 t => t,
                 StringComparer.OrdinalIgnoreCase);
 
-        // Register graph as both IRelationshipGraph and the concrete RelationshipGraph
+        // Register graph as IRelationshipGraph, IM2MDescriptorSource, and the concrete RelationshipGraph
         var graph = new RelationshipGraph(collections, collectionTypes);
         services.AddSingleton<IRelationshipGraph>(graph);
+        services.AddSingleton<IM2MDescriptorSource>(graph);
         services.AddSingleton(graph);
 
         return services;
