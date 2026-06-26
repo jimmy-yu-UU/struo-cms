@@ -184,13 +184,11 @@ public sealed class ItemService(
     }
 
     /// <summary>
-    /// Returns a new <see cref="JsonElement"/> (backed by a pooled <see cref="JsonDocument"/>)
-    /// that is identical to <paramref name="source"/> but with any top-level key in
-    /// <paramref name="keysToRemove"/> omitted. Used to strip M2M id-array keys before
-    /// the entity deserializer runs so it does not try to map <c>long[]</c> into navigation
-    /// properties typed as <c>List&lt;TargetEntity&gt;</c>.
+    /// Serialises <paramref name="source"/> as UTF-8 JSON with any top-level key in
+    /// <paramref name="keysToRemove"/> omitted. Returns the raw bytes so the caller can
+    /// parse them into a <c>using</c>-scoped <see cref="JsonDocument"/> and avoid a pool leak.
     /// </summary>
-    private static JsonElement StripKeys(JsonElement source, IReadOnlySet<string> keysToRemove)
+    private static byte[] StripKeys(JsonElement source, IReadOnlySet<string> keysToRemove)
     {
         using var ms = new System.IO.MemoryStream();
         using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
@@ -203,8 +201,7 @@ public sealed class ItemService(
             }
             writer.WriteEndObject();
         }
-        // Parse into a new document; the caller owns it via the returned JsonElement.
-        return JsonDocument.Parse(ms.ToArray()).RootElement;
+        return ms.ToArray();
     }
 
     private CollectionMetadata Meta(string collection) =>
@@ -221,10 +218,19 @@ public sealed class ItemService(
             .Select(r => r.RelationName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var scalarBody = m2mNames.Count > 0 ? StripKeys(body, m2mNames) : body;
-
-        var entity = scalarBody.Deserialize(d.EntityType, JsonOpts)
+        object entity;
+        if (m2mNames.Count > 0)
+        {
+            // Parse into a using-scoped document so the ArrayPool buffer is returned promptly.
+            using var stripped = JsonDocument.Parse(StripKeys(body, m2mNames));
+            entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
                      ?? throw new QueryException("Request body could not be parsed.");
+        }
+        else
+        {
+            entity = body.Deserialize(d.EntityType, JsonOpts)
+                     ?? throw new QueryException("Request body could not be parsed.");
+        }
 
         // strip system/read-only fields (audit AOP / identity own them); only nullable props can be nulled
         foreach (var field in meta.Fields.Where(f => f.IsSystem || f.ReadOnly))
