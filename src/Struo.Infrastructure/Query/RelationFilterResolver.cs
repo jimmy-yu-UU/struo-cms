@@ -4,6 +4,7 @@ using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Metadata.Enums;
+using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 
@@ -16,7 +17,11 @@ public sealed class RelationFilterResolver(
     IEntityRegistry registry,
     StruoQueryOptions options) : IRelationFilterResolver
 {
-    public async Task<FilterNode?> RewriteAsync(string rootCollection, FilterNode? filter, CancellationToken ct = default)
+    public async Task<FilterNode?> RewriteAsync(
+        string rootCollection,
+        FilterNode? filter,
+        string? queryLocale = null,
+        CancellationToken ct = default)
     {
         switch (filter)
         {
@@ -27,16 +32,58 @@ public sealed class RelationFilterResolver(
                 return ids.Count == 0
                     ? new ComparisonFilter("id", QueryOperator.Null, null)        // always-false PK leaf
                     : new ComparisonFilter("id", QueryOperator.In, ids);
+            case ComparisonFilter cf when queryLocale is not null
+                                         && IsTranslatableField(rootCollection, cf.FieldPath):
+                // Translatable own-collection leaf: resolve to parent ids via the translation sidecar
+                // at the query locale.
+                var tIds = await ResolveTranslatableIdsAsync(rootCollection, cf, queryLocale, ct);
+                return tIds.Count == 0
+                    ? new ComparisonFilter("id", QueryOperator.Null, null)
+                    : new ComparisonFilter("id", QueryOperator.In, tIds);
             case ComparisonFilter:
                 return filter;                                                     // own-collection leaf
             case LogicalFilter l:
                 var children = new List<FilterNode>(l.Children.Count);
                 foreach (var ch in l.Children)
-                    children.Add((await RewriteAsync(rootCollection, ch, ct))!);
+                    children.Add((await RewriteAsync(rootCollection, ch, queryLocale, ct))!);
                 return new LogicalFilter(l.Op, children);
             default:
                 return filter;
         }
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="fieldName"/> is a translatable field on the given collection.
+    /// </summary>
+    private bool IsTranslatableField(string collection, string fieldName)
+    {
+        var meta = metadata.GetCollection(collection);
+        if (meta?.Translation is null) return false;
+        return meta.Translation.Fields.Any(
+            f => string.Equals(f, fieldName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Resolves a translatable own-collection <see cref="ComparisonFilter"/> to a set of parent ids
+    /// by querying the translation sidecar where Locale == queryLocale AND fieldCol op value.
+    /// </summary>
+    private async Task<IReadOnlyList<object>> ResolveTranslatableIdsAsync(
+        string collection, ComparisonFilter c, string queryLocale, CancellationToken ct)
+    {
+        var meta = metadata.GetCollection(collection)!;
+        var tm = meta.Translation!;
+
+        // The field condition uses the camelCase field name (e.g. "title").
+        // QueryTranslationParentIdsAsync will map it to the CLR property name on the translation entity.
+        var fieldCondition = new ComparisonFilter(c.FieldPath, c.Op, c.Value);
+
+        return await repository.QueryTranslationParentIdsAsync(
+            tm.TranslationEntityType,
+            tm.ForeignKeyProperty,
+            tm.LocaleProperty,
+            queryLocale,
+            fieldCondition,
+            ct);
     }
 
     private async Task<IReadOnlyList<object>> ResolveRootIdsAsync(

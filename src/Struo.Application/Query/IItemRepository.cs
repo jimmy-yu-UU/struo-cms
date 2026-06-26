@@ -6,7 +6,12 @@ public sealed record QueryResult(IReadOnlyList<object> Rows, int Total);
 
 public interface IItemRepository
 {
-    Task<QueryResult> QueryAsync(string collection, QueryModel query, IReadOnlyList<string> searchableFields, CancellationToken ct = default);
+    /// <summary>
+    /// Executes a query against <paramref name="collection"/> with the given filter/sort/search.
+    /// <paramref name="queryLocale"/> is used to resolve translatable fields in sort and search
+    /// against the translation sidecar at that locale; pass <c>null</c> to skip locale-aware paths.
+    /// </summary>
+    Task<QueryResult> QueryAsync(string collection, QueryModel query, IReadOnlyList<string> searchableFields, string? queryLocale = null, CancellationToken ct = default);
     Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default);
     Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default);
     Task<object?> UpdateAsync(string collection, string id, object entity, CancellationToken ct = default);
@@ -62,6 +67,20 @@ public interface IItemRepository
         string localeProperty,
         IReadOnlyList<object> parentIds,
         string? locale,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Queries the translation sidecar table for rows matching <c>Locale == locale</c> AND the given
+    /// <paramref name="fieldCondition"/> (which references a CLR property name on the translation
+    /// entity), then returns the distinct FK (parent id) values from those rows.
+    /// Used by the translatable filter resolver to produce parent-id sets at a given locale.
+    /// </summary>
+    Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        string locale,
+        FilterNode fieldCondition,
         CancellationToken ct = default);
 
     /// <summary>
