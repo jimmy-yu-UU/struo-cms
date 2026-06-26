@@ -29,4 +29,25 @@ public class RelationWriteTests(ApiFactory factory)
             .GetProperty("data").GetProperty("tags");
         tags.GetArrayLength().Should().Be(2);
     }
+
+    [Fact]
+    public async Task Update_article_with_empty_tags_clears_junction()
+    {
+        var c = _factory.CreateClient();
+        var authorId = await Id(await c.PostAsJsonAsync("/api/items/author", new { name = "B" }));
+        var t1 = await Id(await c.PostAsJsonAsync("/api/items/tag", new { name = "c1" }));
+        var t2 = await Id(await c.PostAsJsonAsync("/api/items/tag", new { name = "c2" }));
+        var id = await Id(await c.PostAsJsonAsync("/api/items/article", new { title = "Clear", status = "draft", authorId, tags = new[] { t1, t2 } }));
+
+        // sanity: 2 tags assigned
+        Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("tags").GetArrayLength().Should().Be(2);
+
+        // update with an explicit empty tags array -> junction cleared
+        (await c.PutAsJsonAsync($"/api/items/article/{id}", new { title = "Clear", status = "draft", authorId, tags = Array.Empty<long>() }))
+            .EnsureSuccessStatusCode();
+
+        Root(await (await c.GetAsync($"/api/items/article/{id}?deep=tags")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("tags").GetArrayLength().Should().Be(0);
+    }
 }
