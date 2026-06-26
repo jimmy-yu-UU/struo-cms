@@ -18,6 +18,10 @@ of truth for which locales the admin UI may edit).
 - Framework built-in `Language` collection (code/name/isDefault/enabled/sort), dev-seeded (`en` default + `zh-TW`).
 - Read: all-locales projection under `translations`; `?locale=` single-locale filter; locale validated against enabled `Language`.
 - Write: embedded `translations` per-locale **upsert** (partial update preserves other locales).
+- **Locale-aware querying of translatable fields**: filter/sort/search on translatable fields, resolved at
+  a single *query locale* (the request `?locale=`, or the default `Language` when omitted), via the
+  translation sidecar — reusing the Phase-3b two-phase id-resolution (filter) and a locale-scoped
+  correlated subquery (sort).
 - Schema marks translatable fields; languages exposed via `GET /api/items/language`.
 - Cached `ILanguageProvider` (invalidated on `Language` writes).
 
@@ -135,6 +139,27 @@ Projected shape:
   "translations": { "en": {"title":"Hello","body":"..."}, "zh-TW": {"title":"你好","body":"..."} } }
 ```
 
+## 7.5 Querying translatable fields (locale-aware)
+
+Translatable fields live in the sidecar, so filter/sort/search on them resolves through the translation
+table at a single **query locale**: the request `?locale=` if provided, else the default `Language`
+(`IsDefault`). The `QueryValidator` recognizes translatable fields as valid filter/sort/search targets;
+execution routes them to the translation table instead of a (non-existent) parent column.
+
+- **Filter** (`{title:{_eq:X}}`): reuse the Phase-3b two-phase id-resolution — resolve parent ids whose
+  translation row at the query locale matches (`SELECT ArticleId FROM article_translations WHERE
+  Locale=@loc AND Title …`), then emit `id IN (…)` (empty → `id IS NULL`). Composes with the existing
+  `ConditionalModel` pipeline and single-level `_and`/`_or`.
+- **Sort** (`sort=title` / `-title`): a locale-scoped correlated subquery (Phase-3b form):
+  `ORDER BY (SELECT t.Title FROM article_translations t WHERE t.ArticleId = articles.Id AND t.Locale=@loc) …`.
+- **Search**: each translatable `Searchable` field contributes a match against its translation column at
+  the query locale, folded into the search via the same id-resolution (parent ids whose translation LIKE
+  the term) unioned with non-translatable searchable columns.
+- Non-translatable fields are filtered/sorted/searched exactly as today (parent columns).
+
+This reuses the Phase-3b engine (`RelationFilterResolver` two-phase id-resolution + `RelationOrderExpr`
+correlated subquery), generalized so the translation sidecar is treated as a locale-scoped to-one source.
+
 ## 8. Write execution (embedded, per-locale upsert)
 
 - Body: non-translatable fields top-level + `translations: { "en":{title,body}, "zh-TW":{...} }`.
@@ -172,6 +197,10 @@ earlier-considered `StruoLocalizationOptions` config list is **dropped** in favo
 - **Write**: nested `translations` persist + round-trip; partial update touches only the provided locale
   (others preserved); non-translatable key → 400; unknown locale → 400; create without default-locale → 400.
 - **Schema**: `/api/schema/article` field list includes translatable `title`/`body` with `translatable:true`.
+- **Querying translatable fields (SQLite + Blog)**: seed `en`+`zh-TW` titles; filter `{title:{_eq:…}}` at
+  `?locale=zh-TW` returns only the matching row; with `?locale` omitted, the query runs at the default
+  locale; sort `-title` orders by the locale value; search term hits a translatable field; filtering a
+  translatable field composes with a non-translatable scalar condition under `_and`.
 
 ## 12. Verification gate (§18 — Phase 4)
 
@@ -179,6 +208,7 @@ earlier-considered `StruoLocalizationOptions` config list is **dropped** in favo
 - `Language` CRUD + dev seed.
 - Read returns all locales by default and a single locale with `?locale=`; unknown locale → 400.
 - Write persists embedded translations; partial update preserves other locales.
+- Filter/sort/search on a translatable field at a locale returns correct rows/order.
 - Schema marks translatable fields.
 - **Live PostgreSQL** re-exercised: seed a language, create a multi-locale article, read all/single locale,
   partial-update one locale, and confirm the 400 validations.
