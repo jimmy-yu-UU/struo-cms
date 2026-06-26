@@ -33,6 +33,13 @@ public interface IItemRepository
     /// one new row per target id in order. If <paramref name="sortProperty"/> is non-null it is set
     /// to the list index (0-based) on each inserted row.
     /// </summary>
+    /// <summary>
+    /// Returns the primary-key values of all rows of <paramref name="collection"/> matching a
+    /// single own-collection (non-dotted) <paramref name="leafCondition"/>. Used by the
+    /// cross-relation filter resolver as the leaf step of two-phase id-resolution.
+    /// </summary>
+    Task<IReadOnlyList<object>> QueryIdsAsync(string collection, FilterNode leafCondition, CancellationToken ct = default);
+
     Task SyncManyToManyAsync(
         Type junctionType,
         string parentFkProperty,

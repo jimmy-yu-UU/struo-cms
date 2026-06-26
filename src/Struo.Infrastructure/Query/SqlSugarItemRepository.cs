@@ -42,6 +42,11 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
+    private static readonly MethodInfo QueryIdsGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(QueryIdsGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(List<IConditionalModel>), typeof(string), typeof(CancellationToken)])!;
+
     private static readonly MethodInfo SyncM2MGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SyncM2MGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -160,6 +165,23 @@ public sealed class SqlSugarItemRepository(ISqlSugarClient db, IEntityRegistry r
         };
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();
+    }
+
+    public async Task<IReadOnlyList<object>> QueryIdsAsync(
+        string collection, FilterNode leafCondition, CancellationToken ct = default)
+    {
+        var d = Descriptor(collection);
+        var conditionals = ConditionalModelTranslator.Translate(leafCondition, null, [], d, db);
+        var method = QueryIdsGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [conditionals, d.IdProperty, ct])!;
+    }
+
+    private async Task<IReadOnlyList<object>> QueryIdsGenericAsync<T>(
+        List<IConditionalModel> conditionals, string idProperty, CancellationToken ct) where T : class, new()
+    {
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        var pi = typeof(T).GetProperty(idProperty)!;
+        return rows.Select(r => pi.GetValue(r)!).ToList();
     }
 
     public async Task SyncManyToManyAsync(

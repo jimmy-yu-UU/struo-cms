@@ -19,6 +19,7 @@ public sealed class ItemService(
     IRelationshipGraph graph,
     IRelationExpander expander,
     IM2MDescriptorSource m2mSource,
+    IRelationFilterResolver relationFilter,
     StruoQueryOptions options)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
@@ -28,6 +29,7 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
         var validated = QueryValidator.Validate(raw, meta, options, graph, metadata);
+        validated = validated with { Filter = await relationFilter.RewriteAsync(collection, validated.Filter, ct) };
         var searchable = QueryValidator.SearchableFields(meta);
         var result = await repository.QueryAsync(collection, validated, searchable, ct);
 
