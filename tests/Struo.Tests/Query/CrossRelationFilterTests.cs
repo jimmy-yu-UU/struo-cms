@@ -97,4 +97,40 @@ public class CrossRelationFilterTests(ApiFactory factory)
             .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
         ids.Should().Contain(byCat).And.Contain(byTitle);
     }
+
+    [Fact]
+    public async Task Filter_m2m_tags_name_exists()
+    {
+        var c = _factory.CreateClient();
+        var author = await Post(c, "author", new { name = "A4" });
+        var tag = await Post(c, "tag", new { name = "CSharpTag" });
+        var hit = await Post(c, "article", new { title = "TAGGED", status = "draft", authorId = author, tags = new[] { tag } });
+        await Post(c, "article", new { title = "UNTAGGED", status = "draft", authorId = author });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object> { ["tags.name"] = Eq("CSharpTag") }
+        });
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
+        var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
+        ids.Should().Contain(hit);
+        foreach (var r in data.EnumerateArray())
+            r.GetProperty("title").GetString().Should().Be("TAGGED");
+    }
+
+    [Fact]
+    public async Task Filter_o2m_category_by_article_title()
+    {
+        var c = _factory.CreateClient();
+        var author = await Post(c, "author", new { name = "A5" });
+        var cat = await Post(c, "category", new { name = "O2MFilterCat" });
+        await Post(c, "article", new { title = "UniqueChildTitle", status = "draft", authorId = author, categoryId = cat });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object> { ["articles.title"] = Eq("UniqueChildTitle") }
+        });
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/category/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
+        data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).Should().Contain(cat);
+    }
 }
