@@ -803,46 +803,53 @@ private string? BuildOrderBy(IReadOnlyList<SortField> sort, EntityDescriptor d, 
 }
 
 /// <summary>
-/// Builds a correlated-subquery ORDER BY expression for a to-one relation path. Validated
-/// to be all-to-one by QueryValidator before reaching here. Built inside-out so multi-level
-/// paths nest: category.parent.name -> (SELECT name FROM category WHERE id =
-/// (SELECT parent_id FROM category WHERE id = article.category_id)).
+/// Builds a correlated-subquery ORDER BY expression for a to-one relation path (validated
+/// all-to-one by QueryValidator before reaching here). This is the SPIKE-VALIDATED form:
+/// ONE subquery, with one JOIN per extra hop. The root table is referenced by its bare
+/// table name (SqlSugar uses no alias for a single-table Queryable&lt;T&gt;).
+///   category.name        -> (SELECT t1.name FROM categories t1 WHERE t1.id = articles.category_id)
+///   category.parent.name -> (SELECT t2.name FROM categories t1
+///                             JOIN categories t2 ON t2.id = t1.parent_id
+///                            WHERE t1.id = articles.category_id)
 /// </summary>
 private string RelationOrderExpr(string rootCollection, string path)
 {
     var rp = RelationPath.Parse(rootCollection, path, graph, metadata, options.MaxRelationDepth);
+    var segs = rp.Segments;
+
+    string FkCol(EntityDescriptor d, string camelFk)
+    {
+        var clr = d.FieldToProperty.TryGetValue(camelFk, out var p) ? p : Capitalize(camelFk);
+        return db.EntityMaintenance.GetDbColumnName(clr, d.EntityType);
+    }
+
     var rootDesc = registry.Get(rootCollection)!;
     var rootTable = db.EntityMaintenance.GetTableName(rootDesc.EntityType);
 
-    // innermost reference: rootTable.<fk column of the first segment>
-    var first = rp.Segments[0];
-    var firstFkClr = rootDesc.FieldToProperty.TryGetValue(first.Relation.ForeignKey!, out var fp)
-        ? fp : Capitalize(first.Relation.ForeignKey!);
-    var current = $"{rootTable}.{db.EntityMaintenance.GetDbColumnName(firstFkClr, rootDesc.EntityType)}";
+    var t1Desc = registry.Get(segs[0].Relation.TargetCollection)!;
+    var t1Table = db.EntityMaintenance.GetTableName(t1Desc.EntityType);
+    var t1IdCol = db.EntityMaintenance.GetDbColumnName(t1Desc.IdProperty, t1Desc.EntityType);
 
-    for (var i = 0; i < rp.Segments.Count; i++)
+    var lastDesc = registry.Get(segs[^1].Relation.TargetCollection)!;
+    var leafClr = lastDesc.FieldToProperty.TryGetValue(rp.LeafField, out var lp) ? lp : rp.LeafField;
+    var leafCol = db.EntityMaintenance.GetDbColumnName(leafClr, lastDesc.EntityType);
+
+    var sb = new System.Text.StringBuilder();
+    sb.Append($"(SELECT t{segs.Count}.{leafCol} FROM {t1Table} t1");
+
+    var prevDesc = t1Desc;                       // FK linking t{k} to t{k+1} lives on the previous (to-one) entity
+    for (var k = 1; k < segs.Count; k++)
     {
-        var seg = rp.Segments[i];
-        var targetDesc = registry.Get(seg.Relation.TargetCollection)!;
-        var targetTable = db.EntityMaintenance.GetTableName(targetDesc.EntityType);
-        var idCol = db.EntityMaintenance.GetDbColumnName(targetDesc.IdProperty, targetDesc.EntityType);
-
-        string selectExpr;
-        if (i == rp.Segments.Count - 1)
-        {
-            var leafClr = targetDesc.FieldToProperty.TryGetValue(rp.LeafField, out var lp) ? lp : rp.LeafField;
-            selectExpr = db.EntityMaintenance.GetDbColumnName(leafClr, targetDesc.EntityType);
-        }
-        else
-        {
-            var next = rp.Segments[i + 1];
-            var nextFkClr = targetDesc.FieldToProperty.TryGetValue(next.Relation.ForeignKey!, out var np)
-                ? np : Capitalize(next.Relation.ForeignKey!);
-            selectExpr = db.EntityMaintenance.GetDbColumnName(nextFkClr, targetDesc.EntityType);
-        }
-        current = $"(SELECT {targetTable}.{selectExpr} FROM {targetTable} WHERE {targetTable}.{idCol} = {current})";
+        var segDesc = registry.Get(segs[k].Relation.TargetCollection)!;
+        var segTable = db.EntityMaintenance.GetTableName(segDesc.EntityType);
+        var segIdCol = db.EntityMaintenance.GetDbColumnName(segDesc.IdProperty, segDesc.EntityType);
+        var linkFkCol = FkCol(prevDesc, segs[k].Relation.ForeignKey!);
+        sb.Append($" JOIN {segTable} t{k + 1} ON t{k + 1}.{segIdCol} = t{k}.{linkFkCol}");
+        prevDesc = segDesc;
     }
-    return current;
+
+    sb.Append($" WHERE t1.{t1IdCol} = {rootTable}.{FkCol(rootDesc, segs[0].Relation.ForeignKey!)})");
+    return sb.ToString();
 }
 
 private static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1..];
@@ -850,7 +857,7 @@ private static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1.
 
 Update the `QueryAsync` call site to pass `collection`: `var orderBy = BuildOrderBy(query.Sort, d, collection);`.
 
-> **Spike fallback (Task 1 chose LeftJoin instead):** drop `RelationOrderExpr` and, in `RunQueryAsync`, attach a `LeftJoin` for the sort path and `OrderBy` the joined column. Keep paging/`Total` correct (a to-one left join does not multiply rows). Use whichever the spike validated; delete the other.
+> Multi-level deeper than two hops: the loop handles any depth, but per the spike depth >2 is unlikely — `MaxRelationDepth` already caps it. The spike confirmed two-hop works on SQLite; T6 confirms portability on Postgres.
 
 - [ ] **Step 4: Run the new tests** — `dotnet test --filter "FullyQualifiedName~CrossRelationSortTests"`. Expected: PASS (descending order correct; to-many sort 400).
 
