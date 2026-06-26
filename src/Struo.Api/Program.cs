@@ -90,6 +90,13 @@ try
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        // TEMP (Phase 4 live-PG verification only — revert, do not commit): drop stale Blog
+        // tables so InitTables rebuilds them under the new translation schema (articles loses title/body).
+        if (Environment.GetEnvironmentVariable("STRUO_DROP_BLOG_TABLES") == "1")
+        {
+            foreach (var t in new[] { "article_translations", "article_tags", "articles", "categories", "authors", "tags", "languages" })
+                if (db.DbMaintenance.IsAnyTable(t, false)) db.DbMaintenance.DropTable(t);
+        }
         DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment,
             typeof(Article), typeof(ArticleTranslation), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag),
             typeof(Struo.Infrastructure.Localization.Language));
