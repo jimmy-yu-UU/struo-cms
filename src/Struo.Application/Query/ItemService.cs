@@ -4,6 +4,7 @@ using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Security;
+using Struo.Domain.Localization;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -71,7 +72,14 @@ public sealed class ItemService(
 
     private void ValidateLocale(string? locale)
     {
-        if (locale is not null && !languages.IsEnabled(locale))
+        if (locale is null) return;
+        // Charset guard: reject ill-formed locale codes before the IsEnabled membership check
+        // so a crafted code containing SQL metacharacters (e.g. a single quote) is stopped here
+        // rather than reaching the sort-subquery literal in SqlSugarItemRepository.
+        if (!LocaleFormat.IsValid(locale))
+            throw new QueryException(
+                $"Locale '{locale}' contains invalid characters. Codes must match [A-Za-z0-9_-]{{1,35}}.");
+        if (!languages.IsEnabled(locale))
             throw new QueryException($"Unknown or disabled locale '{locale}'.");
     }
 
@@ -204,6 +212,7 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
+        ValidateLanguageCodeIfNeeded(collection, body);
         var entity = Deserialize(collection, body, meta);
         var created = await repository.CreateAsync(collection, entity, ct);
         var d = registry.Get(collection)!;
@@ -218,6 +227,7 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
+        ValidateLanguageCodeIfNeeded(collection, body);
         var entity = Deserialize(collection, body, meta);
         var updated = await repository.UpdateAsync(collection, id, entity, ct);
         if (updated is null) return null;
@@ -233,6 +243,22 @@ public sealed class ItemService(
     {
         if (string.Equals(collection, "language", StringComparison.OrdinalIgnoreCase))
             languages.Invalidate();
+    }
+
+    /// <summary>
+    /// When writing to the <c>language</c> collection, validates that the <c>code</c> field in
+    /// <paramref name="body"/> matches the strict locale-format whitelist so that a crafted code
+    /// value cannot later be used to inject SQL via the translatable sort subquery.
+    /// </summary>
+    private static void ValidateLanguageCodeIfNeeded(string collection, JsonElement body)
+    {
+        if (!string.Equals(collection, "language", StringComparison.OrdinalIgnoreCase)) return;
+        if (!body.TryGetProperty("code", out var codeElem)) return;
+        var code = codeElem.ValueKind == JsonValueKind.String ? codeElem.GetString() : null;
+        if (code is null) return; // missing/null code handled by required-field validation
+        if (!LocaleFormat.IsValid(code))
+            throw new QueryException(
+                $"Language code '{code}' contains invalid characters. Codes must match [A-Za-z0-9_-]{{1,35}}.");
     }
 
     /// <summary>
