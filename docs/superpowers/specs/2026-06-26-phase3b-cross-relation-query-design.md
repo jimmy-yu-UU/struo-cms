@@ -114,10 +114,8 @@ Every hop is SqlSugar `Queryable`/`ConditionalModel` (the Phase-3a batched-`IN` 
 zero vendor SQL; to-one, to-many, and multi-level are handled uniformly.
 
 **Guards:**
-- depth bounded by `MaxRelationDepth`;
-- `MaxRelationFilterIds` (new, default 5000) caps each intermediate id set — exceeding it
-  → 400 "relation filter too broad". (Final value fixed in the plan; removable if the
-  user prefers no cap.)
+- depth bounded by `MaxRelationDepth`. No cap on intermediate id-set size (a
+  `MaxRelationFilterIds` guard was considered and deliberately omitted).
 
 ## 7. Sort (to-one only)
 
@@ -131,14 +129,13 @@ zero vendor SQL; to-one, to-many, and multi-level are handled uniformly.
 ## 8. Configuration
 
 - Reuse `StruoQueryOptions.MaxRelationDepth` (default 5) as the path-depth cap.
-- Add `StruoQueryOptions.MaxRelationFilterIds` (default 5000), bound from the `Query`
-  section, consumed by the filter resolver.
+- No new options. (A `MaxRelationFilterIds` intermediate-set cap was considered and
+  deliberately omitted.)
 
 ## 9. Error handling
 
 - Unknown relation segment / unknown leaf field / over-depth path → 400 (`QueryException`).
 - Sort path containing a to-many segment → 400.
-- Intermediate or root id set exceeds `MaxRelationFilterIds` → 400.
 - Empty id set → always-false leaf (`id IS NULL`), not an error; returns 0 rows.
 
 ## 10. Testing (TDD)
