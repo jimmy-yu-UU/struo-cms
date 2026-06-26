@@ -9,4 +9,5 @@ public sealed record CollectionMetadata
     public string? DefaultDisplayField { get; init; }
     public required IReadOnlyList<FieldGroupMetadata> FieldGroups { get; init; }
     public required IReadOnlyList<FieldMetadata> Fields { get; init; }
+    public IReadOnlyList<RelationMetadata> Relations { get; init; } = [];
 }
