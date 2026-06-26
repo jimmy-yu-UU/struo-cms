@@ -21,6 +21,10 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpPost("query")]
     public async Task<IActionResult> Query(string collection, [FromBody] JsonElement body, CancellationToken ct)
     {
+        // Detach from the pooled request buffer: the backing JsonDocument is only valid
+        // synchronously within the request, and Kestrel recycles it across awaits. Clone()
+        // deep-copies into a standalone GC-managed document that survives async work.
+        body = body.Clone();
         var raw = QueryParser.ParseEnvelope(body);
         var result = await items.QueryAsync(collection, raw, Locale(), ct);
         return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
@@ -43,6 +47,9 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(string collection, [FromBody] JsonElement body, CancellationToken ct)
     {
+        // See Query: clone off the pooled request buffer so values read after awaits
+        // (SyncTranslationsAsync/SyncM2MAsync run post-await) stay valid for multibyte text.
+        body = body.Clone();
         var created = await items.CreateAsync(collection, body, ct);
         var id = created.TryGetValue("id", out var idValue) ? idValue : null;
         return Created($"/api/items/{collection}/{id}", new { data = created });
@@ -51,6 +58,8 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string collection, string id, [FromBody] JsonElement body, CancellationToken ct)
     {
+        // See Query: clone off the pooled request buffer so values read after awaits stay valid.
+        body = body.Clone();
         var updated = await items.UpdateAsync(collection, id, body, ct);
         return updated is null ? NotFound() : Ok(new { data = updated });
     }
