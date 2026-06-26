@@ -19,6 +19,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IPermissionService, AllowAllPermissionService>();
         services.AddScoped<IItemRepository, SqlSugarItemRepository>();
         services.AddScoped<IRelationExpander, RelationExpander>();
+        services.AddScoped<IRelationFilterResolver, RelationFilterResolver>();
         services.AddScoped<ItemService>();
         return services;
     }
