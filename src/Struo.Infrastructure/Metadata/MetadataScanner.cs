@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Reflection;
 using System.Text.Json;
 using SqlSugar;
@@ -120,7 +121,8 @@ public static class MetadataScanner
             Group = attr.Group,
             DefaultDisplayField = defaultDisplay,
             FieldGroups = groups,
-            Fields = ordered
+            Fields = ordered,
+            Relations = ScanRelations(type)
         };
     }
 
@@ -201,4 +203,106 @@ public static class MetadataScanner
             Group = "SEO", Sort = 902
         };
     }
+
+    // ── Relation scanning ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Scans all properties on <paramref name="type"/> that carry both
+    /// <c>[Navigate]</c> and <c>[CmsRelation]</c> and returns a
+    /// <see cref="RelationMetadata"/> for each.
+    /// </summary>
+    /// <remarks>
+    /// SqlSugar's <c>Navigate</c> attribute exposes no public properties —
+    /// all data lives in constructor arguments, read via
+    /// <see cref="CustomAttributeData"/>.
+    /// Constructors:
+    ///   M2O/O2M → <c>(NavigateType, string fk, string[]?)</c>
+    ///   M2M     → <c>(Type junctionType, string parentFk, string targetFk, string[]?)</c>
+    /// </remarks>
+    public static IReadOnlyList<RelationMetadata> ScanRelations(Type type)
+    {
+        var list = new List<RelationMetadata>();
+        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            // Both [Navigate] and [CmsRelation] required
+            var navData = prop.CustomAttributes
+                .FirstOrDefault(a => a.AttributeType == typeof(Navigate));
+            var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
+            if (navData is null || rel is null) continue;
+
+            var isCollection = prop.PropertyType.IsGenericType
+                && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType);
+
+            Type target;
+            RelationKind kind;
+            string? fk = null;
+
+            if (isCollection)
+            {
+                target = prop.PropertyType.GetGenericArguments()[0];
+                kind = NavigateHasMappingType(navData)
+                    ? RelationKind.ManyToMany
+                    : RelationKind.OneToMany;
+            }
+            else
+            {
+                target = prop.PropertyType.IsGenericType
+                    ? prop.PropertyType.GetGenericArguments()[0]
+                    : prop.PropertyType;
+                // Unwrap Nullable<T>
+                target = Nullable.GetUnderlyingType(target) ?? target;
+                kind = RelationKind.ManyToOne;
+                fk = Camel(NavigateForeignKeyName(navData));
+            }
+
+            list.Add(new RelationMetadata
+            {
+                Name = Camel(prop.Name),
+                Label = prop.Name,
+                Kind = kind,
+                TargetCollection = Camel(target.Name),
+                Interface = rel.Interface,
+                ForeignKey = fk,
+                DisplayTemplate = rel.DisplayTemplate,
+                PickerQuery = rel.PickerQuery,
+                OnDelete = rel.OnDelete,
+                Editable = rel.Editable,
+                SelfReferencing = target == type
+            });
+        }
+        return list;
+    }
+
+    // Navigate attribute has no public properties; read ctor args via CustomAttributeData.
+    // M2M ctor: (Type MappingTableType, string typeAId, string typeBId, string[]?)
+    // M2O/O2M ctor: (NavigateType, string fk, string[]?)
+
+    /// <summary>Returns true when the Navigate ctor's first arg is a <see cref="Type"/> (M2M junction).</summary>
+    internal static bool NavigateHasMappingType(CustomAttributeData navData) =>
+        navData.ConstructorArguments.Count >= 1
+        && navData.ConstructorArguments[0].ArgumentType == typeof(Type);
+
+    /// <summary>Returns the junction mapping <see cref="Type"/> (M2M ctor arg 0).</summary>
+    internal static Type? NavigateMappingType(CustomAttributeData navData) =>
+        NavigateHasMappingType(navData)
+            ? (Type?)navData.ConstructorArguments[0].Value
+            : null;
+
+    /// <summary>Returns the parent-side junction FK property name (M2M ctor arg 1).</summary>
+    internal static string? NavigateMappingA(CustomAttributeData navData) =>
+        NavigateHasMappingType(navData) && navData.ConstructorArguments.Count >= 2
+            ? navData.ConstructorArguments[1].Value as string
+            : null;
+
+    /// <summary>Returns the target-side junction FK property name (M2M ctor arg 2).</summary>
+    internal static string? NavigateMappingB(CustomAttributeData navData) =>
+        NavigateHasMappingType(navData) && navData.ConstructorArguments.Count >= 3
+            ? navData.ConstructorArguments[2].Value as string
+            : null;
+
+    /// <summary>Returns the FK property name for M2O/O2M (Navigate ctor arg 1).</summary>
+    internal static string NavigateForeignKeyName(CustomAttributeData navData) =>
+        navData.ConstructorArguments.Count >= 2
+            ? (navData.ConstructorArguments[1].Value as string ?? string.Empty)
+            : string.Empty;
 }
