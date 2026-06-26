@@ -214,12 +214,13 @@ public sealed class SqlSugarItemRepository(
         IReadOnlyList<object> targetIds,
         CancellationToken ct) where T : class, new()
     {
+        // ConditionalType.In (not Equal): Equal binds FieldValue as text -> "bigint = text" 42883 on PostgreSQL. In is the Postgres-safe primitive used elsewhere in this class.
         var deleteConditionals = new List<IConditionalModel>
         {
             new ConditionalModel
             {
                 FieldName = parentColumn,
-                ConditionalType = ConditionalType.Equal,
+                ConditionalType = ConditionalType.In,
                 FieldValue = parentId.ToString()
             }
         };
