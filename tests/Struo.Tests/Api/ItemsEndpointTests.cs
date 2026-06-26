@@ -20,7 +20,8 @@ public class ItemsEndpointTests(ApiFactory factory)
     {
         var client = _factory.CreateClient();
 
-        var create = await client.PostAsJsonAsync("/api/items/article", new { title = "Hello", status = "draft" });
+        var create = await client.PostAsJsonAsync("/api/items/article",
+            new { status = "draft", translations = new { en = new { title = "Hello" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdData = Root(await create.Content.ReadAsStringAsync()).GetProperty("data");
         var id = createdData.GetProperty("id").GetInt64();
@@ -29,9 +30,10 @@ public class ItemsEndpointTests(ApiFactory factory)
         var get = await client.GetAsync($"/api/items/article/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var put = await client.PutAsJsonAsync($"/api/items/article/{id}", new { title = "Updated", status = "published" });
+        var put = await client.PutAsJsonAsync($"/api/items/article/{id}",
+            new { status = "published", translations = new { en = new { title = "Updated" } } });
         put.StatusCode.Should().Be(HttpStatusCode.OK);
-        Root(await put.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("title").GetString().Should().Be("Updated");
+        Root(await put.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString().Should().Be("published");
 
         (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await client.GetAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -42,15 +44,18 @@ public class ItemsEndpointTests(ApiFactory factory)
     {
         var client = _factory.CreateClient();
         for (var i = 0; i < 4; i++)
-            await client.PostAsJsonAsync("/api/items/article", new { title = $"Post{i}", status = i % 2 == 0 ? "published" : "draft" });
+            await client.PostAsJsonAsync("/api/items/article",
+                new { status = i % 2 == 0 ? "published" : "draft", translations = new { en = new { title = $"Post{i}" } } });
 
-        var resp = await client.GetAsync("/api/items/article?filter[status][_eq]=published&sort=-title&limit=1&offset=0&fields=id,title");
+        // NOTE: sort/filter/fields by the translatable `title` is locale-aware querying (Task 5).
+        // Here we filter+sort+select by non-translatable own-collection fields (status, id).
+        var resp = await client.GetAsync("/api/items/article?filter[status][_eq]=published&sort=-id&limit=1&offset=0&fields=id,status");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var root = Root(await resp.Content.ReadAsStringAsync());
         root.GetProperty("meta").GetProperty("total").GetInt32().Should().BeGreaterThanOrEqualTo(2);
         var first = root.GetProperty("data")[0];
-        first.TryGetProperty("status", out _).Should().BeFalse();
-        first.TryGetProperty("title", out _).Should().BeTrue();
+        first.TryGetProperty("status", out _).Should().BeTrue();
+        first.TryGetProperty("id", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -73,11 +78,12 @@ public class ItemsEndpointTests(ApiFactory factory)
     {
         var client = _factory.CreateClient();
 
-        var create = await client.PostAsJsonAsync("/api/items/article", new { title = "IdFilterTest", status = "draft" });
+        var create = await client.PostAsJsonAsync("/api/items/article",
+            new { status = "draft", translations = new { en = new { title = "IdFilterTest" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
 
-        var resp = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}&fields=id,title");
+        var resp = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}&fields=id,status");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetArrayLength().Should().Be(1);

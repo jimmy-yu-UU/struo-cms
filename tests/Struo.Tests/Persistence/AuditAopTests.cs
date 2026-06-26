@@ -22,7 +22,7 @@ public class AuditAopTests
         var client = SqlSugarClientFactory.Create(Options(db), new TestCurrentUserAccessor("alice"));
         client.CodeFirst.InitTables<Article>();
 
-        var id = client.Insertable(new Article { Title = "Hello" }).ExecuteReturnBigIdentity();
+        var id = client.Insertable(new Article { Status = "draft" }).ExecuteReturnBigIdentity();
 
         var saved = client.Queryable<Article>().InSingle(id);
         saved.CreatedBy.Should().Be("alice");
@@ -37,12 +37,12 @@ public class AuditAopTests
         using var db = new SqliteTestDatabase();
         var client = SqlSugarClientFactory.Create(Options(db), new TestCurrentUserAccessor("alice"));
         client.CodeFirst.InitTables<Article>();
-        var id = client.Insertable(new Article { Title = "Hello" }).ExecuteReturnBigIdentity();
+        var id = client.Insertable(new Article { Status = "draft" }).ExecuteReturnBigIdentity();
         var original = client.Queryable<Article>().InSingle(id);
 
         var updateClient = SqlSugarClientFactory.Create(Options(db), new TestCurrentUserAccessor("bob"));
         var toUpdate = updateClient.Queryable<Article>().InSingle(id);
-        toUpdate.Title = "Changed";
+        toUpdate.Status = "published";
         updateClient.Updateable(toUpdate).ExecuteCommand();
 
         var after = updateClient.Queryable<Article>().InSingle(id);

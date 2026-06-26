@@ -24,8 +24,8 @@ public class CrossRelationSortTests(ApiFactory factory)
         var author = await Post(c, "author", new { name = "S1" });
         var catA = await Post(c, "category", new { name = "AAA_sort" });
         var catZ = await Post(c, "category", new { name = "ZZZ_sort" });
-        var artA = await Post(c, "article", new { title = "sortA", status = "draft", authorId = author, categoryId = catA });
-        var artZ = await Post(c, "article", new { title = "sortZ", status = "draft", authorId = author, categoryId = catZ });
+        var artA = await Post(c, "article", new { status = "draft", authorId = author, categoryId = catA, translations = new { en = new { title = "sortA" } } });
+        var artZ = await Post(c, "article", new { status = "draft", authorId = author, categoryId = catZ, translations = new { en = new { title = "sortZ" } } });
 
         // sort=-category.name should put the ZZZ-category article before the AAA-category one.
         var envelope = JsonSerializer.SerializeToElement(new { sort = new[] { "-category.name" } });

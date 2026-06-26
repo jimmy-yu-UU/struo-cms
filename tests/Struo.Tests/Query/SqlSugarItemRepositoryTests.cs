@@ -45,12 +45,12 @@ public class SqlSugarItemRepositoryTests : IDisposable
     [Fact]
     public async Task Create_then_get_returns_entity_with_audit()
     {
-        var created = (Article)await _repo.CreateAsync("article", new Article { Title = "Hello", Status = "draft" });
+        var created = (Article)await _repo.CreateAsync("article", new Article { Status = "draft" });
         created.Id.Should().BeGreaterThan(0);
 
         var fetched = (Article?)await _repo.GetByIdAsync("article", created.Id.ToString());
         fetched.Should().NotBeNull();
-        fetched!.Title.Should().Be("Hello");
+        fetched!.Status.Should().Be("draft");
         fetched.CreatedBy.Should().Be("tester");
     }
 
@@ -58,11 +58,11 @@ public class SqlSugarItemRepositoryTests : IDisposable
     public async Task Query_filters_and_paginates()
     {
         for (var i = 0; i < 5; i++)
-            await _repo.CreateAsync("article", new Article { Title = $"T{i}", Status = i % 2 == 0 ? "published" : "draft" });
+            await _repo.CreateAsync("article", new Article { Status = i % 2 == 0 ? "published" : "draft" });
 
         var q = new QueryModel(null,
             new ComparisonFilter("status", QueryOperator.Eq, "published"),
-            [new SortField("title", false)], 2, 0, null);
+            [new SortField("status", false)], 2, 0, null);
 
         var result = await _repo.QueryAsync("article", q, []);
         result.Total.Should().Be(3);
@@ -72,10 +72,10 @@ public class SqlSugarItemRepositoryTests : IDisposable
     [Fact]
     public async Task Update_changes_fields_and_delete_removes()
     {
-        var created = (Article)await _repo.CreateAsync("article", new Article { Title = "Old", Status = "draft" });
+        var created = (Article)await _repo.CreateAsync("article", new Article { Status = "draft" });
         var updated = (Article?)await _repo.UpdateAsync("article", created.Id.ToString(),
-            new Article { Title = "New", Status = "published" });
-        updated!.Title.Should().Be("New");
+            new Article { Status = "published" });
+        updated!.Status.Should().Be("published");
         // Audit AOP must stamp UpdatedBy on the persisted row.
         updated.UpdatedBy.Should().Be("tester");
 

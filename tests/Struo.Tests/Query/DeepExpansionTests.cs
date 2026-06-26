@@ -18,7 +18,7 @@ public class DeepExpansionTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
         var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "Ada" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", new { title = "T", status = "draft", authorId })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, translations = new { en = new { title = "T" } } })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
 
         var resp = await c.GetAsync($"/api/items/article/{id}?deep=author");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -30,7 +30,7 @@ public class DeepExpansionTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
         var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "X" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", new { title = "Y", status = "draft", authorId })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, translations = new { en = new { title = "Y" } } })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
         (await c.GetAsync($"/api/items/article/{id}?deep=ghostrel")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -39,7 +39,7 @@ public class DeepExpansionTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
         var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "NoDeep" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
-        await c.PostAsJsonAsync("/api/items/article", new { title = "NoDeep", status = "draft", authorId });
+        await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, translations = new { en = new { title = "NoDeep" } } });
 
         var data = Root(await (await c.GetAsync("/api/items/article?limit=50")).Content.ReadAsStringAsync()).GetProperty("data");
         data.GetArrayLength().Should().BeGreaterThan(0);                 // at least the one we created
@@ -53,8 +53,8 @@ public class DeepExpansionTests(ApiFactory factory)
         var c = _factory.CreateClient();
         var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/category", new { name = "News" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
         var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "O2M" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
-        await c.PostAsJsonAsync("/api/items/article", new { title = "Child1", status = "draft", authorId, categoryId });
-        await c.PostAsJsonAsync("/api/items/article", new { title = "Child2", status = "draft", authorId, categoryId });
+        await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, categoryId, translations = new { en = new { title = "Child1" } } });
+        await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, categoryId, translations = new { en = new { title = "Child2" } } });
 
         var resp = await c.GetAsync($"/api/items/category/{categoryId}?deep=articles");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -68,7 +68,7 @@ public class DeepExpansionTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
         var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "Whitelisted" })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
-        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article", new { title = "WL", status = "draft", authorId })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article", new { status = "draft", authorId, translations = new { en = new { title = "WL" } } })).Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
 
         var envelope = JsonSerializer.SerializeToElement(new
         {

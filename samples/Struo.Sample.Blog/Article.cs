@@ -7,7 +7,7 @@ using Struo.Domain.Seo;
 namespace Struo.Sample.Blog;
 
 [SugarTable("articles")]
-[CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Title))]
+[CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status))]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]
 public sealed class Article : IAuditable, ISeoMeta
@@ -15,14 +15,10 @@ public sealed class Article : IAuditable, ISeoMeta
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
     public long Id { get; set; }
 
-    [CmsField(Label = "Title", Interface = FieldInterface.Text, Required = true,
-              Searchable = true, Translatable = true, Sort = 1, Group = "Content")]
-    public string Title { get; set; } = string.Empty;
-
-    [SugarColumn(IsNullable = true)]
-    [CmsField(Label = "Body", Interface = FieldInterface.RichText,
-              Translatable = true, Sort = 2, Group = "Content")]
-    public string? Body { get; set; }
+    // Title/Body moved to the ArticleTranslation sidecar (Phase 4 i18n).
+    [CmsTranslations(typeof(ArticleTranslation))]
+    [SugarColumn(IsIgnore = true)]
+    public List<ArticleTranslation> Translations { get; set; } = [];
 
     [CmsField(Label = "Status", Interface = FieldInterface.Select, Sort = 3, Group = "Content")]
     [CmsOptions("draft:Draft", "published:Published")]
