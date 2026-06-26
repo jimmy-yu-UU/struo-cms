@@ -25,4 +25,20 @@ public interface IItemRepository
     /// Empty <paramref name="values"/> returns an empty list without issuing a query.
     /// </summary>
     Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces all junction rows for <paramref name="parentId"/> on the given
+    /// <paramref name="junctionType"/> so that exactly <paramref name="targetIds"/> are linked.
+    /// Deletes all existing rows whose parent FK matches <paramref name="parentId"/>, then inserts
+    /// one new row per target id in order. If <paramref name="sortProperty"/> is non-null it is set
+    /// to the list index (0-based) on each inserted row.
+    /// </summary>
+    Task SyncManyToManyAsync(
+        Type junctionType,
+        string parentFkProperty,
+        string targetFkProperty,
+        string? sortProperty,
+        object parentId,
+        IReadOnlyList<object> targetIds,
+        CancellationToken ct = default);
 }

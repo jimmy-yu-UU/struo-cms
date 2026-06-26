@@ -26,7 +26,7 @@ public sealed record RelationDescriptor(
 /// Registered as both <see cref="IRelationshipGraph"/> and the concrete
 /// <see cref="RelationshipGraph"/> so Infrastructure peers can access descriptors.
 /// </summary>
-public sealed class RelationshipGraph : IRelationshipGraph
+public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 {
     private readonly IReadOnlyDictionary<string, IReadOnlyList<RelationDescriptor>> _byCollection;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundRestrict;
@@ -96,6 +96,23 @@ public sealed class RelationshipGraph : IRelationshipGraph
 
     public IReadOnlyList<RelationDescriptor> Descriptors(string collection) =>
         _byCollection.TryGetValue(collection, out var d) ? d : [];
+
+    // ── IM2MDescriptorSource ─────────────────────────────────────────────────
+
+    public IReadOnlyList<M2MDescriptor> M2MDescriptors(string collection) =>
+        Descriptors(collection)
+            .Where(d => d.Meta.Kind == RelationKind.ManyToMany
+                        && d.JunctionType is not null
+                        && d.JunctionParentFk is not null
+                        && d.JunctionTargetFk is not null)
+            .Select(d => new M2MDescriptor(
+                d.Meta.Name,
+                d.Meta.TargetCollection,
+                d.JunctionType!,
+                d.JunctionParentFk!,
+                d.JunctionTargetFk!,
+                d.JunctionSort))
+            .ToList();
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
