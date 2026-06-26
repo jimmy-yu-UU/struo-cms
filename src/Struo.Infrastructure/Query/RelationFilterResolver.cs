@@ -70,7 +70,8 @@ public sealed class RelationFilterResolver(
                 // declaring rows where FK IN targetIds -> their ids
                 var declaringType = registry.Get(seg.DeclaringCollection)!.EntityType;
                 var fkClr = registry.Get(seg.DeclaringCollection)!.FieldToProperty
-                    .TryGetValue(seg.Relation.ForeignKey!, out var p) ? p : Capitalize(seg.Relation.ForeignKey!);
+                    .TryGetValue(seg.Relation.ForeignKey!, out var p) ? p
+                    : throw new QueryException($"Foreign key '{seg.Relation.ForeignKey}' is not a known property on '{seg.DeclaringCollection}'.");
                 var parents = await repository.QueryEntityWhereInAsync(declaringType, fkClr, targetIds, ct);
                 return ReadIds(parents, "id");
             }
@@ -98,5 +99,4 @@ public sealed class RelationFilterResolver(
         entity.GetType().GetProperty(property,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)?.GetValue(entity);
 
-    private static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1..];
 }
