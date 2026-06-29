@@ -18,8 +18,7 @@ public static class FileStorageServiceCollectionExtensions
         services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         services.AddSingleton<IImageDimensionReader, ImageDimensionReader>();
-        // Uncommented when FileService lands (Task 5):
-        // services.AddScoped<FileService>();
+        services.AddScoped<FileService>();
         return services;
     }
 }
