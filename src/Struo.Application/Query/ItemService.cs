@@ -172,7 +172,8 @@ public sealed class ItemService(
                 foreach (var fieldMap in byLocale.Values)
                     foreach (var fn in imageFields)
                     {
-                        var resolvedKey = fn.EndsWith("Id", StringComparison.Ordinal) ? fn[..^2] : fn + "Resolved";
+                        if (!fn.EndsWith("Id", StringComparison.Ordinal)) continue; // only resolve "<name>Id" image fields → "<name>"
+                        var resolvedKey = fn[..^2];
                         if (!fieldMap.TryGetValue(fn, out var raw) || raw is not Guid g)
                         {
                             fieldMap[resolvedKey] = null;
