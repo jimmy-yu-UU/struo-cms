@@ -30,7 +30,7 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
     public Task DeleteAsync(string key, CancellationToken ct = default)
     {
         var path = FullPath(key);
-        if (File.Exists(path)) File.Delete(path);
+        if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
         return Task.CompletedTask;
     }
 
