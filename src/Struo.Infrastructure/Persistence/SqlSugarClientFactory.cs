@@ -7,8 +7,6 @@ namespace Struo.Infrastructure.Persistence;
 
 public static class SqlSugarClientFactory
 {
-    private static readonly NullabilityInfoContext NullabilityCtx = new();
-
     public static ISqlSugarClient Create(DatabaseOptions options, ICurrentUserAccessor currentUser)
     {
         var dbType = DbTypeMapper.Map(options.DbType);
@@ -50,8 +48,8 @@ public static class SqlSugarClientFactory
                     // nullable annotations so we respect the intent without adding SqlSugar to Domain.
                     if (property.PropertyType == typeof(string))
                     {
-                        var info = NullabilityCtx.Create(property);
-                        if (info.WriteState == NullabilityState.Nullable)
+                        var ctx = new NullabilityInfoContext(); // per-call; NullabilityInfoContext is not thread-safe
+                        if (ctx.Create(property).WriteState == NullabilityState.Nullable)
                             column.IsNullable = true;
                     }
                 }
