@@ -17,8 +17,8 @@ public static class FileStorageServiceCollectionExtensions
         // Task 9 swaps in S3FileStorage when Backend=s3.
         services.AddSingleton<IFileStorage, LocalFileStorage>();
 
-        // Uncommented as their types land (Task 3 / Task 5):
-        // services.AddSingleton<IImageDimensionReader, ImageSharpDimensionReader>();
+        services.AddSingleton<IImageDimensionReader, ImageDimensionReader>();
+        // Uncommented when FileService lands (Task 5):
         // services.AddScoped<FileService>();
         return services;
     }
