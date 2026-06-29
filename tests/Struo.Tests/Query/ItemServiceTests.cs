@@ -23,24 +23,22 @@ public class ItemServiceTests : IDisposable
     {
         var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
-            new TestCurrentUserAccessor("tester"));
+            new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
+            [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
-            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag), typeof(Struo.Infrastructure.Files.File)]));
+            [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article),
-            ["tag"] = typeof(Tag),
-            ["author"] = typeof(Author),
+            ["article"]  = typeof(Article),
             ["category"] = typeof(Category),
-            ["file"] = typeof(Struo.Infrastructure.Files.File),
+            ["file"]     = typeof(Struo.Infrastructure.Files.File),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());

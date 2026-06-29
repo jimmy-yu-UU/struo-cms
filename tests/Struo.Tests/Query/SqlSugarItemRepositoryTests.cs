@@ -15,6 +15,8 @@ namespace Struo.Tests.Query;
 
 public class SqlSugarItemRepositoryTests : IDisposable
 {
+    private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
     private readonly SqliteTestDatabase _file = new();
     private readonly ISqlSugarClient _db;
     private readonly IItemRepository _repo;
@@ -23,18 +25,16 @@ public class SqlSugarItemRepositoryTests : IDisposable
     {
         _db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
-            new TestCurrentUserAccessor("tester"));
+            new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<Article>();
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
+            [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
         var descriptors = MetadataScanner.ScanDescriptors([typeof(Article)]);
         var registry = new EntityRegistry(descriptors);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["article"]  = typeof(Article),
-            ["tag"]      = typeof(Tag),
-            ["author"]   = typeof(Author),
             ["category"] = typeof(Category),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
         };
@@ -48,12 +48,12 @@ public class SqlSugarItemRepositoryTests : IDisposable
     public async Task Create_then_get_returns_entity_with_audit()
     {
         var created = (Article)await _repo.CreateAsync("article", new Article { Status = "draft" });
-        created.Id.Should().BeGreaterThan(0);
+        created.Id.Should().NotBe(Guid.Empty);
 
         var fetched = (Article?)await _repo.GetByIdAsync("article", created.Id.ToString());
         fetched.Should().NotBeNull();
         fetched!.Status.Should().Be("draft");
-        fetched.CreatedBy.Should().Be("tester");
+        fetched.CreatedBy.Should().Be(Tester);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
             new Article { Status = "published" });
         updated!.Status.Should().Be("published");
         // Audit AOP must stamp UpdatedBy on the persisted row.
-        updated.UpdatedBy.Should().Be("tester");
+        updated.UpdatedBy.Should().Be(Tester);
 
         (await _repo.DeleteAsync("article", created.Id.ToString())).Should().BeTrue();
         (await _repo.GetByIdAsync("article", created.Id.ToString())).Should().BeNull();

@@ -3,7 +3,7 @@ namespace Struo.Domain.Auditing;
 public interface IAuditable
 {
     DateTime CreatedAt { get; set; }
-    string? CreatedBy { get; set; }
+    Guid? CreatedBy { get; set; }
     DateTime UpdatedAt { get; set; }
-    string? UpdatedBy { get; set; }
+    Guid? UpdatedBy { get; set; }
 }

@@ -14,7 +14,7 @@ public class DatabaseInitializerTests
         var db = new SqliteTestDatabase();
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor("system"));
+            new TestCurrentUserAccessor(Guid.Empty));
         return (db, client);
     }
 

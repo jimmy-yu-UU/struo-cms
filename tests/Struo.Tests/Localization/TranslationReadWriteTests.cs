@@ -13,18 +13,13 @@ public class TranslationReadWriteTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<long> NewAuthor(System.Net.Http.HttpClient c, string n) =>
-        Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = n })).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
-
     [Fact]
     public async Task Create_with_translations_and_read_all_locales()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "TA");
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Hello", body = "B-en" },
@@ -32,7 +27,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
             }
         });
         var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
 
         var all = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync()).GetProperty("data");
         var tr = all.GetProperty("translations");
@@ -45,10 +40,9 @@ public class TranslationReadWriteTests(ApiFactory factory)
     public async Task Read_single_locale_filters_translations()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "TB");
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "OnlyEn", body = (string?)null },
@@ -56,7 +50,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
             }
         });
         var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
 
         var tr = Root(await (await c.GetAsync($"/api/items/article/{id}?locale=zh-TW")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
@@ -68,10 +62,9 @@ public class TranslationReadWriteTests(ApiFactory factory)
     public async Task Partial_update_preserves_other_locale()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "TC");
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "E1", body = (string?)null },
@@ -79,11 +72,11 @@ public class TranslationReadWriteTests(ApiFactory factory)
             }
         });
         var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
 
         var upd = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object> { ["zh-TW"] = new { title = "Z2", body = (string?)null } }
         });
         await c.PutAsJsonAsync($"/api/items/article/{id}", upd);
@@ -98,10 +91,9 @@ public class TranslationReadWriteTests(ApiFactory factory)
     public async Task Unknown_locale_on_write_is_400()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "TD");
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object> { ["xx"] = new { title = "x", body = (string?)null } }
         });
         (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode.Should().Be(HttpStatusCode.BadRequest);

@@ -10,10 +10,9 @@ namespace Struo.Sample.Blog;
 [CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status))]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]
-public sealed class Article : IAuditable, ISeoMeta
+public sealed class Article : AuditableEntity, ISeoMeta
 {
-    [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-    public long Id { get; set; }
+    [SugarColumn(IsPrimaryKey = true)] public new Guid Id { get; set; }
 
     // Title/Body moved to the ArticleTranslation sidecar (Phase 4 i18n).
     [CmsTranslations(typeof(ArticleTranslation))]
@@ -33,41 +32,18 @@ public sealed class Article : IAuditable, ISeoMeta
     [SugarColumn(IsNullable = true)] public string? SeoMetaDescription { get; set; }
     [SugarColumn(IsNullable = true)] public Guid? SeoOgImageId { get; set; }
 
-    // --- relations (Phase 3a) ---
-    public long AuthorId { get; set; }
-
-    [Navigate(NavigateType.OneToOne, nameof(AuthorId))]
-    [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.Restrict)]
-    [SugarColumn(IsIgnore = true)]
-    public Author? Author { get; set; }
-
+    // --- relations ---
     [SugarColumn(IsNullable = true)]
-    public long? CategoryId { get; set; }
+    public Guid? CategoryId { get; set; }
 
     [Navigate(NavigateType.OneToOne, nameof(CategoryId))]
     [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull)]
     [SugarColumn(IsIgnore = true)]
     public Category? Category { get; set; }
 
-    [Navigate(typeof(ArticleTag), nameof(ArticleTag.ArticleId), nameof(ArticleTag.TagId))]
-    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(ArticleTag.SortOrder))]
-    [SugarColumn(IsIgnore = true)]
-    public List<Tag> Tags { get; set; } = [];
-
-    // --- file relations (Phase 5) ---
+    // SEO OG image — single parent relation, retained as-is (Phase 5.6 will move SEO to translations)
     [Navigate(NavigateType.OneToOne, nameof(SeoOgImageId))]
     [CmsRelation(Interface = RelationInterface.ImagePicker, OnDelete = OnDelete.SetNull)]
     [SugarColumn(IsIgnore = true)]
     public Struo.Infrastructure.Files.File? SeoOgImage { get; set; }
-
-    [Navigate(typeof(ArticleFile), nameof(ArticleFile.ArticleId), nameof(ArticleFile.FileId))]
-    [CmsRelation(Interface = RelationInterface.FilesPicker, SortField = nameof(ArticleFile.SortOrder))]
-    [SugarColumn(IsIgnore = true)]
-    public List<Struo.Infrastructure.Files.File> Gallery { get; set; } = [];
-
-    // IAuditable
-    public DateTime CreatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? CreatedBy { get; set; }
-    public DateTime UpdatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? UpdatedBy { get; set; }
 }

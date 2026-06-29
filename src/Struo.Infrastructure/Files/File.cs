@@ -13,9 +13,9 @@ namespace Struo.Infrastructure.Files;
 /// </summary>
 [SugarTable("files")]
 [CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName))]
-public sealed class File : IAuditable
+public sealed class File : AuditableEntity
 {
-    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    [SugarColumn(IsPrimaryKey = true)] public new Guid Id { get; set; }
 
     public string StorageKey { get; set; } = "";   // internal: no [CmsField]
 
@@ -38,9 +38,4 @@ public sealed class File : IAuditable
     [CmsTranslations(typeof(FileTranslation))]
     [SugarColumn(IsIgnore = true)]
     public List<FileTranslation> Translations { get; set; } = [];
-
-    public DateTime CreatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? CreatedBy { get; set; }
-    public DateTime UpdatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? UpdatedBy { get; set; }
 }

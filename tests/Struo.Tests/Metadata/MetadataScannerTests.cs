@@ -10,7 +10,7 @@ namespace Struo.Tests.Metadata;
 public class MetadataScannerTests
 {
     private static CollectionMetadata ArticleMeta() =>
-        MetadataScanner.ScanTypes([typeof(Article), typeof(Tag)])
+        MetadataScanner.ScanTypes([typeof(Article), typeof(Category)])
             .Single(c => c.Name == "article");
 
     [Fact]
@@ -73,8 +73,8 @@ public class MetadataScannerTests
     [Fact]
     public void Scans_multiple_collections()
     {
-        var all = MetadataScanner.ScanTypes([typeof(Article), typeof(Tag)]);
-        all.Select(c => c.Name).Should().BeEquivalentTo(["article", "tag"]);
+        var all = MetadataScanner.ScanTypes([typeof(Article), typeof(Category)]);
+        all.Select(c => c.Name).Should().BeEquivalentTo(["article", "category"]);
     }
 
     [Fact]

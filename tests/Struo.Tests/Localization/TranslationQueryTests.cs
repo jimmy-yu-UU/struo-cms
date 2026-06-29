@@ -14,13 +14,11 @@ public class TranslationQueryTests(ApiFactory factory)
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
     private static object Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
 
-    private async Task<long> NewArticle(System.Net.Http.HttpClient c, string enTitle, string zhTitle)
+    private async Task<string> NewArticle(System.Net.Http.HttpClient c, string enTitle, string zhTitle)
     {
-        var author = Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = "QA" })).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = enTitle, body = (string?)null },
@@ -28,7 +26,7 @@ public class TranslationQueryTests(ApiFactory factory)
             }
         });
         return Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
     }
 
     [Fact]
@@ -40,7 +38,7 @@ public class TranslationQueryTests(ApiFactory factory)
 
         var env = JsonSerializer.SerializeToElement(new { filter = new Dictionary<string, object> { ["title"] = Eq("ZhUniqueAAA") } });
         var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
-        data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).Should().Contain(hit).And.HaveCount(1);
+        data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit).And.HaveCount(1);
     }
 
     [Fact]
@@ -51,7 +49,7 @@ public class TranslationQueryTests(ApiFactory factory)
         var zzz = await NewArticle(c, "Zzz", "Zzz");
         var env = JsonSerializer.SerializeToElement(new { sort = new[] { "-title" }, filter = new Dictionary<string, object> { ["status"] = Eq("draft") } });
         var order = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=en", env)).Content.ReadAsStringAsync())
-            .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
+            .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
         order.IndexOf(zzz).Should().BeLessThan(order.IndexOf(aaa));
     }
 }

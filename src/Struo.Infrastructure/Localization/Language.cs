@@ -22,7 +22,7 @@ public sealed class Language : IAuditable
     public int Sort { get; set; }
 
     public DateTime CreatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? CreatedBy { get; set; }
+    [SugarColumn(IsNullable = true)] public Guid? CreatedBy { get; set; }
     public DateTime UpdatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? UpdatedBy { get; set; }
+    [SugarColumn(IsNullable = true)] public Guid? UpdatedBy { get; set; }
 }
