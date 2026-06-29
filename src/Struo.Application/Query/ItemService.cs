@@ -444,10 +444,7 @@ public sealed class ItemService(
                              System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
                          ?? throw new InvalidOperationException(
                              $"Collection '{collection}' has no primary-key property '{targetDesc.IdProperty}'.");
-            object typedId;
-            try { typedId = Convert.ChangeType(id, pkProp.PropertyType); }
-            catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
-            { throw new QueryException($"Invalid id '{id}' for collection '{collection}'."); }
+            var typedId = IdParsing.ParseTo(id, pkProp.PropertyType);
 
             foreach (var (sourceCollection, foreignKey) in inbound)
             {
