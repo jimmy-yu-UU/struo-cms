@@ -12,7 +12,7 @@ namespace Struo.Sample.Blog;
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]
 public sealed class Article : AuditableEntity, ISeoMeta
 {
-    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
     // Title/Body moved to the ArticleTranslation sidecar (Phase 4 i18n).
     [CmsTranslations(typeof(ArticleTranslation))]
