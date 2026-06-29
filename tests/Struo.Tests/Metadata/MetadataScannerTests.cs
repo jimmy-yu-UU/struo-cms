@@ -67,7 +67,7 @@ public class MetadataScannerTests
         seoTitle.Interface.Should().Be(FieldInterface.Text);
         seoTitle.Group.Should().Be("SEO");
         article.Fields.Should().Contain(f => f.Name == "seoMetaDescription" && f.Interface == FieldInterface.Textarea);
-        article.Fields.Should().Contain(f => f.Name == "seoOgImageId" && f.Interface == FieldInterface.Number);
+        article.Fields.Should().Contain(f => f.Name == "seoOgImageId" && f.Interface == FieldInterface.Hidden);
     }
 
     [Fact]

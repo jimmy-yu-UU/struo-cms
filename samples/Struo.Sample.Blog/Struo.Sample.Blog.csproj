@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Struo.Domain\Struo.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Struo.Infrastructure\Struo.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
