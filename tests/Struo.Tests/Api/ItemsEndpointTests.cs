@@ -24,8 +24,8 @@ public class ItemsEndpointTests(ApiFactory factory)
             new { status = "draft", translations = new { en = new { title = "Hello" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdData = Root(await create.Content.ReadAsStringAsync()).GetProperty("data");
-        var id = createdData.GetProperty("id").GetInt64();
-        createdData.GetProperty("createdBy").GetString().Should().Be("system");
+        var id = createdData.GetProperty("id").GetString()!;
+        createdData.GetProperty("createdBy").GetString().Should().Be(Guid.Empty.ToString());
 
         var get = await client.GetAsync($"/api/items/article/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -81,13 +81,13 @@ public class ItemsEndpointTests(ApiFactory factory)
         var create = await client.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "IdFilterTest" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
-        var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+        var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
         var resp = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}&fields=id,status");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetArrayLength().Should().Be(1);
-        data[0].GetProperty("id").GetInt64().Should().Be(id);
+        data[0].GetProperty("id").GetString().Should().Be(id);
     }
 
     [Fact]

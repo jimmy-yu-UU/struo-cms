@@ -13,12 +13,8 @@ public static class SqlSugarClientFactory
         {
             ConnectionString = options.ConnectionString,
             DbType = dbType,
-            IsAutoCloseConnection = true
-        };
-
-        if (dbType == SqlSugar.DbType.Sqlite)
-        {
-            config.ConfigureExternalServices = new ConfigureExternalServices
+            IsAutoCloseConnection = true,
+            ConfigureExternalServices = new ConfigureExternalServices
             {
                 EntityService = (property, column) =>
                 {
@@ -29,9 +25,19 @@ public static class SqlSugarClientFactory
                     {
                         column.DataType = "INTEGER";
                     }
+
+                    // Treat all C# nullable value types (e.g. Guid?, int?, DateTime?)
+                    // as nullable columns in CodeFirst DDL. This covers audit actor
+                    // fields (Guid? CreatedBy/UpdatedBy) inherited from AuditableEntity
+                    // without requiring [SugarColumn(IsNullable=true)] in Domain code.
+                    var underlyingType = Nullable.GetUnderlyingType(property.PropertyType);
+                    if (underlyingType != null && !column.IsPrimarykey)
+                    {
+                        column.IsNullable = true;
+                    }
                 }
-            };
-        }
+            }
+        };
 
         var client = new SqlSugarClient(config);
 

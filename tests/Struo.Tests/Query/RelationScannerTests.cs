@@ -12,24 +12,15 @@ public class RelationScannerTests
         MetadataScanner.ScanRelations(t);
 
     [Fact]
-    public void Scans_m2o_author_with_foreign_key()
+    public void Scans_m2o_category_with_foreign_key()
     {
-        var author = Rel(typeof(Article)).Single(r => r.Name == "author");
-        author.Kind.Should().Be(RelationKind.ManyToOne);
-        author.TargetCollection.Should().Be("author");
-        author.ForeignKey.Should().Be("authorId");
-        author.Interface.Should().Be(RelationInterface.Dropdown);
-        author.OnDelete.Should().Be(OnDelete.Restrict);
-        author.SelfReferencing.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Scans_m2m_tags()
-    {
-        var tags = Rel(typeof(Article)).Single(r => r.Name == "tags");
-        tags.Kind.Should().Be(RelationKind.ManyToMany);
-        tags.TargetCollection.Should().Be("tag");
-        tags.Interface.Should().Be(RelationInterface.TagSelect);
+        var category = Rel(typeof(Article)).Single(r => r.Name == "category");
+        category.Kind.Should().Be(RelationKind.ManyToOne);
+        category.TargetCollection.Should().Be("category");
+        category.ForeignKey.Should().Be("categoryId");
+        category.Interface.Should().Be(RelationInterface.Dropdown);
+        category.OnDelete.Should().Be(OnDelete.SetNull);
+        category.SelfReferencing.Should().BeFalse();
     }
 
     [Fact]

@@ -23,18 +23,13 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
     private static object Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
 
-    private async Task<long> NewAuthor(System.Net.Http.HttpClient c, string n) =>
-        Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = n })).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
-
     [Fact]
     public async Task Create_with_multibyte_translation_round_trips()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "MB-A");
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Hello", body = "English body" },
@@ -43,7 +38,7 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
         });
 
         var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
 
         var tr = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
@@ -56,10 +51,9 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
     public async Task Filter_translatable_field_with_multibyte_value_returns_match()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "MB-B");
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Findable", body = (string?)null },
@@ -67,7 +61,7 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
             }
         });
         var hit = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
 
         var env = JsonSerializer.SerializeToElement(new
         {
@@ -75,6 +69,6 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
         });
         var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", env)).Content.ReadAsStringAsync())
             .GetProperty("data");
-        data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).Should().Contain(hit);
+        data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit);
     }
 }

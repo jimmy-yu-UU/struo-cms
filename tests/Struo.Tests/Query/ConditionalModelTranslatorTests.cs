@@ -19,7 +19,7 @@ public class ConditionalModelTranslatorTests
         var file = new SqliteTestDatabase();
         var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
-            new TestCurrentUserAccessor("system"));
+            new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         // title moved to the translation sidecar; use own-collection fields (status/publishedAt).
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

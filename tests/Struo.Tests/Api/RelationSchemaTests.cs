@@ -16,11 +16,10 @@ public class RelationSchemaTests(ApiFactory factory)
         var client = _factory.CreateClient();
         var body = await (await client.GetAsync("/api/schema/article")).Content.ReadAsStringAsync();
         body.Should().Contain("\"relations\"");
-        body.Should().Contain("\"name\":\"author\"");
+        body.Should().Contain("\"name\":\"category\"");
         body.Should().Contain("\"kind\":\"manyToOne\"");
-        body.Should().Contain("\"name\":\"tags\"");
-        body.Should().Contain("\"kind\":\"manyToMany\"");
-        body.Should().Contain("\"targetCollection\":\"author\"");
+        body.Should().Contain("\"name\":\"seoOgImage\"");
+        body.Should().Contain("\"targetCollection\":\"category\"");
     }
 
     [Fact]

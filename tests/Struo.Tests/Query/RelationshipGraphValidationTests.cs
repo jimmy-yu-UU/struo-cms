@@ -10,19 +10,19 @@ namespace Struo.Tests.Query;
 
 public class RelationshipGraphValidationTests
 {
-    private static readonly CollectionMetadata TagCollection = new()
+    private static readonly CollectionMetadata CategoryCollection = new()
     {
-        Name = "tag",
-        Label = "Tag",
+        Name = "category",
+        Label = "Category",
         FieldGroups = [],
         Fields = [],
         Relations = []
     };
 
-    private static readonly IReadOnlyDictionary<string, Type> TagTypes =
+    private static readonly IReadOnlyDictionary<string, Type> CategoryTypes =
         new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["tag"] = typeof(Tag)
+            ["category"] = typeof(Category)
         };
 
     [Fact]
@@ -52,7 +52,7 @@ public class RelationshipGraphValidationTests
 
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["widget"] = typeof(Tag)
+            ["widget"] = typeof(Category)
         };
 
         var act = () => new RelationshipGraph([widgetMeta], collectionTypes);
@@ -74,10 +74,10 @@ public class RelationshipGraphValidationTests
             [
                 new RelationMetadata
                 {
-                    Name = "tag",
-                    Label = "Tag",
+                    Name = "category",
+                    Label = "Category",
                     Kind = RelationKind.ManyToOne,
-                    TargetCollection = "tag",
+                    TargetCollection = "category",
                     Interface = RelationInterface.Dropdown,
                     ForeignKey = null,
                     OnDelete = OnDelete.Restrict,
@@ -88,11 +88,11 @@ public class RelationshipGraphValidationTests
 
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["widget"] = typeof(Tag),
-            ["tag"] = typeof(Tag)
+            ["widget"] = typeof(Category),
+            ["category"] = typeof(Category)
         };
 
-        var act = () => new RelationshipGraph([widgetMeta, TagCollection], collectionTypes);
+        var act = () => new RelationshipGraph([widgetMeta, CategoryCollection], collectionTypes);
 
         act.Should().Throw<MetadataException>()
             .WithMessage("*no foreign key*");

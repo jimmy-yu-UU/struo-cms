@@ -22,7 +22,7 @@ public class CachedMetadataProviderTests
         using var sp = Build();
         var provider = sp.GetRequiredService<IMetadataProvider>();
         provider.GetCollections().Select(c => c.Name)
-            .Should().Contain(["article", "tag"]);
+            .Should().Contain(["article", "category"]);
     }
 
     [Fact]

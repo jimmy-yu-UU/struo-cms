@@ -17,7 +17,7 @@ public class DbReadinessCheckTests
         using var db = new SqliteTestDatabase();
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor("system"));
+            new TestCurrentUserAccessor(Guid.Empty));
         client.CodeFirst.InitTables<Article>();
 
         var check = new DbReadinessCheck(client);
@@ -35,7 +35,7 @@ public class DbReadinessCheckTests
                 DbType = StruoDbType.Sqlite,
                 ConnectionString = "Data Source=/nonexistent-dir/struo_missing.db;Mode=ReadOnly"
             },
-            new TestCurrentUserAccessor("system"));
+            new TestCurrentUserAccessor(Guid.Empty));
 
         var check = new DbReadinessCheck(client);
         var result = await check.CheckHealthAsync(new HealthCheckContext());

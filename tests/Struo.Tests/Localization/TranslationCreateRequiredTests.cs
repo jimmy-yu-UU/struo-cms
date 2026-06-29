@@ -18,18 +18,13 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<long> NewAuthor(System.Net.Http.HttpClient c, string n) =>
-        Root(await (await c.PostAsJsonAsync("/api/items/author", new { name = n })).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
-
     [Fact]
     public async Task Create_without_translations_returns_400()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "CR-A");
 
         // No `translations` key at all → the default-locale translation is missing.
-        var body = JsonSerializer.SerializeToElement(new { status = "draft", authorId = author });
+        var body = JsonSerializer.SerializeToElement(new { status = "draft" });
 
         (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode
             .Should().Be(HttpStatusCode.BadRequest);
@@ -39,12 +34,11 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     public async Task Create_missing_default_locale_returns_400()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "CR-B");
 
         // Translations present, but only the non-default locale (default is "en").
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["zh-TW"] = new { title = "只中", body = (string?)null }
@@ -59,22 +53,21 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     public async Task Update_without_translations_is_allowed()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "CR-C");
 
         // 1. Create a valid article carrying the default-locale translation.
         var createBody = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Keep-Me", body = "B-en" }
             }
         });
         var id = Root(await (await c.PostAsJsonAsync("/api/items/article", createBody)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
+            .GetProperty("data").GetProperty("id").GetString()!;
 
         // 2. PUT with no `translations` key — just a status change. Must NOT 400.
-        var updBody = JsonSerializer.SerializeToElement(new { status = "published", authorId = author });
+        var updBody = JsonSerializer.SerializeToElement(new { status = "published" });
         var updResp = await c.PutAsJsonAsync($"/api/items/article/{id}", updBody);
         updResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -88,11 +81,10 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     public async Task Create_with_default_locale_translation_returns_201()
     {
         var c = _factory.CreateClient();
-        var author = await NewAuthor(c, "CR-D");
 
         var body = JsonSerializer.SerializeToElement(new
         {
-            status = "draft", authorId = author,
+            status = "draft",
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Valid", body = "B-en" }

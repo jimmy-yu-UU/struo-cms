@@ -71,17 +71,12 @@ public class LocaleSecurityTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
 
-        // Create an author and two articles with distinct translatable titles.
-        var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author",
-            new { name = "SearchOrAuthor" })).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
-
-        long MakeArticle(string enTitle, string zhTitle)
+        // Create two articles with distinct translatable titles.
+        string MakeArticle(string enTitle, string zhTitle)
         {
             var body = JsonSerializer.SerializeToElement(new
             {
                 status = "draft",
-                authorId,
                 translations = new Dictionary<string, object>
                 {
                     ["en"]    = new { title = enTitle,  body = (string?)null },
@@ -90,7 +85,7 @@ public class LocaleSecurityTests(ApiFactory factory)
             });
             var resp = c.PostAsJsonAsync("/api/items/article", body).GetAwaiter().GetResult();
             return Root(resp.Content.ReadAsStringAsync().GetAwaiter().GetResult())
-                .GetProperty("data").GetProperty("id").GetInt64();
+                .GetProperty("data").GetProperty("id").GetString()!;
         }
 
         var hitId  = MakeArticle("UniqueOrSearchHit",  "UniqueOrSearchHit-zh");
@@ -101,7 +96,7 @@ public class LocaleSecurityTests(ApiFactory factory)
         var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=en", qBody))
             .Content.ReadAsStringAsync()).GetProperty("data");
 
-        var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64()).ToList();
+        var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
         ids.Should().Contain(hitId);
         ids.Should().NotContain(missId);
     }
@@ -111,14 +106,9 @@ public class LocaleSecurityTests(ApiFactory factory)
     {
         var c = _factory.CreateClient();
 
-        var authorId = Root(await (await c.PostAsJsonAsync("/api/items/author",
-            new { name = "SearchOrAuthorZh" })).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetInt64();
-
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
-            authorId,
             translations = new Dictionary<string, object>
             {
                 ["en"]    = new { title = "ZhSearchTestEn",  body = (string?)null },
@@ -126,13 +116,13 @@ public class LocaleSecurityTests(ApiFactory factory)
             }
         });
         var hitId = Root(await (await c.PostAsJsonAsync("/api/items/article", body))
-            .Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetInt64();
+            .Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
         var qBody = JsonSerializer.SerializeToElement(new { search = "獨特搜尋目標" });
         var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", qBody))
             .Content.ReadAsStringAsync()).GetProperty("data");
 
-        data.EnumerateArray().Select(r => r.GetProperty("id").GetInt64())
+        data.EnumerateArray().Select(r => r.GetProperty("id").GetString())
             .Should().Contain(hitId);
     }
 }

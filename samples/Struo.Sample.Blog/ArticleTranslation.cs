@@ -8,7 +8,7 @@ namespace Struo.Sample.Blog;
 public sealed class ArticleTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-    public long ArticleId { get; set; }
+    public Guid ArticleId { get; set; }
     public string Locale { get; set; } = "";
     [CmsField(Label = "Title", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1, Group = "Content")]
     public string Title { get; set; } = "";

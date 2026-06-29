@@ -20,7 +20,7 @@ public class SchemaEndpointTests(ApiFactory factory)
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("\"name\":\"article\"");
-        body.Should().Contain("\"name\":\"tag\"");
+        body.Should().Contain("\"name\":\"category\"");
     }
 
     [Fact]
