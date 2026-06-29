@@ -122,4 +122,65 @@ public class TranslationReadWriteTests(ApiFactory factory)
         tr.GetProperty("zh-TW").GetProperty("seoTitle").GetString().Should().Be("哈囉 SEO");
         tr.GetProperty("zh-TW").GetProperty("seoMetaDescription").GetString().Should().Be("zh desc");
     }
+
+    [Fact]
+    public async Task Per_locale_og_image_resolves_to_file_object()
+    {
+        var c = _factory.CreateClient();
+
+        // 1. Upload a file, capture its id
+        var content = new System.Net.Http.ByteArrayContent(new byte[] { 1, 2, 3 });
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        var mp = new System.Net.Http.MultipartFormDataContent { { content, "file", "og.bin" } };
+        var fileResp = await c.PostAsync("/api/files", mp);
+        var fileId = Root(await fileResp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+        var fileGuid = Guid.Parse(fileId);
+
+        // 2. Create article: en has seoOgImageId, zh-TW has none
+        var body = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            status = "draft",
+            translations = new Dictionary<string, object>
+            {
+                ["en"]    = new { title = "OG Test", seoOgImageId = fileGuid },
+                ["zh-TW"] = new { title = "OG 測試" }
+            }
+        });
+        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").GetString()!;
+
+        // 3. GET the article (all locales)
+        var tr = Root(await (await c.GetAsync($"/api/items/article/{articleId}")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("translations");
+
+        // 4. Assert
+        tr.GetProperty("en").GetProperty("seoOgImage").ValueKind.Should().NotBe(System.Text.Json.JsonValueKind.Null);
+        tr.GetProperty("en").GetProperty("seoOgImage").GetProperty("id").GetString().Should().Be(fileId);
+        tr.GetProperty("en").GetProperty("seoOgImage").TryGetProperty("fileName", out _).Should().BeTrue();
+        tr.GetProperty("zh-TW").GetProperty("seoOgImage").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Dangling_og_image_id_resolves_to_null()
+    {
+        var c = _factory.CreateClient();
+
+        // Create article with a random (non-existent) file id
+        var danglingId = Guid.NewGuid();
+        var body = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            status = "draft",
+            translations = new Dictionary<string, object>
+            {
+                ["en"] = new { title = "Dangling", seoOgImageId = danglingId }
+            }
+        });
+        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").GetString()!;
+
+        // GET → seoOgImage must be null, no throw
+        var tr = Root(await (await c.GetAsync($"/api/items/article/{articleId}")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("translations");
+        tr.GetProperty("en").GetProperty("seoOgImage").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+    }
 }

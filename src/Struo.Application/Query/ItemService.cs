@@ -5,6 +5,7 @@ using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Security;
 using Struo.Domain.Localization;
+using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -137,6 +138,48 @@ public sealed class ItemService(
             foreach (var (camel, clr) in camelToClr)
                 fieldMap[camel] = ReadProp(tr, clr);
             byLocale[loc] = fieldMap;
+        }
+
+        // --- per-locale image resolution (Phase 5.6) ---
+        var imageFields = meta.Fields
+            .Where(f => f.Translatable && f.Interface is FieldInterface.Image or FieldInterface.File or FieldInterface.Files)
+            .Select(f => f.Name)
+            .ToList();
+
+        if (imageFields.Count > 0)
+        {
+            var imageIds = grouped.Values
+                .SelectMany(byLocale => byLocale.Values)
+                .SelectMany(fieldMap => imageFields
+                    .Where(fn => fieldMap.TryGetValue(fn, out var v) && v is Guid)
+                    .Select(fn => (object)(Guid)fieldMap[fn]!))
+                .Distinct()
+                .ToList();
+
+            var byId = new Dictionary<Guid, IReadOnlyDictionary<string, object?>>();
+            if (imageIds.Count > 0)
+            {
+                var files = await repository.QueryWhereInAsync("file", "id", imageIds, ct);
+                foreach (var f in files)
+                {
+                    var projected = ProjectFor("file", f, null);
+                    if (projected.TryGetValue("id", out var idVal) && idVal is Guid g)
+                        byId[g] = projected;
+                }
+            }
+
+            foreach (var byLocale in grouped.Values)
+                foreach (var fieldMap in byLocale.Values)
+                    foreach (var fn in imageFields)
+                    {
+                        var resolvedKey = fn.EndsWith("Id", StringComparison.Ordinal) ? fn[..^2] : fn + "Resolved";
+                        if (!fieldMap.TryGetValue(fn, out var raw) || raw is not Guid g)
+                        {
+                            fieldMap[resolvedKey] = null;
+                            continue;
+                        }
+                        fieldMap[resolvedKey] = byId.TryGetValue(g, out var file) ? (object?)file : null;
+                    }
         }
 
         for (var i = 0; i < entities.Count; i++)
