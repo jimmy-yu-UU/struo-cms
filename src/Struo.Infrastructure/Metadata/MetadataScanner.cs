@@ -8,8 +8,6 @@ using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
-using Struo.Domain.Seo;
-
 namespace Struo.Infrastructure.Metadata;
 
 public static class MetadataScanner
@@ -90,15 +88,6 @@ public static class MetadataScanner
             else if (isAudit)
                 fields.Add((order, BuildSystemField(prop)));
             // properties with neither [CmsField] nor audit convention are ignored
-        }
-
-        // ISeoMeta convention
-        if (typeof(ISeoMeta).IsAssignableFrom(type))
-        {
-            foreach (var seo in BuildSeoFields())
-                fields.Add((++order, seo));
-            if (groups.All(g => g.Name != "SEO"))
-                groups.Add(new FieldGroupMetadata("SEO", "SEO", groups.Count + 1));
         }
 
         var (translation, translatableFields) = ScanTranslations(type);
@@ -235,25 +224,6 @@ public static class MetadataScanner
         Hidden = false,
         Sort = 1000
     };
-
-    private static IEnumerable<FieldMetadata> BuildSeoFields()
-    {
-        yield return new FieldMetadata
-        {
-            Name = "seoTitle", Label = "SEO Title", Interface = FieldInterface.Text,
-            Group = "SEO", Sort = 900
-        };
-        yield return new FieldMetadata
-        {
-            Name = "seoMetaDescription", Label = "SEO Meta Description", Interface = FieldInterface.Textarea,
-            Group = "SEO", Sort = 901
-        };
-        yield return new FieldMetadata
-        {
-            Name = "seoOgImageId", Label = "OG Image", Interface = FieldInterface.Hidden,
-            Hidden = true, Group = "SEO", Sort = 902
-        };
-    }
 
     // ── Relation scanning ────────────────────────────────────────────────────
 

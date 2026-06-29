@@ -34,7 +34,7 @@ public class SchemaEndpointTests(ApiFactory factory)
         body.Should().Contain("\"interface\":\"richText\"");   // enum as camelCase string
         body.Should().Contain("\"translatable\":true");
         body.Should().Contain("\"value\":\"draft\"");          // option pair
-        body.Should().Contain("\"name\":\"seoTitle\"");        // SEO convention applied
+        body.Should().Contain("\"name\":\"seoTitle\"");        // SEO from SeoTranslation sidecar (translatable)
         body.Should().Contain("\"isSystem\":true");            // audit fields
     }
 

@@ -2,7 +2,6 @@ using SqlSugar;
 using Struo.Domain.Auditing;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
-using Struo.Domain.Seo;
 
 namespace Struo.Sample.Blog;
 
@@ -10,7 +9,7 @@ namespace Struo.Sample.Blog;
 [CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status))]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]
-public sealed class Article : AuditableEntity, ISeoMeta
+public sealed class Article : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
@@ -27,11 +26,6 @@ public sealed class Article : AuditableEntity, ISeoMeta
     [CmsField(Label = "Published At", Interface = FieldInterface.DateTime, Sort = 4, Group = "Content")]
     public DateTime? PublishedAt { get; set; }
 
-    // ISeoMeta — SEO field group auto-applied by the scanner (no [CmsField] here by design)
-    [SugarColumn(IsNullable = true)] public string? SeoTitle { get; set; }
-    [SugarColumn(IsNullable = true)] public string? SeoMetaDescription { get; set; }
-    [SugarColumn(IsNullable = true)] public Guid? SeoOgImageId { get; set; }
-
     // --- relations ---
     [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }
@@ -40,10 +34,4 @@ public sealed class Article : AuditableEntity, ISeoMeta
     [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull)]
     [SugarColumn(IsIgnore = true)]
     public Category? Category { get; set; }
-
-    // SEO OG image — single parent relation, retained as-is (Phase 5.6 will move SEO to translations)
-    [Navigate(NavigateType.OneToOne, nameof(SeoOgImageId))]
-    [CmsRelation(Interface = RelationInterface.ImagePicker, OnDelete = OnDelete.SetNull)]
-    [SugarColumn(IsIgnore = true)]
-    public Struo.Infrastructure.Files.File? SeoOgImage { get; set; }
 }

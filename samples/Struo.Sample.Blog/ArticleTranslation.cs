@@ -5,7 +5,7 @@ using Struo.Domain.Metadata.Enums;
 namespace Struo.Sample.Blog;
 
 [SugarTable("article_translations")]
-public sealed class ArticleTranslation
+public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
     public Guid ArticleId { get; set; }
@@ -15,4 +15,7 @@ public sealed class ArticleTranslation
     [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Body", Interface = FieldInterface.RichText, Sort = 2, Group = "Content")]
     public string? Body { get; set; }
+    // SeoTitle / SeoMetaDescription / SeoOgImageId inherited from SeoTranslation.
+    // SqlSugar EntityService hook maps Nullable<T> → IsNullable=true for all backends,
+    // so no [SugarColumn(IsNullable=true)] override is needed here.
 }

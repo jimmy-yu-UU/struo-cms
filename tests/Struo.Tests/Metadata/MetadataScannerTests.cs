@@ -59,15 +59,19 @@ public class MetadataScannerTests
     }
 
     [Fact]
-    public void Applies_seo_field_group_for_iseometa()
+    public void Article_seo_fields_are_translatable_on_the_sidecar()
     {
-        var article = ArticleMeta();
-        article.FieldGroups.Should().Contain(g => g.Name == "SEO");
-        var seoTitle = article.Fields.Single(f => f.Name == "seoTitle");
-        seoTitle.Interface.Should().Be(FieldInterface.Text);
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
+        var article = collections.Single(c => c.Name == "article");
+
+        var seoTitle = article.Fields.SingleOrDefault(f => f.Name == "seoTitle");
+        seoTitle.Should().NotBeNull();
+        seoTitle!.Translatable.Should().BeTrue();
         seoTitle.Group.Should().Be("SEO");
-        article.Fields.Should().Contain(f => f.Name == "seoMetaDescription" && f.Interface == FieldInterface.Textarea);
-        article.Fields.Should().Contain(f => f.Name == "seoOgImageId" && f.Interface == FieldInterface.Hidden);
+
+        article.Fields.Should().Contain(f => f.Name == "seoOgImageId" && f.Translatable);
+        // No NON-translatable parent SEO field should remain:
+        article.Fields.Should().NotContain(f => f.Name == "seoTitle" && !f.Translatable);
     }
 
     [Fact]

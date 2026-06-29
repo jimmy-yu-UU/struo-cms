@@ -18,7 +18,8 @@ public class RelationSchemaTests(ApiFactory factory)
         body.Should().Contain("\"relations\"");
         body.Should().Contain("\"name\":\"category\"");
         body.Should().Contain("\"kind\":\"manyToOne\"");
-        body.Should().Contain("\"name\":\"seoOgImage\"");
+        // seoOgImage parent relation removed in Phase 5.6 (SEO moved to SeoTranslation sidecar)
+        body.Should().NotContain("\"name\":\"seoOgImage\"");
         body.Should().Contain("\"targetCollection\":\"category\"");
 
         // Phase-5.5 realignment: removed Author/Tag/ArticleTag/ArticleFile entities.

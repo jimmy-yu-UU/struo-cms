@@ -60,6 +60,7 @@ public class ItemServiceTests : IDisposable
         dict.Should().ContainKey("id");
         dict["status"].Should().Be("draft");
         dict.Should().ContainKey("createdAt");
-        dict.Should().ContainKey("seoTitle");
+        // seoTitle is now a translatable field on ArticleTranslation (Phase 5.6)
+        dict.Should().NotContainKey("seoTitle");
     }
 }

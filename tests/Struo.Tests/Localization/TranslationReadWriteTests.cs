@@ -98,4 +98,28 @@ public class TranslationReadWriteTests(ApiFactory factory)
         });
         (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Article_seo_is_per_locale()
+    {
+        var c = _factory.CreateClient();
+        var body = JsonSerializer.SerializeToElement(new
+        {
+            status = "draft",
+            translations = new Dictionary<string, object>
+            {
+                ["en"]    = new { title = "Hello",  seoTitle = "Hello SEO",  seoMetaDescription = "en desc" },
+                ["zh-TW"] = new { title = "哈囉", seoTitle = "哈囉 SEO", seoMetaDescription = "zh desc" }
+            }
+        });
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").GetString()!;
+
+        var tr = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("translations");
+        tr.GetProperty("en").GetProperty("seoTitle").GetString().Should().Be("Hello SEO");
+        tr.GetProperty("en").GetProperty("seoMetaDescription").GetString().Should().Be("en desc");
+        tr.GetProperty("zh-TW").GetProperty("seoTitle").GetString().Should().Be("哈囉 SEO");
+        tr.GetProperty("zh-TW").GetProperty("seoMetaDescription").GetString().Should().Be("zh desc");
+    }
 }
