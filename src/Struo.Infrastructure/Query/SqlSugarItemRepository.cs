@@ -190,7 +190,7 @@ public sealed class SqlSugarItemRepository(
         var d = Descriptor(collection);
         var pk = d.EntityType.GetProperty(d.IdProperty)!;
         if (pk.PropertyType == typeof(Guid) && pk.GetValue(entity) is Guid cur && cur == Guid.Empty)
-            pk.SetValue(entity, Guid.NewGuid());
+            pk.SetValue(entity, Guid.CreateVersion7());
         var method = CreateGenericAsyncDef.MakeGenericMethod(d.EntityType);
         return await (Task<object>)method.Invoke(this, [entity])!;
     }
