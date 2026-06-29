@@ -30,8 +30,10 @@ public static class SqlSugarClientFactory
                     // All DBs: map C# nullable value types (Guid?, int?, DateTime?) to nullable
                     // columns in CodeFirst DDL, so inherited Guid? audit actors
                     // (CreatedBy/UpdatedBy from AuditableEntity) need no [SugarColumn(IsNullable=true)]
-                    // in Domain code. Correct on every backend.
-                    if (Nullable.GetUnderlyingType(property.PropertyType) is not null && !column.IsPrimarykey)
+                    // in Domain code. Correct on every backend. IsIgnore columns (navigation
+                    // properties) are skipped — they map to no column.
+                    // A nullable value-type property that must map to a NOT NULL column should carry [SugarColumn(IsNullable = false)] to override this hook.
+                    if (Nullable.GetUnderlyingType(property.PropertyType) is not null && !column.IsPrimarykey && !column.IsIgnore)
                     {
                         column.IsNullable = true;
                     }

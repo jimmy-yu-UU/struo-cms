@@ -9,7 +9,7 @@ namespace Struo.Sample.Blog;
 [CmsCollection("Category", Icon = "folder", Group = "Content", DefaultDisplayField = nameof(Name))]
 public sealed class Category : AuditableEntity
 {
-    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Name { get; set; } = string.Empty;
