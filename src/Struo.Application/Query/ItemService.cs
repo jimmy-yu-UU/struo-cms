@@ -228,10 +228,30 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
         ValidateLanguageCodeIfNeeded(collection, body);
-        var entity = Deserialize(collection, body, meta);
-        var updated = await repository.UpdateAsync(collection, id, entity, ct);
-        if (updated is null) return null;
         var d = registry.Get(collection)!;
+
+        // Merge update: start from the existing row and overlay ONLY the fields the client actually
+        // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
+        // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
+        // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
+        var existing = await repository.GetByIdAsync(collection, id, ct);
+        if (existing is null) return null;
+        var incoming = Deserialize(collection, body, meta);
+        var bodyKeys = body.ValueKind == JsonValueKind.Object
+            ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in meta.Fields)
+        {
+            if (field.IsSystem || field.ReadOnly) continue;
+            if (!bodyKeys.Contains(field.Name)) continue;
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true }) continue;
+            pi.SetValue(existing, pi.GetValue(incoming));
+        }
+
+        var updated = await repository.UpdateAsync(collection, id, existing, ct);
+        if (updated is null) return null;
         var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
         await SyncM2MAsync(collection, body, updatedId, ct);
         await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
