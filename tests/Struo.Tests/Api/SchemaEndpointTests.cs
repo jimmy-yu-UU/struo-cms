@@ -36,6 +36,10 @@ public class SchemaEndpointTests(ApiFactory factory)
         body.Should().Contain("\"value\":\"draft\"");          // option pair
         body.Should().Contain("\"name\":\"seoTitle\"");        // SEO from SeoTranslation sidecar (translatable)
         body.Should().Contain("\"isSystem\":true");            // audit fields
+
+        // Phase 5.6 deliberately changed seoOgImageId interface from Hidden -> Image; guard against reversion.
+        body.Should().Contain("\"name\":\"seoOgImageId\"");
+        body.Should().Contain("\"interface\":\"image\"");
     }
 
     [Fact]
