@@ -381,7 +381,9 @@ public sealed class ItemService(
             if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
 
             var targetIds = idsElem.EnumerateArray()
-                .Select(e => (object)e.GetInt64())
+                .Select(e => e.ValueKind == JsonValueKind.Number
+                    ? (object)e.GetInt64()
+                    : (object)(e.GetString() ?? string.Empty))
                 .ToList();
 
             // Validate all target ids exist.

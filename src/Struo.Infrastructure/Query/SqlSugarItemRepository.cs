@@ -188,6 +188,9 @@ public sealed class SqlSugarItemRepository(
     public async Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
+        var pk = d.EntityType.GetProperty(d.IdProperty)!;
+        if (pk.PropertyType == typeof(Guid) && pk.GetValue(entity) is Guid cur && cur == Guid.Empty)
+            pk.SetValue(entity, Guid.NewGuid());
         var method = CreateGenericAsyncDef.MakeGenericMethod(d.EntityType);
         return await (Task<object>)method.Invoke(this, [entity])!;
     }
@@ -330,8 +333,8 @@ public sealed class SqlSugarItemRepository(
         for (var i = 0; i < targetIds.Count; i++)
         {
             var row = new T();
-            parentProp.SetValue(row, Convert.ChangeType(parentId,    parentProp.PropertyType));
-            targetProp.SetValue(row, Convert.ChangeType(targetIds[i], targetProp.PropertyType));
+            parentProp.SetValue(row, IdCoercion.Coerce(parentId,    parentProp.PropertyType));
+            targetProp.SetValue(row, IdCoercion.Coerce(targetIds[i], targetProp.PropertyType));
             // Use Convert.ChangeType so the sort index (int) is coerced to whatever numeric
             // type the sort column declares (e.g. int, long, short).
             sortProp?.SetValue(row, Convert.ChangeType(i, sortProp.PropertyType));
@@ -515,7 +518,7 @@ public sealed class SqlSugarItemRepository(
         foreach (var (locale, values) in perLocale)
         {
             var row = new T();
-            fkProp.SetValue(row, Convert.ChangeType(parentId, fkProp.PropertyType));
+            fkProp.SetValue(row, IdCoercion.Coerce(parentId, fkProp.PropertyType));
             localeProp.SetValue(row, locale);
             foreach (var (fieldName, prop) in fieldProps)
             {
@@ -569,15 +572,7 @@ public sealed class SqlSugarItemRepository(
         return false;
     }
 
-    private static object? CoerceValue(object? raw, Type targetType)
-    {
-        if (raw is null) return null;
-        var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (underlying.IsInstanceOfType(raw)) return raw;
-        try { return Convert.ChangeType(raw, underlying); }
-        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
-        { return raw; }
-    }
+    private static object? CoerceValue(object? raw, Type targetType) => IdCoercion.Coerce(raw, targetType);
 
     private EntityDescriptor Descriptor(string collection) =>
         registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
