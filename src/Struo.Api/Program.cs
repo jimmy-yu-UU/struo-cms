@@ -33,6 +33,7 @@ try
     builder.Services.AddStruoInfrastructure(builder.Configuration);
     builder.Services.AddStruoMetadata(typeof(Article).Assembly);
     builder.Services.AddStruoData(builder.Configuration);
+    builder.Services.AddStruoFiles(builder.Configuration);
     builder.Services.AddScoped<SchemaService>();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"]);
@@ -92,7 +93,8 @@ try
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment,
             typeof(Article), typeof(ArticleTranslation), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag),
-            typeof(Struo.Infrastructure.Localization.Language));
+            typeof(Struo.Infrastructure.Localization.Language),
+            typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.FileTranslation));
         await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
     }
 
