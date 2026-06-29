@@ -20,6 +20,11 @@ public class RelationSchemaTests(ApiFactory factory)
         body.Should().Contain("\"kind\":\"manyToOne\"");
         body.Should().Contain("\"name\":\"seoOgImage\"");
         body.Should().Contain("\"targetCollection\":\"category\"");
+
+        // Phase-5.5 realignment: removed Author/Tag/ArticleTag/ArticleFile entities.
+        body.Should().NotContain("\"name\":\"author\"");
+        body.Should().NotContain("\"name\":\"tags\"");
+        body.Should().NotContain("\"name\":\"gallery\"");
     }
 
     [Fact]
