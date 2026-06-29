@@ -18,20 +18,20 @@ public static class SqlSugarClientFactory
             {
                 EntityService = (property, column) =>
                 {
-                    // SQLite only auto-increments an INTEGER (rowid alias).
-                    // Rewrite identity PK columns so CodeFirst emits INTEGER
-                    // instead of BIGINT, keeping the entity field as long.
-                    if (column.IsPrimarykey && column.IsIdentity)
+                    // SQLite-only: identity PK must be INTEGER (rowid alias) to auto-increment.
+                    // On other backends the long IsIdentity sidecar PKs must stay bigint, so this
+                    // rewrite is gated to SQLite — applying it everywhere would downgrade
+                    // Postgres bigint identity PKs to int4.
+                    if (dbType == SqlSugar.DbType.Sqlite && column.IsPrimarykey && column.IsIdentity)
                     {
                         column.DataType = "INTEGER";
                     }
 
-                    // Treat all C# nullable value types (e.g. Guid?, int?, DateTime?)
-                    // as nullable columns in CodeFirst DDL. This covers audit actor
-                    // fields (Guid? CreatedBy/UpdatedBy) inherited from AuditableEntity
-                    // without requiring [SugarColumn(IsNullable=true)] in Domain code.
-                    var underlyingType = Nullable.GetUnderlyingType(property.PropertyType);
-                    if (underlyingType != null && !column.IsPrimarykey)
+                    // All DBs: map C# nullable value types (Guid?, int?, DateTime?) to nullable
+                    // columns in CodeFirst DDL, so inherited Guid? audit actors
+                    // (CreatedBy/UpdatedBy from AuditableEntity) need no [SugarColumn(IsNullable=true)]
+                    // in Domain code. Correct on every backend.
+                    if (Nullable.GetUnderlyingType(property.PropertyType) is not null && !column.IsPrimarykey)
                     {
                         column.IsNullable = true;
                     }
