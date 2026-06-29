@@ -48,7 +48,9 @@ public static class SqlSugarClientFactory
                     // nullable annotations so we respect the intent without adding SqlSugar to Domain.
                     if (property.PropertyType == typeof(string))
                     {
-                        var ctx = new NullabilityInfoContext(); // per-call; NullabilityInfoContext is not thread-safe
+                        // NullabilityInfoContext is not thread-safe; EntityService can be invoked concurrently while
+                        // SqlSugar reflects multiple entities during InitTables, so create a fresh instance per column.
+                        var ctx = new NullabilityInfoContext();
                         if (ctx.Create(property).WriteState == NullabilityState.Nullable)
                             column.IsNullable = true;
                     }
