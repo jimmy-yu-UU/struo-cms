@@ -15,7 +15,7 @@ namespace Struo.Infrastructure.Files;
 [CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName))]
 public sealed class File : AuditableEntity
 {
-    [SugarColumn(IsPrimaryKey = true)] public new Guid Id { get; set; }
+    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
 
     public string StorageKey { get; set; } = "";   // internal: no [CmsField]
 
