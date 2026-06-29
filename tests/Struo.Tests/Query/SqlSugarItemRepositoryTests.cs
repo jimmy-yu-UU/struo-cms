@@ -30,7 +30,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         var collections = MetadataScanner.ScanTypes(
             [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
-        var descriptors = MetadataScanner.ScanDescriptors([typeof(Article)]);
+        var descriptors = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)]);
         var registry = new EntityRegistry(descriptors);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
@@ -43,6 +43,17 @@ public class SqlSugarItemRepositoryTests : IDisposable
     }
 
     public void Dispose() => _file.Dispose();
+
+    [Fact]
+    public async Task CreateAsync_assigns_a_version7_guid_id()
+    {
+        _db.CodeFirst.InitTables<Category>();
+        var created = await _repo.CreateAsync("category", new Category { Name = "News" });
+
+        var id = (Guid)created.GetType().GetProperty("Id")!.GetValue(created)!;
+        id.Should().NotBe(Guid.Empty);
+        id.Version.Should().Be(7);
+    }
 
     [Fact]
     public async Task Create_then_get_returns_entity_with_audit()
