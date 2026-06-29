@@ -31,7 +31,7 @@ public sealed class Article : IAuditable, ISeoMeta
     // ISeoMeta — SEO field group auto-applied by the scanner (no [CmsField] here by design)
     [SugarColumn(IsNullable = true)] public string? SeoTitle { get; set; }
     [SugarColumn(IsNullable = true)] public string? SeoMetaDescription { get; set; }
-    [SugarColumn(IsNullable = true)] public long? SeoOgImageId { get; set; }
+    [SugarColumn(IsNullable = true)] public Guid? SeoOgImageId { get; set; }
 
     // --- relations (Phase 3a) ---
     public long AuthorId { get; set; }
@@ -53,6 +53,17 @@ public sealed class Article : IAuditable, ISeoMeta
     [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(ArticleTag.SortOrder))]
     [SugarColumn(IsIgnore = true)]
     public List<Tag> Tags { get; set; } = [];
+
+    // --- file relations (Phase 5) ---
+    [Navigate(NavigateType.OneToOne, nameof(SeoOgImageId))]
+    [CmsRelation(Interface = RelationInterface.ImagePicker, OnDelete = OnDelete.SetNull)]
+    [SugarColumn(IsIgnore = true)]
+    public Struo.Infrastructure.Files.File? SeoOgImage { get; set; }
+
+    [Navigate(typeof(ArticleFile), nameof(ArticleFile.ArticleId), nameof(ArticleFile.FileId))]
+    [CmsRelation(Interface = RelationInterface.FilesPicker, SortField = nameof(ArticleFile.SortOrder))]
+    [SugarColumn(IsIgnore = true)]
+    public List<Struo.Infrastructure.Files.File> Gallery { get; set; } = [];
 
     // IAuditable
     public DateTime CreatedAt { get; set; }

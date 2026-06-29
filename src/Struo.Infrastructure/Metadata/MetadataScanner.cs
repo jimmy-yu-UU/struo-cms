@@ -250,8 +250,8 @@ public static class MetadataScanner
         };
         yield return new FieldMetadata
         {
-            Name = "seoOgImageId", Label = "OG Image", Interface = FieldInterface.Number,
-            Group = "SEO", Sort = 902
+            Name = "seoOgImageId", Label = "OG Image", Interface = FieldInterface.Hidden,
+            Hidden = true, Group = "SEO", Sort = 902
         };
     }
 

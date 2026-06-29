@@ -29,16 +29,18 @@ public class ItemServiceTests : IDisposable
         db.CodeFirst.InitTables<Language>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
-        var collections = MetadataScanner.Scan(typeof(Article).Assembly);
+        var collections = MetadataScanner.ScanTypes(
+            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
-            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag)]));
+            [typeof(Article), typeof(Tag), typeof(Author), typeof(Category), typeof(ArticleTag), typeof(Struo.Infrastructure.Files.File)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["article"] = typeof(Article),
             ["tag"] = typeof(Tag),
             ["author"] = typeof(Author),
             ["category"] = typeof(Category),
+            ["file"] = typeof(Struo.Infrastructure.Files.File),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());

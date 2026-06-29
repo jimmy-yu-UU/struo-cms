@@ -1,3 +1,3 @@
 namespace Struo.Domain.Metadata.Enums;
 
-public enum RelationInterface { Dropdown, TagSelect, TreeSelect, RelatedList }
+public enum RelationInterface { Dropdown, TagSelect, TreeSelect, RelatedList, FilePicker, ImagePicker, FilesPicker }
