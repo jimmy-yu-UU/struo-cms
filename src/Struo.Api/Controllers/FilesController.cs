@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
-using Struo.Infrastructure.Files;
+using Struo.Application.Files;
+// Alias to avoid importing the Struo.Infrastructure.Files namespace, whose `File` type would
+// clash with ControllerBase.File(...) used by the download action.
+using FileService = Struo.Infrastructure.Files.FileService;
 
 namespace Struo.Api.Controllers;
 
 [ApiController]
 [Route("api/files")]
-public sealed class FilesController(FileService files) : ControllerBase
+public sealed class FilesController(FileService files, IFileStorage storage, FileStorageOptions options) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Upload(CancellationToken ct)
@@ -27,4 +30,37 @@ public sealed class FilesController(FileService files) : ControllerBase
             }
         });
     }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
+    {
+        var row = await files.GetAsync(id, ct);
+        if (row is null || row.Status != "published") return NotFound();
+        return Ok(new
+        {
+            data = new
+            {
+                id = row.Id, fileName = row.FileName, contentType = row.ContentType,
+                size = row.Size, width = row.Width, height = row.Height, status = row.Status
+            }
+        });
+    }
+
+    [HttpGet("{id:guid}/content")]
+    public async Task<IActionResult> Download(Guid id, CancellationToken ct)
+    {
+        var row = await files.GetAsync(id, ct);
+        if (row is null || row.Status != "published") return NotFound();
+
+        var presigned = await storage.GetPresignedUrlAsync(
+            row.StorageKey, TimeSpan.FromSeconds(options.S3.PresignTtlSeconds), ct);
+        if (presigned is not null) return Redirect(presigned);   // 302 (S3/MinIO)
+
+        var stream = await storage.OpenReadAsync(row.StorageKey, ct);
+        return File(stream, row.ContentType, fileDownloadName: row.FileName);
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
+        await files.DeleteAsync(id, ct) ? NoContent() : NotFound();
 }
