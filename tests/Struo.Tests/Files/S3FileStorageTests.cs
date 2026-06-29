@@ -1,4 +1,5 @@
 using System.Text;
+using Amazon.S3;
 using AwesomeAssertions;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
@@ -27,11 +28,23 @@ public class S3FileStorageTests
         };
     }
 
+    private static async Task EnsureBucketAsync(FileStorageOptions opts)
+    {
+        using var admin = new AmazonS3Client(opts.S3.AccessKey, opts.S3.SecretKey, new AmazonS3Config
+        {
+            ServiceURL = opts.S3.Endpoint, ForcePathStyle = opts.S3.ForcePathStyle, AuthenticationRegion = opts.S3.Region
+        });
+        try { await admin.PutBucketAsync(opts.S3.Bucket); }
+        catch (AmazonS3Exception e) when (e.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists") { /* idempotent */ }
+    }
+
     [Fact]
     public async Task Save_read_delete_and_presign()
     {
         var opts = FromEnv();
         if (opts is null) return; // skip when MinIO env not configured
+
+        await EnsureBucketAsync(opts);
 
         using var s = new S3FileStorage(opts);
         var key = "it/" + Guid.NewGuid().ToString("N") + ".txt";
