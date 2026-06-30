@@ -18,15 +18,14 @@ public class ItemsEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Crud_round_trip_with_envelope_and_audit()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync();
 
         var create = await client.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "Hello" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdData = Root(await create.Content.ReadAsStringAsync()).GetProperty("data");
         var id = createdData.GetProperty("id").GetString()!;
-        // With the real HttpContextCurrentUserAccessor, anonymous requests yield createdBy = null (not Guid.Empty).
-        createdData.GetProperty("createdBy").GetString().Should().BeNull();
+        createdData.GetProperty("createdBy").GetString().Should().Be(_factory.AdminUserId.ToString());
 
         var get = await client.GetAsync($"/api/items/article/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -43,7 +42,7 @@ public class ItemsEndpointTests(ApiFactory factory)
     [Fact]
     public async Task List_filters_sorts_paginates_with_meta()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync();
         for (var i = 0; i < 4; i++)
             await client.PostAsJsonAsync("/api/items/article",
                 new { status = i % 2 == 0 ? "published" : "draft", translations = new { en = new { title = $"Post{i}" } } });
@@ -77,7 +76,7 @@ public class ItemsEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Filter_by_id_returns_the_row()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync();
 
         var create = await client.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "IdFilterTest" } } });

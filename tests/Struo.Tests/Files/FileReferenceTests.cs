@@ -18,7 +18,7 @@ public class FileReferenceTests(ApiFactory factory)
     public async Task File_upload_and_info_round_trip()
     {
         // Smoke-test that the files subsystem is wired up in the integration host.
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var content = new ByteArrayContent([1, 2, 3]);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
         var mp = new MultipartFormDataContent { { content, "file", "smoke.bin" } };

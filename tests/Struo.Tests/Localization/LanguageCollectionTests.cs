@@ -27,7 +27,7 @@ public class LanguageCollectionTests(ApiFactory factory)
     [Fact]
     public async Task Language_supports_crud()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var created = Root(await (await c.PostAsJsonAsync("/api/items/language",
             new { code = "fr", name = "Français", isDefault = false, enabled = true, sort = 9 }))
             .Content.ReadAsStringAsync()).GetProperty("data");

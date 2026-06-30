@@ -26,7 +26,7 @@ public class LocaleSecurityTests(ApiFactory factory)
     [Fact]
     public async Task Create_language_with_sql_injection_code_returns_400()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         // A single quote in the code would break the sort subquery literal.
         var resp = await c.PostAsJsonAsync("/api/items/language",
             new { code = "x' OR '1'='1", name = "Malicious", isDefault = false, enabled = true, sort = 99 });
@@ -36,7 +36,7 @@ public class LocaleSecurityTests(ApiFactory factory)
     [Fact]
     public async Task Create_language_with_quote_in_code_returns_400()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsJsonAsync("/api/items/language",
             new { code = "en'", name = "BadCode", isDefault = false, enabled = true, sort = 98 });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -69,10 +69,10 @@ public class LocaleSecurityTests(ApiFactory factory)
     [Fact]
     public async Task Search_on_translatable_title_returns_matching_article()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         // Create two articles with distinct translatable titles.
-        string MakeArticle(string enTitle, string zhTitle)
+        async Task<string> MakeArticle(string enTitle, string zhTitle)
         {
             var body = JsonSerializer.SerializeToElement(new
             {
@@ -83,13 +83,13 @@ public class LocaleSecurityTests(ApiFactory factory)
                     ["zh-TW"] = new { title = zhTitle,  body = (string?)null }
                 }
             });
-            var resp = c.PostAsJsonAsync("/api/items/article", body).GetAwaiter().GetResult();
-            return Root(resp.Content.ReadAsStringAsync().GetAwaiter().GetResult())
+            var resp = await c.PostAsJsonAsync("/api/items/article", body);
+            return Root(await resp.Content.ReadAsStringAsync())
                 .GetProperty("data").GetProperty("id").GetString()!;
         }
 
-        var hitId  = MakeArticle("UniqueOrSearchHit",  "UniqueOrSearchHit-zh");
-        var missId = MakeArticle("UnrelatedOrMiss",    "UnrelatedOrMiss-zh");
+        var hitId  = await MakeArticle("UniqueOrSearchHit",  "UniqueOrSearchHit-zh");
+        var missId = await MakeArticle("UnrelatedOrMiss",    "UnrelatedOrMiss-zh");
 
         // Search at en locale — should find only the "hit" article.
         var qBody = JsonSerializer.SerializeToElement(new { search = "UniqueOrSearchHit" });
@@ -104,7 +104,7 @@ public class LocaleSecurityTests(ApiFactory factory)
     [Fact]
     public async Task Search_on_translatable_title_zh_returns_matching_article()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         var body = JsonSerializer.SerializeToElement(new
         {

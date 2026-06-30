@@ -22,7 +22,7 @@ public class RelationWriteTests(ApiFactory factory)
     [Fact]
     public async Task Delete_category_referenced_by_setnull_relation_is_allowed()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         // Article.categoryId is OnDelete.SetNull (not Restrict), so deleting a referenced category is permitted.
         var categoryId = await Id(await c.PostAsJsonAsync("/api/items/category", new { name = "Doomed" }));
         await c.PostAsJsonAsync("/api/items/article", new
