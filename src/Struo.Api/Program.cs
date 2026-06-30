@@ -8,6 +8,7 @@ using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
+using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 using Struo.Sample.Blog;
 
@@ -94,7 +95,8 @@ try
         DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment,
             typeof(Article), typeof(ArticleTranslation), typeof(Category),
             typeof(Struo.Infrastructure.Localization.Language),
-            typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.FileTranslation));
+            typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.FileTranslation),
+            typeof(User));
         await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
     }
 
