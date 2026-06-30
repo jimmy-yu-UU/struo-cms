@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
 using Serilog;
 using SqlSugar;
+using Struo.Api.Auth;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
@@ -35,6 +36,9 @@ try
     builder.Services.AddStruoMetadata(typeof(Article).Assembly);
     builder.Services.AddStruoData(builder.Configuration);
     builder.Services.AddStruoFiles(builder.Configuration);
+    builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
+    builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
+        .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"]);
@@ -42,6 +46,8 @@ try
     var app = builder.Build();
 
     app.UseSerilogRequestLogging();
+    app.UseAuthentication();
+    app.UseAuthorization();
 
     app.Use(async (context, next) =>
     {
