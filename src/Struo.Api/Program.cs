@@ -41,7 +41,8 @@ try
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
     builder.Services.AddHealthChecks()
-        .AddCheck<DbReadinessCheck>("database", tags: ["ready"]);
+        .AddCheck<DbReadinessCheck>("database", tags: ["ready"])
+        .AddCheck<Struo.Infrastructure.Health.CacheReadinessCheck>("cache", tags: ["ready"]);
 
     var app = builder.Build();
 
