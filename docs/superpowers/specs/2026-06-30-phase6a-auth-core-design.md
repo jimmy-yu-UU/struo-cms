@@ -117,22 +117,23 @@ Infrastructure. Not piecemeal, and not in 6a.
   (memory/iterations/parallelism) as constants; PHC-encoded output.
 - `SqlSugarUserCredentialStore : IUserCredentialStore` — direct SqlSugar query by email
   (case-insensitive) and by access-token hash.
-- `HttpContextCurrentUserAccessor : ICurrentUserAccessor` — reads `IHttpContextAccessor.HttpContext.User`
-  `NameIdentifier` claim → `Guid?`. **Replaces** `StubCurrentUserAccessor` in DI. (Adds a
-  `Microsoft.AspNetCore.Http.Abstractions` dependency to Infrastructure — accepted; it is the
-  web↔identity bridge and sits beside the stub it replaces.)
-- `DistributedCacheTicketStore : ITicketStore` — `Store/Renew/Retrieve/Remove` over `IDistributedCache`
-  (prefixed keys; value = `TicketSerializer`-serialized `AuthenticationTicket`). Enables server-side
-  revocation and logout-all.
-- `BearerTokenAuthenticationHandler` — reads `Authorization: Bearer <token>`, computes `SHA-256`,
-  resolves the user via `IUserCredentialStore.FindByAccessTokenAsync`, builds the `ClaimsPrincipal`.
+  *(Web-coupled auth components — `HttpContextCurrentUserAccessor`, `DistributedCacheTicketStore`,
+  `BearerTokenAuthenticationHandler` — live in **Api** per the 2026-06-30 placement decision so
+  Infrastructure stays web-free with no ASP.NET FrameworkReference; see the Api subsection.)*
 - `AdminUserSeeder` (dev) — if no users exist, create an admin from `Auth:BootstrapAdmin:{Email,Password}`.
   Runs in the dev startup block after `LanguageSeeder`.
 - Redis registration: when `Redis:ConnectionString` is configured →
   `AddStackExchangeRedisCache`; otherwise `AddDistributedMemoryCache` (tests/fallback, logged).
 - `RedisReadinessCheck` (tag `ready`) — lightweight `IDistributedCache` round-trip.
 
-### Api (composition root + endpoints)
+### Api (composition root + endpoints; web-coupled auth lives here)
+- `HttpContextCurrentUserAccessor : ICurrentUserAccessor` — reads `IHttpContextAccessor.HttpContext.User`
+  `NameIdentifier` claim → `Guid?`; **replaces** the Infrastructure `StubCurrentUserAccessor` in DI
+  (`Program.cs` via `services.Replace`).
+- `DistributedCacheTicketStore : ITicketStore` — `Store/Renew/Retrieve/Remove` over `IDistributedCache`
+  (prefixed keys; value = `TicketSerializer`-serialized `AuthenticationTicket`); server-side revocation + logout-all.
+- `BearerTokenAuthenticationHandler` — reads `Authorization: Bearer <token>`, computes `SHA-256`,
+  resolves the user via `IUserCredentialStore.FindByAccessTokenAsync`, builds the `ClaimsPrincipal`.
 - `AuthController`:
   - `POST /api/auth/login` `{email, password}` → `AuthService` → `HttpContext.SignInAsync(Cookie)` → 200 + user summary; failure → 401.
   - `POST /api/auth/logout` → `SignOutAsync` (removes ticket from Redis) → 204.
@@ -210,8 +211,8 @@ revocation works; a host restart preserves the session (server-side store confir
 Dev-only `InitTables`: register `User` in the initializer entity list and the metadata scan assembly;
 recreate to add the `users` table (`email` unique index, `accesstoken` index). New packages added
 via `dotnet add package` (latest, centralized in `Directory.Packages.props`):
-`Isopoh.Cryptography.Argon2`, `Microsoft.Extensions.Caching.StackExchangeRedis`,
-`Microsoft.AspNetCore.Http.Abstractions` (Infrastructure). No data migration.
+`Isopoh.Cryptography.Argon2` (Infrastructure) and `Microsoft.Extensions.Caching.StackExchangeRedis`
+(Api). No new ASP.NET package needed (Api already references the framework). No data migration.
 
 ## 9. Risks & mitigations
 
@@ -221,7 +222,7 @@ via `dotnet add package` (latest, centralized in `Directory.Packages.props`):
 | Permanent token is a long-lived credential | Stored only as `SHA-256`; high-entropy random; shown once; rotatable/revocable; bearer lookup by hash. |
 | Bootstrap admin password committed | Sourced from config/env only; never hardcoded; verified in acceptance. |
 | Redis outage breaks sessions | `/health/ready` includes Redis; 503 on session ops; tests use in-memory cache. |
-| Infrastructure gains an ASP.NET dependency | Scoped to `IHttpContextAccessor` for the accessor bridge; acceptable per §2 (Infrastructure may use external packages). |
+| Web-framework coupling for auth | Web-coupled auth (accessor / ticket store / bearer handler) lives in **Api**; Infrastructure stays web-free (no ASP.NET FrameworkReference). |
 | Adding a 2nd auth scheme increases surface | Both schemes converge on one `ClaimsPrincipal` shape; downstream identical; enforcement centralized in policy. |
 
 ## 10. Acceptance (verification gate, with evidence)
