@@ -84,6 +84,46 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return client;
     }
 
+    /// <summary>
+    /// Seeds a non-super role with the given read/write grants, a fresh editor user,
+    /// the user-role link, and returns a logged-in client + the user id.
+    /// </summary>
+    public async Task<(HttpClient client, Guid userId)> CreateEditorClientAsync(
+        string[] readCollections, string[] writeCollections)
+    {
+        Guid userId;
+        const string password = "editor-pw-123";
+        string email;
+        using (var scope = Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+            userId = Guid.CreateVersion7();
+            email = $"editor-{userId:N}@struo.test";
+            await db.Insertable(new User
+            {
+                Id = userId, Email = email, Password = hasher.Hash(password),
+                Name = "Editor", IsActive = true
+            }).ExecuteCommandAsync();
+            var role = new Role { Id = Guid.CreateVersion7(), Name = $"editor-{userId:N}" };
+            await db.Insertable(role).ExecuteCommandAsync();
+            await db.Insertable(new UserRole
+            {
+                Id = Guid.CreateVersion7(), UserId = userId, RoleId = role.Id
+            }).ExecuteCommandAsync();
+            foreach (var c in readCollections.Union(writeCollections).Distinct())
+                await db.Insertable(new Permission
+                {
+                    Id = Guid.CreateVersion7(), RoleId = role.Id, Collection = c,
+                    CanRead = readCollections.Contains(c), CanWrite = writeCollections.Contains(c)
+                }).ExecuteCommandAsync();
+        }
+        var client = CreateClient();
+        var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        resp.EnsureSuccessStatusCode();
+        return (client, userId);
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
