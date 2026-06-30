@@ -19,7 +19,7 @@ public class DeepExpansionTests(ApiFactory factory)
     [Fact]
     public async Task Deep_unknown_relation_returns_400()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = Root(await (await c.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "Y" } } })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
@@ -29,7 +29,7 @@ public class DeepExpansionTests(ApiFactory factory)
     [Fact]
     public async Task List_without_deep_has_no_relation_keys()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         await c.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "NoDeep" } } });
 
@@ -42,7 +42,7 @@ public class DeepExpansionTests(ApiFactory factory)
     [Fact]
     public async Task Deep_expands_o2m_articles_for_category()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/category",
             new { name = "News" })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
@@ -61,7 +61,7 @@ public class DeepExpansionTests(ApiFactory factory)
     [Fact]
     public async Task Deep_m2o_honors_field_whitelist_via_envelope()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/category",
             new { name = "Whitelisted" })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;

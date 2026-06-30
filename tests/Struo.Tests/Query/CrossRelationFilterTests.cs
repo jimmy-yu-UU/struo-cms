@@ -24,7 +24,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     [Fact]
     public async Task Filter_to_one_category_name()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var news = await Post(c, "category", new { name = "FilterNews" });
         var other = await Post(c, "category", new { name = "FilterOther" });
         var hit = await Post(c, "article", new { status = "draft", categoryId = news, translations = new { en = new { title = "HIT" } } });
@@ -58,7 +58,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     [Fact]
     public async Task Filter_multi_level_category_parent_name()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var parent = await Post(c, "category", new { name = "ParentCat" });
         var child = await Post(c, "category", new { name = "ChildCat", parentId = parent });
         var hit = await Post(c, "article", new { status = "draft", categoryId = child, translations = new { en = new { title = "DEEPHIT" } } });
@@ -74,7 +74,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     [Fact]
     public async Task Filter_relation_path_or_scalar_composes()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "category", new { name = "OrCat" });
         var byCat = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = "ZZZ" } } });
         var byId = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "OrIdUnique" } } });
@@ -102,7 +102,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // NOTE: filtering an o2m relation by the child's translatable `title` is locale-aware
         // relation querying (Task 5). Here we filter the o2m relation by the child's
         // non-translatable own-collection field (id) to exercise the same two-phase resolution.
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "category", new { name = "O2MFilterCat" });
         var childArticle = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = "UniqueChildTitle" } } });
 
@@ -119,7 +119,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         // _or: relation branch matches nothing, scalar branch matches one article.
         // The empty relation branch must contribute zero ids — not swallow the whole OR.
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var hit = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "OrEmptyUnique" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
@@ -146,7 +146,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         // _and: relation branch matches nothing, so the whole AND must return 0 rows
         // even though the scalar branch would match.
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var art = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "AndEmptyUnique" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new

@@ -34,7 +34,7 @@ public class FileDownloadTests(ApiFactory factory)
     [Fact]
     public async Task Draft_download_is_404()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraft(c);
         (await c.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await c.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -43,7 +43,7 @@ public class FileDownloadTests(ApiFactory factory)
     [Fact]
     public async Task Published_download_streams_bytes()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraft(c, "payload");
         await Publish(c, id);
         var resp = await c.GetAsync($"/api/files/{id}/content");
@@ -54,7 +54,7 @@ public class FileDownloadTests(ApiFactory factory)
     [Fact]
     public async Task Published_info_returns_metadata()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraft(c);
         var pub = await Publish(c, id);
         pub.StatusCode.Should().Be(HttpStatusCode.OK, await pub.Content.ReadAsStringAsync());
@@ -67,7 +67,7 @@ public class FileDownloadTests(ApiFactory factory)
     [Fact]
     public async Task Delete_removes_file_then_download_404()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraft(c);
         await Publish(c, id);
         (await c.DeleteAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);

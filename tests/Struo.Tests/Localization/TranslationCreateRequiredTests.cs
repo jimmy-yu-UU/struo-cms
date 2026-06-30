@@ -21,7 +21,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     [Fact]
     public async Task Create_without_translations_returns_400()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         // No `translations` key at all → the default-locale translation is missing.
         var body = JsonSerializer.SerializeToElement(new { status = "draft" });
@@ -33,7 +33,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     [Fact]
     public async Task Create_missing_default_locale_returns_400()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         // Translations present, but only the non-default locale (default is "en").
         var body = JsonSerializer.SerializeToElement(new
@@ -52,7 +52,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     [Fact]
     public async Task Update_without_translations_is_allowed()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         // 1. Create a valid article carrying the default-locale translation.
         var createBody = JsonSerializer.SerializeToElement(new
@@ -80,7 +80,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     [Fact]
     public async Task Create_with_default_locale_translation_returns_201()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         var body = JsonSerializer.SerializeToElement(new
         {

@@ -32,7 +32,7 @@ public class TranslationQueryTests(ApiFactory factory)
     [Fact]
     public async Task Filter_translatable_field_at_locale()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var hit = await NewArticle(c, "EnUnique", "ZhUniqueAAA");
         await NewArticle(c, "EnOther", "ZhOther");
 
@@ -44,7 +44,7 @@ public class TranslationQueryTests(ApiFactory factory)
     [Fact]
     public async Task Sort_translatable_field_at_locale()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var aaa = await NewArticle(c, "Aaa", "Aaa");
         var zzz = await NewArticle(c, "Zzz", "Zzz");
         var env = JsonSerializer.SerializeToElement(new { sort = new[] { "-title" }, filter = new Dictionary<string, object> { ["status"] = Eq("draft") } });

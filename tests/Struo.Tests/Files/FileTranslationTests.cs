@@ -25,7 +25,7 @@ public class FileTranslationTests(ApiFactory factory)
     [Fact]
     public async Task Title_alt_translations_round_trip_all_locales()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await Upload(c);
         await c.PutAsJsonAsync($"/api/items/file/{id}", new
         {
@@ -47,7 +47,7 @@ public class FileTranslationTests(ApiFactory factory)
     [Fact]
     public async Task Single_locale_filter_on_file_translations()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await Upload(c);
         await c.PutAsJsonAsync($"/api/items/file/{id}", new
         {

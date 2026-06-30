@@ -26,7 +26,7 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
     [Fact]
     public async Task Create_with_multibyte_translation_round_trips()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
@@ -50,7 +50,7 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
     [Fact]
     public async Task Filter_translatable_field_with_multibyte_value_returns_match()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",

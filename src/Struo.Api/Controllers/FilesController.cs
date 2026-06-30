@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Struo.Api.Auth;
 using Struo.Application.Files;
 // Alias to avoid importing the Struo.Infrastructure.Files namespace, whose `File` type would
 // clash with ControllerBase.File(...) used by the download action.
@@ -11,6 +13,7 @@ namespace Struo.Api.Controllers;
 public sealed class FilesController(FileService files, IFileStorage storage, FileStorageOptions options) : ControllerBase
 {
     [HttpPost]
+    [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Upload(CancellationToken ct)
     {
         if (!Request.HasFormContentType)
@@ -61,6 +64,7 @@ public sealed class FilesController(FileService files, IFileStorage storage, Fil
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
         await files.DeleteAsync(id, ct) ? NoContent() : NotFound();
 }

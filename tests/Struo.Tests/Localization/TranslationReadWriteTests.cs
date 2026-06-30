@@ -16,7 +16,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Create_with_translations_and_read_all_locales()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
@@ -39,7 +39,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Read_single_locale_filters_translations()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
@@ -61,7 +61,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Partial_update_preserves_other_locale()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
@@ -90,7 +90,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Unknown_locale_on_write_is_400()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
@@ -102,7 +102,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Article_seo_is_per_locale()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
@@ -126,7 +126,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Per_locale_og_image_resolves_to_file_object()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         // 1. Upload a file, capture its id
         var content = new System.Net.Http.ByteArrayContent(new byte[] { 1, 2, 3 });
@@ -163,7 +163,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
     [Fact]
     public async Task Dangling_og_image_id_resolves_to_null()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
 
         // Create article with a random (non-existent) file id
         var danglingId = Guid.NewGuid();

@@ -20,7 +20,7 @@ public class CrossRelationSortTests(ApiFactory factory)
     [Fact]
     public async Task Sort_descending_by_category_name()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var catA = await Post(c, "category", new { name = "AAA_sort" });
         var catZ = await Post(c, "category", new { name = "ZZZ_sort" });
         var artA = await Post(c, "article", new { status = "draft", categoryId = catA, translations = new { en = new { title = "sortA" } } });

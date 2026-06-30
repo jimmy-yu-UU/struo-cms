@@ -24,7 +24,7 @@ public class FileUploadTests(ApiFactory factory)
     [Fact]
     public async Task Upload_returns_201_with_metadata_and_draft_status()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsync("/api/files", Multipart(Encoding.UTF8.GetBytes("hello world"), "note.txt", "text/plain"));
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
@@ -38,7 +38,7 @@ public class FileUploadTests(ApiFactory factory)
     [Fact]
     public async Task Upload_multibyte_filename_round_trips()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsync("/api/files", Multipart([1, 2, 3], "報告.bin", "application/octet-stream"));
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetProperty("fileName").GetString().Should().Be("報告.bin");
@@ -47,7 +47,7 @@ public class FileUploadTests(ApiFactory factory)
     [Fact]
     public async Task Upload_image_populates_width_height()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync();
         // 1x1 PNG
         var png = Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
