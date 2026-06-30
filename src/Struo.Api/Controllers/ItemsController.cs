@@ -14,7 +14,6 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> List(string collection, CancellationToken ct)
     {
-        if (GuardProtected(collection) is { } denied1) return denied1;
         var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
         var raw = QueryParser.ParseQueryString(qs);
         var result = await items.QueryAsync(collection, raw, Locale(), ct);
@@ -24,7 +23,6 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpPost("query")]
     public async Task<IActionResult> Query(string collection, [FromBody] JsonElement body, CancellationToken ct)
     {
-        if (GuardProtected(collection) is { } denied2) return denied2;
         var raw = QueryParser.ParseEnvelope(body);
         var result = await items.QueryAsync(collection, raw, Locale(), ct);
         return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
@@ -33,7 +31,6 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(string collection, string id, CancellationToken ct)
     {
-        if (GuardProtected(collection) is { } denied3) return denied3;
         var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
         var deep = QueryParser.ParseQueryString(qs).Deep;
         var item = await items.GetAsync(collection, id, deep, Locale(), ct);
@@ -43,11 +40,6 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     private string? Locale() =>
         Request.Query.TryGetValue("locale", out var lv) && !string.IsNullOrWhiteSpace(lv)
             ? lv.ToString()
-            : null;
-
-    private IActionResult? GuardProtected(string collection) =>
-        ProtectedCollections.Set.Contains(collection) && User.Identity?.IsAuthenticated != true
-            ? Unauthorized(new { error = new { message = "Authentication required." } })
             : null;
 
     [HttpPost]
