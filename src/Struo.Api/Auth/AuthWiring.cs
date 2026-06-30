@@ -38,9 +38,9 @@ public static class AuthWiring
                 // API, not MVC views: return 401/403 instead of redirecting.
                 options.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
                 options.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
-            });
-        // NOTE (Task 8): append
-        //   .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(AuthSchemes.Bearer, _ => { });
+            })
+            .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(
+                AuthSchemes.Bearer, _ => { });
 
         services.AddAuthorization();
         return services;
