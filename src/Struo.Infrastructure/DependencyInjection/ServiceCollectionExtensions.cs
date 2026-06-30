@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICurrentUserAccessor, StubCurrentUserAccessor>();
         services.AddSingleton<Struo.Application.Security.IPasswordHasher, Identity.Argon2idPasswordHasher>();
         services.AddScoped<Struo.Application.Security.IUserCredentialStore, Identity.SqlSugarUserCredentialStore>();
+        services.AddScoped<Struo.Application.Security.IAuthService, Struo.Application.Security.AuthService>();
 
         services.AddScoped<ISqlSugarClient>(sp =>
         {
