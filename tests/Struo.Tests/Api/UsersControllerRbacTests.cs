@@ -23,7 +23,7 @@ public class UsersControllerRbacTests(ApiFactory factory)
     {
         var client = await factory.CreateAuthenticatedClientAsync();
         var resp = await client.PostAsJsonAsync("/api/users",
-            new { email = "fresh@struo.test", password = "password-123", name = "Fresh" });
+            new { email = $"fresh-{Guid.NewGuid():N}@struo.test", password = "password-123", name = "Fresh" });
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
@@ -43,5 +43,17 @@ public class UsersControllerRbacTests(ApiFactory factory)
         var resp = await client.PutAsJsonAsync($"/api/users/{userId}/password",
             new { newPassword = "new-password-123", currentPassword = "editor-pw-123" });
         resp.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task NonAdmin_changing_another_users_password_is_403()
+    {
+        var (client, _) = await factory.CreateEditorClientAsync([], []);
+        // Ensure the admin user exists so we have a stable "other user" id to target.
+        await factory.CreateAuthenticatedClientAsync();
+        var otherUserId = factory.AdminUserId;
+        var resp = await client.PutAsJsonAsync($"/api/users/{otherUserId}/password",
+            new { newPassword = "new-password-123", currentPassword = "whatever" });
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }
