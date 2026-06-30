@@ -30,7 +30,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = _db.ConnectionString,
                 ["Struo:Files:Backend"] = "local",
-                ["Struo:Files:Local:RootPath"] = FilesRoot
+                ["Struo:Files:Local:RootPath"] = FilesRoot,
+                ["Rbac:PublicReadCollections:0"] = "article",
+                ["Rbac:PublicReadCollections:1"] = "category",
+                ["Rbac:PublicReadCollections:2"] = "file",
+                ["Rbac:PublicReadCollections:3"] = "language"
             }));
     }
 
@@ -60,12 +64,64 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 AdminUserId = existing.Id;
             }
+
+            var adminRole = await db.Queryable<Role>().Where(r => r.Name == "admin").FirstAsync();
+            if (adminRole is null)
+            {
+                adminRole = new Role { Id = Guid.CreateVersion7(), Name = "admin", IsSuperAdmin = true };
+                await db.Insertable(adminRole).ExecuteCommandAsync();
+            }
+            var linked = await db.Queryable<UserRole>()
+                .Where(ur => ur.UserId == AdminUserId && ur.RoleId == adminRole.Id).AnyAsync();
+            if (!linked)
+                await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = AdminUserId, RoleId = adminRole.Id })
+                    .ExecuteCommandAsync();
         }
 
         var client = CreateClient();
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email = AdminEmail, password = AdminPassword });
         resp.EnsureSuccessStatusCode();
         return client;
+    }
+
+    /// <summary>
+    /// Seeds a non-super role with the given read/write grants, a fresh editor user,
+    /// the user-role link, and returns a logged-in client + the user id.
+    /// </summary>
+    public async Task<(HttpClient client, Guid userId)> CreateEditorClientAsync(
+        string[] readCollections, string[] writeCollections)
+    {
+        Guid userId;
+        const string password = "editor-pw-123";
+        string email;
+        using (var scope = Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+            userId = Guid.CreateVersion7();
+            email = $"editor-{userId:N}@struo.test";
+            await db.Insertable(new User
+            {
+                Id = userId, Email = email, Password = hasher.Hash(password),
+                Name = "Editor", IsActive = true
+            }).ExecuteCommandAsync();
+            var role = new Role { Id = Guid.CreateVersion7(), Name = $"editor-{userId:N}" };
+            await db.Insertable(role).ExecuteCommandAsync();
+            await db.Insertable(new UserRole
+            {
+                Id = Guid.CreateVersion7(), UserId = userId, RoleId = role.Id
+            }).ExecuteCommandAsync();
+            foreach (var c in readCollections.Union(writeCollections).Distinct())
+                await db.Insertable(new Permission
+                {
+                    Id = Guid.CreateVersion7(), RoleId = role.Id, Collection = c,
+                    CanRead = readCollections.Contains(c), CanWrite = writeCollections.Contains(c)
+                }).ExecuteCommandAsync();
+        }
+        var client = CreateClient();
+        var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        resp.EnsureSuccessStatusCode();
+        return (client, userId);
     }
 
     protected override void Dispose(bool disposing)

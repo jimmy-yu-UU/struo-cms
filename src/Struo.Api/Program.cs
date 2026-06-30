@@ -49,10 +49,21 @@ try
     app.UseSerilogRequestLogging();
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>();
 
     app.Use(async (context, next) =>
     {
         try { await next(); }
+        catch (Struo.Domain.Query.PermissionDeniedException ex)
+        {
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = context.User.Identity?.IsAuthenticated == true
+                    ? StatusCodes.Status403Forbidden
+                    : StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            }
+        }
         catch (Struo.Domain.Query.CollectionNotFoundException ex)
         {
             if (!context.Response.HasStarted)
@@ -103,12 +114,18 @@ try
             typeof(Article), typeof(ArticleTranslation), typeof(Category),
             typeof(Struo.Infrastructure.Localization.Language),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.FileTranslation),
-            typeof(User));
+            typeof(User),
+            typeof(Struo.Infrastructure.Identity.Role),
+            typeof(Struo.Infrastructure.Identity.Permission),
+            typeof(Struo.Infrastructure.Identity.UserRole));
         await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
         var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
         await Struo.Infrastructure.Identity.AdminUserSeeder.SeedAsync(db, hasher,
             builder.Configuration["Auth:BootstrapAdmin:Email"],
             builder.Configuration["Auth:BootstrapAdmin:Password"]);
+        await Struo.Infrastructure.Identity.RbacSeeder.SeedAsync(db,
+            builder.Configuration["Auth:BootstrapAdmin:Email"],
+            builder.Configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? []);
     }
 
     app.Run();
