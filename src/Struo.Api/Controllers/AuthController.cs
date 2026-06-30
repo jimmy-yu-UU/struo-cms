@@ -27,8 +27,7 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
         return Ok(new { data = new { id = result.UserId } });
     }
 
-    // NOTE (Task 8): change AuthSchemes.Cookie to AuthSchemes.CookieOrBearer once Bearer handler is registered.
-    [Authorize(AuthenticationSchemes = AuthSchemes.Cookie)]
+    [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
@@ -36,8 +35,7 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
         return NoContent();
     }
 
-    // NOTE (Task 8): change AuthSchemes.Cookie to AuthSchemes.CookieOrBearer once Bearer handler is registered.
-    [Authorize(AuthenticationSchemes = AuthSchemes.Cookie)]
+    [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     [HttpGet("me")]
     public IActionResult Me() =>
         Ok(new { data = new { id = User.FindFirstValue(ClaimTypes.NameIdentifier) } });
