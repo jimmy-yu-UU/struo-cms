@@ -25,7 +25,8 @@ public class ItemsEndpointTests(ApiFactory factory)
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdData = Root(await create.Content.ReadAsStringAsync()).GetProperty("data");
         var id = createdData.GetProperty("id").GetString()!;
-        createdData.GetProperty("createdBy").GetString().Should().Be(Guid.Empty.ToString());
+        // With the real HttpContextCurrentUserAccessor, anonymous requests yield createdBy = null (not Guid.Empty).
+        createdData.GetProperty("createdBy").GetString().Should().BeNull();
 
         var get = await client.GetAsync($"/api/items/article/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
