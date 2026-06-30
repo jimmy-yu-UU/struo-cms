@@ -33,7 +33,10 @@
 | 5 | Files (upload, dimension extraction, local + S3/MinIO storage, references) | ✅ | [spec](superpowers/specs/2026-06-27-phase5-files-design.md) | [plan](superpowers/plans/2026-06-27-phase5-files.md) |
 | 5.5 | Identity & schema alignment (Guid/UUIDv7 PKs via `AuditableEntity`) — *inserted* | ✅ | [spec](superpowers/specs/2026-06-29-phase5.5-identity-uuid-alignment-design.md) | [plan](superpowers/plans/2026-06-29-phase5.5-identity-uuid-alignment.md) |
 | 5.6 | Multilingual SEO (`SeoTranslation` sidecar base; `ISeoMeta` retired; per-locale OG image) — *inserted* | ✅ | [spec](superpowers/specs/2026-06-29-phase5.6-multilingual-seo-design.md) | [plan](superpowers/plans/2026-06-29-phase5.6-multilingual-seo.md) |
-| 6 | Auth / session / SSO / RBAC / Redis | ⬜ planned | — | — |
+| 6 | Auth / session / SSO / RBAC / Redis — *decomposed into 6a/6b/6c* | 🔧 in progress | — | — |
+| 6a | Authentication core (User collection, Argon2id, cookie+Redis session, bearer token) | 📝 spec + plan ready | [spec](superpowers/specs/2026-06-30-phase6a-auth-core-design.md) | [plan](superpowers/plans/2026-06-30-phase6a-auth-core.md) |
+| 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | ⬜ planned | — | — |
+| 6c | SSO (external OIDC identity providers) | ⬜ planned | — | — |
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
