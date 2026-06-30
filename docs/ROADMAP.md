@@ -12,12 +12,12 @@
 
 ## Status at a glance
 
-- **Done & merged to `main`:** Phases 0 → 5.6 (latest commit `1901803`).
-- **Next up:** Phase 6 (auth / session / SSO / RBAC / Redis). Seams are already in place:
-  `ICurrentUserAccessor` and `IPermissionService` (ports in Application) with allow-all stubs
-  in Infrastructure — business logic depends only on the interfaces.
+- **Done & merged to `main`:** Phases 0 → 6a; Phase 6b RBAC complete (live-PG verified).
+- **Next up:** Phase 6c (SSO / external OIDC) or Phase 7 (Vue admin SPA). The `IPermissionService`
+  port is now backed by real RBAC (`RbacPermissionService` + per-request snapshot); the allow-all
+  stub is out of the live DI graph.
 - **Verification baseline (2026-06-30):** `dotnet build` clean (warnings-as-errors);
-  `dotnet test` 161 passed / 0 failed / 0 skipped. DB features additionally gated on live
+  `dotnet test` 213 passed / 0 failed / 0 skipped. DB features additionally gated on live
   Postgres (SQLite-green ≠ Postgres-correct).
 
 ## Phases
@@ -35,7 +35,7 @@
 | 5.6 | Multilingual SEO (`SeoTranslation` sidecar base; `ISeoMeta` retired; per-locale OG image) — *inserted* | ✅ | [spec](superpowers/specs/2026-06-29-phase5.6-multilingual-seo-design.md) | [plan](superpowers/plans/2026-06-29-phase5.6-multilingual-seo.md) |
 | 6 | Auth / session / SSO / RBAC / Redis — *decomposed into 6a/6b/6c* | 🔧 in progress | — | — |
 | 6a | Authentication core (User collection, Argon2id, cookie+Redis session, bearer token) | ✅ done (live PG+Redis verified) | [spec](superpowers/specs/2026-06-30-phase6a-auth-core-design.md) · [plan](superpowers/plans/2026-06-30-phase6a-auth-core.md) · [guide](guide/02-authentication.md) | — |
-| 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | 📝 spec written | [spec](superpowers/specs/2026-06-30-phase6b-rbac-design.md) | — |
+| 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | ✅ done (live PG verified) | [spec](superpowers/specs/2026-06-30-phase6b-rbac-design.md) | [plan](superpowers/plans/2026-06-30-phase6b-rbac.md) |
 | 6c | SSO (external OIDC identity providers) | ⬜ planned | — | — |
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
