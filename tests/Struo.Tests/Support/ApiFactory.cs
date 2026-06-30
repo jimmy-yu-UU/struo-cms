@@ -30,7 +30,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = _db.ConnectionString,
                 ["Struo:Files:Backend"] = "local",
-                ["Struo:Files:Local:RootPath"] = FilesRoot
+                ["Struo:Files:Local:RootPath"] = FilesRoot,
+                ["Rbac:PublicReadCollections:0"] = "article",
+                ["Rbac:PublicReadCollections:1"] = "category",
+                ["Rbac:PublicReadCollections:2"] = "file",
+                ["Rbac:PublicReadCollections:3"] = "language"
             }));
     }
 
@@ -60,6 +64,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 AdminUserId = existing.Id;
             }
+
+            var adminRole = await db.Queryable<Role>().Where(r => r.Name == "admin").FirstAsync();
+            if (adminRole is null)
+            {
+                adminRole = new Role { Id = Guid.CreateVersion7(), Name = "admin", IsSuperAdmin = true };
+                await db.Insertable(adminRole).ExecuteCommandAsync();
+            }
+            var linked = await db.Queryable<UserRole>()
+                .Where(ur => ur.UserId == AdminUserId && ur.RoleId == adminRole.Id).AnyAsync();
+            if (!linked)
+                await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = AdminUserId, RoleId = adminRole.Id })
+                    .ExecuteCommandAsync();
         }
 
         var client = CreateClient();
