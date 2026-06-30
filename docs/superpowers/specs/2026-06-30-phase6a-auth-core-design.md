@@ -29,7 +29,7 @@ revocable server-side session, and stamp real audit identities — without chang
 
 **In scope:**
 - `User` entity as a first-class CMS collection (Infrastructure, like `File`/`Language`), with
-  sensitive fields (`Password`, `AccessTokenHash`) `Hidden + ReadOnly` so the generic CRUD path can
+  sensitive fields (`Password`, `AccessToken`) `Hidden + ReadOnly` so the generic CRUD path can
   never project or accept them.
 - Password hashing with **Argon2id** via a PHC-encoding library (encoded hash embeds salt + params;
   no separate salt column).
@@ -98,7 +98,7 @@ Infrastructure. Not piecemeal, and not in 6a.
 - `IUserCredentialStore` — credential lookups that deliberately **bypass the generic projection** so
   hashes never traverse the read path:
   - `Task<UserCredential?> FindByEmailAsync(string email, CancellationToken)`
-  - `Task<UserCredential?> FindByAccessTokenHashAsync(string tokenHash, CancellationToken)`
+  - `Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken)`
   - `record UserCredential(Guid Id, string PasswordEncoded, bool IsActive)`
 - `IAuthService` — `Task<AuthResult> AuthenticateAsync(string email, string password, CancellationToken)`;
   returns success(userId) or a typed failure (`InvalidCredentials` / `Inactive`). Verifies only —
@@ -110,7 +110,8 @@ Infrastructure. Not piecemeal, and not in 6a.
 - `User` entity (`Identity/User.cs`), collection `user`, `: AuditableEntity`:
   `Id` (Guid/UUIDv7) · `Email` (`[CmsField]`, required, **unique index**) · `Password`
   (Argon2id PHC string; `[CmsField(Hidden, ReadOnly)]`) · `Name` (`[CmsField]`) · `IsActive`
-  (`[CmsField]`, default true) · `AccessTokenHash` (string?, `[CmsField(Hidden, ReadOnly)]`,
+  (`[CmsField]`, default true) · `AccessToken` (string?,
+  **stores the `SHA-256` of the issued token, never the plaintext**; `[CmsField(Hidden, ReadOnly)]`,
   indexed for lookup) · audit fields.
 - `Argon2idPasswordHasher : IPasswordHasher` — wraps `Isopoh.Cryptography.Argon2`; fixed params
   (memory/iterations/parallelism) as constants; PHC-encoded output.
@@ -124,7 +125,7 @@ Infrastructure. Not piecemeal, and not in 6a.
   (prefixed keys; value = `TicketSerializer`-serialized `AuthenticationTicket`). Enables server-side
   revocation and logout-all.
 - `BearerTokenAuthenticationHandler` — reads `Authorization: Bearer <token>`, computes `SHA-256`,
-  resolves the user via `IUserCredentialStore.FindByAccessTokenHashAsync`, builds the `ClaimsPrincipal`.
+  resolves the user via `IUserCredentialStore.FindByAccessTokenAsync`, builds the `ClaimsPrincipal`.
 - `AdminUserSeeder` (dev) — if no users exist, create an admin from `Auth:BootstrapAdmin:{Email,Password}`.
   Runs in the dev startup block after `LanguageSeeder`.
 - Redis registration: when `Redis:ConnectionString` is configured →
@@ -140,7 +141,7 @@ Infrastructure. Not piecemeal, and not in 6a.
   - `POST /api/users` `{email, password, name}` → Argon2id hash → create → 201 (no hash returned).
   - `PUT /api/users/{id}/password` `{newPassword}` (self-service also requires `currentPassword`) → rehash.
   - `POST /api/users/{id}/access-token` → generate random ≥256-bit token, store `SHA-256`, return plaintext **once**.
-  - `DELETE /api/users/{id}/access-token` → null `AccessTokenHash` (revoke).
+  - `DELETE /api/users/{id}/access-token` → null `AccessToken` (revoke).
 - Wiring in `Program.cs`: `AddHttpContextAccessor()`; Redis cache; `AddAuthentication()` with two
   schemes — Cookie (`SessionStore = DistributedCacheTicketStore`, `HttpOnly`, `SecurePolicy=Always`,
   `SameSite`, `OnRedirectToLogin`/`OnRedirectToAccessDenied` overridden to return **401/403 JSON**,
@@ -164,7 +165,7 @@ Infrastructure. Not piecemeal, and not in 6a.
 2. **Cookie request:** cookie → cookie middleware → `ITicketStore.RetrieveAsync` (Redis) →
    `HttpContext.User` → `HttpContextCurrentUserAccessor` → audit AOP stamps the real user.
 3. **Bearer request:** `Authorization: Bearer <token>` → handler → `SHA-256` →
-   `FindByAccessTokenHashAsync` → if found & active → principal → identical downstream.
+   `FindByAccessTokenAsync` → if found & active → principal → identical downstream.
 4. **Logout:** `SignOutAsync` → `ITicketStore.RemoveAsync` (immediate server-side invalidation) → cookie cleared.
 5. **Provisioning / password:** create hashes a fresh Argon2id PHC string; change-password rehashes;
    hash never returned or projected.
@@ -179,7 +180,7 @@ Infrastructure. Not piecemeal, and not in 6a.
 - Self-service change-password with wrong `currentPassword` → 401.
 - Invalid / revoked bearer token → 401.
 - Redis unavailable at runtime → session operations fail with **503**; surfaced by `/health/ready`.
-- `Password` / `AccessTokenHash` never appear in any projection (Hidden+ReadOnly **and** the dedicated
+- `Password` / `AccessToken` never appear in any projection (Hidden+ReadOnly **and** the dedicated
   credential store that bypasses projection — double guard); generic create/update cannot set them.
 - Bootstrap seeder runs with no current user (accessor returns null → existing audit null-handling applies).
 - Tests use `AddDistributedMemoryCache` → no Redis dependency (hermetic, mirrors SQLite-for-tests).
@@ -188,8 +189,8 @@ Infrastructure. Not piecemeal, and not in 6a.
 
 **Unit:** (1) Argon2id hasher — distinct output per call, `Verify` true/false, encoded round-trip;
 (2) token `SHA-256` hashing + lookup; (3) `AuthService` — valid / wrong-password / inactive /
-unknown-email; (4) `user` schema — `password`/`accessTokenHash` Hidden (absent from field list);
-(5) generic CRUD can neither read nor write `password`/`accessTokenHash`.
+unknown-email; (4) `user` schema — `password`/`accessToken` Hidden (absent from field list);
+(5) generic CRUD can neither read nor write `password`/`accessToken`.
 
 **Integration** (`WebApplicationFactory` + SQLite + in-memory cache): (6) login 200 + `Set-Cookie` /
 401 / inactive 401; (7) authenticated write → audit `CreatedBy` == logged-in user; unauthenticated
@@ -200,14 +201,14 @@ requires auth (anonymous → 401), content-collection read stays anonymous; (13)
 seeds admin when no users.
 
 **Live verification gate** (memory: *SQLite green ≠ Postgres correct*) — real PG **and** Redis:
-(14) `users` table columns (`email` unique, `password`, `accesstokenhash`, `isactive`); login
+(14) `users` table columns (`email` unique, `password`, `accesstoken`, `isactive`); login
 round-trip; audit stamps the real user; (15) Redis holds the session ticket; logout removes it;
 revocation works; a host restart preserves the session (server-side store confirmed).
 
 ## 8. Migration
 
 Dev-only `InitTables`: register `User` in the initializer entity list and the metadata scan assembly;
-recreate to add the `users` table (`email` unique index, `accesstokenhash` index). New packages added
+recreate to add the `users` table (`email` unique index, `accesstoken` index). New packages added
 via `dotnet add package` (latest, centralized in `Directory.Packages.props`):
 `Isopoh.Cryptography.Argon2`, `Microsoft.Extensions.Caching.StackExchangeRedis`,
 `Microsoft.AspNetCore.Http.Abstractions` (Infrastructure). No data migration.
