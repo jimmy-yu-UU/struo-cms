@@ -39,6 +39,11 @@ public sealed class UsersController(ISqlSugarClient db, IPasswordHasher hasher, 
         return Created($"/api/items/user/{id}", new { data = new { id, email = body.Email, name = body.Name } });
     }
 
+    // TODO(6b/RBAC): currentPassword is NOT yet verified and there is no ownership/role check —
+    // in Phase 6a any authenticated caller (admin-only provisioning) may set any user's password by id.
+    // Self-service currentPassword verification and "may only change own password" land together with
+    // the role/permission model in Phase 6b (a currentPassword check without ownership is incomplete).
+    // body.CurrentPassword is intentionally accepted-but-unused until then.
     [HttpPut("{id:guid}/password")]
     public async Task<IActionResult> ChangePassword(Guid id, [FromBody] ChangePasswordRequest body, CancellationToken ct)
     {
