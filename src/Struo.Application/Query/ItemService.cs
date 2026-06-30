@@ -32,7 +32,7 @@ public sealed class ItemService(
         string collection, QueryModel raw, string? locale = null, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         ValidateLocale(locale);
 
         // Compute the effective query locale: explicit locale ?? collection default ?? global default.
@@ -60,7 +60,7 @@ public sealed class ItemService(
         string collection, string id, DeepSpec? deep = null, string? locale = null, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanRead(collection)) throw new QueryException("Read not permitted.");
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         ValidateLocale(locale);
         var entity = await repository.GetByIdAsync(collection, id, ct);
         if (entity is null) return null;
@@ -255,7 +255,7 @@ public sealed class ItemService(
     public async Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
+        if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         ValidateLanguageCodeIfNeeded(collection, body);
         var entity = Deserialize(collection, body, meta);
         var created = await repository.CreateAsync(collection, entity, ct);
@@ -270,7 +270,7 @@ public sealed class ItemService(
     public async Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanWrite(collection)) throw new QueryException("Write not permitted.");
+        if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         ValidateLanguageCodeIfNeeded(collection, body);
         var d = registry.Get(collection)!;
 
@@ -473,7 +473,7 @@ public sealed class ItemService(
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
         _ = Meta(collection);
-        if (!permissions.CanDelete(collection)) throw new QueryException("Delete not permitted.");
+        if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
 
         // Enforce OnDelete.Restrict: for each inbound M2O relation with Restrict semantics,
         // check whether any row in the source collection still references this id.
