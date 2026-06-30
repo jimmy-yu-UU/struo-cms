@@ -104,6 +104,10 @@ try
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.FileTranslation),
             typeof(User));
         await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
+        var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
+        await Struo.Infrastructure.Identity.AdminUserSeeder.SeedAsync(db, hasher,
+            builder.Configuration["Auth:BootstrapAdmin:Email"],
+            builder.Configuration["Auth:BootstrapAdmin:Password"]);
     }
 
     app.Run();
