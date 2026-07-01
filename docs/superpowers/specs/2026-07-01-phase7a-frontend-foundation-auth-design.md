@@ -18,7 +18,7 @@ scaffold, the auth plumbing, and the test toolchain that every later sub-phase (
 **In scope**
 - New `frontend/` folder (monorepo sibling to `src/`): a **separate app/deployable** with its own
   `package.json` + Vite build, versioned with the backend. Vue 3 + **TypeScript**, Vite, **PrimeVue**
-  (Aura theme), **Pinia**, **Vue Router**. Package manager: npm.
+  (Aura theme), **Pinia**, **Vue Router**. Package manager: **pnpm**.
 - **`apiClient`** — thin HTTP wrapper: base URL from env, `credentials: 'include'`, camelCase JSON,
   centralized `401 → clear session + redirect to /login` handling.
 - **`authStore` (Pinia)** — `user`, `isAuthenticated`, `login(email, password)`, `logout()`,
@@ -50,9 +50,9 @@ scaffold, the auth plumbing, and the test toolchain that every later sub-phase (
 both npm (frontend) and NuGet (backend) — is installed at its **latest** version *through the package
 manager itself*, never by hand-writing a version string guessed from memory.
 
-- Frontend: add deps via `npm install <pkg>@latest` (or `npm install <pkg>`, which resolves to latest);
-  let npm write the resolved versions into `package.json` / `package-lock.json`. Do not type a version
-  literal into `package.json` from memory.
+- Frontend: add deps via `pnpm add <pkg>` (resolves to latest by default); let pnpm write the resolved
+  versions into `package.json` / `pnpm-lock.yaml`. Do not type a version literal into `package.json`
+  from memory.
 - Backend: `dotnet add package <pkg>` (latest), versions centralized in `Directory.Packages.props`
   (existing rule §17.5). Never hardcode a version.
 - The plan and execution must *run the installer* to obtain versions; any version number appearing in a
@@ -182,8 +182,8 @@ Scaffold/layout markup is verified via render + the E2E flow, not literal RED-fi
 - Playwright E2E `login → dashboard → logout` passes.
 - **Manual live smoke:** Vite (HTTPS) + API (HTTPS) on different origins; real cross-origin cookie login
   round-trip succeeds; logout revokes the session (a subsequent `/api/auth/me` returns 401).
-- **Version-policy check (§1a):** every dependency version in `package.json`/`package-lock.json` was
-  produced by `npm install` (not hand-authored); no version string was guessed from assistant knowledge.
+- **Version-policy check (§1a):** every dependency version in `package.json`/`pnpm-lock.yaml` was
+  produced by `pnpm add` (not hand-authored); no version string was guessed from assistant knowledge.
 
 ## 10. Risks & mitigations
 
