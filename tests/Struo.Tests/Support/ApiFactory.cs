@@ -124,6 +124,33 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         return (client, userId);
     }
 
+    /// <summary>
+    /// Seeds a fresh user with NO role and a password, logs them in, and returns the client + id.
+    /// Used to verify the RBAC "public floor" (role-less authenticated user gets public permissions).
+    /// </summary>
+    public async Task<(HttpClient client, Guid userId)> CreateRolelessClientAsync()
+    {
+        Guid userId;
+        const string password = "roleless-pw-123";
+        string email;
+        using (var scope = Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+            userId = Guid.CreateVersion7();
+            email = $"roleless-{userId:N}@struo.test";
+            await db.Insertable(new User
+            {
+                Id = userId, Email = email, Password = hasher.Hash(password),
+                Name = "Roleless", IsActive = true
+            }).ExecuteCommandAsync();
+        }
+        var client = CreateClient();
+        var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        resp.EnsureSuccessStatusCode();
+        return (client, userId);
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
