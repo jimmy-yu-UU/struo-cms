@@ -39,4 +39,15 @@ public class RbacEnforcementTests(ApiFactory factory)
         var resp = await client.PostAsJsonAsync("/api/items/category", new { name = "X" });
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task Roleless_authenticated_user_gets_public_read_but_no_write()
+    {
+        var (client, _) = await factory.CreateRolelessClientAsync();
+        // 'article' is granted to public via ApiFactory config → role-less user inherits it.
+        (await client.GetAsync("/api/items/article")).StatusCode.Should().Be(HttpStatusCode.OK);
+        // public has no write on 'category' → forbidden (authenticated → 403).
+        var write = await client.PostAsJsonAsync("/api/items/category", new { name = "X" });
+        write.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
 }

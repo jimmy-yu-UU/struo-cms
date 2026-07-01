@@ -12,13 +12,19 @@
 
 ## Status at a glance
 
-- **Done & merged to `main`:** Phases 0 → 6a; Phase 6b RBAC complete (live-PG verified).
-- **Next up:** Phase 6c (SSO / external OIDC) or Phase 7 (Vue admin SPA). The `IPermissionService`
-  port is now backed by real RBAC (`RbacPermissionService` + per-request snapshot); the allow-all
-  stub is out of the live DI graph.
-- **Verification baseline (2026-06-30):** `dotnet build` clean (warnings-as-errors);
-  `dotnet test` 213 passed / 0 failed / 0 skipped. DB features additionally gated on live
-  Postgres (SQLite-green ≠ Postgres-correct).
+- **Done & merged to `main`:** Phases 0 → 6c. Phase 6 (auth/session/SSO/RBAC/Redis) fully complete.
+- **Phase 6c (SSO) done & live-verified:** external OIDC login (Entra ID / M365), email-only JIT
+  provisioning (role-less → public floor), coexists with password login. Live gate passed on real
+  Entra ID + Postgres + Redis (login → callback → cookie session → `/api/auth/me` returns the JIT
+  user id).
+- **Next up:** Phase 7 (Vue admin SPA). Settle the pending framework-vs-host decision (see "Open
+  architectural decisions" below) before starting Phase 7. The `IPermissionService` port is backed
+  by real RBAC (`RbacPermissionService` + per-request snapshot); the allow-all stub is out of the
+  live DI graph.
+- **Verification baseline (2026-07-01):** `dotnet build` clean (warnings-as-errors);
+  `dotnet test` 246 passed / 0 failed / 0 skipped. DB/auth features additionally gated on live
+  Postgres+Redis (SQLite-green ≠ Postgres-correct); Phase 6c OIDC round-trip verified against live
+  Entra ID.
 
 ## Phases
 
@@ -33,10 +39,10 @@
 | 5 | Files (upload, dimension extraction, local + S3/MinIO storage, references) | ✅ | [spec](superpowers/specs/2026-06-27-phase5-files-design.md) | [plan](superpowers/plans/2026-06-27-phase5-files.md) |
 | 5.5 | Identity & schema alignment (Guid/UUIDv7 PKs via `AuditableEntity`) — *inserted* | ✅ | [spec](superpowers/specs/2026-06-29-phase5.5-identity-uuid-alignment-design.md) | [plan](superpowers/plans/2026-06-29-phase5.5-identity-uuid-alignment.md) |
 | 5.6 | Multilingual SEO (`SeoTranslation` sidecar base; `ISeoMeta` retired; per-locale OG image) — *inserted* | ✅ | [spec](superpowers/specs/2026-06-29-phase5.6-multilingual-seo-design.md) | [plan](superpowers/plans/2026-06-29-phase5.6-multilingual-seo.md) |
-| 6 | Auth / session / SSO / RBAC / Redis — *decomposed into 6a/6b/6c* | 🔧 in progress | — | — |
+| 6 | Auth / session / SSO / RBAC / Redis — *decomposed into 6a/6b/6c* | ✅ | — | — |
 | 6a | Authentication core (User collection, Argon2id, cookie+Redis session, bearer token) | ✅ done (live PG+Redis verified) | [spec](superpowers/specs/2026-06-30-phase6a-auth-core-design.md) · [plan](superpowers/plans/2026-06-30-phase6a-auth-core.md) · [guide](guide/02-authentication.md) | — |
 | 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | ✅ done (live PG verified) | [spec](superpowers/specs/2026-06-30-phase6b-rbac-design.md) | [plan](superpowers/plans/2026-06-30-phase6b-rbac.md) |
-| 6c | SSO (external OIDC identity providers) | ⬜ planned | — | — |
+| 6c | SSO (external OIDC identity providers) | ✅ done (live-verified: Entra+PG+Redis) | [spec](superpowers/specs/2026-07-01-phase6c-sso-design.md) · [guide](guide/02-authentication.md) | [plan](superpowers/plans/2026-07-01-phase6c-sso.md) |
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |

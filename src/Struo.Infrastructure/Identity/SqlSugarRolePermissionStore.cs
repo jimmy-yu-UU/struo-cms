@@ -7,13 +7,24 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
 {
     public async Task<RolePermissionData> LoadForUserAsync(Guid? userId, CancellationToken ct = default)
     {
-        List<Role> roles = userId is null
-            ? await db.Queryable<Role>().Where(r => r.Name == "public").ToListAsync(ct)
-            : await db.Queryable<UserRole>()
+        List<Role> roles;
+        if (userId is null)
+        {
+            roles = await db.Queryable<Role>().Where(r => r.Name == "public").ToListAsync(ct);
+        }
+        else
+        {
+            roles = await db.Queryable<UserRole>()
                 .InnerJoin<Role>((ur, r) => ur.RoleId == r.Id)
                 .Where((ur, r) => ur.UserId == userId.Value)
                 .Select((ur, r) => r)
                 .ToListAsync(ct);
+
+            // Public floor: an authenticated user with no assigned roles inherits the public role
+            // (still <= what anonymous callers can see). Assigned users get only their roles.
+            if (roles.Count == 0)
+                roles = await db.Queryable<Role>().Where(r => r.Name == "public").ToListAsync(ct);
+        }
 
         if (roles.Count == 0)
             return new RolePermissionData([], []);

@@ -59,4 +59,23 @@ public class SqlSugarRolePermissionStoreTests
         data.Permissions.Should().ContainSingle(p => p.Collection == "article" && p.CanWrite);
         data.Permissions.Should().NotContain(p => p.Collection == "user"); // other role not assigned
     }
+
+    [Fact]
+    public async Task Authenticated_user_with_no_roles_falls_back_to_public()
+    {
+        using var file = new SqliteTestDatabase();
+        var db = NewDb(file);
+        var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
+        await db.Insertable(pub).ExecuteCommandAsync();
+        await db.Insertable(new Permission
+        {
+            Id = Guid.CreateVersion7(), RoleId = pub.Id, Collection = "article", CanRead = true
+        }).ExecuteCommandAsync();
+
+        var store = new SqlSugarRolePermissionStore(db);
+        var data = await store.LoadForUserAsync(Guid.CreateVersion7()); // authenticated, no UserRole
+
+        data.Roles.Should().ContainSingle(r => r.Name == "public");
+        data.Permissions.Should().ContainSingle(p => p.Collection == "article" && p.CanRead);
+    }
 }
