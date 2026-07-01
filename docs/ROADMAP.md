@@ -12,19 +12,28 @@
 
 ## Status at a glance
 
-- **Done & merged to `main`:** Phases 0 → 6c. Phase 6 (auth/session/SSO/RBAC/Redis) fully complete.
+- **Done & merged to `main`:** Phases 0 → 6.9. Phase 6 (auth/session/SSO/RBAC/Redis) fully complete.
 - **Phase 6c (SSO) done & live-verified:** external OIDC login (Entra ID / M365), email-only JIT
   provisioning (role-less → public floor), coexists with password login. Live gate passed on real
   Entra ID + Postgres + Redis (login → callback → cookie session → `/api/auth/me` returns the JIT
   user id).
-- **Next up:** Phase 7 (Vue admin SPA) — now unblocked. Phase 6.9 resolved the framework-vs-host
+- **Phase 7a (frontend foundation & auth) code-complete, live-smoke-pending:** separate Vue 3 SPA in
+  `frontend/` (Vite + Pinia + Vue Router) authenticating against the .NET API; backend gained a
+  default-off CORS policy + conditional cross-origin cookie mode. Automated gates are green
+  (backend build/tests, frontend unit/component tests, frontend build, and a live Playwright E2E
+  login → dashboard → logout). The spec's manual cross-origin HTTPS smoke (§9: Vite HTTPS + API
+  HTTPS on distinct origins, real cross-origin cookie round-trip) is **user-driven and still
+  pending** — see [`frontend/README.md`](../frontend/README.md) for the run recipe.
+- **Next up:** run the Phase 7a manual cross-origin smoke, then continue Phase 7 (admin SPA:
+  content tables/forms, TipTap, i18n, RBAC-aware UI). Phase 6.9 resolved the framework-vs-host
   decision (see "Open architectural decisions" below): `Struo.Api` is a reusable base template with
   convention-based collection discovery. The `IPermissionService` port is backed by real RBAC
   (`RbacPermissionService` + per-request snapshot); the allow-all stub is out of the live DI graph.
-- **Verification baseline (2026-07-01):** `dotnet build` clean (warnings-as-errors);
-  `dotnet test` 246 passed / 0 failed / 0 skipped. DB/auth features additionally gated on live
-  Postgres+Redis (SQLite-green ≠ Postgres-correct); Phase 6c OIDC round-trip verified against live
-  Entra ID.
+- **Verification baseline (2026-07-01):** backend `dotnet build` clean (warnings-as-errors);
+  `dotnet test` 255 passed / 0 failed / 0 skipped (246 prior + 2 CORS + others through 6.9/7a).
+  Frontend: 17 unit/component tests passed, `pnpm build` succeeds, Playwright E2E (login → dashboard
+  → logout) passed live in 3.4s. DB/auth features additionally gated on live Postgres+Redis
+  (SQLite-green ≠ Postgres-correct); Phase 6c OIDC round-trip verified against live Entra ID.
 
 ## Phases
 
@@ -44,7 +53,8 @@
 | 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | ✅ done (live PG verified) | [spec](superpowers/specs/2026-06-30-phase6b-rbac-design.md) | [plan](superpowers/plans/2026-06-30-phase6b-rbac.md) |
 | 6c | SSO (external OIDC identity providers) | ✅ done (live-verified: Entra+PG+Redis) | [spec](superpowers/specs/2026-07-01-phase6c-sso-design.md) · [guide](guide/02-authentication.md) | [plan](superpowers/plans/2026-07-01-phase6c-sso.md) |
 | 6.9 | Convention-based collection discovery (framework/host decoupling) — *inserted* | ✅ | [spec](superpowers/specs/2026-07-01-phase6.9-convention-collection-discovery-design.md) | [plan](superpowers/plans/2026-07-01-phase6.9-convention-collection-discovery.md) |
-| 7 | Vue 3 + PrimeVue + TipTap admin SPA | ⬜ planned | — | — |
+| 7 | Vue 3 + PrimeVue + TipTap admin SPA — *decomposed into 7a/…* | ⬜ in progress | — | — |
+| 7a | Frontend foundation & auth (Vue 3 SPA scaffold, `apiClient`, `authStore`, router guard, login/dashboard shell, cross-origin CORS+cookie mode) | ⬜ code-complete, live-smoke-pending | [spec](superpowers/specs/2026-07-01-phase7a-frontend-foundation-auth-design.md) | [plan](superpowers/plans/2026-07-01-phase7a-frontend-foundation-auth.md) |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
