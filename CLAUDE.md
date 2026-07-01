@@ -16,8 +16,10 @@ Domain stays free of external packages; persistence attributes live on entities 
 2. TDD: failing test first; acceptance = verification gate with evidence.
 3. YAGNI: stay inside the current phase's scope.
 4. All DB access via SqlSugar ORM; zero vendor SQL. InitTables dev-only.
-5. Install packages at latest via `dotnet add package`; never hardcode versions.
-   Versions centralized in `Directory.Packages.props`.
+5. Package versions are NEVER inferred from model knowledge — install latest via the package
+   manager itself (`dotnet add package` for NuGet, `npm install <pkg>` for frontend). Any version
+   string in a file must be one the package manager produced, never hand-authored from memory.
+   NuGet versions centralized in `Directory.Packages.props`.
 6. Metadata scanned at startup and cached; no per-request reflection (Phase 1+).
 7. Query DSL never leaks ORM internals; field/relation paths are whitelist-validated (Phase 2+).
 8. RichText is server-side sanitized (Phase 6/7).
