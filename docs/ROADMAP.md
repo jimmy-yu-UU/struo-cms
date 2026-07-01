@@ -13,12 +13,17 @@
 ## Status at a glance
 
 - **Done & merged to `main`:** Phases 0 → 6a; Phase 6b RBAC complete (live-PG verified).
-- **Next up:** Phase 6c (SSO / external OIDC) or Phase 7 (Vue admin SPA). The `IPermissionService`
-  port is now backed by real RBAC (`RbacPermissionService` + per-request snapshot); the allow-all
-  stub is out of the live DI graph.
+- **Phase 6c (SSO) code complete on branch `phase6c-sso`:** all 11 tasks implemented, suite
+  246/246 green; the live OIDC gate (real Entra ID + Postgres + Redis) has **not** been run yet —
+  not merged, not marked done, pending the user-driven live verification.
+- **Next up:** Phase 7 (Vue admin SPA), after the Phase 6c live gate closes. Settle the pending
+  framework-vs-host decision (see "Open architectural decisions" below) before starting Phase 7.
+  The `IPermissionService` port is now backed by real RBAC (`RbacPermissionService` + per-request
+  snapshot); the allow-all stub is out of the live DI graph.
 - **Verification baseline (2026-06-30):** `dotnet build` clean (warnings-as-errors);
   `dotnet test` 213 passed / 0 failed / 0 skipped. DB features additionally gated on live
-  Postgres (SQLite-green ≠ Postgres-correct).
+  Postgres (SQLite-green ≠ Postgres-correct). (Phase 6c on `phase6c-sso`: 246/246 passed as of
+  2026-07-01, pending the live gate before this baseline is updated on `main`.)
 
 ## Phases
 
@@ -36,7 +41,7 @@
 | 6 | Auth / session / SSO / RBAC / Redis — *decomposed into 6a/6b/6c* | 🔧 in progress | — | — |
 | 6a | Authentication core (User collection, Argon2id, cookie+Redis session, bearer token) | ✅ done (live PG+Redis verified) | [spec](superpowers/specs/2026-06-30-phase6a-auth-core-design.md) · [plan](superpowers/plans/2026-06-30-phase6a-auth-core.md) · [guide](guide/02-authentication.md) | — |
 | 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | ✅ done (live PG verified) | [spec](superpowers/specs/2026-06-30-phase6b-rbac-design.md) | [plan](superpowers/plans/2026-06-30-phase6b-rbac.md) |
-| 6c | SSO (external OIDC identity providers) | ⬜ planned | — | — |
+| 6c | SSO (external OIDC identity providers) | 🔧 code complete — live gate pending | [spec](superpowers/specs/2026-07-01-phase6c-sso-design.md) | [plan](superpowers/plans/2026-07-01-phase6c-sso.md) |
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
