@@ -28,11 +28,12 @@ using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Api.Content; // any namespace in a scanned assembly
 
-[CmsCollection("Product", Icon = "package", Group = "Catalog", DefaultDisplayField = "Sku")]
+[SugarTable("products")]
+[CmsCollection("Product", Icon = "package", Group = "Catalog", DefaultDisplayField = nameof(Sku))]
 public sealed class Product : AuditableEntity
 {
-    [SugarColumn(IsPrimaryKey = true)]
-    public Guid Id { get; set; }
+    // AuditableEntity declares Id as abstract — you MUST `override` it and mark the PK.
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
     [CmsField(Label = "SKU", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Sku { get; set; } = string.Empty;
@@ -41,36 +42,48 @@ public sealed class Product : AuditableEntity
     [CmsOptions("draft:Draft", "active:Active", "archived:Archived")]
     public string Status { get; set; } = "draft";
 
+    [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }
 
+    // Navigation properties are not columns: [SugarColumn(IsIgnore = true)] keeps them out of the table.
     [Navigate(NavigateType.OneToOne, nameof(CategoryId))]
     [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull)]
+    [SugarColumn(IsIgnore = true)]
     public Category? Category { get; set; }
 
     [CmsTranslations(typeof(ProductTranslation))]
+    [SugarColumn(IsIgnore = true)]
     public List<ProductTranslation> Translations { get; set; } = [];
 }
 ```
+
+`Category` above is any other `[CmsCollection]` you want to relate to (here, the sample blog's
+`Category`). The mechanics of a relation are the `Guid? {Name}Id` foreign-key column plus the
+`[Navigate]` + `[CmsRelation]` pair on the ignored navigation property.
 
 The **translation sidecar** carries the per-locale fields. Its foreign key must follow the
 convention `{Parent}Id`, and it must have `Id` and a string `Locale`:
 
 ```csharp
+using SqlSugar;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Seo; // SeoTranslation base gives per-locale SEO fields
 
 namespace Struo.Api.Content;
 
+[SugarTable("product_translations")]
 public sealed class ProductTranslation : SeoTranslation
 {
-    public long Id { get; set; }
-    public Guid ProductId { get; set; }   // {Parent}Id convention
+    // Sidecar PK is its own auto-increment long (distinct from the parent's Guid Id).
+    [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+    public Guid ProductId { get; set; }   // {Parent}Id convention (matches the parent class name + "Id")
     public string Locale { get; set; } = string.Empty;
 
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true)]
     public string Name { get; set; } = string.Empty;
 
+    [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Description", Interface = FieldInterface.RichText)]
     public string? Description { get; set; }
 }
@@ -82,7 +95,7 @@ public sealed class ProductTranslation : SeoTranslation
 |---|---|---|
 | `[CmsCollection(label)]` | the class | Registers the collection. Optional `Icon`, `Group`, `DefaultDisplayField`. |
 | `[CmsField(...)]` | a property | Makes the property an editable field. Set `Interface` (Text, RichText, Select, DateTime, Image, File, …), `Required`, `Searchable`, `Sortable`, `ReadOnly`, `Hidden`, `Sort`, `HelpText`, `Group`. |
-| `[CmsOptions("value:Label", …)]` | a Select-type property | Defines the dropdown options. |
+| `[CmsOptions("value:Label", …)]` | an option-type field | Supplies the choices for option-type interfaces (`Select`, `MultiSelect`, `Radio`, `CheckboxGroup`, `Tags`) — a Select without it just has no options. Placing it on a **non**-option field fails fast at startup. |
 | `[CmsRelation(...)]` | a navigation property (also needs SqlSugar `[Navigate]`) | Exposes a relation (Dropdown / TreeSelect / RelatedList) with `DisplayTemplate`, `OnDelete`. |
 | `[CmsTranslations(typeof(T))]` | a `List<T>` property | Declares the per-locale sidecar `T`; `T`'s `[CmsField]`s become translated fields. |
 
