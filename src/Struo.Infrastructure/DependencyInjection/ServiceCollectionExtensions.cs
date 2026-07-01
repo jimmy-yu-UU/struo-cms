@@ -20,6 +20,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Struo.Application.Security.IUserCredentialStore, Identity.SqlSugarUserCredentialStore>();
         services.AddScoped<Struo.Application.Security.IRolePermissionStore, Identity.SqlSugarRolePermissionStore>();
         services.AddScoped<Struo.Application.Security.IAuthService, Struo.Application.Security.AuthService>();
+        services.AddScoped<Struo.Application.Security.IExternalUserStore, Identity.SqlSugarExternalUserStore>();
+        services.AddScoped<Struo.Application.Security.IExternalLoginService, Struo.Application.Security.ExternalLoginService>();
 
         services.AddScoped<ISqlSugarClient>(sp =>
         {
