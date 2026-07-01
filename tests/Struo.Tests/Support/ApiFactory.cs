@@ -29,6 +29,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = _db.ConnectionString,
+                ["Struo:ContentAssemblies:0"] = "Struo.Sample.Blog",
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = FilesRoot,
                 ["Rbac:PublicReadCollections:0"] = "article",
