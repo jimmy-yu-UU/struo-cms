@@ -17,10 +17,10 @@
   provisioning (role-less → public floor), coexists with password login. Live gate passed on real
   Entra ID + Postgres + Redis (login → callback → cookie session → `/api/auth/me` returns the JIT
   user id).
-- **Next up:** Phase 7 (Vue admin SPA). Settle the pending framework-vs-host decision (see "Open
-  architectural decisions" below) before starting Phase 7. The `IPermissionService` port is backed
-  by real RBAC (`RbacPermissionService` + per-request snapshot); the allow-all stub is out of the
-  live DI graph.
+- **Next up:** Phase 7 (Vue admin SPA) — now unblocked. Phase 6.9 resolved the framework-vs-host
+  decision (see "Open architectural decisions" below): `Struo.Api` is a reusable base template with
+  convention-based collection discovery. The `IPermissionService` port is backed by real RBAC
+  (`RbacPermissionService` + per-request snapshot); the allow-all stub is out of the live DI graph.
 - **Verification baseline (2026-07-01):** `dotnet build` clean (warnings-as-errors);
   `dotnet test` 246 passed / 0 failed / 0 skipped. DB/auth features additionally gated on live
   Postgres+Redis (SQLite-green ≠ Postgres-correct); Phase 6c OIDC round-trip verified against live
@@ -43,6 +43,7 @@
 | 6a | Authentication core (User collection, Argon2id, cookie+Redis session, bearer token) | ✅ done (live PG+Redis verified) | [spec](superpowers/specs/2026-06-30-phase6a-auth-core-design.md) · [plan](superpowers/plans/2026-06-30-phase6a-auth-core.md) · [guide](guide/02-authentication.md) | — |
 | 6b | Collection-based authorization / RBAC (per-collection rules incl. public read) | ✅ done (live PG verified) | [spec](superpowers/specs/2026-06-30-phase6b-rbac-design.md) | [plan](superpowers/plans/2026-06-30-phase6b-rbac.md) |
 | 6c | SSO (external OIDC identity providers) | ✅ done (live-verified: Entra+PG+Redis) | [spec](superpowers/specs/2026-07-01-phase6c-sso-design.md) · [guide](guide/02-authentication.md) | [plan](superpowers/plans/2026-07-01-phase6c-sso.md) |
+| 6.9 | Convention-based collection discovery (framework/host decoupling) — *inserted* | ✅ | [spec](superpowers/specs/2026-07-01-phase6.9-convention-collection-discovery-design.md) | [plan](superpowers/plans/2026-07-01-phase6.9-convention-collection-discovery.md) |
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
@@ -52,11 +53,11 @@
 
 ## Open architectural decisions (not blocking, recorded here so they aren't lost)
 
-- **Framework vs. host separation.** `Struo.Api` currently references `Struo.Sample.Blog`
-  (`Program.cs` — metadata scanning via `typeof(Article).Assembly` and `InitTables` entity list).
-  Acceptable while there is a single demo host, but if `Struo.Api` is meant to be the reusable
-  framework, entity-assembly discovery should become config/convention driven rather than a
-  compile-time reference to a specific content model. Decide before Phase 7.
+- **Framework vs. host separation — RESOLVED (Phase 6.9).** StruoCMS is a reusable **base template**:
+  clone it, add `[CmsCollection]` classes, get CRUD APIs. `Struo.Api` no longer names any content
+  type — metadata is discovered by convention (framework assembly + host assembly + the
+  `Struo:ContentAssemblies` config list). Adding a collection requires no edit to `Program.cs`. See
+  [`docs/guide/03-adding-a-collection.md`](guide/03-adding-a-collection.md).
 - **Permission granularity for Phase 6.** `IPermissionService` is collection-level and takes no
   user argument (ambient). RBAC may need the current user/roles resolved inside the service (via
   `ICurrentUserAccessor`) or a signature change. Settle this during the Phase 6 brainstorm.
