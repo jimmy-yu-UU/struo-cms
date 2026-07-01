@@ -3,6 +3,7 @@ obj/
 *.user
 appsettings.Development.json
 .vs/
+.idea/
 node_modules/
 dist/
 logs/
