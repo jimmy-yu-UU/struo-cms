@@ -37,6 +37,7 @@ try
     builder.Services.AddStruoData(builder.Configuration);
     builder.Services.AddStruoFiles(builder.Configuration);
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
+    builder.Services.AddStruoOidc(builder.Configuration);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
