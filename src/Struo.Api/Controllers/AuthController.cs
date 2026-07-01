@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using Struo.Api.Auth;
 using Struo.Application.Security;
@@ -39,4 +40,15 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     [HttpGet("me")]
     public IActionResult Me() =>
         Ok(new { data = new { id = User.FindFirstValue(ClaimTypes.NameIdentifier) } });
+
+    [AllowAnonymous]
+    [HttpGet("login/oidc")]
+    public IActionResult LoginOidc([FromQuery] string? returnUrl, [FromServices] IOptions<OidcOptions> oidc)
+    {
+        if (!oidc.Value.Enabled)
+            return NotFound();
+
+        var target = Struo.Api.Auth.LocalRedirect.Sanitize(returnUrl, oidc.Value.ReturnUrlDefault);
+        return Challenge(new AuthenticationProperties { RedirectUri = target }, AuthSchemes.Oidc);
+    }
 }
