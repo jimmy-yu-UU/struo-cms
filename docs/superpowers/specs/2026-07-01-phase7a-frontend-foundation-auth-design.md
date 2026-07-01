@@ -44,6 +44,22 @@ scaffold, the auth plumbing, and the test toolchain that every later sub-phase (
 - Production hosting/CD pipeline for the SPA; containerization.
 - Enriching `GET /api/auth/me` beyond its current `{ id }` payload (see §3 open note).
 
+## 1a. Package version policy — ABSOLUTE CONSTRAINT
+
+**Package versions MUST NEVER be inferred from the assistant's own knowledge.** Every dependency —
+both npm (frontend) and NuGet (backend) — is installed at its **latest** version *through the package
+manager itself*, never by hand-writing a version string guessed from memory.
+
+- Frontend: add deps via `npm install <pkg>@latest` (or `npm install <pkg>`, which resolves to latest);
+  let npm write the resolved versions into `package.json` / `package-lock.json`. Do not type a version
+  literal into `package.json` from memory.
+- Backend: `dotnet add package <pkg>` (latest), versions centralized in `Directory.Packages.props`
+  (existing rule §17.5). Never hardcode a version.
+- The plan and execution must *run the installer* to obtain versions; any version number appearing in a
+  file must have been produced by the package manager, not authored from assumed knowledge.
+
+This is a hard gate: work that hardcodes assumed versions is rejected at verification.
+
 ## 2. Decisions locked in brainstorming
 
 | Topic | Decision |
@@ -166,6 +182,8 @@ Scaffold/layout markup is verified via render + the E2E flow, not literal RED-fi
 - Playwright E2E `login → dashboard → logout` passes.
 - **Manual live smoke:** Vite (HTTPS) + API (HTTPS) on different origins; real cross-origin cookie login
   round-trip succeeds; logout revokes the session (a subsequent `/api/auth/me` returns 401).
+- **Version-policy check (§1a):** every dependency version in `package.json`/`package-lock.json` was
+  produced by `npm install` (not hand-authored); no version string was guessed from assistant knowledge.
 
 ## 10. Risks & mitigations
 
