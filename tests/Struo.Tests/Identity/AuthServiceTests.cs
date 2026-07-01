@@ -47,4 +47,32 @@ public class AuthServiceTests
         var svc = new AuthService(new FakeStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", false)), new PlainHasher());
         (await svc.AuthenticateAsync("a@b.com", "pw")).Failure.Should().Be(AuthFailure.Inactive);
     }
+
+    [Fact]
+    public async Task Empty_stored_hash_is_invalid_credentials_without_calling_verify()
+    {
+        var userId = Guid.NewGuid();
+        var store = new FakeCredentialStore(new UserCredential(userId, "", IsActive: true));
+        var hasher = new ThrowingHasher(); // Verify must never be called
+        var sut = new AuthService(store, hasher);
+
+        var result = await sut.AuthenticateAsync("jit@corp.com", "anything");
+
+        result.Succeeded.Should().BeFalse();
+        result.Failure.Should().Be(AuthFailure.InvalidCredentials);
+        hasher.VerifyCalled.Should().BeFalse();
+    }
+
+    private sealed class FakeCredentialStore(UserCredential? cred) : IUserCredentialStore
+    {
+        public Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default) => Task.FromResult(cred);
+        public Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
+    }
+
+    private sealed class ThrowingHasher : IPasswordHasher
+    {
+        public bool VerifyCalled { get; private set; }
+        public string Hash(string password) => throw new NotSupportedException();
+        public bool Verify(string encoded, string password) { VerifyCalled = true; throw new InvalidOperationException("Verify should not be called for an empty hash"); }
+    }
 }
