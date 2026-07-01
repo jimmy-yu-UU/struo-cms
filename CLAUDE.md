@@ -17,7 +17,7 @@ Domain stays free of external packages; persistence attributes live on entities 
 3. YAGNI: stay inside the current phase's scope.
 4. All DB access via SqlSugar ORM; zero vendor SQL. InitTables dev-only.
 5. Package versions are NEVER inferred from model knowledge — install latest via the package
-   manager itself (`dotnet add package` for NuGet, `npm install <pkg>` for frontend). Any version
+   manager itself (`dotnet add package` for NuGet, `pnpm add <pkg>` for frontend). Any version
    string in a file must be one the package manager produced, never hand-authored from memory.
    NuGet versions centralized in `Directory.Packages.props`.
 6. Metadata scanned at startup and cached; no per-request reflection (Phase 1+).
