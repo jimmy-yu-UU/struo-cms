@@ -11,7 +11,6 @@ using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
 using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
-using Struo.Sample.Blog;
 
 Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger();
 
@@ -33,7 +32,7 @@ try
 
     builder.Services.AddOpenApi();
     builder.Services.AddStruoInfrastructure(builder.Configuration);
-    builder.Services.AddStruoMetadata(typeof(Article).Assembly);
+    builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
     builder.Services.AddStruoData(builder.Configuration);
     builder.Services.AddStruoFiles(builder.Configuration);
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
@@ -111,14 +110,10 @@ try
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment,
-            typeof(Article), typeof(ArticleTranslation), typeof(Category),
-            typeof(Struo.Infrastructure.Localization.Language),
-            typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.FileTranslation),
-            typeof(User),
-            typeof(Struo.Infrastructure.Identity.Role),
-            typeof(Struo.Infrastructure.Identity.Permission),
-            typeof(Struo.Infrastructure.Identity.UserRole));
+        var entityTypes = scope.ServiceProvider
+            .GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>()
+            .CollectForInitTables();
+        DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, entityTypes.ToArray());
         await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
         var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
         await Struo.Infrastructure.Identity.AdminUserSeeder.SeedAsync(db, hasher,
