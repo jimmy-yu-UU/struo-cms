@@ -64,3 +64,14 @@ E2E_EMAIL=someone@example.com E2E_PASSWORD=secret pnpm e2e
 
 Playwright writes `test-results/` and `playwright-report/` on failures/traces;
 these are gitignored and should not be committed.
+
+## Phase 7b browse E2E (collections.spec.ts)
+
+Requires the same seeded admin as the auth E2E, plus at least one `article` row so the table is
+non-empty (the header assertion passes even when empty). Seed one via the authenticated API after
+login, e.g. from a REST client or `curl` against the dev API:
+
+    POST /api/items/article   { "status": "published" }
+
+(super-admin session cookie required). The sample blog collection `article` is served because
+`Struo:ContentAssemblies` includes `Struo.Sample.Blog` in the dev configuration.
