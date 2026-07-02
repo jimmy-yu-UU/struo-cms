@@ -70,4 +70,20 @@ describe('authStore', () => {
     const store = useAuthStore()
     expect(store.canRead('article')).toBe(false)
   })
+
+  it('canWrite: super-admin true; limited user by grant', () => {
+    const store = useAuthStore()
+    store.user = { id: '1', isSuperAdmin: true, permissions: {} }
+    expect(store.canWrite('article')).toBe(true)
+    store.user = { id: '2', isSuperAdmin: false, permissions: { article: { read: true, write: true, delete: false } } }
+    expect(store.canWrite('article')).toBe(true)
+    expect(store.canDelete('article')).toBe(false)
+    expect(store.canWrite('category')).toBe(false)
+  })
+
+  it('canWrite false when unauthenticated', () => {
+    const store = useAuthStore()
+    store.user = null
+    expect(store.canWrite('article')).toBe(false)
+  })
 })
