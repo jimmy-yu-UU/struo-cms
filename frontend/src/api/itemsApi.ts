@@ -14,4 +14,18 @@ export const itemsApi = {
     const res = await apiClient.getRaw<ListEnvelope>(path)
     return { data: res.data, total: res.meta.total }
   },
+
+  async get(collection: string, id: string, opts?: { locale?: string }): Promise<Record<string, unknown>> {
+    const qs = opts?.locale ? `?locale=${encodeURIComponent(opts.locale)}` : ''
+    return apiClient.get<Record<string, unknown>>(`/items/${collection}/${id}${qs}`)
+  },
+  async create(collection: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return apiClient.post<Record<string, unknown>>(`/items/${collection}`, payload)
+  },
+  async update(collection: string, id: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return apiClient.put<Record<string, unknown>>(`/items/${collection}/${id}`, payload)
+  },
+  async remove(collection: string, id: string): Promise<void> {
+    await apiClient.delete<void>(`/items/${collection}/${id}`)
+  },
 }
