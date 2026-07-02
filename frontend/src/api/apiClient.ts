@@ -20,7 +20,16 @@ export class ApiClient {
     return this.request<T>('POST', path, body)
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  getRaw<T>(path: string): Promise<T> {
+    return this.request<T>('GET', path, undefined, { unwrap: false })
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { unwrap?: boolean },
+  ): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       credentials: 'include',
@@ -43,6 +52,7 @@ export class ApiClient {
     const text = await res.text()
     if (!text) return undefined as T
     const payload = JSON.parse(text)
+    if (opts?.unwrap === false) return payload as T
     return (payload?.data ?? payload) as T
   }
 }
