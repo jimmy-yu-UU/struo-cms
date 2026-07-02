@@ -1,17 +1,24 @@
 import { defineStore } from 'pinia'
 import { apiClient } from '../api/apiClient'
+import type { CollectionPermission } from '../types/schema'
 
-export type CurrentUser = { id: string }
+export type CurrentUser = {
+  id: string
+  isSuperAdmin: boolean
+  permissions: Record<string, CollectionPermission>
+}
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({ user: null as CurrentUser | null }),
   getters: {
     isAuthenticated: (state) => state.user !== null,
+    canRead: (state) => (collection: string): boolean =>
+      !!state.user && (state.user.isSuperAdmin || state.user.permissions?.[collection]?.read === true),
   },
   actions: {
     async login(email: string, password: string): Promise<void> {
-      // Login returns { id }; then confirm via /me for a canonical session.
-      await apiClient.post<CurrentUser>('/auth/login', { email, password })
+      // Login returns { id }; then confirm via /me for a canonical session (id + perms).
+      await apiClient.post('/auth/login', { email, password })
       await this.fetchCurrentUser()
     },
     async logout(): Promise<void> {

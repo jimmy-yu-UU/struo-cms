@@ -13,7 +13,9 @@ describe('AppShell', () => {
   it('logout calls the store and routes to login', async () => {
     const store = useAuthStore()
     const logoutSpy = vi.spyOn(store, 'logout').mockResolvedValue()
-    const wrapper = mount(AppShell, { global: { stubs: { RouterView: true } } })
+    const wrapper = mount(AppShell, {
+      global: { stubs: { RouterView: true, CollectionNav: true } },
+    })
     await wrapper.find('button.logout').trigger('click')
     await new Promise((r) => setTimeout(r, 0))
     expect(logoutSpy).toHaveBeenCalledOnce()

@@ -38,8 +38,34 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     [HttpGet("me")]
-    public IActionResult Me() =>
-        Ok(new { data = new { id = User.FindFirstValue(ClaimTypes.NameIdentifier) } });
+    public IActionResult Me(
+        [FromServices] Struo.Application.Security.ICurrentPermissions permissions,
+        [FromServices] Struo.Application.Metadata.SchemaService schema)
+    {
+        var eff = permissions.Current;
+        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        if (!eff.IsSuperAdmin)
+        {
+            foreach (var c in schema.GetAll())
+            {
+                var read = eff.CanRead(c.Name);
+                var write = eff.CanWrite(c.Name);
+                var del = eff.CanDelete(c.Name);
+                if (read || write || del)
+                    map[c.Name] = new { read, write, @delete = del };
+            }
+        }
+
+        return Ok(new
+        {
+            data = new
+            {
+                id = User.FindFirstValue(ClaimTypes.NameIdentifier),
+                isSuperAdmin = eff.IsSuperAdmin,
+                permissions = map
+            }
+        });
+    }
 
     [AllowAnonymous]
     [HttpGet("login/oidc")]
