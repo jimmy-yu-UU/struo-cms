@@ -15,12 +15,21 @@ async function login(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/$/)
 }
 
+// Required fields render their label with a trailing `*` and NO separating
+// space (ItemForm.vue appends `<span class="req">*</span>`), so a required
+// field's label text is e.g. "Title*". Match the label anchored with an
+// optional trailing `*` — anchoring keeps "Title" from also matching the
+// distinct "SEO Title" field.
+function labelMatch(label: string): RegExp {
+  return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*?$`)
+}
+
 // ItemForm.vue renders each editable field inside a `.field` wrapper with a
 // plain (unlinked — no `for`/`id` pair on the rendered PrimeVue control)
 // `<label>`, so `getByLabel()` cannot resolve these controls. Scope by the
 // `.field` container that has the matching label text instead.
 function fieldByLabel(page: Page, label: string) {
-  return page.locator('.field', { has: page.getByText(label, { exact: true }) })
+  return page.locator('.field', { has: page.getByText(labelMatch(label)) })
 }
 
 // Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>, which
@@ -32,7 +41,7 @@ function fieldByLabel(page: Page, label: string) {
 // field matches — the inactive panel's `.field` is excluded because it (and
 // its descendants) are `display:none`.
 function translatableFieldByLabel(page: Page, label: string) {
-  return page.locator('.field:visible', { has: page.getByText(label, { exact: true }) })
+  return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
 }
 
 // Article.Status is [CmsField(Interface = FieldInterface.Select)] with
