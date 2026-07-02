@@ -36,3 +36,5 @@ export type CurrentUserDto = {
   isSuperAdmin: boolean
   permissions: Record<string, CollectionPermission>
 }
+
+export type LanguageInfo = { code: string; name: string; isDefault: boolean }
