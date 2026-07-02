@@ -42,6 +42,20 @@ public static class AuthWiring
             .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(
                 AuthSchemes.Bearer, _ => { });
 
+        // Cross-origin mode (SPA on a different origin) requires SameSite=None, which browsers
+        // only honor alongside Secure — so cross-origin also forces the secure policy on.
+        // Resolved lazily via IConfiguration from DI (not the `config` parameter captured above)
+        // so that test hosts which append configuration after service registration (e.g.
+        // WebApplicationFactory.ConfigureAppConfiguration) are still honored: CookieAuthenticationOptions
+        // are materialized per-request by the auth handler, long after the app has fully built.
+        services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie)
+            .Configure<IConfiguration>((options, resolvedConfig) =>
+            {
+                if (!CorsWiring.HasConfiguredOrigins(resolvedConfig)) return;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SameSite = SameSiteMode.None;
+            });
+
         services.AddAuthorization();
         return services;
     }
