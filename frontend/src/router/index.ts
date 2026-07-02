@@ -4,6 +4,7 @@ import { authGuard } from './guard'
 import AppShell from '../layouts/AppShell.vue'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
+import CollectionListView from '../views/CollectionListView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -12,7 +13,10 @@ const router = createRouter({
     {
       path: '/',
       component: AppShell,
-      children: [{ path: '', name: 'dashboard', component: DashboardView }],
+      children: [
+        { path: '', name: 'dashboard', component: DashboardView },
+        { path: 'collections/:name', name: 'collection-list', component: CollectionListView },
+      ],
     },
   ],
 })
