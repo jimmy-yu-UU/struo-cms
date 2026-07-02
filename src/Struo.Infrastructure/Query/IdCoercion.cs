@@ -13,7 +13,13 @@ public static class IdCoercion
         var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
         if (underlying.IsInstanceOfType(value)) return value;
         if (underlying == typeof(Guid))
-            return value is Guid g ? g : Guid.Parse(value.ToString()!);
+        {
+            if (value is Guid g) return g;
+            // An empty/blank string is not a Guid; for a (typically nullable) id/FK it
+            // means "no reference" — coerce to null rather than throwing on Guid.Parse("").
+            var s = value.ToString();
+            return string.IsNullOrWhiteSpace(s) ? null : Guid.Parse(s);
+        }
         try { return Convert.ChangeType(value, underlying); }
         catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
         { return value; }

@@ -48,4 +48,24 @@ describe('ApiClient', () => {
     const result = await c.getRaw<{ data: unknown[]; meta: { total: number } }>('/items/article')
     expect(result).toEqual({ data: [{ id: '1' }], meta: { total: 42 } })
   })
+
+  it('put unwraps the data envelope', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: '1' } }), { status: 200 }))
+    const c = new ApiClient('/api')
+    await expect(c.put('/items/article/1', { x: 1 })).resolves.toEqual({ id: '1' })
+  })
+
+  it('delete tolerates 204 no-content', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    const c = new ApiClient('/api')
+    await expect(c.delete('/items/article/1')).resolves.toBeUndefined()
+  })
+
+  it('put throws the server error message on non-2xx', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'nope' } }), { status: 400 }))
+    const c = new ApiClient('/api')
+    await expect(c.put('/x', {})).rejects.toThrow('nope')
+  })
 })

@@ -24,6 +24,14 @@ export class ApiClient {
     return this.request<T>('GET', path, undefined, { unwrap: false })
   }
 
+  put<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('PUT', path, body)
+  }
+
+  delete<T>(path: string): Promise<T> {
+    return this.request<T>('DELETE', path)
+  }
+
   private async request<T>(
     method: string,
     path: string,
