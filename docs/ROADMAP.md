@@ -24,16 +24,17 @@
   login → dashboard → logout). The spec's manual cross-origin HTTPS smoke (§9: Vite HTTPS + API
   HTTPS on distinct origins, real cross-origin cookie round-trip) is **user-driven and still
   pending** — see [`frontend/README.md`](../frontend/README.md) for the run recipe.
-- **Phase 7b (collection lists) code-complete, live-gate-pending:** RBAC-aware collection nav
+- **Phase 7b (collection lists) done & live-verified:** RBAC-aware collection nav
   (`CollectionNav`) and a generic `CollectionListView` (paginated/sortable PrimeVue DataTable driven
-  by schema metadata), plus additive `/api/auth/me` permissions. Automated gates are green (backend
-  build/tests incl. `AuthMePermissionsTests`, frontend unit/component tests, frontend build). The
-  live browse E2E (`collections.spec.ts`, requires a running dev API + seeded admin + ≥1 `article`
-  row) and the live Postgres+Redis RBAC gate (super-admin vs. limited-editor `/api/auth/me` +
-  nav + list pagination/sort) are **user-driven and still pending** — see
-  [`frontend/e2e/README.md`](../frontend/e2e/README.md) for the seed recipe.
-- **Next up:** run the Phase 7b live browse E2E + live Postgres/Redis RBAC gate, then continue with
-  Phase 7c (item detail view + create/edit forms). Phase 6.9 resolved the framework-vs-host
+  by schema metadata), plus additive `/api/auth/me` permissions. Automated gates green (backend
+  build/tests incl. `AuthMePermissionsTests`, frontend unit/component tests, frontend build). **Live
+  gate PASSED 2026-07-02 on real Postgres + Redis:** dev API on `:5080` against live PG (`web-struo-cms-db`)
+  + Redis; `GET /api/auth/me` for the bootstrap super-admin returned `{ isSuperAdmin: true, permissions: {} }`;
+  `GET /api/items/article` returned live rows via the query DSL; Playwright E2E (`auth.spec.ts` +
+  `collections.spec.ts`) 2/2 passed in Chromium (login → dashboard/logout; browse Content → Article →
+  `/collections/article` → Status column). Article create is correctly gated by the i18n rule
+  ("default-locale translation required") — expected, not a defect.
+- **Next up:** Phase 7c (item detail view + create/edit forms + mutations). Phase 6.9 resolved the framework-vs-host
   decision (see "Open architectural decisions" below): `Struo.Api` is a reusable base template with
   convention-based collection discovery. The `IPermissionService` port is backed by real RBAC
   (`RbacPermissionService` + per-request snapshot); the allow-all stub is out of the live DI graph.
@@ -41,8 +42,9 @@
   `dotnet test` 257 passed / 0 failed / 0 skipped (255 prior + `AuthMePermissionsTests`).
   Frontend: 44/44 unit/component tests passed, `pnpm build` succeeds. Phase 7a's live Playwright E2E
   (login → dashboard → logout) previously passed live; Phase 7b's live browse E2E
-  (`collections.spec.ts`) and the live Postgres+Redis RBAC gate are pending (user-driven — see
-  Phase 7b row above). DB/auth features are gated on live Postgres+Redis (SQLite-green ≠
+  (`auth.spec.ts` + `collections.spec.ts`) passed 2/2 in Chromium 2026-07-02 against the dev API on
+  live Postgres + Redis, and the live `/api/auth/me` + collection-list RBAC gate passed on the same
+  stack (see Phase 7b row above). DB/auth features are gated on live Postgres+Redis (SQLite-green ≠
   Postgres-correct); Phase 6c OIDC round-trip previously verified against live Entra ID.
 
 ## Phases
@@ -65,7 +67,7 @@
 | 6.9 | Convention-based collection discovery (framework/host decoupling) — *inserted* | ✅ | [spec](superpowers/specs/2026-07-01-phase6.9-convention-collection-discovery-design.md) | [plan](superpowers/plans/2026-07-01-phase6.9-convention-collection-discovery.md) |
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA — *decomposed into 7a/…* | ⬜ in progress | — | — |
 | 7a | Frontend foundation & auth (Vue 3 SPA scaffold, `apiClient`, `authStore`, router guard, login/dashboard shell, cross-origin CORS+cookie mode) | ⬜ code-complete, live-smoke-pending | [spec](superpowers/specs/2026-07-01-phase7a-frontend-foundation-auth-design.md) | [plan](superpowers/plans/2026-07-01-phase7a-frontend-foundation-auth.md) |
-| 7b | Collection lists (RBAC-aware nav, generic paginated/sortable `CollectionListView`, additive `/api/auth/me` permissions) | ⬜ code-complete, live-gate-pending | [spec](superpowers/specs/2026-07-02-phase7b-collection-lists-design.md) | [plan](superpowers/plans/2026-07-02-phase7b-collection-lists.md) |
+| 7b | Collection lists (RBAC-aware nav, generic paginated/sortable `CollectionListView`, additive `/api/auth/me` permissions) | ✅ done (live-verified: PG+Redis) | [spec](superpowers/specs/2026-07-02-phase7b-collection-lists-design.md) | [plan](superpowers/plans/2026-07-02-phase7b-collection-lists.md) |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
