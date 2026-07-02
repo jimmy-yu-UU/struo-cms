@@ -1,10 +1,11 @@
 <!-- frontend/src/views/CollectionListView.vue -->
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { itemsApi } from '../api/itemsApi'
@@ -13,12 +14,14 @@ import { formatCell } from '../lib/formatCell'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const schema = useSchemaStore()
 
 const name = computed(() => route.params.name as string)
 const meta = computed(() => schema.get(name.value))
 const canRead = computed(() => auth.canRead(name.value))
+const canWrite = computed(() => auth.canWrite(name.value))
 const columns = computed(() => (meta.value ? selectListColumns(meta.value) : []))
 
 const rows = ref<Record<string, unknown>[]>([])
@@ -83,6 +86,15 @@ function onSearchInput(value: string): void {
   }, 300)
 }
 
+function onRowClick(e: { data: Record<string, unknown> }): void {
+  const rid = e.data.id
+  if (rid != null) router.push({ name: 'collection-item', params: { name: name.value, id: String(rid) } })
+}
+
+function onNew(): void {
+  router.push({ name: 'collection-create', params: { name: name.value } })
+}
+
 watch(name, () => {
   page.value = 0
   sortField.value = undefined
@@ -93,7 +105,7 @@ watch(name, () => {
 
 onMounted(loadItems)
 
-defineExpose({ loadItems, onPage, onSort, onSearchInput, rows, total, loading, error })
+defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, rows, total, loading, error })
 </script>
 
 <template>
@@ -112,6 +124,7 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, rows, total, loading, e
           placeholder="Search"
           @input="onSearchInput(($event.target as HTMLInputElement).value)"
         />
+        <Button v-if="canWrite" label="New" icon="pi pi-plus" @click="onNew" />
       </header>
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -125,6 +138,7 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, rows, total, loading, e
         :loading="loading"
         @page="onPage"
         @sort="onSort"
+        @row-click="onRowClick"
       >
         <Column
           v-for="col in columns"

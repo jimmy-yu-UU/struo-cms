@@ -14,6 +14,10 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state) => state.user !== null,
     canRead: (state) => (collection: string): boolean =>
       !!state.user && (state.user.isSuperAdmin || state.user.permissions?.[collection]?.read === true),
+    canWrite: (state) => (collection: string): boolean =>
+      !!state.user && (state.user.isSuperAdmin || state.user.permissions?.[collection]?.write === true),
+    canDelete: (state) => (collection: string): boolean =>
+      !!state.user && (state.user.isSuperAdmin || state.user.permissions?.[collection]?.delete === true),
   },
   actions: {
     async login(email: string, password: string): Promise<void> {
