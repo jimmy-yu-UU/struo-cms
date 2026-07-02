@@ -41,4 +41,11 @@ describe('ApiClient', () => {
     await expect(c.get('/auth/me')).rejects.toThrow()
     expect(onUnauth).toHaveBeenCalledOnce()
   })
+
+  it('getRaw returns the full envelope without unwrapping data', async () => {
+    vi.stubGlobal('fetch', mockFetch(200, { data: [{ id: '1' }], meta: { total: 42 } }))
+    const c = new ApiClient('/api')
+    const result = await c.getRaw<{ data: unknown[]; meta: { total: number } }>('/items/article')
+    expect(result).toEqual({ data: [{ id: '1' }], meta: { total: 42 } })
+  })
 })
