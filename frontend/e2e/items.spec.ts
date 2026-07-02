@@ -23,6 +23,18 @@ function fieldByLabel(page: Page, label: string) {
   return page.locator('.field', { has: page.getByText(label, { exact: true }) })
 }
 
+// Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>, which
+// is NOT `lazy` — PrimeVue keeps every <TabPanel> mounted and only toggles
+// `display:none` on the inactive ones. With two seeded locales (en + zh-TW),
+// both panels' "Title"/"Body" `.field` wrappers exist in the DOM at once, so
+// the plain fieldByLabel() above resolves to 2 elements (strict-mode
+// violation). Scope to `:visible` so only the active (default-locale) tab's
+// field matches — the inactive panel's `.field` is excluded because it (and
+// its descendants) are `display:none`.
+function translatableFieldByLabel(page: Page, label: string) {
+  return page.locator('.field:visible', { has: page.getByText(label, { exact: true }) })
+}
+
 // Article.Status is [CmsField(Interface = FieldInterface.Select)] with
 // CmsOptions("draft:Draft", "published:Published") -> FieldInput renders a
 // PrimeVue <Select> (a role="combobox" trigger + role="listbox"/"option"
@@ -48,8 +60,8 @@ test('create, edit, then delete an article', async ({ page }) => {
   // which is active by default per ItemForm.vue's `activeLocale` ref).
   const title = `E2E Title ${STAMP}`
   await chooseStatus(page, 'Draft')
-  await fieldByLabel(page, 'Title').locator('input').fill(title)
-  await fieldByLabel(page, 'Body').locator('textarea').fill('E2E body content.')
+  await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
+  await translatableFieldByLabel(page, 'Body').locator('textarea').fill('E2E body content.')
   await page.getByRole('button', { name: 'Save' }).click()
 
   // Back on the list; the new row is present (Title is a scalar, non-system
