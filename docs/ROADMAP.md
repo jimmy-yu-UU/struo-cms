@@ -34,16 +34,22 @@
   `collections.spec.ts`) 2/2 passed in Chromium (login → dashboard/logout; browse Content → Article →
   `/collections/article` → Status column). Article create is correctly gated by the i18n rule
   ("default-locale translation required") — expected, not a defect.
-- **Phase 7c (item detail + create/edit/delete forms) code-complete, automated gates green,
-  live-gate user-driven/pending:** schema-driven create/edit/delete forms for scalar fields
-  (`ItemForm`/`ItemFormView`/`FieldInput`), i18n locale tabs backed by an additive
-  `GET /api/languages` endpoint, `apiClient` put/delete + `itemsApi` CRUD, and
-  `authStore.canWrite`/`canDelete` gating wired into the collection-list route. Automated gates
-  green: backend `dotnet build` clean + `dotnet test` 259/259 (257 prior + 2 new
-  `LanguagesEndpointTests`); frontend `pnpm test` 86/86 and `pnpm build` succeeds. **Live gate
-  (real Postgres + Redis, `pnpm dev`, Playwright E2E create/edit/delete + manual i18n round-trip
-  confirming a default-locale translation is required and `en`+`zh-TW` both persist) has not been
-  run yet — it is user-driven per the Phase 7a §9 / 7b precedent** and remains pending.
+- **Phase 7c (item detail + create/edit/delete forms) done & live-verified (API-level):**
+  schema-driven create/edit/delete forms for scalar fields (`ItemForm`/`ItemFormView`/`FieldInput`),
+  i18n locale tabs backed by an additive `GET /api/languages` endpoint, `apiClient` put/delete +
+  `itemsApi` CRUD, and `authStore.canWrite`/`canDelete` gating wired into the collection-list route.
+  Automated gates green: backend `dotnet build` clean + `dotnet test` 262/262; frontend `pnpm test`
+  86/86 and `pnpm build` succeeds. **Live gate PASSED 2026-07-02 on real Postgres (`web-struo-cms-db`)
+  + Redis:** creating an `article` without a default-locale translation is rejected (400 "default
+  locale 'en' required"); creating with `en`+`zh-TW` returns 201 and `GET /api/items/article/{id}`
+  round-trips both locales with correct UTF-8 (`繁中標題`/`繁中內文`); edit (PUT) 200, delete 204,
+  GET-after 404. **The live gate surfaced and fixed a real Postgres-only bug** (commit `049a8fa`):
+  an empty translatable Guid FK (per-locale OG image) hit `Guid.Parse("")` in the translation-sync
+  path → HTTP 500 on create; empty/blank now coerces to null (+3 regression tests). *Known follow-up
+  (Phase 7d / not 7c scope):* the collection **list** shows translatable columns (Title/SEO) as "—"
+  because the list endpoint does not overlay translations and spec §0 defers translated columns; the
+  full Playwright UI create→edit→delete flow (`items.spec.ts`) therefore can't identify a row by title
+  and is deferred with translated columns. The i18n CRUD contract itself is verified above at the API level.
 - **Next up:** Phase 7d (relation pickers, File/Image upload controls, TipTap rich text, multi-value
   selects) — all explicitly deferred by Phase 7c, which scoped itself to scalar fields only.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
@@ -51,11 +57,12 @@
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
   snapshot); the allow-all stub is out of the live DI graph.
 - **Verification baseline (2026-07-02):** backend `dotnet build` clean (warnings-as-errors);
-  `dotnet test` 259 passed / 0 failed / 0 skipped (257 prior + 2 `LanguagesEndpointTests`).
-  Frontend: 86/86 unit/component tests passed, `pnpm build` succeeds. Phase 7a's live Playwright E2E
-  (login → dashboard → logout) and Phase 7b's live browse E2E (`auth.spec.ts` + `collections.spec.ts`,
-  2/2 in Chromium) previously passed against the dev API on live Postgres + Redis; Phase 7c's live
-  gate (E2E create/edit/delete + i18n round-trip) is still pending — see Phase 7c row above. DB/auth
+  `dotnet test` 262 passed / 0 failed / 0 skipped (257 prior + 2 `LanguagesEndpointTests` +
+  3 `IdCoercionTests` regression). Frontend: 86/86 unit/component tests passed, `pnpm build` succeeds.
+  Phase 7a's live Playwright E2E (login → dashboard → logout) and Phase 7b's live browse E2E
+  (`auth.spec.ts` + `collections.spec.ts`, 2/2 in Chromium) previously passed against the dev API on
+  live Postgres + Redis; Phase 7c's live gate PASSED at the API level (create/edit/delete + i18n
+  reject/round-trip on live Postgres+Redis — see Phase 7c row above). DB/auth
   features are gated on live Postgres+Redis (SQLite-green ≠ Postgres-correct); Phase 6c OIDC
   round-trip previously verified against live Entra ID.
 
@@ -80,7 +87,7 @@
 | 7 | Vue 3 + PrimeVue + TipTap admin SPA — *decomposed into 7a/…* | ⬜ in progress | — | — |
 | 7a | Frontend foundation & auth (Vue 3 SPA scaffold, `apiClient`, `authStore`, router guard, login/dashboard shell, cross-origin CORS+cookie mode) | ⬜ code-complete, live-smoke-pending | [spec](superpowers/specs/2026-07-01-phase7a-frontend-foundation-auth-design.md) | [plan](superpowers/plans/2026-07-01-phase7a-frontend-foundation-auth.md) |
 | 7b | Collection lists (RBAC-aware nav, generic paginated/sortable `CollectionListView`, additive `/api/auth/me` permissions) | ✅ done (live-verified: PG+Redis) | [spec](superpowers/specs/2026-07-02-phase7b-collection-lists-design.md) | [plan](superpowers/plans/2026-07-02-phase7b-collection-lists.md) |
-| 7c | Item detail + create/edit/delete forms (scalar fields, i18n locale tabs, additive `GET /api/languages`) | ⬜ code-complete, automated gates green, live-gate user-driven/pending | [spec](superpowers/specs/2026-07-02-phase7c-item-forms-design.md) | [plan](superpowers/plans/2026-07-02-phase7c-item-forms.md) |
+| 7c | Item detail + create/edit/delete forms (scalar fields, i18n locale tabs, additive `GET /api/languages`) | ✅ done (live-verified API-level: PG+Redis i18n CRUD) | [spec](superpowers/specs/2026-07-02-phase7c-item-forms-design.md) | [plan](superpowers/plans/2026-07-02-phase7c-item-forms.md) |
 | 7d | Relation pickers, File/Image upload, TipTap rich text, multi-value selects | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
