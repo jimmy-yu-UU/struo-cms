@@ -10,7 +10,7 @@ function field(name: string, over: Partial<FieldMeta> = {}): FieldMeta {
 const meta: CollectionMeta = { name: 'article', label: 'Article', fields: [
   field('status', { required: true }),
   field('title', { translatable: true, required: true }),
-]}
+], relations: [] }
 
 describe('validateItem', () => {
   it('flags empty required shared and default-locale required translatable', () => {

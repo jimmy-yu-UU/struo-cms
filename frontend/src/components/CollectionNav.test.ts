@@ -17,8 +17,8 @@ describe('CollectionNav', () => {
     auth.user = { id: 'u1', isSuperAdmin, permissions }
     const schema = useSchemaStore()
     schema.collections = [
-      { name: 'article', label: 'Article', group: 'Content', fields: [] },
-      { name: 'user', label: 'User', group: 'System', fields: [] },
+      { name: 'article', label: 'Article', group: 'Content', fields: [], relations: [] },
+      { name: 'user', label: 'User', group: 'System', fields: [], relations: [] },
     ]
   }
 
