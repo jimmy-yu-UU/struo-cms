@@ -6,7 +6,7 @@ function field(name: string, over: Partial<FieldMeta> = {}): FieldMeta {
   return { name, label: name, interface: 'text', required: false, searchable: false, sortable: false,
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over }
 }
-const meta = (fields: FieldMeta[]): CollectionMeta => ({ name: 'article', label: 'Article', fields })
+const meta = (fields: FieldMeta[]): CollectionMeta => ({ name: 'article', label: 'Article', fields, relations: [] })
 
 describe('splitFields', () => {
   it('partitions by translatable, excludes system, orders by sort', () => {

@@ -23,6 +23,7 @@ function seedSchema() {
     fields: [{ name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
       sortable: true, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false,
       options: [{ value: 'draft', label: 'Draft' }] }],
+    relations: [],
   }]
 }
 

@@ -11,7 +11,7 @@ function field(name: string, over: Partial<FieldMeta> = {}): FieldMeta {
 const meta: CollectionMeta = { name: 'article', label: 'Article', fields: [
   field('status', { sort: 1 }),
   field('title', { translatable: true, sort: 2 }),
-]}
+], relations: [] }
 const locales: LanguageInfo[] = [
   { code: 'en', name: 'English', isDefault: true },
   { code: 'zh-TW', name: '繁中', isDefault: false },
