@@ -87,3 +87,41 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions })
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.file-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.file-picker__current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-picker__current :deep(.file-thumb) {
+  width: 48px;
+  height: 48px;
+  flex: none;
+}
+
+.file-picker__missing,
+.file-picker__empty {
+  color: var(--text);
+  font-style: italic;
+}
+
+.file-picker__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.file-picker__search {
+  display: block;
+  margin: 8px 0 12px;
+  width: 100%;
+}
+</style>

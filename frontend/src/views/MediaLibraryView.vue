@@ -49,7 +49,7 @@ defineExpose({ load, onDelete, onEdit })
   <section class="media-library">
     <h1>Media Library</h1>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <MediaUploadDropzone @uploaded="load" />
+    <MediaUploadDropzone @done="load" />
     <MediaGrid :files="files" />
     <div v-if="files.length" class="media-actions">
       <template v-for="f in files" :key="f.id">

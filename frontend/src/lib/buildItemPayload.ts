@@ -21,7 +21,10 @@ export function buildItemPayload(
   const payload: Record<string, unknown> = {}
 
   for (const f of shared) {
-    const v = model.shared[f.name]
+    let v = model.shared[f.name]
+    // File/image fields hold a scalar Guid? FK. An empty string must never be sent —
+    // the backend does Guid.Parse(value) and "" is not a valid UUID (Postgres 22P02 -> 500).
+    if ((f.interface === 'file' || f.interface === 'image') && v === '') v = null
     if (mode === 'update' || !isEmpty(v)) payload[f.name] = v
   }
 

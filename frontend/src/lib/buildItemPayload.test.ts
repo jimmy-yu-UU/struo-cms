@@ -45,6 +45,26 @@ describe('buildItemPayload (update)', () => {
   })
 })
 
+describe('buildItemPayload file/image fields', () => {
+  const fileMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    field('id', { isSystem: true }),
+    field('heroImageId', { interface: 'file' }),
+  ]}
+  const langs: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
+
+  it('serializes an empty file/image value as null (not "") on update, to avoid a backend Guid.Parse("") 500', () => {
+    const model: FormModel = { shared: { heroImageId: '' }, translations: {}, relations: {} }
+    const p = buildItemPayload(fileMeta, model, langs, 'update')
+    expect(p.heroImageId).toBeNull()
+  })
+
+  it('round-trips a set file/image value unchanged on update', () => {
+    const model: FormModel = { shared: { heroImageId: 'file-123' }, translations: {}, relations: {} }
+    const p = buildItemPayload(fileMeta, model, langs, 'update')
+    expect(p.heroImageId).toBe('file-123')
+  })
+})
+
 describe('buildItemPayload relations', () => {
   it('writes M2O FK (camelCased) and M2M id array; omits relatedList and untouched relations', () => {
     const model: FormModel = {

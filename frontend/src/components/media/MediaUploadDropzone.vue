@@ -60,3 +60,45 @@ defineExpose({ uploadFiles })
     </ul>
   </div>
 </template>
+
+<style scoped>
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.dropzone.is-dragging {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dropzone__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.dropzone__input {
+  display: none;
+}
+
+.dropzone__rows {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  text-align: left;
+}
+
+.dropzone__rows li.uploading {
+  color: var(--text);
+}
+
+.dropzone__rows li.error {
+  color: #d33;
+}
+</style>
