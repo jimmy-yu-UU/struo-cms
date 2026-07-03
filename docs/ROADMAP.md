@@ -76,12 +76,32 @@
   extracted synchronously — `draft` gated nothing), and `GET /api/files/{id}` + `/content` now serve **any** status
   to an authenticated caller (cookie or bearer, probed via `AuthenticateAsync`) while anonymous stays published-only,
   so the admin backend can preview draft/archived files. Backend **272/272**, frontend 147/147, `pnpm build` clean.
-- **Next up:** Phase 7f+ (TipTap rich text; then multi-value selects + structured editors; multi-file `Files`) —
-  deferred from 7d/7e, rendering read-only meanwhile.
+- **Phase 7f (TipTap rich text + server-side HTML sanitization) code-complete, automated gates green, live-gate pending:**
+  *sliced to the first rich-text slice* — a real TipTap WYSIWYG editor (`RichTextInput.vue`: basic formatting — bold/
+  italic/strike, H2/H3, lists, blockquote, code block, link (http/https/mailto), hr, undo/redo — plus **inline images**
+  that reuse the Phase 7e media library, stored as a base-independent relative `src` + `data-file-id`), replacing the
+  `Textarea` fallback via the existing `FieldInput` dispatcher with **no save-path change**. Critically it also closes the
+  **CLAUDE.md §8 gap**: a new `IHtmlSanitizer` port (Application) + `GanssHtmlSanitizer` (Infrastructure, `HtmlSanitizer`
+  NuGet package, namespace `Ganss.Xss`) sanitizes every `RichText` value **on write** (both the translation-sidecar and
+  parent-entity paths in `ItemService`), with an allowlist mirroring the editor output and blank documents coerced to
+  `null`. Automated gates green: backend `dotnet build` clean + `dotnet test` **283/283**; frontend `pnpm test` **157/157**
+  and `pnpm build` succeeds. **Live-gate is user-driven and pending** (real PG+Redis+MinIO: submit a `<script>`/`onerror`
+  body → confirm stripped on read-back; insert a media-library image → relative-`src` round-trip + preview; i18n body
+  round-trip). Advanced rich text (tables/align/colour), multi-value selects, structured editors, and multi-file `Files`
+  remain deferred to 7g+.
+- **Next up:** Phase 7g+ (advanced rich text: tables / text-align / colour / sub-superscript; then multi-value selects
+  `MultiSelect`/`CheckboxGroup`/`Tags`; structured editors `Json`/`KeyValue`/`Repeater`; multi-file `Files`) —
+  incremental additions on the 7f sanitizer + editor foundation, rendering read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
   snapshot); the allow-all stub is out of the live DI graph.
+- **Verification baseline (2026-07-03, post-7f):** backend `dotnet build` clean (warnings-as-errors);
+  `dotnet test` **283** passed / 0 failed / 0 skipped (272 post-7e + 9 sanitizer allowlist tests + 2 RichText
+  write-path sanitization tests). Frontend: **157/157** unit/component (147 post-7e + 5 image-url helpers + 4
+  RichTextInput editor + 1 image-insert), `pnpm build` succeeds (pre-existing >500 kB chunk-size advisory only).
+  Phase 7f live-gate (real PG+Redis+MinIO: stored-XSS strip + media-image round-trip + i18n body) is **user-driven
+  and pending**. (Prior post-7d baseline retained below for history.)
 - **Verification baseline (2026-07-03, post-7d + live-gate fixes):** backend `dotnet build` clean
   (warnings-as-errors); `dotnet test` **269** passed / 0 failed / 0 skipped (262 prior + 1 sample M2M scan +
   6 across the 3 live-gate fixes). Frontend: **119/119** unit/component (86 prior + 33 for 7d relations),
@@ -125,7 +145,8 @@
 | 7c | Item detail + create/edit/delete forms (scalar fields, i18n locale tabs, additive `GET /api/languages`) | ✅ done (live-verified API-level: PG+Redis i18n CRUD) | [spec](superpowers/specs/2026-07-02-phase7c-item-forms-design.md) | [plan](superpowers/plans/2026-07-02-phase7c-item-forms.md) |
 | 7d | Relation editing (`Dropdown`/`TagSelect`/`TreeSelect` + read-only `RelatedList`) + list translated columns + full UI CRUD E2E — *sliced to relations only* | ✅ done (live-verified: PG+Redis — relations CRUD + M2M replace + RelatedList + translated list; **+3 live-gate backend fixes**) | [spec](superpowers/specs/2026-07-03-phase7d-relations-design.md) | [plan](superpowers/plans/2026-07-03-phase7d-relations.md) |
 | 7e | Media Library + File/Image field pickers (dedicated `/media` view: browse + drag-drop bulk upload + delete/edit; select-only `File`/`Image` pickers in forms) — *sliced to files only* | ✅ done (live-verified: PG+Redis+MinIO — upload/list/pick/clear + presigned thumbnails; **+1 live-gate backend fix: upload-publishes + auth-aware file serving**) | [spec](superpowers/specs/2026-07-03-phase7e-media-library-file-pickers-design.md) | [plan](superpowers/plans/2026-07-03-phase7e-media-library-file-pickers.md) |
-| 7f+ | TipTap rich text, multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e* | ⬜ planned | — | — |
+| 7f | TipTap rich text (basic formatting + inline images) + server-side HTML sanitization (`IHtmlSanitizer`/`GanssHtmlSanitizer`, write-path, both entity + translation paths) — *sliced to the first rich-text slice* | ⬜ code-complete, gates green, live-gate pending | [spec](superpowers/specs/2026-07-03-phase7f-richtext-tiptap-design.md) | [plan](superpowers/plans/2026-07-03-phase7f-richtext-tiptap.md) |
+| 7g+ | Advanced rich text (tables / text-align / colour / sub-superscript), multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e/7f* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 

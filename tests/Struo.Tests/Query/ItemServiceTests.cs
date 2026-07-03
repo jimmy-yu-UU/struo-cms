@@ -49,7 +49,7 @@ public class ItemServiceTests : IDisposable
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, resolver, languages, new StruoQueryOptions());
+            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer());
     }
 
     public void Dispose() => _file.Dispose();
