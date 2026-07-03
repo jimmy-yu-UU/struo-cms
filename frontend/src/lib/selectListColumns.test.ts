@@ -11,7 +11,7 @@ function field(partial: Partial<FieldMeta> & { name: string; interface: string }
 }
 
 function meta(fields: FieldMeta[], defaultDisplayField?: string): CollectionMeta {
-  return { name: 'article', label: 'Article', defaultDisplayField, fields }
+  return { name: 'article', label: 'Article', defaultDisplayField, fields, relations: [] }
 }
 
 describe('selectListColumns', () => {

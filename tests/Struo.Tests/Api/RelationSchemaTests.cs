@@ -22,9 +22,12 @@ public class RelationSchemaTests(ApiFactory factory)
         body.Should().NotContain("\"name\":\"seoOgImage\"");
         body.Should().Contain("\"targetCollection\":\"category\"");
 
-        // Phase-5.5 realignment: removed Author/Tag/ArticleTag/ArticleFile entities.
+        // Phase-5.5 realignment: removed Author/ArticleFile entities.
+        // Phase 7d: Tag/ArticleTag M2M reintroduced for TagSelect live-verification.
         body.Should().NotContain("\"name\":\"author\"");
-        body.Should().NotContain("\"name\":\"tags\"");
+        body.Should().Contain("\"name\":\"tags\"");
+        body.Should().Contain("\"kind\":\"manyToMany\"");
+        body.Should().Contain("\"targetCollection\":\"tag\"");
         body.Should().NotContain("\"name\":\"gallery\"");
     }
 

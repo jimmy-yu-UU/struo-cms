@@ -26,17 +26,20 @@ public class ItemServiceTests : IDisposable
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
+        db.CodeFirst.InitTables<Tag>();
+        db.CodeFirst.InitTables<ArticleTag>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
-            [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]));
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["article"]  = typeof(Article),
             ["category"] = typeof(Category),
+            ["tag"]      = typeof(Tag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);

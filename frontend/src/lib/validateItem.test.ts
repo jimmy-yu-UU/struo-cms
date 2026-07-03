@@ -10,17 +10,17 @@ function field(name: string, over: Partial<FieldMeta> = {}): FieldMeta {
 const meta: CollectionMeta = { name: 'article', label: 'Article', fields: [
   field('status', { required: true }),
   field('title', { translatable: true, required: true }),
-]}
+], relations: [] }
 
 describe('validateItem', () => {
   it('flags empty required shared and default-locale required translatable', () => {
-    const model: FormModel = { shared: { status: '' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } } }
+    const model: FormModel = { shared: { status: '' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {} }
     const errs = validateItem(meta, model, 'en')
     expect(errs.status).toMatch(/required/i)
     expect(errs.title).toMatch(/required/i)
   })
   it('does not block on missing non-default locale', () => {
-    const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: 'Hi' }, 'zh-TW': { title: '' } } }
+    const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: 'Hi' }, 'zh-TW': { title: '' } }, relations: {} }
     expect(validateItem(meta, model, 'en')).toEqual({})
   })
 })

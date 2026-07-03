@@ -9,7 +9,7 @@ describe('schemaStore', () => {
   beforeEach(() => { setActivePinia(createPinia()); vi.clearAllMocks() })
 
   it('loads collections once and caches', async () => {
-    vi.mocked(schemaApi.getAll).mockResolvedValue([{ name: 'article', label: 'Article', fields: [] }])
+    vi.mocked(schemaApi.getAll).mockResolvedValue([{ name: 'article', label: 'Article', fields: [], relations: [] }])
     const store = useSchemaStore()
     await store.load()
     await store.load() // second call should not re-fetch
