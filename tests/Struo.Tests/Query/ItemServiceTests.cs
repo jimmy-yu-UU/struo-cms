@@ -28,6 +28,7 @@ public class ItemServiceTests : IDisposable
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Tag>();
         db.CodeFirst.InitTables<ArticleTag>();
+        db.CodeFirst.InitTables<Category>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
@@ -65,5 +66,38 @@ public class ItemServiceTests : IDisposable
         dict.Should().ContainKey("createdAt");
         // seoTitle is now a translatable field on ArticleTranslation (Phase 5.6)
         dict.Should().NotContainKey("seoTitle");
+    }
+
+    [Fact]
+    public async Task Update_persists_m2o_foreign_key()
+    {
+        using var catABody = System.Text.Json.JsonDocument.Parse("""{"name":"Category A"}""");
+        var catA = await _svc.CreateAsync("category", catABody.RootElement);
+        var catAId = (Guid)catA["id"]!;
+
+        using var catBBody = System.Text.Json.JsonDocument.Parse("""{"name":"Category B"}""");
+        var catB = await _svc.CreateAsync("category", catBBody.RootElement);
+        var catBId = (Guid)catB["id"]!;
+
+        using var createBody = System.Text.Json.JsonDocument.Parse(
+            "{\"status\":\"draft\",\"categoryId\":\"" + catAId + "\",\"translations\":{\"en\":{\"title\":\"Hello\"}}}");
+        var created = await _svc.CreateAsync("article", createBody.RootElement);
+        var articleId = created["id"]!.ToString()!;
+
+        using var updateBody = System.Text.Json.JsonDocument.Parse(
+            "{\"categoryId\":\"" + catBId + "\"}");
+        var updated = await _svc.UpdateAsync("article", articleId, updateBody.RootElement);
+        updated.Should().NotBeNull();
+
+        var deep = new Struo.Domain.Query.DeepSpec(
+            new Dictionary<string, Struo.Domain.Query.DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["category"] = new Struo.Domain.Query.DeepRelationSpec(null, null)
+            });
+        var reloaded = await _svc.GetAsync("article", articleId, deep);
+        reloaded.Should().NotBeNull();
+        reloaded!.Should().ContainKey("category");
+        var category = (IReadOnlyDictionary<string, object?>)reloaded["category"]!;
+        category["id"].Should().Be(catBId);
     }
 }
