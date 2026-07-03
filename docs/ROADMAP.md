@@ -50,15 +50,31 @@
   because the list endpoint does not overlay translations and spec §0 defers translated columns; the
   full Playwright UI create→edit→delete flow (`items.spec.ts`) therefore can't identify a row by title
   and is deferred with translated columns. The i18n CRUD contract itself is verified above at the API level.
-- **Next up:** Phase 7d (relation pickers, File/Image upload controls, TipTap rich text, multi-value
-  selects) — all explicitly deferred by Phase 7c, which scoped itself to scalar fields only.
+- **Phase 7d (relation editing) code-complete, automated gates green, live gate user-driven:** *sliced to
+  relations only* — schema-driven editing for `Dropdown` (M2O), `TagSelect` (M2M), `TreeSelect` (self-ref,
+  cycle-guarded) + a read-only `RelatedList` (inbound), via a generic `RelationPicker` + `RelationInput`
+  dispatcher; the collection **list** now renders translatable columns (fixes the 7c "—"); a full UI
+  create→edit→delete E2E (`relations.spec.ts`) is authored. **Frontend-only** — the backend already accepted
+  relation writes (M2O FK scalar, `SyncM2MAsync` M2M id-array, deep expansion, list translation overlay); the
+  only non-frontend change is a sample `Article↔Tag` M2M so `TagSelect` has a real relation. Automated gates
+  green: backend `dotnet build` clean + `dotnet test` 263/263; frontend `pnpm test` 119/119 + `pnpm build` ok;
+  E2E `--list`-collected. **Whole-branch review = READY TO MERGE** (zero Critical/Important; round-trip seams
+  verified against the real backend contract incl. the case-sensitive M2M key match). The **live PG+Redis gate
+  is user-driven/pending** (create an `article` with `category`+`tags`, edit relations, confirm M2M junction
+  replace + `Articles` RelatedList + translated list title — first create a `tag` via API, the sample has no
+  seed). File/Image upload, TipTap, multi-value selects, and structured editors are explicitly deferred (they
+  render read-only) to a later sub-phase (7e+).
+- **Next up:** Phase 7e+ (File/Image/Files upload + TipTap rich text; then multi-value selects + structured
+  editors) — all deferred from 7d, rendering read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
   snapshot); the allow-all stub is out of the live DI graph.
-- **Verification baseline (2026-07-02):** backend `dotnet build` clean (warnings-as-errors);
-  `dotnet test` 262 passed / 0 failed / 0 skipped (257 prior + 2 `LanguagesEndpointTests` +
-  3 `IdCoercionTests` regression). Frontend: 86/86 unit/component tests passed, `pnpm build` succeeds.
+- **Verification baseline (2026-07-03, post-7d):** backend `dotnet build` clean (warnings-as-errors);
+  `dotnet test` 263 passed / 0 failed / 0 skipped (262 prior + 1 `RelationScannerTests` M2M scan). Frontend:
+  119/119 unit/component tests passed (86 prior + 33 across the 7d relation helpers/components/views),
+  `pnpm build` succeeds. Phase 7d's live relation/M2M/i18n gate on real Postgres+Redis is user-driven/pending.
+  (Prior 2026-07-02 baseline: backend 262/262, frontend 86/86.)
   Phase 7a's live Playwright E2E (login → dashboard → logout) and Phase 7b's live browse E2E
   (`auth.spec.ts` + `collections.spec.ts`, 2/2 in Chromium) previously passed against the dev API on
   live Postgres + Redis; Phase 7c's live gate PASSED at the API level (create/edit/delete + i18n
@@ -88,7 +104,8 @@
 | 7a | Frontend foundation & auth (Vue 3 SPA scaffold, `apiClient`, `authStore`, router guard, login/dashboard shell, cross-origin CORS+cookie mode) | ⬜ code-complete, live-smoke-pending | [spec](superpowers/specs/2026-07-01-phase7a-frontend-foundation-auth-design.md) | [plan](superpowers/plans/2026-07-01-phase7a-frontend-foundation-auth.md) |
 | 7b | Collection lists (RBAC-aware nav, generic paginated/sortable `CollectionListView`, additive `/api/auth/me` permissions) | ✅ done (live-verified: PG+Redis) | [spec](superpowers/specs/2026-07-02-phase7b-collection-lists-design.md) | [plan](superpowers/plans/2026-07-02-phase7b-collection-lists.md) |
 | 7c | Item detail + create/edit/delete forms (scalar fields, i18n locale tabs, additive `GET /api/languages`) | ✅ done (live-verified API-level: PG+Redis i18n CRUD) | [spec](superpowers/specs/2026-07-02-phase7c-item-forms-design.md) | [plan](superpowers/plans/2026-07-02-phase7c-item-forms.md) |
-| 7d | Relation pickers, File/Image upload, TipTap rich text, multi-value selects | ⬜ planned | — | — |
+| 7d | Relation editing (`Dropdown`/`TagSelect`/`TreeSelect` + read-only `RelatedList`) + list translated columns + full UI CRUD E2E — *sliced to relations only* | ⬜ code-complete, automated gates green, final review READY-TO-MERGE (live PG+Redis gate user-driven) | [spec](superpowers/specs/2026-07-03-phase7d-relations-design.md) | [plan](superpowers/plans/2026-07-03-phase7d-relations.md) |
+| 7e+ | File/Image/Files upload, TipTap rich text, multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`) — *deferred from 7d* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
