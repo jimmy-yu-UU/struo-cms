@@ -10,7 +10,12 @@ export function parseItemToForm(
 ): FormModel {
   const { shared, translatable } = splitFields(meta)
   const sharedModel: Record<string, unknown> = {}
-  for (const f of shared) sharedModel[f.name] = item[f.name] ?? ''
+  for (const f of shared) {
+    // File/image fields hold a scalar Guid? FK; default to null (never '') so a
+    // resave without touching the field can't emit an invalid empty-string uuid.
+    const empty = f.interface === 'file' || f.interface === 'image' ? null : ''
+    sharedModel[f.name] = item[f.name] ?? empty
+  }
 
   const itemTranslations = (item.translations ?? {}) as Record<string, Record<string, unknown>>
   const translations: Record<string, Record<string, unknown>> = {}

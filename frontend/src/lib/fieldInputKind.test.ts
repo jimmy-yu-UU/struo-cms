@@ -26,7 +26,13 @@ describe('fieldInputKind', () => {
     expect(fieldInputKind('divider')).toBe('divider')
   })
   it('falls back to readonly for deferred/unknown interfaces', () => {
-    for (const i of ['file', 'image', 'files', 'multiSelect', 'checkboxGroup', 'tags', 'json', 'keyValue', 'repeater', 'uuid', 'somethingNew'])
+    for (const i of ['files', 'multiSelect', 'checkboxGroup', 'tags', 'json', 'keyValue', 'repeater', 'uuid', 'somethingNew'])
       expect(fieldInputKind(i)).toBe('readonly')
   })
+})
+
+describe('fieldInputKind file/image', () => {
+  it('maps file to file', () => expect(fieldInputKind('file')).toBe('file'))
+  it('maps image to image', () => expect(fieldInputKind('image')).toBe('image'))
+  it('still falls back to readonly for unknown', () => expect(fieldInputKind('nope')).toBe('readonly'))
 })

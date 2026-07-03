@@ -11,8 +11,21 @@ const router = useRouter()
 const auth = useAuthStore()
 const schema = useSchemaStore()
 
-const model = computed(() =>
-  buildNav(schema.collections, auth.user?.isSuperAdmin ?? false, auth.user?.permissions ?? {}).map(
+const canReadMedia = computed(
+  () => auth.user?.isSuperAdmin === true || auth.user?.permissions?.file?.read === true,
+)
+
+const model = computed(() => [
+  ...(canReadMedia.value
+    ? [
+        {
+          key: 'media',
+          label: 'Media',
+          items: [{ key: 'media', label: 'Media Library', command: () => router.push({ name: 'media' }) }],
+        },
+      ]
+    : []),
+  ...buildNav(schema.collections, auth.user?.isSuperAdmin ?? false, auth.user?.permissions ?? {}).map(
     (g) => ({
       key: g.group,
       label: g.group,
@@ -23,7 +36,7 @@ const model = computed(() =>
       })),
     }),
   ),
-)
+])
 
 defineExpose({ model })
 </script>
