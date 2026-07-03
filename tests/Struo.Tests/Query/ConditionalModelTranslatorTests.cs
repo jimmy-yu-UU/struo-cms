@@ -23,7 +23,10 @@ public class ConditionalModelTranslatorTests
         db.CodeFirst.InitTables<Article>();
         // title moved to the translation sidecar; use own-collection fields (status/publishedAt).
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            { ["status"] = "Status", ["publishedAt"] = "PublishedAt" };
+            {
+                ["status"] = "Status", ["publishedAt"] = "PublishedAt",
+                ["id"] = "Id", ["categoryId"] = "CategoryId"
+            };
         var d = new EntityDescriptor(typeof(Article), fieldToProp, "Id");
         return (db, d, file);
     }
@@ -42,6 +45,50 @@ public class ConditionalModelTranslatorTests
             cm.FieldName.Should().Be("Status");
             cm.ConditionalType.Should().Be(ConditionalType.Equal);
             cm.FieldValue.Should().Be("published");
+        }
+    }
+
+    [Fact]
+    public void Guid_equality_sets_csharp_type_name_for_postgres_cast()
+    {
+        // Postgres-only regression (SQLite is loosely typed and never surfaces this): an
+        // untyped string FieldValue against a uuid column produces "operator does not exist:
+        // uuid = text" (42883). SqlSugar casts the parameter when CSharpTypeName is set.
+        var (db, d, file) = Setup();
+        using (file)
+        {
+            var list = ConditionalModelTranslator.Translate(
+                new ComparisonFilter("id", QueryOperator.Eq, Guid.NewGuid().ToString()), null, [], d, db);
+
+            list.Should().ContainSingle();
+            ((ConditionalModel)list[0]).CSharpTypeName.Should().Be("guid");
+        }
+    }
+
+    [Fact]
+    public void Nullable_guid_relation_fk_equality_sets_csharp_type_name()
+    {
+        // CategoryId is Guid? — the underlying-type unwrap must still resolve to "guid".
+        var (db, d, file) = Setup();
+        using (file)
+        {
+            var list = ConditionalModelTranslator.Translate(
+                new ComparisonFilter("categoryId", QueryOperator.Eq, Guid.NewGuid().ToString()), null, [], d, db);
+
+            ((ConditionalModel)list[0]).CSharpTypeName.Should().Be("guid");
+        }
+    }
+
+    [Fact]
+    public void String_equality_leaves_csharp_type_name_null_no_regression()
+    {
+        var (db, d, file) = Setup();
+        using (file)
+        {
+            var list = ConditionalModelTranslator.Translate(
+                new ComparisonFilter("status", QueryOperator.Eq, "published"), null, [], d, db);
+
+            ((ConditionalModel)list[0]).CSharpTypeName.Should().BeNull();
         }
     }
 

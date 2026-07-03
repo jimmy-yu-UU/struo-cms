@@ -297,10 +297,13 @@ public sealed class ItemService(
         // Relation foreign keys (M2O / self-referencing tree) are declared via [CmsRelation], not
         // [CmsField], so the field overlay above skips them. Overlay each local FK the client
         // actually sent, keeping the same allowlist discipline (only declared relations, only keys
-        // present in the body).
+        // present in the body). Restricted to ManyToOne: O2M relations also carry a non-null
+        // ForeignKey (it names the FK column on the *related* entity, not this one), so without
+        // this guard the loop would try to overlay a property that doesn't exist/isn't writable
+        // here; M2M has no local FK at all.
         foreach (var rel in meta.Relations)
         {
-            if (rel.ForeignKey is null) continue;              // M2M / inbound O2M have no local FK on this entity
+            if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
             if (!bodyKeys.Contains(rel.ForeignKey)) continue;  // only overlay when the client sent this FK
             // ForeignKey is stored camelCase (e.g. "categoryId") but the CLR property is PascalCase
             // (e.g. CategoryId), so the lookup must be case-insensitive.
