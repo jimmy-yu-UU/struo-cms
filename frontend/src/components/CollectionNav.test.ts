@@ -23,11 +23,14 @@ describe('CollectionNav', () => {
   }
 
   it('builds a grouped model of readable collections and navigates on command', () => {
-    seed(false, { article: { read: true, write: false, delete: false } })
+    seed(false, {
+      article: { read: true, write: false, delete: false },
+      file: { read: true, write: false, delete: false },
+    })
     const wrapper = mount(CollectionNav)
     const model = (wrapper.vm as unknown as { model: any[] }).model
     const names = model.flatMap((g) => g.items.map((i: any) => i.key))
-    // A static 'media' group is always prepended; 'user' is filtered out by permissions.
+    // The 'media' group is prepended because the user has file:read; 'user' is filtered out by permissions.
     expect(names).toEqual(['media', 'article'])
 
     model[1].items[0].command()
@@ -43,5 +46,13 @@ describe('CollectionNav', () => {
     const names = (wrapper.vm as unknown as { model: any[] }).model.flatMap((g) => g.items.map((i: any) => i.key))
     // Includes the static 'media' entry alongside every collection.
     expect(names.sort()).toEqual(['article', 'media', 'user'])
+  })
+
+  it('omits the Media Library entry for a non-super-admin without file read permission', () => {
+    seed(false, { article: { read: true, write: false, delete: false } })
+    const wrapper = mount(CollectionNav)
+    const names = (wrapper.vm as unknown as { model: any[] }).model.flatMap((g) => g.items.map((i: any) => i.key))
+    expect(names).toEqual(['article'])
+    expect(names).not.toContain('media')
   })
 })

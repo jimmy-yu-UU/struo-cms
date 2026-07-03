@@ -24,3 +24,38 @@ function onClick(id: string): void {
     </button>
   </div>
 </template>
+
+<style scoped>
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.media-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  overflow: hidden;
+}
+
+.media-tile.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.media-tile__name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
