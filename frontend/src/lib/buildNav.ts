@@ -11,7 +11,7 @@ export function buildNav(
   permissions: Record<string, CollectionPermission>,
 ): NavGroup[] {
   const readable = collections.filter(
-    (c) => isSuperAdmin || permissions[c.name]?.read === true,
+    (c) => c.name !== 'file' && (isSuperAdmin || permissions[c.name]?.read === true),
   )
 
   const groups = new Map<string, NavItem[]>()
