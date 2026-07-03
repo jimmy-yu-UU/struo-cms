@@ -61,6 +61,27 @@ public static class MetadataScanner
                 if (prop.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
                     idProperty = prop.Name;
             }
+
+            // Also map each declared many-to-one relation's local FK (camelCase -> CLR
+            // property name) so the WHERE/sort column resolver (ConditionalModelTranslator.Column)
+            // can resolve filters like "categoryId" even though the FK carries no [CmsField]
+            // (it must NOT be added to meta.Fields — not projected/writable/required).
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var navData = prop.CustomAttributes
+                    .FirstOrDefault(a => a.AttributeType == typeof(Navigate));
+                var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
+                if (navData is null || rel is null) continue;
+
+                var isCollection = prop.PropertyType.IsGenericType
+                    && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType);
+                if (isCollection) continue; // only many-to-one relations have a local FK
+
+                var fkProp = NavigateForeignKeyName(navData);
+                if (!string.IsNullOrEmpty(fkProp))
+                    fieldToProp[Camel(fkProp)] = fkProp;
+            }
+
             map[collection] = new EntityDescriptor(type, fieldToProp, idProperty);
         }
         return map;
@@ -264,6 +285,11 @@ public static class MetadataScanner
                 kind = NavigateHasMappingType(navData)
                     ? RelationKind.ManyToMany
                     : RelationKind.OneToMany;
+                if (kind == RelationKind.OneToMany)
+                    // Reverse FK on the child entity (mirrors RelationshipGraph's
+                    // ReverseForeignKeyProperty) so the frontend RelatedList knows
+                    // which column to filter the child collection by.
+                    fk = Camel(NavigateForeignKeyName(navData));
             }
             else
             {

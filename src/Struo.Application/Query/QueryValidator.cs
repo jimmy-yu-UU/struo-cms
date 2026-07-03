@@ -1,6 +1,7 @@
 // src/Struo.Application/Query/QueryValidator.cs
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
+using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -12,7 +13,15 @@ public static class QueryValidator
         QueryModel q, CollectionMetadata meta, StruoQueryOptions opts,
         IRelationshipGraph graph, IMetadataProvider metadata)
     {
-        var known = meta.Fields.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Allowlist: a collection's own fields, plus its declared many-to-one relation
+        // foreign keys (e.g. "categoryId" on article) so callers (incl. the frontend
+        // RelatedList) can filter/sort by the FK column even though it carries no
+        // [CmsField]. Never widened to arbitrary non-relation columns.
+        var known = meta.Fields.Select(f => f.Name)
+            .Concat(meta.Relations
+                .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
+                .Select(r => r.ForeignKey!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         void CheckField(string path, bool forSort = false, bool allowRelation = true)
         {

@@ -100,4 +100,40 @@ public class ItemServiceTests : IDisposable
         var category = (IReadOnlyDictionary<string, object?>)reloaded["category"]!;
         category["id"].Should().Be(catBId);
     }
+
+    [Fact]
+    public async Task Query_filters_by_m2o_relation_foreign_key()
+    {
+        using var catABody = System.Text.Json.JsonDocument.Parse("""{"name":"Category A"}""");
+        var catA = await _svc.CreateAsync("category", catABody.RootElement);
+        var catAId = (Guid)catA["id"]!;
+
+        using var catBBody = System.Text.Json.JsonDocument.Parse("""{"name":"Category B"}""");
+        var catB = await _svc.CreateAsync("category", catBBody.RootElement);
+        var catBId = (Guid)catB["id"]!;
+
+        using var articleABody = System.Text.Json.JsonDocument.Parse(
+            "{\"status\":\"draft\",\"categoryId\":\"" + catAId + "\",\"translations\":{\"en\":{\"title\":\"A\"}}}");
+        await _svc.CreateAsync("article", articleABody.RootElement);
+
+        using var articleBBody = System.Text.Json.JsonDocument.Parse(
+            "{\"status\":\"draft\",\"categoryId\":\"" + catBId + "\",\"translations\":{\"en\":{\"title\":\"B\"}}}");
+        await _svc.CreateAsync("article", articleBBody.RootElement);
+
+        var filter = new Struo.Domain.Query.ComparisonFilter(
+            "categoryId", Struo.Domain.Query.QueryOperator.Eq, catAId.ToString());
+        var query = new Struo.Domain.Query.QueryModel(null, filter, [], 0, 0, null);
+        var result = await _svc.QueryAsync("article", query);
+
+        result.Data.Should().HaveCount(1);
+        result.Data[0].Should().NotContainKey("categoryId"); // FK is not projected (meta.Fields unchanged)
+        var deep = new Struo.Domain.Query.DeepSpec(
+            new Dictionary<string, Struo.Domain.Query.DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["category"] = new Struo.Domain.Query.DeepRelationSpec(null, null)
+            });
+        var reloaded = await _svc.GetAsync("article", result.Data[0]["id"]!.ToString()!, deep);
+        var category = (IReadOnlyDictionary<string, object?>)reloaded!["category"]!;
+        category["id"].Should().Be(catAId);
+    }
 }
