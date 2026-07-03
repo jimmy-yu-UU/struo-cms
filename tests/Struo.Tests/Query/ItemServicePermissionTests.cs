@@ -76,7 +76,7 @@ public class ItemServicePermissionTests : IDisposable
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         return new ItemService(repo, provider, registry, permissions,
-            graph, expander, graph, resolver, languages, new StruoQueryOptions());
+            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer());
     }
 
     public void Dispose() => _file.Dispose();
