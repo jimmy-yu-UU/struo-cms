@@ -29,4 +29,15 @@ describe('buildNav', () => {
     expect(content.items.map((i) => i.name)).toEqual(['article', 'category'])
     expect(general.items.map((i) => i.name)).toEqual(['user'])
   })
+
+  it('suppresses the file collection from auto nav', () => {
+    const cols = [
+      { name: 'file', label: 'File', group: 'System' },
+      { name: 'article', label: 'Article', group: 'Content' },
+    ] as never
+    const groups = buildNav(cols, true, {})
+    const names = groups.flatMap((g) => g.items.map((i) => i.name))
+    expect(names).toContain('article')
+    expect(names).not.toContain('file')
+  })
 })

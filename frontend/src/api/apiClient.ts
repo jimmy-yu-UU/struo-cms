@@ -20,6 +20,10 @@ export class ApiClient {
     return this.request<T>('POST', path, body)
   }
 
+  postForm<T>(path: string, form: FormData): Promise<T> {
+    return this.request<T>('POST', path, form)
+  }
+
   getRaw<T>(path: string): Promise<T> {
     return this.request<T>('GET', path, undefined, { unwrap: false })
   }
@@ -38,11 +42,12 @@ export class ApiClient {
     body?: unknown,
     opts?: { unwrap?: boolean },
   ): Promise<T> {
+    const isForm = body instanceof FormData
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       credentials: 'include',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     })
 
     if (res.status === 401) this.onUnauthorized?.()

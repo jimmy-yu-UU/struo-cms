@@ -35,6 +35,23 @@ describe('blankItemForm', () => {
   })
 })
 
+describe('parseItemToForm file/image fields', () => {
+  const fileMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    field('id', { isSystem: true }),
+    field('heroImageId', { interface: 'file' }),
+  ]}
+
+  it('seeds a missing file/image value as null (not "") so it survives unchanged through an update', () => {
+    const model = parseItemToForm(fileMeta, {}, locales)
+    expect(model.shared.heroImageId).toBeNull()
+  })
+
+  it('carries a set file/image value through unchanged', () => {
+    const model = parseItemToForm(fileMeta, { heroImageId: 'file-1' }, locales)
+    expect(model.shared.heroImageId).toBe('file-1')
+  })
+})
+
 describe('parseItemToForm relations', () => {
   const langs: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
   function relMeta(): CollectionMeta {

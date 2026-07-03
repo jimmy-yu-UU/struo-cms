@@ -26,6 +26,10 @@ public sealed class Article : AuditableEntity
     [CmsField(Label = "Published At", Interface = FieldInterface.DateTime, Sort = 4, Group = "Content")]
     public DateTime? PublishedAt { get; set; }
 
+    [SugarColumn(IsNullable = true)]
+    [CmsField(Label = "Hero Image", Interface = FieldInterface.Image, Sort = 5, Group = "Content")]
+    public Guid? HeroImageId { get; set; }
+
     // --- relations ---
     [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }
