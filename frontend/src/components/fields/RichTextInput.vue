@@ -73,7 +73,7 @@ const editor = useEditor({
   content: absolutizeImageSrc(props.modelValue || ''),
   editable: !props.disabled,
   extensions: [
-    StarterKit.configure({ heading: { levels: [2, 3] } }),
+    StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
     Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
     Image.configure({ inline: false }),
   ],
