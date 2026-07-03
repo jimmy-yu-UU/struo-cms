@@ -16,7 +16,7 @@ const locales: LanguageInfo[] = [
   { code: 'en', name: 'English', isDefault: true },
   { code: 'zh-TW', name: '繁中', isDefault: false },
 ]
-const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } } }
+const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {} }
 const stubs = {
   FieldInput: { props: ['field', 'modelValue', 'disabled'], template: '<div class="field-input" :data-name="field.name" />' },
   Button: { props: ['label'], template: '<button :data-label="label" @click="$emit(\'click\')">{{ label }}</button>' },
