@@ -28,14 +28,15 @@ public class SqlSugarItemRepositoryTests : IDisposable
             new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<Article>();
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Category), typeof(Struo.Infrastructure.Files.File)]);
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
-        var descriptors = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)]);
+        var descriptors = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category), typeof(Tag)]);
         var registry = new EntityRegistry(descriptors);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["article"]  = typeof(Article),
             ["category"] = typeof(Category),
+            ["tag"]      = typeof(Tag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
