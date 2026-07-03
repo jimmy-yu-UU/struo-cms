@@ -63,8 +63,14 @@
   **The live gate surfaced & fixed 3 real backend bugs (all "SQLite-green ≠ Postgres-correct")** — see the
   verification-baseline note. File/Image upload, TipTap, multi-value selects, and structured editors are
   deferred (render read-only) to a later sub-phase (7e+).
-- **Next up:** Phase 7e+ (File/Image/Files upload + TipTap rich text; then multi-value selects + structured
-  editors) — all deferred from 7d, rendering read-only meanwhile.
+- **Phase 7e (media library + File/Image pickers) code-complete, automated gates green, live gate user-driven:**
+  *sliced to files only* — a dedicated `/media` Media Library view (browse via `GET /api/items/file`, drag-drop
+  bulk upload via `POST /api/files`, per-file delete + Title/Alt edit) plus **select-only** `File`/`Image` field
+  pickers (reuse the shared `MediaGrid`; store a scalar `Guid?` like SEO's `OgImageId`, so the form save path is
+  unchanged). Frontend-only (Phase 5 file API + `File` CMS collection already exist); one sample field added
+  (`Article.HeroImageId`). Backend 269/269 (unchanged), frontend 141/141, `pnpm build` clean.
+- **Next up:** Phase 7f+ (TipTap rich text; then multi-value selects + structured editors; multi-file `Files`) —
+  deferred from 7d/7e, rendering read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -111,7 +117,8 @@
 | 7b | Collection lists (RBAC-aware nav, generic paginated/sortable `CollectionListView`, additive `/api/auth/me` permissions) | ✅ done (live-verified: PG+Redis) | [spec](superpowers/specs/2026-07-02-phase7b-collection-lists-design.md) | [plan](superpowers/plans/2026-07-02-phase7b-collection-lists.md) |
 | 7c | Item detail + create/edit/delete forms (scalar fields, i18n locale tabs, additive `GET /api/languages`) | ✅ done (live-verified API-level: PG+Redis i18n CRUD) | [spec](superpowers/specs/2026-07-02-phase7c-item-forms-design.md) | [plan](superpowers/plans/2026-07-02-phase7c-item-forms.md) |
 | 7d | Relation editing (`Dropdown`/`TagSelect`/`TreeSelect` + read-only `RelatedList`) + list translated columns + full UI CRUD E2E — *sliced to relations only* | ✅ done (live-verified: PG+Redis — relations CRUD + M2M replace + RelatedList + translated list; **+3 live-gate backend fixes**) | [spec](superpowers/specs/2026-07-03-phase7d-relations-design.md) | [plan](superpowers/plans/2026-07-03-phase7d-relations.md) |
-| 7e+ | File/Image/Files upload, TipTap rich text, multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`) — *deferred from 7d* | ⬜ planned | — | — |
+| 7e | Media Library + File/Image field pickers (dedicated `/media` view: browse + drag-drop bulk upload + delete/edit; select-only `File`/`Image` pickers in forms) — *sliced to files only* | ⬜ code-complete, automated gates green (live PG+Redis+MinIO gate user-driven) | [spec](superpowers/specs/2026-07-03-phase7e-media-library-file-pickers-design.md) | [plan](superpowers/plans/2026-07-03-phase7e-media-library-file-pickers.md) |
+| 7f+ | TipTap rich text, multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
