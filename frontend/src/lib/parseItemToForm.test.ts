@@ -34,3 +34,27 @@ describe('blankItemForm', () => {
     expect(model.translations['zh-TW']).toEqual({ title: '' })
   })
 })
+
+describe('parseItemToForm relations', () => {
+  const langs: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
+  function relMeta(): CollectionMeta {
+    return {
+      name: 'article', label: 'Article', fields: [], defaultDisplayField: null,
+      relations: [
+        { name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false },
+        { name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect', foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false },
+      ],
+    }
+  }
+  it('inflates M2O id and M2M id array from deep-expanded item', () => {
+    const item = { id: '1', category: { id: 'cat-1', name: 'Tech' }, tags: [{ id: 't1' }, { id: 't2' }] }
+    const model = parseItemToForm(relMeta(), item, langs)
+    expect(model.relations.category).toBe('cat-1')
+    expect(model.relations.tags).toEqual(['t1', 't2'])
+  })
+  it('blank form seeds M2O null and M2M empty array', () => {
+    const model = blankItemForm(relMeta(), langs)
+    expect(model.relations.category).toBeNull()
+    expect(model.relations.tags).toEqual([])
+  })
+})
