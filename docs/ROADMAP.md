@@ -50,30 +50,36 @@
   because the list endpoint does not overlay translations and spec §0 defers translated columns; the
   full Playwright UI create→edit→delete flow (`items.spec.ts`) therefore can't identify a row by title
   and is deferred with translated columns. The i18n CRUD contract itself is verified above at the API level.
-- **Phase 7d (relation editing) code-complete, automated gates green, live gate user-driven:** *sliced to
-  relations only* — schema-driven editing for `Dropdown` (M2O), `TagSelect` (M2M), `TreeSelect` (self-ref,
-  cycle-guarded) + a read-only `RelatedList` (inbound), via a generic `RelationPicker` + `RelationInput`
-  dispatcher; the collection **list** now renders translatable columns (fixes the 7c "—"); a full UI
-  create→edit→delete E2E (`relations.spec.ts`) is authored. **Frontend-only** — the backend already accepted
-  relation writes (M2O FK scalar, `SyncM2MAsync` M2M id-array, deep expansion, list translation overlay); the
-  only non-frontend change is a sample `Article↔Tag` M2M so `TagSelect` has a real relation. Automated gates
-  green: backend `dotnet build` clean + `dotnet test` 263/263; frontend `pnpm test` 119/119 + `pnpm build` ok;
-  E2E `--list`-collected. **Whole-branch review = READY TO MERGE** (zero Critical/Important; round-trip seams
-  verified against the real backend contract incl. the case-sensitive M2M key match). The **live PG+Redis gate
-  is user-driven/pending** (create an `article` with `category`+`tags`, edit relations, confirm M2M junction
-  replace + `Articles` RelatedList + translated list title — first create a `tag` via API, the sample has no
-  seed). File/Image upload, TipTap, multi-value selects, and structured editors are explicitly deferred (they
-  render read-only) to a later sub-phase (7e+).
+- **Phase 7d (relation editing) done & live-verified (real PG+Redis):** *sliced to relations only* —
+  schema-driven editing for `Dropdown` (M2O), `TagSelect` (M2M), `TreeSelect` (self-ref, cycle-guarded) + a
+  read-only `RelatedList` (inbound), via a generic `RelationPicker` + `RelationInput` dispatcher; the collection
+  **list** now renders translatable columns (fixes the 7c "—"); a full UI create→edit→delete E2E
+  (`relations.spec.ts`) authored. Frontend built on the existing backend write path (M2O FK scalar, M2M
+  `SyncM2MAsync`, deep expansion, list translation overlay) + a sample `Article↔Tag` M2M. Merged to main
+  (`dbe9bf0`, --no-ff). **LIVE GATE PASSED 2026-07-03** (live Postgres `web-struo-cms-db` + Redis, API-level,
+  all 11 steps): create category/tag + article with `category`+`tags`; deep round-trip (M2O+M2M inflate); edit
+  category A→B (M2O update); edit tags [T1]→[T1,T2]→[T2] (M2M junction replace); RelatedList inbound
+  `filter[categoryId][_eq]` returns the article with its translated title; list translation overlay; delete→404.
+  **The live gate surfaced & fixed 3 real backend bugs (all "SQLite-green ≠ Postgres-correct")** — see the
+  verification-baseline note. File/Image upload, TipTap, multi-value selects, and structured editors are
+  deferred (render read-only) to a later sub-phase (7e+).
 - **Next up:** Phase 7e+ (File/Image/Files upload + TipTap rich text; then multi-value selects + structured
   editors) — all deferred from 7d, rendering read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
   snapshot); the allow-all stub is out of the live DI graph.
-- **Verification baseline (2026-07-03, post-7d):** backend `dotnet build` clean (warnings-as-errors);
-  `dotnet test` 263 passed / 0 failed / 0 skipped (262 prior + 1 `RelationScannerTests` M2M scan). Frontend:
-  119/119 unit/component tests passed (86 prior + 33 across the 7d relation helpers/components/views),
-  `pnpm build` succeeds. Phase 7d's live relation/M2M/i18n gate on real Postgres+Redis is user-driven/pending.
+- **Verification baseline (2026-07-03, post-7d + live-gate fixes):** backend `dotnet build` clean
+  (warnings-as-errors); `dotnet test` **269** passed / 0 failed / 0 skipped (262 prior + 1 sample M2M scan +
+  6 across the 3 live-gate fixes). Frontend: **119/119** unit/component (86 prior + 33 for 7d relations),
+  `pnpm build` succeeds. **Live gate PASSED on real Postgres + Redis** (Phase 7d relations CRUD/M2M/RelatedList/
+  translated list, API-level). **Three live-gate backend fixes** (all SQLite-green ≠ Postgres-correct):
+  (1) `a0f02bb` — `ItemService.UpdateAsync` merged only `[CmsField]`, silently dropping M2O/tree relation FK
+  updates (editing a relation via PUT did nothing); (2) `26b1a39` — O2M relation metadata exposed
+  `foreignKey: null` and the query whitelist rejected FK columns, so `RelatedList` never queried; now a
+  collection is filterable by its declared M2O relation FKs and O2M exposes its reverse FK; (3) `df1f1b6` —
+  the filter translator stringified every value, so uuid/`Guid` columns (incl. the `id` PK) hit Postgres 42883
+  `operator does not exist: uuid = text`; now `ConditionalModel.CSharpTypeName` is set from the column CLR type.
   (Prior 2026-07-02 baseline: backend 262/262, frontend 86/86.)
   Phase 7a's live Playwright E2E (login → dashboard → logout) and Phase 7b's live browse E2E
   (`auth.spec.ts` + `collections.spec.ts`, 2/2 in Chromium) previously passed against the dev API on
@@ -104,7 +110,7 @@
 | 7a | Frontend foundation & auth (Vue 3 SPA scaffold, `apiClient`, `authStore`, router guard, login/dashboard shell, cross-origin CORS+cookie mode) | ⬜ code-complete, live-smoke-pending | [spec](superpowers/specs/2026-07-01-phase7a-frontend-foundation-auth-design.md) | [plan](superpowers/plans/2026-07-01-phase7a-frontend-foundation-auth.md) |
 | 7b | Collection lists (RBAC-aware nav, generic paginated/sortable `CollectionListView`, additive `/api/auth/me` permissions) | ✅ done (live-verified: PG+Redis) | [spec](superpowers/specs/2026-07-02-phase7b-collection-lists-design.md) | [plan](superpowers/plans/2026-07-02-phase7b-collection-lists.md) |
 | 7c | Item detail + create/edit/delete forms (scalar fields, i18n locale tabs, additive `GET /api/languages`) | ✅ done (live-verified API-level: PG+Redis i18n CRUD) | [spec](superpowers/specs/2026-07-02-phase7c-item-forms-design.md) | [plan](superpowers/plans/2026-07-02-phase7c-item-forms.md) |
-| 7d | Relation editing (`Dropdown`/`TagSelect`/`TreeSelect` + read-only `RelatedList`) + list translated columns + full UI CRUD E2E — *sliced to relations only* | ⬜ code-complete, automated gates green, final review READY-TO-MERGE (live PG+Redis gate user-driven) | [spec](superpowers/specs/2026-07-03-phase7d-relations-design.md) | [plan](superpowers/plans/2026-07-03-phase7d-relations.md) |
+| 7d | Relation editing (`Dropdown`/`TagSelect`/`TreeSelect` + read-only `RelatedList`) + list translated columns + full UI CRUD E2E — *sliced to relations only* | ✅ done (live-verified: PG+Redis — relations CRUD + M2M replace + RelatedList + translated list; **+3 live-gate backend fixes**) | [spec](superpowers/specs/2026-07-03-phase7d-relations-design.md) | [plan](superpowers/plans/2026-07-03-phase7d-relations.md) |
 | 7e+ | File/Image/Files upload, TipTap rich text, multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`) — *deferred from 7d* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
