@@ -27,16 +27,21 @@ describe('CollectionNav', () => {
     const wrapper = mount(CollectionNav)
     const model = (wrapper.vm as unknown as { model: any[] }).model
     const names = model.flatMap((g) => g.items.map((i: any) => i.key))
-    expect(names).toEqual(['article']) // 'user' filtered out
+    // A static 'media' group is always prepended; 'user' is filtered out by permissions.
+    expect(names).toEqual(['media', 'article'])
+
+    model[1].items[0].command()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
 
     model[0].items[0].command()
-    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
+    expect(push).toHaveBeenCalledWith({ name: 'media' })
   })
 
   it('super-admin model includes every collection', () => {
     seed(true, {})
     const wrapper = mount(CollectionNav)
     const names = (wrapper.vm as unknown as { model: any[] }).model.flatMap((g) => g.items.map((i: any) => i.key))
-    expect(names.sort()).toEqual(['article', 'user'])
+    // Includes the static 'media' entry alongside every collection.
+    expect(names.sort()).toEqual(['article', 'media', 'user'])
   })
 })
