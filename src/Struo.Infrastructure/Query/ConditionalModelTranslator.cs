@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/ConditionalModelTranslator.cs
+using System.Reflection;
 using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Domain.Query;
@@ -54,7 +55,8 @@ public static class ConditionalModelTranslator
                 {
                     FieldName = Column(d, db, c.FieldPath),
                     ConditionalType = MapOperator(c.Op),
-                    FieldValue = ToFieldValue(c.Op, c.Value)
+                    FieldValue = ToFieldValue(c.Op, c.Value),
+                    CSharpTypeName = ResolveCSharpTypeName(d, c.FieldPath, c.Op)
                 };
 
             case LogicalFilter l:
@@ -108,6 +110,58 @@ public static class ConditionalModelTranslator
                 string.Join(",", list.Cast<object?>().Select(v => v?.ToString())),
             _ => value.ToString()
         };
+    }
+
+    /// <summary>
+    /// Resolves the SqlSugar <c>ConditionalModel.CSharpTypeName</c> for a filter field, so the
+    /// string <c>FieldValue</c> is cast/parameterized to the column's real CLR type instead of
+    /// being sent as text. Without this, a uuid (Guid) column comparison becomes
+    /// <c>WHERE category_id = 'text-literal'</c>, which SQLite accepts (loose typing) but
+    /// PostgreSQL rejects with 42883 "operator does not exist: uuid = text". Returns null for
+    /// string columns (and anything unrecognized) so their behavior is unchanged.
+    /// </summary>
+    private static string? ResolveCSharpTypeName(EntityDescriptor d, string field, QueryOperator op)
+    {
+        // _null / _nnull never touch FieldValue (render pure "IS [NOT] NULL"); a cast is moot.
+        if (op is QueryOperator.Null or QueryOperator.NNull)
+            return null;
+
+        var clrType = ResolveClrType(d, field);
+        return clrType is null ? null : SqlSugarTypeName(clrType);
+    }
+
+    private static Type? ResolveClrType(EntityDescriptor d, string field)
+    {
+        if (!d.FieldToProperty.TryGetValue(field, out var property))
+            return null;
+
+        var propertyType = d.EntityType
+            .GetProperty(property, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+            ?.PropertyType;
+
+        return propertyType is null ? null : Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+    }
+
+    /// <summary>
+    /// Maps a CLR type to the string SqlSugar's <c>ConditionalModel.CSharpTypeName</c> expects
+    /// (verified against the installed SqlSugarCore 5.1.4.215 via decompilation of
+    /// <c>UtilMethods.ConvertDataByTypeName</c>/<c>IsNumber</c>, which compare case-insensitively
+    /// against these literals and against <c>Type.Name</c>). Returns null for <see cref="string"/>
+    /// and any unmapped type, so those columns keep today's untyped (string) behavior exactly.
+    /// </summary>
+    private static string? SqlSugarTypeName(Type clrType)
+    {
+        if (clrType == typeof(Guid)) return "guid";
+        if (clrType == typeof(int)) return "int";
+        if (clrType == typeof(long)) return "long";
+        if (clrType == typeof(short)) return "short";
+        if (clrType == typeof(bool)) return "bool";
+        if (clrType == typeof(DateTime)) return "datetime";
+        if (clrType == typeof(DateTimeOffset)) return "datetimeoffset";
+        if (clrType == typeof(decimal)) return "decimal";
+        if (clrType == typeof(double)) return "double";
+        if (clrType == typeof(float)) return "float";
+        return null;
     }
 
     private static ConditionalType MapOperator(QueryOperator op) => op switch
