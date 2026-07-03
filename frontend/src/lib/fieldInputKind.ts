@@ -1,6 +1,7 @@
 export type InputKind =
   | 'text' | 'textarea' | 'richtext' | 'number' | 'boolean'
-  | 'date' | 'time' | 'datetime' | 'select' | 'radio' | 'divider' | 'readonly'
+  | 'date' | 'time' | 'datetime' | 'select' | 'radio' | 'divider'
+  | 'file' | 'image' | 'readonly'
 
 const MAP: Record<string, InputKind> = {
   text: 'text', slug: 'text', email: 'text', url: 'text', color: 'text', phone: 'text', password: 'text',
@@ -11,6 +12,7 @@ const MAP: Record<string, InputKind> = {
   date: 'date', time: 'time', dateTime: 'datetime',
   select: 'select', radio: 'radio',
   divider: 'divider',
+  file: 'file', image: 'image',
 }
 
 export function fieldInputKind(iface: string): InputKind {
