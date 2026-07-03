@@ -21,6 +21,14 @@ describe('itemsApi.list', () => {
     await itemsApi.list('article', { page: 0, rows: 25 })
     expect(apiClient.getRaw).toHaveBeenCalledWith('/items/article?limit=25&offset=0')
   })
+
+  it('list forwards filter and locale to the query string', async () => {
+    ;(apiClient.getRaw as any).mockResolvedValue({ data: [], meta: { total: 0 } })
+    await itemsApi.list('article', { page: 0, rows: 10, filter: { categoryId: { op: '_eq', value: 'x' } }, locale: 'en' })
+    const path = (apiClient.getRaw as any).mock.calls[0][0] as string
+    expect(path).toContain('filter%5BcategoryId%5D%5B_eq%5D=x')
+    expect(path).toContain('locale=en')
+  })
 })
 
 describe('itemsApi mutations', () => {
@@ -37,6 +45,12 @@ describe('itemsApi mutations', () => {
     const spy = vi.spyOn(apiClient, 'get').mockResolvedValue({})
     await itemsApi.get('article', '1', { locale: 'zh-TW' })
     expect(spy).toHaveBeenCalledWith('/items/article/1?locale=zh-TW')
+  })
+
+  it('get appends deep and locale', async () => {
+    ;(apiClient.get as any).mockResolvedValue({})
+    await itemsApi.get('article', '1', { locale: 'zh-TW', deep: ['category', 'tags'] })
+    expect(apiClient.get).toHaveBeenCalledWith('/items/article/1?locale=zh-TW&deep=category%2Ctags')
   })
 
   it('create posts the payload', async () => {
