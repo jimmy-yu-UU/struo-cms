@@ -7,6 +7,7 @@ import Checkbox from 'primevue/checkbox'
 import DatePicker from 'primevue/datepicker'
 import Select from 'primevue/select'
 import RadioButton from 'primevue/radiobutton'
+import FilePicker from './FilePicker.vue'
 import { fieldInputKind } from '../../lib/fieldInputKind'
 import type { FieldMeta } from '../../types/schema'
 
@@ -50,6 +51,9 @@ function update(v: unknown): void { emit('update:modelValue', v) }
   </div>
 
   <hr v-else-if="kind === 'divider'" />
+
+  <FilePicker v-else-if="kind === 'file' || kind === 'image'" :model-value="(modelValue as string | null)"
+    :image="kind === 'image'" :disabled="isDisabled" @update:model-value="(v: string | null) => $emit('update:modelValue', v)" />
 
   <span v-else class="readonly-field">{{ modelValue ?? '—' }}</span>
 </template>
