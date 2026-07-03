@@ -19,7 +19,7 @@ export function parseItemToForm(
     for (const f of translatable) entry[f.name] = src[f.name] ?? ''
     translations[loc.code] = entry
   }
-  return { shared: sharedModel, translations }
+  return { shared: sharedModel, translations, relations: {} }
 }
 
 export function blankItemForm(meta: CollectionMeta, locales: LanguageInfo[]): FormModel {

@@ -28,7 +28,7 @@ const meta = computed(() => schema.get(name.value))
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
 
-const model = reactive<FormModel>({ shared: {}, translations: {} })
+const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
 const serverError = ref('')
 const loading = ref(true)
