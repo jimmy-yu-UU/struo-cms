@@ -22,8 +22,10 @@ public class FileUploadTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Upload_returns_201_with_metadata_and_draft_status()
+    public async Task Upload_returns_201_with_metadata_and_published_status()
     {
+        // Uploads default to "published": dimensions are extracted synchronously in the same
+        // call, so there is no pending async step that "draft" was gating (7e live-gate finding).
         var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsync("/api/files", Multipart(Encoding.UTF8.GetBytes("hello world"), "note.txt", "text/plain"));
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -31,7 +33,7 @@ public class FileUploadTests(ApiFactory factory)
         data.GetProperty("fileName").GetString().Should().Be("note.txt");
         data.GetProperty("contentType").GetString().Should().Be("text/plain");
         data.GetProperty("size").GetInt64().Should().Be(11);
-        data.GetProperty("status").GetString().Should().Be("draft");
+        data.GetProperty("status").GetString().Should().Be("published");
         Guid.TryParse(data.GetProperty("id").GetString(), out _).Should().BeTrue();
     }
 
