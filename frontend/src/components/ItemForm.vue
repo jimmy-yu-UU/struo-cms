@@ -7,6 +7,7 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import FieldInput from './fields/FieldInput.vue'
+import RelationInput from './fields/RelationInput.vue'
 import { splitFields } from '../lib/splitFields'
 import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
@@ -19,6 +20,7 @@ const props = defineProps<{
   serverError?: string
   disabled?: boolean
   submitting?: boolean
+  itemId?: string
 }>()
 const emit = defineEmits<{ (e: 'submit'): void; (e: 'cancel'): void }>()
 
@@ -36,6 +38,20 @@ const activeLocale = ref(props.locales[0]?.code ?? '')
       <small v-if="f.helpText" class="help">{{ f.helpText }}</small>
       <small v-if="errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
     </div>
+
+    <section v-if="meta.relations && meta.relations.length" class="relations">
+      <h3>Relations</h3>
+      <div v-for="rel in meta.relations" :key="rel.name" class="field">
+        <label>{{ rel.label }}</label>
+        <RelationInput
+          :relation="rel"
+          v-model="model.relations[rel.name]"
+          :disabled="disabled"
+          :parent-id="itemId"
+          :exclude-id="rel.selfReferencing ? itemId : undefined"
+        />
+      </div>
+    </section>
 
     <Tabs v-if="fields.translatable.length" v-model:value="activeLocale">
       <TabList>

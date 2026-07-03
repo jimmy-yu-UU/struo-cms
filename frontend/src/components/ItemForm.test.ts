@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ItemForm from './ItemForm.vue'
+import RelationInput from './fields/RelationInput.vue'
 import type { CollectionMeta, FieldMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
@@ -48,5 +49,18 @@ describe('ItemForm', () => {
   it('hides Save when disabled (read-only)', () => {
     const w = mount(ItemForm, { props: { meta, model, locales, errors: {}, disabled: true }, global: { stubs } })
     expect(w.find('button[data-label="Save"]').exists()).toBe(false)
+  })
+  it('renders a RelationInput per relation in the shared section', () => {
+    const relMeta: CollectionMeta = {
+      name: 'article', label: 'Article', defaultDisplayField: null,
+      fields: [field('status', { sort: 1 })],
+      relations: [{ name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false }],
+    }
+    const relModel: FormModel = { shared: { status: 'draft' }, translations: {}, relations: { category: null } }
+    const w = mount(ItemForm, {
+      props: { meta: relMeta, model: relModel, locales: [], errors: {} },
+      global: { stubs: { ...stubs, RelationInput: true } },
+    })
+    expect(w.findComponent(RelationInput).exists()).toBe(true)
   })
 })
