@@ -20,6 +20,9 @@ vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmReq
 const meta = { name: 'article', label: 'Article', fields: [
   { name: 'status', label: 'Status', interface: 'text', required: true, searchable: false, sortable: false,
     readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
+], relations: [
+  { name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false },
+  { name: 'comments', label: 'Comments', kind: 'oneToMany', targetCollection: 'comment', interface: 'relatedList', foreignKey: 'ArticleId', displayTemplate: '{Body}', editable: false, selfReferencing: false },
 ]}
 const stubs = { ItemForm: true, Button: true, ConfirmDialog: true }
 
@@ -51,8 +54,30 @@ describe('ItemFormView', () => {
     const spy = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {} })
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
-    expect(spy).toHaveBeenCalledWith('article', '5')
+    expect(spy).toHaveBeenCalledWith('article', '5', expect.objectContaining({ deep: ['category'], locale: 'en' }))
     expect((w.vm as any).model.shared.status).toBe('published')
+  })
+
+  it('fetches with deep = editable relation names on edit', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const spy = vi.spyOn(itemsApi, 'get').mockResolvedValue({
+      id: '5', status: 'published', translations: {}, category: { id: 'cat-1' },
+    })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    expect(spy).toHaveBeenCalledWith('article', '5', expect.objectContaining({ deep: ['category'] }))
+  })
+
+  it('inflates relation current values into the model on edit', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({
+      id: '5', status: 'published', translations: {}, category: { id: 'cat-1' },
+    })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    expect((w.vm as any).model.relations.category).toBe('cat-1')
   })
 
   it('create path builds a blank model and calls create on submit', async () => {

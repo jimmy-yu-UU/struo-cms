@@ -20,6 +20,18 @@ export type FieldMeta = {
   isSystem: boolean
 }
 
+export type RelationMeta = {
+  name: string
+  label: string
+  kind: string // camelCase RelationKind, e.g. "manyToOne" | "manyToMany" | "oneToMany"
+  targetCollection: string
+  interface: string // camelCase RelationInterface: "dropdown" | "tagSelect" | "treeSelect" | "relatedList"
+  foreignKey?: string | null // CLR property name on the owning/child entity, e.g. "CategoryId"
+  displayTemplate?: string | null // e.g. "{Name}"
+  editable: boolean
+  selfReferencing: boolean
+}
+
 export type CollectionMeta = {
   name: string
   label: string
@@ -27,6 +39,7 @@ export type CollectionMeta = {
   group?: string | null
   defaultDisplayField?: string | null
   fields: FieldMeta[]
+  relations: RelationMeta[]
 }
 
 export type CollectionPermission = { read: boolean; write: boolean; delete: boolean }

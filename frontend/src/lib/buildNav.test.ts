@@ -3,7 +3,7 @@ import { buildNav } from './buildNav'
 import type { CollectionMeta, CollectionPermission } from '../types/schema'
 
 function coll(name: string, group?: string): CollectionMeta {
-  return { name, label: name[0].toUpperCase() + name.slice(1), group, fields: [] }
+  return { name, label: name[0].toUpperCase() + name.slice(1), group, fields: [], relations: [] }
 }
 const grant = (read: boolean): CollectionPermission => ({ read, write: false, delete: false })
 

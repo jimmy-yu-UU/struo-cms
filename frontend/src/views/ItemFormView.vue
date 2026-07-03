@@ -12,6 +12,7 @@ import { itemsApi } from '../api/itemsApi'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { validateItem } from '../lib/validateItem'
+import { relationInputKind } from '../lib/relationInputKind'
 import type { FormModel } from '../types/itemForm'
 
 const route = useRoute()
@@ -25,10 +26,15 @@ const name = computed(() => route.params.name as string)
 const id = computed(() => (route.params.id as string | undefined) ?? undefined)
 const isCreate = computed(() => id.value === undefined)
 const meta = computed(() => schema.get(name.value))
+const editableRelations = computed(() =>
+  (meta.value?.relations ?? [])
+    .filter((r) => ['dropdown', 'tagSelect', 'treeSelect'].includes(relationInputKind(r.interface)))
+    .map((r) => r.name),
+)
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
 
-const model = reactive<FormModel>({ shared: {}, translations: {} })
+const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
 const serverError = ref('')
 const loading = ref(true)
@@ -38,6 +44,7 @@ const notFound = ref(false)
 function setModel(next: FormModel): void {
   model.shared = next.shared
   model.translations = next.translations
+  model.relations = next.relations
 }
 
 async function init(): Promise<void> {
@@ -51,7 +58,10 @@ async function init(): Promise<void> {
     setModel(blankItemForm(meta.value, langStore.languages))
   } else {
     try {
-      const item = await itemsApi.get(name.value, id.value!)
+      const item = await itemsApi.get(name.value, id.value!, {
+        deep: editableRelations.value,
+        locale: langStore.defaultCode,
+      })
       setModel(parseItemToForm(meta.value, item, langStore.languages))
     } catch (e) {
       if (e instanceof Error && /not found/i.test(e.message)) notFound.value = true
@@ -116,6 +126,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, model, errors, serverError, n
       </header>
       <ItemForm
         :meta="meta"
+        :item-id="id"
         :model="model"
         :locales="langStore.languages"
         :errors="errors"

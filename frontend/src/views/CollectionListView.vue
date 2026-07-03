@@ -8,6 +8,7 @@ import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
+import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { selectListColumns } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
@@ -17,6 +18,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const schema = useSchemaStore()
+const langStore = useLanguageStore()
 
 const name = computed(() => route.params.name as string)
 const meta = computed(() => schema.get(name.value))
@@ -38,6 +40,14 @@ function fieldOf(colField: string): FieldMeta | undefined {
   return meta.value?.fields.find((f) => f.name === colField)
 }
 
+function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
+  if (field.translatable) {
+    const t = (row.translations as Record<string, Record<string, unknown>> | undefined)?.[langStore.defaultCode]
+    return t?.[field.name]
+  }
+  return row[field.name]
+}
+
 async function loadItems(): Promise<void> {
   if (!meta.value || !canRead.value) return
   loading.value = true
@@ -46,11 +56,13 @@ async function loadItems(): Promise<void> {
     const sort = sortField.value
       ? sortOrder.value === -1 ? `-${sortField.value}` : sortField.value
       : undefined
+    await langStore.load()
     const res = await itemsApi.list(name.value, {
       page: page.value,
       rows: perPage.value,
       sort,
       search: search.value || undefined,
+      locale: langStore.defaultCode || undefined,
     })
     rows.value = res.data
     total.value = res.total
@@ -105,7 +117,7 @@ watch(name, () => {
 
 onMounted(loadItems)
 
-defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, rows, total, loading, error })
+defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, rows, total, loading, error, cellValue })
 </script>
 
 <template>
@@ -148,7 +160,7 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
           :sortable="col.sortable"
         >
           <template #body="{ data }">
-            {{ formatCell(data[col.field], fieldOf(col.field)!) }}
+            {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
           </template>
         </Column>
         <template #empty>No records.</template>
