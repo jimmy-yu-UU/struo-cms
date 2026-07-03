@@ -24,7 +24,8 @@ public sealed class ItemService(
     IM2MDescriptorSource m2mSource,
     IRelationFilterResolver relationFilter,
     ILanguageProvider languages,
-    StruoQueryOptions options)
+    StruoQueryOptions options,
+    IHtmlSanitizer sanitizer)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -400,7 +401,10 @@ public sealed class ItemService(
                 if (!allowed.Contains(field.Name))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                fieldValues[field.Name] = JsonValue(field.Value);
+                var value = JsonValue(field.Value);
+                if (value is string s && IsRichTextField(meta, field.Name))
+                    value = SanitizeRichText(s);
+                fieldValues[field.Name] = value;
             }
 
             // Required: every required translatable field must be present and non-empty.
@@ -445,6 +449,36 @@ public sealed class ItemService(
         JsonValueKind.Null => null,
         _ => e.GetRawText()
     };
+
+    /// <summary>
+    /// Sanitizes a RichText field value: null stays null; otherwise the HTML is run through the
+    /// sanitizer and, if the cleaned result is visually blank (no text and no void media), coerced
+    /// to null so blank editor documents (<c>&lt;p&gt;&lt;/p&gt;</c>) do not create dirty rows and
+    /// so a required RichText field treats blank as missing.
+    /// </summary>
+    private string? SanitizeRichText(string? raw)
+    {
+        if (raw is null) return null;
+        var clean = sanitizer.Sanitize(raw);
+        return IsBlankHtml(clean) ? null : clean;
+    }
+
+    private static bool IsBlankHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return true;
+        // Void/media content counts as non-blank.
+        if (html.Contains("<img", StringComparison.OrdinalIgnoreCase) ||
+            html.Contains("<hr", StringComparison.OrdinalIgnoreCase)) return false;
+        // Strip tags and non-breaking spaces; blank if nothing meaningful remains.
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", string.Empty)
+            .Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase);
+        return string.IsNullOrWhiteSpace(text);
+    }
+
+    private static bool IsRichTextField(CollectionMetadata meta, string fieldName) =>
+        meta.Fields.Any(f =>
+            string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
+            f.Interface == FieldInterface.RichText);
 
     /// <summary>
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
@@ -583,6 +617,17 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;
             var canBeNull = !pi.PropertyType.IsValueType || Nullable.GetUnderlyingType(pi.PropertyType) is not null;
             if (canBeNull) pi.SetValue(entity, null);
+        }
+
+        // Sanitize non-translatable RichText field values on the entity before required validation,
+        // so stored HTML is XSS-clean and a blank editor document is treated as missing.
+        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.RichText && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true } || pi.PropertyType != typeof(string)) continue;
+            if (pi.GetValue(entity) is string raw)
+                pi.SetValue(entity, SanitizeRichText(raw));
         }
 
         // required validation — skip translatable fields (they live on the sidecar entity and

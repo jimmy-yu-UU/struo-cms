@@ -26,9 +26,13 @@ describe('FieldInput', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-text').exists()).toBe(true)
   })
-  it('renders Textarea for richText (fallback)', () => {
-    const w = mount(FieldInput, { props: { field: field({ interface: 'richText' }), modelValue: '' }, global: { stubs } })
-    expect(w.find('.stub-textarea').exists()).toBe(true)
+  it('renders RichTextInput for richText', () => {
+    const w = mount(FieldInput, {
+      props: { field: field({ interface: 'richText' }), modelValue: '' },
+      global: { stubs: { ...stubs, RichTextInput: { template: '<div class="stub-richtext" />' } } },
+    })
+    expect(w.find('.stub-richtext').exists()).toBe(true)
+    expect(w.find('.stub-textarea').exists()).toBe(false)
   })
   it('renders Select for select interface', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: '' }, global: { stubs } })

@@ -8,6 +8,7 @@ using Struo.Application.Security;
 using Struo.Domain.Localization;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Security;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -144,7 +145,7 @@ public class DeleteRestrictWithGuidPkTests
             repo, meta, registry, new StubPermissions(),
             graph, new StubExpander(), new StubM2M(),
             new StubFilterResolver(), new StubLanguages(),
-            new StruoQueryOptions());
+            new StruoQueryOptions(), new GanssHtmlSanitizer());
 
         // Act: delete a Guid-keyed row that is still referenced — must throw RelationConflictException
         // (conflict / 409), NOT a QueryException from a failed Convert.ChangeType (spurious 400).

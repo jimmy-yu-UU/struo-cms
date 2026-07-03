@@ -25,6 +25,7 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<IRelationFilterResolver, RelationFilterResolver>();
         // Scoped to match ISqlSugarClient's lifetime (the cache is per-request).
         services.AddScoped<ILanguageProvider, LanguageProvider>();
+        services.AddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();
         services.AddScoped<ItemService>();
         return services;
     }

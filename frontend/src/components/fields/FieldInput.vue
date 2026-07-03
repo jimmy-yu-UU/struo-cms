@@ -8,6 +8,7 @@ import DatePicker from 'primevue/datepicker'
 import Select from 'primevue/select'
 import RadioButton from 'primevue/radiobutton'
 import FilePicker from './FilePicker.vue'
+import RichTextInput from './RichTextInput.vue'
 import { fieldInputKind } from '../../lib/fieldInputKind'
 import type { FieldMeta } from '../../types/schema'
 
@@ -23,8 +24,11 @@ function update(v: unknown): void { emit('update:modelValue', v) }
   <InputText v-if="kind === 'text'" :model-value="(modelValue as string)" :disabled="isDisabled"
     @update:model-value="update" />
 
-  <Textarea v-else-if="kind === 'textarea' || kind === 'richtext'" :model-value="(modelValue as string)"
+  <Textarea v-else-if="kind === 'textarea'" :model-value="(modelValue as string)"
     :disabled="isDisabled" :rows="6" @update:model-value="update" />
+
+  <RichTextInput v-else-if="kind === 'richtext'" :model-value="((modelValue as string) ?? '')"
+    :disabled="isDisabled" @update:model-value="(v: string) => update(v)" />
 
   <InputNumber v-else-if="kind === 'number'" :model-value="(modelValue as number)" :disabled="isDisabled"
     @update:model-value="update" />
