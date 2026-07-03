@@ -18,3 +18,14 @@ describe('buildListQuery', () => {
     expect(buildListQuery(0, 25, undefined, '   ')).toEqual({ limit: '25', offset: '0' })
   })
 })
+
+describe('buildListQuery filter + locale', () => {
+  it('emits filter[field][op]=value', () => {
+    const p = buildListQuery(0, 25, undefined, undefined, { categoryId: { op: '_eq', value: 'abc' } })
+    expect(p['filter[categoryId][_eq]']).toBe('abc')
+  })
+  it('emits locale when provided', () => {
+    const p = buildListQuery(0, 25, undefined, undefined, undefined, 'zh-TW')
+    expect(p.locale).toBe('zh-TW')
+  })
+})
