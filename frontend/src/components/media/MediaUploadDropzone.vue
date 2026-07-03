@@ -1,0 +1,62 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { filesApi, type FileMeta } from '../../api/filesApi'
+
+const emit = defineEmits<{ (e: 'uploaded', meta: FileMeta): void; (e: 'done'): void }>()
+
+type Row = { name: string; state: 'uploading' | 'error'; error?: string }
+const rows = ref<Row[]>([])
+const dragging = ref(false)
+
+async function uploadFiles(files: File[]): Promise<void> {
+  await Promise.all(
+    files.map(async (file) => {
+      const row: Row = { name: file.name, state: 'uploading' }
+      rows.value = [...rows.value, row]
+      try {
+        const meta = await filesApi.upload(file)
+        rows.value = rows.value.filter((r) => r !== row)
+        emit('uploaded', meta)
+      } catch (e) {
+        row.state = 'error'
+        row.error = e instanceof Error ? e.message : 'Upload failed.'
+        rows.value = [...rows.value] // trigger reactivity
+      }
+    }),
+  )
+  emit('done')
+}
+
+function onInput(e: Event): void {
+  const input = e.target as HTMLInputElement
+  if (input.files) void uploadFiles(Array.from(input.files))
+  input.value = ''
+}
+
+function onDrop(e: DragEvent): void {
+  dragging.value = false
+  if (e.dataTransfer?.files) void uploadFiles(Array.from(e.dataTransfer.files))
+}
+
+defineExpose({ uploadFiles })
+</script>
+
+<template>
+  <div
+    class="dropzone"
+    :class="{ 'is-dragging': dragging }"
+    @dragover.prevent="dragging = true"
+    @dragleave.prevent="dragging = false"
+    @drop.prevent="onDrop"
+  >
+    <label class="dropzone__label">
+      <span>Drop files here or click to upload</span>
+      <input type="file" multiple class="dropzone__input" @change="onInput" />
+    </label>
+    <ul v-if="rows.length" class="dropzone__rows">
+      <li v-for="(r, i) in rows" :key="i" :class="r.state">
+        {{ r.name }}<template v-if="r.error"> — {{ r.error }}</template>
+      </li>
+    </ul>
+  </div>
+</template>
