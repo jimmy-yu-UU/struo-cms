@@ -33,4 +33,13 @@ public class RelationScannerTests
         rels.Single(r => r.Name == "children").Kind.Should().Be(RelationKind.OneToMany);
         rels.Should().Contain(r => r.Name == "articles" && r.Kind == RelationKind.OneToMany);
     }
+
+    [Fact]
+    public void Scans_m2m_tags_with_junction()
+    {
+        var tags = Rel(typeof(Article)).Single(r => r.Name == "tags");
+        tags.Kind.Should().Be(RelationKind.ManyToMany);
+        tags.TargetCollection.Should().Be("tag");
+        tags.Interface.Should().Be(RelationInterface.TagSelect);
+    }
 }

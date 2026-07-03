@@ -34,4 +34,9 @@ public sealed class Article : AuditableEntity
     [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull)]
     [SugarColumn(IsIgnore = true)]
     public Category? Category { get; set; }
+
+    [Navigate(typeof(ArticleTag), nameof(ArticleTag.ArticleId), nameof(ArticleTag.TagId))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
+    [SugarColumn(IsIgnore = true)]
+    public List<Tag> Tags { get; set; } = [];
 }
