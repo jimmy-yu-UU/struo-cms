@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Struo.Api.Auth;
@@ -38,7 +39,8 @@ public sealed class FilesController(FileService files, IFileStorage storage, Fil
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
         var row = await files.GetAsync(id, ct);
-        if (row is null || row.Status != "published") return NotFound();
+        if (row is null) return NotFound();
+        if (row.Status != "published" && !await IsAuthenticatedAsync()) return NotFound();
         return Ok(new
         {
             data = new
@@ -53,7 +55,8 @@ public sealed class FilesController(FileService files, IFileStorage storage, Fil
     public async Task<IActionResult> Download(Guid id, CancellationToken ct)
     {
         var row = await files.GetAsync(id, ct);
-        if (row is null || row.Status != "published") return NotFound();
+        if (row is null) return NotFound();
+        if (row.Status != "published" && !await IsAuthenticatedAsync()) return NotFound();
 
         var presigned = await storage.GetPresignedUrlAsync(
             row.StorageKey, TimeSpan.FromSeconds(options.S3.PresignTtlSeconds), ct);
@@ -67,4 +70,21 @@ public sealed class FilesController(FileService files, IFileStorage storage, Fil
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
         await files.DeleteAsync(id, ct) ? NoContent() : NotFound();
+
+    /// <summary>
+    /// Get/Download carry no [Authorize] so anonymous callers can fetch published files (e.g. public
+    /// image serving). To let authenticated callers additionally see non-published files without
+    /// blocking anonymous access, auth is probed rather than enforced: AuthSchemes.CookieOrBearer is
+    /// a comma-joined pair of scheme names meant for [Authorize]'s multi-scheme syntax, not a single
+    /// registered scheme, so it can't be passed to AuthenticateAsync directly. Instead each real
+    /// scheme is authenticated independently; both handlers return a non-throwing NoResult/Fail when
+    /// their credential is absent or invalid.
+    /// </summary>
+    private async Task<bool> IsAuthenticatedAsync()
+    {
+        var cookie = await HttpContext.AuthenticateAsync(AuthSchemes.Cookie);
+        if (cookie.Succeeded) return true;
+        var bearer = await HttpContext.AuthenticateAsync(AuthSchemes.Bearer);
+        return bearer.Succeeded;
+    }
 }

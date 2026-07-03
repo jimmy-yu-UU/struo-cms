@@ -5,7 +5,7 @@ using Struo.Domain.Query;
 namespace Struo.Infrastructure.Files;
 
 /// <summary>
-/// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a draft
+/// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a published
 /// <see cref="File"/> row) and file lookup/delete. Lives in Infrastructure so it can reference the
 /// framework <see cref="File"/> entity directly.
 /// </summary>
@@ -44,7 +44,7 @@ public sealed class FileService(
             Size = length,
             Width = dims?.Width,
             Height = dims?.Height,
-            Status = "draft",
+            Status = "published",
         };
         return (await db.Insertable(entity).ExecuteReturnEntityAsync())!;
     }
