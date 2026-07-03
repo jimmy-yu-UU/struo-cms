@@ -35,6 +35,14 @@ public class RelationScannerTests
     }
 
     [Fact]
+    public void O2m_relations_expose_reverse_foreign_key()
+    {
+        var rels = Rel(typeof(Category));
+        rels.Single(r => r.Name == "articles").ForeignKey.Should().Be("categoryId");
+        rels.Single(r => r.Name == "children").ForeignKey.Should().Be("parentId");
+    }
+
+    [Fact]
     public void Scans_m2m_tags_with_junction()
     {
         var tags = Rel(typeof(Article)).Single(r => r.Name == "tags");
