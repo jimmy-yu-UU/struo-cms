@@ -294,6 +294,23 @@ public sealed class ItemService(
             pi.SetValue(existing, pi.GetValue(incoming));
         }
 
+        // Relation foreign keys (M2O / self-referencing tree) are declared via [CmsRelation], not
+        // [CmsField], so the field overlay above skips them. Overlay each local FK the client
+        // actually sent, keeping the same allowlist discipline (only declared relations, only keys
+        // present in the body).
+        foreach (var rel in meta.Relations)
+        {
+            if (rel.ForeignKey is null) continue;              // M2M / inbound O2M have no local FK on this entity
+            if (!bodyKeys.Contains(rel.ForeignKey)) continue;  // only overlay when the client sent this FK
+            // ForeignKey is stored camelCase (e.g. "categoryId") but the CLR property is PascalCase
+            // (e.g. CategoryId), so the lookup must be case-insensitive.
+            var pi = d.EntityType.GetProperty(rel.ForeignKey,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.IgnoreCase);
+            if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
+            pi.SetValue(existing, pi.GetValue(incoming));
+        }
+
         var updated = await repository.UpdateAsync(collection, id, existing, ct);
         if (updated is null) return null;
         var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
