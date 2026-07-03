@@ -1,23 +1,37 @@
 import { apiClient } from './apiClient'
-import { buildListQuery } from '../lib/buildListQuery'
+import { buildListQuery, type FilterSpec } from '../lib/buildListQuery'
 
-export type ListOptions = { page: number; rows: number; sort?: string; search?: string }
+export type ListOptions = {
+  page: number
+  rows: number
+  sort?: string
+  search?: string
+  filter?: FilterSpec
+  locale?: string
+}
 export type ListResult = { data: Record<string, unknown>[]; total: number }
 
 type ListEnvelope = { data: Record<string, unknown>[]; meta: { total: number } }
 
 export const itemsApi = {
   async list(collection: string, opts: ListOptions): Promise<ListResult> {
-    const params = buildListQuery(opts.page, opts.rows, opts.sort, opts.search)
+    const params = buildListQuery(opts.page, opts.rows, opts.sort, opts.search, opts.filter, opts.locale)
     const qs = new URLSearchParams(params).toString()
     const path = qs ? `/items/${collection}?${qs}` : `/items/${collection}`
     const res = await apiClient.getRaw<ListEnvelope>(path)
     return { data: res.data, total: res.meta.total }
   },
 
-  async get(collection: string, id: string, opts?: { locale?: string }): Promise<Record<string, unknown>> {
-    const qs = opts?.locale ? `?locale=${encodeURIComponent(opts.locale)}` : ''
-    return apiClient.get<Record<string, unknown>>(`/items/${collection}/${id}${qs}`)
+  async get(
+    collection: string,
+    id: string,
+    opts?: { locale?: string; deep?: string[] },
+  ): Promise<Record<string, unknown>> {
+    const params = new URLSearchParams()
+    if (opts?.locale) params.set('locale', opts.locale)
+    if (opts?.deep && opts.deep.length) params.set('deep', opts.deep.join(','))
+    const qs = params.toString()
+    return apiClient.get<Record<string, unknown>>(`/items/${collection}/${id}${qs ? `?${qs}` : ''}`)
   },
   async create(collection: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     return apiClient.post<Record<string, unknown>>(`/items/${collection}`, payload)
