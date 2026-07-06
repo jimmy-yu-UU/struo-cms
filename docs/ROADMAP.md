@@ -94,13 +94,32 @@
   and `<strong>` preserved. (One non-reproducing transient 500 on a first locale-scoped read at startup; every subsequent
   read — with and without `?locale=` — returned 200, so treated as a first-request warmup blip, not a defect.) Advanced
   rich text (tables/align/colour), multi-value selects, structured editors, and multi-file `Files` remain deferred to 7g+.
-- **Next up:** Phase 7g+ (advanced rich text: tables / text-align / colour / sub-superscript; then multi-value selects
-  `MultiSelect`/`CheckboxGroup`/`Tags`; structured editors `Json`/`KeyValue`/`Repeater`; multi-file `Files`) —
-  incremental additions on the 7f sanitizer + editor foundation, rendering read-only meanwhile.
+- **Phase 7g (advanced rich text) code-complete, live-gate pending:** the second rich-text slice — the TipTap
+  editor gains **basic tables** (insert 3×3 with header row, add/delete rows and columns, toggle header row,
+  delete table — no cell merge / column resize), **text alignment** (left/center/right/justify on paragraphs +
+  headings), **text colour** (10-swatch palette + free colour picker + clear, via `TextStyle`+`Color`), and
+  **sub/superscript** (mutually exclusive via `excludes` — TipTap does NOT exclude them by default), with the
+  `GanssHtmlSanitizer` allowlist extended **in lockstep**: tags `table thead tbody tr th td sub sup span` + the
+  `style` attribute carrying **exactly two CSS properties** (`color`, `text-align`; every other property and
+  `url()`/`expression()` values stripped per-property by Ganss); `colspan`/`rowspan`/`colwidth` deliberately
+  rejected. New presentational `RichTextColorMenu`/`RichTextTableMenu` components emit events; the parent runs
+  the editor commands. No save-path or `ItemService` change — the existing write-path sanitization picks up the
+  new allowlist automatically. Automated gates green (see baseline below). Spec:
+  [spec](superpowers/specs/2026-07-06-phase7g-advanced-richtext-design.md) · plan:
+  [plan](superpowers/plans/2026-07-06-phase7g-advanced-richtext.md).
+- **Next up:** Phase 7g live gate (real PG + Redis + MinIO: round-trip preservation + hostile-CSS payload +
+  i18n), then Phase 7g+ (multi-value selects `MultiSelect`/`CheckboxGroup`/`Tags`; structured editors
+  `Json`/`KeyValue`/`Repeater`; multi-file `Files` — consider the audit-F1 field-type registry refactor first),
+  rendering read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
   snapshot); the allow-all stub is out of the live DI graph.
+- **Verification baseline (2026-07-06, post-7g code-complete):** backend `dotnet build` clean
+  (warnings-as-errors, 0 warnings) + `dotnet test` **323** passed / 0 failed / 0 skipped (316 post-audit-remediation
+  + 7 sanitizer allowlist tests; suite includes the real-PG integration tests). Frontend: **173/173**
+  unit/component (161 post-audit + 2 align/sub-sup + 5 colour menu + 5 table menu), `pnpm build` succeeds
+  (pre-existing >500 kB chunk-size advisory only). Live gate pending — see the Phase 7g row above.
 - **Verification baseline (2026-07-03, post-7f):** backend `dotnet build` clean (warnings-as-errors);
   `dotnet test` **283** passed / 0 failed / 0 skipped (272 post-7e + 9 sanitizer allowlist tests + 2 RichText
   write-path sanitization tests). Frontend: **157/157** unit/component (147 post-7e + 5 image-url helpers + 4
@@ -151,7 +170,8 @@
 | 7d | Relation editing (`Dropdown`/`TagSelect`/`TreeSelect` + read-only `RelatedList`) + list translated columns + full UI CRUD E2E — *sliced to relations only* | ✅ done (live-verified: PG+Redis — relations CRUD + M2M replace + RelatedList + translated list; **+3 live-gate backend fixes**) | [spec](superpowers/specs/2026-07-03-phase7d-relations-design.md) | [plan](superpowers/plans/2026-07-03-phase7d-relations.md) |
 | 7e | Media Library + File/Image field pickers (dedicated `/media` view: browse + drag-drop bulk upload + delete/edit; select-only `File`/`Image` pickers in forms) — *sliced to files only* | ✅ done (live-verified: PG+Redis+MinIO — upload/list/pick/clear + presigned thumbnails; **+1 live-gate backend fix: upload-publishes + auth-aware file serving**) | [spec](superpowers/specs/2026-07-03-phase7e-media-library-file-pickers-design.md) | [plan](superpowers/plans/2026-07-03-phase7e-media-library-file-pickers.md) |
 | 7f | TipTap rich text (basic formatting + inline images) + server-side HTML sanitization (`IHtmlSanitizer`/`GanssHtmlSanitizer`, write-path, both entity + translation paths) — *sliced to the first rich-text slice* | ✅ done (live-verified: PG+Redis+MinIO — stored-XSS strip + media-image round-trip + i18n) | [spec](superpowers/specs/2026-07-03-phase7f-richtext-tiptap-design.md) | [plan](superpowers/plans/2026-07-03-phase7f-richtext-tiptap.md) |
-| 7g+ | Advanced rich text (tables / text-align / colour / sub-superscript), multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e/7f* | ⬜ planned | — | — |
+| 7g | Advanced rich text (basic tables / text-align / colour / sub-superscript) + sanitizer allowlist extended in lockstep (`style` limited to `color`+`text-align`) — *second rich-text slice, deferred from 7f* | ⬜ code-complete, live-gate pending | [spec](superpowers/specs/2026-07-06-phase7g-advanced-richtext-design.md) | [plan](superpowers/plans/2026-07-06-phase7g-advanced-richtext.md) |
+| 7g+ | Multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
