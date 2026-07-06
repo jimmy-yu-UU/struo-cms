@@ -89,4 +89,16 @@ describe('RichTextInput', () => {
     await w.get('[data-color="#dc2626"]').trigger('click')
     expect(vm.editor.getAttributes('textStyle').color).toBe('#dc2626')
   })
+
+  it('inserts a 3x3 table with header row via the table menu', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: { stubs } })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cmd="tableInsert"]').trigger('click')
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect(html).toContain('<table')
+    expect(html).toContain('<th')
+  })
 })
