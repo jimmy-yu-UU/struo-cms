@@ -24,15 +24,23 @@
 | **D3** 無 production migration | 文件化策略 | ✅ 已產出 `docs/migration-strategy.md`（版本化 SQL 腳本 + 手動套用 runbook；不建框架，日後可升 DbUp） |
 | **D4** SQLite 測試掩蓋 PG bug | opt-in 本地 PG 測試 | ✅ 已加 `PostgresIntegrationTests`（設 `STRUO_TEST_PG_CONNECTION` 才跑真 PG，否則 no-op）；覆蓋 D5 offset / D2 compare-and-swap / uuid filter。**需操作者跑一次確認。** |
 | **D5** offset 分頁計算錯誤 | 修正 | ✅ 已修復（改 Count + Skip/Take 真 offset 窗；+1 SQLite 測試 +1 PG 骨架） |
-| **D6** CSharpTypeName 套用不一致 | 待做（建議 D4 後） | ⬜ PG 型別硬化，應在 D4 PG 測試就緒後做並驗證 |
+| **D6** CSharpTypeName 套用不一致 | 統一 | ✅ 已修復（5 個 hand-built ConditionalModel 依值 CLR 型別設 CSharpTypeName；共用 `ConditionalModelTranslator.SqlSugarTypeName`）**（SQLite 綠，PG 由 D4 骨架驗證）** |
 | **D7** 資料路徑重反射 | 待做 | ⬜ 效能（compiled delegate / method 快取），非正確性 |
 | **D8** overlay locale=null 全載 | 待做 | ⬜ 規模化正確性 |
-| **D9** 多 DB 宣稱名不符實 | 待做 | ⬜ 文件化（restate §1）——trivial |
+| **D9** 多 DB 宣稱名不符實 | 文件化 | ✅ 已修（CLAUDE.md §1 改為 PG 支援、SQLite 測試、其他 provider 標 experimental） |
 | **D10** update 三次 SELECT | 待做 | ⬜ 效能，非正確性 |
-| A1–A4（分層整潔） | 未決 | ⬜ 待討論 |
+| **L1** 登入 timing 洩露 | 修正 | ✅ 已修（not-found 走 dummy verify 等化時間；+測試改寫） |
+| **L2** 上傳信任 Content-Type | 待做 | ⬜ 有行為變更風險（改預設 allowlist 可能擋掉現有上傳），另議 |
+| **L3** 路徑前綴無分隔符 | 修正 | ✅ 已修（比對 root + 分隔符邊界） |
+| **A1** §2 sample 引用違規 | 待做 | ⬜ 需另建 Sample.Host，結構性改動 |
+| **A2** ItemService god class | 待做 | ⬜ 重構 |
+| **A3** AllowAll footgun 在 prod 組件 | 修正 | ✅ 已移到測試專案（Struo.Tests.Support） |
+| **A4** discovery GetTypes 未防 | 待做 | ⬜ 加固 |
 | F1–F10（前端擴充性） | 未決 | ⬜ 待討論 |
 
-> 基線：後端測試 283 → **309**（+26：H2×4、H3×4、H4×4、M1×3、M2×1、D1×3、D2×3、D5×1、D4-PG骨架×3〔無 PG 時 no-op〕），前端 157 → **161**（M1×2、D2×2），0 失敗。GateGuard hook 本 session 已停用以減少編輯摩擦。
+> 基線：後端測試 283 → **309**（含 D4-PG骨架×3〔無 PG 時 no-op〕；L1 測試改寫、A3 移置、D6 皆行為保留故總數不變），前端 157 → **161**，0 失敗。GateGuard hook 本 session 已停用以減少編輯摩擦。
+>
+> **第二批（未 commit）：** D9（doc）、A3（移 footgun）、L1（timing）、L3（path prefix）、D6（CSharpTypeName 統一，SQLite 綠、PG 待 D4 骨架驗證）。第一批已 commit 於 `fix/architecture-audit-remediation`（c95389d/84594bd）。
 >
 > **PG-correctness 批次建議（下一輪）：** D6（CSharpTypeName 統一）應與「跑 D4 的 PG 測試套件驗證 D1/D2/D5」一起做——設好 `STRUO_TEST_PG_CONNECTION` 後執行，讓 D6 有 PG 可驗證，同時把 D1/D2/D5 的 SQLite-only 狀態升級為 PG-verified。D7/D10 為純效能、D8 為規模化、D9 為文件，優先序較低。
 >
