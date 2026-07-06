@@ -50,18 +50,20 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task Empty_stored_hash_is_invalid_credentials_without_calling_verify()
+    public async Task Empty_stored_hash_is_invalid_credentials_and_never_verifies_the_empty_hash()
     {
         var userId = Guid.NewGuid();
         var store = new FakeCredentialStore(new UserCredential(userId, "", IsActive: true));
-        var hasher = new ThrowingHasher(); // Verify must never be called
+        var hasher = new RecordingHasher();
         var sut = new AuthService(store, hasher);
 
         var result = await sut.AuthenticateAsync("jit@corp.com", "anything");
 
         result.Succeeded.Should().BeFalse();
         result.Failure.Should().Be(AuthFailure.InvalidCredentials);
-        hasher.VerifyCalled.Should().BeFalse();
+        // L1: timing is equalized by verifying against a dummy hash, but the empty STORED hash must
+        // never itself reach Verify — some hashers would treat "" as a trivially-matching value.
+        hasher.VerifiedEncodedValues.Should().NotContain("");
     }
 
     private sealed class FakeCredentialStore(UserCredential? cred) : IUserCredentialStore
@@ -71,10 +73,10 @@ public class AuthServiceTests
         public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => Task.CompletedTask;
     }
 
-    private sealed class ThrowingHasher : IPasswordHasher
+    private sealed class RecordingHasher : IPasswordHasher
     {
-        public bool VerifyCalled { get; private set; }
-        public string Hash(string password) => throw new NotSupportedException();
-        public bool Verify(string encoded, string password) { VerifyCalled = true; throw new InvalidOperationException("Verify should not be called for an empty hash"); }
+        public List<string> VerifiedEncodedValues { get; } = [];
+        public string Hash(string password) => "dummy-hash";
+        public bool Verify(string encoded, string password) { VerifiedEncodedValues.Add(encoded); return false; }
     }
 }

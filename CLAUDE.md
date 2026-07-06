@@ -1,7 +1,9 @@
 # StruoCMS — Working Rules (condensed)
 
 ## Stack (§1)
-.NET 10 / C# latest · SqlSugarCore · multi-DB (default PostgreSQL, tests SQLite) ·
+.NET 10 / C# latest · SqlSugarCore · DB: **PostgreSQL** (runtime, supported) + SQLite (tests only);
+MySQL/SqlServer/Oracle are type-mapped but **unverified/experimental** (raw ORDER-BY subqueries and
+literal-coercion assumptions are PG/SQLite-shaped — see audit D9) ·
 ASP.NET Core **Controllers** · Serilog · Scalar (Mars theme, axios) · Redis (Phase 6) ·
 Vue 3 + PrimeVue + TipTap (Phase 7). Outbound JSON = camelCase.
 

@@ -149,7 +149,7 @@ public static class ConditionalModelTranslator
     /// against these literals and against <c>Type.Name</c>). Returns null for <see cref="string"/>
     /// and any unmapped type, so those columns keep today's untyped (string) behavior exactly.
     /// </summary>
-    private static string? SqlSugarTypeName(Type clrType)
+    internal static string? SqlSugarTypeName(Type clrType)
     {
         if (clrType == typeof(Guid)) return "guid";
         if (clrType == typeof(int)) return "int";

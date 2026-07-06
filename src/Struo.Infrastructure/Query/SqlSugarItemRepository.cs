@@ -121,7 +121,8 @@ public sealed class SqlSugarItemRepository(
                     {
                         FieldName = idColumn,
                         ConditionalType = SqlSugar.ConditionalType.In,
-                        FieldValue = string.Join(",", allParentIds)
+                        FieldValue = string.Join(",", allParentIds),
+                        CSharpTypeName = TypeNameOfProperty(d.EntityType, d.IdProperty)  // D6: PK is Guid -> uuid on PG
                     };
 
                     if (nonTranslatableSearchable.Count > 0)
@@ -210,6 +211,20 @@ public sealed class SqlSugarItemRepository(
             await db.Ado.RollbackTranAsync();
             throw;
         }
+    }
+
+    // D6: resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
+    // their real CLR type (Guid -> uuid, long -> bigint) on Postgres instead of as text (42883 on PG).
+    // Mirrors what ConditionalModelTranslator already does for the parsed query DSL; returns null for
+    // string/unknown so those keep untyped behavior.
+    private static string? TypeNameOf(object? sample) =>
+        sample is null ? null : ConditionalModelTranslator.SqlSugarTypeName(sample.GetType());
+
+    private static string? TypeNameOfProperty(Type entityType, string clrPropertyName)
+    {
+        var pt = entityType.GetProperty(clrPropertyName,
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)?.PropertyType;
+        return pt is null ? null : ConditionalModelTranslator.SqlSugarTypeName(Nullable.GetUnderlyingType(pt) ?? pt);
     }
 
     public async Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default)
@@ -313,7 +328,8 @@ public sealed class SqlSugarItemRepository(
             {
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", values.Select(v => v?.ToString()))
+                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
             }
         };
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
@@ -367,7 +383,8 @@ public sealed class SqlSugarItemRepository(
             {
                 FieldName = parentColumn,
                 ConditionalType = ConditionalType.In,
-                FieldValue = parentId.ToString()
+                FieldValue = parentId.ToString(),
+                CSharpTypeName = TypeNameOf(parentId)  // D6
             }
         };
 
@@ -428,7 +445,8 @@ public sealed class SqlSugarItemRepository(
             {
                 FieldName = fkColumn,
                 ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", parentIds.Select(v => v?.ToString()))
+                FieldValue = string.Join(",", parentIds.Select(v => v?.ToString())),
+                CSharpTypeName = TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // D6: parent FK is Guid
             }
         };
         if (locale is not null)
@@ -576,7 +594,8 @@ public sealed class SqlSugarItemRepository(
                 {
                     FieldName = fkColumn,
                     ConditionalType = ConditionalType.In,
-                    FieldValue = parentId.ToString()
+                    FieldValue = parentId.ToString(),
+                    CSharpTypeName = TypeNameOf(parentId)  // D6: parent FK is Guid
                 },
                 new ConditionalModel
                 {

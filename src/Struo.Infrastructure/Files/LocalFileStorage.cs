@@ -8,10 +8,15 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
 
     private string FullPath(string key)
     {
-        // Reject traversal: the resolved path must stay under Root.
+        // Reject traversal: the resolved path must stay under Root. Compare against Root plus a
+        // trailing separator so a sibling directory sharing the prefix (e.g. "C:\data" vs "C:\dataX")
+        // cannot slip through a bare StartsWith.
         var root = Path.GetFullPath(Root);
         var full = Path.GetFullPath(Path.Combine(root, key));
-        if (!full.StartsWith(root, StringComparison.Ordinal))
+        var rootWithSep = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(rootWithSep, StringComparison.Ordinal))
             throw new InvalidOperationException($"Storage key '{key}' escapes the storage root.");
         return full;
     }
