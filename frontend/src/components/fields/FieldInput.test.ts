@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
+import PrimeVue from 'primevue/config'
 import FieldInput from './FieldInput.vue'
 import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -42,6 +43,22 @@ describe('FieldInput', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'json' }), modelValue: '{}' }, global: { stubs } })
     expect(w.find('.readonly-field').exists()).toBe(true)
     expect(w.find('.stub-text').exists()).toBe(false)
+  })
+
+  it('binds maxlength on text inputs when the field declares one', () => {
+    const w = mount(FieldInput, {
+      props: { field: field({ interface: 'text', maxLength: 100 }), modelValue: '' },
+      global: { plugins: [PrimeVue] },
+    })
+    expect(w.get('input').attributes('maxlength')).toBe('100')
+  })
+
+  it('omits maxlength when the field has none', () => {
+    const w2 = mount(FieldInput, {
+      props: { field: field({ interface: 'textarea', maxLength: null }), modelValue: '' },
+      global: { plugins: [PrimeVue] },
+    })
+    expect(w2.get('textarea').attributes('maxlength')).toBeUndefined()
   })
 
   it('renders FilePicker for image interface and relays the value', async () => {

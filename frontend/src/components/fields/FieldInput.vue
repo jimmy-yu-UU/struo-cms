@@ -22,10 +22,10 @@ function update(v: unknown): void { emit('update:modelValue', v) }
 
 <template>
   <InputText v-if="kind === 'text'" :model-value="(modelValue as string)" :disabled="isDisabled"
-    @update:model-value="update" />
+    :maxlength="field.maxLength ?? undefined" @update:model-value="update" />
 
   <Textarea v-else-if="kind === 'textarea'" :model-value="(modelValue as string)"
-    :disabled="isDisabled" :rows="6" @update:model-value="update" />
+    :disabled="isDisabled" :rows="6" :maxlength="field.maxLength ?? undefined" @update:model-value="update" />
 
   <RichTextInput v-else-if="kind === 'richtext'" :model-value="((modelValue as string) ?? '')"
     :disabled="isDisabled" @update:model-value="(v: string) => update(v)" />
