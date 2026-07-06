@@ -18,6 +18,16 @@ public static class MetadataScanner
         FieldInterface.CheckboxGroup, FieldInterface.Tags
     ];
 
+    // 7g.5: interfaces whose undeclared MaxLength defaults to 255 (SqlSugar's default varchar width).
+    // Content-bearing interfaces (RichText/Textarea/Markdown/Code/Json) default to unlimited.
+    private static readonly HashSet<FieldInterface> ShortStringInterfaces =
+    [
+        FieldInterface.Text, FieldInterface.Slug, FieldInterface.Email, FieldInterface.Url,
+        FieldInterface.Password, FieldInterface.Color, FieldInterface.Phone,
+        FieldInterface.Select, FieldInterface.MultiSelect, FieldInterface.Radio,
+        FieldInterface.CheckboxGroup, FieldInterface.Tags
+    ];
+
     private static readonly string[] AuditFieldNames =
         [nameof(IAuditable.CreatedAt), nameof(IAuditable.CreatedBy),
          nameof(IAuditable.UpdatedAt), nameof(IAuditable.UpdatedBy)];
@@ -218,6 +228,19 @@ public static class MetadataScanner
             options = ParseOptions(prop, optionsAttr);
         }
 
+        if (attr.MaxLength < 0)
+            throw new MetadataException(
+                $"Field '{prop.DeclaringType?.Name}.{prop.Name}' has a MaxLength that is negative.");
+        if (attr.MaxLength > 0 && prop.PropertyType != typeof(string))
+            throw new MetadataException(
+                $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
+
+        int? maxLength = attr.MaxLength > 0
+            ? attr.MaxLength
+            : prop.PropertyType == typeof(string) && ShortStringInterfaces.Contains(attr.Interface)
+                ? 255
+                : null;
+
         return new FieldMetadata
         {
             Name = Camel(prop.Name),
@@ -232,6 +255,7 @@ public static class MetadataScanner
             Sort = attr.Sort,
             HelpText = attr.HelpText,
             Group = attr.Group,
+            MaxLength = maxLength,
             Options = options,
             IsSystem = false
         };
