@@ -16,6 +16,9 @@ public sealed record FieldMetadata
     public int Sort { get; init; }
     public string? HelpText { get; init; }
     public string? Group { get; init; }
+
+    /// <summary>Effective CMS-layer max length resolved by the scanner; null = unlimited.</summary>
+    public int? MaxLength { get; init; }
     public IReadOnlyList<FieldOption>? Options { get; init; }
     public bool IsSystem { get; init; }
 }

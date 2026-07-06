@@ -1,8 +1,12 @@
 using AwesomeAssertions;
+using Struo.Domain.Auditing;
+using Struo.Domain.Metadata;
+using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Infrastructure.Metadata;
 using Struo.Sample.Blog;
+using SqlSugar;
 using Xunit;
 
 namespace Struo.Tests.Metadata;
@@ -110,5 +114,54 @@ public class MetadataScannerTests
         [Struo.Domain.Metadata.Attributes.CmsField(Interface = Struo.Domain.Metadata.Enums.FieldInterface.Text)]
         public string Name { get; set; } = "";
         public System.DateTime CreatedAt { get; set; }   // NOT IAuditable -> must be ignored
+    }
+
+    // 7g.5: [CmsField(MaxLength)] resolution matrix.
+    [CmsCollection("maxLenSample")]
+    private sealed class MaxLenSample : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text, MaxLength = 100)] public string Declared { get; set; } = string.Empty;
+        [CmsField(Interface = FieldInterface.Text)] public string ShortDefault { get; set; } = string.Empty;
+        [CmsField(Interface = FieldInterface.Textarea)] public string ContentDefault { get; set; } = string.Empty;
+        [CmsField(Interface = FieldInterface.Textarea, MaxLength = 5000)] public string ContentDeclared { get; set; } = string.Empty;
+    }
+
+    [Fact]
+    public void MaxLength_resolution_matrix()
+    {
+        var meta = MetadataScanner.ScanTypes([typeof(MaxLenSample)]).Single();
+        meta.Fields.Single(f => f.Name == "declared").MaxLength.Should().Be(100);
+        meta.Fields.Single(f => f.Name == "shortDefault").MaxLength.Should().Be(255);
+        meta.Fields.Single(f => f.Name == "contentDefault").MaxLength.Should().BeNull();
+        meta.Fields.Single(f => f.Name == "contentDeclared").MaxLength.Should().Be(5000);
+    }
+
+    [CmsCollection("negativeMaxLen")]
+    private sealed class NegativeMaxLen : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+        [CmsField(MaxLength = -1)] public string Name { get; set; } = string.Empty;
+    }
+
+    [CmsCollection("maxLenOnNonString")]
+    private sealed class MaxLenOnNonString : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Number, MaxLength = 10)] public int Count { get; set; }
+    }
+
+    [Fact]
+    public void Negative_MaxLength_fails_fast()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(NegativeMaxLen)]);
+        act.Should().Throw<MetadataException>().WithMessage("*MaxLength*negative*");
+    }
+
+    [Fact]
+    public void MaxLength_on_non_string_property_fails_fast()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(MaxLenOnNonString)]);
+        act.Should().Throw<MetadataException>().WithMessage("*MaxLength*string*");
     }
 }
