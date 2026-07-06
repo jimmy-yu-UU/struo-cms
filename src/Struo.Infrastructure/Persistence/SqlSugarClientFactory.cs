@@ -2,11 +2,20 @@ using System.Reflection;
 using SqlSugar;
 using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Infrastructure.Persistence;
 
 public static class SqlSugarClientFactory
 {
+    // FieldInterface values whose content is unbounded by nature (see the EntityService hook below).
+    private static readonly HashSet<FieldInterface> ContentBearingInterfaces =
+    [
+        FieldInterface.RichText, FieldInterface.Textarea, FieldInterface.Markdown,
+        FieldInterface.Code, FieldInterface.Json
+    ];
+
     public static ISqlSugarClient Create(DatabaseOptions options, ICurrentUserAccessor currentUser)
     {
         var dbType = DbTypeMapper.Map(options.DbType);
@@ -53,6 +62,25 @@ public static class SqlSugarClientFactory
                         var ctx = new NullabilityInfoContext();
                         if (ctx.Create(property).WriteState == NullabilityState.Nullable)
                             column.IsNullable = true;
+
+                        // All DBs: content-bearing [CmsField] interfaces (RichText/Textarea/Markdown/
+                        // Code/Json) are unbounded by nature — prose, sanitized HTML, or serialized
+                        // structures routinely exceed SqlSugar's default varchar(255) CodeFirst mapping.
+                        // A realistic RichText body (a table, a couple of styled paragraphs) trivially
+                        // blows past 255 chars and fails on Postgres with 22001 "value too long for
+                        // type character varying(255)" (phase7g live gate, Check 1). Widen just these
+                        // interfaces to `text`. An explicit [SugarColumn(ColumnDataType = ...)] on the
+                        // property always wins over this convention. Plain Text fields keep SqlSugar's
+                        // default varchar(255) for now, pending the dedicated MaxLength feature (7g.5).
+                        var explicitDataType = property.GetCustomAttribute<SugarColumn>()?.ColumnDataType;
+                        if (string.IsNullOrEmpty(explicitDataType))
+                        {
+                            var cmsField = property.GetCustomAttribute<CmsFieldAttribute>();
+                            if (cmsField is not null && ContentBearingInterfaces.Contains(cmsField.Interface))
+                            {
+                                column.DataType = "text";
+                            }
+                        }
                     }
                 }
             }
