@@ -119,7 +119,7 @@
   tables, not columns). Spec:
   [spec](superpowers/specs/2026-07-06-phase7g-advanced-richtext-design.md) · plan:
   [plan](superpowers/plans/2026-07-06-phase7g-advanced-richtext.md).
-- **Phase 7g.5 (declared field max length) code-complete, live-gate pending:** `[CmsField(MaxLength = n)]` —
+- **Phase 7g.5 (declared field max length) done & live-verified (real PG+Redis+MinIO, 2026-07-06):** `[CmsField(MaxLength = n)]` —
   a **CMS-layer** input-length limit deliberately decoupled from the DB column width (which stays SqlSugar's
   concern via `[SugarColumn(Length = n)]`; the guide documents the alignment responsibility). The scanner
   resolves the **effective** limit once into `FieldMetadata.MaxLength` (`int?`): declared value wins; undeclared
@@ -131,11 +131,19 @@
   RichText sanitization, exactly-at-limit passes); the SPA binds native `maxlength` on text/textarea and
   mirrors the rule in `validateItem`. Unit = UTF-16 code units on both sides. Spec:
   [spec](superpowers/specs/2026-07-06-phase7g5-field-maxlength-design.md) · plan:
-  [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md).
-- **Verification baseline (2026-07-06, post-7g.5 code-complete):** backend `dotnet build` clean +
+  [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md). **Live gate PASSED 2026-07-06**
+  (API-level, real Postgres + Redis + MinIO, 4/4, no fixes needed): 256-char `category.name` → **400**
+  `Field 'name' exceeds maximum length 255.` (the 7g bug-class kill-shot — was a 500); 255-char boundary →
+  201 + exact round-trip; 256-char `en` title → **400** `... for locale 'en'.`; normal article regression
+  intact. *Known residual (final-review minor, deferred):* string fields with interfaces outside both sets
+  (`Hidden`, `Uuid`, and the 7g+ `KeyValue`/`Repeater`/`Files`) resolve to no CMS limit while their columns
+  stay `varchar(255)` — the old 500 remains possible there (negligible exposure today; option: broaden the
+  default to "any non-content-bearing string → 255" as a follow-up one-liner).
+- **Verification baseline (2026-07-06, post-7g.5):** backend `dotnet build` clean +
   `dotnet test` **333** passed / 0 failed (325 post-7g + 3 scanner + 5 ItemService MaxLength). Frontend:
-  **177/177** (173 post-7g + 2 FieldInput maxlength + 2 validateItem), `pnpm build` succeeds. Live gate pending.
-- **Next up:** Phase 7g.5 live gate (real PG: 256-char value → 400 not 500), then Phase 7g+
+  **177/177** (173 post-7g + 2 FieldInput maxlength + 2 validateItem), `pnpm build` succeeds.
+  **Live gate PASSED 2026-07-06** (4/4) — see the Phase 7g.5 row above.
+- **Next up:** Phase 7g+
   (multi-value selects `MultiSelect`/`CheckboxGroup`/`Tags`; structured editors `Json`/`KeyValue`/`Repeater`;
   multi-file `Files` — consider the audit-F1 field-type registry refactor first), rendering read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
@@ -200,7 +208,7 @@
 | 7e | Media Library + File/Image field pickers (dedicated `/media` view: browse + drag-drop bulk upload + delete/edit; select-only `File`/`Image` pickers in forms) — *sliced to files only* | ✅ done (live-verified: PG+Redis+MinIO — upload/list/pick/clear + presigned thumbnails; **+1 live-gate backend fix: upload-publishes + auth-aware file serving**) | [spec](superpowers/specs/2026-07-03-phase7e-media-library-file-pickers-design.md) | [plan](superpowers/plans/2026-07-03-phase7e-media-library-file-pickers.md) |
 | 7f | TipTap rich text (basic formatting + inline images) + server-side HTML sanitization (`IHtmlSanitizer`/`GanssHtmlSanitizer`, write-path, both entity + translation paths) — *sliced to the first rich-text slice* | ✅ done (live-verified: PG+Redis+MinIO — stored-XSS strip + media-image round-trip + i18n) | [spec](superpowers/specs/2026-07-03-phase7f-richtext-tiptap-design.md) | [plan](superpowers/plans/2026-07-03-phase7f-richtext-tiptap.md) |
 | 7g | Advanced rich text (basic tables / text-align / colour / sub-superscript) + sanitizer allowlist extended in lockstep (`style` limited to `color`+`text-align`) — *second rich-text slice, deferred from 7f* | ✅ done (live-verified: PG+Redis+MinIO — round-trip + hostile-CSS + i18n; **+1 live-gate backend fix: content-bearing interfaces → `text` columns**) | [spec](superpowers/specs/2026-07-06-phase7g-advanced-richtext-design.md) | [plan](superpowers/plans/2026-07-06-phase7g-advanced-richtext.md) |
-| 7g.5 | Declared field max length (`[CmsField(MaxLength = n)]` → metadata/schema → backend 400 validation → frontend `maxlength`; CMS-layer only, decoupled from DB width — *no DDL*) — *inserted; born from the 7g live-gate varchar(255) bug* | ⬜ code-complete, live-gate pending | [spec](superpowers/specs/2026-07-06-phase7g5-field-maxlength-design.md) | [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md) |
+| 7g.5 | Declared field max length (`[CmsField(MaxLength = n)]` → metadata/schema → backend 400 validation → frontend `maxlength`; CMS-layer only, decoupled from DB width — *no DDL*) — *inserted; born from the 7g live-gate varchar(255) bug* | ✅ done (live-verified: PG+Redis+MinIO — 256→400 kill-shot + boundary + translatable + regression, 4/4, no fixes) | [spec](superpowers/specs/2026-07-06-phase7g5-field-maxlength-design.md) | [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md) |
 | 7g+ | Multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
