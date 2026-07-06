@@ -139,13 +139,28 @@
   (`Hidden`, `Uuid`, and the 7g+ `KeyValue`/`Repeater`/`Files`) resolve to no CMS limit while their columns
   stay `varchar(255)` — the old 500 remains possible there (negligible exposure today; option: broaden the
   default to "any non-content-bearing string → 255" as a follow-up one-liner).
+- **Verification baseline (2026-07-06, post-7g.6):** frontend `pnpm test` **192/192** passed (177 post-7g.5
+  − 8 retired `fieldInputKind` tests + 2 `fieldTypes/types` + 7 registry + 13 `fieldComponents` + 1 new
+  `ItemForm` error-jump), `pnpm build` succeeds (pre-existing >500 kB chunk advisory only), `vue-tsc` clean
+  (this is what enforces registry exhaustiveness). **Backend untouched** — no `src/**` change on the branch,
+  so `dotnet test` stays **333** from post-7g.5. No live gate (frontend-only, no persistence change).
 - **Verification baseline (2026-07-06, post-7g.5):** backend `dotnet build` clean +
   `dotnet test` **333** passed / 0 failed (325 post-7g + 3 scanner + 5 ItemService MaxLength). Frontend:
   **177/177** (173 post-7g + 2 FieldInput maxlength + 2 validateItem), `pnpm build` succeeds.
   **Live gate PASSED 2026-07-06** (4/4) — see the Phase 7g.5 row above.
+- **Phase 7g.6 (frontend field-type registry + lazy i18n tabs) done — pure refactor, no live gate:** the
+  audit's F1+F2+F3 pre-work for 7g+. Per-field-type behaviour (component dispatch, parse/default,
+  serialize/coercion, list-column eligibility + formatting) is now a single `lib/fieldTypes/` registry keyed
+  by `FieldInterface` (`Record<…>` gives compile-time exhaustiveness; unknown interfaces degrade to read-only),
+  the empty-`Guid?` `''`→`null` coercion is single-homed in the file/image def (F2), and `ItemForm` mounts
+  only the active locale's translatable fields (F3, with an error→default-locale jump). Zero behaviour change
+  for F1/F2 (existing parse/serialize/list/dispatch tests stayed green as characterization); only `ItemForm`'s
+  test changed for the deliberate lazy-mount behaviour. No backend/DDL/live-gate (frontend-only). Adding a new
+  field type is now one registry entry + one `*Field.vue` + tests.
 - **Next up:** Phase 7g+
   (multi-value selects `MultiSelect`/`CheckboxGroup`/`Tags`; structured editors `Json`/`KeyValue`/`Repeater`;
-  multi-file `Files` — consider the audit-F1 field-type registry refactor first), rendering read-only meanwhile.
+  multi-file `Files`), each now a single registry entry + component + its own persistence design + live gate;
+  deferred interfaces render read-only meanwhile.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -209,7 +224,8 @@
 | 7f | TipTap rich text (basic formatting + inline images) + server-side HTML sanitization (`IHtmlSanitizer`/`GanssHtmlSanitizer`, write-path, both entity + translation paths) — *sliced to the first rich-text slice* | ✅ done (live-verified: PG+Redis+MinIO — stored-XSS strip + media-image round-trip + i18n) | [spec](superpowers/specs/2026-07-03-phase7f-richtext-tiptap-design.md) | [plan](superpowers/plans/2026-07-03-phase7f-richtext-tiptap.md) |
 | 7g | Advanced rich text (basic tables / text-align / colour / sub-superscript) + sanitizer allowlist extended in lockstep (`style` limited to `color`+`text-align`) — *second rich-text slice, deferred from 7f* | ✅ done (live-verified: PG+Redis+MinIO — round-trip + hostile-CSS + i18n; **+1 live-gate backend fix: content-bearing interfaces → `text` columns**) | [spec](superpowers/specs/2026-07-06-phase7g-advanced-richtext-design.md) | [plan](superpowers/plans/2026-07-06-phase7g-advanced-richtext.md) |
 | 7g.5 | Declared field max length (`[CmsField(MaxLength = n)]` → metadata/schema → backend 400 validation → frontend `maxlength`; CMS-layer only, decoupled from DB width — *no DDL*) — *inserted; born from the 7g live-gate varchar(255) bug* | ✅ done (live-verified: PG+Redis+MinIO — 256→400 kill-shot + boundary + translatable + regression, 4/4, no fixes) | [spec](superpowers/specs/2026-07-06-phase7g5-field-maxlength-design.md) | [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md) |
-| 7g+ | Multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e* | ⬜ planned | — | — |
+| 7g.6 | Frontend field-type registry (`lib/fieldTypes/*`, keyed by `FieldInterface`, TS-exhaustive, unknown→read-only) + empty-`Guid?` coercion single-homed (F2) + lazy i18n tabs (F3) — *pure refactor, no new field types, no backend* | ✅ done (frontend gates green; no live gate — no server/persistence change) | [spec](superpowers/specs/2026-07-06-phase7g6-field-type-registry-design.md) | [plan](superpowers/plans/2026-07-06-phase7g6-field-type-registry.md) |
+| 7g+ | Multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e; now stands on the 7g.6 registry (add-a-type = one registry entry + one `*Field.vue` + tests)* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
