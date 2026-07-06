@@ -8,7 +8,7 @@ namespace Struo.Infrastructure.Identity;
 /// <summary>Junction modelling the user↔role many-to-many. Collection route is <c>userRole</c>.
 /// Unique on (<see cref="UserId"/>, <see cref="RoleId"/>).</summary>
 [SugarTable("user_roles")]
-[CmsCollection("UserRole", Group = "System", DefaultDisplayField = nameof(UserId))]
+[CmsCollection("UserRole", Group = "System", DefaultDisplayField = nameof(UserId), AdminOnly = true)]
 public sealed class UserRole : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

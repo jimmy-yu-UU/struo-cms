@@ -17,7 +17,12 @@ public static class QueryValidator
         // foreign keys (e.g. "categoryId" on article) so callers (incl. the frontend
         // RelatedList) can filter/sort by the FK column even though it carries no
         // [CmsField]. Never widened to arbitrary non-relation columns.
-        var known = meta.Fields.Select(f => f.Name)
+        //
+        // Hidden fields are excluded on purpose: they hold credentials (User.Password /
+        // User.AccessToken) that projection already refuses to serialize. If they stayed
+        // filterable/sortable, meta.total would become a blind-extraction oracle
+        // (?filter[password][_startsWith]=...) that leaks the value one character at a time.
+        var known = meta.Fields.Where(f => !f.Hidden).Select(f => f.Name)
             .Concat(meta.Relations
                 .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
                 .Select(r => r.ForeignKey!))
@@ -74,5 +79,5 @@ public static class QueryValidator
     }
 
     public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>
-        meta.Fields.Where(f => f.Searchable).Select(f => f.Name).ToList();
+        meta.Fields.Where(f => f.Searchable && !f.Hidden).Select(f => f.Name).ToList();
 }

@@ -55,5 +55,9 @@ export function buildItemPayload(
   }
 
   if (Object.keys(translations).length > 0) payload.translations = translations
+
+  // Echo the concurrency token on update so the server can reject a stale write with 409 (D2).
+  if (mode === 'update' && typeof model.version === 'number') payload.version = model.version
+
   return payload
 }

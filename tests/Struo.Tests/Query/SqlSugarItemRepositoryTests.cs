@@ -45,6 +45,61 @@ public class SqlSugarItemRepositoryTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
+    // D5: a non-page-aligned offset returns the exact window (offset is absolute, not a page index).
+    [Fact]
+    public async Task Query_offset_returns_exact_window()
+    {
+        _db.CodeFirst.InitTables<Category>();
+        for (var i = 0; i < 5; i++)
+            await _repo.CreateAsync("category", new Category { Name = $"C{i}" });
+
+        // sort by name asc, skip 1, take 2 → C1, C2 (would be wrong under page-index division).
+        var q = new QueryModel(null, null, [new SortField("name", false)], 2, 1, null);
+        var result = await _repo.QueryAsync("category", q, []);
+
+        result.Total.Should().Be(5);
+        result.Rows.Select(r => ((Category)r).Name).Should().Equal("C1", "C2");
+    }
+
+    // D1: aggregate-write atomicity.
+    [Fact]
+    public async Task InTransaction_rolls_back_on_throw()
+    {
+        _db.CodeFirst.InitTables<Category>();
+        var act = async () => await _repo.InTransactionAsync(async () =>
+        {
+            await _repo.CreateAsync("category", new Category { Name = "Temp" });
+            throw new InvalidOperationException("boom");
+        });
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await _db.Queryable<Category>().CountAsync()).Should().Be(0, "a throw must roll the insert back");
+    }
+
+    [Fact]
+    public async Task InTransaction_commits_on_success()
+    {
+        _db.CodeFirst.InitTables<Category>();
+        await _repo.InTransactionAsync(async () =>
+            await _repo.CreateAsync("category", new Category { Name = "Keep" }));
+        (await _db.Queryable<Category>().CountAsync()).Should().Be(1);
+    }
+
+    // D1: nesting-safety — an inner InTransactionAsync must join the outer one, not commit
+    // independently, so an outer rollback also undoes the inner write.
+    [Fact]
+    public async Task Nested_InTransaction_rolls_back_with_outer()
+    {
+        _db.CodeFirst.InitTables<Category>();
+        var act = async () => await _repo.InTransactionAsync(async () =>
+        {
+            await _repo.InTransactionAsync(async () =>
+                await _repo.CreateAsync("category", new Category { Name = "Inner" }));
+            throw new InvalidOperationException("outer boom");
+        });
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await _db.Queryable<Category>().CountAsync()).Should().Be(0, "inner write joined the outer tran");
+    }
+
     [Fact]
     public async Task CreateAsync_assigns_a_version7_guid_id()
     {

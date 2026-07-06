@@ -59,6 +59,7 @@ public class DeleteRestrictWithGuidPkTests
             Task.FromResult<object?>(e);
         public Task<bool> DeleteAsync(string c, string id, CancellationToken ct) =>
             Task.FromResult(true);
+        public Task InTransactionAsync(Func<Task> body, CancellationToken ct) => body();
         public Task<IReadOnlyList<object>> QueryWhereInAsync(string c, string prop, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([new GuidEntity()]);
         public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, CancellationToken ct) =>
