@@ -119,6 +119,18 @@ public class GanssHtmlSanitizerTests
     }
 
     [Fact]
+    public void Strips_dangerous_values_inside_allowed_css_properties()
+    {
+        var clean = _s.Sanitize(
+            "<p><span style=\"color: expression(alert(1))\">a</span></p>"
+          + "<p style=\"text-align: url(javascript:alert(1))\">b</p>"
+          + "<p><span style=\"color: red\">ok</span></p>");
+        clean.Should().NotContain("expression").And.NotContain("url(").And.NotContain("javascript");
+        clean.Should().Contain("a").And.Contain("b");
+        clean.Should().Contain("color").And.Contain("ok"); // benign value inside an allowed property survives
+    }
+
+    [Fact]
     public void Keeps_sub_and_sup()
     {
         var clean = _s.Sanitize("<p>H<sub>2</sub>O and x<sup>2</sup></p>");
