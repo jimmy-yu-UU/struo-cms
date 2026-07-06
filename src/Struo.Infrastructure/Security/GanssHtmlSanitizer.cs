@@ -8,6 +8,7 @@ namespace Struo.Infrastructure.Security;
 /// constructor (tags/attributes/schemes) and never mutated afterward, so a single instance is
 /// safe to share across requests. The allowlist mirrors the TipTap editor output (Phase 7f):
 /// basic formatting + anchors (http/https/mailto) + relative-src images carrying data-file-id.
+/// Phase 7g adds basic tables, text-align/colour styles, and sub/superscript.
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
@@ -20,11 +21,13 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         _sanitizer.AllowedTags.Clear();
         foreach (var tag in new[]
                  { "p", "h2", "h3", "strong", "em", "s", "ul", "ol", "li",
-                   "blockquote", "pre", "code", "hr", "br", "a", "img" })
+                   "blockquote", "pre", "code", "hr", "br", "a", "img",
+                   // 7g: basic tables + sub/superscript + the colour carrier tag.
+                   "table", "thead", "tbody", "tr", "th", "td", "sub", "sup", "span" })
             _sanitizer.AllowedTags.Add(tag);
 
         _sanitizer.AllowedAttributes.Clear();
-        foreach (var attr in new[] { "href", "src", "alt", "rel" })
+        foreach (var attr in new[] { "href", "src", "alt", "rel", "style" })
             _sanitizer.AllowedAttributes.Add(attr);
 
         // data-file-id: allow data-* attributes (inert; carry no script surface).
@@ -34,8 +37,11 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         foreach (var scheme in new[] { "http", "https", "mailto" })
             _sanitizer.AllowedSchemes.Add(scheme);
 
-        // Drop inline styles and CSS entirely.
+        // 7g: style survives but carries exactly two CSS properties (colour + alignment);
+        // Ganss strips every other property and dangerous values (url()/expression()) per-property.
         _sanitizer.AllowedCssProperties.Clear();
+        _sanitizer.AllowedCssProperties.Add("color");
+        _sanitizer.AllowedCssProperties.Add("text-align");
         _sanitizer.AllowedAtRules.Clear();
 
         // Harden every surviving anchor.

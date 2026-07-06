@@ -58,4 +58,47 @@ describe('RichTextInput', () => {
     expect(html).toContain('data-file-id="abc"')
     expect(html).toContain(`src="${fileContentPath('abc')}"`)
   })
+
+  it('sets text alignment via the toolbar', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: { stubs } })
+    await flushPromises()
+    await w.get('[data-cmd="alignCenter"]').trigger('click')
+    const vm = w.vm as unknown as { editor: { isActive: (a: Record<string, string>) => boolean } }
+    expect(vm.editor.isActive({ textAlign: 'center' })).toBe(true)
+  })
+
+  it('subscript and superscript are mutually exclusive', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: { stubs } })
+    await flushPromises()
+    await w.get('[data-cmd="subscript"]').trigger('click')
+    const vm = w.vm as unknown as { editor: { isActive: (n: string) => boolean } }
+    expect(vm.editor.isActive('subscript')).toBe(true)
+    await w.get('[data-cmd="superscript"]').trigger('click')
+    expect(vm.editor.isActive('superscript')).toBe(true)
+    expect(vm.editor.isActive('subscript')).toBe(false)
+  })
+
+  it('applies colour via the colour menu', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: { stubs } })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      editor: { commands: { selectAll: () => void }; getAttributes: (n: string) => Record<string, unknown> }
+    }
+    vm.editor.commands.selectAll()
+    await w.get('[data-cmd="color"]').trigger('click')
+    await w.get('[data-color="#dc2626"]').trigger('click')
+    expect(vm.editor.getAttributes('textStyle').color).toBe('#dc2626')
+  })
+
+  it('inserts a 3x3 table with header row via the table menu', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: { stubs } })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cmd="tableInsert"]').trigger('click')
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect(html).toContain('<table')
+    expect(html).toContain('<th')
+  })
 })
