@@ -407,6 +407,9 @@ public sealed class ItemService(
             .Where(f => f.Translatable && f.Required)
             .Select(f => f.Name)
             .ToList();
+        var maxLengths = meta.Fields
+            .Where(f => f.MaxLength is > 0)
+            .ToDictionary(f => f.Name, f => f.MaxLength!.Value, StringComparer.OrdinalIgnoreCase);
 
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
 
@@ -437,6 +440,14 @@ public sealed class ItemService(
                 if (!has || v is null || (v is string s && string.IsNullOrWhiteSpace(s)))
                     throw new QueryException(
                         $"Required translation field '{rf}' is missing for locale '{locale}'.");
+            }
+
+            // Max length — CMS-layer limit (7g.5), measured after RichText sanitization.
+            foreach (var (name, value) in fieldValues)
+            {
+                if (value is string sv && maxLengths.TryGetValue(name, out var max) && sv.Length > max)
+                    throw new QueryException(
+                        $"Field '{name}' exceeds maximum length {max} for locale '{locale}'.");
             }
 
             perLocale[locale] = fieldValues;
@@ -686,6 +697,15 @@ public sealed class ItemService(
             var value = pi?.GetValue(entity);
             if (value is null || (value is string s && string.IsNullOrWhiteSpace(s)))
                 throw new QueryException($"Field '{field.Name}' is required.");
+        }
+
+        // Max length — CMS-layer limit (7g.5); the DB column width is SqlSugar's separate concern.
+        // Runs after RichText sanitization so the stored value is what gets measured.
+        foreach (var field in meta.Fields.Where(f => f.MaxLength is > 0 && !f.Translatable))
+        {
+            var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.EntityType.GetProperty(prop) : null;
+            if (pi?.GetValue(entity) is string value && value.Length > field.MaxLength!.Value)
+                throw new QueryException($"Field '{field.Name}' exceeds maximum length {field.MaxLength}.");
         }
         return entity;
     }

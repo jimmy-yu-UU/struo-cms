@@ -14,6 +14,7 @@ export type FieldMeta = {
   hidden: boolean
   translatable: boolean
   sort: number
+  maxLength?: number | null // effective CMS-layer limit resolved by the backend scanner; null = unlimited
   helpText?: string | null
   group?: string | null
   options?: FieldOption[] | null
