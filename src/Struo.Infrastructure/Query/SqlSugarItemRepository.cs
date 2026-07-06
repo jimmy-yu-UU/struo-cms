@@ -167,12 +167,15 @@ public sealed class SqlSugarItemRepository(
         List<IConditionalModel> conditionals, string? orderBy, int limit, int offset, CancellationToken ct)
         where T : class, new()
     {
-        var pageNumber = (offset / Math.Max(1, limit)) + 1;
-        var total = new RefAsync<int>();
+        // True offset/limit windowing: offset is an absolute row count and need NOT be a multiple of
+        // limit. The old code turned offset into a 1-based page index by integer division, which
+        // silently returned the wrong window for any non-page-aligned offset (e.g. offset=25,limit=20
+        // skipped 20 instead of 25). Count + Skip/Take gives the exact window.
+        var total = await db.Queryable<T>().Where(conditionals).CountAsync(ct);
         var queryable = db.Queryable<T>().Where(conditionals);
         if (!string.IsNullOrWhiteSpace(orderBy)) queryable = queryable.OrderBy(orderBy);
-        var rows = await queryable.ToPageListAsync(pageNumber, limit, total, ct);
-        return new QueryResult(rows.Cast<object>().ToList(), total.Value);
+        var rows = await queryable.Skip(offset).Take(limit).ToListAsync(ct);
+        return new QueryResult(rows.Cast<object>().ToList(), total);
     }
 
     public async Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default)
@@ -184,6 +187,30 @@ public sealed class SqlSugarItemRepository(
 
     private async Task<object?> GetByIdGenericAsync<T>(object id) where T : class, new() =>
         await db.Queryable<T>().InSingleAsync(id);
+
+    public async Task InTransactionAsync(Func<Task> body, CancellationToken ct = default)
+    {
+        // Nesting-safe: if the scoped connection already has an open transaction (an outer
+        // InTransactionAsync), join it rather than opening — and committing — a second one, which
+        // would end the outer transaction early.
+        if (db.Ado.Transaction is not null)
+        {
+            await body();
+            return;
+        }
+
+        try
+        {
+            await db.Ado.BeginTranAsync();
+            await body();
+            await db.Ado.CommitTranAsync();
+        }
+        catch
+        {
+            await db.Ado.RollbackTranAsync();
+            throw;
+        }
+    }
 
     public async Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default)
     {
@@ -214,8 +241,30 @@ public sealed class SqlSugarItemRepository(
         return await GetByIdAsync(collection, id, ct);
     }
 
-    private async Task UpdateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new() =>
+    private async Task UpdateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
+    {
+        // Optimistic concurrency (D2): for auditable collection entities, bump the version and update
+        // WHERE id = ? AND version = expected. If a concurrent writer already advanced the version, zero
+        // rows match and we surface a 409 instead of silently overwriting their change. The id + version
+        // are bound as typed parameters (real Guid / long), so PG's uuid column matches correctly.
+        if (entity is Struo.Domain.Auditing.AuditableEntity ae)
+        {
+            var expected = ae.Version;
+            ae.Version = expected + 1;
+            var idColumn = db.EntityMaintenance.GetDbColumnName(nameof(Struo.Domain.Auditing.AuditableEntity.Id), typeof(T));
+            var versionColumn = db.EntityMaintenance.GetDbColumnName(nameof(Struo.Domain.Auditing.AuditableEntity.Version), typeof(T));
+            var affected = await db.Updateable((T)entity)
+                .Where($"{idColumn} = @__ocId AND {versionColumn} = @__ocVersion",
+                    new { __ocId = ae.Id, __ocVersion = expected })
+                .ExecuteCommandAsync(ct);
+            if (affected == 0)
+                throw new Struo.Domain.Query.ConcurrencyConflictException(
+                    "The record was modified by someone else since you loaded it. Reload and try again.");
+            return;
+        }
+
         await db.Updateable((T)entity).ExecuteCommandAsync(ct);
+    }
 
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
@@ -342,20 +391,13 @@ public sealed class SqlSugarItemRepository(
         }
 
         // Delete + insert in a single transaction so a failed insert never leaves the parent
-        // with zero junction rows.
-        try
+        // with zero junction rows. Joins the caller's aggregate transaction when one is open.
+        await InTransactionAsync(async () =>
         {
-            await db.Ado.BeginTranAsync();
             await db.Deleteable<T>().Where(deleteConditionals).ExecuteCommandAsync(ct);
             if (rows.Count > 0)
                 await db.Insertable(rows).ExecuteCommandAsync(ct);
-            await db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await db.Ado.RollbackTranAsync();
-            throw;
-        }
+        }, ct);
     }
 
     public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
@@ -545,19 +587,12 @@ public sealed class SqlSugarItemRepository(
             ]);
         }
 
-        try
+        await InTransactionAsync(async () =>
         {
-            await db.Ado.BeginTranAsync();
             foreach (var del in deletes)
                 await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
             await db.Insertable(inserts).ExecuteCommandAsync(ct);
-            await db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await db.Ado.RollbackTranAsync();
-            throw;
-        }
+        }, ct);
     }
 
     private static bool TryGetValueCaseInsensitive(

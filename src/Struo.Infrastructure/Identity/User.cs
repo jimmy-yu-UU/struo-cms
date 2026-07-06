@@ -13,7 +13,7 @@ namespace Struo.Infrastructure.Identity;
 /// the create flow.
 /// </summary>
 [SugarTable("users")]
-[CmsCollection("User", Group = "System", DefaultDisplayField = nameof(Email))]
+[CmsCollection("User", Group = "System", DefaultDisplayField = nameof(Email), AdminOnly = true)]
 public sealed class User : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
@@ -35,4 +35,10 @@ public sealed class User : AuditableEntity
     [SugarColumn(IsNullable = true, UniqueGroupNameList = ["uq_users_accesstoken"])]
     [CmsField(Label = "Access Token", Interface = FieldInterface.Text, Hidden = true, ReadOnly = true, Sort = 5)]
     public string? AccessToken { get; set; }
+
+    // Token lifecycle metadata (M2). Internal columns — no [CmsField], so they never enter the generic
+    // CRUD/read surface. The token stays permanent/non-expiring; these just record issuance and last
+    // use so a leaked/stale token can be spotted and rotated.
+    [SugarColumn(IsNullable = true)] public DateTime? AccessTokenCreatedAt { get; set; }
+    [SugarColumn(IsNullable = true)] public DateTime? AccessTokenLastUsedAt { get; set; }
 }

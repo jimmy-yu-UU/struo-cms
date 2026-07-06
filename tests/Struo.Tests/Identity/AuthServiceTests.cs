@@ -10,6 +10,7 @@ public class AuthServiceTests
     {
         public Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default) => Task.FromResult(byEmail);
         public Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
+        public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => Task.CompletedTask;
     }
     private sealed class PlainHasher : IPasswordHasher
     {
@@ -67,6 +68,7 @@ public class AuthServiceTests
     {
         public Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default) => Task.FromResult(cred);
         public Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
+        public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class ThrowingHasher : IPasswordHasher

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Struo.Api.Auth;
 using Struo.Application.Files;
+using Struo.Application.Security;
+using Struo.Domain.Query;
 // Alias to avoid importing the Struo.Infrastructure.Files namespace, whose `File` type would
 // clash with ControllerBase.File(...) used by the download action.
 using FileService = Struo.Infrastructure.Files.FileService;
@@ -11,12 +13,21 @@ namespace Struo.Api.Controllers;
 
 [ApiController]
 [Route("api/files")]
-public sealed class FilesController(FileService files, IFileStorage storage, FileStorageOptions options) : ControllerBase
+public sealed class FilesController(
+    FileService files, IFileStorage storage, FileStorageOptions options, IPermissionService permissions) : ControllerBase
 {
+    // The media library is the "file" collection. Mutations go through the dedicated file storage
+    // pipeline rather than the generic ItemService, so RBAC must be enforced here too — otherwise any
+    // authenticated caller (incl. a role-less SSO user) could upload or delete any file, bypassing the
+    // per-collection grants that govern every other collection.
+    private const string FileCollection = "file";
+
     [HttpPost]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Upload(CancellationToken ct)
     {
+        if (!permissions.CanWrite(FileCollection))
+            throw new PermissionDeniedException("Write not permitted.");
         if (!Request.HasFormContentType)
             return BadRequest(new { error = new { message = "Expected multipart/form-data." } });
         var form = await Request.ReadFormAsync(ct);
@@ -68,8 +79,12 @@ public sealed class FilesController(FileService files, IFileStorage storage, Fil
 
     [HttpDelete("{id:guid}")]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
-        await files.DeleteAsync(id, ct) ? NoContent() : NotFound();
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        if (!permissions.CanDelete(FileCollection))
+            throw new PermissionDeniedException("Delete not permitted.");
+        return await files.DeleteAsync(id, ct) ? NoContent() : NotFound();
+    }
 
     /// <summary>
     /// Get/Download carry no [Authorize] so anonymous callers can fetch published files (e.g. public

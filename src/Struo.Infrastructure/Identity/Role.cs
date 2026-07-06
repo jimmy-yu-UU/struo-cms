@@ -8,7 +8,7 @@ namespace Struo.Infrastructure.Identity;
 /// <summary>Framework-owned RBAC role. Collection route is <c>role</c>.
 /// <see cref="IsSuperAdmin"/> short-circuits all permission checks (allow-all).</summary>
 [SugarTable("roles")]
-[CmsCollection("Role", Group = "System", DefaultDisplayField = nameof(Name))]
+[CmsCollection("Role", Group = "System", DefaultDisplayField = nameof(Name), AdminOnly = true)]
 public sealed class Role : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

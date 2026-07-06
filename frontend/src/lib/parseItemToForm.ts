@@ -36,7 +36,8 @@ export function parseItemToForm(
       relations[rel.name] = arr.map((r) => r.id)
     }
   }
-  return { shared: sharedModel, translations, relations }
+  const version = typeof item.version === 'number' ? item.version : undefined
+  return { shared: sharedModel, translations, relations, version }
 }
 
 export function blankItemForm(meta: CollectionMeta, locales: LanguageInfo[]): FormModel {

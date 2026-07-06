@@ -18,6 +18,14 @@ public interface IItemRepository
     Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default);
 
     /// <summary>
+    /// Runs <paramref name="body"/> inside a single database transaction: everything it writes
+    /// commits together or rolls back together. Used to make an aggregate write (parent row + M2M
+    /// junctions + translation sidecars) atomic. Nesting-safe — if a transaction is already open on
+    /// the (scoped) connection, <paramref name="body"/> joins it instead of opening a new one.
+    /// </summary>
+    Task InTransactionAsync(Func<Task> body, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all rows of <paramref name="collection"/> whose <paramref name="property"/>
     /// (a camelCase field name, e.g. <c>"id"</c>) is in <paramref name="values"/>.
     /// Empty <paramref name="values"/> returns an empty list without issuing a query.

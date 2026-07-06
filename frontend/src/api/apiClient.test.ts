@@ -68,4 +68,21 @@ describe('ApiClient', () => {
     const c = new ApiClient('/api')
     await expect(c.put('/x', {})).rejects.toThrow('nope')
   })
+
+  // M1: mutations carry the CSRF header; safe GETs do not.
+  it('attaches the CSRF header on mutations', async () => {
+    const f = mockFetch(200, { data: {} })
+    vi.stubGlobal('fetch', f)
+    await new ApiClient('/api').post('/items/article', { x: 1 })
+    const headers = f.mock.calls[0][1].headers as Record<string, string>
+    expect(headers['X-Struo-CSRF']).toBe('1')
+  })
+
+  it('does not attach the CSRF header on GET', async () => {
+    const f = mockFetch(200, { data: {} })
+    vi.stubGlobal('fetch', f)
+    await new ApiClient('/api').get('/auth/me')
+    const headers = (f.mock.calls[0][1].headers ?? {}) as Record<string, string>
+    expect(headers['X-Struo-CSRF']).toBeUndefined()
+  })
 })

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using Struo.Api.Auth;
 using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
 using System.Net.Http.Json;
@@ -80,6 +81,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         }
 
         var client = CreateClient();
+        // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email = AdminEmail, password = AdminPassword });
         resp.EnsureSuccessStatusCode();
         return client;
@@ -120,6 +124,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 }).ExecuteCommandAsync();
         }
         var client = CreateClient();
+        // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();
         return (client, userId);
@@ -147,6 +154,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             }).ExecuteCommandAsync();
         }
         var client = CreateClient();
+        // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();
         return (client, userId);
