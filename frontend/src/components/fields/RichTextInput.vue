@@ -4,6 +4,11 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
+import { TableKit } from '@tiptap/extension-table'
+import TextAlign from '@tiptap/extension-text-align'
+import { TextStyle, Color } from '@tiptap/extension-text-style'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import MediaGrid from '../media/MediaGrid.vue'
@@ -76,6 +81,12 @@ const editor = useEditor({
     StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
     Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
     Image.configure({ inline: false }),
+    TableKit.configure({ table: { resizable: false } }),
+    TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
+    TextStyle,
+    Color,
+    Subscript.extend({ excludes: 'superscript' }),
+    Superscript.extend({ excludes: 'subscript' }),
   ],
   onUpdate: () => emitNormalized(),
 })
@@ -114,10 +125,21 @@ defineExpose({ editor, insertImage })
         :disabled="disabled" aria-label="Italic" title="Italic" @click="editor!.chain().focus().toggleItalic().run()"><i>I</i></button>
       <button type="button" data-cmd="strike" :class="{ active: editor.isActive('strike') }"
         :disabled="disabled" aria-label="Strikethrough" title="Strikethrough" @click="editor!.chain().focus().toggleStrike().run()"><s>S</s></button>
+      <button v-for="al in (['left', 'center', 'right', 'justify'] as const)" :key="al" type="button"
+        :data-cmd="`align${al.charAt(0).toUpperCase()}${al.slice(1)}`"
+        :class="{ active: editor.isActive({ textAlign: al }) }" :disabled="disabled"
+        :aria-label="`Align ${al}`" :title="`Align ${al}`"
+        @click="editor!.chain().focus().setTextAlign(al).run()"><i :class="`pi pi-align-${al}`" /></button>
       <button v-for="lvl in ([2, 3] as Level[])" :key="lvl" type="button" :data-cmd="`h${lvl}`"
         :class="{ active: editor.isActive('heading', { level: lvl }) }" :disabled="disabled"
         :aria-label="`Heading ${lvl}`" :title="`Heading ${lvl}`"
         @click="editor!.chain().focus().toggleHeading({ level: lvl }).run()">H{{ lvl }}</button>
+      <button type="button" data-cmd="subscript" :class="{ active: editor.isActive('subscript') }"
+        :disabled="disabled" aria-label="Subscript" title="Subscript"
+        @click="editor!.chain().focus().toggleSubscript().run()">x₂</button>
+      <button type="button" data-cmd="superscript" :class="{ active: editor.isActive('superscript') }"
+        :disabled="disabled" aria-label="Superscript" title="Superscript"
+        @click="editor!.chain().focus().toggleSuperscript().run()">x²</button>
       <button type="button" data-cmd="bulletList" :class="{ active: editor.isActive('bulletList') }"
         :disabled="disabled" aria-label="Bullet list" title="Bullet list" @click="editor!.chain().focus().toggleBulletList().run()">• List</button>
       <button type="button" data-cmd="orderedList" :class="{ active: editor.isActive('orderedList') }"
@@ -154,5 +176,8 @@ defineExpose({ editor, insertImage })
 .rich-text__toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
 .rich-text__content { padding: 10px; min-height: 8rem; }
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
+.rich-text__content :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; }
+.rich-text__content :deep(th), .rich-text__content :deep(td) { border: 1px solid var(--surface-border, #d0d0d0); padding: 4px 8px; }
+.rich-text__content :deep(th) { background: var(--surface-100, #f4f4f5); text-align: left; }
 .rich-text__search { display: block; margin: 8px 0 12px; width: 100%; }
 </style>
