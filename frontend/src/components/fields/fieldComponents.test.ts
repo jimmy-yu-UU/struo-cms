@@ -11,6 +11,14 @@ import RadioField from './RadioField.vue'
 import DividerField from './DividerField.vue'
 import ReadonlyField from './ReadonlyField.vue'
 import type { FieldMeta } from '../../types/schema'
+import { setActivePinia, createPinia } from 'pinia'
+import { flushPromises } from '@vue/test-utils'
+import { vi } from 'vitest'
+import RichTextField from './RichTextField.vue'
+import FileField from './FileField.vue'
+import FilePicker from './FilePicker.vue'
+import { itemsApi } from '../../api/itemsApi'
+import { useLanguageStore } from '../../stores/languageStore'
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
@@ -80,5 +88,41 @@ describe('field components (choice + structural)', () => {
   it('ReadonlyField shows the value, em-dash when empty', () => {
     expect(mount(ReadonlyField, { props: { field: field({ interface: 'json' }), modelValue: '{}' } }).text()).toBe('{}')
     expect(mount(ReadonlyField, { props: { field: field({ interface: 'json' }), modelValue: null } }).find('.readonly-field').text()).toBe('—')
+  })
+})
+
+describe('field components (rich-text + file wrappers)', () => {
+  it('RichTextField relays the RichTextInput value', () => {
+    const w = mount(RichTextField, {
+      props: { field: field({ interface: 'richText' }), modelValue: '<p>hi</p>' },
+      global: { stubs: { RichTextInput: { name: 'RichTextInput', props: ['modelValue'], template: '<div class="stub-rt" />' } } },
+    })
+    const rt = w.findComponent({ name: 'RichTextInput' })
+    expect(rt.props('modelValue')).toBe('<p>hi</p>')
+    rt.vm.$emit('update:modelValue', '<p>bye</p>')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['<p>bye</p>'])
+  })
+
+  it('RichTextField coerces a null model to empty string', () => {
+    const w = mount(RichTextField, {
+      props: { field: field({ interface: 'richText' }), modelValue: null },
+      global: { stubs: { RichTextInput: { name: 'RichTextInput', props: ['modelValue'], template: '<div class="stub-rt" />' } } },
+    })
+    expect(w.findComponent({ name: 'RichTextInput' }).props('modelValue')).toBe('')
+  })
+
+  it('FileField sets image=true for the image interface and relays the id', async () => {
+    setActivePinia(createPinia())
+    useLanguageStore().languages = [{ code: 'en', name: 'English', isDefault: true }]
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
+    const w = mount(FileField, {
+      props: { field: field({ name: 'heroImageId', interface: 'image' }), modelValue: null },
+      global: { stubs: { Dialog: true, Button: true, MediaGrid: true } },
+    })
+    await flushPromises()
+    const picker = w.findComponent(FilePicker)
+    expect(picker.props('image')).toBe(true)
+    picker.vm.$emit('update:modelValue', 'f1')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['f1'])
   })
 })
