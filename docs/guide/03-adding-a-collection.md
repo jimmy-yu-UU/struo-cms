@@ -94,13 +94,33 @@ public sealed class ProductTranslation : SeoTranslation
 | Attribute | Put it on | What it does |
 |---|---|---|
 | `[CmsCollection(label)]` | the class | Registers the collection. Optional `Icon`, `Group`, `DefaultDisplayField`. |
-| `[CmsField(...)]` | a property | Makes the property an editable field. Set `Interface` (Text, RichText, Select, DateTime, Image, File, …), `Required`, `Searchable`, `Sortable`, `ReadOnly`, `Hidden`, `Sort`, `HelpText`, `Group`. |
+| `[CmsField(...)]` | a property | Makes the property an editable field. Set `Interface` (Text, RichText, Select, DateTime, Image, File, …), `Required`, `Searchable`, `Sortable`, `ReadOnly`, `Hidden`, `Sort`, `HelpText`, `Group`, `MaxLength` (see below). |
 | `[CmsOptions("value:Label", …)]` | an option-type field | Supplies the choices for option-type interfaces (`Select`, `MultiSelect`, `Radio`, `CheckboxGroup`, `Tags`) — a Select without it just has no options. Placing it on a **non**-option field fails fast at startup. |
 | `[CmsRelation(...)]` | a navigation property (also needs SqlSugar `[Navigate]`) | Exposes a relation (Dropdown / TreeSelect / RelatedList) with `DisplayTemplate`, `OnDelete`. |
 | `[CmsTranslations(typeof(T))]` | a `List<T>` property | Declares the per-locale sidecar `T`; `T`'s `[CmsField]`s become translated fields. |
 
 Properties with neither `[CmsField]` nor a relation attribute (e.g. `CategoryId`) are persisted but
 not exposed as editable fields — they back relations.
+
+## Field max length (`MaxLength`)
+
+`[CmsField(MaxLength = 100)]` sets the CMS-layer input limit: the admin form caps typing at 100
+characters and the API rejects longer values with 400. Undeclared short-string fields (Text, Slug,
+Email, Url, Password, Color, Phone, and option-backed interfaces) default to **255** — matching the
+database default; content-bearing fields (RichText, Textarea, Markdown, Code, Json) are unlimited.
+Lengths count UTF-16 code units (what `string.Length` and JavaScript `.length` return). A negative
+`MaxLength`, or one placed on a non-string property, fails fast at startup.
+
+`MaxLength` is deliberately independent of the **database column width**, which SqlSugar controls
+(`[SugarColumn(Length = n)]`, default `varchar(255)`; content-bearing interfaces map to `text`). If
+you raise `MaxLength` above 255, also widen the column, or values in between will still fail at the
+database:
+
+```csharp
+[CmsField(Label = "Summary", MaxLength = 500)]
+[SugarColumn(Length = 500)]
+public string Summary { get; set; } = string.Empty;
+```
 
 ## How discovery works
 
