@@ -21,6 +21,9 @@ public class QueryValidatorTests
             new FieldMetadata { Name = "title", Label = "Title", Interface = FieldInterface.Text, Searchable = true },
             new FieldMetadata { Name = "status", Label = "Status", Interface = FieldInterface.Select },
             new FieldMetadata { Name = "createdAt", Label = "CreatedAt", Interface = FieldInterface.DateTime, IsSystem = true, ReadOnly = true },
+            // A hidden credential-style field (mirrors User.Password / User.AccessToken). It must never
+            // be usable as a filter/sort/search target — otherwise meta.total becomes a blind-extraction oracle.
+            new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true, Searchable = true },
         ]
     };
 
@@ -120,6 +123,40 @@ public class QueryValidatorTests
         fields.Should().Contain("title");
         fields.Should().NotContain("status");
         fields.Should().NotContain("createdAt");
+    }
+
+    // H2: a Hidden field (credential) must be rejected as a filter target so meta.total
+    // cannot be used to blind-extract the value character by character.
+    [Fact]
+    public void Hidden_field_filter_throws()
+    {
+        var q = new QueryModel(null, new ComparisonFilter("secret", QueryOperator.StartsWith, "$argon2"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        act.Should().Throw<QueryException>().WithMessage("*secret*");
+    }
+
+    [Fact]
+    public void Hidden_field_sort_throws()
+    {
+        var q = new QueryModel(null, null, [new SortField("secret", false)], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        act.Should().Throw<QueryException>().WithMessage("*secret*");
+    }
+
+    [Fact]
+    public void Hidden_field_in_field_selection_throws()
+    {
+        var q = new QueryModel(["secret"], null, [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        act.Should().Throw<QueryException>().WithMessage("*secret*");
+    }
+
+    // H2: search must also skip Hidden fields even if the field is (mis)marked Searchable.
+    [Fact]
+    public void SearchableFields_excludes_hidden()
+    {
+        var fields = QueryValidator.SearchableFields(Meta());
+        fields.Should().NotContain("secret");
     }
 
     [Fact]

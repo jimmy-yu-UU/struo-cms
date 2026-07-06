@@ -133,6 +133,7 @@ public static class MetadataScanner
             Icon = attr.Icon,
             Group = attr.Group,
             DefaultDisplayField = defaultDisplay,
+            AdminOnly = attr.AdminOnly,
             FieldGroups = groups,
             Fields = ordered,
             Relations = ScanRelations(type),

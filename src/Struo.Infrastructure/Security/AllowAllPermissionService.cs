@@ -11,6 +11,7 @@ public sealed class AllowAllPermissionService : IPermissionService
     public bool CanRead(string collection) => true;
     public bool CanWrite(string collection) => true;
     public bool CanDelete(string collection) => true;
+    public bool IsSuperAdmin => true;
     public IReadOnlyCollection<string> ReadableFields(string collection, IEnumerable<string> allFieldNames) =>
         allFieldNames.ToList();
 }

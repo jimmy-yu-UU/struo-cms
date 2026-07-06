@@ -10,6 +10,7 @@ public sealed class RbacPermissionService(ICurrentPermissions current) : IPermis
     public bool CanRead(string collection) => current.Current.CanRead(collection);
     public bool CanWrite(string collection) => current.Current.CanWrite(collection);
     public bool CanDelete(string collection) => current.Current.CanDelete(collection);
+    public bool IsSuperAdmin => current.Current.IsSuperAdmin;
 
     public IReadOnlyCollection<string> ReadableFields(string collection, IEnumerable<string> allFieldNames) =>
         allFieldNames.ToList();

@@ -8,7 +8,7 @@ namespace Struo.Infrastructure.Identity;
 /// <summary>A role's read/write/delete grant for one collection. Collection route is
 /// <c>permission</c>. Unique on (<see cref="RoleId"/>, <see cref="Collection"/>).</summary>
 [SugarTable("permissions")]
-[CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection))]
+[CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true)]
 public sealed class Permission : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
