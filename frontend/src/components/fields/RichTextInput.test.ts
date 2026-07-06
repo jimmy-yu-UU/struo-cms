@@ -58,4 +58,23 @@ describe('RichTextInput', () => {
     expect(html).toContain('data-file-id="abc"')
     expect(html).toContain(`src="${fileContentPath('abc')}"`)
   })
+
+  it('sets text alignment via the toolbar', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: { stubs } })
+    await flushPromises()
+    await w.get('[data-cmd="alignCenter"]').trigger('click')
+    const vm = w.vm as unknown as { editor: { isActive: (a: Record<string, string>) => boolean } }
+    expect(vm.editor.isActive({ textAlign: 'center' })).toBe(true)
+  })
+
+  it('subscript and superscript are mutually exclusive', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: { stubs } })
+    await flushPromises()
+    await w.get('[data-cmd="subscript"]').trigger('click')
+    const vm = w.vm as unknown as { editor: { isActive: (n: string) => boolean } }
+    expect(vm.editor.isActive('subscript')).toBe(true)
+    await w.get('[data-cmd="superscript"]').trigger('click')
+    expect(vm.editor.isActive('superscript')).toBe(true)
+    expect(vm.editor.isActive('subscript')).toBe(false)
+  })
 })
