@@ -13,6 +13,8 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
+import RichTextTableMenu from './RichTextTableMenu.vue'
+import type { TableAction } from './richTextTableActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -114,6 +116,23 @@ function setLink(): void {
   editor.value.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
 }
 
+function onTableAction(action: TableAction): void {
+  if (!editor.value) return
+  const chain = editor.value.chain().focus()
+  const commands: Record<TableAction, () => void> = {
+    insert: () => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+    addRowBefore: () => chain.addRowBefore().run(),
+    addRowAfter: () => chain.addRowAfter().run(),
+    addColumnBefore: () => chain.addColumnBefore().run(),
+    addColumnAfter: () => chain.addColumnAfter().run(),
+    deleteRow: () => chain.deleteRow().run(),
+    deleteColumn: () => chain.deleteColumn().run(),
+    toggleHeaderRow: () => chain.toggleHeaderRow().run(),
+    deleteTable: () => chain.deleteTable().run(),
+  }
+  commands[action]()
+}
+
 defineExpose({ editor, insertImage })
 </script>
 
@@ -159,6 +178,7 @@ defineExpose({ editor, insertImage })
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
+      <RichTextTableMenu :disabled="disabled" :in-table="editor.isActive('table')" @action="onTableAction" />
       <button type="button" data-cmd="undo" :disabled="disabled"
         aria-label="Undo" title="Undo" @click="editor!.chain().focus().undo().run()">&#8630;</button>
       <button type="button" data-cmd="redo" :disabled="disabled"
