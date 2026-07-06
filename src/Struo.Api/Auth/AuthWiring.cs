@@ -29,7 +29,7 @@ public static class AuthWiring
         services.AddAuthentication(AuthSchemes.Cookie)
             .AddCookie(AuthSchemes.Cookie, options =>
             {
-                options.Cookie.Name = "struo.session";
+                options.Cookie.Name = AuthSchemes.SessionCookieName;
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = securePolicy;
                 options.Cookie.SameSite = SameSiteMode.Lax;

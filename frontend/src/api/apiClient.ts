@@ -1,5 +1,11 @@
 export type ApiError = { message: string }
 
+// CSRF: the API rejects cookie-authenticated mutations that lack this header (OWASP custom-header
+// method). The value is irrelevant — a cross-site page cannot set a custom header on a credentialed
+// request without the API's CORS allowing its origin, so its mere presence proves same-app origin.
+const CSRF_HEADER = 'X-Struo-CSRF'
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
+
 export class ApiClient {
   private readonly baseUrl: string
   private onUnauthorized: (() => void) | null = null
@@ -43,10 +49,13 @@ export class ApiClient {
     opts?: { unwrap?: boolean },
   ): Promise<T> {
     const isForm = body instanceof FormData
+    const headers: Record<string, string> = {}
+    if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
+    if (!SAFE_METHODS.has(method)) headers[CSRF_HEADER] = '1'
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       credentials: 'include',
-      headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     })
 

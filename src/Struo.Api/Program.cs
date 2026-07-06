@@ -51,6 +51,7 @@ try
     app.UseStruoCors(app.Configuration);
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseMiddleware<Struo.Api.Auth.CsrfProtectionMiddleware>();
     app.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>();
 
     app.Use(async (context, next) =>
@@ -75,6 +76,14 @@ try
             }
         }
         catch (Struo.Domain.Query.RelationConflictException ex)
+        {
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
+            }
+        }
+        catch (Struo.Domain.Query.ConcurrencyConflictException ex)
         {
             if (!context.Response.HasStarted)
             {

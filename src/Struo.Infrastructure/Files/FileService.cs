@@ -28,6 +28,15 @@ public sealed class FileService(
         // Buffer once so we can read dimensions AND persist from the same bytes.
         await using var buffer = new MemoryStream();
         await content.CopyToAsync(buffer, ct);
+
+        // Conservative content sniff (L2): if the client claims a type we have a signature for, the
+        // leading bytes must match it — blocks e.g. a script stored as image/png. Unknown types pass.
+        buffer.Position = 0;
+        var header = new byte[12];
+        var read = buffer.Read(header, 0, header.Length);
+        if (!FileSignatureValidator.IsConsistent(header.AsSpan(0, read), contentType))
+            throw new QueryException($"File contents do not match the declared content type '{contentType}'.");
+
         buffer.Position = 0;
         var dims = images.TryRead(buffer, contentType);
         buffer.Position = 0;

@@ -17,4 +17,12 @@ public abstract class AuditableEntity : IAuditable
     public Guid? CreatedBy { get; set; }
     public DateTime UpdatedAt { get; set; }
     public Guid? UpdatedBy { get; set; }
+
+    /// <summary>
+    /// Optimistic-concurrency token (D2). Incremented on every update; an update guards on the value
+    /// the caller last read (<c>WHERE version = expected</c>) so a concurrent writer that already moved
+    /// the row on causes a conflict (409) instead of a silent lost update. Plain column — no SugarColumn
+    /// attribute, so Domain stays package-free (§2).
+    /// </summary>
+    public long Version { get; set; }
 }

@@ -257,13 +257,22 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
+        RequireSuperAdminForAdminOnly(meta);
         ValidateLanguageCodeIfNeeded(collection, body);
         var entity = Deserialize(collection, body, meta);
-        var created = await repository.CreateAsync(collection, entity, ct);
         var d = registry.Get(collection)!;
-        var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
-        await SyncM2MAsync(collection, body, createdId, ct);
-        await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+
+        // Parent row + M2M junctions + translation sidecars must commit together or not at all —
+        // otherwise a failure after the parent insert leaves a row that violates invariants the API
+        // enforces (e.g. "default-locale translation required").
+        object created = null!;
+        await repository.InTransactionAsync(async () =>
+        {
+            created = await repository.CreateAsync(collection, entity, ct);
+            var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
+            await SyncM2MAsync(collection, body, createdId, ct);
+            await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+        }, ct);
         InvalidateLanguagesIfNeeded(collection);
         return Project(created, meta, null);
     }
@@ -272,6 +281,7 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
+        RequireSuperAdminForAdminOnly(meta);
         ValidateLanguageCodeIfNeeded(collection, body);
         var d = registry.Get(collection)!;
 
@@ -315,11 +325,24 @@ public sealed class ItemService(
             pi.SetValue(existing, pi.GetValue(incoming));
         }
 
-        var updated = await repository.UpdateAsync(collection, id, existing, ct);
+        // Optimistic concurrency (D2): guard the write on the version the client last read. When the
+        // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
+        // writer already moved the row on. Absent a client version we fall back to the freshly-loaded
+        // value (no protection, but backward compatible for callers that don't track versions).
+        if (existing is Struo.Domain.Auditing.AuditableEntity ex)
+            ex.Version = TryReadVersion(body) ?? ex.Version;
+
+        // Parent row + M2M + translations commit atomically (see CreateAsync).
+        object? updated = null;
+        await repository.InTransactionAsync(async () =>
+        {
+            updated = await repository.UpdateAsync(collection, id, existing, ct);
+            if (updated is null) return;
+            var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
+            await SyncM2MAsync(collection, body, updatedId, ct);
+            await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
+        }, ct);
         if (updated is null) return null;
-        var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
-        await SyncM2MAsync(collection, body, updatedId, ct);
-        await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
         InvalidateLanguagesIfNeeded(collection);
         return Project(updated, meta, null);
     }
@@ -526,8 +549,9 @@ public sealed class ItemService(
 
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
-        _ = Meta(collection);
+        var meta = Meta(collection);
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
+        RequireSuperAdminForAdminOnly(meta);
 
         // Enforce OnDelete.Restrict: for each inbound M2O relation with Restrict semantics,
         // check whether any row in the source collection still references this id.
@@ -579,6 +603,30 @@ public sealed class ItemService(
 
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);
+
+    // Reads the optimistic-concurrency token the client echoed back, if any. Accepts a JSON number or
+    // a numeric string; returns null when absent or unparseable (treated as "no version supplied").
+    private static long? TryReadVersion(JsonElement body)
+    {
+        if (body.ValueKind != JsonValueKind.Object) return null;
+        if (!body.TryGetProperty("version", out var v)) return null;
+        return v.ValueKind switch
+        {
+            JsonValueKind.Number when v.TryGetInt64(out var n) => n,
+            JsonValueKind.String when long.TryParse(v.GetString(), out var n) => n,
+            _ => null
+        };
+    }
+
+    // Writes to an AdminOnly collection (identity/authorization tables: user/role/permission/userRole)
+    // require a super-admin even when the caller holds a per-collection write/delete grant. Otherwise a
+    // delegated grant on, say, userRole could be used to self-assign the super-admin role — privilege
+    // escalation. Reads are intentionally not gated here (ordinary RBAC governs them).
+    private void RequireSuperAdminForAdminOnly(CollectionMetadata meta)
+    {
+        if (meta.AdminOnly && !permissions.IsSuperAdmin)
+            throw new PermissionDeniedException($"Writes to '{meta.Name}' require a super-admin.");
+    }
 
     private object Deserialize(string collection, JsonElement body, CollectionMetadata meta)
     {
@@ -649,6 +697,11 @@ public sealed class ItemService(
 
         const string idKey = "id";
         dict[idKey] = d.EntityType.GetProperty(d.IdProperty)?.GetValue(entity);
+
+        // Always expose the concurrency token (like id, independent of field selection) so the client
+        // can echo it back on update for optimistic-locking (D2).
+        if (entity is Struo.Domain.Auditing.AuditableEntity versioned)
+            dict["version"] = versioned.Version;
 
         var wanted = fields is { Count: > 0 } ? fields.ToHashSet(StringComparer.OrdinalIgnoreCase) : null;
         var readable = permissions.ReadableFields(meta.Name, meta.Fields.Select(f => f.Name))

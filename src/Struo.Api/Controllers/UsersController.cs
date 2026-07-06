@@ -75,8 +75,10 @@ public sealed class UsersController(
     {
         if (RequireAdmin() is { } denied) return denied;
         var (token, hash) = AccessTokenHasher.Generate();
+        var now = DateTime.UtcNow;
         var updated = await db.Updateable<User>()
-            .SetColumns(u => u.AccessToken == hash).Where(u => u.Id == id).ExecuteCommandAsync(ct);
+            .SetColumns(u => new User { AccessToken = hash, AccessTokenCreatedAt = now, AccessTokenLastUsedAt = null })
+            .Where(u => u.Id == id).ExecuteCommandAsync(ct);
         if (updated == 0) return NotFound();
         return Ok(new { data = new { token } }); // shown once
     }

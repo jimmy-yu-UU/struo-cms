@@ -15,6 +15,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Struo.Application\Struo.Application.csproj" />
     <ProjectReference Include="..\Struo.Infrastructure\Struo.Infrastructure.csproj" />
+    <!-- DEV/DEMO ONLY (audit A1): the Blog sample provides demo content for local runs. A real host
+         built on this template removes this reference and the "Struo.Sample.Blog" entry in
+         appsettings.json Struo:ContentAssemblies, then adds its own [CmsCollection] content assembly. -->
     <ProjectReference Include="..\..\samples\Struo.Sample.Blog\Struo.Sample.Blog.csproj" />
   </ItemGroup>
 

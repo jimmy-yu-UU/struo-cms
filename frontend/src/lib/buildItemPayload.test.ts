@@ -85,6 +85,18 @@ describe('buildItemPayload relations', () => {
     expect(payload.tags).toEqual(['t1', 't2'])
     expect(payload).not.toHaveProperty('comments')
   })
+  it('echoes version on update but not on create (D2)', () => {
+    const model: FormModel = { shared: { status: 'draft' }, translations: {}, relations: {}, version: 3 }
+    const upd = buildItemPayload(meta, model, locales, 'update')
+    expect(upd.version).toBe(3)
+    const created = buildItemPayload(meta, model, locales, 'create')
+    expect(created).not.toHaveProperty('version')
+  })
+  it('omits version on update when the model has none', () => {
+    const model: FormModel = { shared: { status: 'draft' }, translations: {}, relations: {} }
+    const upd = buildItemPayload(meta, model, locales, 'update')
+    expect(upd).not.toHaveProperty('version')
+  })
   it('sends empty M2M array to clear, and null FK to clear', () => {
     const meta: CollectionMeta = {
       name: 'article', label: 'Article', fields: [], defaultDisplayField: null,
