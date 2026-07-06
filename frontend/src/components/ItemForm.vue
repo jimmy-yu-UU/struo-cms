@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import Button from 'primevue/button'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -25,7 +25,15 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'submit'): void; (e: 'cancel'): void }>()
 
 const fields = computed(() => splitFields(props.meta))
+const defaultCode = computed(() => props.locales.find((l) => l.isDefault)?.code ?? props.locales[0]?.code ?? '')
 const activeLocale = ref(props.locales[0]?.code ?? '')
+
+// Surface default-locale validation errors even if the user is on another locale's tab.
+watch(() => props.errors, (e) => {
+  if (Object.keys(e).length > 0) activeLocale.value = defaultCode.value
+})
+
+defineExpose({ activeLocale })
 </script>
 
 <template>
@@ -61,11 +69,13 @@ const activeLocale = ref(props.locales[0]?.code ?? '')
       </TabList>
       <TabPanels>
         <TabPanel v-for="loc in locales" :key="loc.code" :value="loc.code">
-          <div v-for="f in fields.translatable" :key="f.name" class="field">
-            <label>{{ f.label }}<span v-if="f.required && loc.isDefault" class="req">*</span></label>
-            <FieldInput :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
-            <small v-if="loc.isDefault && errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
-          </div>
+          <template v-if="loc.code === activeLocale">
+            <div v-for="f in fields.translatable" :key="f.name" class="field">
+              <label>{{ f.label }}<span v-if="f.required && loc.isDefault" class="req">*</span></label>
+              <FieldInput :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
+              <small v-if="loc.isDefault && errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
+            </div>
+          </template>
         </TabPanel>
       </TabPanels>
     </Tabs>
