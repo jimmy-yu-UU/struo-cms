@@ -1,21 +1,13 @@
 import type { CollectionMeta, FieldMeta } from '../types/schema'
+import { getFieldType } from './fieldTypes/registry'
 
 export type ColumnDef = { field: string; header: string; sortable: boolean }
-
-// camelCase FieldInterface values that render cleanly as a single table cell.
-const SCALAR_INTERFACES = new Set<string>([
-  'text', 'textarea', 'slug', 'email', 'url', 'phone', 'color',
-  'number', 'slider', 'rating',
-  'boolean', 'checkbox',
-  'date', 'time', 'dateTime',
-  'select', 'radio',
-])
 
 const MAX_COLUMNS = 6
 
 export function selectListColumns(meta: CollectionMeta): ColumnDef[] {
   const eligible = meta.fields.filter(
-    (f) => !f.isSystem && !f.hidden && SCALAR_INTERFACES.has(f.interface),
+    (f) => !f.isSystem && !f.hidden && getFieldType(f.interface).listColumn !== null,
   )
 
   const ordered: FieldMeta[] = []

@@ -2,13 +2,11 @@ import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 import { splitFields } from './splitFields'
 import { relationInputKind } from './relationInputKind'
+import { getFieldType } from './fieldTypes/registry'
+import { isEmpty } from './fieldTypes/types'
 
 function camel(s: string): string {
   return s.length ? s[0].toLowerCase() + s.slice(1) : s
-}
-
-function isEmpty(v: unknown): boolean {
-  return v === undefined || v === null || v === ''
 }
 
 export function buildItemPayload(
@@ -21,10 +19,9 @@ export function buildItemPayload(
   const payload: Record<string, unknown> = {}
 
   for (const f of shared) {
-    let v = model.shared[f.name]
-    // File/image fields hold a scalar Guid? FK. An empty string must never be sent —
-    // the backend does Guid.Parse(value) and "" is not a valid UUID (Postgres 22P02 -> 500).
-    if ((f.interface === 'file' || f.interface === 'image') && v === '') v = null
+    // The registry's serialize owns per-type coercion — e.g. file/image '' -> null so a
+    // nullable Guid FK never serialises "" (Postgres 22P02 -> 500). See fieldTypes/registry.ts.
+    const v = getFieldType(f.interface).serialize(model.shared[f.name], f)
     if (mode === 'update' || !isEmpty(v)) payload[f.name] = v
   }
 
@@ -39,7 +36,7 @@ export function buildItemPayload(
     if (mode === 'create' && !isDefault && !hasContent) continue
     if (mode === 'update' && !hasContent) continue
     const entry: Record<string, unknown> = {}
-    for (const f of translatable) entry[f.name] = values[f.name]
+    for (const f of translatable) entry[f.name] = getFieldType(f.interface).serialize(values[f.name], f)
     translations[loc.code] = entry
   }
   const relations = model.relations ?? {}
