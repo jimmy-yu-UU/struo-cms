@@ -23,7 +23,24 @@ public static class MetadataScanner
          nameof(IAuditable.UpdatedAt), nameof(IAuditable.UpdatedBy)];
 
     public static IReadOnlyList<CollectionMetadata> Scan(params Assembly[] assemblies) =>
-        ScanTypes(assemblies.SelectMany(a => a.GetTypes()));
+        ScanTypes(assemblies.SelectMany(SafeGetTypes));
+
+    /// <summary>
+    /// <see cref="Assembly.GetTypes"/> that tolerates an assembly with an unresolvable type: instead of
+    /// throwing <see cref="ReflectionTypeLoadException"/> (which aborts the whole scan), it returns the
+    /// types that did load. Guards convention-based discovery against a single bad dependency (audit A4).
+    /// </summary>
+    public static IEnumerable<Type> SafeGetTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            return ex.Types.Where(t => t is not null)!;
+        }
+    }
 
     public static IReadOnlyList<CollectionMetadata> ScanTypes(IEnumerable<Type> types)
     {
