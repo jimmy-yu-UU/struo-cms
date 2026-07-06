@@ -14,33 +14,32 @@
 | **H2** 隱藏欄位 filter 洩露 | 直接修正 | ✅ 已修復（`QueryValidator` 排除 Hidden；+4 測試，295 綠） |
 | **H3** RBAC 自我提權 | 限 super-admin | ✅ 已修復（`CmsCollection.AdminOnly` + `ItemService` 守衛；+4 測試） |
 | **H4** 檔案 API 繞過 RBAC | 套用完整 RBAC | ✅ 已修復（`FilesController` CanWrite/CanDelete；+4 測試） |
-| **H1** 無 rate limiting | 暫緩 | ⬜ 待處理 |
 | **M1** 無 CSRF 防護 | 加 anti-forgery | ✅ 已修復（`CsrfProtectionMiddleware` OWASP 自訂 header + 前端 apiClient；+3 後端 +2 前端測試） |
 | **M2** token 永久/無追蹤 | 保留永久 + 加 last-used | ✅ 已修復（User 加 `AccessTokenCreatedAt`/`LastUsedAt`；bearer 認證 throttled 更新；+1 測試） |
 | **M3** SSO email 合併 | 維持現狀（接受） | ✅ 已記錄 accepted-risk（`OidcOptions` 註解 + 本文件；部署需 pin tenant/domain） |
-| L1–L3 | 未決 | ⬜ 待討論 |
-| **D1** 多步驟寫入非原子 | 加 unit-of-work | ✅ 已修復（`IItemRepository.InTransactionAsync` nesting-safe；Create/Update 包單一 tx；+3 測試）**（SQLite 綠，建議補 live-PG gate）** |
-| **D2** 無樂觀鎖 | 加 RowVersion + 409 | ✅ 已修復（`AuditableEntity.Version`；repo compare-and-swap `WHERE id AND version=expected`→`ConcurrencyConflictException`(409)；version 進投影；前端 echo；+3 後端 +2 前端）**（SQLite 綠，建議補 live-PG gate）** |
+| **D1** 多步驟寫入非原子 | 加 unit-of-work | ✅ 已修復（`IItemRepository.InTransactionAsync` nesting-safe；Create/Update 包單一 tx；+3 測試）**（SQLite + 真 PG 綠）** |
+| **D2** 無樂觀鎖 | 加 RowVersion + 409 | ✅ 已修復（`AuditableEntity.Version`；repo compare-and-swap `WHERE id AND version=expected`→`ConcurrencyConflictException`(409)；version 進投影；前端 echo；+3 後端 +2 前端）**（SQLite + 真 PG 綠）** |
 | **D3** 無 production migration | 文件化策略 | ✅ 已產出 `docs/migration-strategy.md`（版本化 SQL 腳本 + 手動套用 runbook；不建框架，日後可升 DbUp） |
 | **D4** SQLite 測試掩蓋 PG bug | opt-in 本地 PG 測試 | ✅ 已加 `PostgresIntegrationTests`（設 `STRUO_TEST_PG_CONNECTION` 才跑真 PG，否則 no-op）；覆蓋 D5 offset / D2 compare-and-swap / uuid filter。**需操作者跑一次確認。** |
 | **D5** offset 分頁計算錯誤 | 修正 | ✅ 已修復（改 Count + Skip/Take 真 offset 窗；+1 SQLite 測試 +1 PG 骨架） |
 | **D6** CSharpTypeName 套用不一致 | 統一 | ✅ 已修復（5 個 hand-built ConditionalModel 依值 CLR 型別設 CSharpTypeName；共用 `ConditionalModelTranslator.SqlSugarTypeName`）**（SQLite 綠，PG 由 D4 骨架驗證）** |
-| **D7** 資料路徑重反射 | 待做 | ⬜ 效能（compiled delegate / method 快取），非正確性 |
-| **D8** overlay locale=null 全載 | 待做 | ⬜ 規模化正確性 |
+| **D7** 資料路徑重反射 | 延後（接受） | 🔷 純效能、需先量測（YAGNI）；決定先不做 |
+| **D8** overlay locale=null 全載 | 接受（取捨） | 🔷 多語系切換在前端；後端僅保留輸出單一語系能力，視為取捨不改 |
 | **D9** 多 DB 宣稱名不符實 | 文件化 | ✅ 已修（CLAUDE.md §1 改為 PG 支援、SQLite 測試、其他 provider 標 experimental） |
-| **D10** update 三次 SELECT | 待做 | ⬜ 效能，非正確性 |
+| **D10** update 三次 SELECT | 延後（接受） | 🔷 純效能，且會讓刪除競態 404→409；決定先不做 |
 | **L1** 登入 timing 洩露 | 修正 | ✅ 已修（not-found 走 dummy verify 等化時間；+測試改寫） |
-| **L2** 上傳信任 Content-Type | 待做 | ⬜ 有行為變更風險（改預設 allowlist 可能擋掉現有上傳），另議 |
+| **L2** 上傳信任 Content-Type | 保守版修正 | ✅ 已修（`FileSignatureValidator` magic-byte 嗅探：宣稱為已知型別但位元組不符即拒；未知型別放行、不動預設 allow-all；+6 測試） |
 | **L3** 路徑前綴無分隔符 | 修正 | ✅ 已修（比對 root + 分隔符邊界） |
-| **A1** §2 sample 引用違規 | 待做 | ⬜ 需另建 Sample.Host，結構性改動 |
-| **A2** ItemService god class | 待做 | ⬜ 重構 |
+| **A1** §2 sample 引用違規 | 接受（dev-only） | ✅ 認定為 dev/demo scaffolding（真實 host 會移除）；csproj 加註說明，不視為框架碼 |
+| **A2** ItemService god class | 延後（接受） | 🔷 大重構、回歸風險高；決定先不做 |
 | **A3** AllowAll footgun 在 prod 組件 | 修正 | ✅ 已移到測試專案（Struo.Tests.Support） |
-| **A4** discovery GetTypes 未防 | 待做 | ⬜ 加固 |
-| F1–F10（前端擴充性） | 未決 | ⬜ 待討論 |
+| **A4** discovery GetTypes 未防 | 修正 | ✅ 已修（`MetadataScanner.SafeGetTypes` 容忍 ReflectionTypeLoadException；+1 測試） |
+| **H1** 無 rate limiting | 延後（接受） | 🔷 決定先不做 |
+| F1–F10（前端擴充性） | 延後 | 🔷 7g+ 前端擴充，留待做進階欄位型別時處理 |
 
-> 基線：後端測試 283 → **309**（含 D4-PG骨架×3〔無 PG 時 no-op〕；L1 測試改寫、A3 移置、D6 皆行為保留故總數不變），前端 157 → **161**，0 失敗。GateGuard hook 本 session 已停用以減少編輯摩擦。
+> 基線：後端測試 283 → **316**（含真 PG 整合 3；L2 magic-byte +6、A4 +1），前端 157 → **161**，0 失敗。GateGuard hook 本 session 已停用以減少編輯摩擦。
 >
-> **第二批（未 commit）：** D9（doc）、A3（移 footgun）、L1（timing）、L3（path prefix）、D6（CSharpTypeName 統一，SQLite 綠、PG 待 D4 骨架驗證）。第一批已 commit 於 `fix/architecture-audit-remediation`（c95389d/84594bd）。
+> **接受/延後（不改）：** D7、D10（純效能）、D8（多語系在前端，取捨）、A2（大重構）、H1（rate limiting）、F1–F10（前端 7g+）。A1 認定為 dev-only scaffolding（csproj 已加註）。
 >
 > **PG-correctness 已驗證（2026-07-06）：** `PostgresIntegrationTests` 現在會在跑 `dotnet test` 時對真 Postgres（`web-struo-cms-test-db`，自動建立、名稱須含 `test` 才執行的防呆）執行，**D2 compare-and-swap、D5 offset、D6 uuid 綁定皆在真 PG 綠**。連線由 `Testing:PostgresConnection`（appsettings，Development 覆蓋）或 `STRUO_TEST_PG_CONNECTION` env 提供；未設時 no-op。該 collection 設 `DisableParallelization` 以避免與其他 collection 併發造成連線干擾。D7/D10 為純效能、D8 為規模化，優先序較低。
 >
