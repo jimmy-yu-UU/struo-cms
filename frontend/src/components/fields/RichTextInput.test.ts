@@ -77,4 +77,16 @@ describe('RichTextInput', () => {
     expect(vm.editor.isActive('superscript')).toBe(true)
     expect(vm.editor.isActive('subscript')).toBe(false)
   })
+
+  it('applies colour via the colour menu', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: { stubs } })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      editor: { commands: { selectAll: () => void }; getAttributes: (n: string) => Record<string, unknown> }
+    }
+    vm.editor.commands.selectAll()
+    await w.get('[data-cmd="color"]').trigger('click')
+    await w.get('[data-color="#dc2626"]').trigger('click')
+    expect(vm.editor.getAttributes('textStyle').color).toBe('#dc2626')
+  })
 })

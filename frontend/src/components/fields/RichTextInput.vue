@@ -12,6 +12,7 @@ import Superscript from '@tiptap/extension-superscript'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import MediaGrid from '../media/MediaGrid.vue'
+import RichTextColorMenu from './RichTextColorMenu.vue'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -154,6 +155,10 @@ defineExpose({ editor, insertImage })
         aria-label="Horizontal rule" title="Horizontal rule" @click="editor!.chain().focus().setHorizontalRule().run()">&#8213;</button>
       <button type="button" data-cmd="image" :disabled="disabled"
         aria-label="Insert image" title="Insert image" @click="openImageDialog">🖼️</button>
+      <RichTextColorMenu :disabled="disabled"
+        :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
+        @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
+        @clear="editor!.chain().focus().unsetColor().run()" />
       <button type="button" data-cmd="undo" :disabled="disabled"
         aria-label="Undo" title="Undo" @click="editor!.chain().focus().undo().run()">&#8630;</button>
       <button type="button" data-cmd="redo" :disabled="disabled"
