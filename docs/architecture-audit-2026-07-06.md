@@ -42,7 +42,7 @@
 >
 > **第二批（未 commit）：** D9（doc）、A3（移 footgun）、L1（timing）、L3（path prefix）、D6（CSharpTypeName 統一，SQLite 綠、PG 待 D4 骨架驗證）。第一批已 commit 於 `fix/architecture-audit-remediation`（c95389d/84594bd）。
 >
-> **PG-correctness 批次建議（下一輪）：** D6（CSharpTypeName 統一）應與「跑 D4 的 PG 測試套件驗證 D1/D2/D5」一起做——設好 `STRUO_TEST_PG_CONNECTION` 後執行，讓 D6 有 PG 可驗證，同時把 D1/D2/D5 的 SQLite-only 狀態升級為 PG-verified。D7/D10 為純效能、D8 為規模化、D9 為文件，優先序較低。
+> **PG-correctness 已驗證（2026-07-06）：** `PostgresIntegrationTests` 現在會在跑 `dotnet test` 時對真 Postgres（`web-struo-cms-test-db`，自動建立、名稱須含 `test` 才執行的防呆）執行，**D2 compare-and-swap、D5 offset、D6 uuid 綁定皆在真 PG 綠**。連線由 `Testing:PostgresConnection`（appsettings，Development 覆蓋）或 `STRUO_TEST_PG_CONNECTION` env 提供；未設時 no-op。該 collection 設 `DisableParallelization` 以避免與其他 collection 併發造成連線干擾。D7/D10 為純效能、D8 為規模化，優先序較低。
 >
 > **D1/D2 live-PG 注意：** 兩者皆在 SQLite 綠。依專案「SQLite 綠 ≠ Postgres 對」紀律，D1 transaction 與 D2 compare-and-swap（raw `WHERE` 用 `GetDbColumnName` + typed 參數；id 綁真 Guid 故 PG uuid 風險低）建議於真 Postgres 跑一次 gate 再視為完全完成。
 >
