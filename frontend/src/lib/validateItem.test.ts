@@ -23,4 +23,20 @@ describe('validateItem', () => {
     const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: 'Hi' }, 'zh-TW': { title: '' } }, relations: {} }
     expect(validateItem(meta, model, 'en')).toEqual({})
   })
+  it('rejects over-long shared values and accepts exactly-at-limit', () => {
+    const lenMeta: CollectionMeta = { name: 'article', label: 'Article', fields: [
+      field('name', { label: 'Name', maxLength: 5 }),
+    ], relations: [] }
+    const tooLongModel: FormModel = { shared: { name: 'x'.repeat(6) }, translations: {}, relations: {} }
+    expect(validateItem(lenMeta, tooLongModel, 'en')).toEqual({ name: 'Name must be at most 5 characters.' })
+    const atLimitModel: FormModel = { shared: { name: 'x'.repeat(5) }, translations: {}, relations: {} }
+    expect(validateItem(lenMeta, atLimitModel, 'en')).toEqual({})
+  })
+  it('rejects over-long default-locale translatable values', () => {
+    const lenMeta: CollectionMeta = { name: 'article', label: 'Article', fields: [
+      field('title', { label: 'Title', translatable: true, maxLength: 5 }),
+    ], relations: [] }
+    const model: FormModel = { shared: {}, translations: { en: { title: 'x'.repeat(6) } }, relations: {} }
+    expect(validateItem(lenMeta, model, 'en')).toEqual({ title: 'Title must be at most 5 characters.' })
+  })
 })
