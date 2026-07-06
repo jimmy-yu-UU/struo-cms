@@ -6,6 +6,10 @@ import TextareaField from './TextareaField.vue'
 import NumberField from './NumberField.vue'
 import BooleanField from './BooleanField.vue'
 import DateField from './DateField.vue'
+import SelectField from './SelectField.vue'
+import RadioField from './RadioField.vue'
+import DividerField from './DividerField.vue'
+import ReadonlyField from './ReadonlyField.vue'
 import type { FieldMeta } from '../../types/schema'
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
@@ -48,5 +52,33 @@ describe('field components (simple inputs)', () => {
     expect(t.findComponent({ name: 'DatePicker' }).props('timeOnly')).toBe(true)
     const dt = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: null }, ...opts })
     expect(dt.findComponent({ name: 'DatePicker' }).props('showTime')).toBe(true)
+  })
+})
+
+describe('field components (choice + structural)', () => {
+  it('SelectField exposes its options', () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: 'a' },
+      global: { plugins: [PrimeVue] },
+    })
+    expect(w.findComponent({ name: 'Select' }).props('options')).toEqual([{ value: 'a', label: 'A' }])
+  })
+
+  it('RadioField renders one option per choice', () => {
+    const w = mount(RadioField, {
+      props: { field: field({ interface: 'radio', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }), modelValue: 'a' },
+      global: { plugins: [PrimeVue] },
+    })
+    expect(w.findAll('.radio-option')).toHaveLength(2)
+  })
+
+  it('DividerField renders an hr', () => {
+    const w = mount(DividerField, { props: { field: field({ interface: 'divider' }), modelValue: '' } })
+    expect(w.find('hr').exists()).toBe(true)
+  })
+
+  it('ReadonlyField shows the value, em-dash when empty', () => {
+    expect(mount(ReadonlyField, { props: { field: field({ interface: 'json' }), modelValue: '{}' } }).text()).toBe('{}')
+    expect(mount(ReadonlyField, { props: { field: field({ interface: 'json' }), modelValue: null } }).find('.readonly-field').text()).toBe('—')
   })
 })
