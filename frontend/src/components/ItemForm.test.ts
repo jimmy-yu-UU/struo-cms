@@ -21,19 +21,26 @@ const model: FormModel = { shared: { status: 'draft' }, translations: { en: { ti
 const stubs = {
   FieldInput: { props: ['field', 'modelValue', 'disabled'], template: '<div class="field-input" :data-name="field.name" />' },
   Button: { props: ['label'], template: '<button :data-label="label" @click="$emit(\'click\')">{{ label }}</button>' },
-  Tabs: { template: '<div><slot /></div>' },
+  Tabs: { props: ['value'], emits: ['update:value'], template: '<div class="tabs"><slot /></div>' },
   TabList: { template: '<div><slot /></div>' },
-  Tab: { template: '<button class="tab"><slot /></button>' },
+  Tab: { props: ['value'], template: '<button class="tab" @click="$emit(\'click\')"><slot /></button>' },
   TabPanels: { template: '<div><slot /></div>' },
-  TabPanel: { template: '<div class="tab-panel"><slot /></div>' },
+  TabPanel: { props: ['value'], template: '<div class="tab-panel"><slot /></div>' },
 }
 
 describe('ItemForm', () => {
-  it('renders shared fields once and a tab per locale', () => {
+  it('renders a tab per locale but mounts only the active locale panel body', () => {
     const w = mount(ItemForm, { props: { meta, model, locales, errors: {} }, global: { stubs } })
     expect(w.findAll('.tab')).toHaveLength(2)
-    // 1 shared (status) + translatable title rendered per locale panel (2) = 3 FieldInputs
-    expect(w.findAll('.field-input')).toHaveLength(3)
+    // 1 shared (status) + translatable title for the ACTIVE locale only (1) = 2 FieldInputs
+    expect(w.findAll('.field-input')).toHaveLength(2)
+  })
+  it('jumps the active tab to the default locale when validation errors appear', async () => {
+    const w = mount(ItemForm, { props: { meta, model, locales, errors: {} }, global: { stubs } })
+    // move off the default locale, then surface an error
+    ;(w.vm as unknown as { activeLocale: string }).activeLocale = 'zh-TW'
+    await w.setProps({ errors: { title: 'Title is required.' } })
+    expect((w.vm as unknown as { activeLocale: string }).activeLocale).toBe('en')
   })
   it('shows a server error banner', () => {
     const w = mount(ItemForm, { props: { meta, model, locales, errors: {}, serverError: 'boom' }, global: { stubs } })
