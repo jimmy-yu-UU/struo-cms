@@ -210,12 +210,43 @@
   `pnpm vue-tsc` clean, `pnpm build` succeeds. **Live gate PASSED 2026-07-07** (4/4, no backend fixes) — see
   the row above. A whole-branch review + one fix batch (bad-JSON-value-type → 400, verbatim mixed-case-key
   test, defensive Json projection guard) preceded the merge.
-- **Next up:** Phase 7g+ remaining —
-  structured editors `Repeater` (repeatable child objects); multi-file `Files`), each a single registry entry +
-  component + its own persistence design + live gate; deferred interfaces render read-only meanwhile.
-  (Multi-value selects (slice 1) and `Json`/`KeyValue` structured editors (slice 2) are done & live-verified,
-  see above.) Deferred hardening from the slice-2 review: a scanner startup fail-fast on `Translatable = true`
-  for Json/KeyValue/multi-value interfaces (latent, also applies to slice 1).
+- **Phase 7g+ slice 3 (multi-file `Files`) done & live-verified (real PG + MinIO, 2026-07-07):**
+  the third 7g+ slice — `Files` is an **ordered** list of file references (`List<Guid>`, a gallery),
+  mirroring the shipped scalar `File`/`Image` contract (store raw ids, project raw ids, frontend
+  resolves each for display). Persists via the slice-1 `IsJson` **`text`** column convention (`Files`
+  added to `JsonColumnInterfaces`); **all JSON we author is System.Text.Json** (inbound whole-entity
+  deserialize binds the guid-string array into `List<Guid>`, outbound projects the raw list) — the only
+  Newtonsoft touch is SqlSugar's internal `IsJson` materialization, and `List<Guid>` (a value-type list)
+  has none of the slice-2 disposed-`JsonElement?` problem. `ItemService.Deserialize` gained a `Files`
+  normalization branch — drops `Guid.Empty`, de-duplicates keeping first (preserving order), and enforces
+  `Required` as a non-empty list (→ 400); a non-guid array element → 400 via the pre-existing slice-2
+  `JsonException → QueryException` guard (no new code). **No existence validation** (a deleted file
+  degrades to a raw-id fallback in the picker, matching the scalar contract). Frontend: `FilesField.vue`
+  (PrimeVue `OrderList` drag-reorder + one batched `filter[id][_in]` resolve + missing-id fallback rows)
+  and an additive multi-select mode on `MediaGrid` (`multiple`/`selectedIds`/`@toggle`; `FilePicker`
+  untouched); sample `Article.Gallery`. Non-translatable, non-sortable, non-searchable; `MaxLength` N/A.
+  This slice also **actioned the slice-2 review's deferred M4 item**: a scanner startup fail-fast on
+  `Translatable = true` for the JSON-column interfaces (`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/
+  `Files`; `Json` intentionally excluded). **Live gate PASSED 12/12 on real Postgres + MinIO, no backend
+  fixes:** upload 3 files → create article with `gallery=[id1,id2,id3]` (201) → reads back **in order** →
+  PUT reorder+drop → `[id3,id1]` → PUT duplicate → de-duplicated keep-first `[id1,id3]` → non-guid
+  element → **400** (not 500) → delete a referenced file → the id still round-trips in the gallery (the
+  raw-id fallback contract). The slice-1 `varchar(1)` class was **not** reintroduced (full guids
+  round-trip through the `text` column). Spec:
+  [spec](superpowers/specs/2026-07-07-phase7g-plus-multifile-files-design.md) · plan:
+  [plan](superpowers/plans/2026-07-07-phase7g-plus-multifile-files.md).
+- **Verification baseline (2026-07-07, post-7g+ slice 3):** backend `dotnet build -warnaserror` clean +
+  `dotnet test` **361** passed / 0 failed (353 post-slice-2 + 5 ItemServiceFilesField + 2 scanner
+  fail-fast + 1 Article scanner; the StructuredColumnMapping DDL fact was extended in place, count
+  unchanged). Frontend `pnpm test` **228** (217 post-slice-2 + 2 MediaGrid multi-select + 6 FilesField +
+  3 registry), `pnpm vue-tsc` clean, `pnpm build` succeeds (pre-existing >500 kB chunk advisory only).
+  **Live gate PASSED 2026-07-07** (12/12, no backend fixes) — see the row above. Migration
+  `003-article-files-column.sql` applied to the live (drifted) DB (`gallery text NOT NULL DEFAULT '[]'`).
+- **Next up:** Phase 7g+ remaining — the **last** interface: structured editor `Repeater` (repeatable
+  child objects), a single registry entry + component + its own persistence design + live gate;
+  `Hidden`/`Uuid` render read-only meanwhile. (Multi-value selects (slice 1), `Json`/`KeyValue`
+  structured editors (slice 2), and multi-file `Files` (slice 3) are all done & live-verified, see
+  above. The slice-2 review's deferred `Translatable` fail-fast was actioned in slice 3.)
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -282,7 +313,8 @@
 | 7g.6 | Frontend field-type registry (`lib/fieldTypes/*`, keyed by `FieldInterface`, TS-exhaustive, unknown→read-only) + empty-`Guid?` coercion single-homed (F2) + lazy i18n tabs (F3) — *pure refactor, no new field types, no backend* | ✅ done (frontend gates green; no live gate — no server/persistence change) | [spec](superpowers/specs/2026-07-06-phase7g6-field-type-registry-design.md) | [plan](superpowers/plans/2026-07-06-phase7g6-field-type-registry.md) |
 | 7g+.1 | Multi-value selects (`MultiSelect`/`CheckboxGroup` option-bound `List<string>`; `Tags` free-form `List<TagItem>` w/ optional per-item display label) + `[CmsOptions]` optional label + `IsJson`→`text` column — *first 7g+ slice* | ✅ done (live-verified: real PG — 3-field CRUD + exact-UTF-8 tag-label round-trip + `mars`→400; **+1 live-gate backend fix: `IsJson`→`text`, was `varchar(1)`**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multivalue-selects-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multivalue-selects.md) |
 | 7g+.2 | Structured editors `Json` (`string?` raw JSON in plain `text` — `JsonElement?` reads back disposed via SqlSugar/Newtonsoft, so strip-on-write + parse-on-project) + `KeyValue` (`Dictionary<string,string>` via `IsJson` `text`, keys verbatim not camelCased) — *second 7g+ slice* | ✅ done (live-verified: real PG — object/array/scalar round-trip + exact-UTF-8 + mixed-case-key verbatim + blank-key→400; **no backend fixes**; +1 pre-merge review fix: bad-value-type→400) | [spec](superpowers/specs/2026-07-07-phase7g-plus-structured-editors-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-structured-editors.md) |
-| 7g+ | Structured editor `Repeater` (repeatable child objects), multi-file `Files` — *remaining 7g+ slices; each = one registry entry + one `*Field.vue` + its own persistence design + live gate* | ⬜ planned | — | — |
+| 7g+.3 | Multi-file `Files` (`List<Guid>` ordered gallery via `IsJson` `text`; mirrors scalar File/Image raw-id contract; STJ in/out; drag-reorder `OrderList` + batched `filter[id][_in]` resolve + missing-id fallback; additive `MediaGrid` multi-select) + scanner `Translatable` fail-fast (review M4) — *third 7g+ slice* | ✅ done (live-verified: real PG+MinIO — order round-trip + reorder/drop + dedup keep-first + non-guid→400 + deleted-file fallback, 12/12, no backend fixes) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multifile-files-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multifile-files.md) |
+| 7g+ | Structured editor `Repeater` (repeatable child objects) — *the last remaining 7g+ slice; = one registry entry + one `*Field.vue` + its own persistence design + live gate* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
