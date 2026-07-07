@@ -149,6 +149,16 @@ namespace Struo.Tests.Metadata
             [CmsField(Interface = FieldInterface.Repeater, Translatable = true)] public List<OkChild> Rows { get; set; } = new();
         }
 
+        private sealed class IListChild
+        {
+            [CmsField(Interface = FieldInterface.Text)] public string A { get; set; } = "";
+        }
+        [CmsCollection("RepeaterInterfaceTypedList")]
+        private sealed class RepeaterInterfaceTypedList
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public IList<IListChild> Rows { get; set; } = new List<IListChild>();
+        }
+
         [Fact]
         public void Throws_when_repeater_is_not_a_list() =>
             ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterNotAList)])))
@@ -178,6 +188,11 @@ namespace Struo.Tests.Metadata
         public void Throws_when_repeater_parent_translatable() =>
             ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterTranslatableParent)])))
                 .Should().Throw<MetadataException>().WithMessage("*cannot be translatable*");
+
+        [Fact]
+        public void Throws_when_repeater_is_interface_typed_list() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterInterfaceTypedList)])))
+                .Should().Throw<MetadataException>().WithMessage("*must be a List<T>*");
     }
 }
 

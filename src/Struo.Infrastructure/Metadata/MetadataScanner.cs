@@ -305,9 +305,7 @@ public static class MetadataScanner
     private static IReadOnlyList<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
     {
         var t = prop.PropertyType;
-        var isList = t.IsGenericType
-            && typeof(IEnumerable).IsAssignableFrom(t)
-            && t.GetGenericArguments().Length == 1;
+        var isList = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>);
         var childType = isList ? t.GetGenericArguments()[0] : null;
         if (childType is null || !childType.IsClass || childType == typeof(string))
             throw new MetadataException(
