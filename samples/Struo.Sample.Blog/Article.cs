@@ -42,6 +42,12 @@ public sealed class Article : AuditableEntity
     [CmsField(Label = "Keywords", Interface = FieldInterface.Tags, Sort = 8, Group = "Content")]
     public List<TagItem> Keywords { get; set; } = [];
 
+    [CmsField(Label = "Attributes", Interface = FieldInterface.Json, Sort = 9, Group = "Content")]
+    public string? Attributes { get; set; }
+
+    [CmsField(Label = "Meta", Interface = FieldInterface.KeyValue, Sort = 10, Group = "Content")]
+    public Dictionary<string, string> Meta { get; set; } = new();
+
     // --- relations ---
     [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }
