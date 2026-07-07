@@ -41,4 +41,13 @@ describe('TagsField', () => {
     await inputs[1].setValue('科技')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([[{ value: 'a', label: '科技' }]])
   })
+
+  it('drops the label key entirely when the display-text input is cleared', async () => {
+    const w = mount(TagsField, {
+      props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a', label: 'x' }] }, ...opts,
+    })
+    const inputs = w.findAll('.tag-row input')
+    await inputs[1].setValue('')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([[{ value: 'a' }]])
+  })
 })
