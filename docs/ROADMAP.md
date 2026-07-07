@@ -182,10 +182,40 @@
   suite also gained TagItem/mapping/multi-value/scanner tests net of the count). Frontend `pnpm test` **205**
   (192 post-7g.6 + 4 option-bound + 4 tags + registry round-trip/format + label-drop), `pnpm vue-tsc` clean,
   `pnpm build` succeeds. **Live gate PASSED 2026-07-07** (4/4 + 1 backend fix `3b4ab40`) — see the row above.
+- **Phase 7g+ slice 2 (structured editors: `Json` + `KeyValue`) done & live-verified (real PG, 2026-07-07):**
+  the second 7g+ slice — `Json` (arbitrary JSON) and `KeyValue` (string→string map). **A persistence probe
+  overturned the brainstorm's `JsonElement?` choice:** SqlSugarCore 5.1.4 materializes `IsJson` columns with
+  Newtonsoft, and a `System.Text.Json.JsonElement?` reads back **disposed** (`JsonElementConverter.Write`
+  throws). So `Json` is a **`string?` holding raw JSON text** in a **plain `text` column (not `IsJson`)**:
+  `ItemService.Deserialize` strips the `Json` field key before the whole-entity deserialize (the existing
+  `StripKeys` path) and sets the property to `element.GetRawText()`; `Project` parses the stored string to a
+  **fresh** `JsonElement` so the API emits real structured JSON. `KeyValue` is a `Dictionary<string,string>`
+  via an `IsJson` **`text`** column (Newtonsoft round-trips a BCL dict cleanly); validated on write — blank
+  key → 400, `Required` empty → 400 (dictionary **keys are user data, NOT camelCased** — they round-trip
+  verbatim). A non-string map value now also maps to 400 (JsonException → QueryException), not 500. Frontend:
+  `JsonField` (validated `Textarea` — malformed input suppresses the emit) + `KeyValueField` (row-based
+  key/value) on the 7g.6 registry; sample `Article.Attributes` (Json) + `Article.Meta` (KeyValue).
+  Non-translatable, non-sortable, non-searchable; `MaxLength` N/A (`Json` is content-bearing → unlimited).
+  **Live gate PASSED 4/4 on real Postgres, no backend fixes:** create 201; `attributes` reads back as a real
+  JSON object (`人工智慧` exact by code point) not a string; `meta` keys verbatim incl. a mixed-case `MyKey`
+  (proves no camelCasing) and `標題` correct; PUT `attributes` → top-level array + added `meta` key persisted;
+  blank `meta` key → 400 (not 500). The slice-1 `varchar(1)` class was **not** reintroduced (full JSON
+  round-trips through the `text` columns). Spec:
+  [spec](superpowers/specs/2026-07-07-phase7g-plus-structured-editors-design.md) · plan:
+  [plan](superpowers/plans/2026-07-07-phase7g-plus-structured-editors.md).
+- **Verification baseline (2026-07-07, post-7g+ slice 2):** backend `dotnet build -warnaserror` clean +
+  `dotnet test` **353** passed / 0 failed (344 post-slice-1 + StructuredColumnMapping + ItemServiceJsonField(3)
+  + ItemServiceKeyValue(4 incl. the final-review bad-value-type test) + scanner + the final-review fixes).
+  Frontend `pnpm test` **217** (205 post-slice-1 + 4 JsonField + 4 KeyValueField + 4 registry round-trip/format),
+  `pnpm vue-tsc` clean, `pnpm build` succeeds. **Live gate PASSED 2026-07-07** (4/4, no backend fixes) — see
+  the row above. A whole-branch review + one fix batch (bad-JSON-value-type → 400, verbatim mixed-case-key
+  test, defensive Json projection guard) preceded the merge.
 - **Next up:** Phase 7g+ remaining —
-  structured editors `Json`/`KeyValue`/`Repeater`; multi-file `Files`), each now a single registry entry +
+  structured editors `Repeater` (repeatable child objects); multi-file `Files`), each a single registry entry +
   component + its own persistence design + live gate; deferred interfaces render read-only meanwhile.
-  (Multi-value selects — the first 7g+ slice — are done & live-verified, see above.)
+  (Multi-value selects (slice 1) and `Json`/`KeyValue` structured editors (slice 2) are done & live-verified,
+  see above.) Deferred hardening from the slice-2 review: a scanner startup fail-fast on `Translatable = true`
+  for Json/KeyValue/multi-value interfaces (latent, also applies to slice 1).
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -251,7 +281,8 @@
 | 7g.5 | Declared field max length (`[CmsField(MaxLength = n)]` → metadata/schema → backend 400 validation → frontend `maxlength`; CMS-layer only, decoupled from DB width — *no DDL*) — *inserted; born from the 7g live-gate varchar(255) bug* | ✅ done (live-verified: PG+Redis+MinIO — 256→400 kill-shot + boundary + translatable + regression, 4/4, no fixes) | [spec](superpowers/specs/2026-07-06-phase7g5-field-maxlength-design.md) | [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md) |
 | 7g.6 | Frontend field-type registry (`lib/fieldTypes/*`, keyed by `FieldInterface`, TS-exhaustive, unknown→read-only) + empty-`Guid?` coercion single-homed (F2) + lazy i18n tabs (F3) — *pure refactor, no new field types, no backend* | ✅ done (frontend gates green; no live gate — no server/persistence change) | [spec](superpowers/specs/2026-07-06-phase7g6-field-type-registry-design.md) | [plan](superpowers/plans/2026-07-06-phase7g6-field-type-registry.md) |
 | 7g+.1 | Multi-value selects (`MultiSelect`/`CheckboxGroup` option-bound `List<string>`; `Tags` free-form `List<TagItem>` w/ optional per-item display label) + `[CmsOptions]` optional label + `IsJson`→`text` column — *first 7g+ slice* | ✅ done (live-verified: real PG — 3-field CRUD + exact-UTF-8 tag-label round-trip + `mars`→400; **+1 live-gate backend fix: `IsJson`→`text`, was `varchar(1)`**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multivalue-selects-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multivalue-selects.md) |
-| 7g+ | Structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *remaining 7g+ slices; each = one registry entry + one `*Field.vue` + its own persistence design + live gate* | ⬜ planned | — | — |
+| 7g+.2 | Structured editors `Json` (`string?` raw JSON in plain `text` — `JsonElement?` reads back disposed via SqlSugar/Newtonsoft, so strip-on-write + parse-on-project) + `KeyValue` (`Dictionary<string,string>` via `IsJson` `text`, keys verbatim not camelCased) — *second 7g+ slice* | ✅ done (live-verified: real PG — object/array/scalar round-trip + exact-UTF-8 + mixed-case-key verbatim + blank-key→400; **no backend fixes**; +1 pre-merge review fix: bad-value-type→400) | [spec](superpowers/specs/2026-07-07-phase7g-plus-structured-editors-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-structured-editors.md) |
+| 7g+ | Structured editor `Repeater` (repeatable child objects), multi-file `Files` — *remaining 7g+ slices; each = one registry entry + one `*Field.vue` + its own persistence design + live gate* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
