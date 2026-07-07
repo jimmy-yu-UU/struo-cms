@@ -35,7 +35,7 @@ public static class MetadataScanner
     private static readonly HashSet<FieldInterface> NonTranslatableJsonInterfaces =
     [
         FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
-        FieldInterface.KeyValue, FieldInterface.Files
+        FieldInterface.KeyValue, FieldInterface.Files, FieldInterface.Repeater
     ];
 
     // 7g+ slice 4: sub-field interfaces allowed inside a Repeater child object (the lean scalar set).

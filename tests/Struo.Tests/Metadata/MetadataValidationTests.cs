@@ -93,6 +93,91 @@ namespace Struo.Tests.Metadata
             field.Options!.Should().ContainSingle(o => o.Value == "published" && o.Label == "Published");
             field.Options!.Should().ContainSingle(o => o.Value == "archived" && o.Label == "archived");
         }
+
+        // 7g+ slice 4 Task 2: Repeater scan-time fail-fast guards.
+
+        [CmsCollection("RepeaterNotAList")]
+        private sealed class RepeaterNotAList
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public string Faqs { get; set; } = "";
+        }
+
+        private sealed class RichChild
+        {
+            [CmsField(Interface = FieldInterface.RichText)] public string Body { get; set; } = "";
+        }
+        [CmsCollection("RepeaterDisallowedSub")]
+        private sealed class RepeaterDisallowedSub
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public List<RichChild> Rows { get; set; } = new();
+        }
+
+        private sealed class NestedChild
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public List<RichChild> Inner { get; set; } = new();
+        }
+        [CmsCollection("RepeaterNested")]
+        private sealed class RepeaterNested
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public List<NestedChild> Rows { get; set; } = new();
+        }
+
+        private sealed class TranslatableChild
+        {
+            [CmsField(Interface = FieldInterface.Text, Translatable = true)] public string T { get; set; } = "";
+        }
+        [CmsCollection("RepeaterTranslatableSub")]
+        private sealed class RepeaterTranslatableSub
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public List<TranslatableChild> Rows { get; set; } = new();
+        }
+
+        private sealed class EmptyChild { public string Bare { get; set; } = ""; }
+        [CmsCollection("RepeaterEmptyChild")]
+        private sealed class RepeaterEmptyChild
+        {
+            [CmsField(Interface = FieldInterface.Repeater)] public List<EmptyChild> Rows { get; set; } = new();
+        }
+
+        private sealed class OkChild
+        {
+            [CmsField(Interface = FieldInterface.Text)] public string A { get; set; } = "";
+        }
+        [CmsCollection("RepeaterTranslatableParent")]
+        private sealed class RepeaterTranslatableParent
+        {
+            [CmsField(Interface = FieldInterface.Repeater, Translatable = true)] public List<OkChild> Rows { get; set; } = new();
+        }
+
+        [Fact]
+        public void Throws_when_repeater_is_not_a_list() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterNotAList)])))
+                .Should().Throw<MetadataException>().WithMessage("*must be a List<T>*");
+
+        [Fact]
+        public void Throws_when_repeater_sub_field_interface_not_allowed() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterDisallowedSub)])))
+                .Should().Throw<MetadataException>().WithMessage("*not allowed inside a Repeater*");
+
+        [Fact]
+        public void Throws_when_repeater_nested_in_repeater() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterNested)])))
+                .Should().Throw<MetadataException>().WithMessage("*not allowed inside a Repeater*");
+
+        [Fact]
+        public void Throws_when_repeater_sub_field_translatable() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterTranslatableSub)])))
+                .Should().Throw<MetadataException>().WithMessage("*cannot be translatable*");
+
+        [Fact]
+        public void Throws_when_repeater_child_has_no_cms_fields() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterEmptyChild)])))
+                .Should().Throw<MetadataException>().WithMessage("*must declare at least one [CmsField]*");
+
+        [Fact]
+        public void Throws_when_repeater_parent_translatable() =>
+            ((Action)(() => MetadataScanner.ScanTypes([typeof(RepeaterTranslatableParent)])))
+                .Should().Throw<MetadataException>().WithMessage("*cannot be translatable*");
     }
 }
 
