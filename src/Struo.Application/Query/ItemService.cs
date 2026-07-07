@@ -29,6 +29,11 @@ public sealed class ItemService(
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
+    private static readonly HashSet<FieldInterface> MultiValueInterfaces =
+    [
+        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags
+    ];
+
     public async Task<PagedResult> QueryAsync(
         string collection, QueryModel raw, string? locale = null, CancellationToken ct = default)
     {
@@ -706,6 +711,51 @@ public sealed class ItemService(
             var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.EntityType.GetProperty(prop) : null;
             if (pi?.GetValue(entity) is string value && value.Length > field.MaxLength!.Value)
                 throw new QueryException($"Field '{field.Name}' exceeds maximum length {field.MaxLength}.");
+        }
+
+        // Multi-value fields (MultiSelect/CheckboxGroup/Tags) live on the parent entity as
+        // List<string> / List<TagItem>. Validate membership / non-blank tags, enforce Required as
+        // non-empty, de-duplicate, and coerce blank tag labels to null. Non-translatable only.
+        foreach (var field in meta.Fields.Where(f => MultiValueInterfaces.Contains(f.Interface) && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true }) continue;
+
+            if (field.Interface == FieldInterface.Tags)
+            {
+                var tags = (pi.GetValue(entity) as IEnumerable<TagItem>) ?? [];
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var cleaned = new List<TagItem>();
+                foreach (var t in tags)
+                {
+                    if (t is null || string.IsNullOrWhiteSpace(t.Value))
+                        throw new QueryException($"Field '{field.Name}' has a tag with an empty value.");
+                    if (!seen.Add(t.Value)) continue; // de-dup by value, keep first
+                    var label = string.IsNullOrWhiteSpace(t.Label) ? null : t.Label;
+                    cleaned.Add(new TagItem(t.Value, label));
+                }
+                if (field.Required && cleaned.Count == 0)
+                    throw new QueryException($"Field '{field.Name}' is required.");
+                pi.SetValue(entity, cleaned);
+            }
+            else // option-bound MultiSelect / CheckboxGroup
+            {
+                var values = (pi.GetValue(entity) as IEnumerable<string>) ?? [];
+                var allowed = (field.Options ?? []).Select(o => o.Value).ToHashSet(StringComparer.Ordinal);
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var cleaned = new List<string>();
+                foreach (var v in values)
+                {
+                    if (v is null) continue;
+                    if (!allowed.Contains(v))
+                        throw new QueryException($"Field '{field.Name}' has value '{v}' not in its options.");
+                    if (seen.Add(v)) cleaned.Add(v); // de-dup, keep first
+                }
+                if (field.Required && cleaned.Count == 0)
+                    throw new QueryException($"Field '{field.Name}' is required.");
+                pi.SetValue(entity, cleaned);
+            }
         }
         return entity;
     }

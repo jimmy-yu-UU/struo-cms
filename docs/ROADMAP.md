@@ -157,10 +157,35 @@
   for F1/F2 (existing parse/serialize/list/dispatch tests stayed green as characterization); only `ItemForm`'s
   test changed for the deliberate lazy-mount behaviour. No backend/DDL/live-gate (frontend-only). Adding a new
   field type is now one registry entry + one `*Field.vue` + tests.
-- **Next up:** Phase 7g+
-  (multi-value selects `MultiSelect`/`CheckboxGroup`/`Tags`; structured editors `Json`/`KeyValue`/`Repeater`;
-  multi-file `Files`), each now a single registry entry + component + its own persistence design + live gate;
-  deferred interfaces render read-only meanwhile.
+- **Phase 7g+ slice 1 (multi-value selects) done & live-verified (real PG, 2026-07-07):** the first 7g+ slice —
+  `MultiSelect`/`CheckboxGroup` (option-bound, values ⊆ `[CmsOptions]`, stored `List<string>`) and `Tags`
+  (free-form, stored `List<TagItem>` where `TagItem = {Value, Label?}` carries an optional per-item display
+  text, `label ?? value`). `[CmsOptions]` label is now **optional** (bare `"value"` → label = value; empty
+  value still fail-fasts). Values persist via a SqlSugar `IsJson` **`text`** column (the value-shape = the
+  CLR property type; System.Text.Json deserializes the array natively); `ItemService.Deserialize` validates
+  option membership / non-blank tags / `Required`-non-empty, de-duplicates (keep first), and coerces blank
+  tag labels to null — **both** write paths, 400 not 500. Frontend: three registry entries + `MultiSelectField`/
+  `CheckboxGroupField`/`TagsField` on the 7g.6 registry (list columns join resolved labels / `label ?? value`).
+  Non-translatable, non-sortable, non-searchable (§9). **Live gate PASSED 4/4 on real Postgres** (create with all
+  three fields incl. a tag with & without label → exact UTF-8 round-trip verified by code point — `人工智慧` =
+  U+4EBA U+5DE5 U+667A U+6167; PUT edit incl. the `amer` value-fallback option; `mars` → **400** "not in its
+  options", not 500). **The live gate surfaced & fixed 1 real backend bug** (`3b4ab40`, the SQLite-green ≠
+  Postgres-correct class again): SqlSugar `IsJson` leaves the CodeFirst length unset → Postgres made the column
+  `varchar(1)` (SQLite ignores declared length, so the round-trip test passed), truncating any real JSON payload
+  with Npgsql 22001; the multi-value convention now also sets `DataType = "text"`, with a DDL type assertion added
+  and a `db/migrations/001-article-multivalue-columns.sql` (lowercase `text` columns) for pre-existing DBs (the
+  live DB boots clean after it). Spec:
+  [spec](superpowers/specs/2026-07-07-phase7g-plus-multivalue-selects-design.md) · plan:
+  [plan](superpowers/plans/2026-07-07-phase7g-plus-multivalue-selects.md).
+- **Verification baseline (2026-07-07, post-7g+ slice 1):** backend `dotnet build -warnaserror` clean +
+  `dotnet test` **344** passed / 0 failed (343 post-7g.6-backend-work + 1 CmsOptions empty-value guard; the
+  suite also gained TagItem/mapping/multi-value/scanner tests net of the count). Frontend `pnpm test` **205**
+  (192 post-7g.6 + 4 option-bound + 4 tags + registry round-trip/format + label-drop), `pnpm vue-tsc` clean,
+  `pnpm build` succeeds. **Live gate PASSED 2026-07-07** (4/4 + 1 backend fix `3b4ab40`) — see the row above.
+- **Next up:** Phase 7g+ remaining —
+  structured editors `Json`/`KeyValue`/`Repeater`; multi-file `Files`), each now a single registry entry +
+  component + its own persistence design + live gate; deferred interfaces render read-only meanwhile.
+  (Multi-value selects — the first 7g+ slice — are done & live-verified, see above.)
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -225,7 +250,8 @@
 | 7g | Advanced rich text (basic tables / text-align / colour / sub-superscript) + sanitizer allowlist extended in lockstep (`style` limited to `color`+`text-align`) — *second rich-text slice, deferred from 7f* | ✅ done (live-verified: PG+Redis+MinIO — round-trip + hostile-CSS + i18n; **+1 live-gate backend fix: content-bearing interfaces → `text` columns**) | [spec](superpowers/specs/2026-07-06-phase7g-advanced-richtext-design.md) | [plan](superpowers/plans/2026-07-06-phase7g-advanced-richtext.md) |
 | 7g.5 | Declared field max length (`[CmsField(MaxLength = n)]` → metadata/schema → backend 400 validation → frontend `maxlength`; CMS-layer only, decoupled from DB width — *no DDL*) — *inserted; born from the 7g live-gate varchar(255) bug* | ✅ done (live-verified: PG+Redis+MinIO — 256→400 kill-shot + boundary + translatable + regression, 4/4, no fixes) | [spec](superpowers/specs/2026-07-06-phase7g5-field-maxlength-design.md) | [plan](superpowers/plans/2026-07-06-phase7g5-field-maxlength.md) |
 | 7g.6 | Frontend field-type registry (`lib/fieldTypes/*`, keyed by `FieldInterface`, TS-exhaustive, unknown→read-only) + empty-`Guid?` coercion single-homed (F2) + lazy i18n tabs (F3) — *pure refactor, no new field types, no backend* | ✅ done (frontend gates green; no live gate — no server/persistence change) | [spec](superpowers/specs/2026-07-06-phase7g6-field-type-registry-design.md) | [plan](superpowers/plans/2026-07-06-phase7g6-field-type-registry.md) |
-| 7g+ | Multi-value selects (`MultiSelect`/`CheckboxGroup`/`Tags`), structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *deferred from 7d/7e; now stands on the 7g.6 registry (add-a-type = one registry entry + one `*Field.vue` + tests)* | ⬜ planned | — | — |
+| 7g+.1 | Multi-value selects (`MultiSelect`/`CheckboxGroup` option-bound `List<string>`; `Tags` free-form `List<TagItem>` w/ optional per-item display label) + `[CmsOptions]` optional label + `IsJson`→`text` column — *first 7g+ slice* | ✅ done (live-verified: real PG — 3-field CRUD + exact-UTF-8 tag-label round-trip + `mars`→400; **+1 live-gate backend fix: `IsJson`→`text`, was `varchar(1)`**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multivalue-selects-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multivalue-selects.md) |
+| 7g+ | Structured editors (`Json`/`KeyValue`/`Repeater`), multi-file `Files` — *remaining 7g+ slices; each = one registry entry + one `*Field.vue` + its own persistence design + live gate* | ⬜ planned | — | — |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 

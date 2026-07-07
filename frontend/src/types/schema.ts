@@ -3,6 +3,9 @@
 
 export type FieldOption = { value: string; label: string }
 
+// A single free-form tag: stored value + optional manual display label (label ?? value shown).
+export type TagItem = { value: string; label?: string }
+
 export type FieldMeta = {
   name: string
   label: string

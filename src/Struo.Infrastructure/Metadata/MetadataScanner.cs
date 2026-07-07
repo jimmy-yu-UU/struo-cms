@@ -267,10 +267,18 @@ public static class MetadataScanner
         foreach (var entry in attr.Options)
         {
             var idx = entry.IndexOf(':');
-            if (idx <= 0 || idx == entry.Length - 1)
+            var value = idx < 0 ? entry : entry[..idx];
+            if (string.IsNullOrWhiteSpace(value))
                 throw new MetadataException(
-                    $"Field '{prop.DeclaringType?.Name}.{prop.Name}' has malformed [CmsOptions] entry '{entry}' (expected 'value:label').");
-            list.Add(new FieldOption(entry[..idx], entry[(idx + 1)..]));
+                    $"Field '{prop.DeclaringType?.Name}.{prop.Name}' has malformed [CmsOptions] entry '{entry}' (value is required).");
+            if (idx < 0)
+            {
+                // No colon: label defaults to the value ("draft" => value=label="draft").
+                list.Add(new FieldOption(entry, entry));
+                continue;
+            }
+            var label = entry[(idx + 1)..];
+            list.Add(new FieldOption(value, string.IsNullOrWhiteSpace(label) ? value : label));
         }
         return list;
     }
