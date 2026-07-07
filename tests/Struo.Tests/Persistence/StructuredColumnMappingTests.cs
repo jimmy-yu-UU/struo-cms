@@ -29,6 +29,9 @@ public class StructuredColumnMappingTests
 
         [CmsField(Label = "Attributes", Interface = FieldInterface.Json)]
         public string? Attributes { get; set; }
+
+        [CmsField(Label = "Gallery", Interface = FieldInterface.Files)]
+        public List<Guid> Gallery { get; set; } = new();
     }
 
     [Fact]
@@ -43,7 +46,7 @@ public class StructuredColumnMappingTests
             client.CodeFirst.InitTables<StructColTestEntity>();
 
             var columns = client.DbMaintenance.GetColumnInfosByTableName("structured_col_test_entity", false);
-            foreach (var col in new[] { "Meta", "Attributes" })
+            foreach (var col in new[] { "Meta", "Attributes", "Gallery" })
             {
                 var info = columns.Single(c => c.DbColumnName.Equals(col, StringComparison.OrdinalIgnoreCase));
                 info.DataType.Should().ContainEquivalentOf("text");
@@ -53,6 +56,11 @@ public class StructuredColumnMappingTests
             {
                 Meta = new Dictionary<string, string> { ["seo-title"] = "值", ["author"] = "me" },
                 Attributes = """{"a":1,"nested":{"x":"人工智慧"},"arr":[1,2]}""",
+                Gallery = new List<Guid>
+                {
+                    Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                },
             };
             client.Insertable(row).ExecuteCommand();
 
@@ -61,6 +69,9 @@ public class StructuredColumnMappingTests
             read.Meta["seo-title"].Should().Be("值");
             read.Meta["author"].Should().Be("me");
             read.Attributes.Should().Be("""{"a":1,"nested":{"x":"人工智慧"},"arr":[1,2]}""");
+            read.Gallery.Should().Equal(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                Guid.Parse("22222222-2222-2222-2222-222222222222"));
         }
     }
 }
