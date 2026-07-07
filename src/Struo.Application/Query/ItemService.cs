@@ -777,6 +777,26 @@ public sealed class ItemService(
                 pi.SetValue(entity, cleaned);
             }
         }
+
+        // KeyValue fields (Dictionary<string,string>) live on the parent entity. Reject blank keys and
+        // enforce Required as a non-empty map. Values may be empty; duplicate keys are impossible
+        // (System.Text.Json last-wins bind). Non-translatable only.
+        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.KeyValue && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true }) continue;
+
+            var map = pi.GetValue(entity) as IDictionary<string, string>;
+            if (map is not null)
+            {
+                foreach (var key in map.Keys)
+                    if (string.IsNullOrWhiteSpace(key))
+                        throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
+            }
+            if (field.Required && (map is null || map.Count == 0))
+                throw new QueryException($"Field '{field.Name}' is required.");
+        }
         return entity;
     }
 
