@@ -187,4 +187,22 @@ public class MetadataScannerTests
         keywords.Sortable.Should().BeFalse();
         keywords.Searchable.Should().BeFalse();
     }
+
+    [Fact]
+    public void Article_exposes_structured_fields_with_correct_metadata()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
+        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+
+        var attributes = article.Fields.Single(f => f.Name == "attributes");
+        attributes.Interface.Should().Be(FieldInterface.Json);
+        attributes.Sortable.Should().BeFalse();
+        attributes.Searchable.Should().BeFalse();
+        attributes.MaxLength.Should().BeNull(); // Json is content-bearing => unlimited
+
+        var meta = article.Fields.Single(f => f.Name == "meta");
+        meta.Interface.Should().Be(FieldInterface.KeyValue);
+        meta.Sortable.Should().BeFalse();
+        meta.Searchable.Should().BeFalse();
+    }
 }
