@@ -2,6 +2,7 @@ using SqlSugar;
 using Struo.Domain.Auditing;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Sample.Blog;
 
@@ -29,6 +30,17 @@ public sealed class Article : AuditableEntity
     [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Hero Image", Interface = FieldInterface.Image, Sort = 5, Group = "Content")]
     public Guid? HeroImageId { get; set; }
+
+    [CmsField(Label = "Regions", Interface = FieldInterface.MultiSelect, Sort = 6, Group = "Content")]
+    [CmsOptions("apac:APAC", "emea:EMEA", "amer")] // "amer" has no explicit label -> falls back to "amer"
+    public List<string> Regions { get; set; } = [];
+
+    [CmsField(Label = "Audiences", Interface = FieldInterface.CheckboxGroup, Sort = 7, Group = "Content")]
+    [CmsOptions("b2b:B2B", "b2c:B2C")]
+    public List<string> Audiences { get; set; } = [];
+
+    [CmsField(Label = "Keywords", Interface = FieldInterface.Tags, Sort = 8, Group = "Content")]
+    public List<TagItem> Keywords { get; set; } = [];
 
     // --- relations ---
     [SugarColumn(IsNullable = true)]
