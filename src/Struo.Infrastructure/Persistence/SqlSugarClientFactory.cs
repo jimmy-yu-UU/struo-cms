@@ -16,6 +16,13 @@ public static class SqlSugarClientFactory
         FieldInterface.Code, FieldInterface.Json
     ];
 
+    // Multi-value [CmsField] interfaces store an array; map them to a JSON column so SqlSugar
+    // (de)serializes the List<> automatically (jsonb on Postgres, JSON-in-text elsewhere).
+    private static readonly HashSet<FieldInterface> MultiValueInterfaces =
+    [
+        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags
+    ];
+
     public static ISqlSugarClient Create(DatabaseOptions options, ICurrentUserAccessor currentUser)
     {
         var dbType = DbTypeMapper.Map(options.DbType);
@@ -38,6 +45,15 @@ public static class SqlSugarClientFactory
                     }
 
                     if (column.IsPrimarykey || column.IsIgnore) return;
+
+                    // Multi-value fields (List<string> / List<TagItem>) -> JSON column. An explicit
+                    // [SugarColumn(IsJson=...)] still wins (this only sets the default).
+                    var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
+                    if (mvField is not null && MultiValueInterfaces.Contains(mvField.Interface))
+                    {
+                        column.IsJson = true;
+                        return;
+                    }
 
                     // All DBs: map C# nullable value types (Guid?, int?, DateTime?) to nullable
                     // columns in CodeFirst DDL, so inherited Guid? audit actors
