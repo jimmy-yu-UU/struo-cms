@@ -49,10 +49,17 @@ public static class SqlSugarClientFactory
                     // Multi-value fields (List<string> / List<TagItem>) always map to a JSON column —
                     // it's the only valid mapping for a List<> property. An explicit
                     // [SugarColumn(IsJson = true)] on the same property is redundant but compatible.
+                    //
+                    // DataType MUST be widened to `text`: `IsJson` alone leaves the CodeFirst length
+                    // unset, and on Postgres that becomes `varchar(1)` (default length 1), so any
+                    // serialized JSON longer than one char fails to insert (Npgsql 22001). SQLite
+                    // ignores declared length (dynamic typing), which is why this only surfaces on
+                    // Postgres — the phase 7g+ live-gate finding. `text` is unbounded on both.
                     var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
                     if (mvField is not null && MultiValueInterfaces.Contains(mvField.Interface))
                     {
                         column.IsJson = true;
+                        column.DataType = "text";
                         return;
                     }
 
