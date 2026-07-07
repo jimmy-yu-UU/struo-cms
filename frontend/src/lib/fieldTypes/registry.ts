@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import type { FieldMeta } from '../../types/schema'
+import type { FieldMeta, TagItem } from '../../types/schema'
 import type { FieldInterface, FieldTypeDef } from './types'
 import TextField from '../../components/fields/TextField.vue'
 import TextareaField from '../../components/fields/TextareaField.vue'
@@ -12,6 +12,9 @@ import RadioField from '../../components/fields/RadioField.vue'
 import DividerField from '../../components/fields/DividerField.vue'
 import FileField from '../../components/fields/FileField.vue'
 import ReadonlyField from '../../components/fields/ReadonlyField.vue'
+import MultiSelectField from '../../components/fields/MultiSelectField.vue'
+import CheckboxGroupField from '../../components/fields/CheckboxGroupField.vue'
+import TagsField from '../../components/fields/TagsField.vue'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => String(v) }
@@ -21,6 +24,58 @@ const asDate: ListColumn = {
 }
 const asOption: ListColumn = {
   format: (v, f) => { const o = f.options?.find((x) => x.value === String(v)); return o ? o.label : String(v) },
+}
+const asJoinedOptions: ListColumn = {
+  format: (v, f) => (Array.isArray(v)
+    ? v.map((x) => f.options?.find((o) => o.value === String(x))?.label ?? String(x)).join(', ')
+    : String(v ?? '')),
+}
+const asJoinedTags: ListColumn = {
+  format: (v) => (Array.isArray(v)
+    ? (v as TagItem[]).map((t) => t?.label ?? t?.value ?? '').join(', ')
+    : String(v ?? '')),
+}
+
+const arrParse = (raw: unknown): unknown[] => (Array.isArray(raw) ? raw : [])
+
+function optionMultiDef(component: Component): FieldTypeDef {
+  return {
+    component,
+    defaultValue: () => [],
+    parse: arrParse,
+    serialize: (v) => {
+      if (!Array.isArray(v)) return []
+      const seen = new Set<string>()
+      const out: string[] = []
+      for (const x of v) {
+        const s = String(x)
+        if (s.trim() === '' || seen.has(s)) continue
+        seen.add(s); out.push(s)
+      }
+      return out
+    },
+    listColumn: asJoinedOptions,
+  }
+}
+
+const tagsDef: FieldTypeDef = {
+  component: TagsField,
+  defaultValue: () => [],
+  parse: arrParse,
+  serialize: (v) => {
+    if (!Array.isArray(v)) return []
+    const seen = new Set<string>()
+    const out: TagItem[] = []
+    for (const t of v as Array<Partial<TagItem>>) {
+      const value = (t?.value ?? '').trim()
+      if (value === '' || seen.has(value)) continue
+      seen.add(value)
+      const label = (t?.label ?? '').trim()
+      out.push(label ? { value, label } : { value })
+    }
+    return out
+  },
+  listColumn: asJoinedTags,
 }
 
 function def(opts: {
@@ -67,10 +122,10 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   divider: def({ component: DividerField }),
   file: def({ component: FileField, empty: null, serialize: fileSerialize }),
   image: def({ component: FileField, empty: null, serialize: fileSerialize }),
+  multiSelect: optionMultiDef(MultiSelectField),
+  checkboxGroup: optionMultiDef(CheckboxGroupField),
+  tags: tagsDef,
   // Deferred to later 7g+ slices — render read-only for now (unchanged behaviour).
-  multiSelect: readonlyDef,
-  checkboxGroup: readonlyDef,
-  tags: readonlyDef,
   json: readonlyDef,
   keyValue: readonlyDef,
   repeater: readonlyDef,

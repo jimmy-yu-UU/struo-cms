@@ -13,6 +13,7 @@ const LIST_ELIGIBLE = new Set([
   'text', 'textarea', 'slug', 'email', 'url', 'phone', 'color',
   'number', 'slider', 'rating', 'boolean', 'checkbox',
   'date', 'time', 'dateTime', 'select', 'radio',
+  'multiSelect', 'checkboxGroup', 'tags',
 ])
 
 describe('field-type registry', () => {
@@ -61,5 +62,33 @@ describe('field-type registry', () => {
     const dt = field({ interface: 'dateTime' })
     expect(getFieldType('dateTime').listColumn!.format('2026-01-02T03:04:05Z', dt)).toContain('2026')
     expect(getFieldType('dateTime').listColumn!.format('not-a-date', dt)).toBe('not-a-date')
+  })
+
+  it('multi-value defaults are empty arrays and parse coerces non-arrays', () => {
+    for (const i of ['multiSelect', 'checkboxGroup', 'tags']) {
+      expect(getFieldType(i).defaultValue(field({ interface: i }))).toEqual([])
+      expect(getFieldType(i).parse(undefined, field({ interface: i }))).toEqual([])
+      expect(getFieldType(i).parse(['a'], field({ interface: i }))).toEqual(['a'])
+    }
+  })
+
+  it('option-bound serialize drops blanks and de-duplicates', () => {
+    const f = field({ interface: 'multiSelect' })
+    expect(getFieldType('multiSelect').serialize(['a', '', 'a', 'b'], f)).toEqual(['a', 'b'])
+  })
+
+  it('tags serialize drops blank values/labels and de-duplicates by value', () => {
+    const f = field({ interface: 'tags' })
+    expect(getFieldType('tags').serialize(
+      [{ value: 'tech', label: ' ' }, { value: '' }, { value: 'tech', label: 'X' }, { value: 'ai', label: '人工智慧' }], f,
+    )).toEqual([{ value: 'tech' }, { value: 'ai', label: '人工智慧' }])
+  })
+
+  it('list formatters join labels for option-bound and label??value for tags', () => {
+    const ms = field({ interface: 'multiSelect', options: [{ value: 'apac', label: 'APAC' }, { value: 'emea', label: 'EMEA' }] })
+    expect(getFieldType('multiSelect').listColumn!.format(['apac', 'emea'], ms)).toBe('APAC, EMEA')
+    expect(getFieldType('multiSelect').listColumn!.format(['apac', 'zzz'], ms)).toBe('APAC, zzz') // unknown -> raw value
+    const tg = field({ interface: 'tags' })
+    expect(getFieldType('tags').listColumn!.format([{ value: 'tech' }, { value: 'ai', label: '人工智慧' }], tg)).toBe('tech, 人工智慧')
   })
 })
