@@ -669,13 +669,29 @@ public sealed class ItemService(
         {
             // Parse into a using-scoped document so the ArrayPool buffer is returned promptly.
             using var stripped = JsonDocument.Parse(StripKeys(body, stripNames));
-            entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
-                     ?? throw new QueryException("Request body could not be parsed.");
+            try
+            {
+                entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
+                         ?? throw new QueryException("Request body could not be parsed.");
+            }
+            catch (JsonException)
+            {
+                // A field's JSON value is the wrong shape for its bound property (e.g. a KeyValue
+                // entry given a number/object instead of a string) — a client error, not a 500.
+                throw new QueryException("Request body could not be parsed.");
+            }
         }
         else
         {
-            entity = body.Deserialize(d.EntityType, JsonOpts)
-                     ?? throw new QueryException("Request body could not be parsed.");
+            try
+            {
+                entity = body.Deserialize(d.EntityType, JsonOpts)
+                         ?? throw new QueryException("Request body could not be parsed.");
+            }
+            catch (JsonException)
+            {
+                throw new QueryException("Request body could not be parsed.");
+            }
         }
 
         // Set each Json field's string property from the original body's raw text (stripped above).
@@ -828,7 +844,18 @@ public sealed class ItemService(
             // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
             // emits structured JSON, not a quoted string. Null stays null.
             if (field.Interface == FieldInterface.Json && value is string rawJson)
-                value = JsonSerializer.Deserialize<JsonElement>(rawJson);
+            {
+                try
+                {
+                    value = JsonSerializer.Deserialize<JsonElement>(rawJson);
+                }
+                catch (JsonException)
+                {
+                    // Defensive: the write path only ever stores valid JSON, so this is unreachable
+                    // via the API. Guards against out-of-band/legacy rows holding non-JSON text —
+                    // leave the raw string so the rest of the page still loads instead of a 500.
+                }
+            }
             dict[field.Name] = value;
         }
         return dict;
