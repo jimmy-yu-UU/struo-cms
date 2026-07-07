@@ -177,7 +177,14 @@ public class MetadataScannerTests
         regions.Searchable.Should().BeFalse();
         regions.Options!.Should().ContainSingle(o => o.Value == "amer" && o.Label == "amer"); // value-fallback
 
-        article.Fields.Single(f => f.Name == "audiences").Interface.Should().Be(FieldInterface.CheckboxGroup);
-        article.Fields.Single(f => f.Name == "keywords").Interface.Should().Be(FieldInterface.Tags);
+        var audiences = article.Fields.Single(f => f.Name == "audiences");
+        audiences.Interface.Should().Be(FieldInterface.CheckboxGroup);
+        audiences.Sortable.Should().BeFalse();
+        audiences.Searchable.Should().BeFalse();
+
+        var keywords = article.Fields.Single(f => f.Name == "keywords");
+        keywords.Interface.Should().Be(FieldInterface.Tags);
+        keywords.Sortable.Should().BeFalse();
+        keywords.Searchable.Should().BeFalse();
     }
 }

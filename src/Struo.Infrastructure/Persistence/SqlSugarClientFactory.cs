@@ -46,8 +46,9 @@ public static class SqlSugarClientFactory
 
                     if (column.IsPrimarykey || column.IsIgnore) return;
 
-                    // Multi-value fields (List<string> / List<TagItem>) -> JSON column. An explicit
-                    // [SugarColumn(IsJson=...)] still wins (this only sets the default).
+                    // Multi-value fields (List<string> / List<TagItem>) always map to a JSON column —
+                    // it's the only valid mapping for a List<> property. An explicit
+                    // [SugarColumn(IsJson = true)] on the same property is redundant but compatible.
                     var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
                     if (mvField is not null && MultiValueInterfaces.Contains(mvField.Interface))
                     {

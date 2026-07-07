@@ -267,7 +267,8 @@ public static class MetadataScanner
         foreach (var entry in attr.Options)
         {
             var idx = entry.IndexOf(':');
-            if (idx == 0)
+            var value = idx < 0 ? entry : entry[..idx];
+            if (string.IsNullOrWhiteSpace(value))
                 throw new MetadataException(
                     $"Field '{prop.DeclaringType?.Name}.{prop.Name}' has malformed [CmsOptions] entry '{entry}' (value is required).");
             if (idx < 0)
@@ -276,7 +277,6 @@ public static class MetadataScanner
                 list.Add(new FieldOption(entry, entry));
                 continue;
             }
-            var value = entry[..idx];
             var label = entry[(idx + 1)..];
             list.Add(new FieldOption(value, string.IsNullOrWhiteSpace(label) ? value : label));
         }
