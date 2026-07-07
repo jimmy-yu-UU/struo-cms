@@ -1,11 +1,23 @@
 <script setup lang="ts">
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 
-const props = defineProps<{ files: FileRow[]; selectable?: boolean; selectedId?: string | null }>()
-const emit = defineEmits<{ (e: 'select', id: string): void }>()
+const props = defineProps<{
+  files: FileRow[]
+  selectable?: boolean
+  selectedId?: string | null
+  multiple?: boolean
+  selectedIds?: string[]
+}>()
+const emit = defineEmits<{ (e: 'select', id: string): void; (e: 'toggle', id: string): void }>()
 
 function onClick(id: string): void {
+  if (props.multiple) { emit('toggle', id); return }
   if (props.selectable) emit('select', id)
+}
+function isSelected(id: string): boolean {
+  return props.multiple
+    ? !!props.selectedIds?.includes(id)
+    : props.selectable === true && props.selectedId === id
 }
 </script>
 
@@ -16,7 +28,7 @@ function onClick(id: string): void {
       :key="f.id"
       type="button"
       class="media-tile"
-      :class="{ 'is-selected': selectable && selectedId === f.id }"
+      :class="{ 'is-selected': isSelected(f.id) }"
       @click="onClick(f.id)"
     >
       <FileThumbnail :file="f" />

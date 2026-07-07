@@ -120,4 +120,22 @@ describe('field-type registry', () => {
     const kv = field({ interface: 'keyValue' })
     expect(getFieldType('keyValue').listColumn!.format({ a: '1', b: '2' }, kv)).toBe('a: 1, b: 2')
   })
+
+  it('files default is an empty array and parse coerces to string[]', () => {
+    const f = field({ interface: 'files' })
+    expect(getFieldType('files').defaultValue(f)).toEqual([])
+    expect(getFieldType('files').parse(undefined, f)).toEqual([])
+    expect(getFieldType('files').parse(['a', 'b'], f)).toEqual(['a', 'b'])
+    expect(getFieldType('files').parse('x', f)).toEqual([])
+  })
+
+  it('files serialize drops blanks and de-duplicates keeping first (order preserved)', () => {
+    const f = field({ interface: 'files' })
+    expect(getFieldType('files').serialize(['a', '', ' ', 'a', 'b'], f)).toEqual(['a', 'b'])
+    expect(getFieldType('files').serialize('nope', f)).toEqual([])
+  })
+
+  it('files is not list-eligible', () => {
+    expect(getFieldType('files').listColumn).toBeNull()
+  })
 })

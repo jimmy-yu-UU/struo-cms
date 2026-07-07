@@ -205,4 +205,53 @@ public class MetadataScannerTests
         meta.Sortable.Should().BeFalse();
         meta.Searchable.Should().BeFalse();
     }
+
+    [Fact]
+    public void Article_exposes_files_field_with_correct_metadata()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
+        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+
+        var gallery = article.Fields.Single(f => f.Name == "gallery");
+        gallery.Interface.Should().Be(FieldInterface.Files);
+        gallery.Sortable.Should().BeFalse();
+        gallery.Searchable.Should().BeFalse();
+        gallery.Translatable.Should().BeFalse();
+    }
+
+    [SugarTable("bad_translatable_files")]
+    [CmsCollection("BadTranslatableFiles")]
+    private sealed class BadTranslatableFiles : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [CmsField(Label = "Gallery", Interface = FieldInterface.Files, Translatable = true)]
+        public List<Guid> Gallery { get; set; } = new();
+    }
+
+    [SugarTable("ok_translatable_json")]
+    [CmsCollection("OkTranslatableJson")]
+    private sealed class OkTranslatableJson : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        // Json is intentionally NOT caught by the guard (a string that could be translatable later).
+        [CmsField(Label = "Attributes", Interface = FieldInterface.Json, Translatable = true)]
+        public string? Attributes { get; set; }
+    }
+
+    [Fact]
+    public void Translatable_files_field_fails_fast()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(BadTranslatableFiles)]);
+        act.Should().Throw<MetadataException>()
+            .WithMessage("*Gallery*cannot be translatable*");
+    }
+
+    [Fact]
+    public void Translatable_json_field_is_allowed()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(OkTranslatableJson)]);
+        act.Should().NotThrow();
+    }
 }
