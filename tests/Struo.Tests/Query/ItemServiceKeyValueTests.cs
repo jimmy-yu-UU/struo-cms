@@ -74,7 +74,7 @@ public class ItemServiceKeyValueTests : IDisposable
     {
         var body = Body(new
         {
-            meta = new Dictionary<string, string> { ["seo-title"] = "值", ["author"] = "me" },
+            meta = new Dictionary<string, string> { ["seo-title"] = "值", ["author"] = "me", ["MyKey"] = "v1" },
             requiredMeta = new Dictionary<string, string> { ["k"] = "v" },
         });
         var created = await _svc.CreateAsync("kvthing", body);
@@ -84,6 +84,20 @@ public class ItemServiceKeyValueTests : IDisposable
         meta.Should().ContainKey("seo-title");   // un-camelCased
         meta["seo-title"].Should().Be("值");
         meta["author"].Should().Be("me");
+        meta.Should().ContainKey("MyKey");       // mixed-case key would change under camelCase
+        meta["MyKey"].Should().Be("v1");
+    }
+
+    [Fact]
+    public async Task Non_string_value_is_rejected_as_bad_request()
+    {
+        var body = Body(new
+        {
+            requiredMeta = new Dictionary<string, string> { ["k"] = "v" },
+            meta = new { count = 1 },
+        });
+        var act = () => _svc.CreateAsync("kvthing", body);
+        await act.Should().ThrowAsync<QueryException>();
     }
 
     [Fact]
