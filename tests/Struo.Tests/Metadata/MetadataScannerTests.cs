@@ -164,4 +164,27 @@ public class MetadataScannerTests
         var act = () => MetadataScanner.ScanTypes([typeof(MaxLenOnNonString)]);
         act.Should().Throw<MetadataException>().WithMessage("*MaxLength*string*");
     }
+
+    [Fact]
+    public void Article_exposes_multi_value_fields_with_correct_metadata()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
+        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+
+        var regions = article.Fields.Single(f => f.Name == "regions");
+        regions.Interface.Should().Be(FieldInterface.MultiSelect);
+        regions.Sortable.Should().BeFalse();
+        regions.Searchable.Should().BeFalse();
+        regions.Options!.Should().ContainSingle(o => o.Value == "amer" && o.Label == "amer"); // value-fallback
+
+        var audiences = article.Fields.Single(f => f.Name == "audiences");
+        audiences.Interface.Should().Be(FieldInterface.CheckboxGroup);
+        audiences.Sortable.Should().BeFalse();
+        audiences.Searchable.Should().BeFalse();
+
+        var keywords = article.Fields.Single(f => f.Name == "keywords");
+        keywords.Interface.Should().Be(FieldInterface.Tags);
+        keywords.Sortable.Should().BeFalse();
+        keywords.Searchable.Should().BeFalse();
+    }
 }
