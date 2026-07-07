@@ -254,4 +254,52 @@ public class MetadataScannerTests
         var act = () => MetadataScanner.ScanTypes([typeof(OkTranslatableJson)]);
         act.Should().NotThrow();
     }
+
+    // 7g+ slice 4: Repeater nested sub-field schema.
+    public sealed class FaqRow
+    {
+        [CmsField(Label = "Question", Interface = FieldInterface.Text, Required = true)]
+        public string Question { get; set; } = "";
+
+        [CmsField(Label = "Answer", Interface = FieldInterface.Textarea)]
+        public string Answer { get; set; } = "";
+
+        [CmsField(Label = "Category", Interface = FieldInterface.Select)]
+        [CmsOptions("general:General", "billing:Billing")]
+        public string? Category { get; set; }
+    }
+
+    [CmsCollection("RepeaterHost")]
+    public sealed class RepeaterHost
+    {
+        [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [CmsField(Label = "FAQs", Interface = FieldInterface.Repeater)]
+        public List<FaqRow> Faqs { get; set; } = new();
+    }
+
+    [Fact]
+    public void Repeater_field_carries_nested_sub_field_schema()
+    {
+        var meta = MetadataScanner.ScanTypes([typeof(RepeaterHost)]).Single();
+        var faqs = meta.Fields.Single(f => f.Name == "faqs");
+
+        faqs.Interface.Should().Be(FieldInterface.Repeater);
+        faqs.Fields.Should().NotBeNull();
+        faqs.Fields!.Select(f => f.Name).Should().Equal("question", "answer", "category");
+
+        var question = faqs.Fields!.Single(f => f.Name == "question");
+        question.Interface.Should().Be(FieldInterface.Text);
+        question.Required.Should().BeTrue();
+
+        var category = faqs.Fields!.Single(f => f.Name == "category");
+        category.Options!.Select(o => o.Value).Should().Equal("general", "billing");
+    }
+
+    [Fact]
+    public void Non_repeater_field_has_null_sub_fields()
+    {
+        var meta = MetadataScanner.ScanTypes([typeof(RepeaterHost)]).Single();
+        meta.Fields.Single(f => f.Name == "name").Fields.Should().BeNull();
+    }
 }
