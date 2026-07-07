@@ -17,6 +17,7 @@ import CheckboxGroupField from '../../components/fields/CheckboxGroupField.vue'
 import TagsField from '../../components/fields/TagsField.vue'
 import JsonField from '../../components/fields/JsonField.vue'
 import KeyValueField from '../../components/fields/KeyValueField.vue'
+import FilesField from '../../components/fields/FilesField.vue'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => String(v) }
@@ -132,6 +133,25 @@ const keyValueDef: FieldTypeDef = {
   listColumn: asJoinedKeyValue,
 }
 
+const filesDef: FieldTypeDef = {
+  component: FilesField,
+  defaultValue: () => [],
+  parse: (raw) => (Array.isArray(raw) ? raw.map(String) : []),
+  serialize: (v) => {
+    if (!Array.isArray(v)) return []
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const x of v) {
+      const s = String(x)
+      if (s.trim() === '' || seen.has(s)) continue
+      seen.add(s)
+      out.push(s)
+    }
+    return out
+  },
+  listColumn: null,
+}
+
 export const registry: Record<FieldInterface, FieldTypeDef> = {
   text: def({ component: TextField, listColumn: asString }),
   slug: def({ component: TextField, listColumn: asString }),
@@ -164,7 +184,7 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   keyValue: keyValueDef,
   // Deferred to later 7g+ slices — render read-only for now (unchanged behaviour).
   repeater: readonlyDef,
-  files: readonlyDef,
+  files: filesDef,
   hidden: readonlyDef,
   uuid: readonlyDef,
 }
