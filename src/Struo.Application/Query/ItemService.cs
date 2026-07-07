@@ -813,6 +813,30 @@ public sealed class ItemService(
             if (field.Required && (map is null || map.Count == 0))
                 throw new QueryException($"Field '{field.Name}' is required.");
         }
+
+        // Files fields (List<Guid>) live on the parent entity as an ordered list of file ids. Drop
+        // Guid.Empty, de-duplicate keeping first (preserves order), and enforce Required as a non-empty
+        // list. No existence check — mirrors the scalar File/Image field (a deleted file degrades to a
+        // raw-id fallback in the picker). A non-guid array element already 400s at the deserialize
+        // guard. Non-translatable only.
+        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Files && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true }) continue;
+
+            var ids = (pi.GetValue(entity) as IEnumerable<Guid>) ?? [];
+            var seen = new HashSet<Guid>();
+            var cleaned = new List<Guid>();
+            foreach (var id in ids)
+            {
+                if (id == Guid.Empty) continue;
+                if (seen.Add(id)) cleaned.Add(id); // de-dup, keep first (preserves order)
+            }
+            if (field.Required && cleaned.Count == 0)
+                throw new QueryException($"Field '{field.Name}' is required.");
+            pi.SetValue(entity, cleaned);
+        }
         return entity;
     }
 
