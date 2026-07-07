@@ -15,6 +15,8 @@ import ReadonlyField from '../../components/fields/ReadonlyField.vue'
 import MultiSelectField from '../../components/fields/MultiSelectField.vue'
 import CheckboxGroupField from '../../components/fields/CheckboxGroupField.vue'
 import TagsField from '../../components/fields/TagsField.vue'
+import JsonField from '../../components/fields/JsonField.vue'
+import KeyValueField from '../../components/fields/KeyValueField.vue'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => String(v) }
@@ -33,6 +35,14 @@ const asJoinedOptions: ListColumn = {
 const asJoinedTags: ListColumn = {
   format: (v) => (Array.isArray(v)
     ? (v as TagItem[]).map((t) => t?.label ?? t?.value ?? '').join(', ')
+    : String(v ?? '')),
+}
+const asMinifiedJson: ListColumn = {
+  format: (v) => (v === null || v === undefined ? '' : JSON.stringify(v)),
+}
+const asJoinedKeyValue: ListColumn = {
+  format: (v) => (v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.entries(v as Record<string, unknown>).map(([k, val]) => `${k}: ${String(val ?? '')}`).join(', ')
     : String(v ?? '')),
 }
 
@@ -97,6 +107,31 @@ function def(opts: {
 const fileSerialize = (v: unknown): unknown => (v === '' ? null : v)
 const readonlyDef = def({ component: ReadonlyField })
 
+const jsonDef: FieldTypeDef = {
+  component: JsonField,
+  defaultValue: () => null,
+  parse: (raw) => raw ?? null,
+  serialize: (v) => v ?? null,
+  listColumn: asMinifiedJson,
+}
+
+const keyValueDef: FieldTypeDef = {
+  component: KeyValueField,
+  defaultValue: () => ({}),
+  parse: (raw) => (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}),
+  serialize: (v) => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+    const out: Record<string, string> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      const key = k.trim()
+      if (key === '') continue
+      out[key] = String(val ?? '')
+    }
+    return out
+  },
+  listColumn: asJoinedKeyValue,
+}
+
 export const registry: Record<FieldInterface, FieldTypeDef> = {
   text: def({ component: TextField, listColumn: asString }),
   slug: def({ component: TextField, listColumn: asString }),
@@ -125,9 +160,9 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   multiSelect: optionMultiDef(MultiSelectField),
   checkboxGroup: optionMultiDef(CheckboxGroupField),
   tags: tagsDef,
+  json: jsonDef,
+  keyValue: keyValueDef,
   // Deferred to later 7g+ slices — render read-only for now (unchanged behaviour).
-  json: readonlyDef,
-  keyValue: readonlyDef,
   repeater: readonlyDef,
   files: readonlyDef,
   hidden: readonlyDef,

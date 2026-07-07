@@ -659,18 +659,54 @@ public sealed class ItemService(
         // property — strip it so deserialization into the parent entity doesn't choke on it.
         if (meta.Translation is not null) stripNames.Add("translations");
 
+        // Json fields carry an arbitrary JSON object/array/scalar; binding that into their string
+        // property would make System.Text.Json throw. Strip them here and set the raw text below.
+        foreach (var jsonField in meta.Fields.Where(f => f.Interface == FieldInterface.Json))
+            stripNames.Add(jsonField.Name);
+
         object entity;
         if (stripNames.Count > 0)
         {
             // Parse into a using-scoped document so the ArrayPool buffer is returned promptly.
             using var stripped = JsonDocument.Parse(StripKeys(body, stripNames));
-            entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
-                     ?? throw new QueryException("Request body could not be parsed.");
+            try
+            {
+                entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
+                         ?? throw new QueryException("Request body could not be parsed.");
+            }
+            catch (JsonException)
+            {
+                // A field's JSON value is the wrong shape for its bound property (e.g. a KeyValue
+                // entry given a number/object instead of a string) — a client error, not a 500.
+                throw new QueryException("Request body could not be parsed.");
+            }
         }
         else
         {
-            entity = body.Deserialize(d.EntityType, JsonOpts)
-                     ?? throw new QueryException("Request body could not be parsed.");
+            try
+            {
+                entity = body.Deserialize(d.EntityType, JsonOpts)
+                         ?? throw new QueryException("Request body could not be parsed.");
+            }
+            catch (JsonException)
+            {
+                throw new QueryException("Request body could not be parsed.");
+            }
+        }
+
+        // Set each Json field's string property from the original body's raw text (stripped above).
+        // Present + non-null => store the raw JSON text; absent or explicit JSON null => leave null.
+        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true } || pi.PropertyType != typeof(string)) continue;
+            if (body.ValueKind == JsonValueKind.Object
+                && body.TryGetProperty(field.Name, out var el)
+                && el.ValueKind != JsonValueKind.Null)
+            {
+                pi.SetValue(entity, el.GetRawText());
+            }
         }
 
         // strip system/read-only fields (audit AOP / identity own them); only nullable props can be nulled
@@ -757,6 +793,26 @@ public sealed class ItemService(
                 pi.SetValue(entity, cleaned);
             }
         }
+
+        // KeyValue fields (Dictionary<string,string>) live on the parent entity. Reject blank keys and
+        // enforce Required as a non-empty map. Values may be empty; duplicate keys are impossible
+        // (System.Text.Json last-wins bind). Non-translatable only.
+        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.KeyValue && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true }) continue;
+
+            var map = pi.GetValue(entity) as IDictionary<string, string>;
+            if (map is not null)
+            {
+                foreach (var key in map.Keys)
+                    if (string.IsNullOrWhiteSpace(key))
+                        throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
+            }
+            if (field.Required && (map is null || map.Count == 0))
+                throw new QueryException($"Field '{field.Name}' is required.");
+        }
         return entity;
     }
 
@@ -784,7 +840,23 @@ public sealed class ItemService(
             if (wanted is not null && !wanted.Contains(field.Name)) continue;
             if (!readable.Contains(field.Name)) continue;
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            dict[field.Name] = d.EntityType.GetProperty(prop)?.GetValue(entity);
+            var value = d.EntityType.GetProperty(prop)?.GetValue(entity);
+            // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
+            // emits structured JSON, not a quoted string. Null stays null.
+            if (field.Interface == FieldInterface.Json && value is string rawJson)
+            {
+                try
+                {
+                    value = JsonSerializer.Deserialize<JsonElement>(rawJson);
+                }
+                catch (JsonException)
+                {
+                    // Defensive: the write path only ever stores valid JSON, so this is unreachable
+                    // via the API. Guards against out-of-band/legacy rows holding non-JSON text —
+                    // leave the raw string so the rest of the page still loads instead of a 500.
+                }
+            }
+            dict[field.Name] = value;
         }
         return dict;
     }

@@ -16,11 +16,14 @@ public static class SqlSugarClientFactory
         FieldInterface.Code, FieldInterface.Json
     ];
 
-    // Multi-value [CmsField] interfaces store an array; map them to a JSON column so SqlSugar
-    // (de)serializes the List<> automatically (jsonb on Postgres, JSON-in-text elsewhere).
-    private static readonly HashSet<FieldInterface> MultiValueInterfaces =
+    // [CmsField] interfaces whose value is a structured aggregate stored as JSON — map them to a JSON
+    // column so SqlSugar (de)serializes the List<>/Dictionary<> automatically (jsonb-in-text). This is
+    // the multi-value selects (slice 1) plus KeyValue (slice 2). Json is NOT here — it is a string
+    // holding raw JSON text and is widened to `text` by the content-bearing convention below.
+    private static readonly HashSet<FieldInterface> JsonColumnInterfaces =
     [
-        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags
+        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
+        FieldInterface.KeyValue
     ];
 
     public static ISqlSugarClient Create(DatabaseOptions options, ICurrentUserAccessor currentUser)
@@ -56,7 +59,7 @@ public static class SqlSugarClientFactory
                     // ignores declared length (dynamic typing), which is why this only surfaces on
                     // Postgres — the phase 7g+ live-gate finding. `text` is unbounded on both.
                     var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
-                    if (mvField is not null && MultiValueInterfaces.Contains(mvField.Interface))
+                    if (mvField is not null && JsonColumnInterfaces.Contains(mvField.Interface))
                     {
                         column.IsJson = true;
                         column.DataType = "text";
