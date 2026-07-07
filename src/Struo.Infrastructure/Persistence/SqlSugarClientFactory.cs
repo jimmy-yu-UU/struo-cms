@@ -18,13 +18,13 @@ public static class SqlSugarClientFactory
 
     // [CmsField] interfaces whose value is a structured aggregate stored as JSON — map them to a JSON
     // column so SqlSugar (de)serializes the List<>/Dictionary<> automatically (jsonb-in-text). This is
-    // the multi-value selects (slice 1) plus KeyValue (slice 2) plus Files (slice 3, List<Guid>). Json
-    // is NOT here — it is a string holding raw JSON text and is widened to `text` by the
-    // content-bearing convention below.
+    // the multi-value selects (slice 1) plus KeyValue (slice 2) plus Files (slice 3, List<Guid>) plus
+    // Repeater (slice 4, List<TChild> of [CmsField] sub-props). Json is NOT here — it is a string
+    // holding raw JSON text and is widened to `text` by the content-bearing convention below.
     private static readonly HashSet<FieldInterface> JsonColumnInterfaces =
     [
         FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
-        FieldInterface.KeyValue, FieldInterface.Files
+        FieldInterface.KeyValue, FieldInterface.Files, FieldInterface.Repeater
     ];
 
     public static ISqlSugarClient Create(DatabaseOptions options, ICurrentUserAccessor currentUser)
