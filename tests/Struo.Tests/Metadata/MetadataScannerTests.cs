@@ -302,4 +302,14 @@ public class MetadataScannerTests
         var meta = MetadataScanner.ScanTypes([typeof(RepeaterHost)]).Single();
         meta.Fields.Single(f => f.Name == "name").Fields.Should().BeNull();
     }
+
+    [Fact]
+    public void Article_sample_has_a_repeater_faqs_field()
+    {
+        var meta = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)])
+            .Single(c => c.Name == "article");
+        var faqs = meta.Fields.Single(f => f.Name == "faqs");
+        faqs.Interface.Should().Be(FieldInterface.Repeater);
+        faqs.Fields!.Select(f => f.Name).Should().Contain("question");
+    }
 }
