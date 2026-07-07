@@ -14,6 +14,7 @@ const LIST_ELIGIBLE = new Set([
   'number', 'slider', 'rating', 'boolean', 'checkbox',
   'date', 'time', 'dateTime', 'select', 'radio',
   'multiSelect', 'checkboxGroup', 'tags',
+  'json', 'keyValue',
 ])
 
 describe('field-type registry', () => {
@@ -22,7 +23,7 @@ describe('field-type registry', () => {
   })
 
   it('falls back to the read-only def for unknown interfaces', () => {
-    expect(getFieldType('somethingNew').component).toBe(getFieldType('json').component)
+    expect(getFieldType('somethingNew').component).toBe(getFieldType('repeater').component)
     expect(getFieldType('somethingNew').listColumn).toBeNull()
   })
 
@@ -90,5 +91,33 @@ describe('field-type registry', () => {
     expect(getFieldType('multiSelect').listColumn!.format(['apac', 'zzz'], ms)).toBe('APAC, zzz') // unknown -> raw value
     const tg = field({ interface: 'tags' })
     expect(getFieldType('tags').listColumn!.format([{ value: 'tech' }, { value: 'ai', label: '人工智慧' }], tg)).toBe('tech, 人工智慧')
+  })
+
+  it('json default is null and parse coerces nullish to null', () => {
+    const f = field({ interface: 'json' })
+    expect(getFieldType('json').defaultValue(f)).toBeNull()
+    expect(getFieldType('json').parse(undefined, f)).toBeNull()
+    expect(getFieldType('json').parse({ a: 1 }, f)).toEqual({ a: 1 })
+    expect(getFieldType('json').serialize({ a: 1 }, f)).toEqual({ a: 1 })
+  })
+
+  it('keyValue default is an empty object and parse coerces non-objects', () => {
+    const f = field({ interface: 'keyValue' })
+    expect(getFieldType('keyValue').defaultValue(f)).toEqual({})
+    expect(getFieldType('keyValue').parse(undefined, f)).toEqual({})
+    expect(getFieldType('keyValue').parse(['x'], f)).toEqual({})
+    expect(getFieldType('keyValue').parse({ a: '1' }, f)).toEqual({ a: '1' })
+  })
+
+  it('keyValue serialize drops blank keys and keeps last-wins', () => {
+    const f = field({ interface: 'keyValue' })
+    expect(getFieldType('keyValue').serialize({ a: '1', '': 'x', ' ': 'y', b: '2' }, f)).toEqual({ a: '1', b: '2' })
+  })
+
+  it('list formatters: json minifies, keyValue joins k: v', () => {
+    const j = field({ interface: 'json' })
+    expect(getFieldType('json').listColumn!.format({ a: 1, b: [2] }, j)).toBe('{"a":1,"b":[2]}')
+    const kv = field({ interface: 'keyValue' })
+    expect(getFieldType('keyValue').listColumn!.format({ a: '1', b: '2' }, kv)).toBe('a: 1, b: 2')
   })
 })
