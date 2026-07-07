@@ -29,9 +29,9 @@ function setLabel(i: number, v: string) {
   <div class="tags-field">
     <div v-for="(it, i) in items" :key="i" class="tag-row">
       <InputText :model-value="it.value" :disabled="disabled" placeholder="value"
-        @update:model-value="(v: string) => setValue(i, v ?? '')" />
+        @update:model-value="(v: string | undefined) => setValue(i, v ?? '')" />
       <InputText :model-value="it.label ?? ''" :disabled="disabled" placeholder="display text (optional)"
-        @update:model-value="(v: string) => setLabel(i, v ?? '')" />
+        @update:model-value="(v: string | undefined) => setLabel(i, v ?? '')" />
       <Button class="tag-remove" icon="pi pi-times" text :disabled="disabled" @click="remove(i)" />
     </div>
     <Button class="tag-add" icon="pi pi-plus" label="Add" text :disabled="disabled" @click="add" />
