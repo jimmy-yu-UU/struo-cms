@@ -659,6 +659,11 @@ public sealed class ItemService(
         // property — strip it so deserialization into the parent entity doesn't choke on it.
         if (meta.Translation is not null) stripNames.Add("translations");
 
+        // Json fields carry an arbitrary JSON object/array/scalar; binding that into their string
+        // property would make System.Text.Json throw. Strip them here and set the raw text below.
+        foreach (var jsonField in meta.Fields.Where(f => f.Interface == FieldInterface.Json))
+            stripNames.Add(jsonField.Name);
+
         object entity;
         if (stripNames.Count > 0)
         {
@@ -671,6 +676,21 @@ public sealed class ItemService(
         {
             entity = body.Deserialize(d.EntityType, JsonOpts)
                      ?? throw new QueryException("Request body could not be parsed.");
+        }
+
+        // Set each Json field's string property from the original body's raw text (stripped above).
+        // Present + non-null => store the raw JSON text; absent or explicit JSON null => leave null.
+        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            var pi = d.EntityType.GetProperty(prop);
+            if (pi is not { CanWrite: true } || pi.PropertyType != typeof(string)) continue;
+            if (body.ValueKind == JsonValueKind.Object
+                && body.TryGetProperty(field.Name, out var el)
+                && el.ValueKind != JsonValueKind.Null)
+            {
+                pi.SetValue(entity, el.GetRawText());
+            }
         }
 
         // strip system/read-only fields (audit AOP / identity own them); only nullable props can be nulled
@@ -784,7 +804,12 @@ public sealed class ItemService(
             if (wanted is not null && !wanted.Contains(field.Name)) continue;
             if (!readable.Contains(field.Name)) continue;
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            dict[field.Name] = d.EntityType.GetProperty(prop)?.GetValue(entity);
+            var value = d.EntityType.GetProperty(prop)?.GetValue(entity);
+            // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
+            // emits structured JSON, not a quoted string. Null stays null.
+            if (field.Interface == FieldInterface.Json && value is string rawJson)
+                value = JsonSerializer.Deserialize<JsonElement>(rawJson);
+            dict[field.Name] = value;
         }
         return dict;
     }
