@@ -206,6 +206,19 @@ public class MetadataScannerTests
         meta.Searchable.Should().BeFalse();
     }
 
+    [Fact]
+    public void Article_exposes_files_field_with_correct_metadata()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
+        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+
+        var gallery = article.Fields.Single(f => f.Name == "gallery");
+        gallery.Interface.Should().Be(FieldInterface.Files);
+        gallery.Sortable.Should().BeFalse();
+        gallery.Searchable.Should().BeFalse();
+        gallery.Translatable.Should().BeFalse();
+    }
+
     [SugarTable("bad_translatable_files")]
     [CmsCollection("BadTranslatableFiles")]
     private sealed class BadTranslatableFiles : AuditableEntity

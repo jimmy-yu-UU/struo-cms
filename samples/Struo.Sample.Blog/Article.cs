@@ -48,6 +48,9 @@ public sealed class Article : AuditableEntity
     [CmsField(Label = "Meta", Interface = FieldInterface.KeyValue, Sort = 10, Group = "Content")]
     public Dictionary<string, string> Meta { get; set; } = new();
 
+    [CmsField(Label = "Gallery", Interface = FieldInterface.Files, Sort = 11, Group = "Content")]
+    public List<Guid> Gallery { get; set; } = [];
+
     // --- relations ---
     [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }
