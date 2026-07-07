@@ -40,7 +40,7 @@ describe('FieldInput', () => {
     expect(w.find('.stub-select').exists()).toBe(true)
   })
   it('renders read-only display for unsupported interface', () => {
-    const w = mount(FieldInput, { props: { field: field({ interface: 'repeater' }), modelValue: '{}' }, global: { stubs } })
+    const w = mount(FieldInput, { props: { field: field({ interface: 'somethingNew' }), modelValue: '{}' }, global: { stubs } })
     expect(w.find('.readonly-field').exists()).toBe(true)
     expect(w.find('.stub-text').exists()).toBe(false)
   })
