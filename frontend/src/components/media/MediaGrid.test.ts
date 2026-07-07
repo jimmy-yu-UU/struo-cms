@@ -23,4 +23,17 @@ describe('MediaGrid', () => {
     const w = mount(MediaGrid, { props: { files, selectable: true, selectedId: 'f2' } })
     expect(w.findAll('.media-tile')[1].classes()).toContain('is-selected')
   })
+
+  it('emits toggle with the id on click in multiple mode', async () => {
+    const w = mount(MediaGrid, { props: { files, multiple: true, selectedIds: [] } })
+    await w.findAll('.media-tile')[0].trigger('click')
+    expect(w.emitted('toggle')?.[0]).toEqual(['f1'])
+    expect(w.emitted('select')).toBeUndefined()
+  })
+
+  it('marks tiles whose id is in selectedIds (multiple mode)', () => {
+    const w = mount(MediaGrid, { props: { files, multiple: true, selectedIds: ['f2'] } })
+    expect(w.findAll('.media-tile')[1].classes()).toContain('is-selected')
+    expect(w.findAll('.media-tile')[0].classes()).not.toContain('is-selected')
+  })
 })

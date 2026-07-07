@@ -28,6 +28,16 @@ public static class MetadataScanner
         FieldInterface.CheckboxGroup, FieldInterface.Tags
     ];
 
+    // 7g+ slice 3: JSON-column interfaces that live on the parent entity and cannot be translatable
+    // (translating a structured aggregate is out of scope). A [CmsField(Translatable=true)] on any of
+    // these fail-fasts at scan. Json is intentionally excluded (a string that could be translatable
+    // in a later slice; non-translatable by convention here, but not fail-fasted).
+    private static readonly HashSet<FieldInterface> NonTranslatableJsonInterfaces =
+    [
+        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
+        FieldInterface.KeyValue, FieldInterface.Files
+    ];
+
     private static readonly string[] AuditFieldNames =
         [nameof(IAuditable.CreatedAt), nameof(IAuditable.CreatedBy),
          nameof(IAuditable.UpdatedAt), nameof(IAuditable.UpdatedBy)];
@@ -140,6 +150,11 @@ public static class MetadataScanner
 
         var (translation, translatableFields) = ScanTranslations(type);
         foreach (var tf in translatableFields) fields.Add((++order, tf));
+
+        foreach (var (_, field) in fields)
+            if (field.Translatable && NonTranslatableJsonInterfaces.Contains(field.Interface))
+                throw new MetadataException(
+                    $"Field '{field.Name}' uses interface '{field.Interface}', which cannot be translatable.");
 
         var ordered = fields
             .OrderBy(f => f.field.Sort)
