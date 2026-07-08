@@ -32,6 +32,12 @@ public static class GraphQlServiceCollectionExtensions
                 // Anchor field so the schema is always valid even before the type module adds
                 // collection fields (GraphQL requires Query to have >=1 field).
                 .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL"))
+            .AddMutationType(d => d
+                .Name("Mutation")
+                // Anchor field so the Mutation root is valid even before the type module adds
+                // collection mutations (GraphQL requires each root type to have >=1 field). Also
+                // serves as the empty-schema guard when zero collections are discovered.
+                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL mutations"))
             .AddType<LongType>()
             .AddType<DateTimeType>()
             .AddType<DateType>()
@@ -41,7 +47,17 @@ public static class GraphQlServiceCollectionExtensions
             .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
             .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
             .DisableIntrospection(!env.IsDevelopment())
-            .ModifyOptions(o => o.DefaultQueryDependencyInjectionScope = DependencyInjectionScope.Request);
+            // Pin both root scopes to Request explicitly (Mutation would otherwise fall back to
+            // HotChocolate's implicit default) so resolvers — query AND mutation — resolve scoped
+            // services against the HTTP request's DI scope. That's what lets ItemService's RBAC
+            // checks see the per-request ICurrentPermissions snapshot populated by
+            // PermissionResolutionMiddleware; without this, a mutation resolver could resolve a
+            // different scoped ItemService with no (or stale) permission snapshot attached.
+            .ModifyOptions(o =>
+            {
+                o.DefaultQueryDependencyInjectionScope = DependencyInjectionScope.Request;
+                o.DefaultMutationDependencyInjectionScope = DependencyInjectionScope.Request;
+            });
 
         return services;
     }
