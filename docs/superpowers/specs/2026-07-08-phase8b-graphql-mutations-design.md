@@ -103,8 +103,9 @@ the existing `BuildFilterInput`, so the resolver receives a dict via
 - **Included own-fields:** the **writable scalar interfaces** — Text / Textarea / RichText / Markdown
   / Code / Slug / Email / Url / Color / Phone / Time → `String`; Number / Slider / Rating →
   `Int`/`Long`/`Float` by CLR property type (same reflection as reads); Boolean / Checkbox →
-  `Boolean`; Date / DateTime → `Date`/`DateTime`; Select / Radio → `String`; Uuid (non-id) → `String`.
-  The exact interface list is fixed in the plan against `SchemaTypeMapper.ScalarSdl`.
+  `Boolean`; Date / DateTime → `Date`/`DateTime`; Select / Radio → `String`; Uuid (non-id) → `ID`
+  (consistent with the read-side `ScalarSdl`). The exact interface list is fixed in the plan against
+  `SchemaTypeMapper.WritableScalarInputSdl`.
 - **Included relations:** M2O foreign key only, as `xxxId: ID` (e.g. `categoryId: ID`). O2M/M2M have
   no local FK to write in 8b.1 (M2M deferred to 8b.2).
 - **Excluded:** `Hidden`, `ReadOnly`, `IsSystem` (id, `version` — handled specially — and audit
