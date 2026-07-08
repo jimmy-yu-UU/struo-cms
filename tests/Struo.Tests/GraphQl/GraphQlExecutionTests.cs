@@ -281,4 +281,102 @@ public class GraphQlExecutionTests
         // Batching still holds for the list path too: one "file" query for the whole request.
         ds.QueryCollections.Count(c => c == "file").Should().Be(1);
     }
+
+    /// <summary>
+    /// Task 10: selecting a relation sub-field (<c>category { name }</c>) on the list element must
+    /// build a <see cref="DeepSpec"/> containing exactly that relation name and pass it into the
+    /// captured <see cref="QueryModel"/> — the fake data source then returns an already-nested
+    /// "category" dict on the article row (mirroring ItemService's deep-expansion shape), which the
+    /// schema's relation field (a plain <c>ParentDict(ctx).GetValueOrDefault(rel.Name)</c> pure
+    /// resolver — see CollectionSchemaBuilder) must surface as-is, one level deep.
+    /// </summary>
+    [Fact]
+    public async Task Selecting_relation_sets_Deep_and_nests_value()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?>
+                {
+                    ["id"] = "1",
+                    ["category"] = new Dictionary<string, object?> { ["id"] = "9", ["name"] = "News" },
+                };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles { items { id category { name } } } }");
+        var data = ParseData(result);
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("category");
+        data.GetProperty("articles").GetProperty("items")[0]
+            .GetProperty("category").GetProperty("name").GetString().Should().Be("News");
+    }
+
+    /// <summary>Task 10: no relation sub-field selected -> Deep stays null (no over-fetching).</summary>
+    [Fact]
+    public async Task Relation_not_selected_leaves_Deep_null()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) =>
+            {
+                deepSeen = q.Deep;
+                return new PagedResult(
+                    new IReadOnlyDictionary<string, object?>[] { new Dictionary<string, object?> { ["id"] = "1" } },
+                    1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync("{ articles { items { id } } }");
+        ParseData(result); // asserts no errors
+
+        deepSeen.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Task 10 (closes the deferred Task 1 end-to-end error-code coverage): a
+    /// <see cref="PermissionDeniedException"/> thrown out of the data source must surface as a
+    /// GraphQL error with <c>extensions.code == "FORBIDDEN"</c>, which requires
+    /// <see cref="StruoErrorFilter"/> to be registered. Per the Task-1 comment in
+    /// GraphQlServiceCollectionExtensions, the filter is registered via the plain-IServiceCollection
+    /// <c>AddErrorFilter&lt;T&gt;()</c> overload (resolves against application services, where
+    /// ILogger&lt;T&gt; is available) rather than chained on the request-executor builder (whose
+    /// schema-services container excludes logging and would fail to activate the filter).
+    /// </summary>
+    [Fact]
+    public async Task PermissionDenied_surfaces_as_FORBIDDEN_code()
+    {
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, _, _) => throw new PermissionDeniedException("no read")
+        };
+
+        var services = new ServiceCollection()
+            .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
+            .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddScoped<IGraphQlDataSource>(_ => ds)
+            .AddSingleton(new StruoQueryOptions())
+            .AddSingleton<StruoTypeModule>()
+            .AddLogging();
+        services.AddErrorFilter<StruoErrorFilter>(); // plain-IServiceCollection overload (see summary above)
+
+        var executor = await services
+            .AddGraphQLServer()
+            .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
+            .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
+            .AddTypeModule<StruoTypeModule>()
+            .BuildRequestExecutorAsync();
+
+        var json = (await executor.ExecuteAsync("{ articles { total } }")).ToJson();
+
+        json.Should().Contain("FORBIDDEN");
+    }
 }
