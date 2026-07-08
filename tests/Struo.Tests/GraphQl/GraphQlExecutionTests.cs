@@ -391,6 +391,42 @@ public class GraphQlExecutionTests
     /// ILogger&lt;T&gt; is available) rather than chained on the request-executor builder (whose
     /// schema-services container excludes logging and would fail to activate the filter).
     /// </summary>
+    /// <summary>
+    /// Live-gate regression (HC0053): <c>ItemService.Project</c> emits a Repeater field's value as
+    /// the entity's raw <c>List&lt;TChild&gt;</c> of POCOs (e.g. <c>List&lt;FaqItem&gt;</c>) — NOT a
+    /// list of dictionaries. Before the fix, <c>BuildRepeaterItemType</c>'s sub-field resolvers cast
+    /// the parent straight to <c>IReadOnlyDictionary&lt;string,object?&gt;</c>, which throws
+    /// HC0053 ("unable to cast the parent type") when the parent is actually a POCO. The fix must
+    /// read sub-fields via reflection (mirroring how <see cref="StruoTypeModule"/>'s TagItemType
+    /// already tolerates a POCO parent), so this must resolve cleanly against a real POCO row —
+    /// not the hand-shaped dictionary fixtures the rest of this suite uses.
+    /// </summary>
+    [Fact]
+    public async Task Repeater_subfields_resolve_from_POCO_children()
+    {
+        var ds = new FakeGraphQlDataSource
+        {
+            OnGet = (_, _, _, _) => new Dictionary<string, object?>
+            {
+                ["id"] = "1",
+                ["faqs"] = new List<object> { new FaqRow("Q1", "A1") },
+            }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ article(id: \"1\") { faqs { question answer } } }");
+        var data = ParseData(result); // asserts no errors — would throw HC0053 pre-fix
+
+        var faqs = data.GetProperty("article").GetProperty("faqs");
+        faqs.GetArrayLength().Should().Be(1);
+        faqs[0].GetProperty("question").GetString().Should().Be("Q1");
+        faqs[0].GetProperty("answer").GetString().Should().Be("A1");
+    }
+
+    // PascalCase properties mirroring a real Repeater sub-field POCO (e.g. Struo.Sample.Blog.FaqItem)
+    // — the sub-field names in the GraphQL query ("question"/"answer") are camelCase.
+    private sealed record FaqRow(string Question, string Answer);
+
     [Fact]
     public async Task PermissionDenied_surfaces_as_FORBIDDEN_code()
     {

@@ -16,6 +16,23 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
     private static IReadOnlyDictionary<string, object?> ParentDict(IResolverContext ctx)
         => ctx.Parent<IReadOnlyDictionary<string, object?>>();
 
+    // Repeater item sub-field resolvers must tolerate TWO parent shapes: a dictionary (the
+    // hand-shaped test fixtures / anything future that projects Repeater rows as maps) AND a real
+    // POCO (ItemService.Project emits a Repeater field's value as the entity's raw
+    // List<TChild> of [CmsField] sub-POCOs, e.g. List<FaqItem> — never a list of dictionaries).
+    // Mirrors StruoTypeModule.TagItemType, which already reads its POCO (TagItem) parent via
+    // reflection rather than assuming a dictionary. Sub-field names are camelCase (GraphQL/SDL
+    // convention) while CLR properties are PascalCase, so the POCO branch reads case-insensitively.
+    private static object? ReadRepeaterSubField(object? parent, string name)
+    {
+        if (parent is IReadOnlyDictionary<string, object?> dict)
+            return dict.GetValueOrDefault(name);
+        if (parent is null) return null;
+        return parent.GetType().GetProperty(name,
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.IgnoreCase)?.GetValue(parent);
+    }
+
     internal IEnumerable<ITypeSystemMember> Build(CollectionMetadata meta)
     {
         var types = new List<ITypeSystemMember>();
@@ -86,14 +103,16 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
 
     private static ObjectType BuildRepeaterItemType(string collection, FieldMetadata repeater)
     {
+        // RuntimeType = object (not IReadOnlyDictionary<string,object?>): the real parent at
+        // execution time is a POCO (see ReadRepeaterSubField above), mirroring TagItemType.
         var config = new ObjectTypeConfiguration(
-            SchemaTypeMapper.RepeaterItemTypeName(collection, repeater.Name), null, typeof(IReadOnlyDictionary<string, object?>));
+            SchemaTypeMapper.RepeaterItemTypeName(collection, repeater.Name), null, typeof(object));
         foreach (var sub in repeater.Fields!)
         {
             if (sub.Hidden || SchemaTypeMapper.IsExcluded(sub.Interface)) continue;
             var sdl = SchemaTypeMapper.ScalarSdl(sub.Interface, typeof(string)); // lean scalar sub-field set
             if (sdl is null) continue;
-            config.Fields.Add(Field(sub.Name, sdl, ctx => ParentDict(ctx).GetValueOrDefault(sub.Name)));
+            config.Fields.Add(Field(sub.Name, sdl, ctx => ReadRepeaterSubField(ctx.Parent<object>(), sub.Name)));
         }
         return ObjectType.CreateUnsafe(config);
     }
