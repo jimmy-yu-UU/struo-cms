@@ -7,9 +7,9 @@ namespace Struo.Api.GraphQl;
 
 /// <summary>
 /// Api-owned seam over the concrete <see cref="ItemService"/>. Exists so GraphQL resolvers depend
-/// on an interface (fakeable in tests) without adding an interface to the Application layer. Only
-/// the operations GraphQL needs are exposed (read + delete so far; create/update land in later
-/// mutation tasks).
+/// on an interface (fakeable in tests) without adding an interface to the Application layer. Covers
+/// the full surface GraphQL needs: reads (Query/Get) and writes (Create/Update/Delete) — all
+/// delegating straight through to ItemService.
 /// </summary>
 public interface IGraphQlDataSource
 {

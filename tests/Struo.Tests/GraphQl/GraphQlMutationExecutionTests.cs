@@ -258,6 +258,48 @@ public class GraphQlMutationExecutionTests
     }
 
     [Fact]
+    public async Task Create_returns_write_result_when_reread_is_permission_denied()
+    {
+        // The create already committed. If the caller's role can write but not read the
+        // collection, the post-create re-read (GetAsync) throws PermissionDeniedException — that
+        // must NOT surface as a FORBIDDEN error hiding a successful write (which would invite
+        // duplicate-create retries). The resolver falls back to the write result instead.
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, _) => new Dictionary<string, object?> { ["id"] = "42", ["status"] = "published" },
+            OnGet = (_, _, _, _) => throw new PermissionDeniedException("no read"),
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"published\" }) { id status } }");
+        var data = ParseData(result);
+
+        var node = data.GetProperty("createArticle");
+        node.GetProperty("id").GetString().Should().Be("42");
+        node.GetProperty("status").GetString().Should().Be("published");
+    }
+
+    [Fact]
+    public async Task Update_returns_write_result_when_reread_is_permission_denied()
+    {
+        // Same best-effort fallback as create: the update committed, so a read-denied re-read
+        // must return the write result rather than FORBIDDEN.
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, _) => new Dictionary<string, object?> { ["id"] = id, ["status"] = "archived" },
+            OnGet = (_, _, _, _) => throw new PermissionDeniedException("no read"),
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"5\", input: { status: \"archived\" }) { id status } }");
+        var data = ParseData(result);
+
+        var node = data.GetProperty("updateArticle");
+        node.GetProperty("id").GetString().Should().Be("5");
+        node.GetProperty("status").GetString().Should().Be("archived");
+    }
+
+    [Fact]
     public async Task Update_version_conflict_maps_to_CONFLICT()
     {
         var ds = new FakeGraphQlDataSource

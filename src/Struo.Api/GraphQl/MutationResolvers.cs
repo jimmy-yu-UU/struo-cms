@@ -4,6 +4,7 @@ using HotChocolate.Resolvers;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
 
@@ -41,7 +42,18 @@ internal static class MutationResolvers
         if (id is null) return created;
         var relations = CollectionResolvers.SelectionRelations(ctx, collection, elementIsDirect: true);
         var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
-        return await source.GetAsync(collection, id, deep, locale, ctx.RequestAborted);
+
+        // Best-effort re-read: the write already committed, so a denied/absent re-read must not
+        // surface as FORBIDDEN and hide a successful create (that would invite duplicate-create
+        // retries from the caller). Fall back to the write result rather than the re-read.
+        try
+        {
+            return await source.GetAsync(collection, id, deep, locale, ctx.RequestAborted) ?? created;
+        }
+        catch (PermissionDeniedException)
+        {
+            return created;
+        }
     }
 
     internal static ObjectFieldConfiguration UpdateField(string collection, IMetadataProvider metadata)
@@ -70,7 +82,17 @@ internal static class MutationResolvers
 
         var relations = CollectionResolvers.SelectionRelations(ctx, collection, elementIsDirect: true);
         var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
-        return await source.GetAsync(collection, id, deep, locale, ctx.RequestAborted);
+
+        // Best-effort re-read: the write already committed, so a denied/absent re-read must not
+        // surface as FORBIDDEN and hide a successful update. Fall back to the write result.
+        try
+        {
+            return await source.GetAsync(collection, id, deep, locale, ctx.RequestAborted) ?? updated;
+        }
+        catch (PermissionDeniedException)
+        {
+            return updated;
+        }
     }
 
     // HotChocolate's coerced argument dictionary (ctx.ArgumentValue<IReadOnlyDictionary<string,object?>?>)
