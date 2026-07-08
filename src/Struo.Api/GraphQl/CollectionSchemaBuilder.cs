@@ -41,6 +41,8 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         types.Add(BuildObjectType(meta, relationNames, types));   // Article + nested repeater item types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
         types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
+        types.Add(BuildCreateInput(meta));                         // ArticleCreateInput
+        types.Add(BuildUpdateInput(meta));                         // ArticleUpdateInput
         return types;
     }
 
@@ -148,6 +150,42 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
 
         return InputObjectType.CreateUnsafe(config);
+    }
+
+    private InputObjectType BuildCreateInput(CollectionMetadata meta)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.CreateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
+        AddWritableFields(config, meta);
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    private InputObjectType BuildUpdateInput(CollectionMetadata meta)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.UpdateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
+        // Optimistic-concurrency token (update-only). Absent -> no protection (backward compatible).
+        config.Fields.Add(new InputFieldConfiguration("version", null, TypeReference.Parse("Long")));
+        AddWritableFields(config, meta);
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    // Shared by create/update inputs: writable scalar own-fields + M2O foreign keys, all nullable.
+    // Deferred kinds resolve to a null SDL from WritableScalarInputSdl and are skipped.
+    private void AddWritableFields(InputObjectTypeConfiguration config, CollectionMetadata meta)
+    {
+        var desc = registry.Get(meta.Name);
+        foreach (var f in meta.Fields)
+        {
+            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
+            if (f.Translatable) continue; // translatable own-fields live on the translation sidecar (8b.2 typed translations input)
+            var sdl = SchemaTypeMapper.WritableScalarInputSdl(f.Interface, ClrType(desc, f.Name));
+            if (sdl is null) continue;
+            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
+        }
+        foreach (var rel in meta.Relations)
+            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
+                config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("ID")));
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).

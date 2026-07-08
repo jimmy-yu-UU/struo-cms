@@ -60,7 +60,7 @@ internal static class CollectionResolvers
     }
 
     /// <summary>Which of the collection's relations the client selected on the element type.</summary>
-    private static IReadOnlyList<string> SelectionRelations(IResolverContext ctx, string collection, bool elementIsDirect)
+    internal static IReadOnlyList<string> SelectionRelations(IResolverContext ctx, string collection, bool elementIsDirect)
     {
         var relNames = ctx.Service<IMetadataProvider>().GetCollection(collection)?.Relations
             .Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];

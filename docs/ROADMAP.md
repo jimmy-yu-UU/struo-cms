@@ -299,7 +299,34 @@
   untouched (237). Spec: [spec](superpowers/specs/2026-07-08-phase8-graphql-design.md) · plan:
   [plan](superpowers/plans/2026-07-08-phase8-graphql.md). *Deferred to follow-ups:* mutations (8b), cross-relation &
   multi-level (depth>1) nesting, typed Select/Radio enums, plus polish minors (long→IntFilter operand, Date filter operand).
-- **Next up:** **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope).
+- **Phase 8b.1 (GraphQL mutations — backbone) code-complete, live-gate pending:** a strongly-typed GraphQL
+  **write** surface layered on the Phase 8 read schema — `createX(input, locale)` / `updateX(id, input, locale)` /
+  `deleteX(id)` per discovered `[CmsCollection]`, generated from metadata (mirrors the read `ITypeModule`). Per collection
+  two `InputObjectType`s: `XCreateInput` (writable **scalar own-fields + M2O FK**, all nullable) and `XUpdateInput` (same +
+  `version: Long` optimistic-concurrency token). Resolvers convert the typed input to a `JsonElement` and delegate to the
+  existing `ItemService.CreateAsync/UpdateAsync/DeleteAsync` via new write methods on the Api-owned `IGraphQlDataSource`
+  adapter (**Domain/Application/Infrastructure untouched, no new packages, no backend write-logic change**); create/update
+  **re-read via `GetAsync`** using the mutation's selection set so the returned node behaves exactly like a query result
+  (relations expand, `translations` present). Errors reuse the Phase 8 `StruoErrorFilter` (FORBIDDEN / BAD_USER_INPUT /
+  NOT_FOUND / CONFLICT / masked INTERNAL_SERVER_ERROR); RBAC (`CanWrite`/`CanDelete` + `RequireSuperAdminForAdminOnly`) and
+  CSRF (POST `/graphql` behind `CsrfProtectionMiddleware`) are inherited unchanged. **Scope fence:** scalar + M2O FK +
+  `version` only; **translatable own-fields are excluded from the inputs** (typed `translations` input is 8b.2), and M2M /
+  File/Image/Files / multi-value / Json / KeyValue / Repeater inputs are **deferred to 8b.2**. Built subagent-driven (Sonnet
+  impl + Opus review per task). **Review caught two real bugs the plan's assumptions missed** — both the v16-HotChocolate
+  **null-backfill** class (the same root cause as the Phase 8 filter-explosion): the coerced input dict backfills every unsent
+  optional field with `null`, so (1) **update** partial-merge would have silently nulled untouched columns, and (2) **create**
+  would clobber entity defaults (`status="draft"`→null) / make non-nullable value-type scalars uncreatable — both fixed by a
+  `SentFieldsOnly` helper that reads the argument literal so only client-sent fields reach the body (verified for inline-literal
+  **and** `$variable` forms). Automated gates green: `dotnet build -warnaserror` **0 warnings** + `dotnet test` **488** (449
+  Phase-8 baseline + 39 mutation tests). Frontend untouched (237). Spec:
+  [spec](superpowers/specs/2026-07-08-phase8b-graphql-mutations-design.md) · plan:
+  [plan](superpowers/plans/2026-07-08-phase8b-graphql-mutations.md). **Live gate (real Postgres) is the remaining step**
+  (user-driven): create/CJK/partial-update/version-conflict→CONFLICT/validation→BAD_USER_INPUT/permission→FORBIDDEN/delete,
+  plus a `create`-omitting-a-defaulted-field check against real PG (the null-backfill fix). *Deferred:* **8b.2** (translatable
+  `translations` + M2M + File/Image/Files + multi-value + Json/KeyValue + Repeater inputs) and **8c** (advanced read querying:
+  cross-relation / deep filtering / multi-level nesting) — both remain, unchanged by this slice.
+- **Next up:** **Phase 8b.2** (structured/multi-value/i18n mutation inputs) or **Phase 9** (soft delete / revisions /
+  lifecycle hooks + unified response envelope) — user's call. **8c** (advanced read querying) is a parallel read-side slice.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -369,6 +396,9 @@
 | 7g+.3 | Multi-file `Files` (`List<Guid>` ordered gallery via `IsJson` `text`; mirrors scalar File/Image raw-id contract; STJ in/out; drag-reorder `OrderList` + batched `filter[id][_in]` resolve + missing-id fallback; additive `MediaGrid` multi-select) + scanner `Translatable` fail-fast (review M4) — *third 7g+ slice* | ✅ done (live-verified: real PG+MinIO — order round-trip + reorder/drop + dedup keep-first + non-guid→400 + deleted-file fallback, 12/12, no backend fixes) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multifile-files-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multifile-files.md) |
 | 7g+.4 | Structured editor `Repeater` (repeatable child objects: `List<TChild>` of `[CmsField]` sub-props, lean scalar sub-field set, `IsJson`→`text`; scanner recurses `FieldMetadata.Fields` + fail-fasts invalid declarations; `ItemService` drops blank rows + validates sub-field Required/options/MaxLength; recursive `RepeaterField.vue`) — *the last 7g+ slice; completes Phase 7g+* | ✅ done (live-verified: real PG — order round-trip + reorder/drop-blank + sub-field required 400 + options 400 + CJK, 5/5, no backend fixes; **+1 final-review fix: interface-typed collection fail-fasts at scan**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-repeater-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-repeater.md) |
 | 8 | GraphQL (read-only delivery API: metadata-driven dynamic schema via HotChocolate; typed per-collection queries + filter/sort/offset-pagination/i18n; single-level relations via existing `deep`; File/Image/Files resolve to `File` nodes via batched DataLoader; RBAC/whitelist reused through an Api-owned `IGraphQlDataSource` adapter — Application untouched) | ✅ done (live-verified: real PG — all JSON-text columns round-trip + CJK exact + File resolution + FORBIDDEN/BAD_USER_INPUT; **+1 live-gate backend fix: Repeater sub-fields resolve from POCO children**) | [spec](superpowers/specs/2026-07-08-phase8-graphql-design.md) | [plan](superpowers/plans/2026-07-08-phase8-graphql.md) |
+| 8b.1 | GraphQL mutations (backbone): typed `createX`/`updateX`/`deleteX` per collection — scalar own-fields + M2O FK + optimistic `version`; input→`JsonElement`→`ItemService` via the Api-owned adapter (Domain/App/Infra untouched); create/update re-read; RBAC/CSRF/error-filter reused — *first mutation slice* | ⬜ code-complete, live-gate pending (automated gates green: build 0 warnings, `dotnet test` **488**; **2 review fixes: v16 null-backfill on update + create**) | [spec](superpowers/specs/2026-07-08-phase8b-graphql-mutations-design.md) | [plan](superpowers/plans/2026-07-08-phase8b-graphql-mutations.md) |
+| 8b.2 | GraphQL mutations (structured): translatable `translations` input + M2M + File/Image/Files + multi-value + Json/KeyValue + Repeater inputs — *second mutation slice* | ⬜ planned | — | — |
+| 8c | GraphQL advanced read querying: cross-relation (dotted-path) filtering + nested filter/sort/pagination + multi-level (depth>1) nesting — *read-side, parallel to 8b* | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
