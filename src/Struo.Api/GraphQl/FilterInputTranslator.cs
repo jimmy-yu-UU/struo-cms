@@ -73,6 +73,13 @@ public static class FilterInputTranslator
         if (AsDict(value) is not { } ops) return;
         foreach (var (token, opValue) in ops)
         {
+            // HotChocolate reads the nested op-input (e.g. StringFilter) back as a dictionary
+            // populated with EVERY declared field, not just the ones the client set — unset
+            // operators default to null here. Skip them, or a single `{ eq: x }` filter would
+            // explode into one ComparisonFilter per operator (neq/in/contains/... all value=null),
+            // ANDed together and silently corrupting the query.
+            if (opValue is null) continue;
+
             if (string.Equals(token, "isNull", StringComparison.Ordinal))
             {
                 var isNull = opValue is true;

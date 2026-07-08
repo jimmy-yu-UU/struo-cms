@@ -1,4 +1,5 @@
 // src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs
+using System.Collections;
 using HotChocolate.Resolvers;
 using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
@@ -150,13 +151,24 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
 
     private static IReadOnlyList<object> TranslationList(IReadOnlyDictionary<string, object?> parent)
     {
-        // projection stores translations as { locale: { field: value } }; expose as [{locale, fields}]
-        if (parent.GetValueOrDefault("translations") is not IDictionary<string, object?> map) return [];
-        return map.Select(kv => (object)new Dictionary<string, object?>
+        // ItemService.OverlayTranslationsAsync projects translations as the CONCRETE type
+        // Dictionary<string, Dictionary<string, object?>> — which does not implement the generic
+        // IDictionary<string, object?> (generic dictionary interfaces are not covariant in the
+        // value type in .NET), so a guard written against that generic interface always misses and
+        // silently returns []. Guard on the non-generic System.Collections.IDictionary instead —
+        // it is implemented by any Dictionary<TKey,TValue> regardless of TValue, and still lets us
+        // return [] when translations is genuinely absent/null.
+        if (parent.GetValueOrDefault("translations") is not IDictionary map) return [];
+        var result = new List<object>(map.Count);
+        foreach (DictionaryEntry entry in map)
         {
-            ["locale"] = kv.Key,
-            ["fields"] = kv.Value
-        }).ToList();
+            result.Add(new Dictionary<string, object?>
+            {
+                ["locale"] = entry.Key,
+                ["fields"] = entry.Value
+            });
+        }
+        return result;
     }
 
     internal static ObjectFieldConfiguration Field(string name, string sdl, PureFieldDelegate pure)
