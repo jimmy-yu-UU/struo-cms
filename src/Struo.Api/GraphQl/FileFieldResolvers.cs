@@ -5,6 +5,7 @@ using HotChocolate.Resolvers;
 using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
+using Struo.Application.Configuration;
 
 namespace Struo.Api.GraphQl;
 
@@ -52,8 +53,8 @@ internal static class FileFieldResolvers
 
     private static Guid? ToGuid(object? v) => v switch
     {
-        Guid g => g,
-        string s when Guid.TryParse(s, out var g) => g,
+        Guid g => g == Guid.Empty ? null : g,
+        string s when Guid.TryParse(s, out var g) => g == Guid.Empty ? null : g,
         _ => null,
     };
 
@@ -63,29 +64,44 @@ internal static class FileFieldResolvers
     /// manually-written subclass (verified against the installed HotChocolate/GreenDonut 16.4.0 —
     /// the inline registration-free <c>ctx.BatchDataLoader&lt;TKey,TValue&gt;(fetch)</c> helper from
     /// v13-15 was removed in v15; v16's replacement is this class shape + <c>ctx.DataLoader&lt;T&gt;()</c>).
-    /// One batched <see cref="IGraphQlDataSource.QueryAsync"/>("file", id _in keys) call per request,
-    /// keyed by id; ids absent from the result are simply omitted from the batch's returned
+    /// One batched <see cref="IGraphQlDataSource.QueryAsync"/>("file", id _in keys) call per request
+    /// for the common case; ids absent from the result are simply omitted from the batch's returned
     /// dictionary, which GreenDonut surfaces as a null <c>LoadAsync</c> result (no throw).
+    /// <para>
+    /// <see cref="ItemService.QueryAsync"/> routes every query through <c>QueryValidator</c>, which
+    /// clamps <c>limit</c> to <see cref="StruoQueryOptions.MaxLimit"/> (default 100) — passing the
+    /// full key count as <c>limit</c> is therefore only safe up to that cap. A single GraphQL request
+    /// can legitimately request more distinct file ids than that (e.g. a 25-item page where each item
+    /// has several gallery/hero files), so the keys are split into <see cref="StruoQueryOptions.MaxLimit"/>
+    /// -sized chunks and one query is issued per chunk — silently dropping the tail past MaxLimit is
+    /// not acceptable. For <c>keys.Count &lt;= MaxLimit</c> (the common case) this still issues exactly
+    /// ONE query, preserving the existing single-query batching guarantee/test.
+    /// </para>
     /// </summary>
     internal sealed class FileByIdDataLoader(
         IGraphQlDataSource dataSource,
         IBatchScheduler batchScheduler,
-        DataLoaderOptions options)
+        DataLoaderOptions options,
+        StruoQueryOptions queryOptions)
         : BatchDataLoader<Guid, IReadOnlyDictionary<string, object?>>(batchScheduler, options)
     {
         protected override async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, object?>>> LoadBatchAsync(
             IReadOnlyList<Guid> keys, CancellationToken cancellationToken)
         {
-            var filter = new Dictionary<string, object?>
-            {
-                ["id"] = new Dictionary<string, object?> { ["in"] = keys.Cast<object?>().ToList() },
-            };
-            var query = GraphQlQueryBuilder.BuildQuery(filter, null, keys.Count, 0, null, Array.Empty<string>());
-            var page = await dataSource.QueryAsync("file", query, null, cancellationToken);
-
             var map = new Dictionary<Guid, IReadOnlyDictionary<string, object?>>();
-            foreach (var row in page.Data)
-                if (ToGuid(row.GetValueOrDefault("id")) is { } g) map[g] = row;
+            var chunkSize = Math.Max(1, queryOptions.MaxLimit);
+            foreach (var chunk in keys.Chunk(chunkSize))
+            {
+                var filter = new Dictionary<string, object?>
+                {
+                    ["id"] = new Dictionary<string, object?> { ["in"] = chunk.Cast<object?>().ToList() },
+                };
+                var query = GraphQlQueryBuilder.BuildQuery(filter, null, chunk.Length, 0, null, Array.Empty<string>());
+                var page = await dataSource.QueryAsync("file", query, null, cancellationToken);
+
+                foreach (var row in page.Data)
+                    if (ToGuid(row.GetValueOrDefault("id")) is { } g) map[g] = row;
+            }
             return map;
         }
     }
