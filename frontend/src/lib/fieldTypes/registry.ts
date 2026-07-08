@@ -18,6 +18,7 @@ import TagsField from '../../components/fields/TagsField.vue'
 import JsonField from '../../components/fields/JsonField.vue'
 import KeyValueField from '../../components/fields/KeyValueField.vue'
 import FilesField from '../../components/fields/FilesField.vue'
+import RepeaterField from '../../components/fields/RepeaterField.vue'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => String(v) }
@@ -133,6 +134,31 @@ const keyValueDef: FieldTypeDef = {
   listColumn: asJoinedKeyValue,
 }
 
+const asItemCount: ListColumn = {
+  format: (v) => (Array.isArray(v) ? `${v.length} items` : String(v ?? '')),
+}
+
+function isBlankRow(row: unknown, subFields: FieldMeta[]): boolean {
+  if (!row || typeof row !== 'object') return true
+  const r = row as Record<string, unknown>
+  return subFields.every((f) => {
+    const val = r[f.name]
+    return val === null || val === undefined || (typeof val === 'string' && val.trim() === '')
+  })
+}
+
+const repeaterDef: FieldTypeDef = {
+  component: RepeaterField,
+  defaultValue: () => [],
+  parse: (raw) => (Array.isArray(raw) ? raw : []),
+  serialize: (v, f) => {
+    if (!Array.isArray(v)) return []
+    const subs = f.fields ?? []
+    return v.filter((row) => !isBlankRow(row, subs))
+  },
+  listColumn: asItemCount,
+}
+
 const filesDef: FieldTypeDef = {
   component: FilesField,
   defaultValue: () => [],
@@ -182,8 +208,7 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   tags: tagsDef,
   json: jsonDef,
   keyValue: keyValueDef,
-  // Deferred to later 7g+ slices — render read-only for now (unchanged behaviour).
-  repeater: readonlyDef,
+  repeater: repeaterDef,
   files: filesDef,
   hidden: readonlyDef,
   uuid: readonlyDef,
