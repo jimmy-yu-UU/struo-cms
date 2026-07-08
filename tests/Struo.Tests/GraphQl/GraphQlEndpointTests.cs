@@ -74,4 +74,38 @@ public class GraphQlEndpointTests(ApiFactory factory)
         var messages = errors.EnumerateArray().Select(e => e.GetProperty("message").GetString()).ToList();
         messages.Should().Contain(m => m != null && m.Contains("depth", StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// Task 6 (Phase 8b.1): every mutation-execution test in this suite builds its own in-process
+    /// executor with an ".AddMutationType(...)" anchor, so none of them prove that the REAL
+    /// production wiring — AddStruoGraphQl in GraphQlServiceCollectionExtensions, which registers
+    /// the production AddMutationType anchor plus the mutation type extension — actually exposes
+    /// per-collection mutations through the real host. This test closes that gap: it introspects
+    /// the live schema's mutation root through the same ApiFactory pipeline used by
+    /// Typename_query_reaches_resolver_through_real_pipeline and asserts the discovered sample
+    /// "article" [CmsCollection] contributed createArticle/updateArticle/deleteArticle, proving
+    /// AddStruoGraphQl actually wires mutations end-to-end rather than only in test-local executors.
+    /// </summary>
+    [Fact]
+    public async Task Mutation_root_exposes_per_collection_mutations_through_real_pipeline()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            "/graphql",
+            new { query = "{ __schema { mutationType { fields { name } } } }" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        doc.RootElement.TryGetProperty("errors", out _).Should().BeFalse(
+            $"expected no errors introspecting the mutation root; full response: {json}");
+
+        var fieldNames = doc.RootElement.GetProperty("data").GetProperty("__schema")
+            .GetProperty("mutationType").GetProperty("fields")
+            .EnumerateArray()
+            .Select(f => f.GetProperty("name").GetString())
+            .ToList();
+
+        fieldNames.Should().Contain(["createArticle", "updateArticle", "deleteArticle"]);
+    }
 }
