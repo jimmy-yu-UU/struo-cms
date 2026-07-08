@@ -1,4 +1,5 @@
 // src/Struo.Api/GraphQl/GraphQlDataSource.cs
+using System.Text.Json;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 
@@ -15,6 +16,7 @@ public interface IGraphQlDataSource
     Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct);
     Task<bool> DeleteAsync(string collection, string id, CancellationToken ct);
+    Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct);
 }
 
 public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDataSource
@@ -27,4 +29,7 @@ public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDa
 
     public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct)
         => items.DeleteAsync(collection, id, ct);
+
+    public Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct)
+        => items.CreateAsync(collection, body, ct);
 }
