@@ -59,6 +59,7 @@ public class GraphQlMutationSchemaTests
         block.Should().NotContain("faqs");      // Repeater
         block.Should().NotContain("heroImageId"); // Image
         // Title is translatable and not on the entity's FieldToProperty -> excluded here (8b.2).
+        block.Should().NotContain("title");
         block.Should().NotContain("version");   // create carries no concurrency token
     }
 
