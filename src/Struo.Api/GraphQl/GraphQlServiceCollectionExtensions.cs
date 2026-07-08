@@ -20,6 +20,7 @@ public static class GraphQlServiceCollectionExtensions
         // The IServiceCollection-level AddErrorFilter overload registers against application
         // services instead, where full constructor DI (including ILogger<T>) resolves normally.
         services.AddErrorFilter<StruoErrorFilter>();
+        services.AddScoped<IGraphQlDataSource, ItemServiceGraphQlDataSource>();
 
         services
             .AddGraphQLServer()
