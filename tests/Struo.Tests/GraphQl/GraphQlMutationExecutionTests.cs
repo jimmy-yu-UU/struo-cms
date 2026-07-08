@@ -102,9 +102,65 @@ public class GraphQlMutationExecutionTests
         node.GetProperty("status").GetString().Should().Be("published");
         node.GetProperty("category").GetProperty("name").GetString().Should().Be("News");
 
-        // The input reached the service as a JSON body carrying exactly the sent keys.
-        capturedBody!.Value.GetProperty("status").GetString().Should().Be("published");
+        // The input reached the service as a JSON body carrying exactly the sent keys — NOT
+        // backfilled with every other optional ArticleCreateInput field (publishedAt, heroImageId,
+        // regions, keywords, attributes, gallery, faqs) as nulls.
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo(["status", "categoryId"]);
+        capturedBody.Value.GetProperty("status").GetString().Should().Be("published");
         capturedBody.Value.GetProperty("categoryId").GetString().Should().Be("9");
+    }
+
+    [Fact]
+    public async Task Create_sends_only_provided_keys_not_backfilled_defaults()
+    {
+        // Regression for the v16 null-backfill bug: HotChocolate's coerced input dictionary contains
+        // EVERY declared optional field, backfilled with null when the client didn't send it. Without
+        // routing create through SentFieldsOnly (like update already does), omitting a field with a
+        // CLR default (e.g. Article.Status = "draft") would send status: null and clobber the
+        // default instead of leaving it untouched.
+        JsonElement? capturedBody = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id, ["status"] = "published" },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"published\" }) { id } }");
+        ParseData(result);
+
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo(["status"]);
+    }
+
+    [Fact]
+    public async Task Create_via_variables_sends_only_provided_keys()
+    {
+        // Real clients send $input as a GraphQL variable, not an inline literal. SentFieldsOnly
+        // (MutationResolvers) recovers the sent-fields set from the argument LITERAL, which must
+        // reflect only the variable's own JSON keys post-substitution — guard against a fix that
+        // happens to work for inline literals but not variables.
+        JsonElement? capturedBody = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id, ["status"] = "published" },
+        };
+
+        var request = OperationRequestBuilder.New()
+            .SetDocument("mutation($input: ArticleCreateInput!) { createArticle(input: $input) { id } }")
+            .SetVariableValues(new Dictionary<string, object?>
+            {
+                ["input"] = new Dictionary<string, object?> { ["status"] = "published" },
+            })
+            .Build();
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(request);
+        ParseData(result);
+
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo(["status"]);
     }
 
     [Fact]

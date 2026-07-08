@@ -31,7 +31,7 @@ internal static class MutationResolvers
     {
         var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var body = MutationInputMapper.ToJsonElement(input);
+        var body = MutationInputMapper.ToJsonElement(SentFieldsOnly(ctx, "input", input));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var created = await source.CreateAsync(collection, body, ctx.RequestAborted);
@@ -75,13 +75,16 @@ internal static class MutationResolvers
 
     // HotChocolate's coerced argument dictionary (ctx.ArgumentValue<IReadOnlyDictionary<string,object?>?>)
     // always contains EVERY declared input field for a Dictionary-runtime-type InputObjectType — an
-    // optional field the client never sent is backfilled with null rather than omitted. That is fine
-    // for create (nothing to preserve yet) but breaks update's partial merge: ItemService.UpdateAsync
-    // treats "key present" as "client sent it" (see bodyKeys in ItemService.UpdateAsync), so a
-    // backfilled null would silently overwrite a field the client never touched. The request's
-    // argument LITERAL (post-variable-substitution) still reflects only the client-supplied keys, so
-    // intersect the coerced dict's values against the literal's field names to recover the true
-    // partial-merge set without needing to re-derive values from the literal ourselves.
+    // optional field the client never sent is backfilled with null rather than omitted. That breaks
+    // update's partial merge (ItemService.UpdateAsync treats "key present" as "client sent it" — see
+    // bodyKeys in ItemService.UpdateAsync — so a backfilled null would silently overwrite a field the
+    // client never touched) AND create's defaults (ItemService.CreateAsync deserializes the body onto
+    // a fresh entity, so a backfilled null overwrites a field's CLR default, e.g. Article.Status, and
+    // can 500 on a non-nullable value-type scalar the client omitted). Both resolvers route the
+    // coerced dict through this helper. The request's argument LITERAL (post-variable-substitution)
+    // still reflects only the client-supplied keys, so intersect the coerced dict's values against the
+    // literal's field names to recover the true sent-fields set without needing to re-derive values
+    // from the literal ourselves.
     private static IReadOnlyDictionary<string, object?>? SentFieldsOnly(
         IResolverContext ctx, string argumentName, IReadOnlyDictionary<string, object?>? coerced)
     {
