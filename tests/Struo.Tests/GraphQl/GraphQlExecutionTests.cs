@@ -318,6 +318,47 @@ public class GraphQlExecutionTests
             .GetProperty("category").GetProperty("name").GetString().Should().Be("News");
     }
 
+    /// <summary>
+    /// Final-review fix regression: HotChocolate merges non-aliased duplicate selections, but
+    /// ALIASED selections of the SAME relation (<c>a: category</c> / <c>b: category</c>) stay
+    /// distinct child selections that both report <c>Field.Name == "category"</c>. Before the fix,
+    /// <see cref="CollectionResolvers"/>'s selection-to-relation-name projection returned
+    /// <c>["category", "category"]</c>, which <see cref="GraphQlQueryBuilder.BuildQuery"/> fed into
+    /// <c>ToDictionary</c> -> <see cref="ArgumentException"/> (duplicate key) -> masked
+    /// INTERNAL_SERVER_ERROR for an otherwise-legal query. The relation names must be de-duplicated
+    /// before reaching BuildQuery so aliasing a relation twice degrades to one Deep entry, not a crash.
+    /// </summary>
+    [Fact]
+    public async Task Aliased_duplicate_relation_selection_does_not_crash_and_resolves_both_aliases()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?>
+                {
+                    ["id"] = "1",
+                    ["category"] = new Dictionary<string, object?> { ["id"] = "9", ["name"] = "News" },
+                };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles { items { a: category { name } b: category { name } } } }");
+        var data = ParseData(result); // asserts no errors — would throw INTERNAL_SERVER_ERROR pre-fix
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("category");
+        deepSeen.Relations.Should().HaveCount(1, "the duplicate aliased selection must collapse to one Deep entry");
+
+        var item = data.GetProperty("articles").GetProperty("items")[0];
+        item.GetProperty("a").GetProperty("name").GetString().Should().Be("News");
+        item.GetProperty("b").GetProperty("name").GetString().Should().Be("News");
+    }
+
     /// <summary>Task 10: no relation sub-field selected -> Deep stays null (no over-fetching).</summary>
     [Fact]
     public async Task Relation_not_selected_leaves_Deep_null()
