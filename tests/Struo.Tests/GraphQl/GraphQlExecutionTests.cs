@@ -6,6 +6,7 @@ using HotChocolate.Execution;
 using HotChocolate.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.GraphQl;
+using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Query;
@@ -27,6 +28,10 @@ public class GraphQlExecutionTests
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
             .AddScoped<IGraphQlDataSource>(_ => ds)
+            // FileByIdDataLoader's ctor takes StruoQueryOptions (Task-9 review fix: chunk the
+            // batch fetch to MaxLimit-sized slices) — HotChocolate's ctx.DataLoader<T>() resolves
+            // it via ActivatorUtilities against request services, so it must be registered here too.
+            .AddSingleton(new StruoQueryOptions())
             // AddTypeModule<T>() resolves T via GetRequiredService<T>() against application
             // services (not schema-scoped activation) — must be registered explicitly (mirrors
             // GraphQlSchemaTests).
@@ -226,5 +231,54 @@ public class GraphQlExecutionTests
         var json = result.ToJson();
         json.Should().Contain("\"heroImage\": null");
         json.Should().NotContain("errors");
+    }
+
+    /// <summary>
+    /// Task-9 review fix regression (Minor): the scalar path (<c>heroImage</c>) already covers
+    /// null-on-missing, but the list-shaped field (<c>galleryFiles</c>) — <see
+    /// cref="FileFieldResolvers.ResolveList"/> — had no direct execution-level test of its two
+    /// defining behaviours: it must resolve ids in the REQUESTED order (not whatever order the
+    /// batched "file" query happens to return rows in) and DROP any id missing from the "file"
+    /// collection, rather than erroring or emitting null placeholders.
+    /// </summary>
+    [Fact]
+    public async Task GalleryFiles_preserves_order_and_drops_missing_ids()
+    {
+        var present1 = Guid.NewGuid();
+        var missing = Guid.NewGuid();
+        var present2 = Guid.NewGuid();
+
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (collection, q, _) => collection == "article"
+                ? new PagedResult(new IReadOnlyDictionary<string, object?>[]
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["id"] = "1",
+                            ["gallery"] = new List<Guid> { present1, missing, present2 },
+                        },
+                    }, 1, q.Limit, q.Offset)
+                // Deliberately returned in the OPPOSITE order from the gallery list, and missing
+                // is simply absent — the resolver's output order must follow the requested id
+                // sequence, not the "file" query's row order.
+                : new PagedResult(new IReadOnlyDictionary<string, object?>[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = present2, ["title"] = "second" },
+                        new Dictionary<string, object?> { ["id"] = present1, ["title"] = "first" },
+                    }, 2, q.Limit, q.Offset)
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles { items { id galleryFiles { id title } } } }");
+        var data = ParseData(result);
+
+        var files = data.GetProperty("articles").GetProperty("items")[0].GetProperty("galleryFiles");
+        files.GetArrayLength().Should().Be(2, "the missing id must be dropped, not resolved as null/error");
+        files[0].GetProperty("title").GetString().Should().Be("first", "order must follow the gallery list, not the file query's row order");
+        files[1].GetProperty("title").GetString().Should().Be("second");
+
+        // Batching still holds for the list path too: one "file" query for the whole request.
+        ds.QueryCollections.Count(c => c == "file").Should().Be(1);
     }
 }
