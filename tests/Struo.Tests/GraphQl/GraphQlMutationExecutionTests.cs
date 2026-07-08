@@ -76,4 +76,63 @@ public class GraphQlMutationExecutionTests
 
         data.GetProperty("deleteArticle").GetBoolean().Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Create_returns_node_with_selected_fields_and_reread_relation()
+    {
+        JsonElement? capturedBody = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (c, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = "42" }; },
+            // Re-read (GetAsync) returns the fully-projected node incl. the M2O relation.
+            OnGet = (_, id, _, _) => new Dictionary<string, object?>
+            {
+                ["id"] = id,
+                ["status"] = "published",
+                ["category"] = new Dictionary<string, object?> { ["id"] = "9", ["name"] = "News" },
+            },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"published\", categoryId: \"9\" }) { id status category { name } } }");
+        var data = ParseData(result);
+
+        var node = data.GetProperty("createArticle");
+        node.GetProperty("id").GetString().Should().Be("42");
+        node.GetProperty("status").GetString().Should().Be("published");
+        node.GetProperty("category").GetProperty("name").GetString().Should().Be("News");
+
+        // The input reached the service as a JSON body carrying exactly the sent keys.
+        capturedBody!.Value.GetProperty("status").GetString().Should().Be("published");
+        capturedBody.Value.GetProperty("categoryId").GetString().Should().Be("9");
+    }
+
+    [Fact]
+    public async Task Create_validation_error_maps_to_BAD_USER_INPUT()
+    {
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, _) => throw new QueryException("Field 'status' is required.")
+        };
+
+        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { }) { id } }")).ToJson();
+
+        json.Should().Contain("BAD_USER_INPUT");
+        json.Should().Contain("required");
+    }
+
+    [Fact]
+    public async Task Create_permission_denied_maps_to_FORBIDDEN()
+    {
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, _) => throw new PermissionDeniedException("Write not permitted.")
+        };
+
+        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"x\" }) { id } }")).ToJson();
+
+        json.Should().Contain("FORBIDDEN");
+    }
 }

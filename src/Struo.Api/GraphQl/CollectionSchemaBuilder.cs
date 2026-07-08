@@ -41,6 +41,7 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         types.Add(BuildObjectType(meta, relationNames, types));   // Article + nested repeater item types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
         types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
+        types.Add(BuildCreateInput(meta));                         // ArticleCreateInput
         return types;
     }
 
@@ -148,6 +149,31 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
 
         return InputObjectType.CreateUnsafe(config);
+    }
+
+    private InputObjectType BuildCreateInput(CollectionMetadata meta)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.CreateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
+        AddWritableFields(config, meta);
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    // Shared by create/update inputs: writable scalar own-fields + M2O foreign keys, all nullable.
+    // Deferred kinds resolve to a null SDL from WritableScalarInputSdl and are skipped.
+    private void AddWritableFields(InputObjectTypeConfiguration config, CollectionMetadata meta)
+    {
+        var desc = registry.Get(meta.Name);
+        foreach (var f in meta.Fields)
+        {
+            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
+            var sdl = SchemaTypeMapper.WritableScalarInputSdl(f.Interface, ClrType(desc, f.Name));
+            if (sdl is null) continue;
+            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
+        }
+        foreach (var rel in meta.Relations)
+            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
+                config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("ID")));
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).
