@@ -7,9 +7,12 @@ namespace Struo.Api.GraphQl;
 /// Converts the HotChocolate typed-input dictionary (keys = camelCase input field names, values =
 /// CLR scalars produced by the scalar bindings) into the <see cref="JsonElement"/> that
 /// <c>ItemService.CreateAsync</c>/<c>UpdateAsync</c> already accept. Uses the same web JSON options
-/// as ItemService so number/date/string shapes match the REST write path. Because the dictionary
-/// contains ONLY the keys the client supplied, the resulting element carries exactly the sent fields
-/// — which is what drives ItemService's partial merge-update.
+/// as ItemService so number/date/string shapes match the REST write path. This mapper trusts the
+/// dictionary it is given verbatim — it does NOT filter unsent fields itself. HotChocolate's coerced
+/// argument dictionary actually backfills every optional input field the client didn't send with a
+/// null entry, so the CALLER (both create's and update's resolvers in
+/// <see cref="MutationResolvers"/>, via its <c>SentFieldsOnly</c> helper) is responsible for passing
+/// in only the keys the client actually supplied before calling <see cref="ToJsonElement"/>.
 /// </summary>
 public static class MutationInputMapper
 {
