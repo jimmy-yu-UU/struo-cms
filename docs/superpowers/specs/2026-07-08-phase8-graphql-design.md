@@ -6,9 +6,20 @@
 `[CmsCollection]` as a strongly-typed, introspectable schema, sitting on top of the existing
 metadata + query DSL + `ItemService` projection + RBAC surface. **Mutations (create/update/delete)
 are explicitly out of scope** and deferred to a later phase (8b); writes continue via the REST
-controllers. Cross-relation (dotted-path) filtering and nested-relation filter/sort/pagination are
-likewise deferred. This phase adds a new `Struo.Api/GraphQl/` layer only — Domain / Application /
-Infrastructure are **untouched** and gain **no new packages** (dependency rule §2).
+controllers. Cross-relation (dotted-path) filtering, nested-relation filter/sort/pagination, and
+**multi-level (depth > 1) relation nesting** are likewise deferred. This phase adds a new
+`Struo.Api/GraphQl/` layer only — Domain / Application / Infrastructure are **untouched** and gain
+**no new packages** (dependency rule §2).
+
+> **Planning-time revision (2026-07-08):** the original §6 described per-field DataLoaders with
+> arbitrary-depth relation nesting. Planning surfaced that M2O foreign keys (e.g. `Article.CategoryId`)
+> are declared via `[CmsRelation]`, **not** `[CmsField]`, so they are **not** in the projected dict —
+> a relation resolver cannot read the FK from the dict, and the existing `IRelationExpander` reads it
+> off the **entity** and expands a **single level** only. To keep Application/Infrastructure untouched
+> and reuse the proven expander, Phase 8 does **single-level** relation nesting via the existing
+> `deep` mechanism (§6 rewritten below). Multi-level nesting is deferred to Phase 8b alongside
+> cross-relation filtering. File/Image/Files resolution is unaffected (their ids **are** `[CmsField]`
+> values in the dict) and resolves at any depth via a by-id DataLoader.
 
 ---
 
@@ -33,8 +44,13 @@ GraphQL is a **new presentation layer over that pipeline** — it does not re-im
 - **Mutations** — no create/update/delete; writes stay on REST. (Deferred to Phase 8b.)
 - **Cross-relation (dotted-path) filtering** (`filter[category.name]`) — deferred; Phase 8 filters
   on own fields + M2O FK ids only.
-- **Nested-relation filter/sort/pagination** — nested relation fields expand only (with an optional
-  `limit` on to-many). Per-nested-level filtering/sorting is deferred.
+- **Nested-relation filter/sort/pagination** — nested relation fields expand only. Per-nested-level
+  filtering/sorting is deferred.
+- **Multi-level (depth > 1) relation nesting** — Phase 8 expands relations one level from the queried
+  collection (e.g. `articles { category { name } tags { name } }`). A relation-of-a-relation (e.g.
+  `category { articles { … } }`) resolves empty; the field exists in the schema (schema is global per
+  collection) but is not expanded past depth 1. Deferred to Phase 8b. (File/Image/Files resolution is
+  **not** subject to this limit — see §6.)
 - **Field-level read restriction beyond today** — `ReadableFields` currently returns all fields;
   GraphQL honours it but adds nothing new.
 - **Dynamic GraphQL enums for `Select`/`Radio` options** — options are runtime data; mapped to
@@ -203,30 +219,50 @@ Offset-based, matching the existing DSL exactly: `limit` / `offset` arguments; t
 returns `{ items, total }`. `limit` is clamped by the existing `StruoQueryOptions.MaxLimit`. (Relay
 cursor connections were considered and rejected — the repository is offset/total-based.)
 
-## 6. Relations & N+1 avoidance (DataLoader)
+## 6. Relations & N+1 avoidance
 
 Relations become natural nested fields (the point of GraphQL). Per `RelationMetadata`:
 
 - M2O → `category: Category` (nullable single)
-- O2M → `articles: [Article!]` (accepts an optional `limit`, reusing `DeepRelationSpec.Limit`)
-- M2M → `tags: [Tag!]` (accepts an optional `limit`)
+- O2M → `articles: [Article!]`
+- M2M → `tags: [Tag!]`
 
-**Why not reuse `ItemService.ExpandDeepAsync` directly:** REST expansion batches the whole parent set
-in one pass, but GraphQL resolves per-field, per-node — naïvely querying each node's relation is
-textbook N+1. So nested relation fields use **HotChocolate DataLoaders**: within one request, all
-`Article.category` resolutions collect their `categoryId`s and coalesce into a **single**
-`id IN (...)` query, dispatched back to each node. This is exactly the batched stitching logic already
-inside `IRelationExpander` (M2O collects FKs → `id IN`; O2M queries by reverse-FK `IN`, groups; M2M
-via junction then `id IN`, ordered by junction sort). The existing single-relation batch logic is
-**wrapped** into DataLoaders — the query logic is not rewritten. File/Image/Files resolution (§4.3)
-shares a by-id DataLoader.
+### 6.1 Single-level relations reuse the existing `deep` expander
 
-- Nested nodes are projected through the same `ItemService` projection (camelCase dicts) and are
-  subject to per-node read permission: an unreadable relation target → `null` / empty array (parity
-  with REST deep expansion).
-- **Depth control:** the existing `StruoQueryOptions.MaxRelationDepth` still bounds relation traversal;
-  additionally, HotChocolate's max execution depth (and optionally a complexity limit) guards against
-  malicious deep/broad queries.
+The M2O foreign key is declared via `[CmsRelation]`, not `[CmsField]`, so it is **not** in the
+projected dict — a per-field relation resolver cannot read the FK from the parent dict, and the
+existing `IRelationExpander` reads it off the **entity** and expands a single level. Phase 8 therefore
+reuses that proven, N+1-safe expander wholesale rather than re-implementing batching in DataLoaders:
+
+- The **root** list/single resolver inspects the GraphQL selection set, builds a `DeepSpec` containing
+  exactly the relation fields the client requested, and calls the existing
+  `ItemService.QueryAsync(collection, queryModel with { Deep = deepSpec }, locale)` /
+  `GetAsync(collection, id, deepSpec, locale)`. `ExpandDeepAsync` → `IRelationExpander.ExpandAsync`
+  batches each relation across the whole page in one query (M2O collects FKs → `id IN`; O2M by
+  reverse-FK `IN`, grouped; M2M via junction then `id IN`, ordered by junction sort) and nests the
+  projected target dict/list into each parent dict under the relation name.
+- The GraphQL relation field resolver is then a **pure dict read**: `ctx.Parent<…dict…>()[relName]`.
+  For a to-one relation the value is a child dict (or `null`); for a to-many it is a list of child
+  dicts.
+- Nested nodes are already projected by `ItemService` (camelCase dicts, hidden/readable rules, i18n
+  overlay) and subject to per-node read permission — parity with REST deep expansion.
+- **Depth limit:** relations are expanded one level from the queried collection. A relation-of-a-
+  relation resolves to `null`/empty (its dict was not deep-expanded). The existing
+  `StruoQueryOptions.MaxRelationDepth` bounds how many relations one request may expand; HotChocolate's
+  max execution depth additionally guards malicious deep/broad queries. Multi-level nesting is deferred
+  (§1.1).
+- **Zero backend change:** this uses only the public `ItemService.QueryAsync`/`GetAsync` signatures
+  and the existing `DeepSpec`/`DeepRelationSpec` — Application/Infrastructure are untouched.
+
+### 6.2 File/Image/Files resolution is DataLoader-batched (any depth)
+
+Unlike relations, File references (`heroImageId`, `gallery`) **are** `[CmsField]` values present in the
+projected dict, so they resolve independently of the `deep` mechanism and at any nesting depth. The
+`heroImage: File` / `galleryFiles: [File!]` resolvers use a **HotChocolate `BatchDataLoader<Guid,
+IReadOnlyDictionary<string,object?>>`**: within one request all requested file ids coalesce into a
+single `ItemService.QueryAsync("file", filter: id _in [ids])` (one batched query), keyed by id and
+dispatched back to each node. A missing/deleted id → `null` (raw-id fallback parity). The batch runs
+through `ItemService`, so file read-permission and projection apply.
 
 ## 7. i18n
 
@@ -295,12 +331,16 @@ Postgres (project rule: SQLite-green ≠ Postgres-correct).
    type and every `FieldInterface` maps, else startup fail-fast. SDL snapshot supported.
 2. **Execution / integration (HotChocolate executor + SQLite).** Execute real queries and assert
    results: list filter (each operator) / sort / limit-offset / `total` / search; single by id;
-   missing id → `NOT_FOUND`; i18n with/without `locale` + the `translations` field; nested M2O/O2M/M2M
-   stitching; File/Image/Files resolving to `File` nodes; permission (unreadable collection →
+   missing id → `NOT_FOUND`; i18n with/without `locale` + the `translations` field; single-level
+   nested M2O/O2M/M2M stitching (via `deep`); a relation-of-a-relation resolves empty (depth-1 limit);
+   File/Image/Files resolving to `File` nodes; permission (unreadable collection →
    `FORBIDDEN`/`UNAUTHENTICATED`, unreadable relation → `null`/empty); every error `code`; depth-limit
    rejection.
-3. **DataLoader batching (unit).** With a counting repository, assert that resolving a relation across
-   N parents triggers exactly **one** batched query (the N+1 regression lock).
+3. **Batching (unit).** (a) Relation expansion reuses `IRelationExpander`, whose per-page-per-relation
+   batching is already covered by existing tests; add a GraphQL-level test that a list query selecting
+   a relation issues one relation query for the page (not per row). (b) The File-resolution
+   `BatchDataLoader` coalesces N requested file ids across N nodes into exactly **one**
+   `QueryAsync("file", …)` — asserted with a counting fake (the N+1 regression lock).
 4. **Live gate (real Postgres).** Representative GraphQL queries against live PG: list + filter +
    pagination + `total`; single; i18n overlay; all three relation kinds nested; File resolution;
    public-read anonymous access vs. a restricted collection denied. Evidence recorded per the project
@@ -318,7 +358,11 @@ green (378 + new GraphQL tests). Frontend untouched (237).
   handled by the `SchemaTypeMapper` reading the entity descriptor's property type. Unmapped numeric
   CLR types fail fast.
 - **`version` token type** — mapped to `Long`; confirm the CLR type during implementation.
-- **Deferred scope** (mutations, cross-relation filtering, nested filter/sort/pagination, typed
-  Select/Radio enums, typed `translations`) is recorded here so it isn't lost; each is a clean
-  follow-up.
+- **Selection-set inspection** — the root resolver builds the `DeepSpec` from the GraphQL selection
+  set (which relations were requested). Uses HotChocolate's resolver-context selection API; verified
+  against v15 docs during planning. If a relation is selected but not expandable it resolves empty.
+- **Deferred scope** (mutations, cross-relation filtering, nested filter/sort/pagination, **multi-level
+  relation nesting**, typed Select/Radio enums, typed `translations`) is recorded here so it isn't
+  lost; each is a clean follow-up (mutations = Phase 8b; multi-level nesting + cross-relation filtering
+  naturally ship together).
 - **Production introspection** left enabled; flag as an ops decision, not a Phase 8 blocker.
