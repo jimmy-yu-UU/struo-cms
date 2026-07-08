@@ -21,6 +21,9 @@ public static class GraphQlServiceCollectionExtensions
         // services instead, where full constructor DI (including ILogger<T>) resolves normally.
         services.AddErrorFilter<StruoErrorFilter>();
         services.AddScoped<IGraphQlDataSource, ItemServiceGraphQlDataSource>();
+        // AddTypeModule<T>() resolves T via GetRequiredService<T>() against application services
+        // (not schema-scoped activation) — StruoTypeModule must be registered explicitly.
+        services.AddSingleton<StruoTypeModule>();
 
         services
             .AddGraphQLServer()
@@ -35,6 +38,7 @@ public static class GraphQlServiceCollectionExtensions
             .AddType<UuidType>()
             .AddType<AnyType>()            // JSON scalar (SDL name "Any")
             .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
+            .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
             .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
             .DisableIntrospection(!env.IsDevelopment())
             .ModifyOptions(o => o.DefaultQueryDependencyInjectionScope = DependencyInjectionScope.Request);
