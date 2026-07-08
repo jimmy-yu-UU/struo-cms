@@ -161,6 +161,35 @@ public class GraphQlMutationExecutionTests
     }
 
     [Fact]
+    public async Task Update_via_variables_sends_only_provided_keys()
+    {
+        // Real clients send $input as a GraphQL variable, not an inline literal. SentFieldsOnly
+        // (MutationResolvers) recovers the partial-merge key set from the argument LITERAL, which
+        // must reflect only the variable's own JSON keys post-substitution — guard against a fix
+        // that happens to work for inline literals but not variables.
+        JsonElement? capturedBody = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id, ["status"] = "archived" },
+        };
+
+        var request = OperationRequestBuilder.New()
+            .SetDocument("mutation($input: ArticleUpdateInput!) { updateArticle(id: \"5\", input: $input) { id } }")
+            .SetVariableValues(new Dictionary<string, object?>
+            {
+                ["input"] = new Dictionary<string, object?> { ["status"] = "archived", ["version"] = 3 },
+            })
+            .Build();
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(request);
+        ParseData(result);
+
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo(["status", "version"]);
+    }
+
+    [Fact]
     public async Task Update_unknown_id_returns_null()
     {
         var ds = new FakeGraphQlDataSource { OnUpdate = (_, _, _) => null };
