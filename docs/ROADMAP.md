@@ -276,10 +276,30 @@
   5 RepeaterField + 4 registry repeaterDef; net of 3 re-pointed `'repeater'`-as-readonly-stand-in
   assertions), `pnpm vue-tsc` clean, `pnpm build` succeeds (pre-existing >500 kB chunk advisory only).
   **Live gate PASSED 2026-07-08** (5/5, no backend fixes) — see the row above.
-- **Next up:** **Phase 7g+ is COMPLETE** — every `FieldInterface` value is now implemented &
-  live-verified: multi-value selects (slice 1), `Json`/`KeyValue` structured editors (slice 2),
-  multi-file `Files` (slice 3), and `Repeater` (slice 4). `Hidden`/`Uuid`/`Divider` intentionally
-  render read-only. The next phase is **Phase 8 (GraphQL)**.
+- **Phase 8 (GraphQL — read-only delivery API) done & live-verified (real PG, 2026-07-08):** a HotChocolate v16
+  read-only GraphQL API at `/graphql`. A metadata-driven `ITypeModule` builds, per discovered `[CmsCollection]`,
+  a strongly-typed `X` object type + `XList {items,total}` + `XFilterInput` + two root queries (`x(id)`,
+  pluralised `xs(filter,sort,limit,offset,search,locale)`) — so adding a `[CmsCollection]` yields a typed GraphQL
+  surface for free. `FieldInterface`→SDL (Number by CLR type, Tags→`[TagItem!]`, Json/KeyValue→`Any`, Repeater→
+  recursive `[XFieldItem!]`, File/Image→`ID`+resolved `File`, Files→`[ID!]`+`[File!]`); typed filter (own scalars +
+  M2O FK + and/or); `sort:[String!]` tokens; offset/`total` pagination; optional `locale` + `translations`.
+  **Single-level relations reuse the existing `deep` expander** (selection→`DeepSpec`); File/Image/Files resolve to
+  `File` nodes via a chunked batch DataLoader (N+1-safe, MaxLimit-chunked so large id sets don't silently truncate).
+  RBAC + query-whitelist are **reused verbatim** through an Api-owned `IGraphQlDataSource` adapter over `ItemService`
+  (**Domain/Application/Infrastructure untouched; only `HotChocolate.AspNetCore` added**); an `IErrorFilter` maps
+  domain exceptions → `code` (FORBIDDEN/NOT_FOUND/BAD_USER_INPUT/CONFLICT/INTERNAL_SERVER_ERROR, masked); introspection
+  + Nitro IDE dev-only; max-execution-depth rule. Built subagent-driven (11 tasks, Sonnet impl + Opus review each) +
+  final whole-branch review. **Review/live-gate caught & fixed real bugs SQLite+fake-dict tests missed:** a v16
+  "fully-populated input dict" filter-explosion (every filtered query was silently wrong), a `translations`-silently-
+  empty type-guard, a File-batch `MaxLimit` silent-truncation, an aliased-relation duplicate-key crash, and (live gate)
+  **Repeater sub-fields casting a POCO child to a dict → HC0053** (fixed: resolve from dict-or-POCO). **Live gate PASSED
+  on real Postgres** (`web-struo-cms-db`): all JSON-text columns round-trip (no `varchar(1)`), CJK exact by code point
+  (`人工智慧`=U+4EBA U+5DE5 U+667A U+6167; KeyValue key `標題`=U+6A19 U+984C), File resolution, M2O+M2M relations,
+  create/read/delete, FORBIDDEN/BAD_USER_INPUT/missing-null. Backend `dotnet test` **449**, 0 warnings; frontend
+  untouched (237). Spec: [spec](superpowers/specs/2026-07-08-phase8-graphql-design.md) · plan:
+  [plan](superpowers/plans/2026-07-08-phase8-graphql.md). *Deferred to follow-ups:* mutations (8b), cross-relation &
+  multi-level (depth>1) nesting, typed Select/Radio enums, plus polish minors (long→IntFilter operand, Date filter operand).
+- **Next up:** **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope).
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -348,7 +368,7 @@
 | 7g+.2 | Structured editors `Json` (`string?` raw JSON in plain `text` — `JsonElement?` reads back disposed via SqlSugar/Newtonsoft, so strip-on-write + parse-on-project) + `KeyValue` (`Dictionary<string,string>` via `IsJson` `text`, keys verbatim not camelCased) — *second 7g+ slice* | ✅ done (live-verified: real PG — object/array/scalar round-trip + exact-UTF-8 + mixed-case-key verbatim + blank-key→400; **no backend fixes**; +1 pre-merge review fix: bad-value-type→400) | [spec](superpowers/specs/2026-07-07-phase7g-plus-structured-editors-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-structured-editors.md) |
 | 7g+.3 | Multi-file `Files` (`List<Guid>` ordered gallery via `IsJson` `text`; mirrors scalar File/Image raw-id contract; STJ in/out; drag-reorder `OrderList` + batched `filter[id][_in]` resolve + missing-id fallback; additive `MediaGrid` multi-select) + scanner `Translatable` fail-fast (review M4) — *third 7g+ slice* | ✅ done (live-verified: real PG+MinIO — order round-trip + reorder/drop + dedup keep-first + non-guid→400 + deleted-file fallback, 12/12, no backend fixes) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multifile-files-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multifile-files.md) |
 | 7g+.4 | Structured editor `Repeater` (repeatable child objects: `List<TChild>` of `[CmsField]` sub-props, lean scalar sub-field set, `IsJson`→`text`; scanner recurses `FieldMetadata.Fields` + fail-fasts invalid declarations; `ItemService` drops blank rows + validates sub-field Required/options/MaxLength; recursive `RepeaterField.vue`) — *the last 7g+ slice; completes Phase 7g+* | ✅ done (live-verified: real PG — order round-trip + reorder/drop-blank + sub-field required 400 + options 400 + CJK, 5/5, no backend fixes; **+1 final-review fix: interface-typed collection fail-fasts at scan**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-repeater-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-repeater.md) |
-| 8 | GraphQL | ⬜ planned | — | — |
+| 8 | GraphQL (read-only delivery API: metadata-driven dynamic schema via HotChocolate; typed per-collection queries + filter/sort/offset-pagination/i18n; single-level relations via existing `deep`; File/Image/Files resolve to `File` nodes via batched DataLoader; RBAC/whitelist reused through an Api-owned `IGraphQlDataSource` adapter — Application untouched) | ✅ done (live-verified: real PG — all JSON-text columns round-trip + CJK exact + File resolution + FORBIDDEN/BAD_USER_INPUT; **+1 live-gate backend fix: Repeater sub-fields resolve from POCO children**) | [spec](superpowers/specs/2026-07-08-phase8-graphql-design.md) | [plan](superpowers/plans/2026-07-08-phase8-graphql.md) |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
