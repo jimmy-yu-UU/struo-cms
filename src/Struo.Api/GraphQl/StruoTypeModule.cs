@@ -74,6 +74,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
         foreach (var name in collectionNames)
         {
             config.Fields.Add(MutationResolvers.CreateField(name, metadata));
+            config.Fields.Add(MutationResolvers.UpdateField(name, metadata));
             config.Fields.Add(MutationResolvers.DeleteField(name));
         }
         return ObjectTypeExtension.CreateUnsafe(config);

@@ -27,6 +27,9 @@ internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
     public Func<string, System.Text.Json.JsonElement, IReadOnlyDictionary<string, object?>> OnCreate { get; set; } =
         (_, _) => new Dictionary<string, object?> { ["id"] = "1" };
 
+    public Func<string, string, System.Text.Json.JsonElement, IReadOnlyDictionary<string, object?>?> OnUpdate { get; set; } =
+        (_, _, _) => null;
+
     public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct)
     {
         QueryCollections.Add(collection);
@@ -49,4 +52,8 @@ internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
         CreatedCollections.Add(collection);
         return Task.FromResult(OnCreate(collection, body));
     }
+
+    public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(
+        string collection, string id, System.Text.Json.JsonElement body, CancellationToken ct)
+        => Task.FromResult(OnUpdate(collection, id, body));
 }

@@ -42,6 +42,7 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
         types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
         types.Add(BuildCreateInput(meta));                         // ArticleCreateInput
+        types.Add(BuildUpdateInput(meta));                         // ArticleUpdateInput
         return types;
     }
 
@@ -155,6 +156,16 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
     {
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.CreateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
+        AddWritableFields(config, meta);
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    private InputObjectType BuildUpdateInput(CollectionMetadata meta)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.UpdateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
+        // Optimistic-concurrency token (update-only). Absent -> no protection (backward compatible).
+        config.Fields.Add(new InputFieldConfiguration("version", null, TypeReference.Parse("Long")));
         AddWritableFields(config, meta);
         return InputObjectType.CreateUnsafe(config);
     }

@@ -135,4 +135,54 @@ public class GraphQlMutationExecutionTests
 
         json.Should().Contain("FORBIDDEN");
     }
+
+    [Fact]
+    public async Task Update_sends_only_provided_keys_and_returns_reread_node()
+    {
+        JsonElement? capturedBody = null;
+        string? capturedId = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, body) => { capturedId = id; capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id, ["status"] = "archived" },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"5\", input: { status: \"archived\", version: 3 }) { id status } }");
+        var data = ParseData(result);
+
+        capturedId.Should().Be("5");
+        // Partial merge: only the sent keys are present in the body.
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo(["status", "version"]);
+        capturedBody.Value.GetProperty("version").GetInt64().Should().Be(3);
+
+        data.GetProperty("updateArticle").GetProperty("status").GetString().Should().Be("archived");
+    }
+
+    [Fact]
+    public async Task Update_unknown_id_returns_null()
+    {
+        var ds = new FakeGraphQlDataSource { OnUpdate = (_, _, _) => null };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"nope\", input: { status: \"x\" }) { id } }");
+        var data = ParseData(result);
+
+        data.GetProperty("updateArticle").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Update_version_conflict_maps_to_CONFLICT()
+    {
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, _, _) => throw new ConcurrencyConflictException("Row was modified by another writer.")
+        };
+
+        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"5\", input: { status: \"x\", version: 1 }) { id } }")).ToJson();
+
+        json.Should().Contain("CONFLICT");
+    }
 }
