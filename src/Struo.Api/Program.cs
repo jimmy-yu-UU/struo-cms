@@ -6,6 +6,7 @@ using Scalar.AspNetCore;
 using Serilog;
 using SqlSugar;
 using Struo.Api.Auth;
+using Struo.Api.GraphQl;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
@@ -34,6 +35,7 @@ try
     builder.Services.AddStruoInfrastructure(builder.Configuration);
     builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
     builder.Services.AddStruoData(builder.Configuration);
+    builder.Services.AddStruoGraphQl(builder.Environment);
     builder.Services.AddStruoFiles(builder.Configuration);
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
     builder.Services.AddStruoCors(builder.Configuration);
@@ -102,6 +104,7 @@ try
     });
 
     app.MapControllers();
+    app.MapStruoGraphQl();
 
     // API schema + interactive explorer are exposed in non-production only.
     // Production exposure would publish the full API surface unauthenticated;
