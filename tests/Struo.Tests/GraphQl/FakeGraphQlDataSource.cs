@@ -1,0 +1,32 @@
+// tests/Struo.Tests/GraphQl/FakeGraphQlDataSource.cs
+using Struo.Api.GraphQl;
+using Struo.Application.Query;
+using Struo.Domain.Query;
+
+namespace Struo.Tests.GraphQl;
+
+/// <summary>
+/// Test double for <see cref="IGraphQlDataSource"/>: canned results via settable delegates, plus a
+/// call log so execution tests can assert which collection(s) were queried and how many times.
+/// </summary>
+internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
+{
+    public List<string> QueryCollections { get; } = [];
+    public int QueryCalls => QueryCollections.Count;
+
+    public Func<string, QueryModel, string?, PagedResult> OnQuery { get; set; } =
+        (_, q, _) => new PagedResult([], 0, q.Limit, q.Offset);
+
+    public Func<string, string, DeepSpec?, string?, IReadOnlyDictionary<string, object?>?> OnGet { get; set; } =
+        (_, _, _, _) => null;
+
+    public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct)
+    {
+        QueryCollections.Add(collection);
+        return Task.FromResult(OnQuery(collection, query, locale));
+    }
+
+    public Task<IReadOnlyDictionary<string, object?>?> GetAsync(
+        string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct)
+        => Task.FromResult(OnGet(collection, id, deep, locale));
+}
