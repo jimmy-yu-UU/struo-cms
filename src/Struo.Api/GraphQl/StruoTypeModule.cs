@@ -34,6 +34,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
             types.AddRange(builder.Build(meta));
 
         types.Add(BuildQueryExtension(collections.Select(c => c.Name)));
+        types.Add(BuildMutationExtension(collections.Select(c => c.Name)));
         return new ValueTask<IReadOnlyCollection<ITypeSystemMember>>(types);
     }
 
@@ -64,6 +65,14 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
             config.Fields.Add(CollectionResolvers.SingleField(name, metadata));
             config.Fields.Add(CollectionResolvers.ListField(name, metadata));
         }
+        return ObjectTypeExtension.CreateUnsafe(config);
+    }
+
+    private ObjectTypeExtension BuildMutationExtension(IEnumerable<string> collectionNames)
+    {
+        var config = new ObjectTypeConfiguration("Mutation");
+        foreach (var name in collectionNames)
+            config.Fields.Add(MutationResolvers.DeleteField(name));
         return ObjectTypeExtension.CreateUnsafe(config);
     }
 

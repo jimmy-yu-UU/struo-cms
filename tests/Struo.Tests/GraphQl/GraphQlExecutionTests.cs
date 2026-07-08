@@ -38,6 +38,7 @@ public class GraphQlExecutionTests
             .AddSingleton<StruoTypeModule>()
             .AddGraphQLServer()
             .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
             .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
             .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
             .AddTypeModule<StruoTypeModule>()
@@ -447,6 +448,7 @@ public class GraphQlExecutionTests
         var executor = await services
             .AddGraphQLServer()
             .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
             .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
             .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
             .AddTypeModule<StruoTypeModule>()
