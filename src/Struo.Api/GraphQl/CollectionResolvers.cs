@@ -81,6 +81,12 @@ internal static class CollectionResolvers
             elementType = (ObjectType)itemsSel.Field.Type.NamedType();                  // X
             childSelections = ctx.GetSelections(elementType, itemsSel);
         }
-        return childSelections.Select(s => s.Field.Name).Where(relNames.Contains).ToList();
+        // Aliased duplicate selections of the same relation (e.g. `a: category { ... } b: category
+        // { ... }`) stay distinct child selections with the SAME Field.Name — HotChocolate only
+        // merges non-aliased duplicates. Without deduping, BuildQuery's requestedRelations.ToDictionary
+        // throws ArgumentException on the duplicate key. Distinct with OrdinalIgnoreCase matches the
+        // relNames HashSet's comparer and BuildQuery's DeepSpec dictionary comparer.
+        return childSelections.Select(s => s.Field.Name).Where(relNames.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 }
