@@ -63,6 +63,17 @@ public class GraphQlMutationSchemaTests
         block.Should().NotContain("version");   // create carries no concurrency token
     }
 
+    [Fact]
+    public async Task Update_input_matches_create_plus_version()
+    {
+        var sdl = await BuildSdlAsync();
+        sdl.Should().Contain("updateArticle(");
+        var block = InputBlock(sdl, "ArticleUpdateInput");
+        block.Should().Contain("status: String");
+        block.Should().Contain("categoryId: ID");
+        block.Should().Contain("version: Long"); // optimistic-concurrency token, update-only
+    }
+
     // Returns the SDL text of a single `input X { ... }` block.
     private static string InputBlock(string sdl, string typeName)
     {

@@ -1,4 +1,5 @@
 // src/Struo.Api/GraphQl/MutationResolvers.cs
+using HotChocolate.Language;
 using HotChocolate.Resolvers;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
@@ -41,6 +42,53 @@ internal static class MutationResolvers
         var relations = CollectionResolvers.SelectionRelations(ctx, collection, elementIsDirect: true);
         var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
         return await source.GetAsync(collection, id, deep, locale, ctx.RequestAborted);
+    }
+
+    internal static ObjectFieldConfiguration UpdateField(string collection, IMetadataProvider metadata)
+    {
+        var config = new ObjectFieldConfiguration(
+            SchemaTypeMapper.UpdateFieldName(collection), null,
+            TypeReference.Parse(SchemaTypeMapper.TypeName(collection)),
+            resolver: ctx => ResolveUpdate(ctx, collection));
+        config.Arguments.Add(new ArgumentConfiguration("id", null, TypeReference.Parse("ID!")));
+        config.Arguments.Add(new ArgumentConfiguration(
+            "input", null, TypeReference.Parse(SchemaTypeMapper.UpdateInputName(collection) + "!")));
+        config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
+        return config;
+    }
+
+    private static async ValueTask<object?> ResolveUpdate(IResolverContext ctx, string collection)
+    {
+        var id = ctx.ArgumentValue<string>("id");
+        var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
+        var locale = ctx.ArgumentValue<string?>("locale");
+        var body = MutationInputMapper.ToJsonElement(SentFieldsOnly(ctx, "input", input));
+
+        var source = ctx.Service<IGraphQlDataSource>();
+        var updated = await source.UpdateAsync(collection, id, body, ctx.RequestAborted);
+        if (updated is null) return null; // unknown id -> null (REST 404 parity)
+
+        var relations = CollectionResolvers.SelectionRelations(ctx, collection, elementIsDirect: true);
+        var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
+        return await source.GetAsync(collection, id, deep, locale, ctx.RequestAborted);
+    }
+
+    // HotChocolate's coerced argument dictionary (ctx.ArgumentValue<IReadOnlyDictionary<string,object?>?>)
+    // always contains EVERY declared input field for a Dictionary-runtime-type InputObjectType — an
+    // optional field the client never sent is backfilled with null rather than omitted. That is fine
+    // for create (nothing to preserve yet) but breaks update's partial merge: ItemService.UpdateAsync
+    // treats "key present" as "client sent it" (see bodyKeys in ItemService.UpdateAsync), so a
+    // backfilled null would silently overwrite a field the client never touched. The request's
+    // argument LITERAL (post-variable-substitution) still reflects only the client-supplied keys, so
+    // intersect the coerced dict's values against the literal's field names to recover the true
+    // partial-merge set without needing to re-derive values from the literal ourselves.
+    private static IReadOnlyDictionary<string, object?>? SentFieldsOnly(
+        IResolverContext ctx, string argumentName, IReadOnlyDictionary<string, object?>? coerced)
+    {
+        if (coerced is null) return null;
+        if (ctx.ArgumentLiteral<IValueNode>(argumentName) is not ObjectValueNode literal) return coerced;
+        var sentKeys = literal.Fields.Select(f => f.Name.Value).ToHashSet(StringComparer.Ordinal);
+        return coerced.Where(kv => sentKeys.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
     }
 
     internal static ObjectFieldConfiguration DeleteField(string collection)

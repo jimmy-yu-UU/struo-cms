@@ -17,6 +17,7 @@ public interface IGraphQlDataSource
     Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct);
     Task<bool> DeleteAsync(string collection, string id, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct);
+    Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct);
 }
 
 public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDataSource
@@ -32,4 +33,7 @@ public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDa
 
     public Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct)
         => items.CreateAsync(collection, body, ct);
+
+    public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct)
+        => items.UpdateAsync(collection, id, body, ct);
 }
