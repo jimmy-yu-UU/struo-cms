@@ -176,4 +176,55 @@ public class GraphQlExecutionTests
         // Code-point exact: guard against lossy transcoding anywhere along the resolver/JSON path.
         zh!.EnumerateRunes().Select(r => r.Value).Should().Equal("哈囉".EnumerateRunes().Select(r => r.Value));
     }
+
+    /// <summary>
+    /// Task 9 N+1 regression lock: two article rows share the same heroImageId — the File
+    /// resolver must batch every requested id across all sibling rows into exactly ONE
+    /// "file" QueryAsync call (not one per row) via <see cref="FileFieldResolvers"/>'s
+    /// BatchDataLoader, and the returned File node's fields must be resolvable.
+    /// </summary>
+    [Fact]
+    public async Task HeroImage_resolves_file_and_batches_one_query()
+    {
+        var fileId = Guid.NewGuid();
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (collection, q, _) => collection == "article"
+                ? new PagedResult(new IReadOnlyDictionary<string, object?>[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = "1", ["heroImageId"] = fileId },
+                        new Dictionary<string, object?> { ["id"] = "2", ["heroImageId"] = fileId },
+                    }, 2, q.Limit, q.Offset)
+                : new PagedResult(new IReadOnlyDictionary<string, object?>[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = fileId, ["title"] = "pic" }
+                    }, 1, q.Limit, q.Offset)
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles { items { id heroImage { id title } } } }");
+        var json = result.ToJson();
+        json.Should().Contain("\"title\": \"pic\"");
+        json.Should().NotContain("errors");
+
+        // Batching: exactly one article query + one file query (not one file query per row).
+        ds.QueryCollections.Count(c => c == "file").Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Missing_file_resolves_to_null()
+    {
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (collection, q, _) => collection == "article"
+                ? new PagedResult(new IReadOnlyDictionary<string, object?>[]
+                    { new Dictionary<string, object?> { ["id"] = "1", ["heroImageId"] = Guid.NewGuid() } }, 1, q.Limit, q.Offset)
+                : new PagedResult([], 0, q.Limit, q.Offset) // file not found
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync("{ articles { items { heroImage { id } } } }");
+        var json = result.ToJson();
+        json.Should().Contain("\"heroImage\": null");
+        json.Should().NotContain("errors");
+    }
 }
