@@ -20,6 +20,9 @@ internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
     public Func<string, string, DeepSpec?, string?, IReadOnlyDictionary<string, object?>?> OnGet { get; set; } =
         (_, _, _, _) => null;
 
+    public List<string> DeletedCollections { get; } = [];
+    public Func<string, string, bool> OnDelete { get; set; } = (_, _) => false;
+
     public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct)
     {
         QueryCollections.Add(collection);
@@ -29,4 +32,10 @@ internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
     public Task<IReadOnlyDictionary<string, object?>?> GetAsync(
         string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct)
         => Task.FromResult(OnGet(collection, id, deep, locale));
+
+    public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct)
+    {
+        DeletedCollections.Add(collection);
+        return Task.FromResult(OnDelete(collection, id));
+    }
 }
