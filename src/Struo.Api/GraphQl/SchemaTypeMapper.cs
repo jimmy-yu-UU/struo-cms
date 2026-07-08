@@ -21,6 +21,12 @@ public static class SchemaTypeMapper
     public static string ListFieldName(string collection) => Pluralise(Camel(collection));
     public static string RepeaterItemTypeName(string collection, string field) => Pascal(collection) + Pascal(field) + "Item";
 
+    public static string CreateFieldName(string collection) => "create" + Pascal(collection);
+    public static string UpdateFieldName(string collection) => "update" + Pascal(collection);
+    public static string DeleteFieldName(string collection) => "delete" + Pascal(collection);
+    public static string CreateInputName(string collection) => Pascal(collection) + "CreateInput";
+    public static string UpdateInputName(string collection) => Pascal(collection) + "UpdateInput";
+
     /// <summary>
     /// Returns the nullable SDL type string for a scalar/list field, or <c>null</c> when the
     /// interface is excluded (Hidden/Divider/Password) or is a named-type interface
@@ -49,6 +55,26 @@ public static class SchemaTypeMapper
         FieldInterface.Files => "[ID!]",
         FieldInterface.Uuid => "ID",
         _ => throw new NotSupportedException($"No GraphQL mapping for field interface '{iface}'.")
+    };
+
+    /// <summary>
+    /// SDL for a writable scalar own-field in a create/update input, or <c>null</c> for interfaces
+    /// deferred to Phase 8b.2 (MultiSelect/CheckboxGroup/Tags/Json/KeyValue/File/Image/Files/Repeater)
+    /// or excluded entirely (Hidden/Divider/Password). This is the Phase 8b.1 writable subset — a
+    /// deliberately narrower set than the read-side <see cref="ScalarSdl"/>.
+    /// </summary>
+    public static string? WritableScalarInputSdl(FieldInterface iface, Type? clrType) => iface switch
+    {
+        FieldInterface.Text or FieldInterface.Textarea or FieldInterface.RichText or FieldInterface.Markdown
+            or FieldInterface.Code or FieldInterface.Slug or FieldInterface.Email or FieldInterface.Url
+            or FieldInterface.Color or FieldInterface.Phone or FieldInterface.Select or FieldInterface.Radio
+            or FieldInterface.Time => "String",
+        FieldInterface.Number or FieldInterface.Slider or FieldInterface.Rating => NumberSdl(clrType),
+        FieldInterface.Boolean or FieldInterface.Checkbox => "Boolean",
+        FieldInterface.Date => "Date",
+        FieldInterface.DateTime => "DateTime",
+        FieldInterface.Uuid => "ID",
+        _ => null,
     };
 
     private static string NumberSdl(Type? clrType)
