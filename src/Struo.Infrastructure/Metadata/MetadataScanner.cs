@@ -35,7 +35,21 @@ public static class MetadataScanner
     private static readonly HashSet<FieldInterface> NonTranslatableJsonInterfaces =
     [
         FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
-        FieldInterface.KeyValue, FieldInterface.Files
+        FieldInterface.KeyValue, FieldInterface.Files, FieldInterface.Repeater
+    ];
+
+    // 7g+ slice 4: sub-field interfaces allowed inside a Repeater child object (the lean scalar set).
+    // Everything else — RichText, File/Image/Files, multi-value, Json/KeyValue, nested Repeater,
+    // Password/Hidden/Uuid/Divider — fail-fasts at scan.
+    private static readonly HashSet<FieldInterface> RepeaterAllowedInterfaces =
+    [
+        FieldInterface.Text, FieldInterface.Textarea, FieldInterface.Markdown, FieldInterface.Code,
+        FieldInterface.Slug, FieldInterface.Email, FieldInterface.Url, FieldInterface.Color,
+        FieldInterface.Phone,
+        FieldInterface.Number, FieldInterface.Slider, FieldInterface.Rating,
+        FieldInterface.Boolean, FieldInterface.Checkbox,
+        FieldInterface.Date, FieldInterface.Time, FieldInterface.DateTime,
+        FieldInterface.Select, FieldInterface.Radio
     ];
 
     private static readonly string[] AuditFieldNames =
@@ -256,6 +270,10 @@ public static class MetadataScanner
                 ? 255
                 : null;
 
+        IReadOnlyList<FieldMetadata>? childFields = null;
+        if (attr.Interface == FieldInterface.Repeater)
+            childFields = BuildRepeaterChildFields(prop);
+
         return new FieldMetadata
         {
             Name = Camel(prop.Name),
@@ -272,8 +290,48 @@ public static class MetadataScanner
             Group = attr.Group,
             MaxLength = maxLength,
             Options = options,
+            Fields = childFields,
             IsSystem = false
         };
+    }
+
+    /// <summary>
+    /// Resolves a Repeater's child-object sub-field schema by recursing into the element type of its
+    /// <c>List&lt;TChild&gt;</c> property. Each sub-property carrying <c>[CmsField]</c> is scanned with
+    /// the same <see cref="BuildField"/> logic; the sub-field interface must be in
+    /// <see cref="RepeaterAllowedInterfaces"/> and must not be translatable. Fails fast on any
+    /// violation (Task 2 covers the guards).
+    /// </summary>
+    private static IReadOnlyList<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
+    {
+        var t = prop.PropertyType;
+        var isList = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>);
+        var childType = isList ? t.GetGenericArguments()[0] : null;
+        if (childType is null || !childType.IsClass || childType == typeof(string))
+            throw new MetadataException(
+                $"Repeater field '{Camel(prop.Name)}' must be a List<T> of a child object type.");
+
+        var subProps = childType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null)
+            .ToList();
+        if (subProps.Count == 0)
+            throw new MetadataException(
+                $"Repeater field '{Camel(prop.Name)}' child type '{childType.Name}' must declare at least one [CmsField].");
+
+        var fields = new List<FieldMetadata>();
+        foreach (var sub in subProps)
+        {
+            var subAttr = sub.GetCustomAttribute<CmsFieldAttribute>()!;
+            if (!RepeaterAllowedInterfaces.Contains(subAttr.Interface))
+                throw new MetadataException(
+                    $"Repeater field '{Camel(prop.Name)}' sub-field '{Camel(sub.Name)}' uses interface " +
+                    $"'{subAttr.Interface}', which is not allowed inside a Repeater.");
+            if (subAttr.Translatable)
+                throw new MetadataException(
+                    $"Repeater field '{Camel(prop.Name)}' sub-field '{Camel(sub.Name)}' cannot be translatable.");
+            fields.Add(BuildField(sub, subAttr));
+        }
+        return fields;
     }
 
     private static IReadOnlyList<FieldOption> ParseOptions(PropertyInfo prop, CmsOptionsAttribute attr)

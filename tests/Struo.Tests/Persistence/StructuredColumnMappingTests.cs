@@ -18,6 +18,12 @@ namespace Struo.Tests.Persistence;
 /// </summary>
 public class StructuredColumnMappingTests
 {
+    public sealed class FaqRowDdl
+    {
+        [CmsField(Interface = FieldInterface.Text)] public string Q { get; set; } = "";
+        [CmsField(Interface = FieldInterface.Textarea)] public string A { get; set; } = "";
+    }
+
     [SugarTable("structured_col_test_entity")]
     private sealed class StructColTestEntity
     {
@@ -32,6 +38,9 @@ public class StructuredColumnMappingTests
 
         [CmsField(Label = "Gallery", Interface = FieldInterface.Files)]
         public List<Guid> Gallery { get; set; } = new();
+
+        [CmsField(Label = "Faqs", Interface = FieldInterface.Repeater)]
+        public List<FaqRowDdl> Faqs { get; set; } = new();
     }
 
     [Fact]
@@ -46,7 +55,7 @@ public class StructuredColumnMappingTests
             client.CodeFirst.InitTables<StructColTestEntity>();
 
             var columns = client.DbMaintenance.GetColumnInfosByTableName("structured_col_test_entity", false);
-            foreach (var col in new[] { "Meta", "Attributes", "Gallery" })
+            foreach (var col in new[] { "Meta", "Attributes", "Gallery", "Faqs" })
             {
                 var info = columns.Single(c => c.DbColumnName.Equals(col, StringComparison.OrdinalIgnoreCase));
                 info.DataType.Should().ContainEquivalentOf("text");
@@ -61,6 +70,7 @@ public class StructuredColumnMappingTests
                     Guid.Parse("11111111-1111-1111-1111-111111111111"),
                     Guid.Parse("22222222-2222-2222-2222-222222222222"),
                 },
+                Faqs = new List<FaqRowDdl> { new() { Q = "問題", A = "答案" } },
             };
             client.Insertable(row).ExecuteCommand();
 
@@ -72,6 +82,9 @@ public class StructuredColumnMappingTests
             read.Gallery.Should().Equal(
                 Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 Guid.Parse("22222222-2222-2222-2222-222222222222"));
+            read.Faqs.Should().ContainSingle();
+            read.Faqs[0].Q.Should().Be("問題");
+            read.Faqs[0].A.Should().Be("答案");
         }
     }
 }

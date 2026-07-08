@@ -51,6 +51,9 @@ public sealed class Article : AuditableEntity
     [CmsField(Label = "Gallery", Interface = FieldInterface.Files, Sort = 11, Group = "Content")]
     public List<Guid> Gallery { get; set; } = [];
 
+    [CmsField(Label = "FAQs", Interface = FieldInterface.Repeater, Sort = 12, Group = "Content")]
+    public List<FaqItem> Faqs { get; set; } = [];
+
     // --- relations ---
     [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }

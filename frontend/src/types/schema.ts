@@ -21,6 +21,7 @@ export type FieldMeta = {
   helpText?: string | null
   group?: string | null
   options?: FieldOption[] | null
+  fields?: FieldMeta[] | null // Repeater sub-field metadata (Phase 7g+ slice 4)
   isSystem: boolean
 }
 

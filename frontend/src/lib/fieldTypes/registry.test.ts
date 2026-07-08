@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getFieldType } from './registry'
+import { getFieldType, registry } from './registry'
 import { ALL_FIELD_INTERFACES } from './types'
 import type { FieldMeta } from '../../types/schema'
 import { formatCell } from '../formatCell'
@@ -14,7 +14,7 @@ const LIST_ELIGIBLE = new Set([
   'number', 'slider', 'rating', 'boolean', 'checkbox',
   'date', 'time', 'dateTime', 'select', 'radio',
   'multiSelect', 'checkboxGroup', 'tags',
-  'json', 'keyValue',
+  'json', 'keyValue', 'repeater',
 ])
 
 describe('field-type registry', () => {
@@ -23,7 +23,7 @@ describe('field-type registry', () => {
   })
 
   it('falls back to the read-only def for unknown interfaces', () => {
-    expect(getFieldType('somethingNew').component).toBe(getFieldType('repeater').component)
+    expect(getFieldType('somethingNew').component).toBe(getFieldType('uuid').component)
     expect(getFieldType('somethingNew').listColumn).toBeNull()
   })
 
@@ -137,5 +137,28 @@ describe('field-type registry', () => {
 
   it('files is not list-eligible', () => {
     expect(getFieldType('files').listColumn).toBeNull()
+  })
+})
+
+describe('repeaterDef', () => {
+  const field = { name: 'faqs', interface: 'repeater',
+    fields: [{ name: 'question', interface: 'text' }, { name: 'answer', interface: 'textarea' }] } as never
+
+  it('defaults to an empty array', () => {
+    expect(registry.repeater.defaultValue(field)).toEqual([])
+  })
+
+  it('parses non-arrays to []', () => {
+    expect(registry.repeater.parse(null, field)).toEqual([])
+    expect(registry.repeater.parse([{ question: 'q' }], field)).toEqual([{ question: 'q' }])
+  })
+
+  it('serialize drops fully-blank rows', () => {
+    const rows = [{ question: 'keep', answer: '' }, { question: '  ', answer: '' }]
+    expect(registry.repeater.serialize(rows, field)).toEqual([{ question: 'keep', answer: '' }])
+  })
+
+  it('list column shows the count', () => {
+    expect(registry.repeater.listColumn?.format([{ x: 1 }, { x: 2 }], field)).toBe('2 items')
   })
 })

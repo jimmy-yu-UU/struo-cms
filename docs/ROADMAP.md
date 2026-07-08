@@ -242,11 +242,44 @@
   3 registry), `pnpm vue-tsc` clean, `pnpm build` succeeds (pre-existing >500 kB chunk advisory only).
   **Live gate PASSED 2026-07-07** (12/12, no backend fixes) — see the row above. Migration
   `003-article-files-column.sql` applied to the live (drifted) DB (`gallery text NOT NULL DEFAULT '[]'`).
-- **Next up:** Phase 7g+ remaining — the **last** interface: structured editor `Repeater` (repeatable
-  child objects), a single registry entry + component + its own persistence design + live gate;
-  `Hidden`/`Uuid` render read-only meanwhile. (Multi-value selects (slice 1), `Json`/`KeyValue`
-  structured editors (slice 2), and multi-file `Files` (slice 3) are all done & live-verified, see
-  above. The slice-2 review's deferred `Translatable` fail-fast was actioned in slice 3.)
+- **Phase 7g+ slice 4 (`Repeater`) done & live-verified (real PG, 2026-07-08) — completes Phase 7g+:**
+  the **last** field interface — `Repeater` is an ordered `List<TChild>` where `TChild` is a POCO of
+  `[CmsField]` sub-properties (the **lean scalar** sub-field set: text/number/boolean/date families +
+  `Select`/`Radio`; RichText/File/multi-value/nested-Repeater fail-fast at scan). Persisted via the
+  slice-1 `IsJson`+`text` convention (the proven `Tags` `List<TagItem>` path; DB storage is Newtonsoft-
+  internal, API in/out is System.Text.Json camelCase). `FieldMetadata` gained a nullable self-recursive
+  `Fields` (the child sub-field schema); the scanner recurses the `List<T>` element type and fail-fasts
+  every out-of-contract declaration (non-`List<T>`, disallowed sub-interface incl. nested `Repeater`,
+  translatable parent/sub, empty child). `ItemService.Deserialize` drops fully-blank rows (every sub-field
+  null/whitespace-string; numeric/bool `0`/`false` keeps the row) and validates each kept row's sub-field
+  Required / `Select`-`Radio` option membership / `MaxLength` (→400), plus parent `Required` as a non-empty
+  list; a wrong-shaped element →400 via the existing deserialize guard. Projection is unchanged (the CLR
+  list emits as-is). Frontend: `RepeaterField.vue` renders a card list (add/remove/move-up/down, immutable
+  updates) that recursively dispatches each sub-field through the field registry (`getFieldType`), wired via
+  `repeaterDef` (`repeater` was `readonlyDef`). Non-translatable, non-sortable, non-searchable; parent
+  `MaxLength` N/A. **A final whole-branch review surfaced & fixed 1 issue** (`a295e8c`): the scanner accepted
+  any single-arg `IEnumerable<T>`, so an interface-typed property (`IList<T>`) booted then 500'd on write
+  (`Activator.CreateInstance` on an interface) — the `List<T>` detection is now tightened to
+  `typeof(List<>)`, so it fail-fasts at scan with a truthful message. **Live gate PASSED 5/5 on real
+  Postgres (`web-struo-cms-db`), no backend fixes:** create an article with `faqs`=[常見問題一/general, Q2]
+  → 201; read back **in order** with CJK exact by code point + `category` preserved (the slice-1 `varchar(1)`
+  class was **not** reintroduced); PUT reorder + a trailing all-blank row → `[Q2, 常見問題一]` (blank dropped);
+  a missing required sub-field → **400** `'question' is required`; an out-of-options `Select` value → **400**
+  `not in its options`; cleanup DELETE 204 → GET 404. Migration `004-article-repeater-column.sql` applied to
+  the live DB (`faqs text NOT NULL DEFAULT '[]'`). Spec:
+  [spec](superpowers/specs/2026-07-07-phase7g-plus-repeater-design.md) · plan:
+  [plan](superpowers/plans/2026-07-07-phase7g-plus-repeater.md).
+- **Verification baseline (2026-07-08, post-7g+ slice 4):** backend `dotnet build -warnaserror` clean +
+  `dotnet test` **378** passed / 0 failed (361 post-slice-3 + 2 scanner recursion + 6 scanner fail-fast +
+  7 ItemService Repeater + 1 sample scanner + 1 final-review interface-typed guard; the
+  StructuredColumnMapping DDL fact was extended in place). Frontend `pnpm test` **237** (228 post-slice-3 +
+  5 RepeaterField + 4 registry repeaterDef; net of 3 re-pointed `'repeater'`-as-readonly-stand-in
+  assertions), `pnpm vue-tsc` clean, `pnpm build` succeeds (pre-existing >500 kB chunk advisory only).
+  **Live gate PASSED 2026-07-08** (5/5, no backend fixes) — see the row above.
+- **Next up:** **Phase 7g+ is COMPLETE** — every `FieldInterface` value is now implemented &
+  live-verified: multi-value selects (slice 1), `Json`/`KeyValue` structured editors (slice 2),
+  multi-file `Files` (slice 3), and `Repeater` (slice 4). `Hidden`/`Uuid`/`Divider` intentionally
+  render read-only. The next phase is **Phase 8 (GraphQL)**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -314,7 +347,7 @@
 | 7g+.1 | Multi-value selects (`MultiSelect`/`CheckboxGroup` option-bound `List<string>`; `Tags` free-form `List<TagItem>` w/ optional per-item display label) + `[CmsOptions]` optional label + `IsJson`→`text` column — *first 7g+ slice* | ✅ done (live-verified: real PG — 3-field CRUD + exact-UTF-8 tag-label round-trip + `mars`→400; **+1 live-gate backend fix: `IsJson`→`text`, was `varchar(1)`**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multivalue-selects-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multivalue-selects.md) |
 | 7g+.2 | Structured editors `Json` (`string?` raw JSON in plain `text` — `JsonElement?` reads back disposed via SqlSugar/Newtonsoft, so strip-on-write + parse-on-project) + `KeyValue` (`Dictionary<string,string>` via `IsJson` `text`, keys verbatim not camelCased) — *second 7g+ slice* | ✅ done (live-verified: real PG — object/array/scalar round-trip + exact-UTF-8 + mixed-case-key verbatim + blank-key→400; **no backend fixes**; +1 pre-merge review fix: bad-value-type→400) | [spec](superpowers/specs/2026-07-07-phase7g-plus-structured-editors-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-structured-editors.md) |
 | 7g+.3 | Multi-file `Files` (`List<Guid>` ordered gallery via `IsJson` `text`; mirrors scalar File/Image raw-id contract; STJ in/out; drag-reorder `OrderList` + batched `filter[id][_in]` resolve + missing-id fallback; additive `MediaGrid` multi-select) + scanner `Translatable` fail-fast (review M4) — *third 7g+ slice* | ✅ done (live-verified: real PG+MinIO — order round-trip + reorder/drop + dedup keep-first + non-guid→400 + deleted-file fallback, 12/12, no backend fixes) | [spec](superpowers/specs/2026-07-07-phase7g-plus-multifile-files-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-multifile-files.md) |
-| 7g+ | Structured editor `Repeater` (repeatable child objects) — *the last remaining 7g+ slice; = one registry entry + one `*Field.vue` + its own persistence design + live gate* | ⬜ planned | — | — |
+| 7g+.4 | Structured editor `Repeater` (repeatable child objects: `List<TChild>` of `[CmsField]` sub-props, lean scalar sub-field set, `IsJson`→`text`; scanner recurses `FieldMetadata.Fields` + fail-fasts invalid declarations; `ItemService` drops blank rows + validates sub-field Required/options/MaxLength; recursive `RepeaterField.vue`) — *the last 7g+ slice; completes Phase 7g+* | ✅ done (live-verified: real PG — order round-trip + reorder/drop-blank + sub-field required 400 + options 400 + CJK, 5/5, no backend fixes; **+1 final-review fix: interface-typed collection fail-fasts at scan**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-repeater-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-repeater.md) |
 | 8 | GraphQL | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 

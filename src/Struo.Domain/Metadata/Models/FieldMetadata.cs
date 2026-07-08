@@ -20,5 +20,8 @@ public sealed record FieldMetadata
     /// <summary>Effective CMS-layer max length resolved by the scanner; null = unlimited.</summary>
     public int? MaxLength { get; init; }
     public IReadOnlyList<FieldOption>? Options { get; init; }
+
+    /// <summary>Repeater child-object sub-field schema; null = not a Repeater.</summary>
+    public IReadOnlyList<FieldMetadata>? Fields { get; init; }
     public bool IsSystem { get; init; }
 }
