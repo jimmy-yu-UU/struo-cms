@@ -26,6 +26,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
 
         // Shared value types.
         types.Add(TagItemType());
+        types.Add(TagItemInputType());
         types.Add(TranslationType());
         types.AddRange(SharedFilterTypes.Build());
 
@@ -45,6 +46,15 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
         config.Fields.Add(CollectionSchemaBuilder.Field("value", "String!", ctx => Prop(ctx.Parent<object>(), "Value")));
         config.Fields.Add(CollectionSchemaBuilder.Field("label", "String", ctx => Prop(ctx.Parent<object>(), "Label")));
         return ObjectType.CreateUnsafe(config);
+    }
+
+    private static InputObjectType TagItemInputType()
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.TagItemInputName(), null, typeof(IReadOnlyDictionary<string, object?>));
+        config.Fields.Add(new InputFieldConfiguration("value", null, TypeReference.Parse("String!")));
+        config.Fields.Add(new InputFieldConfiguration("label", null, TypeReference.Parse("String")));
+        return InputObjectType.CreateUnsafe(config);
     }
 
     private static ObjectType TranslationType()
