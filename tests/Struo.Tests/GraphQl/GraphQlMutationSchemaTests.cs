@@ -42,25 +42,53 @@ public class GraphQlMutationSchemaTests
     }
 
     [Fact]
-    public async Task Create_input_has_writable_scalars_and_m2o_fk_only()
+    public async Task Create_input_includes_structured_multivalue_and_m2m_fields()
     {
         var sdl = await BuildSdlAsync();
         var block = InputBlock(sdl, "ArticleCreateInput");
 
-        block.Should().Contain("status: String");        // Select -> String
-        block.Should().Contain("publishedAt: DateTime");  // DateTime
-        block.Should().Contain("categoryId: ID");         // M2O FK
+        // scalars + M2O FK (unchanged from 8b.1)
+        block.Should().Contain("status: String");
+        block.Should().Contain("publishedAt: DateTime");
+        block.Should().Contain("categoryId: ID");
 
-        // Deferred kinds must NOT appear in the 8b.1 create input:
-        block.Should().NotContain("regions");   // MultiSelect
-        block.Should().NotContain("keywords");  // Tags
-        block.Should().NotContain("attributes");// Json
-        block.Should().NotContain("gallery");   // Files
-        block.Should().NotContain("faqs");      // Repeater
-        block.Should().NotContain("heroImageId"); // Image
-        // Title is translatable and not on the entity's FieldToProperty -> excluded here (8b.2).
+        // deferred kinds now typed (8b.2a)
+        block.Should().Contain("heroImageId: ID");          // Image scalar own-field
+        block.Should().Contain("regions: [String!]");        // MultiSelect
+        block.Should().Contain("keywords: [TagItemInput!]"); // Tags
+        block.Should().Contain("attributes: Any");           // Json
+        block.Should().Contain("gallery: [ID!]");            // Files
+        block.Should().Contain("faqs: [ArticleFaqsItemInput!]"); // Repeater
+        block.Should().Contain("tags: [ID!]");               // M2M relation
+
+        // boundary: translatable own-field + create carries no version
         block.Should().NotContain("title");
-        block.Should().NotContain("version");   // create carries no concurrency token
+        block.Should().NotContain("version:");
+    }
+
+    [Fact]
+    public async Task Update_input_carries_deferred_kinds_and_version()
+    {
+        var sdl = await BuildSdlAsync();
+        var block = InputBlock(sdl, "ArticleUpdateInput");
+        block.Should().Contain("keywords: [TagItemInput!]");
+        block.Should().Contain("faqs: [ArticleFaqsItemInput!]");
+        block.Should().Contain("tags: [ID!]");
+        block.Should().Contain("version: Long");
+    }
+
+    [Fact]
+    public async Task TagItemInput_and_repeater_item_input_types_are_declared()
+    {
+        var sdl = await BuildSdlAsync();
+
+        var tag = InputBlock(sdl, "TagItemInput");
+        tag.Should().Contain("value: String!");
+        tag.Should().Contain("label: String");
+
+        var faq = InputBlock(sdl, "ArticleFaqsItemInput");
+        faq.Should().Contain("question: String");   // Text sub-field, nullable in input
+        faq.Should().Contain("answer: String");     // Textarea sub-field
     }
 
     [Fact]

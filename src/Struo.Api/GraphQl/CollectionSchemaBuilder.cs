@@ -41,6 +41,13 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         types.Add(BuildObjectType(meta, relationNames, types));   // Article + nested repeater item types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
         types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
+
+        // Repeater input item types — built ONCE per field, referenced by name in both inputs
+        // (building them inside AddWritableFields would register a duplicate for create AND update).
+        foreach (var f in meta.Fields)
+            if (f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
+                types.Add(BuildRepeaterItemInputType(meta.Name, f));
+
         types.Add(BuildCreateInput(meta));                         // ArticleCreateInput
         types.Add(BuildUpdateInput(meta));                         // ArticleUpdateInput
         return types;
@@ -119,6 +126,22 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         return ObjectType.CreateUnsafe(config);
     }
 
+    private InputObjectType BuildRepeaterItemInputType(string collection, FieldMetadata repeater)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.RepeaterItemInputTypeName(collection, repeater.Name), null,
+            typeof(IReadOnlyDictionary<string, object?>));
+        foreach (var sub in repeater.Fields!)
+        {
+            if (sub.Hidden || sub.ReadOnly || sub.IsSystem) continue;
+            // Lean scalar sub-field set; input hint is string (same as the read side's BuildRepeaterItemType).
+            var sdl = SchemaTypeMapper.WritableInputSdl(sub.Interface, typeof(string));
+            if (sdl is null) continue;
+            config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
+        }
+        return InputObjectType.CreateUnsafe(config);
+    }
+
     private ObjectType BuildListType(CollectionMetadata meta)
     {
         var config = new ObjectTypeConfiguration(SchemaTypeMapper.TypeName(meta.Name) + "List", null, typeof(PagedResultView));
@@ -170,22 +193,36 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         return InputObjectType.CreateUnsafe(config);
     }
 
-    // Shared by create/update inputs: writable scalar own-fields + M2O foreign keys, all nullable.
-    // Deferred kinds resolve to a null SDL from WritableScalarInputSdl and are skipped.
+    // Shared by create/update inputs: writable own-fields (scalars, File/Image, Files, multi-value,
+    // Json/KeyValue), Tags, Repeater, and M2M foreign-key arrays — all nullable. Translatable own-fields
+    // are excluded (8b.2b typed translations input).
     private void AddWritableFields(InputObjectTypeConfiguration config, CollectionMetadata meta)
     {
         var desc = registry.Get(meta.Name);
         foreach (var f in meta.Fields)
         {
             if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
-            if (f.Translatable) continue; // translatable own-fields live on the translation sidecar (8b.2 typed translations input)
-            var sdl = SchemaTypeMapper.WritableScalarInputSdl(f.Interface, ClrType(desc, f.Name));
+            if (f.Translatable) continue; // -> 8b.2b
+
+            string? sdl = f.Interface switch
+            {
+                FieldInterface.Tags => $"[{SchemaTypeMapper.TagItemInputName()}!]",
+                FieldInterface.Repeater when f.Fields is { Count: > 0 } =>
+                    $"[{SchemaTypeMapper.RepeaterItemInputTypeName(meta.Name, f.Name)}!]",
+                _ => SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name)),
+            };
             if (sdl is null) continue;
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
         }
+
+        // M2O foreign keys (as ID) + M2M relations (as [ID!] target-id arrays).
         foreach (var rel in meta.Relations)
+        {
             if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("ID")));
+            else if (rel.Kind == RelationKind.ManyToMany)
+                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse("[ID!]")));
+        }
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).
