@@ -312,4 +312,120 @@ public class GraphQlMutationExecutionTests
 
         json.Should().Contain("CONFLICT");
     }
+
+    [Fact]
+    public async Task Create_with_tags_and_multivalue_passes_structured_body()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { " +
+            "regions: [\"apac\", \"emea\"], " +
+            "keywords: [{ value: \"ai\", label: \"AI\" }, { value: \"ml\" }], " +
+            "gallery: [\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"], " +
+            "tags: [\"9\"] " +
+            "}) { id } }");
+        ParseData(result);
+
+        body!.Value.GetProperty("regions").EnumerateArray().Select(e => e.GetString())
+            .Should().BeEquivalentTo(["apac", "emea"]);
+        var kw = body.Value.GetProperty("keywords");
+        kw[0].GetProperty("value").GetString().Should().Be("ai");
+        kw[0].GetProperty("label").GetString().Should().Be("AI");
+        // second tag omitted its label -> pruned (no "label" key), NOT backfilled null
+        kw[1].EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["value"]);
+        body.Value.GetProperty("gallery").GetArrayLength().Should().Be(1);
+        body.Value.GetProperty("tags").GetArrayLength().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Create_with_repeater_prunes_unsent_sub_fields()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { faqs: [{ question: \"Q1\" }] }) { id } }");
+        ParseData(result);
+
+        var row = body!.Value.GetProperty("faqs")[0];
+        // Only the sent sub-field survives: "answer" was NOT backfilled as null.
+        row.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["question"]);
+        row.GetProperty("question").GetString().Should().Be("Q1");
+    }
+
+    [Fact]
+    public async Task Create_with_repeater_via_variables_prunes_unsent_sub_fields()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var request = OperationRequestBuilder.New()
+            .SetDocument("mutation($input: ArticleCreateInput!) { createArticle(input: $input) { id } }")
+            .SetVariableValues(new Dictionary<string, object?>
+            {
+                ["input"] = new Dictionary<string, object?>
+                {
+                    ["faqs"] = new object[] { new Dictionary<string, object?> { ["question"] = "Q1" } },
+                },
+            })
+            .Build();
+
+        ParseData(await (await ExecutorAsync(ds)).ExecuteAsync(request));
+
+        var row = body!.Value.GetProperty("faqs")[0];
+        row.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["question"]);
+    }
+
+    [Fact]
+    public async Task Create_with_json_any_preserves_full_object()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { attributes: { a: 1, b: { c: \"x\" } } }) { id } }");
+        ParseData(result);
+
+        // Any is opaque: every key the client wrote survives at every depth (no pruning damage).
+        var attrs = body!.Value.GetProperty("attributes");
+        attrs.GetProperty("a").GetInt32().Should().Be(1);
+        attrs.GetProperty("b").GetProperty("c").GetString().Should().Be("x");
+    }
+
+    [Fact]
+    public async Task Update_with_empty_m2m_array_clears_junction()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"5\", input: { tags: [] }) { id } }");
+        ParseData(result);
+
+        // Explicit empty array is sent (present + empty) -> ItemService.SyncM2MAsync clears the junction.
+        body!.Value.GetProperty("tags").GetArrayLength().Should().Be(0);
+        body.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["tags"]);
+    }
 }
