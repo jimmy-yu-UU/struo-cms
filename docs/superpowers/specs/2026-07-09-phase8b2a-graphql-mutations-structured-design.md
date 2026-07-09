@@ -95,8 +95,10 @@ package, or DDL change. `AnyType` is already registered.
 
 - **`XFieldItemInput`** (e.g. `ArticleFaqsItemInput`) — one per Repeater field, mirroring the
   read-side `BuildRepeaterItemType`: sub-fields are the lean scalar sub-field set, **all nullable**
-  (per §3.4), RuntimeType `IReadOnlyDictionary<string, object?>`. Built inside `AddWritableFields`
-  and added to the schema `sink` exactly like the read-side item type. Naming:
+  (per §3.4), RuntimeType `IReadOnlyDictionary<string, object?>`. Built **once per Repeater field in
+  `Build`** (before the create/update inputs) and referenced by name in both `XCreateInput` and
+  `XUpdateInput`; building it inside `AddWritableFields` would double-register the type (create and
+  update both call `AddWritableFields`) and break the schema build. Naming:
   `SchemaTypeMapper.RepeaterItemInputTypeName(collection, field)` = read item type name + `"Input"`.
 
 ### 3.3 `SchemaTypeMapper` extension
