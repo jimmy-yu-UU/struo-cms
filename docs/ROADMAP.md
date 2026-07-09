@@ -332,8 +332,42 @@
   gate) and stays covered by the inline-and-`$variable` unit tests. *Deferred:* **8b.2** (translatable
   `translations` + M2M + File/Image/Files + multi-value + Json/KeyValue + Repeater inputs) and **8c** (advanced read querying:
   cross-relation / deep filtering / multi-level nesting) — both remain, unchanged by this slice.
-- **Next up:** **Phase 8b.2** (structured/multi-value/i18n mutation inputs) or **Phase 9** (soft delete / revisions /
-  lifecycle hooks + unified response envelope) — user's call. **8c** (advanced read querying) is a parallel read-side slice.
+- **Phase 8b.2a (GraphQL mutations — structured, non-i18n) done & live-verified (real Postgres, 2026-07-09):** typed
+  GraphQL **input** for the non-i18n deferred field kinds, layered on the 8b.1 backbone — M2M relation (`[ID!]`),
+  scalar File/Image own-field (`ID`), Files (`[ID!]`), MultiSelect/CheckboxGroup (`[String!]`), Tags
+  (`[TagItemInput!]`), Json/KeyValue (`Any`), and Repeater (`[XFieldItemInput!]`, the item input type built **once**
+  per field in `Build` and referenced by name in both create+update inputs). All schema generation in
+  `CollectionSchemaBuilder`/`SchemaTypeMapper`/`StruoTypeModule`; the input dict flows through the **unchanged**
+  `MutationInputMapper.ToJsonElement` into the shape `ItemService` already validates (**Domain/App/Infra untouched, no
+  new packages, ItemService/mapper write logic unchanged**). **The one new behaviour** is a **recursive
+  `SentFieldsOnly`** (`MutationResolvers`): HotChocolate v16 null-backfills unsent fields of dict-runtime
+  `InputObjectType`s at **every** depth (8b.1 pruned only the top level), so a Repeater/Tags nested item would carry
+  backfilled `null`s (and a non-nullable value-type sub-field would 500 on the child-POCO deserialize); the recursion
+  prunes against the request literal at all depths, and `Any` (Json/KeyValue) is a **provable no-op** (never
+  backfilled). Translatable own-fields + typed `translations` input + translatable File/Image stay fenced to **8b.2b**
+  (`AddWritableFields` keeps `if (f.Translatable) continue;`). Built subagent-driven (Sonnet impl + Opus review per
+  task; final whole-branch Opus review READY-TO-MERGE Yes). Automated gates green: `dotnet build -warnaserror` **0
+  warnings** + `dotnet test` **500** (490 8b.1 baseline + 10 new: ~5 SchemaTypeMapper + 3 schema + ~5 execution incl.
+  recursive-prune inline & `$variable`). Frontend untouched (237). Spec:
+  [spec](superpowers/specs/2026-07-09-phase8b2a-graphql-mutations-structured-design.md) · plan:
+  [plan](superpowers/plans/2026-07-09-phase8b2a-graphql-mutations-structured.md). **Live gate PASSED 2026-07-09 on real
+  Postgres (`web-struo-cms-db`) + Redis + MinIO, no core backend fixes.** Because every 8b.2a structured field lives on
+  the translation-gated `Article`, the gate drove REST-create-base → **`updateArticle` sets all kinds** → read back:
+  MultiSelect/CheckboxGroup/Tags(CJK `人工智慧` code-point-exact + `{value}`-only tag → `label:null` via recursive
+  prune)/Json(nested, CJK)/KeyValue(`MyKey` **verbatim mixed-case, not camelCased** + CJK key `標題`)/Files/Image
+  (resolved `File` node)/Repeater(CJK `常見問題一` + `Select` option + omitted `answer`→`""` POCO default via recursive
+  prune)/M2M(linked + re-read); the `varchar(1)` class was **not** reintroduced (full JSON through `text` columns);
+  **partial-merge** (update `status` only) left every unsent structured/M2M field untouched; M2M `[]` cleared the
+  junction; Repeater-required / Repeater-option / M2M-nonexistent-id → **BAD_USER_INPUT**; `createArticle` without
+  translations → **BAD_USER_INPUT** "default locale 'en' required" (confirms the 8b.2b boundary); delete → re-query
+  `null`. **One known limitation** (accepted, documented in spec §8): an **empty object key** in a Json/KeyValue `Any`
+  value passed as a **variable** is rejected by HotChocolate's `AnyType` variable coercion (`ArgumentException`)
+  **before** the resolver → masked `INTERNAL_SERVER_ERROR` (REST gives a clean 400); inherent to the `Any`
+  representation, fails safely (no write). *Deferred:* **8b.2b** (translatable `translations` + translatable File/Image
+  inputs) and **8c** (advanced read querying) remain, unchanged by this slice.
+- **Next up:** **Phase 8b.2b** (translatable `translations` + translatable File/Image mutation inputs) or **Phase 9**
+  (soft delete / revisions / lifecycle hooks + unified response envelope) — user's call. **8c** (advanced read
+  querying) is a parallel read-side slice.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -404,7 +438,8 @@
 | 7g+.4 | Structured editor `Repeater` (repeatable child objects: `List<TChild>` of `[CmsField]` sub-props, lean scalar sub-field set, `IsJson`→`text`; scanner recurses `FieldMetadata.Fields` + fail-fasts invalid declarations; `ItemService` drops blank rows + validates sub-field Required/options/MaxLength; recursive `RepeaterField.vue`) — *the last 7g+ slice; completes Phase 7g+* | ✅ done (live-verified: real PG — order round-trip + reorder/drop-blank + sub-field required 400 + options 400 + CJK, 5/5, no backend fixes; **+1 final-review fix: interface-typed collection fail-fasts at scan**) | [spec](superpowers/specs/2026-07-07-phase7g-plus-repeater-design.md) | [plan](superpowers/plans/2026-07-07-phase7g-plus-repeater.md) |
 | 8 | GraphQL (read-only delivery API: metadata-driven dynamic schema via HotChocolate; typed per-collection queries + filter/sort/offset-pagination/i18n; single-level relations via existing `deep`; File/Image/Files resolve to `File` nodes via batched DataLoader; RBAC/whitelist reused through an Api-owned `IGraphQlDataSource` adapter — Application untouched) | ✅ done (live-verified: real PG — all JSON-text columns round-trip + CJK exact + File resolution + FORBIDDEN/BAD_USER_INPUT; **+1 live-gate backend fix: Repeater sub-fields resolve from POCO children**) | [spec](superpowers/specs/2026-07-08-phase8-graphql-design.md) | [plan](superpowers/plans/2026-07-08-phase8-graphql.md) |
 | 8b.1 | GraphQL mutations (backbone): typed `createX`/`updateX`/`deleteX` per collection — scalar own-fields + M2O FK + optimistic `version`; input→`JsonElement`→`ItemService` via the Api-owned adapter (Domain/App/Infra untouched); create/update re-read; RBAC/CSRF/error-filter reused — *first mutation slice* | ✅ done (live-verified: real PG 9/9 — create/CJK/M2O-re-read/partial-merge/CONFLICT/BAD_USER_INPUT/FORBIDDEN/delete, no backend fixes; **2 review fixes: v16 null-backfill on update + create**; `dotnet test` **490**, 0 warnings) | [spec](superpowers/specs/2026-07-08-phase8b-graphql-mutations-design.md) | [plan](superpowers/plans/2026-07-08-phase8b-graphql-mutations.md) |
-| 8b.2 | GraphQL mutations (structured): translatable `translations` input + M2M + File/Image/Files + multi-value + Json/KeyValue + Repeater inputs — *second mutation slice* | ⬜ planned | — | — |
+| 8b.2a | GraphQL mutations (structured, non-i18n): typed inputs for M2M (`[ID!]`) + File/Image (`ID`) + Files (`[ID!]`) + MultiSelect/CheckboxGroup (`[String!]`) + Tags (`[TagItemInput!]`) + Json/KeyValue (`Any`) + Repeater (`[XFieldItemInput!]`); recursive `SentFieldsOnly` prunes v16 null-backfill in nested inputs; ItemService/mapper unchanged — *first structured mutation slice* | ✅ done (live-verified: real PG+Redis+MinIO — all kinds round-trip via updateArticle incl. CJK + KeyValue verbatim keys + recursive-prune + partial-merge + M2M clear + validation→BAD_USER_INPUT, no core fixes; 1 documented known limitation: empty Any object key → masked 500) | [spec](superpowers/specs/2026-07-09-phase8b2a-graphql-mutations-structured-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2a-graphql-mutations-structured.md) |
+| 8b.2b | GraphQL mutations (i18n): translatable `translations` input (locale-keyed → typed per-collection translation fields input) + translatable File/Image (per-locale OG image) inputs — *second structured mutation slice* | ⬜ planned | — | — |
 | 8c | GraphQL advanced read querying: cross-relation (dotted-path) filtering + nested filter/sort/pagination + multi-level (depth>1) nesting — *read-side, parallel to 8b* | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
