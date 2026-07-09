@@ -48,6 +48,14 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             if (f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
                 types.Add(BuildRepeaterItemInputType(meta.Name, f));
 
+        // Translation input types — built ONCE per collection (referenced by name in both inputs,
+        // like the Repeater item input). Only for collections with a translation sidecar.
+        if (meta.Translation is not null)
+        {
+            types.Add(BuildTranslationFieldsInputType(meta)); // XTranslationFieldsInput
+            types.Add(BuildTranslationInputType(meta));        // XTranslationInput { locale, fields }
+        }
+
         types.Add(BuildCreateInput(meta));                         // ArticleCreateInput
         types.Add(BuildUpdateInput(meta));                         // ArticleUpdateInput
         return types;
@@ -142,6 +150,37 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         return InputObjectType.CreateUnsafe(config);
     }
 
+    // XTranslationFieldsInput: one input field per translatable own-field, all nullable, SDL via the
+    // shared WritableInputSdl (so a translatable Image/File -> ID, RichText/Text/Textarea -> String).
+    private InputObjectType BuildTranslationFieldsInputType(CollectionMetadata meta)
+    {
+        var desc = registry.Get(meta.Name);
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.TranslationFieldsInputName(meta.Name), null,
+            typeof(IReadOnlyDictionary<string, object?>));
+        foreach (var f in meta.Fields)
+        {
+            if (!f.Translatable) continue;
+            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
+            var sdl = SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name));
+            if (sdl is null) continue;
+            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
+        }
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    // XTranslationInput: one entry = { locale: String!, fields: XTranslationFieldsInput! }.
+    private static InputObjectType BuildTranslationInputType(CollectionMetadata meta)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.TranslationInputName(meta.Name), null,
+            typeof(IReadOnlyDictionary<string, object?>));
+        config.Fields.Add(new InputFieldConfiguration("locale", null, TypeReference.Parse("String!")));
+        config.Fields.Add(new InputFieldConfiguration(
+            "fields", null, TypeReference.Parse(SchemaTypeMapper.TranslationFieldsInputName(meta.Name) + "!")));
+        return InputObjectType.CreateUnsafe(config);
+    }
+
     private ObjectType BuildListType(CollectionMetadata meta)
     {
         var config = new ObjectTypeConfiguration(SchemaTypeMapper.TypeName(meta.Name) + "List", null, typeof(PagedResultView));
@@ -223,6 +262,14 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             else if (rel.Kind == RelationKind.ManyToMany)
                 config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse("[ID!]")));
         }
+
+        // Typed translations input (8b.2b) — only when the collection has a translation sidecar.
+        // Translatable own-fields stay excluded above (`if (f.Translatable) continue;`); they are
+        // carried here instead.
+        if (meta.Translation is not null)
+            config.Fields.Add(new InputFieldConfiguration(
+                "translations", null,
+                TypeReference.Parse($"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]")));
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).

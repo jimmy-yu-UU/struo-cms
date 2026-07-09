@@ -64,4 +64,11 @@ public class SchemaTypeMapperMutationTests
         SchemaTypeMapper.TagItemInputName().Should().Be("TagItemInput");
         SchemaTypeMapper.RepeaterItemInputTypeName("article", "faqs").Should().Be("ArticleFaqsItemInput");
     }
+
+    [Fact]
+    public void Translation_input_type_name_helpers_follow_convention()
+    {
+        SchemaTypeMapper.TranslationInputName("article").Should().Be("ArticleTranslationInput");
+        SchemaTypeMapper.TranslationFieldsInputName("article").Should().Be("ArticleTranslationFieldsInput");
+    }
 }

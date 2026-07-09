@@ -428,4 +428,162 @@ public class GraphQlMutationExecutionTests
         body!.Value.GetProperty("tags").GetArrayLength().Should().Be(0);
         body.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["tags"]);
     }
+
+    [Fact]
+    public async Task Create_folds_translations_list_into_locale_keyed_object()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"published\", translations: [" +
+            "{ locale: \"en\", fields: { title: \"Hello\" } }, " +
+            "{ locale: \"zh-TW\", fields: { title: \"你好\", seoOgImageId: \"3f2504e0-4f89-11d3-9a0c-0305e82c3301\" } } " +
+            "] }) { id } }");
+        ParseData(result);
+
+        // translations reached ItemService as a locale-KEYED OBJECT (not a list): { en: {...}, zh-TW: {...} }.
+        var tr = body!.Value.GetProperty("translations");
+        tr.ValueKind.Should().Be(JsonValueKind.Object);
+        tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Hello");
+        tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("你好");
+        tr.GetProperty("zh-TW").GetProperty("seoOgImageId").GetString()
+            .Should().Be("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+        // Locale codes and field keys are verbatim (NOT camelCased) — zh-TW stays zh-TW.
+        tr.TryGetProperty("zhTw", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Create_translations_prunes_unsent_fields_inline()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        // Send only `title` in the en entry — `body`/`seoOgImageId` are NOT backfilled as null.
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { translations: [ { locale: \"en\", fields: { title: \"T\" } } ] }) { id } }");
+        ParseData(result);
+
+        var en = body!.Value.GetProperty("translations").GetProperty("en");
+        en.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["title"]);
+        en.GetProperty("title").GetString().Should().Be("T");
+    }
+
+    [Fact]
+    public async Task Create_translations_prunes_unsent_fields_via_variables()
+    {
+        // $variable form: SentFieldsOnly recovers sent keys from the post-substitution literal, so
+        // the nested fields object prunes the same way as an inline literal (guard for both forms).
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var request = OperationRequestBuilder.New()
+            .SetDocument("mutation($input: ArticleCreateInput!) { createArticle(input: $input) { id } }")
+            .SetVariableValues(new Dictionary<string, object?>
+            {
+                ["input"] = new Dictionary<string, object?>
+                {
+                    ["translations"] = new object[]
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["locale"] = "en",
+                            ["fields"] = new Dictionary<string, object?> { ["title"] = "T" },
+                        },
+                    },
+                },
+            })
+            .Build();
+
+        ParseData(await (await ExecutorAsync(ds)).ExecuteAsync(request));
+
+        var en = body!.Value.GetProperty("translations").GetProperty("en");
+        en.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["title"]);
+    }
+
+    [Fact]
+    public async Task Update_adds_locale_and_partial_merges_other_fields()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"5\", input: { version: 2, translations: [ { locale: \"zh-TW\", fields: { title: \"新\" } } ] }) { id } }");
+        ParseData(result);
+
+        // Only version + translations were sent; translations folded to a locale-keyed object.
+        body!.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["version", "translations"]);
+        body.Value.GetProperty("translations").GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("新");
+    }
+
+    [Fact]
+    public async Task Update_without_translations_leaves_them_untouched()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateArticle(id: \"5\", input: { status: \"published\" }) { id } }");
+        ParseData(result);
+
+        // No `translations` key sent -> fold is a no-op -> body has no translations key (partial merge).
+        body!.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["status"]);
+    }
+
+    [Fact]
+    public async Task Duplicate_locale_last_writer_wins()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { translations: [ " +
+            "{ locale: \"en\", fields: { title: \"first\" } }, " +
+            "{ locale: \"en\", fields: { title: \"second\" } } ] }) { id } }");
+        ParseData(result);
+
+        body!.Value.GetProperty("translations").GetProperty("en").GetProperty("title").GetString().Should().Be("second");
+    }
+
+    [Fact]
+    public async Task Create_missing_required_translation_field_maps_to_BAD_USER_INPUT()
+    {
+        // ItemService validates translations verbatim; the resolver adds no new validation. Simulate
+        // the domain rejection and assert the error filter maps it to BAD_USER_INPUT (parity with REST).
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, _) => throw new QueryException(
+                "Required translation field 'title' is missing for locale 'en'."),
+        };
+
+        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { translations: [ { locale: \"en\", fields: { } } ] }) { id } }")).ToJson();
+
+        json.Should().Contain("BAD_USER_INPUT");
+        json.Should().Contain("Required translation field");
+    }
 }

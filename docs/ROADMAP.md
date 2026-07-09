@@ -365,9 +365,43 @@
   **before** the resolver → masked `INTERNAL_SERVER_ERROR` (REST gives a clean 400); inherent to the `Any`
   representation, fails safely (no write). *Deferred:* **8b.2b** (translatable `translations` + translatable File/Image
   inputs) and **8c** (advanced read querying) remain, unchanged by this slice.
-- **Next up:** **Phase 8b.2b** (translatable `translations` + translatable File/Image mutation inputs) or **Phase 9**
-  (soft delete / revisions / lifecycle hooks + unified response envelope) — user's call. **8c** (advanced read
-  querying) is a parallel read-side slice.
+- **Phase 8b.2b (GraphQL mutations — i18n / translations) done & live-verified (real Postgres, 2026-07-09):** the third and
+  **last** mutation slice — a typed GraphQL `translations` **input** on every translation-gated collection's
+  `createX`/`updateX`, completing the Phase 8b write series. Per collection (only when `meta.Translation is not null`) the
+  builder emits, **built once in `Build()`** and referenced by name in both inputs: `XTranslationInput { locale: String!,
+  fields: XTranslationFieldsInput! }` + `XTranslationFieldsInput` (one input field per translatable own-field, all nullable,
+  SDL via the existing `WritableInputSdl` — so a translatable `Image`/`File` → `ID` = the per-locale OG image, RichText/Text/
+  Textarea → `String`); `AddWritableFields` gains `translations: [XTranslationInput!]` and **keeps** its
+  `if (f.Translatable) continue;` (translatable fields ride only inside `translations`). **The one new runtime behaviour** is
+  `MutationResolvers.FoldTranslations` — an immutable fold of the GraphQL list `[{locale,fields}]` into the locale-keyed
+  object `{ "<locale>": {fields} }` that `ItemService.SyncTranslationsAsync` consumes; it runs **after** the recursive
+  `SentFieldsOnly` prune (8b.2a, which strips HC v16 null-backfill at every depth incl. the nested `fields` object) and
+  **before** `MutationInputMapper.ToJsonElement` (mapper unchanged). Locale codes + field keys serialize **verbatim**
+  (`JsonSerializerDefaults.Web` leaves `DictionaryKeyPolicy` null), so `zh-TW` stays `zh-TW`. **Read side stays
+  `[Translation!]{locale,fields:Any!}` (accepted asymmetry; typing it is a separate read enhancement).** All validation/errors
+  reused verbatim from `ItemService` (unknown/disabled locale, field ⊆ translatable, required present, MaxLength after
+  RichText sanitize, create-requires-default-locale) → `BAD_USER_INPUT`/`CONFLICT`/`FORBIDDEN`. **Domain/App/Infra untouched,
+  no new packages, `ItemService`/`MutationInputMapper` write logic unchanged.** No new sample entity/fields (the real
+  `ArticleTranslation` already carries title/body/seo*/`seoOgImageId`). Built subagent-driven (Sonnet impl + Opus review per
+  task; final whole-branch Opus review READY-TO-MERGE Yes, SPEC ✅, 0 Critical/Important). Automated gates green:
+  `dotnet build -warnaserror` **0 warnings** + `dotnet test` **513** (500 8b.2a baseline + 13 new: 1 name-helper + 5 schema +
+  1 fold + 6 execution). Frontend untouched (237). Spec:
+  [spec](superpowers/specs/2026-07-09-phase8b2b-graphql-mutations-i18n-design.md) · plan:
+  [plan](superpowers/plans/2026-07-09-phase8b2b-graphql-mutations-i18n.md). **Live gate PASSED 2026-07-09 on real
+  Postgres (`web-struo-cms-db`) + Redis + MinIO, 22/22, no backend fixes:** `createArticle` en+zh-TW **succeeds** (the
+  8b.1/8b.2a default-locale-400 boundary now passable); `zh-TW` title `你好` code-point-exact (U+4F60 U+597D); `body` RichText
+  `<script>`/`onclick` stripped on the translation-sidecar path; per-locale `seoOgImageId` (F1/F2) round-trips; **article-level
+  partial-merge** (update `status` only, no `translations` key) leaves both locales fully intact; edit-one-locale leaves the
+  other untouched; recursive-prune title-only `$variable` update succeeds (no backfill crash); missing-default-locale /
+  unknown-locale / missing-required-`title` → `BAD_USER_INPUT`; delete → re-query `null`. **Semantic note (documented, not a
+  defect):** the repo's translation sync is **delete-then-insert per locale** (replace-per-locale), so a locale entry with a
+  subset of fields clears the omitted ones within that locale — identical to REST; the partial-merge guarantee is at the
+  **article level**, and the recursive prune's role here is preventing a spurious 400/500 from v16 null-backfill, not
+  preserving unsent sub-fields. *Deferred:* typed read-side `translations` (separate read enhancement) and **8c** (advanced
+  read querying) remain.
+- **Next up:** **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) or **8c** (advanced read
+  querying: cross-relation / deep filtering / multi-level nesting) — user's call. The Phase 8b GraphQL **write** series
+  (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) is now **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -439,7 +473,7 @@
 | 8 | GraphQL (read-only delivery API: metadata-driven dynamic schema via HotChocolate; typed per-collection queries + filter/sort/offset-pagination/i18n; single-level relations via existing `deep`; File/Image/Files resolve to `File` nodes via batched DataLoader; RBAC/whitelist reused through an Api-owned `IGraphQlDataSource` adapter — Application untouched) | ✅ done (live-verified: real PG — all JSON-text columns round-trip + CJK exact + File resolution + FORBIDDEN/BAD_USER_INPUT; **+1 live-gate backend fix: Repeater sub-fields resolve from POCO children**) | [spec](superpowers/specs/2026-07-08-phase8-graphql-design.md) | [plan](superpowers/plans/2026-07-08-phase8-graphql.md) |
 | 8b.1 | GraphQL mutations (backbone): typed `createX`/`updateX`/`deleteX` per collection — scalar own-fields + M2O FK + optimistic `version`; input→`JsonElement`→`ItemService` via the Api-owned adapter (Domain/App/Infra untouched); create/update re-read; RBAC/CSRF/error-filter reused — *first mutation slice* | ✅ done (live-verified: real PG 9/9 — create/CJK/M2O-re-read/partial-merge/CONFLICT/BAD_USER_INPUT/FORBIDDEN/delete, no backend fixes; **2 review fixes: v16 null-backfill on update + create**; `dotnet test` **490**, 0 warnings) | [spec](superpowers/specs/2026-07-08-phase8b-graphql-mutations-design.md) | [plan](superpowers/plans/2026-07-08-phase8b-graphql-mutations.md) |
 | 8b.2a | GraphQL mutations (structured, non-i18n): typed inputs for M2M (`[ID!]`) + File/Image (`ID`) + Files (`[ID!]`) + MultiSelect/CheckboxGroup (`[String!]`) + Tags (`[TagItemInput!]`) + Json/KeyValue (`Any`) + Repeater (`[XFieldItemInput!]`); recursive `SentFieldsOnly` prunes v16 null-backfill in nested inputs; ItemService/mapper unchanged — *first structured mutation slice* | ✅ done (live-verified: real PG+Redis+MinIO — all kinds round-trip via updateArticle incl. CJK + KeyValue verbatim keys + recursive-prune + partial-merge + M2M clear + validation→BAD_USER_INPUT, no core fixes; 1 documented known limitation: empty Any object key → masked 500) | [spec](superpowers/specs/2026-07-09-phase8b2a-graphql-mutations-structured-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2a-graphql-mutations-structured.md) |
-| 8b.2b | GraphQL mutations (i18n): translatable `translations` input (locale-keyed → typed per-collection translation fields input) + translatable File/Image (per-locale OG image) inputs — *second structured mutation slice* | ⬜ planned | — | — |
+| 8b.2b | GraphQL mutations (i18n): typed `translations` input (`[XTranslationInput!]` of `{locale, fields: XTranslationFieldsInput}`, built once in `Build()`; translatable File/Image per-locale OG image → `ID`) + immutable list→locale-keyed `FoldTranslations` after recursive prune; ItemService/mapper unchanged; read side stays `Any` — *third & last mutation slice, completes Phase 8b writes* | ✅ done (live-verified: real PG+Redis+MinIO 22/22 — createArticle now succeeds + CJK exact + translation-path sanitize + per-locale OG image + article-level partial-merge + negatives→BAD_USER_INPUT, no backend fixes; `dotnet test` **513**, 0 warnings) | [spec](superpowers/specs/2026-07-09-phase8b2b-graphql-mutations-i18n-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2b-graphql-mutations-i18n.md) |
 | 8c | GraphQL advanced read querying: cross-relation (dotted-path) filtering + nested filter/sort/pagination + multi-level (depth>1) nesting — *read-side, parallel to 8b* | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
