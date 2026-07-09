@@ -223,3 +223,33 @@ In `tests/Struo.Tests` (SQLite for automated tests), gated finally on real Postg
   `Json` field's value is still `Any` and inherits that documented limitation, unchanged).
 - **Deferred scope** (typed read-side translations; 8c advanced read querying) recorded so it isn't
   lost; each is a clean follow-up on the pipeline this slice completes.
+
+## 9. Live gate result (2026-07-09) — PASSED, no backend fixes
+
+Ran against real Postgres (`web-struo-cms-db`) + Redis + MinIO, dev API `:5221`, bootstrap super-admin
+(session cookie + `X-Struo-CSRF` header). CJK built from code points to avoid the PS 5.1 `.ps1` Big5
+source trap; request/response encoded/decoded as UTF-8. **22/22 checks passed, no core backend fixes.**
+
+- **`createArticle` (translation-gated) now succeeds** — `en` (default) + `zh-TW` in one call →
+  201-equivalent, version 0, both locales read back. This is the exact mutation 8b.1/8b.2a could not
+  reach (they confirmed only the `BAD_USER_INPUT` "default locale" boundary).
+- **CJK exact by code point** — `zh-TW` title `你好` = U+4F60 U+597D.
+- **RichText sanitize on the translation path** — `body` carrying `<script>`/`onclick` reads back
+  stripped (the `ItemService` translation-sidecar sanitizer, reused).
+- **Per-locale OG image (translatable `Image` → `ID`)** — a different `seoOgImageId` per locale each
+  round-trips.
+- **Article-level partial-merge** — `updateArticle` sending only `status` (no `translations` key)
+  leaves **both** locales fully intact (titles + body), version 0→1. This is the strong guarantee.
+- **Edit-one-locale** — a full re-send of `en` updates `en` and leaves `zh-TW` untouched.
+- **Recursive prune on the wire** — a `$variable` update sending only `{ locale: en, fields: {title} }`
+  succeeds (no null-backfill crash) and behaves like REST.
+- **Negatives** — missing default locale / unknown locale / missing required `title` → all
+  `BAD_USER_INPUT`. Delete → re-query `null`.
+
+**Semantic note surfaced by the gate (documented, not a defect):** the repository's translation sync
+(`SqlSugarItemRepository.SyncTranslationsGenericAsync`) does **delete-then-insert per locale**
+(replace-per-locale), so sending a locale entry with a subset of its fields clears the omitted fields
+**within that locale** — identical to REST. Field-level merge is *not* a translation contract; the
+partial-merge guarantee is at the **article level** (omit the `translations` key entirely). The
+recursive prune's role for translations is therefore to prevent a spurious `400`/`500` from HotChocolate
+v16 null-backfill, not to preserve unsent sub-fields.
