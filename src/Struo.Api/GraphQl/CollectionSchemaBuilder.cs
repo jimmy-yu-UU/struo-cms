@@ -171,7 +171,7 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
     }
 
     // Shared by create/update inputs: writable scalar own-fields + M2O foreign keys, all nullable.
-    // Deferred kinds resolve to a null SDL from WritableScalarInputSdl and are skipped.
+    // Deferred kinds resolve to a null SDL from WritableInputSdl and are skipped.
     private void AddWritableFields(InputObjectTypeConfiguration config, CollectionMetadata meta)
     {
         var desc = registry.Get(meta.Name);
@@ -179,7 +179,7 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         {
             if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
             if (f.Translatable) continue; // translatable own-fields live on the translation sidecar (8b.2 typed translations input)
-            var sdl = SchemaTypeMapper.WritableScalarInputSdl(f.Interface, ClrType(desc, f.Name));
+            var sdl = SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name));
             if (sdl is null) continue;
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
         }
