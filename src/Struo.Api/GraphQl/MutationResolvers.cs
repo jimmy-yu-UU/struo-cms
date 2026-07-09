@@ -107,13 +107,54 @@ internal static class MutationResolvers
     // still reflects only the client-supplied keys, so intersect the coerced dict's values against the
     // literal's field names to recover the true sent-fields set without needing to re-derive values
     // from the literal ourselves.
+    //
+    // HotChocolate v16 backfills every declared field of a dict-runtime InputObjectType when the
+    // client omits it (see above) — NESTED input objects (TagItemInput / XFieldItemInput items) are
+    // ALSO dict-runtime and backfilled, so a Repeater sub-field the client omitted would reach the
+    // body as null (and, for a non-nullable value-type sub-field, 500 on the child POCO deserialize).
+    // This prunes recursively: keep only keys present in the argument literal at every depth. Any
+    // (Json/KeyValue) is safe under this blind structural recursion — it is never backfilled, so its
+    // literal keys always equal its value keys and recursing into it is a no-op.
     private static IReadOnlyDictionary<string, object?>? SentFieldsOnly(
         IResolverContext ctx, string argumentName, IReadOnlyDictionary<string, object?>? coerced)
     {
         if (coerced is null) return null;
-        if (ctx.ArgumentLiteral<IValueNode>(argumentName) is not ObjectValueNode literal) return coerced;
-        var sentKeys = literal.Fields.Select(f => f.Name.Value).ToHashSet(StringComparer.Ordinal);
-        return coerced.Where(kv => sentKeys.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+        var literal = ctx.ArgumentLiteral<IValueNode>(argumentName);
+        return PruneObject(coerced, literal) as IReadOnlyDictionary<string, object?> ?? coerced;
+    }
+
+    // Returns a new value graph containing only the keys/elements present in the literal. When the
+    // literal shape does not match the value (e.g. a $variable whose literal is not fully expanded, or
+    // a scalar), the value is returned as-is.
+    private static object? PruneValue(object? value, IValueNode? literal) => (value, literal) switch
+    {
+        (IReadOnlyDictionary<string, object?> dict, ObjectValueNode obj) => PruneObject(dict, obj),
+        (System.Collections.IEnumerable list and not string, ListValueNode listNode) => PruneList(list, listNode),
+        _ => value,
+    };
+
+    private static Dictionary<string, object?> PruneObject(
+        IReadOnlyDictionary<string, object?> dict, IValueNode? literal)
+    {
+        if (literal is not ObjectValueNode obj) return new Dictionary<string, object?>(dict);
+        var byName = obj.Fields.ToDictionary(f => f.Name.Value, f => f.Value, StringComparer.Ordinal);
+        var result = new Dictionary<string, object?>(byName.Count, StringComparer.Ordinal);
+        foreach (var (key, node) in byName)
+            if (dict.TryGetValue(key, out var v))
+                result[key] = PruneValue(v, node);
+        return result;
+    }
+
+    private static List<object?> PruneList(System.Collections.IEnumerable list, ListValueNode listNode)
+    {
+        var items = list.Cast<object?>().ToList();
+        var result = new List<object?>(items.Count);
+        for (var i = 0; i < items.Count; i++)
+        {
+            var node = i < listNode.Items.Count ? listNode.Items[i] : null;
+            result.Add(PruneValue(items[i], node));
+        }
+        return result;
     }
 
     internal static ObjectFieldConfiguration DeleteField(string collection)
