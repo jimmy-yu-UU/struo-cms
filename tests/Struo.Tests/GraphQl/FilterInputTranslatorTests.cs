@@ -83,4 +83,121 @@ public class FilterInputTranslatorTests
     [InlineData(FieldInterface.Boolean, typeof(bool), "BooleanFilter")]
     public void OperatorInputTypeName_by_interface(FieldInterface iface, System.Type clr, string expected)
         => FilterInputTranslator.OperatorInputTypeName(iface, clr).Should().Be(expected);
+
+    // relationTarget stub: "category" and "parent" are M2O relations whose target is "category"
+    // (mirrors the sample Article.category and Category.parent self-relation). Everything else is a
+    // plain field. Independent of real fixtures/DB.
+    private static readonly Func<string, string, string?> Rel =
+        (_, key) => key is "category" or "parent" ? "category" : null;
+
+    [Fact]
+    public void Nested_relation_becomes_dotted_comparison()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["category"] = new Dictionary<string, object?>
+            {
+                ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
+            }
+        }, "article", Rel);
+
+        var cmp = f.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("category.name");
+        cmp.Op.Should().Be(QueryOperator.Eq);
+        cmp.Value.Should().Be("Tech");
+    }
+
+    [Fact]
+    public void Multi_hop_relation_becomes_multi_dotted_comparison()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["category"] = new Dictionary<string, object?>
+            {
+                ["parent"] = new Dictionary<string, object?>
+                {
+                    ["name"] = new Dictionary<string, object?> { ["eq"] = "Root" }
+                }
+            }
+        }, "article", Rel);
+
+        var cmp = f.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("category.parent.name");
+        cmp.Value.Should().Be("Root");
+    }
+
+    [Fact]
+    public void Own_field_and_nested_relation_are_anded()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["status"] = new Dictionary<string, object?> { ["eq"] = "published" },
+            ["category"] = new Dictionary<string, object?>
+            {
+                ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
+            }
+        }, "article", Rel);
+
+        var logical = f.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Op.Should().Be(LogicalOperator.And);
+        logical.Children.Should().HaveCount(2);
+        logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
+            .Should().Contain(new[] { "status", "category.name" });
+    }
+
+    [Fact]
+    public void Or_group_with_a_nested_relation_child_is_honoured()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["or"] = new List<object?>
+            {
+                new Dictionary<string, object?> { ["status"] = new Dictionary<string, object?> { ["eq"] = "a" } },
+                new Dictionary<string, object?>
+                {
+                    ["category"] = new Dictionary<string, object?>
+                    {
+                        ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
+                    }
+                },
+            }
+        }, "article", Rel);
+
+        var logical = f.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Op.Should().Be(LogicalOperator.Or);
+        logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
+            .Should().Contain("category.name");
+    }
+
+    [Fact]
+    public void Null_operators_inside_nested_relation_are_skipped()
+    {
+        // HotChocolate backfills every declared operator field as null; only "eq" was set.
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["category"] = new Dictionary<string, object?>
+            {
+                ["name"] = new Dictionary<string, object?>
+                {
+                    ["eq"] = "Tech", ["neq"] = null, ["contains"] = null, ["in"] = null
+                }
+            }
+        }, "article", Rel);
+
+        f.Should().BeOfType<ComparisonFilter>().Which.FieldPath.Should().Be("category.name");
+    }
+
+    [Fact]
+    public void One_arg_overload_still_treats_relation_key_as_flat_field()
+    {
+        // Back-compat: with no relationTarget, "category" is NOT a relation, so its dict is read as
+        // an operator bag; "name" is not a known operator -> nothing emitted -> null.
+        FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["category"] = new Dictionary<string, object?>
+            {
+                ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
+            }
+        }).Should().BeNull();
+    }
 }

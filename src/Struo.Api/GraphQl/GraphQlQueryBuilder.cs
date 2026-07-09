@@ -30,7 +30,9 @@ public static class GraphQlQueryBuilder
         int? limit,
         int? offset,
         string? search,
-        IReadOnlyList<string> requestedRelations)
+        IReadOnlyList<string> requestedRelations,
+        string collection = "",
+        Func<string, string, string?>? relationTarget = null)
     {
         var deep = requestedRelations.Count == 0
             ? null
@@ -39,7 +41,7 @@ public static class GraphQlQueryBuilder
 
         return new QueryModel(
             Fields: null,
-            Filter: FilterInputTranslator.Translate(filter),
+            Filter: FilterInputTranslator.Translate(filter, collection, relationTarget),
             Sort: ParseSort(sort),
             Limit: limit ?? 0,
             Offset: offset ?? 0,

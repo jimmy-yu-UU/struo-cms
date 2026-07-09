@@ -1,5 +1,6 @@
 // tests/Struo.Tests/GraphQl/GraphQlSchemaTests.cs
 using AwesomeAssertions;
+using HotChocolate;
 using HotChocolate.Execution;
 using HotChocolate.Serialization;
 using HotChocolate.Types;
@@ -41,6 +42,27 @@ public class GraphQlSchemaTests
         return SchemaFormatter.FormatAsString(executor.Schema);
     }
 
+    // Same setup as BuildSdlAsync, but ends in BuildSchemaAsync() to hand back the built
+    // ISchemaDefinition directly (for tests that inspect specific input-object fields/types
+    // rather than substring-matching printed SDL).
+    private static async Task<ISchemaDefinition> BuildSchemaAsync()
+    {
+        var services = new ServiceCollection()
+            .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
+            .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddScoped<IGraphQlDataSource, FakeGraphQlDataSource>()
+            .AddSingleton<StruoTypeModule>();
+
+        return await services
+            .AddGraphQLServer()
+            .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
+            .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
+            .AddTypeModule<StruoTypeModule>()
+            .BuildSchemaAsync();
+    }
+
     [Fact]
     public async Task Query_has_single_and_list_fields_per_collection()
     {
@@ -78,5 +100,32 @@ public class GraphQlSchemaTests
         var sdl = await BuildSdlAsync();
 
         sdl.ToLowerInvariant().Should().NotContain("password");
+    }
+
+    [Fact]
+    public async Task ArticleFilterInput_has_nested_category_relation_filter()
+    {
+        var schema = await BuildSchemaAsync();
+        var input = schema.Types.OfType<HotChocolate.Types.IInputObjectTypeDefinition>()
+            .Single(t => t.Name == "ArticleFilterInput");
+
+        input.Fields.Any(f => f.Name == "category" && f.Type.NamedType().Name == "CategoryFilterInput")
+            .Should().BeTrue();
+        // FK operator field is retained (parity with REST allowlist).
+        input.Fields.Any(f => f.Name == "categoryId" && f.Type.NamedType().Name == "IdFilter")
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CategoryFilterInput_is_self_referential_via_parent()
+    {
+        var schema = await BuildSchemaAsync();
+        var input = schema.Types.OfType<HotChocolate.Types.IInputObjectTypeDefinition>()
+            .Single(t => t.Name == "CategoryFilterInput");
+
+        input.Fields.Any(f => f.Name == "parent" && f.Type.NamedType().Name == "CategoryFilterInput")
+            .Should().BeTrue();
+        input.Fields.Any(f => f.Name == "name" && f.Type.NamedType().Name == "StringFilter")
+            .Should().BeTrue();
     }
 }

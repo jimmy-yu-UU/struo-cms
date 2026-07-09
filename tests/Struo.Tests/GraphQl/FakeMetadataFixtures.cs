@@ -136,6 +136,12 @@ internal static class FakeMetadataFixtures
         [
             new RelationMetadata
             {
+                Name = "parent", Label = "Parent", Kind = RelationKind.ManyToOne,
+                TargetCollection = "category", Interface = RelationInterface.TreeSelect,
+                ForeignKey = "parentId", DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull,
+            },
+            new RelationMetadata
+            {
                 Name = "articles", Label = "Articles", Kind = RelationKind.OneToMany,
                 TargetCollection = "article", Interface = RelationInterface.RelatedList,
                 DisplayTemplate = "{Title}",
@@ -217,6 +223,7 @@ internal static class FakeMetadataFixtures
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
+        public Guid? ParentId { get; set; }
     }
 
     private sealed class TagPoco
@@ -271,6 +278,7 @@ internal static class FakeMetadataFixtures
                     {
                         ["id"] = "Id",
                         ["name"] = "Name",
+                        ["parentId"] = "ParentId",
                     },
                     "Id"),
                 ["tag"] = new EntityDescriptor(

@@ -54,4 +54,26 @@ public class GraphQlQueryBuilderTests
         q.Limit.Should().Be(0);
         q.Offset.Should().Be(0);
     }
+
+    [Fact]
+    public void BuildQuery_flattens_nested_M2O_relation_filter_to_dotted_path()
+    {
+        Func<string, string, string?> rel = (_, key) => key == "category" ? "category" : null;
+
+        var q = GraphQlQueryBuilder.BuildQuery(
+            filter: new Dictionary<string, object?>
+            {
+                ["category"] = new Dictionary<string, object?>
+                {
+                    ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
+                }
+            },
+            sort: null, limit: null, offset: null, search: null,
+            requestedRelations: System.Array.Empty<string>(),
+            collection: "article", relationTarget: rel);
+
+        var cmp = q.Filter.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("category.name");
+        cmp.Value.Should().Be("Tech");
+    }
 }
