@@ -85,6 +85,16 @@ internal static class FakeMetadataFixtures
                     },
                 ],
             },
+            new FieldMetadata
+            {
+                Name = "body", Label = "Body", Interface = FieldInterface.RichText,
+                Translatable = true, Sort = 10,
+            },
+            new FieldMetadata
+            {
+                Name = "seoOgImageId", Label = "OG Image", Interface = FieldInterface.Image,
+                Translatable = true, Sort = 11,
+            },
         ],
         Relations =
         [
@@ -105,7 +115,7 @@ internal static class FakeMetadataFixtures
         {
             ForeignKeyProperty = "ArticleId",
             LocaleProperty = "Locale",
-            Fields = ["title"],
+            Fields = ["title", "body", "seoOgImageId"],
         },
     };
 

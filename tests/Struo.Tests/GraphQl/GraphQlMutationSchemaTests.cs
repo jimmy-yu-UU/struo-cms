@@ -102,6 +102,53 @@ public class GraphQlMutationSchemaTests
         block.Should().Contain("version: Long"); // optimistic-concurrency token, update-only
     }
 
+    [Fact]
+    public async Task Create_and_update_inputs_include_translations_list()
+    {
+        var sdl = await BuildSdlAsync();
+        InputBlock(sdl, "ArticleCreateInput").Should().Contain("translations: [ArticleTranslationInput!]");
+        InputBlock(sdl, "ArticleUpdateInput").Should().Contain("translations: [ArticleTranslationInput!]");
+    }
+
+    [Fact]
+    public async Task Translation_wrapper_input_has_locale_and_typed_fields()
+    {
+        var sdl = await BuildSdlAsync();
+        var wrapper = InputBlock(sdl, "ArticleTranslationInput");
+        wrapper.Should().Contain("locale: String!");
+        wrapper.Should().Contain("fields: ArticleTranslationFieldsInput!");
+    }
+
+    [Fact]
+    public async Task Translation_fields_input_lists_translatable_fields_all_nullable()
+    {
+        var sdl = await BuildSdlAsync();
+        var fields = InputBlock(sdl, "ArticleTranslationFieldsInput");
+        fields.Should().Contain("title: String");          // Text (nullable in input; required validated server-side)
+        fields.Should().Contain("body: String");           // RichText -> String
+        fields.Should().Contain("seoOgImageId: ID");        // translatable Image -> ID
+        fields.Should().NotContain("String!");              // no required marker on the field-map
+    }
+
+    [Fact]
+    public async Task Translatable_fields_do_not_leak_to_top_level_inputs()
+    {
+        var sdl = await BuildSdlAsync();
+        // body/seoOgImageId are translatable -> present ONLY inside the fields input, never as
+        // top-level own-fields of the create/update input.
+        InputBlock(sdl, "ArticleCreateInput").Should().NotContain("body:");
+        InputBlock(sdl, "ArticleCreateInput").Should().NotContain("seoOgImageId:");
+    }
+
+    [Fact]
+    public async Task Collection_without_sidecar_has_no_translations_input()
+    {
+        var sdl = await BuildSdlAsync();
+        // Category has no translation sidecar -> no translations field, no translation input types.
+        InputBlock(sdl, "CategoryCreateInput").Should().NotContain("translations");
+        sdl.Should().NotContain("CategoryTranslationInput");
+    }
+
     // Returns the SDL text of a single `input X { ... }` block.
     private static string InputBlock(string sdl, string typeName)
     {
