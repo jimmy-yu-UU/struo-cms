@@ -4,6 +4,7 @@ using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Api.GraphQl;
 
@@ -40,7 +41,9 @@ internal static class CollectionResolvers
         var id = ctx.ArgumentValue<string>("id");
         var locale = ctx.ArgumentValue<string?>("locale");
         var relations = SelectionRelations(ctx, collection, elementIsDirect: true);
-        var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
+        var deep = GraphQlQueryBuilder.BuildQuery(
+            null, null, null, null, null, relations,
+            collection, RelationTargets(ctx.Service<IMetadataProvider>())).Deep;
         var data = await ctx.Service<IGraphQlDataSource>().GetAsync(collection, id, deep, locale, ctx.RequestAborted);
         return data;
     }
@@ -54,10 +57,23 @@ internal static class CollectionResolvers
         var search = ctx.ArgumentValue<string?>("search");
         var locale = ctx.ArgumentValue<string?>("locale");
         var relations = SelectionRelations(ctx, collection, elementIsDirect: false);
-        var query = GraphQlQueryBuilder.BuildQuery(filter, sort, limit, offset, search, relations);
+        var query = GraphQlQueryBuilder.BuildQuery(
+            filter, sort, limit, offset, search, relations,
+            collection, RelationTargets(ctx.Service<IMetadataProvider>()));
         var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, ctx.RequestAborted);
         return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total);
     }
+
+    /// <summary>
+    /// Delegate for FilterInputTranslator: returns the target collection name when <paramref name="key"/>
+    /// is an M2O relation of <paramref name="coll"/> (so a nested filter descends into a dotted path),
+    /// else null. Only M2O relations with a foreign key participate (parity with the schema input).
+    /// </summary>
+    private static Func<string, string, string?> RelationTargets(IMetadataProvider metadata) =>
+        (coll, key) => metadata.GetCollection(coll)?.Relations
+            .FirstOrDefault(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null
+                              && string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase))
+            ?.TargetCollection;
 
     /// <summary>Which of the collection's relations the client selected on the element type.</summary>
     internal static IReadOnlyList<string> SelectionRelations(IResolverContext ctx, string collection, bool elementIsDirect)
