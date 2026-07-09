@@ -512,4 +512,24 @@ public class GraphQlExecutionTests
         logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
             .Should().Contain(new[] { "status", "category.name" });
     }
+
+    [Fact]
+    public async Task Cross_relation_sort_token_flows_into_QueryModel()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(sort: [\"category.name\", \"-category.parent.name\"]) { total } }");
+        ParseData(result);
+
+        captured!.Sort.Should().HaveCount(2);
+        captured.Sort[0].Field.Should().Be("category.name");
+        captured.Sort[0].Descending.Should().BeFalse();
+        captured.Sort[1].Field.Should().Be("category.parent.name");
+        captured.Sort[1].Descending.Should().BeTrue();
+    }
 }
