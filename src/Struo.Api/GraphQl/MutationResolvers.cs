@@ -32,7 +32,7 @@ internal static class MutationResolvers
     {
         var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var body = MutationInputMapper.ToJsonElement(SentFieldsOnly(ctx, "input", input));
+        var body = MutationInputMapper.ToJsonElement(FoldTranslations(SentFieldsOnly(ctx, "input", input)));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var created = await source.CreateAsync(collection, body, ctx.RequestAborted);
@@ -74,7 +74,7 @@ internal static class MutationResolvers
         var id = ctx.ArgumentValue<string>("id");
         var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var body = MutationInputMapper.ToJsonElement(SentFieldsOnly(ctx, "input", input));
+        var body = MutationInputMapper.ToJsonElement(FoldTranslations(SentFieldsOnly(ctx, "input", input)));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var updated = await source.UpdateAsync(collection, id, body, ctx.RequestAborted);
@@ -121,6 +121,34 @@ internal static class MutationResolvers
         if (coerced is null) return null;
         var literal = ctx.ArgumentLiteral<IValueNode>(argumentName);
         return PruneObject(coerced, literal) as IReadOnlyDictionary<string, object?> ?? coerced;
+    }
+
+    // GraphQL sends `translations` as a list of { locale, fields } entries (mirroring the read side's
+    // [Translation!]); ItemService.SyncTranslationsAsync consumes a locale-keyed object
+    // { "<locale>": { <field>: <value> } }. Fold the (already SentFieldsOnly-pruned) list into that
+    // object, returning a NEW dict so the input is not mutated (CLAUDE immutability). Runs AFTER the
+    // recursive prune (so each entry's `fields` carries only client-sent sub-fields) and BEFORE
+    // ToJsonElement. Absent/unexpected `translations` -> pass through unchanged (ItemService then
+    // enforces create-requires-default-locale / rejects a non-object). Duplicate locale -> last wins.
+    private static IReadOnlyDictionary<string, object?>? FoldTranslations(
+        IReadOnlyDictionary<string, object?>? input)
+    {
+        if (input is null) return null;
+        var raw = input.GetValueOrDefault("translations");
+        if (raw is not System.Collections.IEnumerable entries || raw is string) return input;
+
+        var byLocale = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            if (entry is not IReadOnlyDictionary<string, object?> e) continue;
+            if (e.GetValueOrDefault("locale") is not string locale) continue;
+            byLocale[locale] = e.GetValueOrDefault("fields");
+        }
+
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var (k, v) in input) result[k] = v;
+        result["translations"] = byLocale;
+        return result;
     }
 
     // Returns a new value graph containing only the keys/elements present in the literal. When the

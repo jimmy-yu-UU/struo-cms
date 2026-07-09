@@ -428,4 +428,32 @@ public class GraphQlMutationExecutionTests
         body!.Value.GetProperty("tags").GetArrayLength().Should().Be(0);
         body.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["tags"]);
     }
+
+    [Fact]
+    public async Task Create_folds_translations_list_into_locale_keyed_object()
+    {
+        JsonElement? body = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"published\", translations: [" +
+            "{ locale: \"en\", fields: { title: \"Hello\" } }, " +
+            "{ locale: \"zh-TW\", fields: { title: \"你好\", seoOgImageId: \"3f2504e0-4f89-11d3-9a0c-0305e82c3301\" } } " +
+            "] }) { id } }");
+        ParseData(result);
+
+        // translations reached ItemService as a locale-KEYED OBJECT (not a list): { en: {...}, zh-TW: {...} }.
+        var tr = body!.Value.GetProperty("translations");
+        tr.ValueKind.Should().Be(JsonValueKind.Object);
+        tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Hello");
+        tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("你好");
+        tr.GetProperty("zh-TW").GetProperty("seoOgImageId").GetString()
+            .Should().Be("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+        // Locale codes and field keys are verbatim (NOT camelCased) — zh-TW stays zh-TW.
+        tr.TryGetProperty("zhTw", out _).Should().BeFalse();
+    }
 }
