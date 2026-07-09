@@ -21,38 +21,47 @@ public class SchemaTypeMapperMutationTests
     [Theory]
     [InlineData(FieldInterface.Text, "String")]
     [InlineData(FieldInterface.Select, "String")]
+    [InlineData(FieldInterface.Radio, "String")]
+    [InlineData(FieldInterface.Time, "String")]
     [InlineData(FieldInterface.Boolean, "Boolean")]
     [InlineData(FieldInterface.Date, "Date")]
     [InlineData(FieldInterface.DateTime, "DateTime")]
     [InlineData(FieldInterface.Uuid, "ID")]
-    public void Writable_scalar_interfaces_map_to_sdl(FieldInterface iface, string expected)
+    [InlineData(FieldInterface.File, "ID")]
+    [InlineData(FieldInterface.Image, "ID")]
+    [InlineData(FieldInterface.Files, "[ID!]")]
+    [InlineData(FieldInterface.MultiSelect, "[String!]")]
+    [InlineData(FieldInterface.CheckboxGroup, "[String!]")]
+    [InlineData(FieldInterface.Json, "Any")]
+    [InlineData(FieldInterface.KeyValue, "Any")]
+    public void Writable_input_interfaces_map_to_sdl(FieldInterface iface, string expected)
     {
-        SchemaTypeMapper.WritableScalarInputSdl(iface, null).Should().Be(expected);
+        SchemaTypeMapper.WritableInputSdl(iface, null).Should().Be(expected);
     }
 
     [Fact]
-    public void Number_maps_by_clr_type()
+    public void Writable_input_number_maps_by_clr_type()
     {
-        SchemaTypeMapper.WritableScalarInputSdl(FieldInterface.Number, typeof(int)).Should().Be("Int");
-        SchemaTypeMapper.WritableScalarInputSdl(FieldInterface.Number, typeof(long)).Should().Be("Long");
-        SchemaTypeMapper.WritableScalarInputSdl(FieldInterface.Number, typeof(decimal)).Should().Be("Float");
+        SchemaTypeMapper.WritableInputSdl(FieldInterface.Number, typeof(int)).Should().Be("Int");
+        SchemaTypeMapper.WritableInputSdl(FieldInterface.Number, typeof(long)).Should().Be("Long");
+        SchemaTypeMapper.WritableInputSdl(FieldInterface.Number, typeof(decimal)).Should().Be("Float");
     }
 
     [Theory]
-    [InlineData(FieldInterface.MultiSelect)]
-    [InlineData(FieldInterface.CheckboxGroup)]
-    [InlineData(FieldInterface.Tags)]
-    [InlineData(FieldInterface.Json)]
-    [InlineData(FieldInterface.KeyValue)]
-    [InlineData(FieldInterface.File)]
-    [InlineData(FieldInterface.Image)]
-    [InlineData(FieldInterface.Files)]
-    [InlineData(FieldInterface.Repeater)]
+    [InlineData(FieldInterface.Tags)]      // named type -> builder handles specially
+    [InlineData(FieldInterface.Repeater)]  // named type -> builder handles specially
     [InlineData(FieldInterface.Hidden)]
     [InlineData(FieldInterface.Divider)]
     [InlineData(FieldInterface.Password)]
-    public void Deferred_and_excluded_interfaces_are_not_writable_scalars(FieldInterface iface)
+    public void Named_and_excluded_interfaces_have_no_input_sdl(FieldInterface iface)
     {
-        SchemaTypeMapper.WritableScalarInputSdl(iface, null).Should().BeNull();
+        SchemaTypeMapper.WritableInputSdl(iface, null).Should().BeNull();
+    }
+
+    [Fact]
+    public void Input_type_name_helpers_follow_convention()
+    {
+        SchemaTypeMapper.TagItemInputName().Should().Be("TagItemInput");
+        SchemaTypeMapper.RepeaterItemInputTypeName("article", "faqs").Should().Be("ArticleFaqsItemInput");
     }
 }
