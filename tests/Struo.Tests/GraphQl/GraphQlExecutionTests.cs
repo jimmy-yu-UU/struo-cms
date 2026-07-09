@@ -458,4 +458,58 @@ public class GraphQlExecutionTests
 
         json.Should().Contain("FORBIDDEN");
     }
+
+    [Fact]
+    public async Task Nested_M2O_relation_filter_arrives_as_dotted_comparison()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { category: { name: { eq: \"Tech\" } } }) { total } }");
+        ParseData(result); // asserts no errors
+
+        var cmp = captured!.Filter.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("category.name");
+        cmp.Op.Should().Be(QueryOperator.Eq);
+        cmp.Value.Should().Be("Tech");
+    }
+
+    [Fact]
+    public async Task Multi_hop_relation_filter_arrives_as_multi_dotted_comparison()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { category: { parent: { name: { eq: \"Root\" } } } }) { total } }");
+        ParseData(result);
+
+        captured!.Filter.Should().BeOfType<ComparisonFilter>()
+            .Which.FieldPath.Should().Be("category.parent.name");
+    }
+
+    [Fact]
+    public async Task Own_field_and_nested_relation_filter_are_anded()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { status: { eq: \"published\" }, category: { name: { eq: \"Tech\" } } }) { total } }");
+        ParseData(result);
+
+        var logical = captured!.Filter.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
+            .Should().Contain(new[] { "status", "category.name" });
+    }
 }
