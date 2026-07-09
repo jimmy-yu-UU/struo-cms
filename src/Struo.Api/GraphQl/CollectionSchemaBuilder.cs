@@ -206,10 +206,16 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             var opInput = FilterInputTranslator.OperatorInputTypeName(f.Interface, ClrType(desc, f.Name));
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(opInput)));
         }
-        // M2O foreign keys are filterable (parity with REST allowlist).
+        // M2O foreign keys are filterable (parity with REST allowlist); each M2O relation also gets a
+        // nested filter input typed as the target's FilterInput (by name -> recursive/self-referential,
+        // same mechanism as and/or). Flattened to a dotted FieldPath by FilterInputTranslator.
         foreach (var rel in meta.Relations)
             if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
+            {
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
+                var targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
+                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse(targetFilter)));
+            }
 
         return InputObjectType.CreateUnsafe(config);
     }
