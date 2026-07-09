@@ -399,9 +399,36 @@
   **article level**, and the recursive prune's role here is preventing a spurious 400/500 from v16 null-backfill, not
   preserving unsent sub-fields. *Deferred:* typed read-side `translations` (separate read enhancement) and **8c** (advanced
   read querying) remain.
-- **Next up:** **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) or **8c** (advanced read
-  querying: cross-relation / deep filtering / multi-level nesting) — user's call. The Phase 8b GraphQL **write** series
-  (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) is now **complete**.
+- **Phase 8c.1 (GraphQL advanced read querying — cross-relation filter + sort) done, pending live gate (2026-07-09):** the
+  first 8c slice — cross-relation (dotted-path) **filtering** over many-to-one relations, multi-hop, plus
+  verified/tested/documented cross-relation **sort** — both by reusing engine/validation machinery already built for
+  the REST side (`RelationFilterResolver.RewriteAsync`, `QueryValidator`/`RelationPath.Parse`,
+  `SqlSugarItemRepository.RelationOrderExpr`); **no new engine code**. `CollectionSchemaBuilder.BuildFilterInput` adds,
+  per M2O relation, a nested `{Target}FilterInput` field referenced **by name** (mirrors the existing self-referential
+  `and`/`or` pattern, so `CategoryFilterInput.parent: CategoryFilterInput` self-resolves without a build loop) alongside
+  the existing FK `IdFilter` field. `FilterInputTranslator` becomes metadata-aware: it recurses into M2O-relation-named
+  keys, accumulating a dotted path prefix (`category.name`, `category.parent.name`), emitting the same
+  `FilterNode`/`ComparisonFilter` shape as before — own-field and cross-relation comparisons mix under one implicit
+  AND, flowing unchanged into `QueryValidator` → `RelationFilterResolver`. **Sort required no schema change** —
+  `sort: [String!]` tokens already threaded through `ParseSort` → `QueryModel.Sort` → `RelationOrderExpr`; this slice
+  adds the execution-spy regression test locking `["category.name", "-category.parent.name"]` into two ordered
+  `SortToken`s (asc/desc). **Api-only** (`Struo.Api/GraphQl` + tests); `Struo.Domain`/`Struo.Application`/
+  `Struo.Infrastructure` untouched, no new NuGet packages. **Caveats (documented, not addressed in this slice):**
+  cross-relation sort's `RelationOrderExpr` is a correlated raw ORDER-BY subquery whose SQL shape is
+  PostgreSQL/SQLite-specific (audit D9) — unverified on MySQL/SqlServer/Oracle; **sort across a to-many relation is
+  rejected** (`BAD_USER_INPUT`); relation paths are depth-capped by `StruoQueryOptions.MaxRelationDepth` (default 5).
+  *Deferred to 8c.2:* to-many (O2M/M2M) cross-relation filter, nested-list `filter/sort/limit/offset` arguments,
+  multi-level (depth > 1) relation **nesting/expansion**. `dotnet build -warnaserror` **0 warnings** + `dotnet test`
+  **526** (513 8b.2b baseline + 13 new: translator dotted-flattening + schema nested-filter-input + query-builder
+  metadata-threading + execution-spy filter/multi-hop/AND + the sort-token execution-spy test, plus engine-reuse
+  coverage). Frontend untouched (237). Spec:
+  [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) · plan:
+  [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md). **Live gate pending** (real
+  Postgres `web-struo-cms-db` + Redis — user/session-driven, run separately from this commit; see spec §9 for the
+  checklist, including a CJK round-trip and a `BAD_USER_INPUT` negative).
+- **Next up:** **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) or **8c.2** (to-many
+  cross-relation filter, nested-list arguments, multi-level relation nesting) — user's call, pending the 8c.1 live gate.
+  The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
   `IPermissionService` port is backed by real RBAC (`RbacPermissionService` + per-request
@@ -474,7 +501,8 @@
 | 8b.1 | GraphQL mutations (backbone): typed `createX`/`updateX`/`deleteX` per collection — scalar own-fields + M2O FK + optimistic `version`; input→`JsonElement`→`ItemService` via the Api-owned adapter (Domain/App/Infra untouched); create/update re-read; RBAC/CSRF/error-filter reused — *first mutation slice* | ✅ done (live-verified: real PG 9/9 — create/CJK/M2O-re-read/partial-merge/CONFLICT/BAD_USER_INPUT/FORBIDDEN/delete, no backend fixes; **2 review fixes: v16 null-backfill on update + create**; `dotnet test` **490**, 0 warnings) | [spec](superpowers/specs/2026-07-08-phase8b-graphql-mutations-design.md) | [plan](superpowers/plans/2026-07-08-phase8b-graphql-mutations.md) |
 | 8b.2a | GraphQL mutations (structured, non-i18n): typed inputs for M2M (`[ID!]`) + File/Image (`ID`) + Files (`[ID!]`) + MultiSelect/CheckboxGroup (`[String!]`) + Tags (`[TagItemInput!]`) + Json/KeyValue (`Any`) + Repeater (`[XFieldItemInput!]`); recursive `SentFieldsOnly` prunes v16 null-backfill in nested inputs; ItemService/mapper unchanged — *first structured mutation slice* | ✅ done (live-verified: real PG+Redis+MinIO — all kinds round-trip via updateArticle incl. CJK + KeyValue verbatim keys + recursive-prune + partial-merge + M2M clear + validation→BAD_USER_INPUT, no core fixes; 1 documented known limitation: empty Any object key → masked 500) | [spec](superpowers/specs/2026-07-09-phase8b2a-graphql-mutations-structured-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2a-graphql-mutations-structured.md) |
 | 8b.2b | GraphQL mutations (i18n): typed `translations` input (`[XTranslationInput!]` of `{locale, fields: XTranslationFieldsInput}`, built once in `Build()`; translatable File/Image per-locale OG image → `ID`) + immutable list→locale-keyed `FoldTranslations` after recursive prune; ItemService/mapper unchanged; read side stays `Any` — *third & last mutation slice, completes Phase 8b writes* | ✅ done (live-verified: real PG+Redis+MinIO 22/22 — createArticle now succeeds + CJK exact + translation-path sanitize + per-locale OG image + article-level partial-merge + negatives→BAD_USER_INPUT, no backend fixes; `dotnet test` **513**, 0 warnings) | [spec](superpowers/specs/2026-07-09-phase8b2b-graphql-mutations-i18n-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2b-graphql-mutations-i18n.md) |
-| 8c | GraphQL advanced read querying: cross-relation (dotted-path) filtering + nested filter/sort/pagination + multi-level (depth>1) nesting — *read-side, parallel to 8b* | ⬜ planned | — | — |
+| 8c.1 | GraphQL advanced read querying (cross-relation filter + sort): M2O cross-relation (dotted-path) filtering, multi-hop, via nested `{Target}FilterInput` fields + metadata-aware `FilterInputTranslator`; cross-relation sort verified/tested/documented (no schema change, reuses `RelationOrderExpr`) — *first 8c slice, read-side, parallel to 8b* | ✅ done, live gate pending | [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) | [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md) |
+| 8c.2 | GraphQL advanced read querying (to-many cross-relation filter, nested-list `filter/sort/limit/offset` arguments, multi-level (depth>1) relation nesting/expansion) — *deferred slice* | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
