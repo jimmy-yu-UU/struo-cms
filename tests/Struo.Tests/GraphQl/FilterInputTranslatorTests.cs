@@ -187,6 +187,34 @@ public class FilterInputTranslatorTests
         f.Should().BeOfType<ComparisonFilter>().Which.FieldPath.Should().Be("category.name");
     }
 
+    // A delegate that resolves to-many keys too (mirrors the relaxed RelationTargets): "tags" is a
+    // relation of "article" whose target is "tag"; "articles" is a relation of "category" whose
+    // target is "article". The translator does not care about the relation KIND — only that the
+    // delegate returns a target for the key.
+    private static readonly Func<string, string, string?> RelToMany =
+        (coll, key) => (coll, key) switch
+        {
+            ("article", "tags") => "tag",
+            ("category", "articles") => "article",
+            _ => null,
+        };
+
+    [Fact]
+    public void To_many_relation_key_becomes_dotted_comparison()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["tags"] = new Dictionary<string, object?>
+            {
+                ["name"] = new Dictionary<string, object?> { ["eq"] = "AI" }
+            }
+        }, "article", RelToMany);
+
+        var cmp = f.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("tags.name");
+        cmp.Value.Should().Be("AI");
+    }
+
     [Fact]
     public void One_arg_overload_still_treats_relation_key_as_flat_field()
     {
