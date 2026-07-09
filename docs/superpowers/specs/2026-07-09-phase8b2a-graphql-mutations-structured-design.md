@@ -220,3 +220,17 @@ In the existing `tests/Struo.Tests` (SQLite for automated tests), gated finally 
   against a fixture with a numeric sub-field to confirm the recursive-prune path.
 - **Deferred scope** (8b.2b translations/i18n inputs; 8c advanced read querying) is recorded here so
   it isn't lost; each is a clean follow-up on the pipeline this slice extends.
+
+## 8. Known limitation (surfaced by the live gate, accepted)
+
+- **Empty object key in an `Any` (Json/KeyValue) input.** Passing a JSON object with an
+  empty-string key inside a `Json`/`KeyValue` field — e.g. `meta: { "": "v" }` — is rejected by
+  HotChocolate v16's built-in `AnyType` **variable coercion** (`ArgumentException: "The value of a
+  name node cannot be null or empty"`, thrown while turning JSON keys into internal `NameNode`s)
+  **before** the resolver runs, so `StruoErrorFilter` masks it as `INTERNAL_SERVER_ERROR` rather than
+  `BAD_USER_INPUT`. (An inline empty key is a `HC0011` parse error instead.) This is inherent to the
+  chosen `Any` representation, not a StruoCMS code path; it **fails safely** (no write, no data
+  corruption), and the REST write path still returns a clean 400 via `ItemService`'s blank-key
+  validation. Accepted as a known limitation for a degenerate input; a future polish could map the
+  coercion `ArgumentException` to `BAD_USER_INPUT` in `StruoErrorFilter` (fragile message/marker
+  match) if the masked 500 proves noisy in practice.
