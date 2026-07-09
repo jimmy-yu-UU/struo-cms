@@ -399,7 +399,7 @@
   **article level**, and the recursive prune's role here is preventing a spurious 400/500 from v16 null-backfill, not
   preserving unsent sub-fields. *Deferred:* typed read-side `translations` (separate read enhancement) and **8c** (advanced
   read querying) remain.
-- **Phase 8c.1 (GraphQL advanced read querying — cross-relation filter + sort) done, pending live gate (2026-07-09):** the
+- **Phase 8c.1 (GraphQL advanced read querying — cross-relation filter + sort) done & live-verified (real PG, 2026-07-09):** the
   first 8c slice — cross-relation (dotted-path) **filtering** over many-to-one relations, multi-hop, plus
   verified/tested/documented cross-relation **sort** — both by reusing engine/validation machinery already built for
   the REST side (`RelationFilterResolver.RewriteAsync`, `QueryValidator`/`RelationPath.Parse`,
@@ -423,11 +423,18 @@
   metadata-threading + execution-spy filter/multi-hop/AND + the sort-token execution-spy test, plus engine-reuse
   coverage). Frontend untouched (237). Spec:
   [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) · plan:
-  [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md). **Live gate pending** (real
-  Postgres `web-struo-cms-db` + Redis — user/session-driven, run separately from this commit; see spec §9 for the
-  checklist, including a CJK round-trip and a `BAD_USER_INPUT` negative).
+  [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md). **Live gate PASSED 2026-07-09 on real
+  Postgres (`web-struo-cms-db`) + Redis, 7/7, no backend fixes:** cross-relation CJK filter `category.name eq 資訊8c1`
+  (資=U+8CC7 訊=U+8A0A) → the linked article, code-point-exact; multi-hop `category.parent.name eq GateRoot8c1` → the
+  same article (server-side `id IN` resolution, independent of the depth-1 read limit); **discrimination** — filter
+  `category.name eq GateRoot8c1` → total 0 (the article is NOT in that category, proving the filter actually filters,
+  not a spy no-op); `sort:["category.name"]` asc + `["-category.name"]` desc ordered on real PG (the D9 raw-SQL
+  ORDER-BY subquery); empty match → empty list; **negatives via the real `QueryValidator`/`RelationPath` →
+  `StruoErrorFilter`**: to-many sort `tags.name` → `BAD_USER_INPUT` "Sort across to-many relations is not supported",
+  unknown relation `nosuchrel.name` → `BAD_USER_INPUT` "Unknown relation 'nosuchrel'". Final whole-branch review (opus)
+  READY-TO-MERGE Yes, 0 Critical/Important.
 - **Next up:** **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) or **8c.2** (to-many
-  cross-relation filter, nested-list arguments, multi-level relation nesting) — user's call, pending the 8c.1 live gate.
+  cross-relation filter, nested-list arguments, multi-level relation nesting) — user's call. 8c.1 is live-verified.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -501,7 +508,7 @@
 | 8b.1 | GraphQL mutations (backbone): typed `createX`/`updateX`/`deleteX` per collection — scalar own-fields + M2O FK + optimistic `version`; input→`JsonElement`→`ItemService` via the Api-owned adapter (Domain/App/Infra untouched); create/update re-read; RBAC/CSRF/error-filter reused — *first mutation slice* | ✅ done (live-verified: real PG 9/9 — create/CJK/M2O-re-read/partial-merge/CONFLICT/BAD_USER_INPUT/FORBIDDEN/delete, no backend fixes; **2 review fixes: v16 null-backfill on update + create**; `dotnet test` **490**, 0 warnings) | [spec](superpowers/specs/2026-07-08-phase8b-graphql-mutations-design.md) | [plan](superpowers/plans/2026-07-08-phase8b-graphql-mutations.md) |
 | 8b.2a | GraphQL mutations (structured, non-i18n): typed inputs for M2M (`[ID!]`) + File/Image (`ID`) + Files (`[ID!]`) + MultiSelect/CheckboxGroup (`[String!]`) + Tags (`[TagItemInput!]`) + Json/KeyValue (`Any`) + Repeater (`[XFieldItemInput!]`); recursive `SentFieldsOnly` prunes v16 null-backfill in nested inputs; ItemService/mapper unchanged — *first structured mutation slice* | ✅ done (live-verified: real PG+Redis+MinIO — all kinds round-trip via updateArticle incl. CJK + KeyValue verbatim keys + recursive-prune + partial-merge + M2M clear + validation→BAD_USER_INPUT, no core fixes; 1 documented known limitation: empty Any object key → masked 500) | [spec](superpowers/specs/2026-07-09-phase8b2a-graphql-mutations-structured-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2a-graphql-mutations-structured.md) |
 | 8b.2b | GraphQL mutations (i18n): typed `translations` input (`[XTranslationInput!]` of `{locale, fields: XTranslationFieldsInput}`, built once in `Build()`; translatable File/Image per-locale OG image → `ID`) + immutable list→locale-keyed `FoldTranslations` after recursive prune; ItemService/mapper unchanged; read side stays `Any` — *third & last mutation slice, completes Phase 8b writes* | ✅ done (live-verified: real PG+Redis+MinIO 22/22 — createArticle now succeeds + CJK exact + translation-path sanitize + per-locale OG image + article-level partial-merge + negatives→BAD_USER_INPUT, no backend fixes; `dotnet test` **513**, 0 warnings) | [spec](superpowers/specs/2026-07-09-phase8b2b-graphql-mutations-i18n-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2b-graphql-mutations-i18n.md) |
-| 8c.1 | GraphQL advanced read querying (cross-relation filter + sort): M2O cross-relation (dotted-path) filtering, multi-hop, via nested `{Target}FilterInput` fields + metadata-aware `FilterInputTranslator`; cross-relation sort verified/tested/documented (no schema change, reuses `RelationOrderExpr`) — *first 8c slice, read-side, parallel to 8b* | ✅ done, live gate pending | [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) | [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md) |
+| 8c.1 | GraphQL advanced read querying (cross-relation filter + sort): M2O cross-relation (dotted-path) filtering, multi-hop, via nested `{Target}FilterInput` fields + metadata-aware `FilterInputTranslator`; cross-relation sort verified/tested/documented (no schema change, reuses `RelationOrderExpr`) — *first 8c slice, read-side, parallel to 8b* | ✅ done (live-verified: real PG — CJK filter + multi-hop + discrimination + sort + BAD_USER_INPUT negatives, 7/7, no backend fixes) | [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) | [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md) |
 | 8c.2 | GraphQL advanced read querying (to-many cross-relation filter, nested-list `filter/sort/limit/offset` arguments, multi-level (depth>1) relation nesting/expansion) — *deferred slice* | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
