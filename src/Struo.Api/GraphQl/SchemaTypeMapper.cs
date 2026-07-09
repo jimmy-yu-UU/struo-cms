@@ -29,6 +29,8 @@ public static class SchemaTypeMapper
     public static string TagItemInputName() => "TagItemInput";
     public static string RepeaterItemInputTypeName(string collection, string field) =>
         RepeaterItemTypeName(collection, field) + "Input";
+    public static string TranslationInputName(string collection) => Pascal(collection) + "TranslationInput";
+    public static string TranslationFieldsInputName(string collection) => Pascal(collection) + "TranslationFieldsInput";
 
     /// <summary>
     /// Returns the nullable SDL type string for a scalar/list field, or <c>null</c> when the
