@@ -4,9 +4,11 @@ using Struo.Domain.Query;
 namespace Struo.Api.GraphQl;
 
 /// <summary>
-/// Assembles the existing <see cref="QueryModel"/> from GraphQL resolver arguments and the set of
-/// requested relation names. Limit/offset default to 0 so the existing QueryValidator performs its
-/// DefaultLimit/MaxLimit clamping (single source of truth for pagination bounds).
+/// Assembles the existing <see cref="QueryModel"/> from GraphQL resolver arguments and a pre-built
+/// (possibly nested) <see cref="DeepSpec"/> — the caller (<see cref="CollectionResolvers"/>) walks the
+/// client's selection tree into that tree; this method just threads it through unchanged. Limit/offset
+/// default to 0 so the existing QueryValidator performs its DefaultLimit/MaxLimit clamping (single
+/// source of truth for pagination bounds).
 /// </summary>
 public static class GraphQlQueryBuilder
 {
@@ -30,15 +32,10 @@ public static class GraphQlQueryBuilder
         int? limit,
         int? offset,
         string? search,
-        IReadOnlyList<string> requestedRelations,
+        DeepSpec? deep,
         string collection = "",
         Func<string, string, string?>? relationTarget = null)
     {
-        var deep = requestedRelations.Count == 0
-            ? null
-            : new DeepSpec(requestedRelations.ToDictionary(
-                r => r, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase));
-
         return new QueryModel(
             Fields: null,
             Filter: FilterInputTranslator.Translate(filter, collection, relationTarget),

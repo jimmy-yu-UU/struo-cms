@@ -42,21 +42,28 @@ public static class QueryParser
         return model with { Deep = ParseDeepEnvelope(env) };
     }
 
-    private static DeepSpec? ParseDeepEnvelope(JsonElement env)
+    private static DeepSpec? ParseDeepEnvelope(JsonElement env) =>
+        env.TryGetProperty("deep", out var d) && d.ValueKind == JsonValueKind.Object
+            ? ParseDeepObject(d)
+            : null;
+
+    private static DeepSpec? ParseDeepObject(JsonElement d)
     {
-        if (!env.TryGetProperty("deep", out var d) || d.ValueKind != JsonValueKind.Object) return null;
         var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
         foreach (var rel in d.EnumerateObject())
         {
             IReadOnlyList<string>? fields = null;
             int? limit = null;
+            DeepSpec? nested = null;
             if (rel.Value.ValueKind == JsonValueKind.Object)
             {
                 if (rel.Value.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
                     fields = f.EnumerateArray().Select(x => x.GetString() ?? "").ToList();
                 if (rel.Value.TryGetProperty("limit", out var l) && l.TryGetInt32(out var li)) limit = li;
+                if (rel.Value.TryGetProperty("deep", out var nd) && nd.ValueKind == JsonValueKind.Object)
+                    nested = ParseDeepObject(nd);
             }
-            map[rel.Name] = new DeepRelationSpec(fields, limit);
+            map[rel.Name] = new DeepRelationSpec(fields, limit, nested);
         }
         return map.Count == 0 ? null : new DeepSpec(map);
     }
