@@ -206,16 +206,28 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             var opInput = FilterInputTranslator.OperatorInputTypeName(f.Interface, ClrType(desc, f.Name));
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(opInput)));
         }
-        // M2O foreign keys are filterable (parity with REST allowlist); each M2O relation also gets a
-        // nested filter input typed as the target's FilterInput (by name -> recursive/self-referential,
-        // same mechanism as and/or). Flattened to a dotted FieldPath by FilterInputTranslator.
+        // Cross-relation filter inputs. M2O contributes its FK column as a filterable IdFilter
+        // (parity with the REST allowlist) PLUS a nested target FilterInput. O2M/M2M carry no FK
+        // on this collection, so they contribute only the nested target FilterInput (ANY/EXISTS
+        // via RelationFilterResolver's to-many hops). Referenced by name -> recursive /
+        // self-referential / cyclic input types resolve like and/or (no build loop). Flattened to
+        // a dotted FieldPath by FilterInputTranslator.
         foreach (var rel in meta.Relations)
+        {
+            string? targetFilter = null;
             if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
             {
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
-                var targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
-                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse(targetFilter)));
+                targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
             }
+            else if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
+            {
+                targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
+            }
+
+            if (targetFilter is not null)
+                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse(targetFilter)));
+        }
 
         return InputObjectType.CreateUnsafe(config);
     }

@@ -128,4 +128,39 @@ public class GraphQlSchemaTests
         input.Fields.Any(f => f.Name == "name" && f.Type.NamedType().Name == "StringFilter")
             .Should().BeTrue();
     }
+
+    [Fact]
+    public async Task ArticleFilterInput_has_nested_tags_m2m_relation_filter()
+    {
+        var schema = await BuildSchemaAsync();
+        var input = schema.Types.OfType<HotChocolate.Types.IInputObjectTypeDefinition>()
+            .Single(t => t.Name == "ArticleFilterInput");
+
+        // M2M relation -> nested target FilterInput (ANY/EXISTS). M2M carries no FK column,
+        // so there is only the nested filter field (no "tagsId").
+        input.Fields.Any(f => f.Name == "tags" && f.Type.NamedType().Name == "TagFilterInput")
+            .Should().BeTrue();
+        // 8c.1 M2O fields are retained.
+        input.Fields.Any(f => f.Name == "category" && f.Type.NamedType().Name == "CategoryFilterInput")
+            .Should().BeTrue();
+        input.Fields.Any(f => f.Name == "categoryId" && f.Type.NamedType().Name == "IdFilter")
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CategoryFilterInput_has_nested_articles_o2m_relation_filter()
+    {
+        var schema = await BuildSchemaAsync();
+        var input = schema.Types.OfType<HotChocolate.Types.IInputObjectTypeDefinition>()
+            .Single(t => t.Name == "CategoryFilterInput");
+
+        // O2M relation -> nested target FilterInput. This also proves the Category <-> Article
+        // cyclic input reference (CategoryFilterInput.articles -> ArticleFilterInput.category ->
+        // CategoryFilterInput) resolves by name without a build loop (BuildSchemaAsync would throw).
+        input.Fields.Any(f => f.Name == "articles" && f.Type.NamedType().Name == "ArticleFilterInput")
+            .Should().BeTrue();
+        // 8c.1 M2O self-reference is retained.
+        input.Fields.Any(f => f.Name == "parent" && f.Type.NamedType().Name == "CategoryFilterInput")
+            .Should().BeTrue();
+    }
 }

@@ -7,7 +7,8 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Filter_m2m_tags_name_exists was deleted in Phase 5.5 (Tag entity removed).
+// NOTE: Filter_m2m_tags_name_exists was deleted in Phase 5.5 (Tag entity removed) and
+// restored below as Filter_m2m_articles_by_tag_name in Phase 8c.2 (Task 3 de-risk).
 
 [Collection("ApiIntegration")]
 public class CrossRelationFilterTests(ApiFactory factory)
@@ -163,5 +164,37 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Filter_m2m_articles_by_tag_name()
+    {
+        // Restores the Phase-5.5-deleted M2M cross-relation filter coverage now that Tag exists again.
+        // Proves RelationFilterResolver's M2M hop (junction targetFk -> parentFk) end-to-end on SQLite:
+        // "articles that have AT LEAST ONE tag named X" (ANY/EXISTS).
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var tag = await Post(c, "tag", new { name = "M2MFilterTag" });
+        var tagged = await Post(c, "article", new
+        {
+            status = "draft",
+            tags = new[] { tag },
+            translations = new { en = new { title = "TAGGED" } }
+        });
+        var untagged = await Post(c, "article", new
+        {
+            status = "draft",
+            translations = new { en = new { title = "UNTAGGED" } }
+        });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object> { ["tags.name"] = Eq("M2MFilterTag") }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var ids = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")
+            .EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
+        ids.Should().Contain(tagged);
+        ids.Should().NotContain(untagged);
     }
 }
