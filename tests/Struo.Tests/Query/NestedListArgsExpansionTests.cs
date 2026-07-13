@@ -141,4 +141,51 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         data[0].GetProperty("articles").GetArrayLength().Should().Be(2); // PP-1: 3 -> capped at 2
         data[1].GetProperty("articles").GetArrayLength().Should().Be(1); // PP-2: 1 -> unchanged
     }
+
+    [Fact]
+    public async Task Nested_cross_relation_filter_on_o2m_list_resolves()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "category", new { name = "CrossRelCat-8c3b" });
+        var wantedTag = await Post(c, "tag", new { name = "Wanted-8c3b" });
+        var otherTag = await Post(c, "tag", new { name = "Other-8c3b" });
+        // Two articles in the SAME category; article A carries the wanted tag, article B the other.
+        var articleA = await Post(c, "article", new { status = "draft", categoryId = cat, tags = new[] { wantedTag }, translations = new { en = new { title = "A-8c3b" } } });
+        await Post(c, "article", new { status = "draft", categoryId = cat, tags = new[] { otherTag }, translations = new { en = new { title = "B-8c3b" } } });
+
+        // Expand the category's O2M `articles`, filtered by a CROSS-RELATION dotted path on the
+        // article's own M2M (article.tags.name) — flat dotted key, REST envelope syntax.
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
+            deep = new { articles = new { filter = new Dictionary<string, object> { ["tags.name"] = new Dictionary<string, object> { ["_eq"] = "Wanted-8c3b" } } } }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
+        var articles = row.GetProperty("articles");
+        articles.GetArrayLength().Should().Be(1); // only article A (tagged "Wanted-8c3b")
+        articles[0].GetProperty("id").GetString().Should().Be(articleA);
+    }
+
+    [Fact]
+    public async Task Limit_trims_before_recursing_into_nested_deep()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "category", new { name = "TrimCat" });
+        foreach (var s in new[] { "a", "b", "c" })
+            await Post(c, "article", new { status = s, categoryId = cat, translations = new { en = new { title = "T-" + s } } });
+
+        // limit=1 on articles; each surviving article expands its category (nested M2O).
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
+            deep = new { articles = new { sort = new[] { "status" }, limit = 1, deep = new { category = new { } } } }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
+        var articles = row.GetProperty("articles");
+        articles.GetArrayLength().Should().Be(1);
+        articles[0].GetProperty("status").GetString().Should().Be("a");
+        articles[0].GetProperty("category").GetProperty("name").GetString().Should().Be("TrimCat");
+    }
 }
