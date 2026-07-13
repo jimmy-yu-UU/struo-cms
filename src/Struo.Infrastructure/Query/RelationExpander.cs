@@ -50,6 +50,10 @@ public sealed class RelationExpander(IItemRepository repository, RelationshipGra
                        ?? throw new QueryException($"Unknown relation '{relName}' on '{collection}'.");
             var rel = desc.Meta;
 
+            // (target entity, its projected mutable dict) pairs produced for this relation, so a
+            // nested spec can recurse on the entities and merge sub-relations into the dicts.
+            var expanded = new List<(object Entity, Dictionary<string, object?> Dict)>();
+
             switch (rel.Kind)
             {
                 case RelationKind.ManyToOne:
@@ -64,9 +68,13 @@ public sealed class RelationExpander(IItemRepository repository, RelationshipGra
                     foreach (var p in parents)
                     {
                         var fk = readProp(p, rel.ForeignKey!);
-                        result[parentId(p)][relName] = fk is not null && byId.TryGetValue(fk, out var tr)
-                            ? projectTarget(rel.TargetCollection, tr, spec.Fields)
-                            : null;
+                        if (fk is not null && byId.TryGetValue(fk, out var tr))
+                        {
+                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, tr, spec.Fields);
+                            result[parentId(p)][relName] = d;
+                            expanded.Add((tr, d));
+                        }
+                        else result[parentId(p)][relName] = null;
                     }
                     break;
                 }
@@ -81,9 +89,14 @@ public sealed class RelationExpander(IItemRepository repository, RelationshipGra
                     foreach (var p in parents)
                     {
                         var pid = parentId(p);
-                        var rows = grouped.TryGetValue(pid, out var lst)
-                            ? lst.Select(ch => projectTarget(rel.TargetCollection, ch, spec.Fields)).ToList()
-                            : new List<IReadOnlyDictionary<string, object?>>();
+                        var rows = new List<IReadOnlyDictionary<string, object?>>();
+                        if (grouped.TryGetValue(pid, out var lst))
+                            foreach (var ch in lst)
+                            {
+                                var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, ch, spec.Fields);
+                                rows.Add(d);
+                                expanded.Add((ch, d));
+                            }
                         result[pid][relName] = rows;
                     }
                     break;
@@ -102,19 +115,37 @@ public sealed class RelationExpander(IItemRepository repository, RelationshipGra
                     foreach (var p in parents)
                     {
                         var pid = parentId(p);
-                        var rows = junctions
+                        var rows = new List<IReadOnlyDictionary<string, object?>>();
+                        var linked = junctions
                             .Where(j => Equals(readProp(j, desc.JunctionParentFk!), pid))
                             .OrderBy(j => JunctionSortKey(desc.JunctionSort, readProp, j))
                             .Select(j => readProp(j, desc.JunctionTargetFk!)!)
-                            .Where(tid => targets.ContainsKey(tid))
-                            .Select(tid => projectTarget(rel.TargetCollection, targets[tid], spec.Fields))
-                            .ToList();
+                            .Where(tid => targets.ContainsKey(tid));
+                        foreach (var tid in linked)
+                        {
+                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, targets[tid], spec.Fields);
+                            rows.Add(d);
+                            expanded.Add((targets[tid], d));
+                        }
                         result[pid][relName] = rows;
                     }
                     break;
                 }
                 default:
                     throw new QueryException($"Unsupported relation kind '{rel.Kind}' for '{relName}'.");
+            }
+
+            // Recurse ONCE per relation-node: expand the target's own relations over the DISTINCT
+            // target entities (batched, breadth-first per level — N+1-safe), then merge each nested
+            // relation value into the corresponding target dict by target id.
+            if (spec.Deep is not null && expanded.Count > 0)
+            {
+                var distinct = expanded.Select(e => e.Entity).Distinct().ToList();
+                var sub = await ExpandAsync(
+                    rel.TargetCollection, distinct, spec.Deep, projectTarget, parentId, readProp, ct);
+                foreach (var (entity, dict) in expanded)
+                    if (sub.TryGetValue(parentId(entity), out var subMap))
+                        foreach (var (k, v) in subMap) dict[k] = v;
             }
         }
 

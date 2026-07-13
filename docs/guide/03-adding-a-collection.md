@@ -147,3 +147,27 @@ list is derived automatically from the scanned metadata — you never edit a tab
 `InitTables` runs in **Development only** — `DatabaseInitializer` refuses to run outside Development.
 For production, apply the schema through a reviewed migration script (see
 [Getting Started → InitTables](01-getting-started.md#development-only-inittables)).
+
+## Querying relations (deep expansion)
+
+A relation field can be expanded **multiple levels deep**, both over GraphQL and REST.
+
+GraphQL — nest the selection and it resolves the whole chain:
+
+```graphql
+{ article(id: "...") { category { parent { name } } } }
+```
+
+REST — nest the `deep` JSON envelope the same way (`POST /api/items/article/query`):
+
+```json
+{ "deep": { "category": { "deep": { "parent": {} } } } }
+```
+
+Nesting depth is capped by `StruoQueryOptions.MaxRelationDepth` (default **5**); exceeding it, or naming an
+unknown relation at any level, returns 400 (`BAD_USER_INPUT`). The cap is on **nesting depth**, not on
+the number of relations — many sibling relations at the same level are allowed (this replaced an earlier
+relation-*count* cap). The flat query-string form (`?deep=category,tags`) stays **single-level** — it has
+no syntax for nesting. Filtering, sorting, or paginating a **nested relation list** (e.g. only the first
+10 of a category's articles) is not yet supported — a nested list currently returns all rows; that's
+planned for a future slice (8c.3b).

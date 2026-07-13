@@ -121,4 +121,36 @@ public class QueryParserTests
         logical.Children.Should().HaveCount(2);
         logical.Children.Should().AllBeOfType<ComparisonFilter>();
     }
+
+    [Fact]
+    public void ParseEnvelope_parses_nested_deep()
+    {
+        var env = JsonSerializer.SerializeToElement(new
+        {
+            deep = new { category = new { deep = new { parent = new { } } } }
+        });
+
+        var model = QueryParser.ParseEnvelope(env);
+
+        model.Deep.Should().NotBeNull();
+        var category = model.Deep!.Relations["category"];
+        category.Deep.Should().NotBeNull();
+        category.Deep!.Relations.Should().ContainKey("parent");
+        category.Deep.Relations["parent"].Deep.Should().BeNull(); // leaf
+    }
+
+    [Fact]
+    public void ParseEnvelope_keeps_flat_deep_backward_compatible()
+    {
+        var env = JsonSerializer.SerializeToElement(new
+        {
+            deep = new { category = new { fields = new[] { "name" } } }
+        });
+
+        var model = QueryParser.ParseEnvelope(env);
+
+        var category = model.Deep!.Relations["category"];
+        category.Fields.Should().ContainSingle().Which.Should().Be("name");
+        category.Deep.Should().BeNull();
+    }
 }

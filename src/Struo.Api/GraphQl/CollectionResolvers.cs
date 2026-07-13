@@ -5,6 +5,7 @@ using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
+using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
 
@@ -40,10 +41,8 @@ internal static class CollectionResolvers
     {
         var id = ctx.ArgumentValue<string>("id");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var relations = SelectionRelations(ctx, collection, elementIsDirect: true);
-        var deep = GraphQlQueryBuilder.BuildQuery(
-            null, null, null, null, null, relations,
-            collection, RelationTargets(ctx.Service<IMetadataProvider>())).Deep;
+        var metadata = ctx.Service<IMetadataProvider>();
+        var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: true);
         var data = await ctx.Service<IGraphQlDataSource>().GetAsync(collection, id, deep, locale, ctx.RequestAborted);
         return data;
     }
@@ -56,10 +55,10 @@ internal static class CollectionResolvers
         var offset = ctx.ArgumentValue<int?>("offset");
         var search = ctx.ArgumentValue<string?>("search");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var relations = SelectionRelations(ctx, collection, elementIsDirect: false);
+        var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);
         var query = GraphQlQueryBuilder.BuildQuery(
-            filter, sort, limit, offset, search, relations,
-            collection, RelationTargets(ctx.Service<IMetadataProvider>()));
+            filter, sort, limit, offset, search, deep,
+            collection, RelationTargets(metadata));
         var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, ctx.RequestAborted);
         return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total);
     }
@@ -78,13 +77,15 @@ internal static class CollectionResolvers
                     || r.Kind is RelationKind.OneToMany or RelationKind.ManyToMany))
             ?.TargetCollection;
 
-    /// <summary>Which of the collection's relations the client selected on the element type.</summary>
-    internal static IReadOnlyList<string> SelectionRelations(IResolverContext ctx, string collection, bool elementIsDirect)
+    /// <summary>
+    /// Builds a nested <see cref="DeepSpec"/> from the client's selection tree: each selected field
+    /// that is a relation of the collection contributes a <see cref="DeepRelationSpec"/> whose nested
+    /// <c>Deep</c> is built recursively from that relation's own sub-selection. Depth is bounded by
+    /// ItemService's MaxRelationDepth validation and HotChocolate's max-execution-depth.
+    /// </summary>
+    internal static DeepSpec? SelectionDeepSpec(
+        IResolverContext ctx, string collection, IMetadataProvider metadata, bool elementIsDirect)
     {
-        var relNames = ctx.Service<IMetadataProvider>().GetCollection(collection)?.Relations
-            .Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
-        if (relNames.Count == 0) return [];
-
         ObjectType elementType;
         SelectionEnumerator childSelections;
         if (elementIsDirect)
@@ -96,16 +97,29 @@ internal static class CollectionResolvers
         {
             var listType = (ObjectType)ctx.Selection.Field.Type.NamedType();          // XList
             var itemsSel = ctx.GetSelections(listType).FirstOrDefault(s => s.Field.Name == "items");
-            if (itemsSel is null) return [];
+            if (itemsSel is null) return null;
             elementType = (ObjectType)itemsSel.Field.Type.NamedType();                  // X
             childSelections = ctx.GetSelections(elementType, itemsSel);
         }
-        // Aliased duplicate selections of the same relation (e.g. `a: category { ... } b: category
-        // { ... }`) stay distinct child selections with the SAME Field.Name — HotChocolate only
-        // merges non-aliased duplicates. Without deduping, BuildQuery's requestedRelations.ToDictionary
-        // throws ArgumentException on the duplicate key. Distinct with OrdinalIgnoreCase matches the
-        // relNames HashSet's comparer and BuildQuery's DeepSpec dictionary comparer.
-        return childSelections.Select(s => s.Field.Name).Where(relNames.Contains)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return BuildDeep(ctx, collection, childSelections, metadata);
+    }
+
+    private static DeepSpec? BuildDeep(
+        IResolverContext ctx, string collection, SelectionEnumerator childSelections, IMetadataProvider metadata)
+    {
+        var relByName = metadata.GetCollection(collection)?.Relations
+            .ToDictionary(r => r.Name, r => r, StringComparer.OrdinalIgnoreCase);
+        if (relByName is null || relByName.Count == 0) return null;
+
+        var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sel in childSelections)
+        {
+            if (!relByName.TryGetValue(sel.Field.Name, out var rel)) continue;
+            if (map.ContainsKey(rel.Name)) continue; // aliased-duplicate selections: first wins per level
+            var targetType = (ObjectType)sel.Field.Type.NamedType();
+            var nested = BuildDeep(ctx, rel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
+            map[rel.Name] = new DeepRelationSpec(null, null, nested);
+        }
+        return map.Count == 0 ? null : new DeepSpec(map);
     }
 }

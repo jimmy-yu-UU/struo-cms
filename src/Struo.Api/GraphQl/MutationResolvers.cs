@@ -40,8 +40,8 @@ internal static class MutationResolvers
         // Re-read so the returned node matches a query result (relations/translations resolvable).
         var id = created.GetValueOrDefault("id")?.ToString();
         if (id is null) return created;
-        var relations = CollectionResolvers.SelectionRelations(ctx, collection, elementIsDirect: true);
-        var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
+        var deep = CollectionResolvers.SelectionDeepSpec(
+            ctx, collection, ctx.Service<IMetadataProvider>(), elementIsDirect: true);
 
         // Best-effort re-read: the write already committed, so a denied/absent re-read must not
         // surface as FORBIDDEN and hide a successful create (that would invite duplicate-create
@@ -80,8 +80,8 @@ internal static class MutationResolvers
         var updated = await source.UpdateAsync(collection, id, body, ctx.RequestAborted);
         if (updated is null) return null; // unknown id -> null (REST 404 parity)
 
-        var relations = CollectionResolvers.SelectionRelations(ctx, collection, elementIsDirect: true);
-        var deep = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, relations).Deep;
+        var deep = CollectionResolvers.SelectionDeepSpec(
+            ctx, collection, ctx.Service<IMetadataProvider>(), elementIsDirect: true);
 
         // Best-effort re-read: the write already committed, so a denied/absent re-read must not
         // surface as FORBIDDEN and hide a successful update. Fall back to the write result.
