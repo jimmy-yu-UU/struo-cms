@@ -467,10 +467,38 @@
   `dotnet test` **534** passed / 0 failed / 0 skipped (526 8c.1 baseline + 8 new, see bullet above). Frontend
   untouched, `pnpm test` still **237**. **Live gate PASSED 8/8** on real Postgres (`web-struo-cms-db`) + Redis
   (2026-07-13, no backend fixes) — see the Phase 8c.2 row above.
-- **Next up:** 8c.2 is done & live-verified. Remaining 8c work is
-  **8c.3** (multi-level depth>1 relation nesting/expansion + nested-list `filter/sort/limit/offset` arguments —
-  engine work across Domain/App/Infra) or **Phase 9** (soft delete / revisions / lifecycle hooks + unified response
-  envelope) — user's call.
+- **Phase 8c.3a (GraphQL advanced read querying — multi-level (depth>1) relation nesting/expansion) done &
+  automated-gates-green, live gate PENDING:** the third 8c slice — relation **expansion** (not filtering) can now
+  recurse past a single hop: `DeepRelationSpec` gains a recursive `DeepSpec? Deep` (Domain), so a relation node can
+  itself carry a nested `DeepSpec` of further relation nodes to expand, to any depth up to the existing
+  `StruoQueryOptions.MaxRelationDepth` (default 5). **Application** — `QueryParser`'s REST `deep` JSON envelope now
+  parses **nested** objects (`deep:{category:{deep:{parent:{}}}}`) into the recursive spec (the flat query-string
+  form, `?deep=a,b`, stays depth-1 by design — it has no syntax for nesting); `ItemService` validates nesting
+  **depth** (≤ `MaxRelationDepth`) and **each level's relation names** against the metadata graph, independent of
+  result-set size, before the query runs → over-depth or an unknown relation at any level is `BAD_USER_INPUT` (400).
+  **Infrastructure** — `RelationExpander` recurses per level, expanding **breadth-first and batched** (one query per
+  relation-node per level, not per row — an explicit N+1-safe regression test locks the query count). **Api** —
+  GraphQL's selection-set walker now builds a **nested** `DeepSpec` from the query's actual selection tree, so a
+  selection like `article { category { parent { name } } }` resolves the full chain; HotChocolate's
+  `max-execution-depth` stays **12** (unchanged) and there is **no GraphQL schema-shape change** (still `deep`
+  expansion under the hood, just recursive now). **Behaviour change vs. 8c.1/8c.2:** the old relation-**count** cap
+  is now a nesting-**depth** cap — many sibling relations at depth 1 are allowed; only how deep a single chain nests
+  is bounded. **Not in this slice (deferred to 8c.3b):** nested-list `filter/sort/limit/offset` **arguments** on
+  related list fields — `DeepRelationSpec.Limit` exists but is **unused**; a nested relation **list** currently
+  returns **all** rows, unfiltered/unsorted/unpaginated. No new NuGet packages; no sample-entity change. Spec:
+  [spec](superpowers/specs/2026-07-13-phase8c3a-multilevel-relation-nesting-design.md) · plan:
+  [plan](superpowers/plans/2026-07-13-phase8c3a-multilevel-relation-nesting.md). **Live gate PENDING** (real
+  Postgres `web-struo-cms-db` + Redis — depth-3 M2O chain, depth-2 O2M, mixed-kind multi-hop, CJK at a nested level,
+  self-referential cycle, over-depth → `BAD_USER_INPUT`, REST nested envelope; see the plan's Live Gate checklist).
+- **Verification baseline (2026-07-13, post-8c.3a):** backend `dotnet build -warnaserror` clean (0 warnings) +
+  `dotnet test` **548** passed / 0 failed / 0 skipped (534 8c.2 baseline + 14 new: recursive `DeepRelationSpec` +
+  REST envelope nesting + depth/name validation + `RelationExpander` recursion + N+1 batching invariant + GraphQL
+  selection-tree recursion). Frontend untouched, `pnpm test` still **237**. **Live gate PENDING** — see the Phase
+  8c.3a row above.
+- **Next up:** 8c.3a is done with automated gates green; its **live gate is pending** (user-run against real
+  Postgres — see the plan's checklist). Remaining work is
+  **8c.3b** (nested-list `filter/sort/limit/offset` arguments on related list fields — no spec/plan yet) or
+  **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) — user's call.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -546,7 +574,8 @@
 | 8b.2b | GraphQL mutations (i18n): typed `translations` input (`[XTranslationInput!]` of `{locale, fields: XTranslationFieldsInput}`, built once in `Build()`; translatable File/Image per-locale OG image → `ID`) + immutable list→locale-keyed `FoldTranslations` after recursive prune; ItemService/mapper unchanged; read side stays `Any` — *third & last mutation slice, completes Phase 8b writes* | ✅ done (live-verified: real PG+Redis+MinIO 22/22 — createArticle now succeeds + CJK exact + translation-path sanitize + per-locale OG image + article-level partial-merge + negatives→BAD_USER_INPUT, no backend fixes; `dotnet test` **513**, 0 warnings) | [spec](superpowers/specs/2026-07-09-phase8b2b-graphql-mutations-i18n-design.md) | [plan](superpowers/plans/2026-07-09-phase8b2b-graphql-mutations-i18n.md) |
 | 8c.1 | GraphQL advanced read querying (cross-relation filter + sort): M2O cross-relation (dotted-path) filtering, multi-hop, via nested `{Target}FilterInput` fields + metadata-aware `FilterInputTranslator`; cross-relation sort verified/tested/documented (no schema change, reuses `RelationOrderExpr`) — *first 8c slice, read-side, parallel to 8b* | ✅ done (live-verified: real PG — CJK filter + multi-hop + discrimination + sort + BAD_USER_INPUT negatives, 7/7, no backend fixes) | [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) | [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md) |
 | 8c.2 | GraphQL to-many cross-relation filter (O2M/M2M nested `{Target}FilterInput`, ANY/EXISTS, multi-hop mixed-kind; relaxes the 8c.1 M2O-only guard in `BuildFilterInput` + `RelationTargets`; engine/validator reused) — *second 8c slice* | ✅ done (live-verified: real PG — M2M/O2M/self-ref/multi-hop mixed-kind/CJK/discrimination/empty, 8/8, no fixes) | [spec](superpowers/specs/2026-07-09-phase8c2-graphql-tomany-relation-filter-design.md) | [plan](superpowers/plans/2026-07-09-phase8c2-graphql-tomany-relation-filter.md) |
-| 8c.3 | GraphQL advanced read querying (multi-level (depth>1) relation nesting/expansion, nested-list `filter/sort/limit/offset` arguments) — *deferred slice, engine work across Domain/App/Infra* | ⬜ planned | — | — |
+| 8c.3a | GraphQL advanced read querying (multi-level (depth>1) relation **nesting/expansion**): recursive `DeepRelationSpec`/`DeepSpec` (Domain); REST `deep` envelope nesting + depth/name validation (Application); batched recursive `RelationExpander` (Infrastructure, N+1-safe); GraphQL selection-tree recursion (Api); relation-**count** cap → nesting-**depth** cap — *third 8c slice, engine work across Domain/App/Infra* | ✅ done (automated gates green; **live gate pending**) | [spec](superpowers/specs/2026-07-13-phase8c3a-multilevel-relation-nesting-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3a-multilevel-relation-nesting.md) |
+| 8c.3b | GraphQL advanced read querying (nested-list `filter/sort/limit/offset` **arguments** on related list fields — `DeepRelationSpec.Limit` exists but is unused today) — *deferred slice* | ⬜ planned | — | — |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
