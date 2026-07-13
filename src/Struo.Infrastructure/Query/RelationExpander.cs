@@ -44,9 +44,9 @@ public sealed class RelationExpander(
         Func<object, object> parentId, Func<object, string, object?> readProp,
         string? locale = null, CancellationToken ct = default)
     {
-        // filterResolver/options are DI-plumbed now for Tasks 6 (nested-filter push-down) and 7
-        // (MaxLimit clamp); not consumed yet this task, so guard-only to keep them "read" (no
-        // behaviour change beyond a defensive DI-contract check).
+        // filterResolver is consumed for nested-filter push-down (Task 6, O2M/M2M target-side
+        // rewrite) and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing
+        // (Task 7, ApplyListArgs). Guarded here too so a null DI registration fails fast.
         ArgumentNullException.ThrowIfNull(filterResolver);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -103,7 +103,7 @@ public sealed class RelationExpander(
                         var pid = parentId(p);
                         var rows = new List<IReadOnlyDictionary<string, object?>>();
                         if (grouped.TryGetValue(pid, out var lst))
-                            foreach (var ch in lst)
+                            foreach (var ch in ApplyListArgs(lst, spec, readProp))
                             {
                                 var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, ch, spec.Fields);
                                 rows.Add(d);
@@ -131,16 +131,18 @@ public sealed class RelationExpander(
                     {
                         var pid = parentId(p);
                         var rows = new List<IReadOnlyDictionary<string, object?>>();
-                        var linked = junctions
+                        var linkedTargets = junctions
                             .Where(j => Equals(readProp(j, desc.JunctionParentFk!), pid))
                             .OrderBy(j => JunctionSortKey(desc.JunctionSort, readProp, j))
                             .Select(j => readProp(j, desc.JunctionTargetFk!)!)
-                            .Where(tid => targets.ContainsKey(tid));
-                        foreach (var tid in linked)
+                            .Where(tid => targets.ContainsKey(tid))
+                            .Select(tid => targets[tid])
+                            .ToList();
+                        foreach (var t in ApplyListArgs(linkedTargets, spec, readProp))
                         {
-                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, targets[tid], spec.Fields);
+                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, t, spec.Fields);
                             rows.Add(d);
-                            expanded.Add((targets[tid], d));
+                            expanded.Add((t, d));
                         }
                         result[pid][relName] = rows;
                     }
@@ -165,6 +167,60 @@ public sealed class RelationExpander(
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Applies the nested-list <c>sort</c> (own-field, multi-key, asc/desc) then <c>offset</c>/<c>limit</c>
+    /// to a single parent's group of target entities, in memory. When <c>Sort</c> is null the caller's
+    /// existing order is preserved (O2M: fetch order; M2M: junction order). An omitted <c>Limit</c>
+    /// returns all rows (8c.3a back-compat); an explicit <c>Limit</c> is clamped to
+    /// <c>options.MaxLimit</c>. This is the per-parent windowing that keeps the batched fetch N+1-safe.
+    /// Instance method: reads <c>options.MaxLimit</c> off the injected <see cref="StruoQueryOptions"/>.
+    /// </summary>
+    private IEnumerable<object> ApplyListArgs(
+        List<object> entities, DeepRelationSpec spec, Func<object, string, object?> readProp)
+    {
+        IEnumerable<object> seq = entities;
+
+        if (spec.Sort is { Count: > 0 } sorts)
+        {
+            IOrderedEnumerable<object>? ordered = null;
+            foreach (var s in sorts)
+            {
+                var field = s.Field;
+                Func<object, object?> key = e => readProp(e, field);
+                ordered = ordered is null
+                    ? (s.Descending
+                        ? seq.OrderByDescending(key, RelationSortComparer.Instance)
+                        : seq.OrderBy(key, RelationSortComparer.Instance))
+                    : (s.Descending
+                        ? ordered.ThenByDescending(key, RelationSortComparer.Instance)
+                        : ordered.ThenBy(key, RelationSortComparer.Instance));
+            }
+            seq = ordered!;
+        }
+
+        var offset = spec.Offset.GetValueOrDefault();
+        if (offset > 0) seq = seq.Skip(offset);
+        if (spec.Limit is > 0) seq = seq.Take(Math.Min(spec.Limit.Value, options.MaxLimit));
+        return seq;
+    }
+
+    /// <summary>
+    /// Null-safe comparer for boxed own-field values (nulls sort first). Values on the same field
+    /// share a CLR type, so <see cref="IComparable"/> ordering is well-defined; a non-comparable
+    /// value degrades to equal (stable order preserved).
+    /// </summary>
+    private sealed class RelationSortComparer : IComparer<object?>
+    {
+        public static readonly RelationSortComparer Instance = new();
+        public int Compare(object? x, object? y)
+        {
+            if (x is null && y is null) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+            return x is IComparable c ? c.CompareTo(y) : 0;
+        }
     }
 
     /// <summary>

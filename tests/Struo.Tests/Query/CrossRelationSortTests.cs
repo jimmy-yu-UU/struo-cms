@@ -27,7 +27,14 @@ public class CrossRelationSortTests(ApiFactory factory)
         var artZ = await Post(c, "article", new { status = "draft", categoryId = catZ, translations = new { en = new { title = "sortZ" } } });
 
         // sort=-category.name should put the ZZZ-category article before the AAA-category one.
-        var envelope = JsonSerializer.SerializeToElement(new { sort = new[] { "-category.name" } });
+        // Scoped to just these two articles (id _in) so the assertion doesn't depend on the
+        // default unbounded page-1 window containing both rows out of the whole shared-DB
+        // collection's accumulated data (other test classes keep adding articles/categories).
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_in"] = new[] { artA, artZ } } },
+            sort = new[] { "-category.name" }
+        });
         var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");

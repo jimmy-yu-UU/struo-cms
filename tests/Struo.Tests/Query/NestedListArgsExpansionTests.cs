@@ -78,4 +78,67 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         tags.GetArrayLength().Should().Be(1);
         tags[0].GetProperty("name").GetString().Should().Be("AI");
     }
+
+    [Fact]
+    public async Task Nested_o2m_sort_and_limit_apply_per_parent()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "category", new { name = "SortCat" });
+        foreach (var s in new[] { "c", "a", "b" })
+            await Post(c, "article", new { status = s, categoryId = cat, translations = new { en = new { title = "S-" + s } } });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
+            deep = new { articles = new { sort = new[] { "status" }, limit = 2 } }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
+        var statuses = row.GetProperty("articles").EnumerateArray()
+            .Select(a => a.GetProperty("status").GetString()).ToList();
+        statuses.Should().Equal("a", "b"); // sorted asc, top-2
+    }
+
+    [Fact]
+    public async Task Nested_o2m_offset_skips_per_parent()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "category", new { name = "OffsetCat" });
+        foreach (var s in new[] { "a", "b", "c" })
+            await Post(c, "article", new { status = s, categoryId = cat, translations = new { en = new { title = "O-" + s } } });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
+            deep = new { articles = new { sort = new[] { "status" }, offset = 1, limit = 1 } }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
+        var statuses = row.GetProperty("articles").EnumerateArray()
+            .Select(a => a.GetProperty("status").GetString()).ToList();
+        statuses.Should().Equal("b"); // skip 1 (a), take 1 -> b
+    }
+
+    [Fact]
+    public async Task Nested_limit_is_independent_per_parent()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat1 = await Post(c, "category", new { name = "PP-1" });
+        var cat2 = await Post(c, "category", new { name = "PP-2" });
+        for (var i = 0; i < 3; i++)
+            await Post(c, "article", new { status = "s" + i, categoryId = cat1, translations = new { en = new { title = $"PP1-{i}" } } });
+        await Post(c, "article", new { status = "s0", categoryId = cat2, translations = new { en = new { title = "PP2-0" } } });
+
+        // Query BOTH parents in one page; each must be trimmed independently to limit 2.
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { name = new Dictionary<string, object> { ["_starts_with"] = "PP-" } },
+            sort = new[] { "name" },
+            deep = new { articles = new { sort = new[] { "status" }, limit = 2 } }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
+        data[0].GetProperty("articles").GetArrayLength().Should().Be(2); // PP-1: 3 -> capped at 2
+        data[1].GetProperty("articles").GetArrayLength().Should().Be(1); // PP-2: 1 -> unchanged
+    }
 }
