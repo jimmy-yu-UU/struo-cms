@@ -26,7 +26,7 @@ public class GraphQlQueryBuilderTests
         var q = GraphQlQueryBuilder.BuildQuery(
             filter: new Dictionary<string, object?> { ["status"] = new Dictionary<string, object?> { ["eq"] = "x" } },
             sort: new[] { "-id" }, limit: 5, offset: 10, search: "term",
-            requestedRelations: Array.Empty<string>());
+            deep: null);
 
         q.Limit.Should().Be(5);
         q.Offset.Should().Be(10);
@@ -36,20 +36,25 @@ public class GraphQlQueryBuilderTests
     }
 
     [Fact]
-    public void BuildQuery_sets_Deep_only_when_relations_requested()
+    public void BuildQuery_passes_deep_through_unchanged()
     {
-        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, new[] { "category", "tags" });
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>
+        {
+            ["category"] = new DeepRelationSpec(null, null,
+                new DeepSpec(new Dictionary<string, DeepRelationSpec> { ["parent"] = new DeepRelationSpec(null, null) }))
+        });
 
-        q.Deep.Should().NotBeNull();
-        q.Deep!.Relations.Should().ContainKey("category");
-        q.Deep.Relations.Should().ContainKey("tags");
+        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, deep);
+
+        q.Deep.Should().BeSameAs(deep);
+        q.Deep!.Relations["category"].Deep!.Relations.Should().ContainKey("parent");
     }
 
     [Fact]
     public void BuildQuery_defaults_limit_and_offset_to_zero_when_absent()
     {
         // 0 = "let the validator clamp to DefaultLimit" (QueryValidator owns clamping).
-        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, Array.Empty<string>());
+        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, deep: null);
 
         q.Limit.Should().Be(0);
         q.Offset.Should().Be(0);
@@ -69,7 +74,7 @@ public class GraphQlQueryBuilderTests
                 }
             },
             sort: null, limit: null, offset: null, search: null,
-            requestedRelations: System.Array.Empty<string>(),
+            deep: null,
             collection: "article", relationTarget: rel);
 
         var cmp = q.Filter.Should().BeOfType<ComparisonFilter>().Subject;
