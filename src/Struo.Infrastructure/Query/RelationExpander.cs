@@ -91,8 +91,10 @@ public sealed class RelationExpander(
                 case RelationKind.OneToMany:
                 {
                     var ids = parents.Select(parentId).ToList();
-                    var children = await repository.QueryWhereInAsync(
-                        rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, ct);
+                    var o2mFilter = spec.Filter is null ? null
+                        : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, locale, ct);
+                    var children = await repository.QueryWhereInFilteredAsync(
+                        rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, o2mFilter, ct);
                     var grouped = children
                         .GroupBy(ch => readProp(ch, desc.ReverseForeignKeyProperty!)!)
                         .ToDictionary(g => g.Key, g => g.ToList());
@@ -120,7 +122,10 @@ public sealed class RelationExpander(
                         .Select(j => readProp(j, desc.JunctionTargetFk!)!)
                         .Distinct()
                         .ToList();
-                    var targets = (await repository.QueryWhereInAsync(rel.TargetCollection, "id", targetIds, ct))
+                    var m2mFilter = spec.Filter is null ? null
+                        : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, locale, ct);
+                    var targets = (await repository.QueryWhereInFilteredAsync(
+                            rel.TargetCollection, "id", targetIds, m2mFilter, ct))
                         .ToDictionary(t => readProp(t, "id")!, t => t);
                     foreach (var p in parents)
                     {
