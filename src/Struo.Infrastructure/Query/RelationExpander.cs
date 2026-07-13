@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/RelationExpander.cs
+using Struo.Application.Configuration;
 using Struo.Application.Query;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Query;
@@ -22,7 +23,10 @@ namespace Struo.Infrastructure.Query;
 ///   target where id IN, group per parent ordered by the junction sort column.</item>
 /// </list>
 /// </remarks>
-public sealed class RelationExpander(IItemRepository repository, RelationshipGraph graph) : IRelationExpander
+public sealed class RelationExpander(
+    IItemRepository repository, RelationshipGraph graph,
+    IRelationFilterResolver filterResolver, StruoQueryOptions options)
+    : IRelationExpander
 {
     /// <summary>
     /// Builds, per parent id, a map of <c>relationName -&gt; (object?|list)</c> of projected
@@ -38,8 +42,14 @@ public sealed class RelationExpander(IItemRepository repository, RelationshipGra
         string collection, IReadOnlyList<object> parents, DeepSpec deep,
         Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
         Func<object, object> parentId, Func<object, string, object?> readProp,
-        CancellationToken ct = default)
+        string? locale = null, CancellationToken ct = default)
     {
+        // filterResolver/options are DI-plumbed now for Tasks 6 (nested-filter push-down) and 7
+        // (MaxLimit clamp); not consumed yet this task, so guard-only to keep them "read" (no
+        // behaviour change beyond a defensive DI-contract check).
+        ArgumentNullException.ThrowIfNull(filterResolver);
+        ArgumentNullException.ThrowIfNull(options);
+
         var result = new Dictionary<object, Dictionary<string, object?>>();
         foreach (var p in parents) result[parentId(p)] = new Dictionary<string, object?>();
 
@@ -142,7 +152,7 @@ public sealed class RelationExpander(IItemRepository repository, RelationshipGra
             {
                 var distinct = expanded.Select(e => e.Entity).Distinct().ToList();
                 var sub = await ExpandAsync(
-                    rel.TargetCollection, distinct, spec.Deep, projectTarget, parentId, readProp, ct);
+                    rel.TargetCollection, distinct, spec.Deep, projectTarget, parentId, readProp, locale, ct);
                 foreach (var (entity, dict) in expanded)
                     if (sub.TryGetValue(parentId(entity), out var subMap))
                         foreach (var (k, v) in subMap) dict[k] = v;

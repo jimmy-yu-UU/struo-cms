@@ -57,7 +57,7 @@ public sealed class ItemService(
 
         var entities = result.Rows;
         var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();
-        await ExpandDeepAsync(collection, raw.Deep, entities, rows, ct);
+        await ExpandDeepAsync(collection, raw.Deep, entities, rows, queryLocale, ct);
         await OverlayTranslationsAsync(meta, entities, rows, locale, ct);
         return new PagedResult(rows, result.Total, validated.Limit, validated.Offset);
     }
@@ -72,7 +72,8 @@ public sealed class ItemService(
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)Project(entity, meta, null);
-        await ExpandDeepAsync(collection, deep, [entity], [projected], ct);
+        var queryLocale = meta.Translation is not null ? (locale ?? languages.DefaultCode()) : null;
+        await ExpandDeepAsync(collection, deep, [entity], [projected], queryLocale, ct);
         await OverlayTranslationsAsync(meta, [entity], [projected], locale, ct);
         return projected;
     }
@@ -208,7 +209,7 @@ public sealed class ItemService(
     private async Task ExpandDeepAsync(
         string collection, DeepSpec? deep,
         IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        CancellationToken ct)
+        string? locale, CancellationToken ct)
     {
         if (deep is null || deep.Relations.Count == 0) return;
 
@@ -226,7 +227,7 @@ public sealed class ItemService(
             ?? throw new QueryException($"Cannot expand relations: a '{collection}' row has no id.");
 
         var nested = await expander.ExpandAsync(
-            collection, entities, deep, ProjectFor, ParentId, ReadProp, ct);
+            collection, entities, deep, ProjectFor, ParentId, ReadProp, locale, ct);
 
         for (var i = 0; i < entities.Count; i++)
         {
@@ -240,6 +241,9 @@ public sealed class ItemService(
     /// <summary>
     /// Recursively validates a <see cref="DeepSpec"/> tree: throws if nesting depth exceeds
     /// <see cref="StruoQueryOptions.MaxRelationDepth"/> or a relation name is unknown at its level.
+    /// Also validates per-level nested-list args (filter/sort/limit/offset): to-many-only,
+    /// filter fields whitelisted against the target collection, sort restricted to the target's
+    /// own fields (no cross-relation sort for nested lists), and non-negative limit/offset.
     /// </summary>
     private void ValidateDeepTree(string coll, DeepSpec spec, int depth)
     {
