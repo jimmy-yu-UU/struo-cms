@@ -90,7 +90,8 @@ public class GraphQlSchemaTests
         sdl.Should().Contain("gallery: [ID!]");
         sdl.Should().Contain("galleryFiles: [File!]");
         sdl.Should().Contain("category: Category");
-        sdl.Should().Contain("tags: [Tag!]");
+        // 8c.3b: M2M relation fields gain nested-list args (filter/sort/limit/offset).
+        sdl.Should().Contain("tags(filter: TagFilterInput, sort: [String!], limit: Int, offset: Int): [Tag!]");
         sdl.Should().Contain("translations: [Translation!]");
     }
 
