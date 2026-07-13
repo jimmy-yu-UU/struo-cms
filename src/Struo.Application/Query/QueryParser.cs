@@ -54,16 +54,33 @@ public static class QueryParser
         {
             IReadOnlyList<string>? fields = null;
             int? limit = null;
+            int? offset = null;
+            FilterNode? filter = null;
+            List<SortField>? sort = null;
             DeepSpec? nested = null;
             if (rel.Value.ValueKind == JsonValueKind.Object)
             {
                 if (rel.Value.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
                     fields = f.EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                if (rel.Value.TryGetProperty("filter", out var fl) && fl.ValueKind == JsonValueKind.Object)
+                    filter = ParseFilter(fl);
+                if (rel.Value.TryGetProperty("sort", out var s) && s.ValueKind == JsonValueKind.Array)
+                {
+                    sort = new List<SortField>();
+                    foreach (var item in s.EnumerateArray())
+                        sort.Add(ParseSortToken(item.GetString() ?? ""));
+                }
                 if (rel.Value.TryGetProperty("limit", out var l) && l.TryGetInt32(out var li)) limit = li;
+                if (rel.Value.TryGetProperty("offset", out var o) && o.TryGetInt32(out var oi)) offset = oi;
                 if (rel.Value.TryGetProperty("deep", out var nd) && nd.ValueKind == JsonValueKind.Object)
                     nested = ParseDeepObject(nd);
             }
-            map[rel.Name] = new DeepRelationSpec(fields, limit, nested);
+            map[rel.Name] = new DeepRelationSpec(fields, limit, nested)
+            {
+                Filter = filter,
+                Sort = sort,
+                Offset = offset
+            };
         }
         return map.Count == 0 ? null : new DeepSpec(map);
     }
