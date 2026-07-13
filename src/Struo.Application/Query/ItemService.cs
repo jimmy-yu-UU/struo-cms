@@ -212,16 +212,9 @@ public sealed class ItemService(
     {
         if (deep is null || deep.Relations.Count == 0 || entities.Count == 0) return;
 
-        // Validate: deep expansion is single-level here, so MaxRelationDepth caps the number
-        // of relations expanded in one request (each adds one level of nesting / one batch query).
-        if (deep.Relations.Count > options.MaxRelationDepth)
-            throw new QueryException(
-                $"Too many deep relations requested ({deep.Relations.Count}); the maximum is {options.MaxRelationDepth}.");
-        foreach (var relName in deep.Relations.Keys)
-        {
-            if (graph.Resolve(collection, relName) is null)
-                throw new QueryException($"Unknown relation '{relName}' on '{collection}'.");
-        }
+        // Validate the whole nested tree: nesting depth <= MaxRelationDepth, and every relation
+        // name resolves against its own level's collection. Runs before any query executes.
+        ValidateDeepTree(collection, deep, depth: 1);
 
         var parentDesc = registry.Get(collection)!;
 
@@ -238,6 +231,24 @@ public sealed class ItemService(
             if (!nested.TryGetValue(pid, out var relMap)) continue;
             var dict = (Dictionary<string, object?>)rows[i];
             foreach (var (relName, value) in relMap) dict[relName] = value;
+        }
+    }
+
+    /// <summary>
+    /// Recursively validates a <see cref="DeepSpec"/> tree: throws if nesting depth exceeds
+    /// <see cref="StruoQueryOptions.MaxRelationDepth"/> or a relation name is unknown at its level.
+    /// </summary>
+    private void ValidateDeepTree(string coll, DeepSpec spec, int depth)
+    {
+        if (depth > options.MaxRelationDepth)
+            throw new QueryException(
+                $"Relation nesting too deep (depth {depth}); the maximum is {options.MaxRelationDepth}.");
+        foreach (var (relName, relSpec) in spec.Relations)
+        {
+            var rel = graph.Resolve(coll, relName)
+                ?? throw new QueryException($"Unknown relation '{relName}' on '{coll}'.");
+            if (relSpec.Deep is not null)
+                ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1);
         }
     }
 
