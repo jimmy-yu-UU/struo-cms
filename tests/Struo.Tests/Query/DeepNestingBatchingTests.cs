@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Struo.Application.Configuration;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
@@ -44,7 +45,9 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
         var graph = scope.ServiceProvider.GetRequiredService<RelationshipGraph>();
         var counter = new CountingItemRepository(real);
-        var expander = new RelationExpander(counter, graph);
+        var relFilter = scope.ServiceProvider.GetRequiredService<IRelationFilterResolver>();
+        var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
+        var expander = new RelationExpander(counter, graph, relFilter, opts);
 
         var parents = await real.QueryWhereInAsync("category", "id", new object[] { System.Guid.Parse(catId) });
 
@@ -77,5 +80,55 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         // nested-category query count grow with the article count, so `many > few`.
         few.Should().Be(many);
         many.Should().Be(2);
+    }
+
+    private async Task<int> ExpandCountWithArgs(int articleCount, string label)
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var catId = await Post(c, "category", new { name = $"ArgBatch-{label}" });
+        for (var i = 0; i < articleCount; i++)
+            await Post(c, "article", new
+            {
+                status = $"s{i}", categoryId = catId,
+                translations = new { en = new { title = $"ArgBatch-{label}-{i}" } }
+            });
+
+        using var scope = _factory.Services.CreateScope();
+        var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
+        var graph = scope.ServiceProvider.GetRequiredService<RelationshipGraph>();
+        var relFilter = scope.ServiceProvider.GetRequiredService<IRelationFilterResolver>();
+        var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
+        var counter = new CountingItemRepository(real);
+        var expander = new RelationExpander(counter, graph, relFilter, opts);
+
+        var parents = await real.QueryWhereInAsync("category", "id", new object[] { System.Guid.Parse(catId) });
+
+        // articles(O2M) with filter+sort+limit, nested category(M2O). Args must NOT add queries.
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>
+        {
+            ["articles"] = new DeepRelationSpec(null, 1,
+                new DeepSpec(new Dictionary<string, DeepRelationSpec> { ["category"] = new DeepRelationSpec(null, null) }))
+            {
+                Filter = new ComparisonFilter("status", QueryOperator.Neq, "zzz"),
+                Sort = new List<SortField> { new("status", false) }
+            }
+        });
+
+        counter.ResetCount();
+        await expander.ExpandAsync(
+            "category", parents, deep,
+            projectTarget: (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
+            parentId: entity => ReadProp(entity, "id")!,
+            readProp: ReadProp);
+        return counter.WhereInCalls;
+    }
+
+    [Fact]
+    public async Task Query_count_with_args_is_constant_in_row_count()
+    {
+        var few = await ExpandCountWithArgs(2, "few");
+        var many = await ExpandCountWithArgs(8, "many");
+        few.Should().Be(many);
+        many.Should().Be(2); // 1 for articles + 1 for nested category, regardless of args or row count
     }
 }

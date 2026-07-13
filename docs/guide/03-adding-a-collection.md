@@ -168,6 +168,83 @@ Nesting depth is capped by `StruoQueryOptions.MaxRelationDepth` (default **5**);
 unknown relation at any level, returns 400 (`BAD_USER_INPUT`). The cap is on **nesting depth**, not on
 the number of relations — many sibling relations at the same level are allowed (this replaced an earlier
 relation-*count* cap). The flat query-string form (`?deep=category,tags`) stays **single-level** — it has
-no syntax for nesting. Filtering, sorting, or paginating a **nested relation list** (e.g. only the first
-10 of a category's articles) is not yet supported — a nested list currently returns all rows; that's
-planned for a future slice (8c.3b).
+no syntax for nesting.
+
+### Shaping a nested list: `filter` / `sort` / `limit` / `offset` (8c.3b)
+
+A **to-many** related list (one-to-many or many-to-many) can be filtered, sorted, and paginated **at every
+nesting level**, not just selected. This applies to O2M/M2M relation fields only — a many-to-one relation
+(a single related object, not a list) does not accept these arguments at all.
+
+GraphQL — declare the arguments on the nested list field:
+
+```graphql
+{
+  category(id: "...") {
+    articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"], limit: 5, offset: 0) {
+      title
+      tags(filter: { name: { contains: "AI" } }, sort: ["name"], limit: 3) {
+        name
+      }
+    }
+  }
+}
+```
+
+(GraphQL `{Target}FilterInput` operator fields are un-prefixed — `eq`, `contains`, etc. — unlike the REST
+envelope's `_`-prefixed operators below; this mirrors the existing top-level GraphQL filter convention.)
+
+REST — the same four keys on the `deep` **JSON envelope** (`POST /api/items/category/query`), including
+cross-relation filtering via **flat dotted keys** on the target collection (the same dotted-path style as a
+top-level filter, e.g. `category.name` to filter a nested list by a relation of the target):
+
+```json
+{
+  "deep": {
+    "articles": {
+      "filter": { "category.name": { "_eq": "News" } },
+      "sort": ["-publishedAt"],
+      "limit": 5,
+      "offset": 0,
+      "deep": {
+        "tags": {
+          "filter": { "name": { "_contains": "AI" } },
+          "sort": ["name"],
+          "limit": 3
+        }
+      }
+    }
+  }
+}
+```
+
+Rules:
+
+- **To-many only.** `filter`/`sort`/`limit`/`offset` are valid on O2M/M2M relation list fields only. GraphQL
+  simply doesn't declare the arguments on an M2O field; the REST envelope rejects them on an M2O relation
+  with 400 (`BAD_USER_INPUT`).
+- **`filter`** is a full cross-relation predicate against the *target* collection — own fields, `_and`/`_or`,
+  and dotted relation paths all work exactly like a top-level filter (reuses the same
+  `RelationFilterResolver`/`FilterInputTranslator` engine as 8c.1/8c.2).
+- **`sort`** is **own-field only** — a relation/dotted sort token on a nested list (e.g. sorting
+  `article.tags` by a field of a relation of `tags`) is rejected as 400 (`BAD_USER_INPUT`). This mirrors the
+  existing root-level restriction on sorting across to-many relations.
+- **`limit`/`offset` are per-parent**, not global: each parent row's related list is independently trimmed —
+  a category with 20 articles and a category with 3 articles each get their own `limit`/`offset` applied to
+  their own children, not a single limit shared across the whole result set.
+- **`limit`**: omitted or ≤ 0 → all rows; an explicit positive value is capped at `MaxLimit`. Applied per
+  parent. There is no implicit default limit or silent truncation — only an explicit positive `limit`
+  paginates. This preserves the 8c.3a nested-list contract for existing callers.
+- **`offset`**: ≥ 0, applied per parent, before `limit`; a negative `offset` is rejected as 400
+  (`BAD_USER_INPUT`).
+- Args and a further `deep` compose: a nested list's `limit` trims **before** any deeper level is expanded
+  (trim-before-recurse) — a deeper level only ever expands the rows that survived this level's limit.
+- The engine stays **N+1-safe**: pushing `filter` into the batched query and applying `sort`/`limit`/`offset`
+  in-memory adds no per-row queries — the query count for a `deep` tree is still one query per relation node,
+  unchanged by whether these arguments are present.
+
+**Known gaps (as of 2026-07-13, pending the live Postgres gate):** nested `sort`/`offset` reaching the real
+GraphQL engine end-to-end is exercised by the live gate, not by an automated execution test (only nested
+`filter`+`limit` have a real-HotChocolate execution test today). The REST query-string form (`?deep=a,b`)
+stays flat/single-level with no arguments — only the JSON `deep` envelope and GraphQL support these four
+controls. A nested list still has no `total`/`hasMore` metadata (bare list, no pagination wrapper).

@@ -62,6 +62,8 @@ public class DeleteRestrictWithGuidPkTests
         public Task InTransactionAsync(Func<Task> body, CancellationToken ct) => body();
         public Task<IReadOnlyList<object>> QueryWhereInAsync(string c, string prop, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([new GuidEntity()]);
+        public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(string c, string prop, IReadOnlyList<object> vals, FilterNode? extraFilter, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<object>>([new GuidEntity()]);
         public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task<IReadOnlyList<object>> QueryIdsAsync(string c, FilterNode f, CancellationToken ct) =>
@@ -95,7 +97,8 @@ public class DeleteRestrictWithGuidPkTests
         public Task<Dictionary<object, Dictionary<string, object?>>> ExpandAsync(
             string c, IReadOnlyList<object> parents, DeepSpec deep,
             Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> project,
-            Func<object, object> parentId, Func<object, string, object?> readProp, CancellationToken ct) =>
+            Func<object, object> parentId, Func<object, string, object?> readProp,
+            string? locale = null, CancellationToken ct = default) =>
             Task.FromResult(new Dictionary<object, Dictionary<string, object?>>());
     }
 
