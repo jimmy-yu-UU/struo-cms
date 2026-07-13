@@ -66,13 +66,16 @@ internal static class CollectionResolvers
 
     /// <summary>
     /// Delegate for FilterInputTranslator: returns the target collection name when <paramref name="key"/>
-    /// is an M2O relation of <paramref name="coll"/> (so a nested filter descends into a dotted path),
-    /// else null. Only M2O relations with a foreign key participate (parity with the schema input).
+    /// is a filterable relation of <paramref name="coll"/> (so a nested filter descends into a dotted
+    /// path), else null. M2O participates only with a foreign key (its engine hop dereferences it);
+    /// O2M and M2M participate unconditionally (they resolve via the reverse FK / junction) — to-many
+    /// paths carry ANY/EXISTS semantics.
     /// </summary>
     private static Func<string, string, string?> RelationTargets(IMetadataProvider metadata) =>
         (coll, key) => metadata.GetCollection(coll)?.Relations
-            .FirstOrDefault(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null
-                              && string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(r => string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase)
+                && ((r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
+                    || r.Kind is RelationKind.OneToMany or RelationKind.ManyToMany))
             ?.TargetCollection;
 
     /// <summary>Which of the collection's relations the client selected on the element type.</summary>

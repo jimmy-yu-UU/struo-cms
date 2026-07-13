@@ -532,4 +532,78 @@ public class GraphQlExecutionTests
         captured.Sort[1].Field.Should().Be("category.parent.name");
         captured.Sort[1].Descending.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task M2M_relation_filter_arrives_as_dotted_comparison()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { tags: { name: { eq: \"AI\" } } }) { total } }");
+        ParseData(result); // asserts no errors
+
+        var cmp = captured!.Filter.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("tags.name");
+        cmp.Op.Should().Be(QueryOperator.Eq);
+        cmp.Value.Should().Be("AI");
+    }
+
+    [Fact]
+    public async Task O2M_relation_filter_arrives_as_dotted_comparison()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        // categories filtered by a field on their O2M articles (ANY/EXISTS).
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ categories(filter: { articles: { status: { eq: \"published\" } } }) { total } }");
+        ParseData(result);
+
+        var cmp = captured!.Filter.Should().BeOfType<ComparisonFilter>().Subject;
+        cmp.FieldPath.Should().Be("articles.status");
+        cmp.Value.Should().Be("published");
+    }
+
+    [Fact]
+    public async Task Mixed_kind_multi_hop_relation_filter_arrives_as_multi_dotted_comparison()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        // category -> (O2M) articles -> (M2O) category -> name : composes to-many + to-one.
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ categories(filter: { articles: { category: { name: { eq: \"Root\" } } } }) { total } }");
+        ParseData(result);
+
+        captured!.Filter.Should().BeOfType<ComparisonFilter>()
+            .Which.FieldPath.Should().Be("articles.category.name");
+    }
+
+    [Fact]
+    public async Task Own_field_and_to_many_relation_filter_are_anded()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { status: { eq: \"published\" }, tags: { name: { eq: \"AI\" } } }) { total } }");
+        ParseData(result);
+
+        var logical = captured!.Filter.Should().BeOfType<LogicalFilter>().Subject;
+        logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
+            .Should().Contain(new[] { "status", "tags.name" });
+    }
 }
