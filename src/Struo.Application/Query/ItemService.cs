@@ -250,6 +250,36 @@ public sealed class ItemService(
         {
             var rel = graph.Resolve(coll, relName)
                 ?? throw new QueryException($"Unknown relation '{relName}' on '{coll}'.");
+
+            var hasArgs = relSpec.Filter is not null || relSpec.Sort is not null
+                          || relSpec.Limit is not null || relSpec.Offset is not null;
+            if (hasArgs && rel.Kind == RelationKind.ManyToOne)
+                throw new QueryException(
+                    $"filter/sort/limit/offset are only supported on to-many relations; " +
+                    $"'{relName}' on '{coll}' is many-to-one.");
+
+            if (relSpec.Limit is < 0)
+                throw new QueryException($"Nested 'limit' must not be negative for relation '{relName}'.");
+            if (relSpec.Offset is < 0)
+                throw new QueryException($"Nested 'offset' must not be negative for relation '{relName}'.");
+
+            var targetMeta = Meta(rel.TargetCollection);
+            if (relSpec.Filter is not null)
+                QueryValidator.Validate(
+                    new QueryModel(null, relSpec.Filter, [], 0, 0, null),
+                    targetMeta, options, graph, metadata);
+
+            if (relSpec.Sort is not null)
+                foreach (var s in relSpec.Sort)
+                {
+                    if (RelationPath.IsRelationPath(s.Field))
+                        throw new QueryException(
+                            $"Sort across relations is not supported for nested lists: '{s.Field}'.");
+                    QueryValidator.Validate(
+                        new QueryModel(null, null, [s], 0, 0, null),
+                        targetMeta, options, graph, metadata);
+                }
+
             if (relSpec.Deep is not null)
                 ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1);
         }
