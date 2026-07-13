@@ -96,4 +96,37 @@ public class DeepNestingExpansionTests(ApiFactory factory)
         children[0].TryGetProperty("children", out var grand).Should().BeTrue();
         grand.ValueKind.Should().Be(JsonValueKind.Array); // depth-2 self-ref level materialised
     }
+
+    [Fact]
+    public async Task Depth2_o2m_then_m2m_category_articles_tags_resolves()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "category", new { name = "M2MParent-8c3a" });
+        var tag = await Post(c, "tag", new { name = "標籤-8c3a" }); // CJK: 標籤 = U+6A19 U+7C64
+        await Post(c, "article", new
+        {
+            status = "draft",
+            categoryId = cat,
+            tags = new[] { tag },
+            translations = new { en = new { title = "Tagged-8c3a" } }
+        });
+
+        // category -> articles (O2M) -> tags (M2M): nested recursion running THROUGH an M2M level
+        // at depth-2 (the `expanded.Add((targets[tid], d)); recurse` branch in the M2M relation-
+        // expansion path), not just at the top level like CrossRelationFilterTests' M2M filter test.
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
+            deep = new { articles = new { deep = new { tags = new { } } } }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
+        var articles = row.GetProperty("articles");
+        articles.GetArrayLength().Should().BeGreaterThanOrEqualTo(1);
+        var tags = articles[0].GetProperty("tags");
+        tags.GetArrayLength().Should().BeGreaterThanOrEqualTo(1);
+        tags[0].GetProperty("name").GetString().Should().Be("標籤-8c3a"); // CJK round-trips at depth-2 through M2M
+    }
 }
