@@ -3,6 +3,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Execution;
+using HotChocolate.Execution.Configuration;
 using HotChocolate.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.GraphQl;
@@ -42,6 +43,11 @@ public class GraphQlExecutionTests
             .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
             .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
             .AddTypeModule<StruoTypeModule>()
+            // Mirrors GraphQlServiceCollectionExtensions.AddStruoGraphQl's production wiring so this
+            // in-process executor can prove the over-depth negative below (this suite's
+            // FakeGraphQlDataSource bypasses ItemService's own MaxRelationDepth check entirely, so
+            // this document-validation-time rule is the only reachable depth guard here).
+            .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
             .BuildRequestExecutorAsync();
 
     /// <summary>
@@ -317,6 +323,89 @@ public class GraphQlExecutionTests
         deepSeen!.Relations.Should().ContainKey("category");
         data.GetProperty("articles").GetProperty("items")[0]
             .GetProperty("category").GetProperty("name").GetString().Should().Be("News");
+    }
+
+    /// <summary>
+    /// 8c.3a: selecting a relation sub-field OF a relation (<c>category { name parent { name } }</c>,
+    /// depth 2) must build a NESTED <see cref="DeepSpec"/> — <c>category</c>'s own
+    /// <see cref="DeepRelationSpec.Deep"/> must itself contain a <c>parent</c> entry — not a flat
+    /// depth-1 tree (pre-8c.3a, <c>SelectionRelations</c> only ever looked at the element type's
+    /// direct children, so <c>parent</c> was silently dropped and would have resolved to null).
+    /// The fake data source mirrors ItemService's deep-expansion shape by pre-nesting "parent" inside
+    /// "category" on the row; the schema's relation field is a plain pass-through pure resolver (see
+    /// CollectionSchemaBuilder), so it surfaces whatever shape the data source returns at every level.
+    /// </summary>
+    [Fact]
+    public async Task Nested_relation_selection_resolves_depth_two()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?>
+                {
+                    ["id"] = "1",
+                    ["category"] = new Dictionary<string, object?>
+                    {
+                        ["id"] = "9",
+                        ["name"] = "Child",
+                        ["parent"] = new Dictionary<string, object?> { ["id"] = "8", ["name"] = "Parent" },
+                    },
+                };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles { items { id category { name parent { name } } } } }");
+        var data = ParseData(result);
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("category");
+        var categoryDeep = deepSeen.Relations["category"].Deep;
+        categoryDeep.Should().NotBeNull("a depth-2 selection must nest a Deep tree under category, not stay flat");
+        categoryDeep!.Relations.Should().ContainKey("parent");
+
+        var item = data.GetProperty("articles").GetProperty("items")[0];
+        item.GetProperty("category").GetProperty("name").GetString().Should().Be("Child");
+        item.GetProperty("category").GetProperty("parent").GetProperty("name").GetString().Should().Be("Parent");
+    }
+
+    /// <summary>
+    /// 8c.3a negative: <see cref="StruoQueryOptions.MaxRelationDepth"/> (5) is enforced by
+    /// ItemService, which this suite's <see cref="FakeGraphQlDataSource"/> bypasses entirely (no real
+    /// ItemService sits in the call path), so a client selection nested deep enough to matter here
+    /// must instead be caught by HotChocolate's own <c>AddMaxExecutionDepthRule(12)</c> — added to
+    /// <see cref="ExecutorAsync"/> above to mirror the production wiring
+    /// (<see cref="Struo.Api.GraphQl.GraphQlServiceCollectionExtensions.AddStruoGraphQl"/>) — which
+    /// runs at document-validation time, before any resolver (including the now-recursive
+    /// <see cref="CollectionResolvers.SelectionDeepSpec"/>) ever executes. This proves the recursive
+    /// selection-walk introduced by 8c.3a has no runaway/unbounded behaviour reachable from a client: an
+    /// over-deep query is rejected up front, with no partial data alongside the error.
+    /// </summary>
+    [Fact]
+    public async Task Over_depth_nested_selection_is_rejected()
+    {
+        const int nestedParents = 20; // category is self-referential; comfortably past both the
+                                       // engine's MaxRelationDepth (5, unreachable here) and HotChocolate's
+                                       // AddMaxExecutionDepthRule(12, added to ExecutorAsync above).
+        var query = "{ categories { items { " +
+                    string.Concat(Enumerable.Repeat("parent { ", nestedParents)) +
+                    "id" +
+                    string.Concat(Enumerable.Repeat(" }", nestedParents)) +
+                    " } } }";
+
+        var result = await (await ExecutorAsync(new FakeGraphQlDataSource())).ExecuteAsync(query);
+        var json = result.ToJson();
+        using var doc = JsonDocument.Parse(json);
+
+        doc.RootElement.TryGetProperty("errors", out var errors).Should().BeTrue(
+            $"expected the max-execution-depth rule to reject this query; full response: {json}");
+        errors.GetArrayLength().Should().BeGreaterThan(0);
+        doc.RootElement.TryGetProperty("data", out _).Should().BeFalse(
+            "a validation-time rejection must not leak partial data alongside the error");
     }
 
     /// <summary>

@@ -96,7 +96,7 @@ internal static class FileFieldResolvers
                 {
                     ["id"] = new Dictionary<string, object?> { ["in"] = chunk.Cast<object?>().ToList() },
                 };
-                var query = GraphQlQueryBuilder.BuildQuery(filter, null, chunk.Length, 0, null, Array.Empty<string>());
+                var query = GraphQlQueryBuilder.BuildQuery(filter, null, chunk.Length, 0, null, deep: null);
                 var page = await dataSource.QueryAsync("file", query, null, cancellationToken);
 
                 foreach (var row in page.Data)
