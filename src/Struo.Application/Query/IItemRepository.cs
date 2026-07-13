@@ -33,6 +33,15 @@ public interface IItemRepository
     Task<IReadOnlyList<object>> QueryWhereInAsync(string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default);
 
     /// <summary>
+    /// Like <see cref="QueryWhereInAsync"/> but ANDs an additional own-collection filter
+    /// (already relation-rewritten to own columns) into the batched WHERE. Used by nested-list
+    /// expansion (8c.3b) to push a to-many list's filter into the single batched fetch.
+    /// </summary>
+    Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
+        string collection, string property, IReadOnlyList<object> values,
+        FilterNode? extraFilter, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all rows of the given CLR <paramref name="entityType"/> (e.g. a junction type)
     /// whose <paramref name="propertyName"/> (a CLR property name) is in <paramref name="values"/>.
     /// Empty <paramref name="values"/> returns an empty list without issuing a query.

@@ -1,4 +1,7 @@
 // src/Struo.Api/GraphQl/CollectionResolvers.cs
+using HotChocolate.Execution;
+using HotChocolate.Execution.Processing;
+using HotChocolate.Language;
 using HotChocolate.Resolvers;
 using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
@@ -118,8 +121,77 @@ internal static class CollectionResolvers
             if (map.ContainsKey(rel.Name)) continue; // aliased-duplicate selections: first wins per level
             var targetType = (ObjectType)sel.Field.Type.NamedType();
             var nested = BuildDeep(ctx, rel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
-            map[rel.Name] = new DeepRelationSpec(null, null, nested);
+
+            // To-many list fields may carry filter/sort/limit/offset arguments (8c.3b). M2O has no
+            // args declared on its field (CollectionSchemaBuilder), so this only ever fires for
+            // OneToMany/ManyToMany relations.
+            FilterNode? filter = null;
+            IReadOnlyList<SortField>? sort = null;
+            int? limit = null, offset = null;
+            if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
+            {
+                var args = ReadSelectionArgs(ctx, sel);
+                if (args.TryGetValue("filter", out var fv) && fv is IReadOnlyDictionary<string, object?> fd)
+                    filter = FilterInputTranslator.Translate(fd, rel.TargetCollection, RelationTargets(metadata));
+                if (args.TryGetValue("sort", out var sv) && sv is IEnumerable<object?> st)
+                    sort = GraphQlQueryBuilder.ParseSort(st.Select(x => x?.ToString() ?? "").ToList());
+                if (args.TryGetValue("limit", out var lv) && lv is not null)
+                    limit = Convert.ToInt32(lv);
+                if (args.TryGetValue("offset", out var ov) && ov is not null)
+                    offset = Convert.ToInt32(ov);
+            }
+
+            map[rel.Name] = new DeepRelationSpec(null, limit, nested)
+            {
+                Filter = filter,
+                Sort = sort,
+                Offset = offset
+            };
         }
         return map.Count == 0 ? null : new DeepSpec(map);
+    }
+
+    // HotChocolate's InputParser is stateless/reusable (mirrors how the runtime itself owns one
+    // per schema); used to turn a selection's raw argument literal into a runtime value below.
+    private static readonly InputParser InputParser = new();
+
+    /// <summary>
+    /// Reads a CHILD selection's own argument values (not the current resolver's args — HotChocolate
+    /// only exposes those via <c>ctx.ArgumentValue&lt;T&gt;</c>, which is scoped to the selection
+    /// <paramref name="ctx"/> is currently resolving). <see cref="Selection.Arguments"/>
+    /// (<c>ArgumentMap : IReadOnlyDictionary&lt;string, ArgumentValue&gt;</c>) never reports
+    /// <see cref="ArgumentValue.IsFullyCoerced"/> for a child selection BuildDeep is walking ahead
+    /// of execution — HotChocolate defers that coercion until right before the selection's own
+    /// resolver runs, regardless of whether its literal is inline or a <c>$variable</c> reference.
+    /// So both shapes are handled uniformly via <see cref="ArgumentValue.ValueLiteral"/>: a plain
+    /// literal (e.g. an <c>ObjectValueNode</c>) is used as-is; a <c>VariableNode</c> is substituted
+    /// with the variable's own literal off <c>ctx.Variables</c> (<see cref="IVariableValueCollection"/>
+    /// — its <c>GetValue&lt;T&gt;</c> is constrained to <c>T : IValueNode</c>, i.e. it only ever
+    /// hands back syntax, never a pre-coerced runtime object). Either way the resulting literal is
+    /// then parsed into a runtime value via <see cref="HotChocolate.Types.InputParser.ParseLiteral"/>
+    /// against the argument's own declared <see cref="ArgumentValue.Type"/> — exactly how
+    /// HotChocolate parses any other literal argument. Isolated here (8b.1's <c>SentFieldsOnly</c>
+    /// precedent) so <see cref="BuildDeep"/> stays free of HC-internals detail.
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> ReadSelectionArgs(IResolverContext ctx, Selection sel)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, argValue) in sel.Arguments)
+        {
+            // A CHILD selection (one BuildDeep is walking ahead of execution, not the selection
+            // ctx is currently resolving) is never reported IsFullyCoerced here regardless of
+            // whether its literal is inline or a $variable reference — HotChocolate only performs
+            // that coercion lazily, right before the selection's own resolver runs. So both shapes
+            // go through the same path: resolve the effective IValueNode (substituting a
+            // VariableNode with the variable's own literal off ctx.Variables), then parse it
+            // against the argument's declared input type exactly like HotChocolate parses any
+            // other literal.
+            var literal = argValue.ValueLiteral;
+            if (literal is VariableNode variableNode)
+                literal = ctx.Variables.GetValue<IValueNode>(variableNode.Name.Value);
+            if (literal is null or NullValueNode) continue; // argument not supplied
+            result[name] = InputParser.ParseLiteral(literal, argValue.Type, HotChocolate.Path.Root);
+        }
+        return result;
     }
 }

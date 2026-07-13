@@ -103,12 +103,24 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             }
         }
 
-        // relations (single-level; value pre-nested by ItemService deep expansion).
+        // relations (single-level value pre-nested by ItemService deep expansion).
+        // To-many (O2M/M2M) list fields gain nested-list args (8c.3b); M2O stays a bare object field.
         foreach (var rel in meta.Relations)
         {
             var target = SchemaTypeMapper.TypeName(rel.TargetCollection);
-            var sdl = rel.Kind == RelationKind.ManyToOne ? target : $"[{target}!]";
-            config.Fields.Add(Field(rel.Name, sdl, ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
+            if (rel.Kind == RelationKind.ManyToOne)
+            {
+                config.Fields.Add(Field(rel.Name, target, ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
+            }
+            else
+            {
+                var field = Field(rel.Name, $"[{target}!]", ctx => ParentDict(ctx).GetValueOrDefault(rel.Name));
+                field.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse($"{target}FilterInput")));
+                field.Arguments.Add(new ArgumentConfiguration("sort", null, TypeReference.Parse("[String!]")));
+                field.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
+                field.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
+                config.Fields.Add(field);
+            }
         }
 
         // translations map (always present in projection when the collection has a sidecar).

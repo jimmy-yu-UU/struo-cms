@@ -507,9 +507,71 @@
   selection-tree recursion + a final-review backfill covering depth>1 recursion through an M2M level). Frontend
   untouched, `pnpm test` still **237**. **Live gate PASSED 7/7** on real Postgres (`web-struo-cms-db`) + Redis
   (2026-07-13, no backend fixes) — see the Phase 8c.3a row above.
-- **Next up:** 8c.3a is **done & live-verified** (real PG 7/7, no fixes). Remaining work is
-  **8c.3b** (nested-list `filter/sort/limit/offset` arguments on related list fields — no spec/plan yet) or
-  **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) — user's call.
+- **Phase 8c.3b (GraphQL advanced read querying — nested-list `filter/sort/limit/offset` arguments) done &
+  live-verified (real PG, 2026-07-13, 18/18, no backend fixes):** the fourth 8c slice — completes the 8c.3 pair 8c.3a started. A related-list field
+  (**to-many only: O2M/M2M**) can now be **shaped**, not just selected/expanded: `filter` (full cross-relation
+  dotted-path predicate on the target, reusing the 8c.1/8c.2 `RelationFilterResolver`/`FilterInputTranslator`
+  engine), `sort` (own-field-only, multi-key, asc/`-`desc), `limit` (per-parent top-N; omitted or ≤ 0 → all
+  rows, an explicit positive value is capped at `MaxLimit` — no implicit default/truncation), and `offset`
+  (per-parent skip, ≥ 0, applied before `limit`; negative rejected) — at **every** nesting level up
+  to `MaxRelationDepth`. **Domain** — `DeepRelationSpec` gains `FilterNode? Filter`,
+  `IReadOnlyList<SortField>? Sort`, `int? Offset` (the pre-existing `Limit` field goes from parsed-but-unused
+  to actually consumed). **Application** — `QueryParser.ParseDeepObject` reads the four new envelope keys;
+  `ItemService.ValidateDeepTree` rejects args on an **M2O** relation (`BAD_USER_INPUT`), whitelist-validates
+  a nested `filter`'s field/relation paths against the **target collection** via `QueryValidator`/
+  `RelationPath`, rejects a relation/dotted nested-`sort` token (own-field only), and rejects negative
+  `limit`/`offset`; `IItemRepository` gains `QueryWhereInFilteredAsync` (batched "WHERE prop IN values AND
+  extraFilter"; a `null` filter is byte-for-byte the pre-8c.3b `QueryWhereInAsync` path, so existing callers
+  are unaffected). **Infrastructure** — `RelationExpander.ExpandAsync` gains an `IRelationFilterResolver`
+  dependency and a `locale` parameter; a nested `filter` is rewritten via
+  `RelationFilterResolver.RewriteAsync` and **pushed into the existing batched query** (ANDed onto the O2M
+  reverse-FK `IN` / M2M junction-target `IN`, adding **no** new query), while `sort`/`limit`/`offset` are
+  applied **in-memory, per parent group**, before recursing into a further `Deep` (trim-before-recurse: a
+  deeper level only expands the rows that survived this level's limit). **Execution strategy A (hybrid,
+  chosen over two rejected alternatives — B: full SQL push-down via `ROW_NUMBER() OVER (PARTITION BY …)`,
+  rejected as raw vendor SQL forbidden by §17.4 and PG/SQLite-shaped per audit D9; C: per-parent queries,
+  rejected as reintroducing N+1):** the N+1-safe batched invariant from 8c.3a is preserved and its test
+  **extended** — follow-up query count still equals the relation-node count of the tree, unchanged by row
+  counts or by whether args are present. **Api (GraphQL)** — `CollectionSchemaBuilder` declares
+  `filter: {Target}FilterInput`, `sort: [String!]`, `limit: Int`, `offset: Int` on O2M/M2M relation fields
+  only (**M2O fields get no arguments at all**); `CollectionResolvers.BuildDeep` reads a selection's argument
+  values (both inline-literal and `$variable` shapes) into the `DeepRelationSpec` via the same
+  `FilterInputTranslator`/`GraphQlQueryBuilder.ParseSort` 8c.1/8c.2 already use. **Back-compat:** an all-null
+  arg spec is byte-for-byte the 8c.3a behaviour (characterization tests green); **omitting `limit` still
+  returns all rows** (no implicit default/truncation) — only an explicit `limit` paginates. No new NuGet
+  packages; no `samples/*` change. Spec:
+  [spec](superpowers/specs/2026-07-13-phase8c3b-nested-list-args-design.md) · plan:
+  [plan](superpowers/plans/2026-07-13-phase8c3b-nested-list-args.md). **Live gate PASSED 2026-07-13 on real
+  Postgres (`web-struo-cms-db`) + Redis, 18/18, no backend fixes:** nested O2M + M2M `filter` narrows
+  (discriminating); cross-relation dotted `tags.name` filter (REST **and** GraphQL); per-parent **independent**
+  `limit` (catA 3→2 and catB 1→1 in one page); `offset`+`limit` (skip a, take b); `sort` asc/desc strict
+  (ASCII); CJK nested-`filter` value round-trips **code-point-exact** (甲 = U+7532); CJK nested-`sort` is
+  deterministic and does not error (observed order `乙丙甲` = current-culture collation, confirming the in-memory
+  `IComparable`/`String.CompareTo` note — deterministic, not a defect); M2O-args / bad nested-filter-field /
+  relation-path nested-`sort` all → `BAD_USER_INPUT` (400); arg-less nested = all rows (8c.3a back-compat).
+  **The deferred GraphQL nested `sort`+`offset` items are now live-confirmed:** nested `sort`+`offset` inline
+  **and** nested `sort`/`filter` via `$variable` all resolve through the real `/graphql` endpoint. No
+  SQLite-green ≠ Postgres-correct bug surfaced — the engine, validation, push-down, and GraphQL arg-reading
+  all worked on real Postgres first try. (All initial script failures were harness-only PowerShell quirks —
+  single-element-array unwrap + `byte[]` pipeline-unroll — not product defects.) **Remaining known items
+  (non-blocking):** the REST query-string `?deep=a,b` flat form stays depth-1 with no args (by design — no
+  nesting syntax); a nested list has no `total`/`hasMore` metadata (bare `[Target!]`); a nested `limit` >
+  `MaxLimit` clamp is unit-trivial and was not separately exercised on live (only ≤ MaxLimit row counts
+  seeded). The implemented `limit` semantics (omitted/≤0 → all rows; explicit positive → capped at
+  `MaxLimit`) supersede the spec's §3.4 wording (ambiguous on this point) — this ROADMAP entry and the guide
+  are the live contract; the spec is a historical planning artifact.
+- **Verification baseline (2026-07-13, post-8c.3b, live-verified):** backend `dotnet build -warnaserror`
+  clean (0 warnings) + `dotnet test` **573** passed / 0 failed / 0 skipped (549 8c.3a baseline + 24 new:
+  `DeepRelationSpec` filter/sort/offset fields + envelope parse + recursive arg validation +
+  `QueryWhereInFilteredAsync` + `RelationExpander` filter push-down/in-memory sort-limit-offset + N+1
+  invariant extended with args + GraphQL schema args on O2M/M2M-only + `BuildDeep` arg-reading + nested-list
+  execution round-trips + a review backfill locking `_starts_with`/`_ends_with` match-direction semantics).
+  Frontend untouched, `pnpm test` still **237**. **Live gate PASSED 18/18** on real Postgres
+  (`web-struo-cms-db`) + Redis (2026-07-13, no backend fixes) — see the Phase 8c.3b row above.
+- **Next up:** 8c.3b is **done & live-verified** (real PG 18/18, no fixes). The 8c series (8c.1 M2O
+  cross-relation filter/sort → 8c.2 to-many filter → 8c.3a multi-level nesting → 8c.3b nested-list args) is
+  now **complete**. Next: **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) —
+  user's call.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -586,7 +648,7 @@
 | 8c.1 | GraphQL advanced read querying (cross-relation filter + sort): M2O cross-relation (dotted-path) filtering, multi-hop, via nested `{Target}FilterInput` fields + metadata-aware `FilterInputTranslator`; cross-relation sort verified/tested/documented (no schema change, reuses `RelationOrderExpr`) — *first 8c slice, read-side, parallel to 8b* | ✅ done (live-verified: real PG — CJK filter + multi-hop + discrimination + sort + BAD_USER_INPUT negatives, 7/7, no backend fixes) | [spec](superpowers/specs/2026-07-09-phase8c1-graphql-cross-relation-read-design.md) | [plan](superpowers/plans/2026-07-09-phase8c1-graphql-cross-relation-read.md) |
 | 8c.2 | GraphQL to-many cross-relation filter (O2M/M2M nested `{Target}FilterInput`, ANY/EXISTS, multi-hop mixed-kind; relaxes the 8c.1 M2O-only guard in `BuildFilterInput` + `RelationTargets`; engine/validator reused) — *second 8c slice* | ✅ done (live-verified: real PG — M2M/O2M/self-ref/multi-hop mixed-kind/CJK/discrimination/empty, 8/8, no fixes) | [spec](superpowers/specs/2026-07-09-phase8c2-graphql-tomany-relation-filter-design.md) | [plan](superpowers/plans/2026-07-09-phase8c2-graphql-tomany-relation-filter.md) |
 | 8c.3a | GraphQL advanced read querying (multi-level (depth>1) relation **nesting/expansion**): recursive `DeepRelationSpec`/`DeepSpec` (Domain); REST `deep` envelope nesting + depth/name validation (Application); batched recursive `RelationExpander` (Infrastructure, N+1-safe); GraphQL selection-tree recursion (Api); relation-**count** cap → nesting-**depth** cap — *third 8c slice, engine work across Domain/App/Infra* | ✅ done (live-verified: real PG 7/7 — depth-3 M2O/depth-2 O2M/mixed-kind/self-ref cycle/CJK exact/over-depth reject/REST envelope, no fixes) | [spec](superpowers/specs/2026-07-13-phase8c3a-multilevel-relation-nesting-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3a-multilevel-relation-nesting.md) |
-| 8c.3b | GraphQL advanced read querying (nested-list `filter/sort/limit/offset` **arguments** on related list fields — `DeepRelationSpec.Limit` exists but is unused today) — *deferred slice* | ⬜ planned | — | — |
+| 8c.3b | GraphQL advanced read querying (nested-list `filter/sort/limit/offset` **arguments** on to-many related list fields; `filter` pushed to SQL via `RelationFilterResolver`, `sort/limit/offset` applied in-memory per parent group; N+1-safe invariant extended; M2O gets no args, nested sort is own-field-only) — *fourth 8c slice, completes the 8c.3 pair with 8c.3a* | ✅ done (live-verified: real PG 18/18, no fixes) | [spec](superpowers/specs/2026-07-13-phase8c3b-nested-list-args-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3b-nested-list-args.md) |
 | 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements

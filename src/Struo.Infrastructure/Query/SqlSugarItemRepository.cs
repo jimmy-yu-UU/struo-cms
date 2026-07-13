@@ -50,6 +50,11 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
+    private static readonly MethodInfo WhereInFilteredGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInFilteredGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(List<IConditionalModel>), typeof(CancellationToken)])!;
+
     private static readonly MethodInfo QueryIdsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(QueryIdsGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -332,6 +337,41 @@ public sealed class SqlSugarItemRepository(
                 CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
             }
         };
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        return rows.Cast<object>().ToList();
+    }
+
+    public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
+        string collection, string property, IReadOnlyList<object> values,
+        FilterNode? extraFilter, CancellationToken ct = default)
+    {
+        if (values.Count == 0) return [];
+        var d = Descriptor(collection);
+        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
+        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.In,
+                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+            }
+        };
+        // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
+        // IConditionalModel entries. ConditionalModelTranslator maps camelCase field paths -> columns.
+        if (extraFilter is not null)
+            conditionals.AddRange(ConditionalModelTranslator.Translate(extraFilter, null, [], d, db));
+
+        var method = WhereInFilteredGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [conditionals, ct])!;
+    }
+
+    private async Task<IReadOnlyList<object>> WhereInFilteredGenericAsync<T>(
+        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
+    {
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();
     }
