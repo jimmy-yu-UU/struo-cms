@@ -25,5 +25,6 @@ public interface IRelationExpander
         Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
         Func<object, object> parentId,
         Func<object, string, object?> readProp,
+        string? locale = null,
         CancellationToken ct = default);
 }
