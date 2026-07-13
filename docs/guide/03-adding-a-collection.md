@@ -232,9 +232,11 @@ Rules:
 - **`limit`/`offset` are per-parent**, not global: each parent row's related list is independently trimmed —
   a category with 20 articles and a category with 3 articles each get their own `limit`/`offset` applied to
   their own children, not a single limit shared across the whole result set.
-- **Omitting `limit` returns all rows** — there is no implicit default limit or silent truncation; only an
-  explicit `limit` paginates. This preserves the 8c.3a nested-list contract for existing callers.
-- An explicit `limit` is **clamped** to `StruoQueryOptions.MaxLimit`, same as a top-level `limit`.
+- **`limit`**: omitted or ≤ 0 → all rows; an explicit positive value is capped at `MaxLimit`. Applied per
+  parent. There is no implicit default limit or silent truncation — only an explicit positive `limit`
+  paginates. This preserves the 8c.3a nested-list contract for existing callers.
+- **`offset`**: ≥ 0, applied per parent, before `limit`; a negative `offset` is rejected as 400
+  (`BAD_USER_INPUT`).
 - Args and a further `deep` compose: a nested list's `limit` trims **before** any deeper level is expanded
   (trim-before-recurse) — a deeper level only ever expands the rows that survived this level's limit.
 - The engine stays **N+1-safe**: pushing `filter` into the batched query and applying `sort`/`limit`/`offset`

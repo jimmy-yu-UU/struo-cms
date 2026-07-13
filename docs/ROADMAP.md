@@ -511,8 +511,9 @@
   live gate PENDING:** the fourth 8c slice — completes the 8c.3 pair 8c.3a started. A related-list field
   (**to-many only: O2M/M2M**) can now be **shaped**, not just selected/expanded: `filter` (full cross-relation
   dotted-path predicate on the target, reusing the 8c.1/8c.2 `RelationFilterResolver`/`FilterInputTranslator`
-  engine), `sort` (own-field-only, multi-key, asc/`-`desc), `limit` (per-parent top-N, explicit values clamped
-  to `[1, MaxLimit]`), and `offset` (per-parent skip, applied before `limit`) — at **every** nesting level up
+  engine), `sort` (own-field-only, multi-key, asc/`-`desc), `limit` (per-parent top-N; omitted or ≤ 0 → all
+  rows, an explicit positive value is capped at `MaxLimit` — no implicit default/truncation), and `offset`
+  (per-parent skip, ≥ 0, applied before `limit`; negative rejected) — at **every** nesting level up
   to `MaxRelationDepth`. **Domain** — `DeepRelationSpec` gains `FilterNode? Filter`,
   `IReadOnlyList<SortField>? Sort`, `int? Offset` (the pre-existing `Limit` field goes from parsed-but-unused
   to actually consumed). **Application** — `QueryParser.ParseDeepObject` reads the four new envelope keys;
@@ -550,7 +551,14 @@
   gate on real Postgres is PENDING** — this slice is code-complete and unit/integration-tested (SQLite +
   spy), but **not yet live-verified**; do not treat it as live-confirmed until the user runs the real-PG gate
   (§12 of the spec: nested-filter discrimination, independent per-parent limit/offset, CJK code-point-exact,
-  M2O-args + bad-path `BAD_USER_INPUT`, arg-less back-compat).
+  M2O-args + bad-path `BAD_USER_INPUT`, arg-less back-compat). **Reviewer-recommended additions to the live-gate
+  checklist** (lack end-to-end automated coverage today): GraphQL nested `sort` + `offset` args (including a
+  `$variable` form) through the real `/graphql` endpoint; CJK nested-`sort` **ordering** (the in-memory sort
+  uses `IComparable`/`String.CompareTo`, not DB collation — verify order determinism); a nested `limit` >
+  `MaxLimit` clamp. The implemented `limit` semantics above (omitted/≤0 → all rows; explicit positive →
+  capped at `MaxLimit`) supersede the spec's §3.4 wording, which is ambiguous on this point — the spec is a
+  historical planning artifact and is not updated here; this ROADMAP entry and the guide are the live
+  contract.
 - **Verification baseline (2026-07-13, post-8c.3b, pending live gate):** backend `dotnet build -warnaserror`
   clean (0 warnings) + `dotnet test` **573** passed / 0 failed / 0 skipped (549 8c.3a baseline + 24 new:
   `DeepRelationSpec` filter/sort/offset fields + envelope parse + recursive arg validation +
