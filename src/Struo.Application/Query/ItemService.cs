@@ -210,11 +210,14 @@ public sealed class ItemService(
         IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
         CancellationToken ct)
     {
-        if (deep is null || deep.Relations.Count == 0 || entities.Count == 0) return;
+        if (deep is null || deep.Relations.Count == 0) return;
 
         // Validate the whole nested tree: nesting depth <= MaxRelationDepth, and every relation
-        // name resolves against its own level's collection. Runs before any query executes.
+        // name resolves against its own level's collection. Runs before any query executes,
+        // and independent of row count — an over-depth/unknown-relation request must be
+        // rejected even when the parent query matched zero rows.
         ValidateDeepTree(collection, deep, depth: 1);
+        if (entities.Count == 0) return;
 
         var parentDesc = registry.Get(collection)!;
 
