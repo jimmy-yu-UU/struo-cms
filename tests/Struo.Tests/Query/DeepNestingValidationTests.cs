@@ -48,6 +48,21 @@ public class DeepNestingValidationTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Nested_deep_over_max_depth_returns_400_even_with_no_matching_rows()
+    {
+        // Validity must not depend on result-set size: an over-depth deep request against an
+        // empty/no-match collection must still be rejected (400), not silently return 200-empty.
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new { id = new Dictionary<string, object> { ["_eq"] = System.Guid.NewGuid().ToString() } }, // matches nothing
+            deep = NestParent(6)
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Many_sibling_relations_at_depth_one_are_allowed()
     {
         // The old cap rejected > MaxRelationDepth *relations* regardless of nesting.
