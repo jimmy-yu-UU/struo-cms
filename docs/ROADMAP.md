@@ -491,10 +491,10 @@
   Postgres `web-struo-cms-db` + Redis — depth-3 M2O chain, depth-2 O2M, mixed-kind multi-hop, CJK at a nested level,
   self-referential cycle, over-depth → `BAD_USER_INPUT`, REST nested envelope; see the plan's Live Gate checklist).
 - **Verification baseline (2026-07-13, post-8c.3a):** backend `dotnet build -warnaserror` clean (0 warnings) +
-  `dotnet test` **548** passed / 0 failed / 0 skipped (534 8c.2 baseline + 14 new: recursive `DeepRelationSpec` +
+  `dotnet test` **549** passed / 0 failed / 0 skipped (534 8c.2 baseline + 15 new: recursive `DeepRelationSpec` +
   REST envelope nesting + depth/name validation + `RelationExpander` recursion + N+1 batching invariant + GraphQL
-  selection-tree recursion). Frontend untouched, `pnpm test` still **237**. **Live gate PENDING** — see the Phase
-  8c.3a row above.
+  selection-tree recursion + a final-review backfill covering depth>1 recursion through an M2M level). Frontend
+  untouched, `pnpm test` still **237**. **Live gate PENDING** — see the Phase 8c.3a row above.
 - **Next up:** 8c.3a is done with automated gates green; its **live gate is pending** (user-run against real
   Postgres — see the plan's checklist). Remaining work is
   **8c.3b** (nested-list `filter/sort/limit/offset` arguments on related list fields — no spec/plan yet) or
