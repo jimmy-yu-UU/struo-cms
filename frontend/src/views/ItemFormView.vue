@@ -13,6 +13,7 @@ import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { validateItem } from '../lib/validateItem'
 import { relationInputKind } from '../lib/relationInputKind'
+import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import type { FormModel } from '../types/itemForm'
 
 const route = useRoute()
@@ -90,9 +91,10 @@ async function onSubmit(): Promise<void> {
 }
 
 function onDelete(): void {
+  const { header, message } = deleteConfirm(deleteKindFor(meta.value))
   confirm.require({
-    header: 'Confirm delete',
-    message: 'Delete this item? This cannot be undone.',
+    header,
+    message,
     accept: async () => {
       try {
         await itemsApi.remove(name.value, id.value!)

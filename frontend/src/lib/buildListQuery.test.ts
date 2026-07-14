@@ -29,3 +29,14 @@ describe('buildListQuery filter + locale', () => {
     expect(p.locale).toBe('zh-TW')
   })
 })
+
+describe('buildListQuery deleted mode', () => {
+  it('omits deleted for undefined or exclude (server default)', () => {
+    expect(buildListQuery(0, 25).deleted).toBeUndefined()
+    expect(buildListQuery(0, 25, undefined, undefined, undefined, undefined, 'exclude').deleted).toBeUndefined()
+  })
+  it('emits deleted for only and with', () => {
+    expect(buildListQuery(0, 25, undefined, undefined, undefined, undefined, 'only').deleted).toBe('only')
+    expect(buildListQuery(0, 25, undefined, undefined, undefined, undefined, 'with').deleted).toBe('with')
+  })
+})
