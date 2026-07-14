@@ -119,6 +119,103 @@ public class SoftDeleteRepositoryTests
         using var h = SoftDeleteRepositoryHarness.Create();
         Assert.Null(await h.Service.RestoreAsync("article", Guid.NewGuid().ToString(), default));
     }
+
+    // ── Final-review fix (Important #1): engine-level exclusion regressions ────
+
+    [Fact]
+    public async Task Deep_expansion_excludes_a_trashed_m2o_parent()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var categoryId = await h.InsertCategoryAsync("WillBeTrashed");
+        var articleId = await h.InsertArticleWithCategoryAsync(categoryId, status: "published");
+        await h.Repository.SoftDeleteAsync("category", categoryId.ToString(), DateTime.UtcNow, null, default);
+
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["category"] = new DeepRelationSpec(null, null)
+        });
+
+        var row = await h.Service.GetAsync(
+            "article", articleId.ToString(), deep, null, DeletedFilter.Exclude, default);
+
+        Assert.NotNull(row);                          // the article itself is still readable
+        Assert.True(row!.ContainsKey("category"));
+        Assert.Null(row["category"]);                  // trashed parent is not expanded
+    }
+
+    // Spec §9's "M2M existence check excludes a trashed target" claim is exercised end-to-end via
+    // Service.UpdateAsync's SyncM2MAsync, which validates target ids through
+    // IItemRepository.QueryWhereInAsync(targetCollection, "id", ids). The sample domain's only M2M
+    // relation is Article.Tags -> Tag, and Tag does NOT implement ISoftDeletable (see Tag.cs) — so a
+    // real "link a trashed tag" scenario can't surface the soft-delete floor at all (Tag rows are
+    // never filtered regardless of DeletedAt, because it has no DeletedAt). No other M2M relation onto
+    // a soft-deletable collection (Article/Category) exists in this sample domain. This test instead
+    // proves the underlying primitive the existence check depends on: QueryWhereInAsync excludes a
+    // trashed row of a collection that IS soft-deletable (Category), which is exactly the mechanism
+    // that would reject a trashed M2M target if/when a soft-deletable M2M target collection exists.
+    [Fact]
+    public async Task QueryWhereIn_excludes_a_trashed_row_of_a_soft_deletable_collection()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var categoryId = await h.InsertCategoryAsync("TrashedTarget");
+        await h.Repository.SoftDeleteAsync("category", categoryId.ToString(), DateTime.UtcNow, null, default);
+
+        var found = await h.Repository.QueryWhereInAsync("category", "id", [categoryId], default);
+        Assert.Empty(found);
+    }
+
+    // Spec §9's "Inbound-Restrict counts live references only" claim is NOT exercisable with the
+    // current sample entities: Article.CategoryId is OnDelete.SetNull and Category.ParentId
+    // (self-reference) is also OnDelete.SetNull (see Article.cs/Category.cs) — no relation in the
+    // sample domain uses OnDelete.Restrict, so graph.InboundRestrict() is empty for every
+    // soft-deletable collection and ItemService.DeleteAsync's Restrict-guard branch never runs for
+    // them. Deferred to the live gate / a future sample entity with a Restrict relation; no test added
+    // here to avoid a fabricated pass that doesn't actually exercise Restrict.
+
+    // ── Final-review fix (Important #1): floor-locking negative tests ──────────
+
+    [Fact]
+    public async Task Non_soft_deletable_collection_ignores_the_deleted_filter_entirely()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var t1 = (Tag)await h.Repository.CreateAsync("tag", new Tag { Name = "Alpha" });
+        var t2 = (Tag)await h.Repository.CreateAsync("tag", new Tag { Name = "Beta" });
+
+        // Tag does not implement ISoftDeletable, so the global <ISoftDeletable> table filter never
+        // attaches to it (SqlSugar's AddTableFilter<T> only applies to types assignable to T), and the
+        // Only/With DeletedFilter branches in RunQueryAsync are gated on `isSoftDeletable`. Exclude and
+        // Only must therefore both see the full, unfiltered set for a non-soft-deletable collection.
+        var excluded = await h.Repository.QueryAsync("tag",
+            new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Exclude, default);
+        var only = await h.Repository.QueryAsync("tag",
+            new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Only, default);
+
+        excluded.Rows.Select(h.IdOf).Should().BeEquivalentTo([t1.Id, t2.Id]);
+        only.Rows.Select(h.IdOf).Should().BeEquivalentTo([t1.Id, t2.Id]);
+    }
+
+    [Fact]
+    public async Task Deleted_filter_scoping_is_per_query_not_sticky_on_the_scoped_client()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var live = await h.InsertArticleAsync(status: "published");
+        var trashed = await h.InsertArticleAsync(status: "published");
+        await h.Repository.SoftDeleteAsync("article", trashed.ToString(), DateTime.UtcNow, null, default);
+
+        // First call on this client lifts the floor via ClearFilter<ISoftDeletable>() (DeletedFilter.With).
+        var with = await h.Repository.QueryAsync("article",
+            new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.With, default);
+        with.Rows.Select(h.IdOf).Should().Contain([live, trashed]);
+
+        // A SUBSEQUENT call on the SAME client/scoped ISqlSugarClient with Exclude must still filter —
+        // proving ClearFilter is applied fresh per Queryable<T>() call (NewQueryable()), not left
+        // dangling/sticky on the shared scoped client from the prior With call.
+        var excludeAgain = await h.Repository.QueryAsync("article",
+            new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Exclude, default);
+        var idsAgain = excludeAgain.Rows.Select(h.IdOf).ToList();
+        idsAgain.Should().Contain(live);
+        idsAgain.Should().NotContain(trashed);
+    }
 }
 
 /// <summary>
@@ -156,6 +253,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         db.CodeFirst.InitTables<ArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<Tag>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
@@ -185,6 +283,19 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
     public async Task<Guid> InsertArticleAsync(string status)
     {
         var created = (Article)await Repository.CreateAsync("article", new Article { Status = status });
+        return created.Id;
+    }
+
+    public async Task<Guid> InsertCategoryAsync(string name)
+    {
+        var created = (Category)await Repository.CreateAsync("category", new Category { Name = name });
+        return created.Id;
+    }
+
+    public async Task<Guid> InsertArticleWithCategoryAsync(Guid categoryId, string status)
+    {
+        var created = (Article)await Repository.CreateAsync(
+            "article", new Article { Status = status, CategoryId = categoryId });
         return created.Id;
     }
 

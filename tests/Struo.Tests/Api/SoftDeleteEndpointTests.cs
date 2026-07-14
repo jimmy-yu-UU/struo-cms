@@ -83,4 +83,35 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
         var resp = await client.GetAsync("/api/items/article?deleted=banana");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    // ── Final-review fix (Important #1): REST permission-denial regressions ───
+
+    [Fact]
+    public async Task Query_only_via_POST_requires_delete_permission()
+    {
+        // Read-granted, delete-lacking editor: CreateEditorClientAsync never sets Permission.CanDelete,
+        // so this role has CanRead=true/CanWrite=false/CanDelete=false on 'article'.
+        var (client, _) = await _factory.CreateEditorClientAsync(
+            readCollections: ["article"], writeCollections: []);
+
+        var envelope = JsonSerializer.SerializeToElement(new { });
+        var resp = await client.PostAsJsonAsync("/api/items/article/query?deleted=only", envelope);
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Delete_and_restore_require_delete_permission()
+    {
+        var admin = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(admin, "NeedsDeletePermission");
+
+        // Read+write granted, delete-lacking editor (same reasoning as above).
+        var (editor, _) = await _factory.CreateEditorClientAsync(
+            readCollections: ["article"], writeCollections: ["article"]);
+
+        (await editor.DeleteAsync($"/api/items/article/{id}")).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
+        (await editor.PostAsync($"/api/items/article/{id}/restore", null)).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
+    }
 }
