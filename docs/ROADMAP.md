@@ -640,8 +640,8 @@
   Title (search state persists across the Active/Trash switch). Spec:
   [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) · plan:
   [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md).
-- **Phase 9a (unified response envelope — REST, backend-only slice) done (automated gates green; live-gate
-  pending), 2026-07-14:** every REST `/api/*` JSON response now carries one envelope — success
+- **Phase 9a (unified response envelope — REST, backend-only slice) done & live-verified (real PG),
+  2026-07-14:** every REST `/api/*` JSON response now carries one envelope — success
   `{ success:true, data, meta? }` (`meta` list-only, offset-based `{ total, limit, offset }`) and error
   `{ success:false, error:{ code, message, details? } }` (`details` only on `VALIDATION`). Enveloping is
   **centralized in `Struo.Api/Http/`** and controllers were simplified to return raw data / a `PagedResult`
@@ -665,7 +665,15 @@
   `res.data`+`res.meta.total`); explicit `apiClient`/`ApiError` alignment (branch on `success`, surface
   `code`/`details`) is deferred to **9a-fe**. Spec:
   [spec](superpowers/specs/2026-07-14-phase9a-unified-response-envelope-design.md) · plan:
-  [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md). **Live gate (real PG) pending.**
+  [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md). **Live gate PASSED 2026-07-14 on
+  real Postgres (`web-struo-cms-db`) + Redis + MinIO, 11/11, no fixes:** list → `{success,data,meta{total,limit,
+  offset}}`; category create → 201 `{success,data}` with CJK `類別9a` code-point-exact (U+985E U+5225) + `version`;
+  get → `{success,data}` (no `meta`); unknown id → 404 `NOT_FOUND`; malformed JSON → 400 `VALIDATION` + `details`;
+  `?deleted=banana` → 400 `BAD_USER_INPUT`; anonymous read of `user` → 401 `UNAUTHORIZED`; stale `version` update →
+  409 `CONFLICT`; `GET /api/files/{id}/content` → **302** to a MinIO presigned URL (**not enveloped**, `content-type`
+  absent, no JSON body); `DELETE ...?purge=true` → **bare 204**, empty body; `/api/schema` now `{success,data}`.
+  No SQLite-green ≠ Postgres-correct bug surfaced — the filter, exception handler, validation factory, and
+  controller simplifications all worked on real Postgres first try.
 - **Next up:** **Phase 9b + 9b-fe done & live-verified** (real PG); **9a done, live-gate pending**. Remaining
   Phase 9 slices — **9a-fe** (frontend envelope alignment), **9c** (revisions), **9d** (lifecycle hooks) —
   remain, user's call on order.
@@ -748,7 +756,7 @@
 | 8c.3b | GraphQL advanced read querying (nested-list `filter/sort/limit/offset` **arguments** on to-many related list fields; `filter` pushed to SQL via `RelationFilterResolver`, `sort/limit/offset` applied in-memory per parent group; N+1-safe invariant extended; M2O gets no args, nested sort is own-field-only) — *fourth 8c slice, completes the 8c.3 pair with 8c.3a* | ✅ done (live-verified: real PG 18/18, no fixes) | [spec](superpowers/specs/2026-07-13-phase8c3b-nested-list-args-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3b-nested-list-args.md) |
 | 9 | Soft delete / revisions / hooks + unified response envelope — *decomposed into 9a/9b/9c/9d* | ⬜ in progress | — | — |
 | 9b | Soft delete (per-collection `ISoftDeletable` opt-in; SqlSugar global query-filter floor; `DELETE`=mark / `?purge=true`=remove / `restore`; `?deleted=exclude\|only\|with` gated by delete perm; REST + GraphQL parity) — *backend-only; Vue UI deferred to 9b-fe* | ✅ done (live-verified: real PG — soft/only/restore/purge + CJK + `?deleted=only`×D9-sort + deep-expansion exclusion; **+1 live-gate fix: typed-NULL PG 42804**) | [spec](superpowers/specs/2026-07-13-phase9b-soft-delete-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-soft-delete.md) |
-| 9a | Unified response envelope (every REST `/api/*` JSON response → `{success,data,meta?}` / `{success:false,error:{code,message,details?}}`; centralized `EnvelopeResultFilter` + `StruoExceptionHandler` + `InvalidModelStateResponseFactory` + `ApiResults.Fail`; machine-readable `error.code` symmetric with GraphQL; 204/binary/redirect not enveloped) — *backend-only; frontend explicit alignment deferred to 9a-fe* | ⬜ done (automated gates green; live-gate pending) | [spec](superpowers/specs/2026-07-14-phase9a-unified-response-envelope-design.md) | [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md) |
+| 9a | Unified response envelope (every REST `/api/*` JSON response → `{success,data,meta?}` / `{success:false,error:{code,message,details?}}`; centralized `EnvelopeResultFilter` + `StruoExceptionHandler` + `InvalidModelStateResponseFactory` + `ApiResults.Fail`; machine-readable `error.code` symmetric with GraphQL; 204/binary/redirect not enveloped) — *backend-only; frontend explicit alignment deferred to 9a-fe* | ✅ done (live-verified: real PG — list meta / get / create / VALIDATION+details / BAD_USER_INPUT / 401 / CONFLICT / 404 / 302-file-not-enveloped / bare-204, 11/11, no fixes) | [spec](superpowers/specs/2026-07-14-phase9a-unified-response-envelope-design.md) | [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md) |
 | 9c | Revisions | ⬜ planned | — | — |
 | 9d | Lifecycle hooks | ⬜ planned | — | — |
 | 9b-fe | Soft delete admin UI (Vue Active/Trash switch on the collection list + inline soft-delete/restore/purge actions column; `itemsApi` `deleted`/`purge`/`restore`; soft-delete-aware item-form confirm) — *frontend-only; consumes the 9b API; `/api/schema` already emits `softDelete`* | ✅ done (live-verified: real PG — full delete→trash→restore→purge UI loop via Playwright `trash.spec.ts`) | [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md) |
