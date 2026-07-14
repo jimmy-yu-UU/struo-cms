@@ -33,6 +33,43 @@ public class SoftDeleteRepositoryTests
         ids.Should().Contain(live);
         ids.Should().NotContain(trashed);
     }
+
+    [Fact]
+    public async Task Query_with_Only_returns_just_trashed()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var live = await h.InsertArticleAsync(status: "published");
+        var trashed = await h.InsertArticleAsync(status: "published");
+        await h.Repository.SoftDeleteAsync("article", trashed.ToString(), DateTime.UtcNow, null, default);
+
+        var only = await h.Repository.QueryAsync("article",
+            new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Only, default);
+        var ids = only.Rows.Select(h.IdOf).ToList();
+        Assert.Contains(trashed, ids);
+        Assert.DoesNotContain(live, ids);
+    }
+
+    [Fact]
+    public async Task Restore_makes_row_visible_again()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var id = await h.InsertArticleAsync(status: "published");
+        await h.Repository.SoftDeleteAsync("article", id.ToString(), DateTime.UtcNow, null, default);
+        Assert.Null(await h.Repository.GetByIdAsync("article", id.ToString(), DeletedFilter.Exclude, default));
+
+        var restored = await h.Repository.RestoreAsync("article", id.ToString(), default);
+        Assert.True(restored);
+        Assert.NotNull(await h.Repository.GetByIdAsync("article", id.ToString(), DeletedFilter.Exclude, default));
+    }
+
+    [Fact]
+    public async Task GetById_with_With_finds_trashed_row()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var id = await h.InsertArticleAsync(status: "published");
+        await h.Repository.SoftDeleteAsync("article", id.ToString(), DateTime.UtcNow, null, default);
+        Assert.NotNull(await h.Repository.GetByIdAsync("article", id.ToString(), DeletedFilter.With, default));
+    }
 }
 
 /// <summary>
