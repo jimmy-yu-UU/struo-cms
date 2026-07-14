@@ -336,4 +336,12 @@ public class MetadataScannerTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
     }
+
+    [Fact]
+    public void Sample_article_and_category_are_soft_deletable()
+    {
+        var metas = MetadataScanner.Scan(typeof(Struo.Sample.Blog.Article).Assembly);
+        Assert.True(metas.Single(m => m.Name == "article").SoftDelete);
+        Assert.True(metas.Single(m => m.Name == "category").SoftDelete);
+    }
 }
