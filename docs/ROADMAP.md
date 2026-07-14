@@ -568,10 +568,58 @@
   execution round-trips + a review backfill locking `_starts_with`/`_ends_with` match-direction semantics).
   Frontend untouched, `pnpm test` still **237**. **Live gate PASSED 18/18** on real Postgres
   (`web-struo-cms-db`) + Redis (2026-07-13, no backend fixes) — see the Phase 8c.3b row above.
-- **Next up:** 8c.3b is **done & live-verified** (real PG 18/18, no fixes). The 8c series (8c.1 M2O
-  cross-relation filter/sort → 8c.2 to-many filter → 8c.3a multi-level nesting → 8c.3b nested-list args) is
-  now **complete**. Next: **Phase 9** (soft delete / revisions / lifecycle hooks + unified response envelope) —
-  user's call.
+- **Phase 9 decomposed into four independent slices** (soft delete / revisions / lifecycle hooks +
+  unified response envelope were bundled; each is its own brainstorm → plan → execute → verify cycle):
+  **9b soft delete (done, below)**, 9a unified response envelope, 9c revisions, 9d lifecycle hooks. 9b was
+  taken first (highest product value, backend self-contained, builds on the existing `OnDelete`/Restrict +
+  audit infrastructure).
+- **Phase 9b (soft delete — REST + GraphQL, backend-only slice) done & live-verified (real PG, 2026-07-14):**
+  per-collection soft delete. A collection opts in by having its entity implement a new
+  `ISoftDeletable { DateTime? DeletedAt; Guid? DeletedBy; }` (Domain marker, mirrors `IAuditable` — one
+  source of truth, no attribute flag); the scanner derives `CollectionMetadata.SoftDelete` from the
+  interface. **Enforcement is a SqlSugar global query filter** (`QueryFilter.AddTableFilter<ISoftDeletable>(e
+  => e.DeletedAt == null)` on the request-scoped client): every read path — list, get-by-id, deep relation
+  expansion, cross-relation id-resolution, M2M existence, inbound-Restrict — excludes trashed rows **by
+  default** with no per-path code (the "floor"). Only the top-level `QueryAsync`/`GetAsync` accept a
+  `DeletedFilter { Exclude, Only, With }` mode that lifts it (via `.ClearFilter<ISoftDeletable>()` + an
+  `Only` `DeletedAt IS NOT NULL` conditional); `SoftDeleteAsync`/`RestoreAsync` use `Updateable` (not
+  filtered) so they locate trashed rows by id. `DELETE` marks (`DeletedAt`/`DeletedBy` stamped from
+  `ICurrentUserAccessor.GetCurrentUserId()`, same actor as audit); `?purge=true` / `deleteX(purge:true)` hard-
+  removes (today's path, existence-check widened to `With` so an already-trashed row can be purged); `POST
+  .../{id}/restore` / `restoreX(id)` reverts. Reads gate `?deleted=only|with` (REST) / `deleted: ONLY|WITH`
+  (GraphQL, new `DeletedFilter` enum + arg on the top-level list query) behind the collection's **delete**
+  permission (`IPermissionService.CanDelete`) → 403/`FORBIDDEN`. **REST + GraphQL full parity**;
+  Domain/Application engine reused by both surfaces (GraphQL via the existing `IGraphQlDataSource` seam); the
+  response envelope stays `{ data }` / `{ error }` (unifying it is slice 9a). Built subagent-driven (8 tasks,
+  Sonnet impl + per-task review, opus on the risk-bearing tasks + the whole-branch review). Sample `Article`
+  and `Category` opt in; migration `db/migrations/005-soft-delete-columns.sql` adds `deletedat timestamp` /
+  `deletedby uuid` (lowercase unquoted, matching CodeFirst). `dotnet build -warnaserror` **0 warnings** +
+  `dotnet test` **599** (573 8c.3b baseline + 26 new incl. a final-review batch locking deep-expansion /
+  `QueryWhereIn` exclusion / non-soft-collection-unaffected / per-query ClearFilter scoping / REST 403).
+  Frontend untouched (**237**); the Vue trash/restore/purge UI is deferred to **9b-fe**. **Live gate PASSED
+  2026-07-14 on real Postgres (`web-struo-cms-db`) + Redis + MinIO** (REST 12/13 — the one miss a default-list
+  pagination artifact on the populated dev DB, disproven by a post-restore GET-by-id success; GraphQL 9/9):
+  create → soft-delete → default list excludes → `?deleted=only`+`sort=title` shows it (the decisive check —
+  `Only` conditional + `ClearFilter` composing with the D9 raw ORDER-BY translatable-sort subquery on real PG)
+  → `?deleted=with` GET returns the trashed row with **CJK code-point-exact** (`軟刪測` = U+8EDF U+522A U+6E2C)
+  → restore → visible again → deep-expand of a soft-deleted M2O parent yields null → purge → 404 even with
+  `?deleted=with`; `?deleted=banana` → 400; GraphQL parity end-to-end with CJK (`類別` = U+985E U+5225).
+  **The live gate surfaced & fixed 1 real Postgres-only bug** (`b76f453`, the SQLite-green ≠ Postgres-correct
+  class): `restore`/`soft-delete` set the nullable columns to NULL via an **untyped** SqlSugar parameter →
+  Npgsql inferred `text` → PG `42804` "column deletedat is timestamp but expression is text" (SQLite's dynamic
+  typing accepted it, so the SQLite suite was green); fixed with the entity-typed
+  `.SetColumns(it => new T { DeletedAt = null, DeletedBy = null })` overload (its expression resolver assigns
+  the correct `DbType` to the null) + an `ISoftDeletable` generic constraint. Spec:
+  [spec](superpowers/specs/2026-07-13-phase9b-soft-delete-design.md) · plan:
+  [plan](superpowers/plans/2026-07-14-phase9b-soft-delete.md).
+  **Known/deferred:** no `OnDelete.Restrict` relation exists among the sample entities (Article→Category and
+  Category→Parent are both `SetNull`), so the "inbound-Restrict counts live references only" claim is proven at
+  the **primitive** level (a trashed row is invisible to the batched `QueryWhereInAsync` the Restrict check
+  uses — unit-locked) but has no end-to-end 409 demo; a real M2M-onto-trashed-target case likewise needs a
+  soft-deletable M2M target (Tag isn't one). Both are documented, not defects.
+- **Next up:** **Phase 9b is done & live-verified** (real PG; +1 live-gate fix `b76f453`). Remaining Phase 9
+  slices — **9a** (unified response envelope), **9c** (revisions), **9d** (lifecycle hooks) — plus **9b-fe**
+  (the Vue trash/restore/purge admin UI) remain, user's call on order.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -649,7 +697,12 @@
 | 8c.2 | GraphQL to-many cross-relation filter (O2M/M2M nested `{Target}FilterInput`, ANY/EXISTS, multi-hop mixed-kind; relaxes the 8c.1 M2O-only guard in `BuildFilterInput` + `RelationTargets`; engine/validator reused) — *second 8c slice* | ✅ done (live-verified: real PG — M2M/O2M/self-ref/multi-hop mixed-kind/CJK/discrimination/empty, 8/8, no fixes) | [spec](superpowers/specs/2026-07-09-phase8c2-graphql-tomany-relation-filter-design.md) | [plan](superpowers/plans/2026-07-09-phase8c2-graphql-tomany-relation-filter.md) |
 | 8c.3a | GraphQL advanced read querying (multi-level (depth>1) relation **nesting/expansion**): recursive `DeepRelationSpec`/`DeepSpec` (Domain); REST `deep` envelope nesting + depth/name validation (Application); batched recursive `RelationExpander` (Infrastructure, N+1-safe); GraphQL selection-tree recursion (Api); relation-**count** cap → nesting-**depth** cap — *third 8c slice, engine work across Domain/App/Infra* | ✅ done (live-verified: real PG 7/7 — depth-3 M2O/depth-2 O2M/mixed-kind/self-ref cycle/CJK exact/over-depth reject/REST envelope, no fixes) | [spec](superpowers/specs/2026-07-13-phase8c3a-multilevel-relation-nesting-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3a-multilevel-relation-nesting.md) |
 | 8c.3b | GraphQL advanced read querying (nested-list `filter/sort/limit/offset` **arguments** on to-many related list fields; `filter` pushed to SQL via `RelationFilterResolver`, `sort/limit/offset` applied in-memory per parent group; N+1-safe invariant extended; M2O gets no args, nested sort is own-field-only) — *fourth 8c slice, completes the 8c.3 pair with 8c.3a* | ✅ done (live-verified: real PG 18/18, no fixes) | [spec](superpowers/specs/2026-07-13-phase8c3b-nested-list-args-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3b-nested-list-args.md) |
-| 9 | Soft delete / revisions / hooks + unified response envelope | ⬜ planned | — | — |
+| 9 | Soft delete / revisions / hooks + unified response envelope — *decomposed into 9a/9b/9c/9d* | ⬜ in progress | — | — |
+| 9b | Soft delete (per-collection `ISoftDeletable` opt-in; SqlSugar global query-filter floor; `DELETE`=mark / `?purge=true`=remove / `restore`; `?deleted=exclude\|only\|with` gated by delete perm; REST + GraphQL parity) — *backend-only; Vue UI deferred to 9b-fe* | ✅ done (live-verified: real PG — soft/only/restore/purge + CJK + `?deleted=only`×D9-sort + deep-expansion exclusion; **+1 live-gate fix: typed-NULL PG 42804**) | [spec](superpowers/specs/2026-07-13-phase9b-soft-delete-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-soft-delete.md) |
+| 9a | Unified response envelope | ⬜ planned | — | — |
+| 9c | Revisions | ⬜ planned | — | — |
+| 9d | Lifecycle hooks | ⬜ planned | — | — |
+| 9b-fe | Soft delete admin UI (Vue trash view + restore/purge) | ⬜ planned | — | — |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
 > (identity model alignment, then SEO model), not feature additions to the planned scope.
