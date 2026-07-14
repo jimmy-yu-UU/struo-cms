@@ -1,4 +1,25 @@
-export type ApiError = { message: string }
+export type ValidationDetail = { field: string; message: string }
+
+// The shape of the server's error envelope body (9a).
+export type ApiErrorBody = {
+  code?: string
+  message: string
+  details?: ValidationDetail[]
+}
+
+// The Error thrown by apiClient on any non-2xx response.
+export class ApiError extends Error {
+  readonly status: number
+  readonly code?: string
+  readonly details?: ValidationDetail[]
+  constructor(status: number, message: string, code?: string, details?: ValidationDetail[]) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.details = details
+  }
+}
 
 // CSRF: the API rejects cookie-authenticated mutations that lack this header (OWASP custom-header
 // method). The value is irrelevant — a cross-site page cannot set a custom header on a credentialed
@@ -62,12 +83,16 @@ export class ApiClient {
     if (res.status === 401) this.onUnauthorized?.()
 
     if (!res.ok) {
-      let message = `Request failed (${res.status})`
+      let body: ApiErrorBody | undefined
       try {
-        const payload = await res.json()
-        message = (payload?.error as ApiError)?.message ?? message
-      } catch { /* non-JSON error body: keep default message */ }
-      throw new Error(message)
+        body = (await res.json())?.error as ApiErrorBody | undefined
+      } catch { /* non-JSON error body: leave body undefined */ }
+      throw new ApiError(
+        res.status,
+        body?.message ?? `Request failed (${res.status})`,
+        body?.code,
+        body?.details,
+      )
     }
 
     if (res.status === 204) return undefined as T
@@ -75,6 +100,9 @@ export class ApiClient {
     if (!text) return undefined as T
     const payload = JSON.parse(text)
     if (opts?.unwrap === false) return payload as T
+    if (payload && typeof payload === 'object' && 'success' in payload) {
+      return (payload as { data?: unknown }).data as T
+    }
     return (payload?.data ?? payload) as T
   }
 }
