@@ -49,6 +49,17 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Bare_not_found_has_clean_human_message()
+    {
+        var client = _factory.CreateClient(); // article is public-read in test config
+        var resp = await client.GetAsync($"/api/items/article/{System.Guid.NewGuid()}"); // valid collection, nonexistent id -> bare NotFound()
+        resp.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+        var error = Root(await resp.Content.ReadAsStringAsync()).GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("NOT_FOUND");
+        error.GetProperty("message").GetString().Should().Be("Resource not found."); // clean DefaultMessage(404), NOT a type name
+    }
+
+    [Fact]
     public async Task Bad_login_is_unauthorized_envelope_via_fail_helper()
     {
         var client = _factory.CreateClient();

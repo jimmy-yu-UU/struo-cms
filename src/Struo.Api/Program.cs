@@ -33,6 +33,7 @@ try
 
     builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
     {
+        o.SuppressMapClientErrors = true;
         o.InvalidModelStateResponseFactory = ctx =>
         {
             var details = ctx.ModelState

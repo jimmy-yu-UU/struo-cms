@@ -61,7 +61,7 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
     }
 
     private static string Message(object? value, int status) =>
-        value?.ToString() is { Length: > 0 } s ? s : DefaultMessage(status);
+        value is string s && s.Length > 0 ? s : DefaultMessage(status);
 
     private static string DefaultMessage(int status) => status switch
     {
