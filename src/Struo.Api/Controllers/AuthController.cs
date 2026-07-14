@@ -20,7 +20,8 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     {
         var result = await auth.AuthenticateAsync(body.Email, body.Password, ct);
         if (!result.Succeeded)
-            return Unauthorized(new { error = new { message = "Invalid credentials." } });
+            return Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
+                Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
 
         var identity = new ClaimsIdentity(AuthSchemes.Cookie);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
