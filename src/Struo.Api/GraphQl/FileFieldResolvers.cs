@@ -6,6 +6,7 @@ using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Configuration;
+using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
 
@@ -97,7 +98,7 @@ internal static class FileFieldResolvers
                     ["id"] = new Dictionary<string, object?> { ["in"] = chunk.Cast<object?>().ToList() },
                 };
                 var query = GraphQlQueryBuilder.BuildQuery(filter, null, chunk.Length, 0, null, deep: null);
-                var page = await dataSource.QueryAsync("file", query, null, cancellationToken);
+                var page = await dataSource.QueryAsync("file", query, null, DeletedFilter.Exclude, cancellationToken);
 
                 foreach (var row in page.Data)
                     if (ToGuid(row.GetValueOrDefault("id")) is { } g) map[g] = row;

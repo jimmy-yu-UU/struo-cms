@@ -7,6 +7,7 @@ using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Query;
 
@@ -37,6 +38,7 @@ internal static class CollectionResolvers
         config.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
         config.Arguments.Add(new ArgumentConfiguration("search", null, TypeReference.Parse("String")));
         config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
+        config.Arguments.Add(new ArgumentConfiguration("deleted", null, TypeReference.Parse("DeletedFilter")));
         return config;
     }
 
@@ -58,11 +60,14 @@ internal static class CollectionResolvers
         var offset = ctx.ArgumentValue<int?>("offset");
         var search = ctx.ArgumentValue<string?>("search");
         var locale = ctx.ArgumentValue<string?>("locale");
+        var deleted = ctx.ArgumentValue<DeletedFilter?>("deleted") ?? DeletedFilter.Exclude;
+        if (deleted != DeletedFilter.Exclude && !ctx.Service<IPermissionService>().CanDelete(collection))
+            throw new PermissionDeniedException("Viewing deleted items requires delete permission.");
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);
         var query = GraphQlQueryBuilder.BuildQuery(
             filter, sort, limit, offset, search, deep,
             collection, RelationTargets(metadata));
-        var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, ctx.RequestAborted);
+        var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, deleted, ctx.RequestAborted);
         return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total);
     }
 
