@@ -31,6 +31,26 @@ try
                 new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         });
 
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+    {
+        o.InvalidModelStateResponseFactory = ctx =>
+        {
+            var details = ctx.ModelState
+                .Where(kv => kv.Value is { Errors.Count: > 0 })
+                .SelectMany(kv => kv.Value!.Errors.Select(e =>
+                    new Struo.Api.Http.ValidationDetail(
+                        kv.Key,
+                        string.IsNullOrEmpty(e.ErrorMessage) ? "Invalid value." : e.ErrorMessage)))
+                .ToList();
+            return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                Struo.Api.Http.Envelope.Error(Struo.Api.Http.ErrorCodes.Validation,
+                    "One or more validation errors occurred.", details));
+        };
+    });
+
+    builder.Services.AddProblemDetails();
+    builder.Services.AddExceptionHandler<Struo.Api.Http.StruoExceptionHandler>();
+
     builder.Services.AddOpenApi();
     builder.Services.AddStruoInfrastructure(builder.Configuration);
     builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
@@ -53,55 +73,9 @@ try
     app.UseStruoCors(app.Configuration);
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseExceptionHandler();
     app.UseMiddleware<Struo.Api.Auth.CsrfProtectionMiddleware>();
     app.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>();
-
-    app.Use(async (context, next) =>
-    {
-        try { await next(); }
-        catch (Struo.Domain.Query.PermissionDeniedException ex)
-        {
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = context.User.Identity?.IsAuthenticated == true
-                    ? StatusCodes.Status403Forbidden
-                    : StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
-            }
-        }
-        catch (Struo.Domain.Query.CollectionNotFoundException ex)
-        {
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
-            }
-        }
-        catch (Struo.Domain.Query.RelationConflictException ex)
-        {
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = StatusCodes.Status409Conflict;
-                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
-            }
-        }
-        catch (Struo.Domain.Query.ConcurrencyConflictException ex)
-        {
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = StatusCodes.Status409Conflict;
-                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
-            }
-        }
-        catch (Struo.Domain.Query.QueryException ex)
-        {
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = new { message = ex.Message } });
-            }
-        }
-    });
 
     app.MapControllers();
     app.MapStruoGraphQl();

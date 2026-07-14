@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Struo.Api.Auth;
+using Struo.Api.Http;
+using ErrorCodes = Struo.Api.Http.ErrorCodes; // disambiguates from the global `HotChocolate.ErrorCodes` using (GraphQl)
 using Struo.Application.Files;
 using Struo.Application.Security;
 using Struo.Domain.Query;
@@ -29,10 +31,10 @@ public sealed class FilesController(
         if (!permissions.CanWrite(FileCollection))
             throw new PermissionDeniedException("Write not permitted.");
         if (!Request.HasFormContentType)
-            return BadRequest(new { error = new { message = "Expected multipart/form-data." } });
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Expected multipart/form-data.");
         var form = await Request.ReadFormAsync(ct);
         var file = form.Files.GetFile("file");
-        if (file is null) return BadRequest(new { error = new { message = "Missing 'file' part." } });
+        if (file is null) return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Missing 'file' part.");
 
         await using var stream = file.OpenReadStream();
         var created = await files.UploadAsync(stream, file.FileName, file.ContentType, file.Length, ct);
