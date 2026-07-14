@@ -14,6 +14,13 @@ public sealed record CollectionMetadata
     /// escalation. See <c>CmsCollectionAttribute.AdminOnly</c>.
     /// </summary>
     public bool AdminOnly { get; init; }
+
+    /// <summary>
+    /// When true, the collection's entity implements <see cref="Struo.Domain.Auditing.ISoftDeletable"/>:
+    /// DELETE marks the row (DeletedAt set) instead of removing it, reads exclude it by default, and a
+    /// restore/purge surface applies (Phase 9b). Derived by the scanner from the interface — no attribute.
+    /// </summary>
+    public bool SoftDelete { get; init; }
     public required IReadOnlyList<FieldGroupMetadata> FieldGroups { get; init; }
     public required IReadOnlyList<FieldMetadata> Fields { get; init; }
     public IReadOnlyList<RelationMetadata> Relations { get; init; } = [];
