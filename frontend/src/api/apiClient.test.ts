@@ -48,7 +48,7 @@ describe('ApiClient', () => {
   it('throws an ApiError carrying status/code/message from the error envelope', async () => {
     vi.stubGlobal('fetch', mockFetch(401, { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid credentials.' } }))
     const c = new ApiClient('/api')
-    const err = await c.get('/auth/me').catch((e) => e)
+    const err = await c.get('/auth/me').catch((e) => e) as ApiError
     expect(err).toBeInstanceOf(ApiError)
     expect(err).toBeInstanceOf(Error)
     expect(err.status).toBe(401)
@@ -62,7 +62,7 @@ describe('ApiClient', () => {
       success: false,
       error: { code: 'VALIDATION', message: 'One or more validation errors occurred.', details: [{ field: 'email', message: 'Email is required.' }] },
     }))
-    const err = await new ApiClient('/api').post('/auth/login', {}).catch((e) => e)
+    const err = await new ApiClient('/api').post('/auth/login', {}).catch((e) => e) as ApiError
     expect(err).toBeInstanceOf(ApiError)
     expect(err.code).toBe('VALIDATION')
     expect(err.details).toEqual([{ field: 'email', message: 'Email is required.' }])
@@ -75,7 +75,7 @@ describe('ApiClient', () => {
       json: async () => { throw new Error('not json') },
       text: async () => 'oops',
     } as unknown as Response)
-    const err = await c.get('/x').catch((e) => e)
+    const err = await c.get('/x').catch((e) => e) as ApiError
     expect(err).toBeInstanceOf(ApiError)
     expect(err.status).toBe(500)
     expect(err.message).toBe('Request failed (500)')
@@ -114,7 +114,7 @@ describe('ApiClient', () => {
   it('put throws an ApiError with the server code on non-2xx', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: false, error: { code: 'BAD_USER_INPUT', message: 'nope' } }), { status: 400 }))
-    const err = await new ApiClient('/api').put('/x', {}).catch((e) => e)
+    const err = await new ApiClient('/api').put('/x', {}).catch((e) => e) as ApiError
     expect(err).toBeInstanceOf(ApiError)
     expect(err.code).toBe('BAD_USER_INPUT')
     expect(err.message).toBe('nope')
