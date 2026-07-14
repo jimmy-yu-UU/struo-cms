@@ -49,12 +49,12 @@ public sealed class SqlSugarItemRepository(
     private static readonly MethodInfo SoftDeleteGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SoftDeleteGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(object), typeof(string), typeof(string), typeof(DateTime), typeof(Guid?), typeof(CancellationToken)])!;
+            [typeof(string), typeof(object), typeof(DateTime), typeof(Guid?), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo RestoreGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(RestoreGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(object), typeof(string), typeof(string), typeof(CancellationToken)])!;
+            [typeof(string), typeof(object), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo WhereInGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInGenericAsync),
@@ -352,17 +352,15 @@ public sealed class SqlSugarItemRepository(
             throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
 
         var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), d.EntityType);
-        var deletedByColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedBy), d.EntityType);
         var typedId = ConvertId(id, d);
 
         var method = SoftDeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, deletedAtColumn, deletedByColumn, deletedAt, deletedBy, ct])!;
+        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, deletedAt, deletedBy, ct])!;
     }
 
     private async Task<bool> SoftDeleteGenericAsync<T>(
-        string idColumn, object id, string deletedAtColumn, string deletedByColumn,
-        DateTime deletedAt, Guid? deletedBy, CancellationToken ct) where T : class, new()
+        string idColumn, object id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct)
+        where T : class, ISoftDeletable, new()
     {
         // Updateable<T> is not subject to the ISoftDeletable query filter, so the row is located by
         // id regardless of its current DeletedAt — soft-deleting an already-trashed row still
@@ -371,9 +369,15 @@ public sealed class SqlSugarItemRepository(
         // its own on Updateable<T>() for an entity whose PK property is named "Id" — colliding with a
         // plain "@id" here silently rebinds to that internal (unset/default) parameter instead of ours.
         // UpdateGenericAsync's "@__ocId" dodges the same collision.
+        //
+        // SetColumns(it => new T{...}) — not the string-fieldName overload — because when deletedBy is
+        // null, SqlSugar's expression resolver (MemberInitExpressionResolve.Update) sees the target
+        // property is Nullable<T> and types the resulting SQL parameter's DbType from the underlying
+        // CLR type (Guid), instead of boxing a bare `(object?)null` with no type info at all. An
+        // untyped null parameter is sent to Npgsql as `text`, which PG rejects (42804) against a
+        // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
         var affected = await db.Updateable<T>()
-            .SetColumns(deletedAtColumn, (object)deletedAt)
-            .SetColumns(deletedByColumn, (object?)deletedBy)
+            .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy })
             .Where($"{idColumn} = @__sdId", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;
@@ -386,21 +390,24 @@ public sealed class SqlSugarItemRepository(
             throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
 
         var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), d.EntityType);
-        var deletedByColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedBy), d.EntityType);
         var typedId = ConvertId(id, d);
 
         var method = RestoreGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, deletedAtColumn, deletedByColumn, ct])!;
+        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, ct])!;
     }
 
-    private async Task<bool> RestoreGenericAsync<T>(
-        string idColumn, object id, string deletedAtColumn, string deletedByColumn, CancellationToken ct)
-        where T : class, new()
+    private async Task<bool> RestoreGenericAsync<T>(string idColumn, object id, CancellationToken ct)
+        where T : class, ISoftDeletable, new()
     {
+        // PG 42804 fix (9b live-gate): `.SetColumns(deletedAtColumn, (object?)null)` binds a null
+        // parameter with NO CLR type, so Npgsql infers `text` and PG rejects
+        // `SET deletedat = @p(text)` against the `timestamp` column. The entity-typed object
+        // initializer below goes through SqlSugar's expression resolver instead of the raw
+        // string-fieldName overload: it recognizes DeletedAt/DeletedBy as Nullable<DateTime>/
+        // Nullable<Guid> and assigns the null parameter's DbType from the underlying type
+        // (DateTime / Guid), which PG accepts against the timestamp/uuid columns.
         var affected = await db.Updateable<T>()
-            .SetColumns(deletedAtColumn, (object?)null)
-            .SetColumns(deletedByColumn, (object?)null)
+            .SetColumns(it => new T { DeletedAt = null, DeletedBy = null })
             .Where($"{idColumn} = @__sdId", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;
