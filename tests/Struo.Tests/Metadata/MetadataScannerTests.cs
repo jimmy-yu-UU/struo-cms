@@ -312,4 +312,36 @@ public class MetadataScannerTests
         faqs.Interface.Should().Be(FieldInterface.Repeater);
         faqs.Fields!.Select(f => f.Name).Should().Contain("question");
     }
+
+    [Fact]
+    public void Scan_marks_soft_deletable_collection()
+    {
+        var metas = MetadataScanner.ScanTypes([typeof(SoftColl), typeof(HardColl)]);
+        Assert.True(metas.Single(m => m.Name == "softColl").SoftDelete);
+        Assert.False(metas.Single(m => m.Name == "hardColl").SoftDelete);
+    }
+
+    [CmsCollection("SoftColl")]
+    private sealed class SoftColl : Struo.Domain.Auditing.ISoftDeletable
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+        public DateTime? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; }
+    }
+
+    [CmsCollection("HardColl")]
+    private sealed class HardColl
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+    }
+
+    [Fact]
+    public void Sample_article_and_category_are_soft_deletable()
+    {
+        var metas = MetadataScanner.Scan(typeof(Struo.Sample.Blog.Article).Assembly);
+        Assert.True(metas.Single(m => m.Name == "article").SoftDelete);
+        Assert.True(metas.Single(m => m.Name == "category").SoftDelete);
+    }
 }

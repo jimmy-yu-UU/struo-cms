@@ -1,5 +1,6 @@
 // tests/Struo.Tests/Query/DeleteRestrictWithGuidPkTests.cs
 using AwesomeAssertions;
+using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
@@ -9,6 +10,7 @@ using Struo.Domain.Localization;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Security;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -49,15 +51,19 @@ public class DeleteRestrictWithGuidPkTests
     // Repository that returns one stub row for QueryWhereInAsync (simulates a referencing row).
     private sealed class StubRepo : IItemRepository
     {
-        public Task<QueryResult> QueryAsync(string c, QueryModel q, IReadOnlyList<string> s, string? l, CancellationToken ct) =>
+        public Task<QueryResult> QueryAsync(string c, QueryModel q, IReadOnlyList<string> s, string? l, DeletedFilter deleted, CancellationToken ct) =>
             Task.FromResult(new QueryResult([], 0));
-        public Task<object?> GetByIdAsync(string c, string id, CancellationToken ct) =>
+        public Task<object?> GetByIdAsync(string c, string id, DeletedFilter deleted, CancellationToken ct) =>
             Task.FromResult<object?>(null);
         public Task<object> CreateAsync(string c, object e, CancellationToken ct) =>
             Task.FromResult(e);
         public Task<object?> UpdateAsync(string c, string id, object e, CancellationToken ct) =>
             Task.FromResult<object?>(e);
         public Task<bool> DeleteAsync(string c, string id, CancellationToken ct) =>
+            Task.FromResult(true);
+        public Task<bool> SoftDeleteAsync(string c, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct) =>
+            Task.FromResult(true);
+        public Task<bool> RestoreAsync(string c, string id, CancellationToken ct) =>
             Task.FromResult(true);
         public Task InTransactionAsync(Func<Task> body, CancellationToken ct) => body();
         public Task<IReadOnlyList<object>> QueryWhereInAsync(string c, string prop, IReadOnlyList<object> vals, CancellationToken ct) =>
@@ -149,7 +155,8 @@ public class DeleteRestrictWithGuidPkTests
             repo, meta, registry, new StubPermissions(),
             graph, new StubExpander(), new StubM2M(),
             new StubFilterResolver(), new StubLanguages(),
-            new StruoQueryOptions(), new GanssHtmlSanitizer());
+            new StruoQueryOptions(), new GanssHtmlSanitizer(),
+            new TestCurrentUserAccessor(Guid.Empty));
 
         // Act: delete a Guid-keyed row that is still referenced — must throw RelationConflictException
         // (conflict / 409), NOT a QueryException from a failed Convert.ChangeType (spurious 400).

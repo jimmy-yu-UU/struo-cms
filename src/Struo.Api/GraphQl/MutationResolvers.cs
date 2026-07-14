@@ -192,12 +192,31 @@ internal static class MutationResolvers
             TypeReference.Parse("Boolean"),
             resolver: ctx => ResolveDelete(ctx, collection));
         config.Arguments.Add(new ArgumentConfiguration("id", null, TypeReference.Parse("ID!")));
+        config.Arguments.Add(new ArgumentConfiguration("purge", null, TypeReference.Parse("Boolean")));
         return config;
     }
 
     private static async ValueTask<object?> ResolveDelete(IResolverContext ctx, string collection)
     {
         var id = ctx.ArgumentValue<string>("id");
-        return await ctx.Service<IGraphQlDataSource>().DeleteAsync(collection, id, ctx.RequestAborted);
+        var purge = ctx.ArgumentValue<bool?>("purge") ?? false;
+        return await ctx.Service<IGraphQlDataSource>().DeleteAsync(collection, id, purge, ctx.RequestAborted);
+    }
+
+    internal static ObjectFieldConfiguration RestoreField(string collection)
+    {
+        var config = new ObjectFieldConfiguration(
+            SchemaTypeMapper.RestoreFieldName(collection), null,
+            TypeReference.Parse(SchemaTypeMapper.TypeName(collection)),
+            resolver: ctx => ResolveRestore(ctx, collection));
+        config.Arguments.Add(new ArgumentConfiguration("id", null, TypeReference.Parse("ID!")));
+        return config;
+    }
+
+    private static async ValueTask<object?> ResolveRestore(IResolverContext ctx, string collection)
+    {
+        var id = ctx.ArgumentValue<string>("id");
+        var restored = await ctx.Service<IGraphQlDataSource>().RestoreAsync(collection, id, ctx.RequestAborted);
+        return restored;   // null -> GraphQL null (REST 404 parity); shape already matches a query node
     }
 }

@@ -2,6 +2,7 @@ using System.Reflection;
 using SqlSugar;
 using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
+using Struo.Domain.Auditing;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 
@@ -115,6 +116,12 @@ public static class SqlSugarClientFactory
         };
 
         var client = new SqlSugarClient(config);
+
+        // Phase 9b: soft-delete floor. Every Queryable over an ISoftDeletable entity excludes rows
+        // whose DeletedAt is set. Applies to list/get/deep-expansion/cross-relation id-resolution/
+        // M2M existence/inbound-Restrict with no per-path code. Reads that need trashed rows
+        // (?deleted=only|with, restore, purge) clear this filter per-query (see the repository).
+        client.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
 
         AuditAop.Register(client, currentUser);
         return client;

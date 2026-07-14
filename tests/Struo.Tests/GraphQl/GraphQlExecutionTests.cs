@@ -69,7 +69,7 @@ public class GraphQlExecutionTests
     {
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => new PagedResult(
+            OnQuery = (_, q, _, _) => new PagedResult(
                 [new Dictionary<string, object?> { ["id"] = "1", ["status"] = "published" }],
                 42, q.Limit, q.Offset)
         };
@@ -91,7 +91,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         // Regression guard: HotChocolate populates the runtime dictionary for the nested op-input
@@ -133,7 +133,7 @@ public class GraphQlExecutionTests
         string? seen = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, loc) => { seen = loc; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, loc, _) => { seen = loc; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync("{ articles(locale: \"zh-TW\") { total } }");
@@ -201,7 +201,7 @@ public class GraphQlExecutionTests
         var fileId = Guid.NewGuid();
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (collection, q, _) => collection == "article"
+            OnQuery = (collection, q, _, _) => collection == "article"
                 ? new PagedResult(new IReadOnlyDictionary<string, object?>[]
                     {
                         new Dictionary<string, object?> { ["id"] = "1", ["heroImageId"] = fileId },
@@ -228,7 +228,7 @@ public class GraphQlExecutionTests
     {
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (collection, q, _) => collection == "article"
+            OnQuery = (collection, q, _, _) => collection == "article"
                 ? new PagedResult(new IReadOnlyDictionary<string, object?>[]
                     { new Dictionary<string, object?> { ["id"] = "1", ["heroImageId"] = Guid.NewGuid() } }, 1, q.Limit, q.Offset)
                 : new PagedResult([], 0, q.Limit, q.Offset) // file not found
@@ -257,7 +257,7 @@ public class GraphQlExecutionTests
 
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (collection, q, _) => collection == "article"
+            OnQuery = (collection, q, _, _) => collection == "article"
                 ? new PagedResult(new IReadOnlyDictionary<string, object?>[]
                     {
                         new Dictionary<string, object?>
@@ -303,7 +303,7 @@ public class GraphQlExecutionTests
         DeepSpec? deepSeen = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) =>
+            OnQuery = (_, q, _, _) =>
             {
                 deepSeen = q.Deep;
                 var row = new Dictionary<string, object?>
@@ -341,7 +341,7 @@ public class GraphQlExecutionTests
         DeepSpec? deepSeen = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) =>
+            OnQuery = (_, q, _, _) =>
             {
                 deepSeen = q.Deep;
                 var row = new Dictionary<string, object?>
@@ -424,7 +424,7 @@ public class GraphQlExecutionTests
         DeepSpec? deepSeen = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) =>
+            OnQuery = (_, q, _, _) =>
             {
                 deepSeen = q.Deep;
                 var row = new Dictionary<string, object?>
@@ -456,7 +456,7 @@ public class GraphQlExecutionTests
         DeepSpec? deepSeen = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) =>
+            OnQuery = (_, q, _, _) =>
             {
                 deepSeen = q.Deep;
                 return new PagedResult(
@@ -522,7 +522,7 @@ public class GraphQlExecutionTests
     {
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, _, _) => throw new PermissionDeniedException("no read")
+            OnQuery = (_, _, _, _) => throw new PermissionDeniedException("no read")
         };
 
         var services = new ServiceCollection()
@@ -554,7 +554,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
@@ -573,7 +573,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
@@ -590,7 +590,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
@@ -608,7 +608,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
@@ -628,7 +628,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
@@ -647,7 +647,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         // categories filtered by a field on their O2M articles (ANY/EXISTS).
@@ -666,7 +666,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         // category -> (O2M) articles -> (M2O) category -> name : composes to-many + to-one.
@@ -684,7 +684,7 @@ public class GraphQlExecutionTests
         QueryModel? captured = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnQuery = (_, q, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
+            OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(

@@ -103,7 +103,8 @@ public class ItemServicePermissionTests : IDisposable
         var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         return new ItemService(repo, provider, registry, permissions,
-            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer());
+            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
+            new TestCurrentUserAccessor(Guid.Empty));
     }
 
     public void Dispose() => _file.Dispose();

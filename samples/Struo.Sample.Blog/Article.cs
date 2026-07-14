@@ -10,9 +10,12 @@ namespace Struo.Sample.Blog;
 [CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status))]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]
-public sealed class Article : AuditableEntity
+public sealed class Article : AuditableEntity, ISoftDeletable
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
 
     // Title/Body moved to the ArticleTranslation sidecar (Phase 4 i18n).
     [CmsTranslations(typeof(ArticleTranslation))]

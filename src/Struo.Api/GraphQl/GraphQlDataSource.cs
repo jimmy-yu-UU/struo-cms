@@ -13,27 +13,31 @@ namespace Struo.Api.GraphQl;
 /// </summary>
 public interface IGraphQlDataSource
 {
-    Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct);
+    Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, DeletedFilter deleted, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct);
-    Task<bool> DeleteAsync(string collection, string id, CancellationToken ct);
+    Task<bool> DeleteAsync(string collection, string id, bool purge, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct);
+    Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(string collection, string id, CancellationToken ct);
 }
 
 public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDataSource
 {
-    public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct)
-        => items.QueryAsync(collection, query, locale, ct);
+    public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, DeletedFilter deleted, CancellationToken ct)
+        => items.QueryAsync(collection, query, locale, deleted, ct);
 
     public Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct)
-        => items.GetAsync(collection, id, deep, locale, ct);
+        => items.GetAsync(collection, id, deep, locale, ct: ct);
 
-    public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct)
-        => items.DeleteAsync(collection, id, ct);
+    public Task<bool> DeleteAsync(string collection, string id, bool purge, CancellationToken ct)
+        => items.DeleteAsync(collection, id, purge, ct);
 
     public Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct)
         => items.CreateAsync(collection, body, ct);
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct)
         => items.UpdateAsync(collection, id, body, ct);
+
+    public Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(string collection, string id, CancellationToken ct)
+        => items.RestoreAsync(collection, id, ct);
 }
