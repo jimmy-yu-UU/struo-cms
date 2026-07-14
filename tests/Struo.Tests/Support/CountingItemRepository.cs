@@ -39,11 +39,12 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     // Delegate every other member straight through (no counting).
     public Task<QueryResult> QueryAsync(
         string collection, QueryModel query, IReadOnlyList<string> searchableFields,
-        string? queryLocale = null, CancellationToken ct = default) =>
-        inner.QueryAsync(collection, query, searchableFields, queryLocale, ct);
+        string? queryLocale = null, DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default) =>
+        inner.QueryAsync(collection, query, searchableFields, queryLocale, deleted, ct);
 
-    public Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default) =>
-        inner.GetByIdAsync(collection, id, ct);
+    public Task<object?> GetByIdAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default) =>
+        inner.GetByIdAsync(collection, id, deleted, ct);
 
     public Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default) =>
         inner.CreateAsync(collection, entity, ct);
@@ -53,6 +54,12 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
 
     public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default) =>
         inner.DeleteAsync(collection, id, ct);
+
+    public Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default) =>
+        inner.SoftDeleteAsync(collection, id, deletedAt, deletedBy, ct);
+
+    public Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default) =>
+        inner.RestoreAsync(collection, id, ct);
 
     public Task InTransactionAsync(Func<Task> body, CancellationToken ct = default) =>
         inner.InTransactionAsync(body, ct);

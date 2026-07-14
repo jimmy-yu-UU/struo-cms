@@ -4,6 +4,7 @@ using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
 
@@ -28,6 +29,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
         types.Add(TagItemType());
         types.Add(TagItemInputType());
         types.Add(TranslationType());
+        types.Add(DeletedFilterEnumType());
         types.AddRange(SharedFilterTypes.Build());
 
         var collections = metadata.GetCollections();
@@ -55,6 +57,18 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
         config.Fields.Add(new InputFieldConfiguration("value", null, TypeReference.Parse("String!")));
         config.Fields.Add(new InputFieldConfiguration("label", null, TypeReference.Parse("String")));
         return InputObjectType.CreateUnsafe(config);
+    }
+
+    // DeletedFilter (Phase 9b): SDL enum EXCLUDE/ONLY/WITH bound onto the C# Struo.Domain.Query
+    // enum's own members (Exclude/Only/With) — the `deleted` list-query argument and the
+    // ItemService/IGraphQlDataSource read path share this exact runtime type.
+    private static EnumType DeletedFilterEnumType()
+    {
+        var config = new EnumTypeConfiguration("DeletedFilter", null, typeof(DeletedFilter));
+        config.Values.Add(new EnumValueConfiguration("EXCLUDE", null, DeletedFilter.Exclude));
+        config.Values.Add(new EnumValueConfiguration("ONLY", null, DeletedFilter.Only));
+        config.Values.Add(new EnumValueConfiguration("WITH", null, DeletedFilter.With));
+        return EnumType.CreateUnsafe(config);
     }
 
     private static ObjectType TranslationType()
@@ -86,6 +100,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
             config.Fields.Add(MutationResolvers.CreateField(name, metadata));
             config.Fields.Add(MutationResolvers.UpdateField(name, metadata));
             config.Fields.Add(MutationResolvers.DeleteField(name));
+            config.Fields.Add(MutationResolvers.RestoreField(name));
         }
         return ObjectTypeExtension.CreateUnsafe(config);
     }

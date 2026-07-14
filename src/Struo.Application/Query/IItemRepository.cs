@@ -11,11 +11,20 @@ public interface IItemRepository
     /// <paramref name="queryLocale"/> is used to resolve translatable fields in sort and search
     /// against the translation sidecar at that locale; pass <c>null</c> to skip locale-aware paths.
     /// </summary>
-    Task<QueryResult> QueryAsync(string collection, QueryModel query, IReadOnlyList<string> searchableFields, string? queryLocale = null, CancellationToken ct = default);
-    Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default);
+    Task<QueryResult> QueryAsync(string collection, QueryModel query, IReadOnlyList<string> searchableFields,
+        string? queryLocale = null, DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
+    Task<object?> GetByIdAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
     Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default);
     Task<object?> UpdateAsync(string collection, string id, object entity, CancellationToken ct = default);
     Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default);
+
+    /// <summary>Stamps DeletedAt/DeletedBy on the row (soft delete). Returns false if the id is unknown.
+    /// Operates against the id regardless of the soft-delete filter (Updateable is not subject to the
+    /// query filter), so an already-trashed row is still located — idempotent.</summary>
+    Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default);
+    /// <summary>Clears DeletedAt/DeletedBy (restore). Returns false if the id is unknown. Filter-cleared.</summary>
+    Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default);
 
     /// <summary>
     /// Runs <paramref name="body"/> inside a single database transaction: everything it writes

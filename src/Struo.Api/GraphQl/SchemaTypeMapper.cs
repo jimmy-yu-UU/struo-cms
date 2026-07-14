@@ -24,6 +24,7 @@ public static class SchemaTypeMapper
     public static string CreateFieldName(string collection) => "create" + Pascal(collection);
     public static string UpdateFieldName(string collection) => "update" + Pascal(collection);
     public static string DeleteFieldName(string collection) => "delete" + Pascal(collection);
+    public static string RestoreFieldName(string collection) => "restore" + Pascal(collection);
     public static string CreateInputName(string collection) => Pascal(collection) + "CreateInput";
     public static string UpdateInputName(string collection) => Pascal(collection) + "UpdateInput";
     public static string TagItemInputName() => "TagItemInput";

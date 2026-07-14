@@ -53,7 +53,7 @@ public class GraphQlMutationExecutionTests
         string? seenCollection = null, seenId = null;
         var ds = new FakeGraphQlDataSource
         {
-            OnDelete = (c, id) => { seenCollection = c; seenId = id; return true; }
+            OnDelete = (c, id, _) => { seenCollection = c; seenId = id; return true; }
         };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
@@ -68,7 +68,7 @@ public class GraphQlMutationExecutionTests
     [Fact]
     public async Task Delete_returns_false_when_not_found()
     {
-        var ds = new FakeGraphQlDataSource { OnDelete = (_, _) => false };
+        var ds = new FakeGraphQlDataSource { OnDelete = (_, _, _) => false };
 
         var result = await (await ExecutorAsync(ds)).ExecuteAsync(
             "mutation { deleteArticle(id: \"missing\") }");
