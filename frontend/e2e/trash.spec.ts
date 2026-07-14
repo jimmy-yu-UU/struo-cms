@@ -38,9 +38,13 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
   await page.getByRole('button', { name: 'New' }).click()
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
-  await translatableFieldByLabel(page, 'Body').locator('textarea').fill('E2E trash body.')
+  // Body is a non-required RichText (TipTap) field — skip it; Title is the only required translatable field.
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
+
+  // Populated dev DB → the new row may not be on list page 1. Title is searchable, so
+  // filter to isolate it. The search state persists across the Active/Trash switch.
+  await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
 
   // Soft-delete from the Active list (inline action). Confirm = "Yes".
