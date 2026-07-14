@@ -9,6 +9,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
+import { ApiError } from '../api/apiClient'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { validateItem } from '../lib/validateItem'
@@ -65,7 +66,7 @@ async function init(): Promise<void> {
       })
       setModel(parseItemToForm(meta.value, item, langStore.languages))
     } catch (e) {
-      if (e instanceof Error && /not found/i.test(e.message)) notFound.value = true
+      if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
       else serverError.value = e instanceof Error ? e.message : 'Failed to load item.'
     }
   }

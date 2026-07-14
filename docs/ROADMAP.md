@@ -682,9 +682,38 @@
   `StatusCodeResult` branch → clean `"Resource not found."`) + hardening `Message()` to trust only string
   bodies, verified by a **real-pipeline** `WebApplicationFactory` integration test (RED reproduced the leak →
   GREEN). Final `dotnet test` **635**, 0 warnings.
-- **Next up:** **Phase 9b + 9b-fe done & live-verified** (real PG); **9a done, live-gate pending**. Remaining
-  Phase 9 slices — **9a-fe** (frontend envelope alignment), **9c** (revisions), **9d** (lifecycle hooks) —
-  remain, user's call on order.
+- **Phase 9a-fe (frontend response-envelope alignment — frontend-only slice) done & live-verified (real PG,
+  2026-07-14):** the Vue companion to 9a, mirroring 9b→9b-fe. `apiClient` is now **explicitly envelope-aware**:
+  the success path branches on the `success` discriminator (returns `payload.data`, with a defensive
+  `data ?? payload` fallback and `getRaw` still returning the full `{success,data,meta}` for `itemsApi.list`),
+  and the error path throws a real **`ApiError extends Error`** carrying `status`/`code?`/`details?` (the old
+  message-only `ApiError` type became `ApiErrorBody`; a grep confirmed no external importer, so the rename had
+  zero ripple). The **one fragile consumer** is fixed: `ItemFormView` detected a 404 by matching the error
+  *message* (`/not found/i.test(e.message)`) and now branches on `e instanceof ApiError && e.code ===
+  'NOT_FOUND'` — robust to wording/locale. Every other `catch` block keeps working unchanged because `ApiError`
+  is an `Error`. **Scope fence held:** frontend only; `itemsApi` (and all `*Api`) signatures unchanged;
+  `validateItem` stays the client-side validation source of truth (server `VALIDATION` `details` are carried on
+  the error but not yet rendered per-field — YAGNI); no backend/GraphQL/dependency change. Built subagent-driven
+  (3 impl tasks, Sonnet impl + Opus review each — all spec ✅, zero Critical/Important). **The Task 4
+  verification gate caught a real defect the per-task gates missed:** `vitest run` strips types (so `pnpm test`
+  was green), but `vue-tsc -b` type-checks the test files — the new `apiClient.test.ts` `.catch((e) => e)`
+  handlers left `err: unknown` → 11× TS18046 on `err.status`/`.code`; fixed by casting the awaited result
+  (`.catch((e) => e) as ApiError` — `await` binds tighter than `as`; the naive `e as ApiError` inside the
+  handler fails because `get<unknown>().catch` widens back to `unknown`). Automated gate: `pnpm test`
+  **267/267**, `pnpm build` (vue-tsc + vite build) clean (pre-existing >500 kB chunk advisory only); backend
+  untouched (**635**). **Live smoke PASSED 2026-07-14 on real Postgres (`web-struo-cms-db`) + Redis + MinIO**
+  (API `:5080`, Vite, Playwright, 4/4 specs): `auth` (login→dashboard→logout, exercises `/api/auth/me` through
+  the new unwrap), `collections` (list + `meta.total` via `getRaw`), `trash` (create→soft-delete→restore→purge
+  — a full CRUD round-trip through `apiClient.post`/`delete` on the new envelope), and a new `not-found.spec.ts`
+  (a well-formed non-existent article id → the live 404 `{ success:false, error:{ code:'NOT_FOUND' } }` drives
+  the "Item not found." view via the **code** branch, end-to-end). `items.spec.ts` is skipped — a **pre-existing**
+  stale precondition (it waits for a `<textarea>` for the `Body` field, which has been a TipTap RichText editor
+  since 7f/7g; same known issue documented for 9b-fe), not a 9a-fe regression (login + form-load + Title-fill all
+  worked; only the Body textarea locator timed out). Spec:
+  [spec](superpowers/specs/2026-07-14-phase9a-fe-frontend-envelope-alignment-design.md) · plan:
+  [plan](superpowers/plans/2026-07-14-phase9a-fe-frontend-envelope-alignment.md).
+- **Next up:** **Phase 9a + 9a-fe + 9b + 9b-fe done & live-verified** (real PG). Remaining Phase 9 slices —
+  **9c** (revisions), **9d** (lifecycle hooks) — remain, user's call on order.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -768,6 +797,7 @@
 | 9c | Revisions | ⬜ planned | — | — |
 | 9d | Lifecycle hooks | ⬜ planned | — | — |
 | 9b-fe | Soft delete admin UI (Vue Active/Trash switch on the collection list + inline soft-delete/restore/purge actions column; `itemsApi` `deleted`/`purge`/`restore`; soft-delete-aware item-form confirm) — *frontend-only; consumes the 9b API; `/api/schema` already emits `softDelete`* | ✅ done (live-verified: real PG — full delete→trash→restore→purge UI loop via Playwright `trash.spec.ts`) | [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md) |
+| 9a-fe | Frontend response-envelope alignment (`apiClient` branches on the `success` discriminator + throws `ApiError extends Error` carrying `status`/`code`/`details`; old `ApiError` type → `ApiErrorBody`; `ItemFormView` 404 via `code === 'NOT_FOUND'` not message text; `itemsApi`/`validateItem` unchanged) — *frontend-only; consumes the 9a envelope* | ✅ done (live-verified: real PG+Redis+MinIO — Playwright auth/collections/trash + new `not-found.spec.ts` 4/4; **+1 gate fix: vue-tsc test-file typing**) | [spec](superpowers/specs/2026-07-14-phase9a-fe-frontend-envelope-alignment-design.md) | [plan](superpowers/plans/2026-07-14-phase9a-fe-frontend-envelope-alignment.md) |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
 > (identity model alignment, then SEO model), not feature additions to the planned scope.
