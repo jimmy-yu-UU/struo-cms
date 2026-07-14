@@ -673,7 +673,15 @@
   409 `CONFLICT`; `GET /api/files/{id}/content` → **302** to a MinIO presigned URL (**not enveloped**, `content-type`
   absent, no JSON body); `DELETE ...?purge=true` → **bare 204**, empty body; `/api/schema` now `{success,data}`.
   No SQLite-green ≠ Postgres-correct bug surfaced — the filter, exception handler, validation factory, and
-  controller simplifications all worked on real Postgres first try.
+  controller simplifications all worked on real Postgres first try. **The final whole-branch review (opus)
+  surfaced & fixed 1 real bug** (`ad38cbd`) the per-task gates + live gate missed (the live 404 check
+  asserted `code` only, not `message`): `[ApiController]`'s built-in `ClientErrorResultFilter` (order −2000)
+  rewrites a bare `NotFound()` into a `ProblemDetails` **before** `EnvelopeResultFilter` runs, so a 404's
+  `error.message` leaked the literal `"Microsoft.AspNetCore.Mvc.ProblemDetails"`; fixed with
+  `ApiBehaviorOptions.SuppressMapClientErrors = true` (bare 4xx now reaches the filter's already-tested
+  `StatusCodeResult` branch → clean `"Resource not found."`) + hardening `Message()` to trust only string
+  bodies, verified by a **real-pipeline** `WebApplicationFactory` integration test (RED reproduced the leak →
+  GREEN). Final `dotnet test` **635**, 0 warnings.
 - **Next up:** **Phase 9b + 9b-fe done & live-verified** (real PG); **9a done, live-gate pending**. Remaining
   Phase 9 slices — **9a-fe** (frontend envelope alignment), **9c** (revisions), **9d** (lifecycle hooks) —
   remain, user's call on order.
