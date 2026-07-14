@@ -126,4 +126,25 @@ describe('ItemFormView', () => {
     expect(rm).toHaveBeenCalledWith('article', '5')
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
   })
+
+  it('delete on a soft-delete collection uses the move-to-trash confirm', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue({ ...meta, softDelete: true })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).onDelete()
+    expect(confirmRequire.mock.calls[0][0].message).toContain('restore')
+  })
+
+  it('delete on a non-soft collection keeps the irreversible confirm', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores() // meta has no softDelete
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).onDelete()
+    expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
+  })
 })
