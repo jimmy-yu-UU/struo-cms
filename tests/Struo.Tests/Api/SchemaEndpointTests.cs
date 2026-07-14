@@ -41,7 +41,7 @@ public class SchemaEndpointTests(ApiFactory factory)
         // Parse as JsonDocument so we assert the "image" interface belongs specifically to the seoOgImageId field
         // (a global string scan would pass even if some other field carried the image interface).
         using var doc = System.Text.Json.JsonDocument.Parse(body);
-        var fields = doc.RootElement.GetProperty("fields");
+        var fields = doc.RootElement.GetProperty("data").GetProperty("fields");
         var seoOgImageField = fields.EnumerateArray()
             .FirstOrDefault(f => f.TryGetProperty("name", out var n) && n.GetString() == "seoOgImageId");
         seoOgImageField.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Object,

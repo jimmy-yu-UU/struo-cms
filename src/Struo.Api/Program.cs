@@ -23,7 +23,7 @@ try
         configuration.ReadFrom.Configuration(context.Configuration).ReadFrom.Services(services));
 
     builder.Services
-        .AddControllers()
+        .AddControllers(o => o.Filters.Add<Struo.Api.Http.EnvelopeResultFilter>())
         .AddJsonOptions(o =>
         {
             o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;

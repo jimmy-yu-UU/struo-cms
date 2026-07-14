@@ -18,7 +18,7 @@ public class UserCollectionTests(ApiFactory factory)
         var c = _factory.CreateClient();
         var resp = await c.GetAsync("/api/schema/user");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("fields");
+        var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields");
         var names = fields.EnumerateArray().Select(f => f.GetProperty("name").GetString()).ToList();
         names.Should().Contain("email");
         names.Should().NotContain("password");     // Hidden

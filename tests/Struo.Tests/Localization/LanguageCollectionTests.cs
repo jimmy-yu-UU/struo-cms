@@ -19,7 +19,7 @@ public class LanguageCollectionTests(ApiFactory factory)
         var c = _factory.CreateClient();
         var resp = await c.GetAsync("/api/schema/language");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        Root(await resp.Content.ReadAsStringAsync()).GetProperty("fields")
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields")
             .EnumerateArray().Select(f => f.GetProperty("name").GetString())
             .Should().Contain(new[] { "code", "name", "isDefault", "enabled" });
     }

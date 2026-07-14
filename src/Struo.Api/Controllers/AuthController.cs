@@ -26,7 +26,7 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
         var identity = new ClaimsIdentity(AuthSchemes.Cookie);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
         await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
-        return Ok(new { data = new { id = result.UserId } });
+        return Ok(new { id = result.UserId });
     }
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
@@ -59,12 +59,9 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
 
         return Ok(new
         {
-            data = new
-            {
-                id = User.FindFirstValue(ClaimTypes.NameIdentifier),
-                isSuperAdmin = eff.IsSuperAdmin,
-                permissions = map
-            }
+            id = User.FindFirstValue(ClaimTypes.NameIdentifier),
+            isSuperAdmin = eff.IsSuperAdmin,
+            permissions = map
         });
     }
 
