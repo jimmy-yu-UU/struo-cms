@@ -18,7 +18,7 @@ public class FileCollectionTests(ApiFactory factory)
         var c = _factory.CreateClient();
         var resp = await c.GetAsync("/api/schema/file");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("fields");
+        var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields");
         var names = fields.EnumerateArray().Select(f => f.GetProperty("name").GetString()).ToList();
         names.Should().Contain(new[] { "fileName", "contentType", "size", "status", "title", "alt" });
         fields.EnumerateArray().Should().Contain(f =>
