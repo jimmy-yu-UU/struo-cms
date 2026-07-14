@@ -16,7 +16,7 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     {
         var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
         var raw = QueryParser.ParseQueryString(qs);
-        var result = await items.QueryAsync(collection, raw, Locale(), ct);
+        var result = await items.QueryAsync(collection, raw, Locale(), ct: ct);
         return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
     }
 
@@ -24,7 +24,7 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     public async Task<IActionResult> Query(string collection, [FromBody] JsonElement body, CancellationToken ct)
     {
         var raw = QueryParser.ParseEnvelope(body);
-        var result = await items.QueryAsync(collection, raw, Locale(), ct);
+        var result = await items.QueryAsync(collection, raw, Locale(), ct: ct);
         return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
     }
 
@@ -33,7 +33,7 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     {
         var qs = Request.Query.ToDictionary(k => k.Key, v => (string?)v.Value.ToString());
         var deep = QueryParser.ParseQueryString(qs).Deep;
-        var item = await items.GetAsync(collection, id, deep, Locale(), ct);
+        var item = await items.GetAsync(collection, id, deep, Locale(), ct: ct);
         return item is null ? NotFound() : Ok(new { data = item });
     }
 
@@ -63,7 +63,7 @@ public sealed class ItemsController(ItemService items) : ControllerBase
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Delete(string collection, string id, CancellationToken ct)
     {
-        var ok = await items.DeleteAsync(collection, id, ct);
+        var ok = await items.DeleteAsync(collection, id, ct: ct);
         return ok ? NoContent() : NotFound();
     }
 }

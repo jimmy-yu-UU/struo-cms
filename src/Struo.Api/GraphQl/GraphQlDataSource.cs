@@ -23,13 +23,13 @@ public interface IGraphQlDataSource
 public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDataSource
 {
     public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, CancellationToken ct)
-        => items.QueryAsync(collection, query, locale, ct);
+        => items.QueryAsync(collection, query, locale, ct: ct);
 
     public Task<IReadOnlyDictionary<string, object?>?> GetAsync(string collection, string id, DeepSpec? deep, string? locale, CancellationToken ct)
-        => items.GetAsync(collection, id, deep, locale, ct);
+        => items.GetAsync(collection, id, deep, locale, ct: ct);
 
     public Task<bool> DeleteAsync(string collection, string id, CancellationToken ct)
-        => items.DeleteAsync(collection, id, ct);
+        => items.DeleteAsync(collection, id, ct: ct);
 
     public Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct)
         => items.CreateAsync(collection, body, ct);

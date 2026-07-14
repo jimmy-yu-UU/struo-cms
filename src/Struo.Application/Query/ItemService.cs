@@ -1,9 +1,11 @@
 // src/Struo.Application/Query/ItemService.cs
 using System.Text.Json;
+using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Security;
+using Struo.Domain.Auditing;
 using Struo.Domain.Localization;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
@@ -25,7 +27,8 @@ public sealed class ItemService(
     IRelationFilterResolver relationFilter,
     ILanguageProvider languages,
     StruoQueryOptions options,
-    IHtmlSanitizer sanitizer)
+    IHtmlSanitizer sanitizer,
+    ICurrentUserAccessor currentUser)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -35,7 +38,8 @@ public sealed class ItemService(
     ];
 
     public async Task<PagedResult> QueryAsync(
-        string collection, QueryModel raw, string? locale = null, CancellationToken ct = default)
+        string collection, QueryModel raw, string? locale = null,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
@@ -53,7 +57,7 @@ public sealed class ItemService(
             Filter = await relationFilter.RewriteAsync(collection, validated.Filter, queryLocale, ct)
         };
         var searchable = QueryValidator.SearchableFields(meta);
-        var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, ct: ct);
+        var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, deleted, ct);
 
         var entities = result.Rows;
         var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();
@@ -63,12 +67,13 @@ public sealed class ItemService(
     }
 
     public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(
-        string collection, string id, DeepSpec? deep = null, string? locale = null, CancellationToken ct = default)
+        string collection, string id, DeepSpec? deep = null, string? locale = null,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         ValidateLocale(locale);
-        var entity = await repository.GetByIdAsync(collection, id, ct: ct);
+        var entity = await repository.GetByIdAsync(collection, id, deleted, ct);
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)Project(entity, meta, null);
@@ -611,7 +616,7 @@ public sealed class ItemService(
         }
     }
 
-    public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
+    public async Task<bool> DeleteAsync(string collection, string id, bool purge = false, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
@@ -641,7 +646,36 @@ public sealed class ItemService(
             }
         }
 
-        return await repository.DeleteAsync(collection, id, ct);
+        if (meta.SoftDelete && !purge)
+        {
+            var actor = currentUser.GetCurrentUserId();
+            return await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+        }
+        return await repository.DeleteAsync(collection, id, ct);   // purge, or non-soft collection
+    }
+
+    /// <summary>
+    /// Restores a soft-deleted row: looks it up ignoring the soft-delete floor (it is, by definition,
+    /// trashed), clears its <c>DeletedAt</c>/<c>DeletedBy</c> marker if still set, and returns the
+    /// re-read live projection. Returns null for an unknown id (404); idempotent when the row is
+    /// already live.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(
+        string collection, string id, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
+        RequireSuperAdminForAdminOnly(meta);
+
+        // Find the row ignoring the soft-delete floor (it is, by definition, trashed).
+        var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (entity is null) return null;                       // unknown id -> 404
+
+        if (entity is ISoftDeletable sd && sd.DeletedAt is not null)
+            await repository.RestoreAsync(collection, id, ct);  // no-op idempotent if already live
+
+        var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
+        return restored is null ? null : Project(restored, meta, null);
     }
 
     /// <summary>
