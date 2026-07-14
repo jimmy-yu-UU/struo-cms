@@ -43,6 +43,7 @@ export type CollectionMeta = {
   icon?: string | null
   group?: string | null
   defaultDisplayField?: string | null
+  softDelete?: boolean // Phase 9b: true when the collection's entity implements ISoftDeletable
   fields: FieldMeta[]
   relations: RelationMeta[]
 }
