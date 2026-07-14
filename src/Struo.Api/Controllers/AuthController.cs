@@ -20,12 +20,13 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     {
         var result = await auth.AuthenticateAsync(body.Email, body.Password, ct);
         if (!result.Succeeded)
-            return Unauthorized(new { error = new { message = "Invalid credentials." } });
+            return Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
+                Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
 
         var identity = new ClaimsIdentity(AuthSchemes.Cookie);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
         await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
-        return Ok(new { data = new { id = result.UserId } });
+        return Ok(new { id = result.UserId });
     }
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
@@ -58,12 +59,9 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
 
         return Ok(new
         {
-            data = new
-            {
-                id = User.FindFirstValue(ClaimTypes.NameIdentifier),
-                isSuperAdmin = eff.IsSuperAdmin,
-                permissions = map
-            }
+            id = User.FindFirstValue(ClaimTypes.NameIdentifier),
+            isSuperAdmin = eff.IsSuperAdmin,
+            permissions = map
         });
     }
 

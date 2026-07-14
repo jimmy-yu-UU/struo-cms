@@ -36,7 +36,7 @@ public class RelationSchemaTests(ApiFactory factory)
         // *field* (not a relation), so a whole-body substring check is no longer valid; assert
         // against the parsed relations array specifically instead.
         using var doc = JsonDocument.Parse(body);
-        var relationNames = doc.RootElement.GetProperty("relations")
+        var relationNames = doc.RootElement.GetProperty("data").GetProperty("relations")
             .EnumerateArray()
             .Select(r => r.GetProperty("name").GetString());
         relationNames.Should().NotContain("gallery");

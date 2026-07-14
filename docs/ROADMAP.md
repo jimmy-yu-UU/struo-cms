@@ -640,8 +640,51 @@
   Title (search state persists across the Active/Trash switch). Spec:
   [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) · plan:
   [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md).
-- **Next up:** **Phase 9b + 9b-fe are done & live-verified** (real PG). Remaining Phase 9 slices — **9a**
-  (unified response envelope), **9c** (revisions), **9d** (lifecycle hooks) — remain, user's call on order.
+- **Phase 9a (unified response envelope — REST, backend-only slice) done & live-verified (real PG),
+  2026-07-14:** every REST `/api/*` JSON response now carries one envelope — success
+  `{ success:true, data, meta? }` (`meta` list-only, offset-based `{ total, limit, offset }`) and error
+  `{ success:false, error:{ code, message, details? } }` (`details` only on `VALIDATION`). Enveloping is
+  **centralized in `Struo.Api/Http/`** and controllers were simplified to return raw data / a `PagedResult`
+  marker / `ApiResults.Fail(...)`: an `EnvelopeResultFilter` (`IAlwaysRunResultFilter`) wraps successful
+  `ObjectResult`s (expanding `PagedResult`→`data`+`meta`) and converts a bare `NotFound()` into a `NOT_FOUND`
+  error envelope while leaving `204`/`FileResult`/`RedirectResult` untouched (idempotent — it never
+  double-wraps a result already carrying an envelope); a `StruoExceptionHandler` (`IExceptionHandler`)
+  **replaced the inline `try/catch` middleware** in `Program.cs`, mapping domain exceptions → status + error
+  envelope (401 `UNAUTHORIZED` for anonymous vs 403 `FORBIDDEN` for authenticated `PermissionDeniedException`,
+  404 `NOT_FOUND`, 409 `CONFLICT`, 400 `BAD_USER_INPUT`, masked 500 `INTERNAL_SERVER_ERROR`) — placed **before**
+  the CSRF/permission middleware so it also envelopes their exceptions; and an
+  `InvalidModelStateResponseFactory` emits `VALIDATION` (400) with `details:[{field,message}]`. The `error.code`
+  taxonomy is **symmetric with the GraphQL `StruoErrorFilter`**; **GraphQL keeps its own `{ data, errors }`
+  envelope untouched**. **Domain/Application/Infrastructure untouched, no new NuGet packages, no DB migration.**
+  Built subagent-driven (5 impl tasks, Sonnet impl + Opus review per task; Task 5 the atomic success
+  switch-over reviewed with **zero issues**). Automated gate: `dotnet build -warnaserror` **0 warnings** +
+  `dotnet test` **634** (599 baseline + 35 new: envelope-types + filter + exception-handler unit tests +
+  error/success integration tests); 5 existing tests re-pointed to read under `data` (pure envelope
+  re-pointing, no behaviour/assertion change). Frontend **untouched** (261) — the current SPA is
+  backward-compatible (`apiClient` unwraps `data ?? payload`, reads `error.message`; `itemsApi.list` reads
+  `res.data`+`res.meta.total`); explicit `apiClient`/`ApiError` alignment (branch on `success`, surface
+  `code`/`details`) is deferred to **9a-fe**. Spec:
+  [spec](superpowers/specs/2026-07-14-phase9a-unified-response-envelope-design.md) · plan:
+  [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md). **Live gate PASSED 2026-07-14 on
+  real Postgres (`web-struo-cms-db`) + Redis + MinIO, 11/11, no fixes:** list → `{success,data,meta{total,limit,
+  offset}}`; category create → 201 `{success,data}` with CJK `類別9a` code-point-exact (U+985E U+5225) + `version`;
+  get → `{success,data}` (no `meta`); unknown id → 404 `NOT_FOUND`; malformed JSON → 400 `VALIDATION` + `details`;
+  `?deleted=banana` → 400 `BAD_USER_INPUT`; anonymous read of `user` → 401 `UNAUTHORIZED`; stale `version` update →
+  409 `CONFLICT`; `GET /api/files/{id}/content` → **302** to a MinIO presigned URL (**not enveloped**, `content-type`
+  absent, no JSON body); `DELETE ...?purge=true` → **bare 204**, empty body; `/api/schema` now `{success,data}`.
+  No SQLite-green ≠ Postgres-correct bug surfaced — the filter, exception handler, validation factory, and
+  controller simplifications all worked on real Postgres first try. **The final whole-branch review (opus)
+  surfaced & fixed 1 real bug** (`ad38cbd`) the per-task gates + live gate missed (the live 404 check
+  asserted `code` only, not `message`): `[ApiController]`'s built-in `ClientErrorResultFilter` (order −2000)
+  rewrites a bare `NotFound()` into a `ProblemDetails` **before** `EnvelopeResultFilter` runs, so a 404's
+  `error.message` leaked the literal `"Microsoft.AspNetCore.Mvc.ProblemDetails"`; fixed with
+  `ApiBehaviorOptions.SuppressMapClientErrors = true` (bare 4xx now reaches the filter's already-tested
+  `StatusCodeResult` branch → clean `"Resource not found."`) + hardening `Message()` to trust only string
+  bodies, verified by a **real-pipeline** `WebApplicationFactory` integration test (RED reproduced the leak →
+  GREEN). Final `dotnet test` **635**, 0 warnings.
+- **Next up:** **Phase 9b + 9b-fe done & live-verified** (real PG); **9a done, live-gate pending**. Remaining
+  Phase 9 slices — **9a-fe** (frontend envelope alignment), **9c** (revisions), **9d** (lifecycle hooks) —
+  remain, user's call on order.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -721,7 +764,7 @@
 | 8c.3b | GraphQL advanced read querying (nested-list `filter/sort/limit/offset` **arguments** on to-many related list fields; `filter` pushed to SQL via `RelationFilterResolver`, `sort/limit/offset` applied in-memory per parent group; N+1-safe invariant extended; M2O gets no args, nested sort is own-field-only) — *fourth 8c slice, completes the 8c.3 pair with 8c.3a* | ✅ done (live-verified: real PG 18/18, no fixes) | [spec](superpowers/specs/2026-07-13-phase8c3b-nested-list-args-design.md) | [plan](superpowers/plans/2026-07-13-phase8c3b-nested-list-args.md) |
 | 9 | Soft delete / revisions / hooks + unified response envelope — *decomposed into 9a/9b/9c/9d* | ⬜ in progress | — | — |
 | 9b | Soft delete (per-collection `ISoftDeletable` opt-in; SqlSugar global query-filter floor; `DELETE`=mark / `?purge=true`=remove / `restore`; `?deleted=exclude\|only\|with` gated by delete perm; REST + GraphQL parity) — *backend-only; Vue UI deferred to 9b-fe* | ✅ done (live-verified: real PG — soft/only/restore/purge + CJK + `?deleted=only`×D9-sort + deep-expansion exclusion; **+1 live-gate fix: typed-NULL PG 42804**) | [spec](superpowers/specs/2026-07-13-phase9b-soft-delete-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-soft-delete.md) |
-| 9a | Unified response envelope | ⬜ planned | — | — |
+| 9a | Unified response envelope (every REST `/api/*` JSON response → `{success,data,meta?}` / `{success:false,error:{code,message,details?}}`; centralized `EnvelopeResultFilter` + `StruoExceptionHandler` + `InvalidModelStateResponseFactory` + `ApiResults.Fail`; machine-readable `error.code` symmetric with GraphQL; 204/binary/redirect not enveloped) — *backend-only; frontend explicit alignment deferred to 9a-fe* | ✅ done (live-verified: real PG — list meta / get / create / VALIDATION+details / BAD_USER_INPUT / 401 / CONFLICT / 404 / 302-file-not-enveloped / bare-204, 11/11, no fixes) | [spec](superpowers/specs/2026-07-14-phase9a-unified-response-envelope-design.md) | [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md) |
 | 9c | Revisions | ⬜ planned | — | — |
 | 9d | Lifecycle hooks | ⬜ planned | — | — |
 | 9b-fe | Soft delete admin UI (Vue Active/Trash switch on the collection list + inline soft-delete/restore/purge actions column; `itemsApi` `deleted`/`purge`/`restore`; soft-delete-aware item-form confirm) — *frontend-only; consumes the 9b API; `/api/schema` already emits `softDelete`* | ✅ done (live-verified: real PG — full delete→trash→restore→purge UI loop via Playwright `trash.spec.ts`) | [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md) |

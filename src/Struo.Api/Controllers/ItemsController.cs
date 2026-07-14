@@ -20,7 +20,7 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
         var raw = QueryParser.ParseQueryString(qs);
         var mode = DeletedMode(collection);
         var result = await items.QueryAsync(collection, raw, Locale(), mode, ct);
-        return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
+        return Ok(new Struo.Api.Http.PagedResult(result.Data, result.Total, result.Limit, result.Offset));
     }
 
     [HttpPost("query")]
@@ -29,7 +29,7 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
         var raw = QueryParser.ParseEnvelope(body);
         var mode = DeletedMode(collection);
         var result = await items.QueryAsync(collection, raw, Locale(), mode, ct);
-        return Ok(new { data = result.Data, meta = new { total = result.Total, limit = result.Limit, offset = result.Offset } });
+        return Ok(new Struo.Api.Http.PagedResult(result.Data, result.Total, result.Limit, result.Offset));
     }
 
     [HttpGet("{id}")]
@@ -39,7 +39,7 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
         var deep = QueryParser.ParseQueryString(qs).Deep;
         var mode = DeletedMode(collection);
         var item = await items.GetAsync(collection, id, deep, Locale(), mode, ct);
-        return item is null ? NotFound() : Ok(new { data = item });
+        return item is null ? NotFound() : Ok(item);
     }
 
     private string? Locale() =>
@@ -80,7 +80,7 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
     {
         var created = await items.CreateAsync(collection, body, ct);
         var id = created.TryGetValue("id", out var idValue) ? idValue : null;
-        return Created($"/api/items/{collection}/{id}", new { data = created });
+        return Created($"/api/items/{collection}/{id}", created);
     }
 
     [HttpPut("{id}")]
@@ -88,7 +88,7 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
     public async Task<IActionResult> Update(string collection, string id, [FromBody] JsonElement body, CancellationToken ct)
     {
         var updated = await items.UpdateAsync(collection, id, body, ct);
-        return updated is null ? NotFound() : Ok(new { data = updated });
+        return updated is null ? NotFound() : Ok(updated);
     }
 
     [HttpDelete("{id}")]
@@ -106,6 +106,6 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
     public async Task<IActionResult> Restore(string collection, string id, CancellationToken ct)
     {
         var restored = await items.RestoreAsync(collection, id, ct);
-        return restored is null ? NotFound() : Ok(new { data = restored });
+        return restored is null ? NotFound() : Ok(restored);
     }
 }
