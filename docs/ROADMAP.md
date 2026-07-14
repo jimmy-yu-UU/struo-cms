@@ -617,9 +617,31 @@
   the **primitive** level (a trashed row is invisible to the batched `QueryWhereInAsync` the Restrict check
   uses — unit-locked) but has no end-to-end 409 demo; a real M2M-onto-trashed-target case likewise needs a
   soft-deletable M2M target (Tag isn't one). Both are documented, not defects.
-- **Next up:** **Phase 9b is done & live-verified** (real PG; +1 live-gate fix `b76f453`). Remaining Phase 9
-  slices — **9a** (unified response envelope), **9c** (revisions), **9d** (lifecycle hooks) — plus **9b-fe**
-  (the Vue trash/restore/purge admin UI) remain, user's call on order.
+- **Phase 9b-fe (soft-delete admin UI — frontend-only slice) done & live-verified (real PG, 2026-07-14):**
+  the Vue admin UI on top of the 9b backend. The generic collection list (`CollectionListView`) gains an
+  **Active / Trash** segmented switch (PrimeVue `SelectButton`, rendered only when the collection is
+  soft-deletable **and** the user has delete permission) and a per-row **actions column** (Active → **Delete**;
+  Trash → **Restore** + **Delete permanently**), all gated on `canDelete` (backend `403`/`404` remain the real
+  guard). Soft-vs-hard delete and all confirm copy live in one pure helper (`lib/deleteAction.ts`): a
+  soft-deletable collection soft-deletes with a light "move to trash" confirm; a non-soft collection
+  hard-deletes with the unchanged irreversible confirm; **Restore** has no confirm; **purge** uses a strong
+  confirm. `itemsApi` gained `deleted` (list mode, `exclude` omitted from the query string), `remove(…, {purge})`,
+  and `restore`; `buildListQuery` threads the `deleted` mode; the item form's delete is now soft-delete-aware.
+  Feedback reuses the existing inline-error + list-reload pattern (**no** `ToastService`). **The `/api/schema`
+  endpoint already emitted `softDelete` per collection — no backend change of any kind.** Built subagent-driven
+  (7 tasks, Sonnet impl + per-task review, Opus on the two view tasks + the whole-branch review; final review
+  READY-TO-MERGE, 0 Critical / 0 Important). Automated gate: `pnpm test` **261** (237 baseline + 24 new),
+  `vue-tsc` clean, `pnpm build` succeeds. **Live gate PASSED 2026-07-14 on real Postgres (`web-struo-cms-db`) +
+  Redis + MinIO** (Playwright `frontend/e2e/trash.spec.ts`, 1/1): create → search-isolate → inline soft-delete →
+  row leaves Active → Trash shows it → Restore → back in Active → soft-delete again → Trash → Delete permanently →
+  gone. **Two test-only live-gate fixes** (validated by the green run, not product defects): the sample `Article`
+  `Body` is a **non-required RichText** (TipTap, no `<textarea>`) so the E2E skips it (Title, required, suffices);
+  and the populated dev DB means a new row isn't on list page 1, so the E2E **search-isolates** by the searchable
+  Title (search state persists across the Active/Trash switch). Spec:
+  [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) · plan:
+  [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md).
+- **Next up:** **Phase 9b + 9b-fe are done & live-verified** (real PG). Remaining Phase 9 slices — **9a**
+  (unified response envelope), **9c** (revisions), **9d** (lifecycle hooks) — remain, user's call on order.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -702,7 +724,7 @@
 | 9a | Unified response envelope | ⬜ planned | — | — |
 | 9c | Revisions | ⬜ planned | — | — |
 | 9d | Lifecycle hooks | ⬜ planned | — | — |
-| 9b-fe | Soft delete admin UI (Vue trash view + restore/purge) | ⬜ planned | — | — |
+| 9b-fe | Soft delete admin UI (Vue Active/Trash switch on the collection list + inline soft-delete/restore/purge actions column; `itemsApi` `deleted`/`purge`/`restore`; soft-delete-aware item-form confirm) — *frontend-only; consumes the 9b API; `/api/schema` already emits `softDelete`* | ✅ done (live-verified: real PG — full delete→trash→restore→purge UI loop via Playwright `trash.spec.ts`) | [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md) |
 
 > The 5.5 and 5.6 phases were inserted between Phase 5 and Phase 6 as principled refinements
 > (identity model alignment, then SEO model), not feature additions to the planned scope.
