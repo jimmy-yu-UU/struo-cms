@@ -40,11 +40,8 @@ public sealed class FilesController(
         var created = await files.UploadAsync(stream, file.FileName, file.ContentType, file.Length, ct);
         return StatusCode(StatusCodes.Status201Created, new
         {
-            data = new
-            {
-                id = created.Id, fileName = created.FileName, contentType = created.ContentType,
-                size = created.Size, width = created.Width, height = created.Height, status = created.Status
-            }
+            id = created.Id, fileName = created.FileName, contentType = created.ContentType,
+            size = created.Size, width = created.Width, height = created.Height, status = created.Status
         });
     }
 
@@ -56,11 +53,8 @@ public sealed class FilesController(
         if (row.Status != "published" && !await IsAuthenticatedAsync()) return NotFound();
         return Ok(new
         {
-            data = new
-            {
-                id = row.Id, fileName = row.FileName, contentType = row.ContentType,
-                size = row.Size, width = row.Width, height = row.Height, status = row.Status
-            }
+            id = row.Id, fileName = row.FileName, contentType = row.ContentType,
+            size = row.Size, width = row.Width, height = row.Height, status = row.Status
         });
     }
 

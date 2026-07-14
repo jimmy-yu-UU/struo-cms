@@ -44,7 +44,7 @@ public sealed class UsersController(
         {
             Id = id, Email = body.Email, Password = hasher.Hash(body.Password), Name = body.Name, IsActive = true
         }).ExecuteCommandAsync(ct);
-        return Created($"/api/items/user/{id}", new { data = new { id, email = body.Email, name = body.Name } });
+        return Created($"/api/items/user/{id}", new { id, email = body.Email, name = body.Name });
     }
 
     [HttpPut("{id:guid}/password")]
@@ -84,7 +84,7 @@ public sealed class UsersController(
             .SetColumns(u => new User { AccessToken = hash, AccessTokenCreatedAt = now, AccessTokenLastUsedAt = null })
             .Where(u => u.Id == id).ExecuteCommandAsync(ct);
         if (updated == 0) return NotFound();
-        return Ok(new { data = new { token } }); // shown once
+        return Ok(new { token }); // shown once
     }
 
     [HttpDelete("{id:guid}/access-token")]

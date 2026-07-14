@@ -16,6 +16,6 @@ public sealed class LanguagesController(ILanguageProvider languages) : Controlle
         var data = languages.Enabled()
             .Select(l => new { code = l.Code, name = l.Name, isDefault = l.IsDefault })
             .ToList();
-        return Ok(new { data });
+        return Ok(data);
     }
 }
