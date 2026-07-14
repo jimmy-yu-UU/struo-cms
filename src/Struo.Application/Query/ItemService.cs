@@ -53,7 +53,7 @@ public sealed class ItemService(
             Filter = await relationFilter.RewriteAsync(collection, validated.Filter, queryLocale, ct)
         };
         var searchable = QueryValidator.SearchableFields(meta);
-        var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, ct);
+        var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, ct: ct);
 
         var entities = result.Rows;
         var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();
@@ -68,7 +68,7 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         ValidateLocale(locale);
-        var entity = await repository.GetByIdAsync(collection, id, ct);
+        var entity = await repository.GetByIdAsync(collection, id, ct: ct);
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)Project(entity, meta, null);
@@ -342,7 +342,7 @@ public sealed class ItemService(
         // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
         // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
         // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
-        var existing = await repository.GetByIdAsync(collection, id, ct);
+        var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
         var incoming = Deserialize(collection, body, meta);
         var bodyKeys = body.ValueKind == JsonValueKind.Object

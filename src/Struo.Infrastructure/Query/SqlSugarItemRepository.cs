@@ -5,6 +5,7 @@ using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Domain.Auditing;
 using Struo.Domain.Localization;
 using Struo.Domain.Query;
 
@@ -23,12 +24,12 @@ public sealed class SqlSugarItemRepository(
     private static readonly MethodInfo RunQueryAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(RunQueryAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int), typeof(CancellationToken)])!;
+            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int), typeof(DeletedFilter), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo GetByIdGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(GetByIdGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object)])!;
+            [typeof(object), typeof(DeletedFilter)])!;
 
     private static readonly MethodInfo CreateGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(CreateGenericAsync),
@@ -44,6 +45,16 @@ public sealed class SqlSugarItemRepository(
         typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
+
+    private static readonly MethodInfo SoftDeleteGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(SoftDeleteGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(object), typeof(string), typeof(string), typeof(DateTime), typeof(Guid?), typeof(CancellationToken)])!;
+
+    private static readonly MethodInfo RestoreGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(RestoreGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(object), typeof(string), typeof(string), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo WhereInGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInGenericAsync),
@@ -82,7 +93,8 @@ public sealed class SqlSugarItemRepository(
              typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)])!;
 
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
-        IReadOnlyList<string> searchableFields, string? queryLocale = null, CancellationToken ct = default)
+        IReadOnlyList<string> searchableFields, string? queryLocale = null,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
         var collMeta = metadata.GetCollection(collection);
@@ -166,33 +178,64 @@ public sealed class SqlSugarItemRepository(
 
         var orderBy = BuildOrderBy(query.Sort, d, collection, queryLocale);
         var method = RunQueryAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<QueryResult>)method.Invoke(this, [conditionals, orderBy, query.Limit, query.Offset, ct])!;
+        return await (Task<QueryResult>)method.Invoke(this, [conditionals, orderBy, query.Limit, query.Offset, deleted, ct])!;
     }
 
     private async Task<QueryResult> RunQueryAsync<T>(
-        List<IConditionalModel> conditionals, string? orderBy, int limit, int offset, CancellationToken ct)
+        List<IConditionalModel> conditionals, string? orderBy, int limit, int offset,
+        DeletedFilter deleted, CancellationToken ct)
         where T : class, new()
     {
+        // Phase 9b: Only/With lift the global soft-delete floor (registered in
+        // SqlSugarClientFactory) for this query; Only additionally restricts to trashed rows via
+        // an extra DeletedAt-IS-NOT-NULL conditional (kept as a ConditionalModel — see the Task-5
+        // report for why the cast-based Where predicate on ISoftDeletable was avoided).
+        var isSoftDeletable = typeof(ISoftDeletable).IsAssignableFrom(typeof(T));
+        var effectiveConditionals = conditionals;
+        if (deleted == DeletedFilter.Only && isSoftDeletable)
+        {
+            effectiveConditionals = [.. conditionals, new ConditionalModel
+            {
+                FieldName = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T)),
+                ConditionalType = ConditionalType.IsNot,
+                FieldValue = null
+            }];
+        }
+
+        ISugarQueryable<T> NewQueryable()
+        {
+            var q = db.Queryable<T>();
+            if (deleted != DeletedFilter.Exclude && isSoftDeletable)
+                q = q.ClearFilter<ISoftDeletable>();
+            return q.Where(effectiveConditionals);
+        }
+
         // True offset/limit windowing: offset is an absolute row count and need NOT be a multiple of
         // limit. The old code turned offset into a 1-based page index by integer division, which
         // silently returned the wrong window for any non-page-aligned offset (e.g. offset=25,limit=20
         // skipped 20 instead of 25). Count + Skip/Take gives the exact window.
-        var total = await db.Queryable<T>().Where(conditionals).CountAsync(ct);
-        var queryable = db.Queryable<T>().Where(conditionals);
+        var total = await NewQueryable().CountAsync(ct);
+        var queryable = NewQueryable();
         if (!string.IsNullOrWhiteSpace(orderBy)) queryable = queryable.OrderBy(orderBy);
         var rows = await queryable.Skip(offset).Take(limit).ToListAsync(ct);
         return new QueryResult(rows.Cast<object>().ToList(), total);
     }
 
-    public async Task<object?> GetByIdAsync(string collection, string id, CancellationToken ct = default)
+    public async Task<object?> GetByIdAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
         var method = GetByIdGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<object?>)method.Invoke(this, [ConvertId(id, d)])!;
+        return await (Task<object?>)method.Invoke(this, [ConvertId(id, d), deleted])!;
     }
 
-    private async Task<object?> GetByIdGenericAsync<T>(object id) where T : class, new() =>
-        await db.Queryable<T>().InSingleAsync(id);
+    private async Task<object?> GetByIdGenericAsync<T>(object id, DeletedFilter deleted) where T : class, new()
+    {
+        var q = db.Queryable<T>();
+        if (deleted != DeletedFilter.Exclude && typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+            q = q.ClearFilter<ISoftDeletable>();
+        return await q.InSingleAsync(id);
+    }
 
     public async Task InTransactionAsync(Func<Task> body, CancellationToken ct = default)
     {
@@ -249,7 +292,7 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        var existing = await GetByIdAsync(collection, id, ct);
+        var existing = await GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
 
         // Clone so the caller's object is never mutated.
@@ -258,7 +301,7 @@ public sealed class SqlSugarItemRepository(
 
         var method = UpdateGenericAsyncDef.MakeGenericMethod(d.EntityType);
         await (Task)method.Invoke(this, [clone, ct])!;
-        return await GetByIdAsync(collection, id, ct);
+        return await GetByIdAsync(collection, id, ct: ct);
     }
 
     private async Task UpdateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
@@ -289,7 +332,7 @@ public sealed class SqlSugarItemRepository(
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        var existing = await GetByIdAsync(collection, id, ct);
+        var existing = await GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return false;
 
         var method = DeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
@@ -299,6 +342,67 @@ public sealed class SqlSugarItemRepository(
 
     private async Task DeleteGenericAsync<T>(object id, CancellationToken ct) where T : class, new() =>
         await db.Deleteable<T>().In(id).ExecuteCommandAsync(ct);
+
+    public async Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default)
+    {
+        var d = Descriptor(collection);
+        if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
+            throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
+
+        var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), d.EntityType);
+        var deletedByColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedBy), d.EntityType);
+        var typedId = ConvertId(id, d);
+
+        var method = SoftDeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, deletedAtColumn, deletedByColumn, deletedAt, deletedBy, ct])!;
+    }
+
+    private async Task<bool> SoftDeleteGenericAsync<T>(
+        string idColumn, object id, string deletedAtColumn, string deletedByColumn,
+        DateTime deletedAt, Guid? deletedBy, CancellationToken ct) where T : class, new()
+    {
+        // Updateable<T> is not subject to the ISoftDeletable query filter, so the row is located by
+        // id regardless of its current DeletedAt — soft-deleting an already-trashed row still
+        // matches (idempotent) rather than silently affecting zero rows.
+        // Parameter named "__sdId" (not "@id"): SqlSugar auto-binds an internal "@id" placeholder of
+        // its own on Updateable<T>() for an entity whose PK property is named "Id" — colliding with a
+        // plain "@id" here silently rebinds to that internal (unset/default) parameter instead of ours.
+        // UpdateGenericAsync's "@__ocId" dodges the same collision.
+        var affected = await db.Updateable<T>()
+            .SetColumns(deletedAtColumn, (object)deletedAt)
+            .SetColumns(deletedByColumn, (object?)deletedBy)
+            .Where($"{idColumn} = @__sdId", new { __sdId = id })
+            .ExecuteCommandAsync(ct);
+        return affected > 0;
+    }
+
+    public async Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default)
+    {
+        var d = Descriptor(collection);
+        if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
+            throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
+
+        var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), d.EntityType);
+        var deletedByColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedBy), d.EntityType);
+        var typedId = ConvertId(id, d);
+
+        var method = RestoreGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, deletedAtColumn, deletedByColumn, ct])!;
+    }
+
+    private async Task<bool> RestoreGenericAsync<T>(
+        string idColumn, object id, string deletedAtColumn, string deletedByColumn, CancellationToken ct)
+        where T : class, new()
+    {
+        var affected = await db.Updateable<T>()
+            .SetColumns(deletedAtColumn, (object?)null)
+            .SetColumns(deletedByColumn, (object?)null)
+            .Where($"{idColumn} = @__sdId", new { __sdId = id })
+            .ExecuteCommandAsync(ct);
+        return affected > 0;
+    }
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
