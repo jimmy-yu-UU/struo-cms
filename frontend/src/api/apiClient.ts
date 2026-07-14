@@ -100,6 +100,9 @@ export class ApiClient {
     if (!text) return undefined as T
     const payload = JSON.parse(text)
     if (opts?.unwrap === false) return payload as T
+    if (payload && typeof payload === 'object' && 'success' in payload) {
+      return (payload as { data?: unknown }).data as T
+    }
     return (payload?.data ?? payload) as T
   }
 }
