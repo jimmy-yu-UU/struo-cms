@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiClient } from './apiClient'
+import { ApiClient, ApiError } from './apiClient'
 
 function mockFetch(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -27,14 +27,45 @@ describe('ApiClient', () => {
     expect(f).toHaveBeenCalledWith('/api/auth/me', expect.objectContaining({ credentials: 'include' }))
   })
 
-  it('throws error.message on failure', async () => {
-    vi.stubGlobal('fetch', mockFetch(401, { error: { message: 'Invalid credentials.' } }))
+  it('throws an ApiError carrying status/code/message from the error envelope', async () => {
+    vi.stubGlobal('fetch', mockFetch(401, { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid credentials.' } }))
     const c = new ApiClient('/api')
-    await expect(c.get('/auth/me')).rejects.toThrow('Invalid credentials.')
+    const err = await c.get('/auth/me').catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toBeInstanceOf(Error)
+    expect(err.status).toBe(401)
+    expect(err.code).toBe('UNAUTHORIZED')
+    expect(err.message).toBe('Invalid credentials.')
+    expect(err.details).toBeUndefined()
+  })
+
+  it('carries VALIDATION details on the thrown ApiError', async () => {
+    vi.stubGlobal('fetch', mockFetch(400, {
+      success: false,
+      error: { code: 'VALIDATION', message: 'One or more validation errors occurred.', details: [{ field: 'email', message: 'Email is required.' }] },
+    }))
+    const err = await new ApiClient('/api').post('/auth/login', {}).catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.code).toBe('VALIDATION')
+    expect(err.details).toEqual([{ field: 'email', message: 'Email is required.' }])
+  })
+
+  it('falls back to a default message on a non-JSON error body', async () => {
+    const c = new ApiClient('/api')
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      status: 500, ok: false,
+      json: async () => { throw new Error('not json') },
+      text: async () => 'oops',
+    } as unknown as Response)
+    const err = await c.get('/x').catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(500)
+    expect(err.message).toBe('Request failed (500)')
+    expect(err.code).toBeUndefined()
   })
 
   it('invokes the unauthorized handler on 401', async () => {
-    vi.stubGlobal('fetch', mockFetch(401, { error: { message: 'x' } }))
+    vi.stubGlobal('fetch', mockFetch(401, { success: false, error: { code: 'UNAUTHORIZED', message: 'x' } }))
     const c = new ApiClient('/api')
     const onUnauth = vi.fn()
     c.setUnauthorizedHandler(onUnauth)
@@ -62,11 +93,13 @@ describe('ApiClient', () => {
     await expect(c.delete('/items/article/1')).resolves.toBeUndefined()
   })
 
-  it('put throws the server error message on non-2xx', async () => {
+  it('put throws an ApiError with the server code on non-2xx', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: { message: 'nope' } }), { status: 400 }))
-    const c = new ApiClient('/api')
-    await expect(c.put('/x', {})).rejects.toThrow('nope')
+      new Response(JSON.stringify({ success: false, error: { code: 'BAD_USER_INPUT', message: 'nope' } }), { status: 400 }))
+    const err = await new ApiClient('/api').put('/x', {}).catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.code).toBe('BAD_USER_INPUT')
+    expect(err.message).toBe('nope')
   })
 
   // M1: mutations carry the CSRF header; safe GETs do not.
