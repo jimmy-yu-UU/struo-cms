@@ -190,6 +190,7 @@ public static class MetadataScanner
             Group = attr.Group,
             DefaultDisplayField = defaultDisplay,
             AdminOnly = attr.AdminOnly,
+            SoftDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type),
             FieldGroups = groups,
             Fields = ordered,
             Relations = ScanRelations(type),
