@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import ItemFormView from './ItemFormView.vue'
 import { itemsApi } from '../api/itemsApi'
+import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -103,13 +104,24 @@ describe('ItemFormView', () => {
     expect((w.vm as any).errors.status).toMatch(/required/i)
   })
 
-  it('marks notFound when the item is missing', async () => {
+  it('marks notFound when the server returns code NOT_FOUND', async () => {
     routeParams = { name: 'article', id: '404' }
     setupStores()
-    vi.spyOn(itemsApi, 'get').mockRejectedValue(new Error('Item not found.'))
+    // CJK message that does NOT match the old /not found/i regex — only the code branch can pass this.
+    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(404, '找不到資源', 'NOT_FOUND'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     expect((w.vm as any).notFound).toBe(true)
+  })
+
+  it('shows serverError (not notFound) on a non-404 load error', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    expect((w.vm as any).notFound).toBe(false)
+    expect((w.vm as any).serverError).toBe('Boom')
   })
 
   it('delete requires confirmation then removes and routes back', async () => {
