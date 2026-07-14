@@ -6,6 +6,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
+import SelectButton from 'primevue/selectbutton'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -24,6 +25,13 @@ const name = computed(() => route.params.name as string)
 const meta = computed(() => schema.get(name.value))
 const canRead = computed(() => auth.canRead(name.value))
 const canWrite = computed(() => auth.canWrite(name.value))
+const canDelete = computed(() => auth.canDelete(name.value))
+const mode = ref<'active' | 'trash'>('active')
+const showTrashSwitch = computed(() => !!meta.value?.softDelete && canDelete.value)
+const modeOptions = [
+  { label: 'Active', value: 'active' as const },
+  { label: 'Trash', value: 'trash' as const },
+]
 const columns = computed(() => (meta.value ? selectListColumns(meta.value) : []))
 
 const rows = ref<Record<string, unknown>[]>([])
@@ -63,6 +71,7 @@ async function loadItems(): Promise<void> {
       sort,
       search: search.value || undefined,
       locale: langStore.defaultCode || undefined,
+      deleted: mode.value === 'trash' ? 'only' : undefined,
     })
     rows.value = res.data
     total.value = res.total
@@ -99,6 +108,7 @@ function onSearchInput(value: string): void {
 }
 
 function onRowClick(e: { data: Record<string, unknown> }): void {
+  if (mode.value === 'trash') return
   const rid = e.data.id
   if (rid != null) router.push({ name: 'collection-item', params: { name: name.value, id: String(rid) } })
 }
@@ -107,17 +117,25 @@ function onNew(): void {
   router.push({ name: 'collection-create', params: { name: name.value } })
 }
 
+function setMode(m: 'active' | 'trash'): void {
+  mode.value = m
+  page.value = 0
+  loadItems()
+}
+
 watch(name, () => {
   page.value = 0
   sortField.value = undefined
   sortOrder.value = undefined
   search.value = ''
+  mode.value = 'active'
   loadItems()
 })
 
 onMounted(loadItems)
 
-defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, rows, total, loading, error, cellValue })
+defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, canDelete,
+  mode, setMode, showTrashSwitch, rows, total, loading, error, cellValue })
 </script>
 
 <template>
@@ -131,6 +149,15 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
     <template v-else>
       <header class="list-header">
         <h2>{{ meta.label }}</h2>
+        <SelectButton
+          v-if="showTrashSwitch"
+          :model-value="mode"
+          :options="modeOptions"
+          option-label="label"
+          option-value="value"
+          :allow-empty="false"
+          @update:model-value="setMode($event)"
+        />
         <InputText
           type="text"
           placeholder="Search"
