@@ -71,3 +71,37 @@ describe('itemsApi mutations', () => {
     expect(spy).toHaveBeenCalledWith('/items/article/1')
   })
 })
+
+describe('itemsApi.list deleted mode', () => {
+  beforeEach(() => vi.clearAllMocks())
+  it('forwards deleted=only to the query string', async () => {
+    ;(apiClient.getRaw as any).mockResolvedValue({ data: [], meta: { total: 0 } })
+    await itemsApi.list('article', { page: 0, rows: 25, deleted: 'only' })
+    expect(apiClient.getRaw).toHaveBeenCalledWith('/items/article?limit=25&offset=0&deleted=only')
+  })
+  it('omits deleted when exclude/undefined', async () => {
+    ;(apiClient.getRaw as any).mockResolvedValue({ data: [], meta: { total: 0 } })
+    await itemsApi.list('article', { page: 0, rows: 25, deleted: 'exclude' })
+    expect(apiClient.getRaw).toHaveBeenCalledWith('/items/article?limit=25&offset=0')
+  })
+})
+
+describe('itemsApi soft-delete ops', () => {
+  beforeEach(() => vi.clearAllMocks())
+  it('remove without opts deletes plainly', async () => {
+    const spy = vi.spyOn(apiClient, 'delete').mockResolvedValue(undefined)
+    await itemsApi.remove('article', '1')
+    expect(spy).toHaveBeenCalledWith('/items/article/1')
+  })
+  it('remove with purge appends ?purge=true', async () => {
+    const spy = vi.spyOn(apiClient, 'delete').mockResolvedValue(undefined)
+    await itemsApi.remove('article', '1', { purge: true })
+    expect(spy).toHaveBeenCalledWith('/items/article/1?purge=true')
+  })
+  it('restore posts the restore path and returns the row', async () => {
+    const spy = vi.spyOn(apiClient, 'post').mockResolvedValue({ id: '1', status: 'draft' })
+    const res = await itemsApi.restore('article', '1')
+    expect(spy).toHaveBeenCalledWith('/items/article/1/restore')
+    expect(res).toEqual({ id: '1', status: 'draft' })
+  })
+})
