@@ -332,7 +332,9 @@ public sealed class SqlSugarItemRepository(
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        var existing = await GetByIdAsync(collection, id, ct: ct);
+        // Look up regardless of the soft-delete filter: a hard delete (purge) must be able to
+        // remove a row that is already trashed (DeletedAt set), not just a live one.
+        var existing = await GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (existing is null) return false;
 
         var method = DeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
