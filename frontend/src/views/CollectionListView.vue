@@ -7,12 +7,15 @@ import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import SelectButton from 'primevue/selectbutton'
+import ConfirmDialog from 'primevue/confirmdialog'
+import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { selectListColumns } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
+import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
@@ -20,6 +23,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
+const confirm = useConfirm()
 
 const name = computed(() => route.params.name as string)
 const meta = computed(() => schema.get(name.value))
@@ -123,6 +127,35 @@ function setMode(m: 'active' | 'trash'): void {
   loadItems()
 }
 
+function rowId(row: Record<string, unknown>): string {
+  return String(row.id)
+}
+
+async function runAction(fn: () => Promise<void>): Promise<void> {
+  error.value = ''
+  try {
+    await fn()
+    await loadItems()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Action failed.'
+  }
+}
+
+function onDelete(row: Record<string, unknown>): void {
+  const kind = deleteKindFor(meta.value)
+  const { header, message } = deleteConfirm(kind)
+  confirm.require({ header, message, accept: () => runAction(() => itemsApi.remove(name.value, rowId(row))) })
+}
+
+function onPurge(row: Record<string, unknown>): void {
+  const { header, message } = purgeConfirm()
+  confirm.require({ header, message, accept: () => runAction(() => itemsApi.remove(name.value, rowId(row), { purge: true })) })
+}
+
+async function onRestore(row: Record<string, unknown>): Promise<void> {
+  await runAction(async () => { await itemsApi.restore(name.value, rowId(row)) })
+}
+
 watch(name, () => {
   page.value = 0
   sortField.value = undefined
@@ -135,11 +168,12 @@ watch(name, () => {
 onMounted(loadItems)
 
 defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, canDelete,
-  mode, setMode, showTrashSwitch, rows, total, loading, error, cellValue })
+  mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading, error, cellValue })
 </script>
 
 <template>
   <section class="collection-list">
+    <ConfirmDialog />
     <template v-if="!meta">
       <p class="notice">Collection not found.</p>
     </template>
@@ -188,6 +222,17 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
         >
           <template #body="{ data }">
             {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
+          </template>
+        </Column>
+        <Column v-if="canDelete" header="" :style="{ width: '12rem' }">
+          <template #body="{ data }">
+            <template v-if="mode === 'active'">
+              <Button label="Delete" severity="danger" text size="small" @click.stop="onDelete(data)" />
+            </template>
+            <template v-else>
+              <Button label="Restore" text size="small" @click.stop="onRestore(data)" />
+              <Button label="Delete permanently" severity="danger" text size="small" @click.stop="onPurge(data)" />
+            </template>
           </template>
         </Column>
         <template #empty>No records.</template>
