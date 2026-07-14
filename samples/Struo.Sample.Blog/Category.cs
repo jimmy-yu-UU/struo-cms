@@ -7,9 +7,12 @@ namespace Struo.Sample.Blog;
 
 [SugarTable("categories")]
 [CmsCollection("Category", Icon = "folder", Group = "Content", DefaultDisplayField = nameof(Name))]
-public sealed class Category : AuditableEntity
+public sealed class Category : AuditableEntity, ISoftDeletable
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
 
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Name { get; set; } = string.Empty;
