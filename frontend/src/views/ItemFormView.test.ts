@@ -172,6 +172,76 @@ describe('ItemFormView', () => {
     expect((w.vm as any).serverError).toBe('Boom')
   })
 
+  it('carries the loaded version through to the update payload (FE-4 chain fix)', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 3 })
+    const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5' })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited'
+    await (w.vm as any).onSubmit()
+    expect(upd).toHaveBeenCalledWith('article', '5', expect.objectContaining({ version: 3 }))
+  })
+
+  it('recovers from 409 CONFLICT: refreshes version, flags conflict, preserves edits, then re-saves', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    // Default (steady-state) load returns version 1; init runs via onMounted AND the explicit call.
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    const upd = vi.spyOn(itemsApi, 'update')
+      .mockRejectedValueOnce(new ApiError(409, 'The item was modified by someone else.', 'CONFLICT'))
+      .mockResolvedValueOnce({ id: '5' })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    // The next get call is the post-409 recovery refresh: return the bumped server version.
+    get.mockResolvedValueOnce({ id: '5', status: 'published', translations: {}, version: 7 })
+    await (w.vm as any).onSubmit() // triggers 409 -> recovery
+    expect((w.vm as any).conflict).toBe(true)
+    expect((w.vm as any).model.version).toBe(7)
+    expect((w.vm as any).model.shared.status).toBe('my-edit') // user edits NOT overwritten
+    // re-save now echoes the refreshed version and succeeds
+    await (w.vm as any).onSubmit()
+    expect(upd).toHaveBeenLastCalledWith('article', '5', expect.objectContaining({ version: 7 }))
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
+  })
+
+  it('Reload latest overwrites the model with the server copy and clears conflict', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    get.mockResolvedValueOnce({ id: '5', status: 'server-copy', translations: {}, version: 9 })
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).conflict).toBe(true)
+    ;(w.vm as any).reloadLatest()
+    expect((w.vm as any).model.shared.status).toBe('server-copy') // full overwrite
+    expect((w.vm as any).model.version).toBe(9)
+    expect((w.vm as any).conflict).toBe(false)
+    expect((w.vm as any).serverError).toBe('')
+  })
+
+  it('falls back to notFound when the post-409 refresh 404s (item deleted)', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    get.mockRejectedValueOnce(new ApiError(404, '找不到資源', 'NOT_FOUND'))
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).notFound).toBe(true)
+    expect((w.vm as any).conflict).toBe(false)
+  })
+
   it('delete requires confirmation then removes and routes back', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()

@@ -43,11 +43,18 @@ const serverError = ref('')
 const loading = ref(true)
 const submitting = ref(false)
 const notFound = ref(false)
+const conflict = ref(false)
+// Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
+let latestFromServer: FormModel | null = null
 
 function setModel(next: FormModel): void {
   model.shared = next.shared
   model.translations = next.translations
   model.relations = next.relations
+  // Carry the optimistic-concurrency token so update payloads echo it (D2 / FE-4). Without this
+  // the version chain breaks at the view layer and the optimistic lock silently degrades to
+  // last-write-wins. On create, next.version is undefined and stays undefined.
+  model.version = next.version
 }
 
 async function init(): Promise<void> {
@@ -84,9 +91,16 @@ async function onSubmit(): Promise<void> {
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update')
     if (isCreate.value) await itemsApi.create(name.value, payload)
     else await itemsApi.update(name.value, id.value!, payload)
+    conflict.value = false
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
-    if (e instanceof ApiError && e.details?.length) {
+    if (e instanceof ApiError && e.status === 409 && e.code === 'CONFLICT') {
+      // Optimistic-lock clash (D2): someone else changed the item since we loaded it. Recover by
+      // refreshing the concurrency token WITHOUT touching the user's in-progress edits, then let
+      // them either save again (overwrite) or reload the server copy. CONFLICT carries no details,
+      // so it never overlaps the FE-3 details-mapping branch below.
+      await recoverFromConflict()
+    } else if (e instanceof ApiError && e.details?.length) {
       // Server-side (ASP.NET model-binding) validation: map details back to
       // per-field errors; anything not matching a field falls to the banner.
       const knownFields = new Set((meta.value?.fields ?? []).map((f) => f.name))
@@ -101,6 +115,33 @@ async function onSubmit(): Promise<void> {
   } finally {
     submitting.value = false
   }
+}
+
+async function recoverFromConflict(): Promise<void> {
+  if (!meta.value) return
+  try {
+    const latest = await itemsApi.get(name.value, id.value!, {
+      deep: editableRelations.value,
+      locale: langStore.defaultCode,
+    })
+    latestFromServer = parseItemToForm(meta.value, latest, langStore.languages)
+    // Only refresh the token; keep the user's edits so a re-save overwrites the server copy.
+    model.version = latestFromServer.version
+    conflict.value = true
+  } catch (e) {
+    // The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
+    conflict.value = false
+    if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
+    else serverError.value = e instanceof Error ? e.message : 'Failed to reload item.'
+  }
+}
+
+function reloadLatest(): void {
+  if (!latestFromServer) return
+  setModel(latestFromServer) // full overwrite: discard the user's edits for the server copy
+  conflict.value = false
+  errors.value = {}
+  serverError.value = ''
 }
 
 function onDelete(): void {
@@ -124,7 +165,7 @@ function onCancel(): void {
 }
 
 onMounted(init)
-defineExpose({ init, onSubmit, onDelete, onCancel, model, errors, serverError, notFound, loading })
+defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, serverError, notFound, loading, conflict })
 </script>
 
 <template>
@@ -139,6 +180,10 @@ defineExpose({ init, onSubmit, onDelete, onCancel, model, errors, serverError, n
         <h2>{{ isCreate ? `New ${meta.label}` : `Edit ${meta.label}` }}</h2>
         <Button v-if="!isCreate && canDelete" label="Delete" severity="danger" @click="onDelete" />
       </header>
+      <div v-if="conflict" class="conflict-banner" role="alert">
+        <span class="conflict-text">This item was changed by someone else. Review your edits and save again to overwrite, or reload the latest version.</span>
+        <Button label="Reload latest" severity="secondary" size="small" @click="reloadLatest" />
+      </div>
       <ItemForm
         :meta="meta"
         :item-id="id"
@@ -154,3 +199,19 @@ defineExpose({ init, onSubmit, onDelete, onCancel, model, errors, serverError, n
     </template>
   </section>
 </template>
+
+<style scoped>
+.conflict-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #f0ad4e;
+  background: #fff8ec;
+  border-radius: 6px;
+}
+.conflict-text {
+  flex: 1;
+}
+</style>
