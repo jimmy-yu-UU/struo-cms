@@ -104,6 +104,54 @@ describe('ItemFormView', () => {
     expect((w.vm as any).errors.status).toMatch(/required/i)
   })
 
+  it('maps server validation error.details onto per-field errors', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    const spy = vi.spyOn(itemsApi, 'create').mockRejectedValue(
+      new ApiError(400, 'One or more validation errors occurred.', 'VALIDATION', [
+        { field: 'status', message: 'Status is already taken.' },
+      ]),
+    )
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft' // pass client validation
+    await (w.vm as any).onSubmit()
+    expect(spy).toHaveBeenCalled()
+    expect((w.vm as any).errors.status).toBe('Status is already taken.')
+    expect((w.vm as any).serverError).toBe('')
+  })
+
+  it('splits mixed details: matched field to errors, unknown to serverError banner', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    vi.spyOn(itemsApi, 'create').mockRejectedValue(
+      new ApiError(400, 'One or more validation errors occurred.', 'VALIDATION', [
+        { field: 'status', message: 'Status is already taken.' },
+        { field: 'mystery', message: 'Server rejected a hidden field.' },
+      ]),
+    )
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).errors.status).toBe('Status is already taken.')
+    expect((w.vm as any).serverError).toContain('Server rejected a hidden field.')
+  })
+
+  it('falls back to serverError banner when the error has no details', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    vi.spyOn(itemsApi, 'create').mockRejectedValue(
+      new ApiError(400, 'Title is required.', 'BAD_USER_INPUT'),
+    )
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).serverError).toBe('Title is required.')
+    expect(Object.keys((w.vm as any).errors)).toHaveLength(0)
+  })
+
   it('marks notFound when the server returns code NOT_FOUND', async () => {
     routeParams = { name: 'article', id: '404' }
     setupStores()
