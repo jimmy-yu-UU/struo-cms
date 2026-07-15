@@ -151,4 +151,20 @@ public class SqlSugarItemRepositoryTests : IDisposable
         (await _repo.DeleteAsync("article", created.Id.ToString())).Should().BeTrue();
         (await _repo.GetByIdAsync("article", created.Id.ToString())).Should().BeNull();
     }
+
+    // CS-2: a malformed id must surface as the mappable QueryException (-> HTTP 400), not a raw
+    // FormatException (which the exception handler cannot map and masks as a 500).
+    [Fact]
+    public async Task GetByIdAsync_with_malformed_id_throws_QueryException_not_FormatException()
+    {
+        var act = async () => await _repo.GetByIdAsync("article", "not-a-guid");
+        await act.Should().ThrowAsync<QueryException>();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_with_malformed_id_throws_QueryException_not_FormatException()
+    {
+        var act = async () => await _repo.DeleteAsync("article", "not-a-guid");
+        await act.Should().ThrowAsync<QueryException>();
+    }
 }

@@ -786,25 +786,14 @@ public sealed class SqlSugarItemRepository(
 
     /// <summary>
     /// Converts a string ID to the PK property type. Handles Guid and all IConvertible types.
+    /// Delegates entirely to the Application-layer twin so any unparseable id surfaces as a
+    /// mappable <see cref="QueryException"/> (-&gt; HTTP 400) instead of a raw FormatException/
+    /// ArgumentException that <c>StruoExceptionHandler.Map</c> cannot map and masks as a 500 (CS-2).
     /// </summary>
     private static object ConvertId(string id, EntityDescriptor d)
     {
         var idType = d.EntityType.GetProperty(d.IdProperty)!.PropertyType;
-        var targetType = Nullable.GetUnderlyingType(idType) ?? idType;
-
-        if (targetType == typeof(Guid))
-            return Guid.Parse(id);
-
-        try
-        {
-            return Convert.ChangeType(id, targetType);
-        }
-        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
-        {
-            throw new ArgumentException(
-                $"ID value '{id}' cannot be converted to type '{targetType.Name}' for collection '{d.EntityType.Name}'.",
-                nameof(id), ex);
-        }
+        return Struo.Application.Query.IdParsing.ParseTo(id, idType);
     }
 
     /// <summary>
