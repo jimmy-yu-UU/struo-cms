@@ -16,7 +16,7 @@ NNN-short-kebab-description.sql
   apply order (ordinal filename sort), so it must be monotonic and gap-free.
 - **`short-kebab-description`** — one logical change per file.
 - The **next migration** is simply the highest existing number **+ 1**. As of this file the series ends
-  at `009`, so the next script is `010-…`.
+  at `010`, so the next script is `011-…`.
 - One numbering scheme only. (Two legacy `0001__`/`0002__` files were folded into this series under
   DB-6; their headers note the original filename.)
 
@@ -28,7 +28,26 @@ Forward-only — no automatic `down`; write a compensating forward script if a r
 
 - `007-soft-delete-columns.sql` (adds `deletedat`) must precede `009-hot-path-indexes.sql` (partial
   indexes `WHERE deletedat IS NULL`).
-- `008-revisions-table.sql` (creates `revisions`) must precede any future index on that table.
+- `008-revisions-table.sql` (creates `revisions`) must precede any future index on that table, including
+  `010-revisions-unique-number.sql` (which replaces `ix_revisions_item` with a UNIQUE index).
+
+### `010` InitTables ordering hazard (dev only)
+
+`010-revisions-unique-number.sql` promotes the `revisions` lookup index to a composite **UNIQUE** index,
+and the matching CodeFirst constraint now lives on the entity (`Revision.cs`,
+`UniqueGroupNameList = ["ux_revisions_item_no"]`). Empirically verified (SqlSugarCore 5.1.4.215):
+`InitTables` on an **existing** table whose entity just gained a `UniqueGroupNameList` attempts to add
+the unique index and **throws if duplicate rows already exist**. Because dev order is
+`InitTables → runner`, a pre-existing dev DB that already holds duplicate revision rows would crash
+startup in `InitTables` before `010` can dedupe. The runner is **not** reordered ahead of `InitTables`
+(migrations `001`/`003`–`007`/`009` touch sample tables that exist only after `InitTables` on a fresh
+dev DB). Handling:
+
+- **Fresh dev/test DB / existing dev DB without dupes** — no action; `InitTables` adds the unique index
+  cleanly and `010` is a near no-op.
+- **Existing dev DB *with* duplicate revision rows** — apply `010` manually (`psql -f`) to dedupe
+  **before** restarting the app, or drop the dev `revisions` table (dev data is disposable).
+- **Production / live PG** — `InitTables` never runs; `010` is the sole path and dedupes first, safely.
 
 ## Applying — the runner
 
