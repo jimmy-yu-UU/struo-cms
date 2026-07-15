@@ -44,4 +44,9 @@ public sealed class SqlSugarRevisionStore(ISqlSugarClient db, ICurrentUserAccess
             .FirstAsync(ct);
         return r is null ? null : new RevisionRecord(r.RevisionNumber, r.Operation, r.CreatedAt, r.CreatedBy, r.Snapshot);
     }
+
+    public async Task DeleteForItemAsync(string collection, string itemId, CancellationToken ct = default) =>
+        await db.Deleteable<Revision>()
+            .Where(r => r.CollectionName == collection && r.ItemId == itemId)
+            .ExecuteCommandAsync(ct);
 }
