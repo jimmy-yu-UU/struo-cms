@@ -1,6 +1,7 @@
 // tests/Struo.Tests/GraphQl/FakeGraphQlDataSource.cs
 using Struo.Api.GraphQl;
 using Struo.Application.Query;
+using Struo.Application.Revisions;
 using Struo.Domain.Query;
 
 namespace Struo.Tests.GraphQl;
@@ -64,5 +65,24 @@ internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
     {
         RestoredCollections.Add(collection);
         return Task.FromResult(OnRestore(collection, id));
+    }
+
+    public Func<string, string, IReadOnlyList<RevisionInfo>> OnListRevisions { get; set; } = (_, _) => [];
+
+    public Func<string, string, long, RevisionRecord?> OnGetRevision { get; set; } = (_, _, _) => null;
+
+    public List<string> RevertedCollections { get; } = [];
+    public Func<string, string, long, IReadOnlyDictionary<string, object?>?> OnRevert { get; set; } = (_, _, _) => null;
+
+    public Task<IReadOnlyList<RevisionInfo>> ListRevisionsAsync(string collection, string id, CancellationToken ct)
+        => Task.FromResult(OnListRevisions(collection, id));
+
+    public Task<RevisionRecord?> GetRevisionAsync(string collection, string id, long revisionNumber, CancellationToken ct)
+        => Task.FromResult(OnGetRevision(collection, id, revisionNumber));
+
+    public Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, CancellationToken ct)
+    {
+        RevertedCollections.Add(collection);
+        return Task.FromResult(OnRevert(collection, id, revisionNumber));
     }
 }
