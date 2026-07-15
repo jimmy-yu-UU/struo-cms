@@ -1,4 +1,4 @@
--- db/migrations/006-revisions-table.sql
+-- db/migrations/008-revisions-table.sql (originally 006-revisions-table.sql)
 -- Phase 9c — the framework `revisions` table (per-item snapshot history).
 --
 -- CONTEXT: SqlSugar `InitTables` creates missing TABLES on a freshly provisioned (dev) database, but

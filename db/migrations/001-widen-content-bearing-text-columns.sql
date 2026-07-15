@@ -1,4 +1,4 @@
--- 0001__widen_content_bearing_text_columns.sql
+-- 001-widen-content-bearing-text-columns.sql (originally 0001__widen_content_bearing_text_columns.sql)
 -- Date: 2026-07-06
 -- Author: Claude (phase7g live-gate remediation)
 -- Ticket: phase7g-advanced-richtext live gate, Check 1 (round-trip preservation) FAIL
