@@ -15,8 +15,12 @@ namespace Struo.Application.Query;
 /// ids and M2M relation id arrays, so the result is exactly the shape <c>ItemService.UpdateAsync</c>
 /// consumes and revert round-trips through the normal write path.
 /// <para>
-/// The omission of RBAC/hidden-field filtering here is deliberate (see <see cref="ItemService.GetRevisionAsync"/>):
-/// a revert must be able to restore every field, so gating stays at the collection-read level only.
+/// The omission of RBAC/hidden-field filtering here is deliberate: a revert must be able to restore
+/// every field, so <see cref="ItemService.RevertAsync"/> reads this full-fidelity snapshot straight
+/// from the revision store. (SEC-2) That full snapshot is internal-to-revert only — any snapshot
+/// returned to an external caller instead goes through <see cref="ItemService.GetRevisionAsync"/>,
+/// which redacts hidden fields via <see cref="RevisionSnapshotRedactor.RedactHidden"/> before handing
+/// it back, so a snapshot never leaks a hidden field via REST/GraphQL.
 /// </para>
 /// </summary>
 public sealed class RevisionSnapshotBuilder(
