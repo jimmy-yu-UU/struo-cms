@@ -242,6 +242,7 @@ public sealed class RevisionServiceTests
         Assert.Equal(catA.ToString(), CategoryIdOf(now!));                          // M2O FK restored
         Assert.Single(TagsOf(now!));                                                // M2M restored
         Assert.Equal(tag.ToString(), TagIdOf(now!, 0));
+        Assert.Equal("T-zh", ZhTwTitleOf(now!));                                    // zh-TW translation restored
     }
 
     [Fact]
@@ -280,4 +281,11 @@ public sealed class RevisionServiceTests
 
     private static string TagIdOf(IReadOnlyDictionary<string, object?> row, int index) =>
         TagsOf(row)[index]["id"]!.ToString()!;
+
+    /// <summary>Reads the <c>zh-TW</c> title out of the <c>translations</c> overlay (populated
+    /// because <see cref="ItemService.GetAsync"/> is called with a <c>null</c> locale, which loads
+    /// every locale rather than filtering to one) — used to prove a seeded translation round-trips
+    /// through <c>RevertAsync</c>.</summary>
+    private static string ZhTwTitleOf(IReadOnlyDictionary<string, object?> row) =>
+        (string)((IReadOnlyDictionary<string, Dictionary<string, object?>>)row["translations"]!)["zh-TW"]["title"]!;
 }
