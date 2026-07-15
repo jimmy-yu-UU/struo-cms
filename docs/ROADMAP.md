@@ -712,8 +712,39 @@
   worked; only the Body textarea locator timed out). Spec:
   [spec](superpowers/specs/2026-07-14-phase9a-fe-frontend-envelope-alignment-design.md) · plan:
   [plan](superpowers/plans/2026-07-14-phase9a-fe-frontend-envelope-alignment.md).
-- **Next up:** **Phase 9a + 9a-fe + 9b + 9b-fe done & live-verified** (real PG). Remaining Phase 9 slices —
-  **9c** (revisions), **9d** (lifecycle hooks) — remain, user's call on order.
+- **Phase 9c (revisions — REST + GraphQL, backend-only slice) code-complete, live-gate pending (2026-07-15):**
+  per-collection revision history with revert. A collection opts in via `[CmsCollection(Revisions = true)]`
+  (attribute flag like `AdminOnly` — unlike soft delete, nothing is added to the entity; snapshots live in a
+  shared table). Every successful create/update appends a **complete, revert-capable JSON snapshot** (all
+  `[CmsField]` values, M2O FK ids, M2M id arrays, all-locale raw translations, `version`) to a **framework-owned
+  `revisions` table** (`Struo.Infrastructure/Revisions/Revision.cs`, `[SugarTable("revisions")]`, **not** a
+  `[CmsCollection]`; `snapshot` is a `text` column — the recurring varchar bug class, set explicitly).
+  Capture runs **inside the existing write transaction** (`ItemService` create/`UpdateCoreAsync`) so a snapshot
+  and its write commit/roll back together; a `RevisionSnapshotBuilder` assembles the canonical shape with **no
+  RBAC field filtering** (a narrow-grant writer still snapshots the whole item) and raw ids (round-trips through
+  the write path). `RevertAsync` re-applies a past snapshot via the shared update core (tagged `revert`),
+  **append-only** (forward history is never deleted), stripping `version` so it can't 409 against the bumped row;
+  translation-revert is **overlay** (locales added after the reverted revision are left intact — documented
+  nuance). Storage is an `IRevisionStore` port (Application) + `SqlSugarRevisionStore` (Infrastructure, monotonic
+  per-item `RevisionNumber`). REST: `GET .../{id}/revisions` (newest-first metadata), `GET .../{id}/revisions/{n}`
+  (incl. structured snapshot), `POST .../{id}/revisions/{n}/revert`; GraphQL parity for revisioned collections
+  only: shared `Revision` type + `xRevisions`/`xRevision` queries + `revertX` mutation (`snapshot: Any`, null on
+  list / object on single). RBAC: view = read, revert = write (+ super-admin if `AdminOnly`). Sample `Article`
+  opts in; migration `db/migrations/006-revisions-table.sql`. **Domain untouched except the attribute flag +
+  metadata property; no new NuGet packages.** Built subagent-driven (9 tasks, Sonnet impl + Opus review per task;
+  every task Spec ✅ / quality Approved, only Minor findings). **Automated gate GREEN:** `dotnet build -warnaserror`
+  **0 warnings** + `dotnet test` **655** (635 baseline + 20 new), frontend untouched (**267**). A pre-existing
+  fragile test (`TranslationQueryTests.Sort_translatable_field_at_locale`) that 9c's new API-integration tests
+  tipped past the shared-DB default page size was hardened to isolate its own rows (`8290037`). Spec:
+  [spec](superpowers/specs/2026-07-14-phase9c-revisions-design.md) · plan:
+  [plan](superpowers/plans/2026-07-15-phase9c-revisions.md). **LIVE GATE PENDING** — user-driven on real Postgres
+  (`web-struo-cms-db`): apply migration 006, then create → update → list (2 revs) → get snapshot → revert-to-v1
+  (item matches v1 + a 3rd `revert` rev appended, forward history intact) → CJK code-point-exact + large snapshot
+  not truncated (`text`) → REST↔GraphQL parity. Flip this entry + the phase-table row to "done & live-verified"
+  after the gate passes.
+- **Next up:** **Phase 9a + 9a-fe + 9b + 9b-fe done & live-verified** (real PG); **9c code-complete, live-gate
+  pending** (above). Remaining Phase 9 slice — **9d** (lifecycle hooks); plus the frontend companion **9c-fe**
+  (revision-history/revert UI). Order is the user's call.
   The Phase 8b GraphQL **write** series (8b.1 backbone → 8b.2a structured non-i18n → **8b.2b i18n**) remains **complete**.
   Phase 6.9 resolved the framework-vs-host decision (see "Open architectural decisions" below):
   `Struo.Api` is a reusable base template with convention-based collection discovery. The
@@ -794,7 +825,7 @@
 | 9 | Soft delete / revisions / hooks + unified response envelope — *decomposed into 9a/9b/9c/9d* | ⬜ in progress | — | — |
 | 9b | Soft delete (per-collection `ISoftDeletable` opt-in; SqlSugar global query-filter floor; `DELETE`=mark / `?purge=true`=remove / `restore`; `?deleted=exclude\|only\|with` gated by delete perm; REST + GraphQL parity) — *backend-only; Vue UI deferred to 9b-fe* | ✅ done (live-verified: real PG — soft/only/restore/purge + CJK + `?deleted=only`×D9-sort + deep-expansion exclusion; **+1 live-gate fix: typed-NULL PG 42804**) | [spec](superpowers/specs/2026-07-13-phase9b-soft-delete-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-soft-delete.md) |
 | 9a | Unified response envelope (every REST `/api/*` JSON response → `{success,data,meta?}` / `{success:false,error:{code,message,details?}}`; centralized `EnvelopeResultFilter` + `StruoExceptionHandler` + `InvalidModelStateResponseFactory` + `ApiResults.Fail`; machine-readable `error.code` symmetric with GraphQL; 204/binary/redirect not enveloped) — *backend-only; frontend explicit alignment deferred to 9a-fe* | ✅ done (live-verified: real PG — list meta / get / create / VALIDATION+details / BAD_USER_INPUT / 401 / CONFLICT / 404 / 302-file-not-enveloped / bare-204, 11/11, no fixes) | [spec](superpowers/specs/2026-07-14-phase9a-unified-response-envelope-design.md) | [plan](superpowers/plans/2026-07-14-phase9a-unified-response-envelope.md) |
-| 9c | Revisions | ⬜ planned | — | — |
+| 9c | Revisions (per-collection `[CmsCollection(Revisions=true)]` opt-in; framework-owned shared `revisions` table with `text` snapshot; capture inside the write transaction on create/update; canonical revert-capable snapshot builder; append-only `revert`; REST `GET/POST .../{id}/revisions[/{n}][/revert]` + GraphQL `xRevisions`/`xRevision`/`revertX` parity) — *backend-only; Vue UI deferred to 9c-fe* | ⬜ code-complete, live-gate pending (automated: build 0 warnings + `dotnet test` **655**) | [spec](superpowers/specs/2026-07-14-phase9c-revisions-design.md) | [plan](superpowers/plans/2026-07-15-phase9c-revisions.md) |
 | 9d | Lifecycle hooks | ⬜ planned | — | — |
 | 9b-fe | Soft delete admin UI (Vue Active/Trash switch on the collection list + inline soft-delete/restore/purge actions column; `itemsApi` `deleted`/`purge`/`restore`; soft-delete-aware item-form confirm) — *frontend-only; consumes the 9b API; `/api/schema` already emits `softDelete`* | ✅ done (live-verified: real PG — full delete→trash→restore→purge UI loop via Playwright `trash.spec.ts`) | [spec](superpowers/specs/2026-07-14-phase9b-fe-soft-delete-ui-design.md) | [plan](superpowers/plans/2026-07-14-phase9b-fe-soft-delete-ui.md) |
 | 9a-fe | Frontend response-envelope alignment (`apiClient` branches on the `success` discriminator + throws `ApiError extends Error` carrying `status`/`code`/`details`; old `ApiError` type → `ApiErrorBody`; `ItemFormView` 404 via `code === 'NOT_FOUND'` not message text; `itemsApi`/`validateItem` unchanged) — *frontend-only; consumes the 9a envelope* | ✅ done (live-verified: real PG+Redis+MinIO — Playwright auth/collections/trash + new `not-found.spec.ts` 4/4; **+1 gate fix: vue-tsc test-file typing**) | [spec](superpowers/specs/2026-07-14-phase9a-fe-frontend-envelope-alignment-design.md) | [plan](superpowers/plans/2026-07-14-phase9a-fe-frontend-envelope-alignment.md) |
