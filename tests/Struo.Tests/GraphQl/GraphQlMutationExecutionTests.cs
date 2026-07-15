@@ -25,6 +25,7 @@ public class GraphQlMutationExecutionTests
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()
+            .AddHttpContextAccessor() // StruoErrorFilter now injects IHttpContextAccessor (ARC-3)
             .AddLogging();
         services.AddErrorFilter<StruoErrorFilter>();
 
@@ -178,8 +179,10 @@ public class GraphQlMutationExecutionTests
         json.Should().Contain("required");
     }
 
+    // ARC-3: no HttpContext in this in-process executor ⇒ unauthenticated ⇒ UNAUTHORIZED
+    // (REST-parity via the shared DomainErrorMap), not the old unconditional FORBIDDEN.
     [Fact]
-    public async Task Create_permission_denied_maps_to_FORBIDDEN()
+    public async Task Create_permission_denied_without_http_context_maps_to_UNAUTHORIZED()
     {
         var ds = new FakeGraphQlDataSource
         {
@@ -189,7 +192,7 @@ public class GraphQlMutationExecutionTests
         var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
             "mutation { createArticle(input: { status: \"x\" }) { id } }")).ToJson();
 
-        json.Should().Contain("FORBIDDEN");
+        json.Should().Contain("UNAUTHORIZED");
     }
 
     [Fact]
