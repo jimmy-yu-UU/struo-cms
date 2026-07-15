@@ -6,6 +6,9 @@ using Struo.Domain.Metadata.Enums;
 namespace Struo.Sample.Blog;
 
 [SugarTable("categories")]
+// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql (ix_categories_parentid —
+// self-referencing M2O FK).
+[SugarIndex("ix_categories_parentid", nameof(ParentId), OrderByType.Asc)]
 [CmsCollection("Category", Icon = "folder", Group = "Content", DefaultDisplayField = nameof(Name))]
 public sealed class Category : AuditableEntity, ISoftDeletable
 {

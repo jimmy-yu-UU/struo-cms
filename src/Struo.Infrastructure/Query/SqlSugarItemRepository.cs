@@ -30,12 +30,12 @@ public sealed class SqlSugarItemRepository(
     private static readonly MethodInfo GetByIdGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(GetByIdGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object), typeof(DeletedFilter)])!;
+            [typeof(object), typeof(DeletedFilter), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo CreateGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(CreateGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object)])!;
+            [typeof(object), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo UpdateGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(UpdateGenericAsync),
@@ -242,15 +242,16 @@ public sealed class SqlSugarItemRepository(
     {
         var d = Descriptor(collection);
         var method = GetByIdGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<object?>)method.Invoke(this, [ConvertId(id, d), deleted])!;
+        return await (Task<object?>)method.Invoke(this, [ConvertId(id, d), deleted, ct])!;
     }
 
-    private async Task<object?> GetByIdGenericAsync<T>(object id, DeletedFilter deleted) where T : class, new()
+    private async Task<object?> GetByIdGenericAsync<T>(object id, DeletedFilter deleted, CancellationToken ct) where T : class, new()
     {
         var q = db.Queryable<T>();
         if (deleted != DeletedFilter.Exclude && typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
             q = q.ClearFilter<ISoftDeletable>();
-        return await q.InSingleAsync(id);
+        // InSingleAsync has no CancellationToken overload; In(id).FirstAsync(ct) forwards the token.
+        return await q.In(id).FirstAsync(ct);
     }
 
     public async Task InTransactionAsync(Func<Task> body, CancellationToken ct = default)
@@ -266,6 +267,8 @@ public sealed class SqlSugarItemRepository(
 
         try
         {
+            // BeginTranAsync/CommitTranAsync/RollbackTranAsync have no CancellationToken overloads
+            // (SqlSugar 5.1.4.215); the token is honored by the awaited ORM calls inside body().
             await db.Ado.BeginTranAsync();
             await body();
             await db.Ado.CommitTranAsync();
@@ -298,11 +301,28 @@ public sealed class SqlSugarItemRepository(
         if (pk.PropertyType == typeof(Guid) && pk.GetValue(entity) is Guid cur && cur == Guid.Empty)
             pk.SetValue(entity, Guid.CreateVersion7());
         var method = CreateGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<object>)method.Invoke(this, [entity])!;
+        return await (Task<object>)method.Invoke(this, [entity, ct])!;
     }
 
-    private async Task<object> CreateGenericAsync<T>(object entity) where T : class, new() =>
-        (await db.Insertable((T)entity).ExecuteReturnEntityAsync())!;
+    // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215); its only effect beyond
+    // ExecuteCommandAsync is to back-populate a DB-generated identity PK onto the entity. Most
+    // collections use client-generated Guid PKs (set in CreateAsync above) — nothing to read back,
+    // so ExecuteCommandAsync(ct) + returning the same instance is equivalent while forwarding the
+    // token. Identity-PK collections (e.g. Language: long IsIdentity) DO need the read-back, so
+    // they keep ExecuteReturnEntityAsync and — like the tran APIs — cannot forward ct.
+    private async Task<object> CreateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
+    {
+        var hasIdentityPk = db.EntityMaintenance.GetEntityInfo(typeof(T))
+            .Columns.Any(c => c.IsPrimarykey && c.IsIdentity);
+        if (hasIdentityPk)
+        {
+            ct.ThrowIfCancellationRequested();
+            return (await db.Insertable((T)entity).ExecuteReturnEntityAsync())!;
+        }
+
+        await db.Insertable((T)entity).ExecuteCommandAsync(ct);
+        return entity;
+    }
 
     public async Task<object?> UpdateAsync(string collection, string id, object entity,
         CancellationToken ct = default)

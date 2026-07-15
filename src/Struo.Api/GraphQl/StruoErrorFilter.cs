@@ -1,42 +1,44 @@
 // src/Struo.Api/GraphQl/StruoErrorFilter.cs
 using HotChocolate;
 using HotChocolate.Execution;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Struo.Domain.Query;
+using Struo.Api.Http;
 
 namespace Struo.Api.GraphQl;
 
 /// <summary>
-/// Maps StruoCMS domain exceptions to GraphQL errors carrying a stable <c>code</c> extension,
-/// mirroring the REST exception→HTTP middleware (see Program.cs). Unmapped exceptions are masked
-/// (no internal detail leaked) and logged server-side.
+/// Maps StruoCMS domain exceptions to GraphQL errors carrying a stable <c>code</c> extension.
+/// The exception→code decision is delegated to the shared <see cref="DomainErrorMap"/> — the same
+/// single source the REST <see cref="StruoExceptionHandler"/> uses — so the two protocols can never
+/// drift (notably: an unauthenticated <c>PermissionDeniedException</c> is <c>UNAUTHORIZED</c> on
+/// both). GraphQL only stamps the code and message (HTTP 200 semantics are unchanged); it does not
+/// carry an HTTP status. Unmapped exceptions are masked and logged server-side.
 /// </summary>
-public sealed class StruoErrorFilter(ILogger<StruoErrorFilter> logger) : IErrorFilter
+public sealed class StruoErrorFilter(
+    ILogger<StruoErrorFilter> logger,
+    IHttpContextAccessor httpContextAccessor) : IErrorFilter
 {
     public IError OnError(IError error)
     {
         var exception = error.Exception;
-        switch (exception)
+        if (exception is null)
+            return error; // validation/parse errors — leave as-is
+
+        // No HttpContext (non-HTTP execution, e.g. the in-process request executor) or an absent
+        // ClaimsPrincipal ⇒ unauthenticated, mirroring the REST handler's authenticated bit.
+        var authenticated = httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true;
+        var (code, message) = DomainErrorMap.Map(exception, authenticated);
+
+        if (code == Http.ErrorCodes.Internal)
         {
-            case null:
-                return error; // validation/parse errors — leave as-is
-            case QueryException:
-                // Domain exceptions carry client-safe messages (mirrors the REST middleware in
-                // Program.cs, which also surfaces ex.Message verbatim for these types).
-                return error.WithMessage(exception.Message).WithCode("BAD_USER_INPUT");
-            case CollectionNotFoundException:
-                return error.WithMessage(exception.Message).WithCode("NOT_FOUND");
-            case PermissionDeniedException:
-                return error.WithMessage(exception.Message).WithCode("FORBIDDEN");
-            case RelationConflictException:
-            case ConcurrencyConflictException:
-                return error.WithMessage(exception.Message).WithCode("CONFLICT");
-            default:
-                logger.LogError(exception, "Unhandled GraphQL resolver exception");
-                return error
-                    .WithMessage("An internal error occurred.")
-                    .WithCode("INTERNAL_SERVER_ERROR")
-                    .WithException(null!); // IError has no RemoveException() in the installed HotChocolate version
+            logger.LogError(exception, "Unhandled GraphQL resolver exception");
+            return error
+                .WithMessage(message)
+                .WithCode(code)
+                .WithException(null!); // IError has no RemoveException() in the installed HotChocolate version
         }
+
+        return error.WithMessage(message).WithCode(code);
     }
 }

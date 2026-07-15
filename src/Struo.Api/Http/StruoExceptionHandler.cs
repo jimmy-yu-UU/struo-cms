@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Struo.Domain.Query;
 
 namespace Struo.Api.Http;
 
@@ -22,27 +21,17 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
         return true;
     }
 
-    /// <summary>Pure mapping: exception → (status, ErrorBody). Unmapped → 500 masked (logged if a logger is supplied).</summary>
-    public static (int Status, ErrorBody Body) Map(Exception exception, bool authenticated, ILogger? logger = null) =>
-        exception switch
-        {
-            PermissionDeniedException when !authenticated =>
-                (StatusCodes.Status401Unauthorized, new ErrorBody(ErrorCodes.Unauthorized, exception.Message)),
-            PermissionDeniedException =>
-                (StatusCodes.Status403Forbidden, new ErrorBody(ErrorCodes.Forbidden, exception.Message)),
-            CollectionNotFoundException =>
-                (StatusCodes.Status404NotFound, new ErrorBody(ErrorCodes.NotFound, exception.Message)),
-            RelationConflictException or ConcurrencyConflictException =>
-                (StatusCodes.Status409Conflict, new ErrorBody(ErrorCodes.Conflict, exception.Message)),
-            QueryException =>
-                (StatusCodes.Status400BadRequest, new ErrorBody(ErrorCodes.BadUserInput, exception.Message)),
-            _ => LogAndMask(exception, logger),
-        };
-
-    private static (int, ErrorBody) LogAndMask(Exception exception, ILogger? logger)
+    /// <summary>
+    /// Pure mapping: exception → (status, ErrorBody). The exception→code decision is delegated to
+    /// <see cref="DomainErrorMap"/> (the single source shared with GraphQL); this method layers the
+    /// HTTP status on top and masks/logs the unmapped (internal) case — masking/logging stays here,
+    /// not in <see cref="DomainErrorMap"/>.
+    /// </summary>
+    public static (int Status, ErrorBody Body) Map(Exception exception, bool authenticated, ILogger? logger = null)
     {
-        logger?.LogError(exception, "Unhandled API exception");
-        return (StatusCodes.Status500InternalServerError,
-            new ErrorBody(ErrorCodes.Internal, "An internal error occurred."));
+        var (code, message) = DomainErrorMap.Map(exception, authenticated);
+        if (code == ErrorCodes.Internal)
+            logger?.LogError(exception, "Unhandled API exception");
+        return (DomainErrorMap.StatusFor(code), new ErrorBody(code, message));
     }
 }

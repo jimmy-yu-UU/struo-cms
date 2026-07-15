@@ -15,8 +15,18 @@ public sealed class Revision
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
 
+    // DB-4 (=CS-6): composite UNIQUE (collectionname, itemid, revisionnumber). CaptureAsync assigns the
+    // per-item number as max()+1 inside ItemService's write transaction; this index is the backstop that
+    // makes a concurrent lost-update race fail closed (unique violation -> the capture's transaction
+    // rolls back with the item write) instead of silently duplicating a revision number. The three
+    // columns share one group name so SqlSugar CodeFirst emits a single composite unique index
+    // (ux_revisions_item_no) — the same mechanism the Identity entities use (see UserRole). The
+    // matching physical DDL for live/existing databases lives in db/migrations/010-revisions-unique-number.sql.
+    [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public string CollectionName { get; set; } = "";
+    [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public string ItemId { get; set; } = "";
+    [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public long RevisionNumber { get; set; }
     public string Operation { get; set; } = "";
 

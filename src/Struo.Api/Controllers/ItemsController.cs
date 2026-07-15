@@ -56,8 +56,7 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
     private DeletedFilter DeletedMode(string collection)
     {
         var mode = ParseDeletedMode();
-        if (mode != DeletedFilter.Exclude && !permissions.CanDelete(collection))
-            throw new PermissionDeniedException("Viewing deleted items requires delete permission.");
+        DeletedAccessGuard.EnsureCanViewDeleted(permissions, collection, mode);
         return mode;
     }
 

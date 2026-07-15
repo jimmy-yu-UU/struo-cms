@@ -1,7 +1,14 @@
 # StruoCMS — Schema Migration Strategy
 
-> **Status:** strategy of record (2026-07-06). No migration *framework* is installed yet — this is a
-> deliberate decision (see below). Audit finding **D3**.
+> **Status:** strategy of record (2026-07-06). Audit finding **D3**.
+>
+> **Update (DB-6, 2026-07-15):** a lightweight in-house runner now exists — no third-party framework
+> was added. `MigrationRunner` (`Struo.Infrastructure/Persistence`) applies the reviewed `*.sql`
+> scripts in order on PostgreSQL, tracking applied filenames in a `schema_migrations` table. It is
+> config-driven (`Database:MigrationsPath`, disabled by default) and a no-op on non-PostgreSQL
+> backends. Numbering was also unified to a single contiguous `NNN-description.sql` series (the
+> `0001__…` examples below are historical). See
+> [`db/migrations/README.md`](../db/migrations/README.md) for the current convention and runbook.
 
 ## The problem
 

@@ -9,6 +9,14 @@
 >
 > Specs live in [`docs/superpowers/specs/`](superpowers/specs/); plans in
 > [`docs/superpowers/plans/`](superpowers/plans/).
+>
+> **⚠️ Migration filenames renumbered (DB-6, audit Batch 2, 2026-07-15):** all `db/migrations/`
+> scripts were folded into a single contiguous `001`–`010` series. Historical migration filenames
+> quoted in the phase entries below (e.g. `001-article-multivalue-columns.sql`,
+> `005-soft-delete-columns.sql`, `006-revisions-table.sql`, `0001__…`, `0002__…`) refer to the
+> **pre-renumber** names and are left as-is as a historical record — they are **not** the current
+> filenames. See [`db/migrations/README.md`](../db/migrations/README.md) for the authoritative
+> old → new mapping.
 
 ## Status at a glance
 
