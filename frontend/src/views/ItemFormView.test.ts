@@ -11,9 +11,12 @@ import { useLanguageStore } from '../stores/languageStore'
 const push = vi.fn()
 let routeParams: Record<string, string> = {}
 let routeName = 'collection-item'
+// Capture the guard registered via onBeforeRouteLeave so tests can invoke it directly.
+let leaveGuard: (() => Promise<boolean> | boolean) | null = null
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: routeParams, name: routeName }),
   useRouter: () => ({ push }),
+  onBeforeRouteLeave: (guard: () => Promise<boolean> | boolean) => { leaveGuard = guard },
 }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
@@ -47,6 +50,7 @@ describe('ItemFormView', () => {
     vi.restoreAllMocks()
     routeParams = {}
     routeName = 'collection-item'
+    leaveGuard = null
   })
 
   it('edit path loads the item and inflates the model', async () => {
@@ -276,5 +280,90 @@ describe('ItemFormView', () => {
     await w.vm.init()
     ;(w.vm as any).onDelete()
     expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
+  })
+
+  // ---- FE-5: dirty-state leave guard --------------------------------------
+
+  it('registers a route-leave guard synchronously on setup', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    mount(ItemFormView, { global: { stubs } })
+    expect(typeof leaveGuard).toBe('function')
+  })
+
+  it('route-leave guard resolves true without confirming when the form is clean', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('route-leave guard confirms when dirty; accept resolves true, reject resolves false', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited'
+
+    const accepted = Promise.resolve(leaveGuard!())
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    expect(confirmRequire.mock.calls[0][0].header).toBe('Unsaved changes')
+    confirmRequire.mock.calls[0][0].accept()
+    await expect(accepted).resolves.toBe(true)
+
+    const rejected = Promise.resolve(leaveGuard!())
+    expect(confirmRequire).toHaveBeenCalledTimes(2)
+    confirmRequire.mock.calls[1][0].reject()
+    await expect(rejected).resolves.toBe(false)
+  })
+
+  it('re-baselines after a successful submit so leaving does not prompt', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5' })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // now dirty
+    await (w.vm as any).onSubmit() // success -> re-baseline before navigate
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('adds a beforeunload listener on mount and removes it on unmount', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    expect(addSpy.mock.calls.some((c) => c[0] === 'beforeunload')).toBe(true)
+    w.unmount()
+    expect(removeSpy.mock.calls.some((c) => c[0] === 'beforeunload')).toBe(true)
+  })
+
+  it('beforeunload calls preventDefault only when the form is dirty', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    const handler = addSpy.mock.calls.find((c) => c[0] === 'beforeunload')![1] as (e: Event) => void
+
+    const clean = { preventDefault: vi.fn(), returnValue: undefined } as unknown as Event
+    handler(clean)
+    expect((clean as unknown as { preventDefault: ReturnType<typeof vi.fn> }).preventDefault).not.toHaveBeenCalled()
+
+    ;(w.vm as any).model.shared.status = 'edited'
+    const dirty = { preventDefault: vi.fn(), returnValue: undefined } as unknown as Event
+    handler(dirty)
+    expect((dirty as unknown as { preventDefault: ReturnType<typeof vi.fn> }).preventDefault).toHaveBeenCalled()
   })
 })

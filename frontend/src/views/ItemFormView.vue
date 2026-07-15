@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
@@ -16,6 +16,7 @@ import { validateItem } from '../lib/validateItem'
 import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
+import { snapshotModel, isDirty, unsavedConfirm } from '../lib/formDirty'
 import type { FormModel } from '../types/itemForm'
 
 const route = useRoute()
@@ -46,6 +47,13 @@ const notFound = ref(false)
 const conflict = ref(false)
 // Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
 let latestFromServer: FormModel | null = null
+// Last committed snapshot of the user-editable model; the leave/unload guards compare against it
+// (FE-5). Seeded with the empty model so navigating away before load never falsely prompts.
+const baseline = ref(snapshotModel(model))
+
+function captureBaseline(): void {
+  baseline.value = snapshotModel(model)
+}
 
 function setModel(next: FormModel): void {
   model.shared = next.shared
@@ -55,6 +63,10 @@ function setModel(next: FormModel): void {
   // the version chain breaks at the view layer and the optimistic lock silently degrades to
   // last-write-wins. On create, next.version is undefined and stays undefined.
   model.version = next.version
+  // Every setModel is a fresh committed state: initial load (create blank / edit fetch) and
+  // "Reload latest". Re-baseline so it is not considered dirty. (recoverFromConflict deliberately
+  // does NOT call setModel — it only refreshes version and keeps the user's edits, staying dirty.)
+  captureBaseline()
 }
 
 async function init(): Promise<void> {
@@ -92,6 +104,7 @@ async function onSubmit(): Promise<void> {
     if (isCreate.value) await itemsApi.create(name.value, payload)
     else await itemsApi.update(name.value, id.value!, payload)
     conflict.value = false
+    captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'CONFLICT') {
@@ -152,6 +165,7 @@ function onDelete(): void {
     accept: async () => {
       try {
         await itemsApi.remove(name.value, id.value!)
+        captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
         router.push({ name: 'collection-list', params: { name: name.value } })
       } catch (e) {
         serverError.value = e instanceof Error ? e.message : 'Delete failed.'
@@ -161,8 +175,38 @@ function onDelete(): void {
 }
 
 function onCancel(): void {
+  // Routes back — naturally intercepted by the leave guard below, so no extra prompt here.
   router.push({ name: 'collection-list', params: { name: name.value } })
 }
+
+// FE-5: warn before navigating away (SPA route change) with unsaved edits. Registered
+// synchronously in setup so vue-router picks it up. Returns a Promise the router awaits:
+// resolve(true) allows the navigation, resolve(false) cancels it and keeps the user here.
+function guardLeave(): Promise<boolean> {
+  if (!isDirty(baseline.value, model)) return Promise.resolve(true)
+  const { header, message } = unsavedConfirm()
+  return new Promise<boolean>((resolve) => {
+    confirm.require({
+      header,
+      message,
+      accept: () => resolve(true),
+      reject: () => resolve(false),
+    })
+  })
+}
+onBeforeRouteLeave(() => guardLeave())
+
+// FE-5: warn before a full browser unload (tab close / reload / hard navigation) with unsaved
+// edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
+// text is not honoured by modern browsers.
+function onBeforeUnload(e: BeforeUnloadEvent): void {
+  if (isDirty(baseline.value, model)) {
+    e.preventDefault()
+    e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 onMounted(init)
 defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, serverError, notFound, loading, conflict })
