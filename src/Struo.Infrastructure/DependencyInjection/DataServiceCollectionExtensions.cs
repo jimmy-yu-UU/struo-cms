@@ -27,6 +27,7 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<ILanguageProvider, LanguageProvider>();
         services.AddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();
         services.AddScoped<Struo.Application.Revisions.IRevisionStore, Struo.Infrastructure.Revisions.SqlSugarRevisionStore>();
+        services.AddScoped<Struo.Application.Query.RevisionSnapshotBuilder>();
         services.AddScoped<ItemService>();
         return services;
     }
