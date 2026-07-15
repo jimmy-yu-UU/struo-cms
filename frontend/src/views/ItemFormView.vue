@@ -13,6 +13,7 @@ import { ApiError } from '../api/apiClient'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { validateItem } from '../lib/validateItem'
+import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import type { FormModel } from '../types/itemForm'
@@ -85,7 +86,18 @@ async function onSubmit(): Promise<void> {
     else await itemsApi.update(name.value, id.value!, payload)
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
-    serverError.value = e instanceof Error ? e.message : 'Save failed.'
+    if (e instanceof ApiError && e.details?.length) {
+      // Server-side (ASP.NET model-binding) validation: map details back to
+      // per-field errors; anything not matching a field falls to the banner.
+      const knownFields = new Set((meta.value?.fields ?? []).map((f) => f.name))
+      const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields)
+      // Replace (not mutate) so ItemForm's watch(props.errors) flips to the default locale tab.
+      errors.value = { ...fieldErrors }
+      const banner = leftover.join(' ')
+      serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
+    } else {
+      serverError.value = e instanceof Error ? e.message : 'Save failed.'
+    }
   } finally {
     submitting.value = false
   }
