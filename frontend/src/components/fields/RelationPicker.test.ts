@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import RelationPicker from './RelationPicker.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -67,6 +68,28 @@ describe('RelationPicker', () => {
     ;(w.vm as any).onChange('c1')
     expect(w.emitted('update:modelValue')).toBeTruthy()
     expect(w.emitted('update:modelValue')![0]).toEqual(['c1'])
+  })
+
+  it('debounces search-driven reloads into a single request', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { stubs } })
+    await flushPromises() // mount load settles under real timers
+    listSpy.mockClear()
+    vi.useFakeTimers()
+    try {
+      ;(w.vm as any).search = 'a'
+      await nextTick()
+      ;(w.vm as any).search = 'ab'
+      await nextTick()
+      ;(w.vm as any).search = 'abc'
+      await nextTick()
+      expect(listSpy).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(listSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('back-fills a preselected label via itemsApi.get when not present in options', async () => {
