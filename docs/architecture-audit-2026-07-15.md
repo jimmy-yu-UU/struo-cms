@@ -19,7 +19,15 @@
 > - ✅ **DB-3** 熱路徑索引 migration 007 — `e6d55ce`（live：11 索引套用 + 冪等重跑 + `pg_indexes` 斷言）
 > - ✅ **FE-1** CollectionListView 深連結載入 schema — `0d4cd61`（live：Playwright 硬導航 `/collections/article` 表格有資料）
 >
-> **Batch 2–5（MED/LOW/ARC-1 重構）：** 待辦，見修復計畫。
+> **Batch 2 — 6 MED（DB-4=CS-6 / DB-5 / DB-6 / CS-3 / CS-4=ARC-2 / ARC-3）：✅ 完成、真 PG live-gate 通過（runner／unique／parity）、後端 732 綠。**
+> - ✅ **DB-4（= CS-6）** revision no. DB 唯一約束 backstop — `3d87618`（migration 010 dedupe-first 後 `UNIQUE(collectionname,itemid,revisionnumber)` + `Revision.UniqueGroupNameList`；live：重複 revision 三元組 insert 遭 23505 擋）
+> - ✅ **DB-5** CodeFirst（InitTables）與 migration schema 收斂 — `662097d`（9 個 plain 熱路徑索引補 `[SugarIndex]` 使 InitTables 亦產生 + dev `SchemaGuard` fail-fast；partial index 仍 migration-only 為文件化不對稱；live：InitTables 產出索引 + 重啟冪等）
+> - ✅ **DB-6** migration runner／排序／追蹤 + 命名統一 — `925fe12`（統一 001-010 編號 + `MigrationRunner` + `schema_migrations`（timestamptz）；live：全套用／no-op 重跑／壞 SQL abort 回滾／Production-path 皆驗證）
+> - ✅ **CS-3** by-id read 與 create DB 路徑轉發 `CancellationToken` — `9f8971b` + `8a58abe` + `55d607f`（by-id read/create + `FileService` 轉發 ct；identity-PK 分支修 review 抓出的 Language `Id=0` 回歸並補回歸測試；identity 路徑 pre-flight 取消）
+> - ✅ **CS-4（= ARC-2）** 投影熱路徑快取 property accessor — `ba4ccbd`（`EntityDescriptor.Properties`（OrdinalIgnoreCase，每實例建一次）+ `PropertyAccessorCache`；零行為改變；寫入路徑延至 Batch 5／ARC-1）
+> - ✅ **ARC-3** REST／GraphQL error-code 映射單一真相 — `09808aa` + `0ed2865`（`DomainErrorMap` 單源 + `StatusFor`；GraphQL 未認證 `PermissionDenied` 改回 `UNAUTHORIZED`（漂移修復，對齊 REST 語意）；`DeletedAccessGuard` 去重；live：3 情境 parity 驗證）
+>
+> **Batch 3–5（前端 MED / LOW / ARC-1 重構）：** 待辦，見修復計畫。
 
 ---
 

@@ -7,6 +7,8 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Sample.Blog;
 
 [SugarTable("articles")]
+// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql (ix_articles_categoryid — M2O FK).
+[SugarIndex("ix_articles_categoryid", nameof(CategoryId), OrderByType.Asc)]
 [CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status), Revisions = true)]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]

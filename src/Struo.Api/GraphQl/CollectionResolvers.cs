@@ -7,6 +7,7 @@ using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Application.Query;
 using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Query;
@@ -61,8 +62,10 @@ internal static class CollectionResolvers
         var search = ctx.ArgumentValue<string?>("search");
         var locale = ctx.ArgumentValue<string?>("locale");
         var deleted = ctx.ArgumentValue<DeletedFilter?>("deleted") ?? DeletedFilter.Exclude;
-        if (deleted != DeletedFilter.Exclude && !ctx.Service<IPermissionService>().CanDelete(collection))
-            throw new PermissionDeniedException("Viewing deleted items requires delete permission.");
+        // Only resolve the (scoped) permission service when a soft-delete view is actually requested,
+        // preserving the original short-circuit; the gate logic + message live in the shared guard.
+        if (deleted != DeletedFilter.Exclude)
+            DeletedAccessGuard.EnsureCanViewDeleted(ctx.Service<IPermissionService>(), collection, deleted);
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);
         var query = GraphQlQueryBuilder.BuildQuery(
             filter, sort, limit, offset, search, deep,

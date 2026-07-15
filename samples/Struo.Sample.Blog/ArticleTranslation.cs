@@ -5,6 +5,9 @@ using Struo.Domain.Metadata.Enums;
 namespace Struo.Sample.Blog;
 
 [SugarTable("article_translations")]
+// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql — translation lookup key
+// (articleid, locale): overlay read / translatable sort subquery / translatable search.
+[SugarIndex("ix_article_translations_fk_locale", nameof(ArticleId), OrderByType.Asc, nameof(Locale), OrderByType.Asc)]
 public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }

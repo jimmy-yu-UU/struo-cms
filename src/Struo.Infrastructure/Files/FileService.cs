@@ -55,20 +55,27 @@ public sealed class FileService(
             Height = dims?.Height,
             Status = "published",
         };
-        return (await db.Insertable(entity).ExecuteReturnEntityAsync())!;
+        // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215); the File PK is a
+        // client-generated Guid set above, so there is no DB-generated value to read back and
+        // ExecuteCommandAsync(ct) + returning the same instance is equivalent while forwarding ct.
+        await db.Insertable(entity).ExecuteCommandAsync(ct);
+        return entity;
     }
 
+    // InSingleAsync has no CancellationToken overload; In(id).FirstAsync(ct) forwards the token.
     public async Task<File?> GetAsync(Guid id, CancellationToken ct = default) =>
-        await db.Queryable<File>().InSingleAsync(id);
+        await db.Queryable<File>().In(id).FirstAsync(ct);
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var row = await db.Queryable<File>().InSingleAsync(id);
+        var row = await db.Queryable<File>().In(id).FirstAsync(ct);
         if (row is null) return false;
 
         var fkCol = db.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation));
         try
         {
+            // Begin/Commit/RollbackTranAsync have no CancellationToken overloads (SqlSugar 5.1.4.215);
+            // the token is honored by the awaited Deleteable ORM calls inside the transaction.
             await db.Ado.BeginTranAsync();
             await db.Deleteable<FileTranslation>()
                 .Where(new List<IConditionalModel>

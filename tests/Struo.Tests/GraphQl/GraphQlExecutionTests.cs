@@ -472,16 +472,6 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task 10 (closes the deferred Task 1 end-to-end error-code coverage): a
-    /// <see cref="PermissionDeniedException"/> thrown out of the data source must surface as a
-    /// GraphQL error with <c>extensions.code == "FORBIDDEN"</c>, which requires
-    /// <see cref="StruoErrorFilter"/> to be registered. Per the Task-1 comment in
-    /// GraphQlServiceCollectionExtensions, the filter is registered via the plain-IServiceCollection
-    /// <c>AddErrorFilter&lt;T&gt;()</c> overload (resolves against application services, where
-    /// ILogger&lt;T&gt; is available) rather than chained on the request-executor builder (whose
-    /// schema-services container excludes logging and would fail to activate the filter).
-    /// </summary>
-    /// <summary>
     /// Live-gate regression (HC0053): <c>ItemService.Project</c> emits a Repeater field's value as
     /// the entity's raw <c>List&lt;TChild&gt;</c> of POCOs (e.g. <c>List&lt;FaqItem&gt;</c>) — NOT a
     /// list of dictionaries. Before the fix, <c>BuildRepeaterItemType</c>'s sub-field resolvers cast
@@ -517,8 +507,11 @@ public class GraphQlExecutionTests
     // — the sub-field names in the GraphQL query ("question"/"answer") are camelCase.
     private sealed record FaqRow(string Question, string Answer);
 
+    // ARC-3: this in-process executor has NO HttpContext, so the shared DomainErrorMap treats the
+    // caller as unauthenticated and PermissionDenied surfaces as UNAUTHORIZED (REST-parity), not the
+    // old unconditional FORBIDDEN. AddHttpContextAccessor is required so the filter can be activated.
     [Fact]
-    public async Task PermissionDenied_surfaces_as_FORBIDDEN_code()
+    public async Task PermissionDenied_without_http_context_surfaces_as_UNAUTHORIZED_code()
     {
         var ds = new FakeGraphQlDataSource
         {
@@ -531,6 +524,7 @@ public class GraphQlExecutionTests
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()
+            .AddHttpContextAccessor()
             .AddLogging();
         services.AddErrorFilter<StruoErrorFilter>(); // plain-IServiceCollection overload (see summary above)
 
@@ -545,7 +539,7 @@ public class GraphQlExecutionTests
 
         var json = (await executor.ExecuteAsync("{ articles { total } }")).ToJson();
 
-        json.Should().Contain("FORBIDDEN");
+        json.Should().Contain("UNAUTHORIZED");
     }
 
     [Fact]

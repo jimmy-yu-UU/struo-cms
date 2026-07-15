@@ -308,11 +308,7 @@ public sealed class ItemService(
     /// so the lookup is case-insensitive.
     /// </summary>
     private static object? ReadProp(object entity, string propertyName) =>
-        entity.GetType()
-            .GetProperty(propertyName,
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance |
-                System.Reflection.BindingFlags.IgnoreCase)
-            ?.GetValue(entity);
+        PropertyAccessorCache.Read(entity, propertyName);
 
     public async Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct = default)
     {
@@ -1148,7 +1144,9 @@ public sealed class ItemService(
         var dict = new Dictionary<string, object?>();
 
         const string idKey = "id";
-        dict[idKey] = d.EntityType.GetProperty(d.IdProperty)?.GetValue(entity);
+        // d.IdProperty is an exact CLR property name; d.Properties is keyed OrdinalIgnoreCase, so this
+        // resolves the same PropertyInfo the old case-sensitive GetProperty(d.IdProperty) returned.
+        dict[idKey] = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entity);
 
         // Always expose the concurrency token (like id, independent of field selection) so the client
         // can echo it back on update for optimistic-locking (D2).
@@ -1166,7 +1164,9 @@ public sealed class ItemService(
             if (wanted is not null && !wanted.Contains(field.Name)) continue;
             if (!readable.Contains(field.Name)) continue;
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var value = d.EntityType.GetProperty(prop)?.GetValue(entity);
+            // `prop` is an exact CLR property name (a FieldToProperty value); the OrdinalIgnoreCase
+            // Properties map returns the same PropertyInfo the old case-sensitive GetProperty(prop) did.
+            var value = d.Properties.GetValueOrDefault(prop)?.GetValue(entity);
             // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
             // emits structured JSON, not a quoted string. Null stays null.
             if (field.Interface == FieldInterface.Json && value is string rawJson)

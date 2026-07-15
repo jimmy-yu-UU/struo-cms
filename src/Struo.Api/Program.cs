@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
 using Serilog;
 using SqlSugar;
@@ -95,22 +96,53 @@ try
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
     app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
-    if (app.Environment.IsDevelopment())
+    using (var scope = app.Services.CreateScope())
     {
-        using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var entityTypes = scope.ServiceProvider
-            .GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>()
-            .CollectForInitTables();
-        DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, entityTypes.ToArray());
-        await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
-        var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
-        await Struo.Infrastructure.Identity.AdminUserSeeder.SeedAsync(db, hasher,
-            builder.Configuration["Auth:BootstrapAdmin:Email"],
-            builder.Configuration["Auth:BootstrapAdmin:Password"]);
-        await Struo.Infrastructure.Identity.RbacSeeder.SeedAsync(db,
-            builder.Configuration["Auth:BootstrapAdmin:Email"],
-            builder.Configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? []);
+
+        // Development-only: SqlSugar CodeFirst creates any missing tables from the entity classes.
+        // Never runs in production (InitTables can only add tables, not evolve them safely).
+        if (app.Environment.IsDevelopment())
+        {
+            var entityTypes = scope.ServiceProvider
+                .GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>()
+                .CollectForInitTables();
+            DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, entityTypes.ToArray());
+        }
+
+        // Reviewed *.sql schema migrations. Config-driven (Database:MigrationsPath) and allowed in
+        // ALL environments — applying reviewed scripts in production is the whole point of the runner.
+        // It is a hard no-op on any non-PostgreSQL backend. Ordered so that in Development it runs
+        // AFTER InitTables (fresh tables exist) and BEFORE the seeders below.
+        var migrationsPath =
+            builder.Configuration.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName)["MigrationsPath"];
+        if (!string.IsNullOrWhiteSpace(migrationsPath))
+        {
+            var migrationLogger = scope.ServiceProvider
+                .GetRequiredService<ILoggerFactory>().CreateLogger("Struo.MigrationRunner");
+            await MigrationRunner.ApplyAsync(db, migrationsPath, migrationLogger);
+        }
+
+        // Dev fail-fast (DB-5): after InitTables + the migration runner have had their chance to create
+        // the schema, assert the correctness-critical constraints actually exist (the revisions
+        // composite UNIQUE — DB-4 backstop). Throws on divergence rather than running with a silent gap.
+        if (app.Environment.IsDevelopment())
+        {
+            await SchemaGuard.AssertCriticalConstraintsAsync(db, default);
+        }
+
+        // Development-only seed data (languages, bootstrap admin, RBAC grants).
+        if (app.Environment.IsDevelopment())
+        {
+            await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
+            var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
+            await Struo.Infrastructure.Identity.AdminUserSeeder.SeedAsync(db, hasher,
+                builder.Configuration["Auth:BootstrapAdmin:Email"],
+                builder.Configuration["Auth:BootstrapAdmin:Password"]);
+            await Struo.Infrastructure.Identity.RbacSeeder.SeedAsync(db,
+                builder.Configuration["Auth:BootstrapAdmin:Email"],
+                builder.Configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? []);
+        }
     }
 
     app.Run();

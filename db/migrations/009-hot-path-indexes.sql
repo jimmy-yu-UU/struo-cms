@@ -29,11 +29,11 @@
 -- ISoftDeletable, so none of them need entries here beyond what's listed.
 --
 -- IDENTIFIER NAMING — lowercase, unquoted (SqlSugar emits unquoted identifiers; Postgres folds to
--- lowercase; matches the convention documented in 005/006's headers). Index names follow
+-- lowercase; matches the convention documented in 007/008's headers). Index names follow
 -- `ix_<table>_<cols>`.
 --
 -- SOFT-DELETE SCOPE: only `Article` and `Category` implement `ISoftDeletable` as of this audit (see
--- 005-soft-delete-columns.sql header) — partial indexes below cover exactly those two tables. If a
+-- 007-soft-delete-columns.sql header) — partial indexes below cover exactly those two tables. If a
 -- future collection opts into ISoftDeletable, add `ix_<table>_live` for it here.
 --
 -- OUT OF SCOPE (considered, deliberately excluded):
@@ -46,9 +46,22 @@
 --     relation; never traversed by RelationExpander/RelationFilterResolver, so it is not a join/filter
 --     hot path today.
 --
--- IDEMPOTENT (safe to re-run; `CREATE INDEX IF NOT EXISTS`). Applied to the live PG database only —
--- dev/test databases created via `InitTables` (CodeFirst) do NOT get these indexes, since no
--- SqlSugar index attribute exists on the entities (tracked separately as audit finding DB-5, batch 2).
+-- IDEMPOTENT (safe to re-run; `CREATE INDEX IF NOT EXISTS`).
+--
+-- CODEFIRST PARITY (DB-5, batch 2): the nine PLAIN btree indexes below now also exist as `[SugarIndex]`
+-- attributes on their owning entities (Article/Category/ArticleTag/ArticleTranslation → samples,
+-- FileTranslation/UserRole/Permission → Infrastructure), so a CodeFirst dev/test database (`InitTables`)
+-- gets the SAME indexes with the IDENTICAL names used here. Names match exactly, so this migration's
+-- `CREATE INDEX IF NOT EXISTS` overlaps idempotently with the CodeFirst emission on a live PG database
+-- (whichever ran first wins; the other is a no-op). A dev fail-fast (`SchemaGuard`) asserts the
+-- correctness-critical constraints at startup, but NOT these performance indexes (their absence is a
+-- latency regression, not a correctness gap — out of the guard's scope by design).
+--
+-- KNOWN ASYMMETRY — the two PARTIAL indexes (`ix_articles_live` / `ix_categories_live`, below, with
+-- `WHERE deletedat IS NULL`) CANNOT be expressed via `[SugarIndex]` (SqlSugar attributes have no filter
+-- clause). They stay MIGRATION-ONLY: they exist on live PG via this file, and are simply absent on a
+-- CodeFirst dev/test database. This is deliberate and is the one place CodeFirst and this migration
+-- diverge.
 
 -- ---------------------------------------------------------------------------------------------
 -- M2O foreign keys
