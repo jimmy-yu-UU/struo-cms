@@ -5,6 +5,21 @@
 > **方法：** 五路平行深度審查（architecture / csharp / security / database / frontend 子代理，Opus），所有 HIGH 發現已於程式碼層交叉驗證（file:line）
 > **基線：** 後端 655 測試綠、前端 267 測試綠
 > **重點：** 前次稽核（`architecture-audit-2026-07-06.md`）已修復項目不重列；已「接受/延後」項目（H1 rate limiting、M3 SSO email-merge、D7/D10 效能、D8 單語系、A2 大重構）不重列。加重審查 2026-07-06 之後新增且**未經稽核**的 Phase 7g+/8（GraphQL）/9a（envelope）/9b（soft-delete）/9c（revisions）。
+>
+> ---
+>
+> ## 🔧 修復進度（分批執行中，計畫 `docs/superpowers/plans/2026-07-15-audit-remediation.md`）
+>
+> **Batch 1 — 全部 7 HIGH：✅ 完成、真 PG live-gate 通過（22/22）、後端 683 綠 / 前端 270 綠。**
+> - ✅ **SEC-1** 關聯路徑 hidden leaf 排除 — `50f1442`（live：hidden-leaf 400 訊息與 unknown-field 同型，無 oracle）
+> - ✅ **CS-2** 畸形 id → 400 — `49cb300`（live：`BAD_USER_INPUT`，無例外型別洩漏）
+> - ✅ **CS-1** SqlSugarScope 併發 thread-safety — `612c787`（live：50 併發 GraphQL 多 root 全 200 無 error）
+> - ✅ **SEC-2** revision snapshot 對外過濾 hidden — `d851b75` + 測試強化 `9fe7e3d`（live：snapshot 無 hidden、revert 仍還原 hidden）
+> - ✅ **DB-1 / DB-2** 交易式 purge 完整性（SetNull/Cascade/孤兒清理）— `02711e4` + 介面預設拋例外 `d187124`（live：purge tag/category/article → junction/translation/revision 全清、SetNull 無 PG 42804）
+> - ✅ **DB-3** 熱路徑索引 migration 007 — `e6d55ce`（live：11 索引套用 + 冪等重跑 + `pg_indexes` 斷言）
+> - ✅ **FE-1** CollectionListView 深連結載入 schema — `0d4cd61`（live：Playwright 硬導航 `/collections/article` 表格有資料）
+>
+> **Batch 2–5（MED/LOW/ARC-1 重構）：** 待辦，見修復計畫。
 
 ---
 
