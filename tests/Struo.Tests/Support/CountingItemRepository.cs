@@ -89,4 +89,15 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
         CancellationToken ct = default) =>
         inner.SyncTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+
+    public Task SetForeignKeyNullAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
+        inner.SetForeignKeyNullAsync(sourceCollection, foreignKeyProperty, typedId, ct);
+
+    public Task DeleteByPropertyAsync(Type entityType, string property, object value, CancellationToken ct = default) =>
+        inner.DeleteByPropertyAsync(entityType, property, value, ct);
+
+    public Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        inner.QueryWhereInWithDeletedAsync(collection, property, values, ct);
 }

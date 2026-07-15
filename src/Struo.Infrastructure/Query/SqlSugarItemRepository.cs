@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using SqlSugar;
@@ -91,6 +92,21 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
              typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)])!;
+
+    private static readonly MethodInfo SetForeignKeyNullGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(SetForeignKeyNullGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(string), typeof(object), typeof(CancellationToken)])!;
+
+    private static readonly MethodInfo DeleteByPropertyGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteByPropertyGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(object), typeof(CancellationToken)])!;
+
+    private static readonly MethodInfo WhereInWithDeletedGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInWithDeletedGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, string? queryLocale = null,
@@ -344,6 +360,105 @@ public sealed class SqlSugarItemRepository(
 
     private async Task DeleteGenericAsync<T>(object id, CancellationToken ct) where T : class, new() =>
         await db.Deleteable<T>().In(id).ExecuteCommandAsync(ct);
+
+    // ── Purge referential-integrity primitives (DB-1/DB-2, Task 5) ─────────────
+
+    public async Task SetForeignKeyNullAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default)
+    {
+        var d = Descriptor(sourceCollection);
+        var clrProperty = d.FieldToProperty.TryGetValue(foreignKeyProperty, out var p) ? p : foreignKeyProperty;
+        var fkColumn = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+        var method = SetForeignKeyNullGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        await (Task)method.Invoke(this, [clrProperty, fkColumn, typedId, ct])!;
+    }
+
+    private async Task SetForeignKeyNullGenericAsync<T>(
+        string clrPropertyName, string fkColumn, object typedId, CancellationToken ct)
+        where T : class, new()
+    {
+        // SqlSugar's IUpdateable<T> has no raw-SQL-fragment SetColumns(string) overload — only
+        // SetColumns(string field, object value) (which would bind an UNTYPED null parameter, the PG
+        // 42804 trap) and the expression form SetColumns(it => new T {...}) used elsewhere in this
+        // class (SoftDeleteGenericAsync/RestoreGenericAsync). Since the FK property name is only known
+        // at runtime here (unlike those two compile-time call sites), build the equivalent
+        // `it => new T { <Fk> = (FkType?)null }` member-init expression dynamically: the null constant
+        // is typed to the FK property's own CLR type, so SqlSugar/Npgsql bind it correctly instead of
+        // inferring `text`.
+        var prop = typeof(T).GetProperty(clrPropertyName, BindingFlags.Public | BindingFlags.Instance)
+                   ?? throw new InvalidOperationException(
+                       $"'{typeof(T).Name}' has no property '{clrPropertyName}'.");
+        var param = Expression.Parameter(typeof(T), "it");
+        var memberInit = Expression.MemberInit(
+            Expression.New(typeof(T)),
+            Expression.Bind(prop, Expression.Constant(null, prop.PropertyType)));
+        var setExpr = Expression.Lambda<Func<T, T>>(memberInit, param);
+
+        // WHERE side stays parameterized; "@__fk" (not "@id"/"@fk") avoids colliding with any
+        // auto-bound internal parameter SqlSugar generates for Updateable<T>() (see
+        // SoftDeleteGenericAsync's identical note on "@__sdId"). Updateable<T> is NOT subject to the
+        // ISoftDeletable query filter, so an already-trashed source row referencing the purge target
+        // is still found and nulled.
+        await db.Updateable<T>()
+            .SetColumns(setExpr)
+            .Where($"{fkColumn} = @__fk", new { __fk = typedId })
+            .ExecuteCommandAsync(ct);
+    }
+
+    public async Task DeleteByPropertyAsync(
+        Type entityType, string property, object value, CancellationToken ct = default)
+    {
+        var column = db.EntityMaintenance.GetDbColumnName(property, entityType);
+        var method = DeleteByPropertyGenericAsyncDef.MakeGenericMethod(entityType);
+        await (Task)method.Invoke(this, [column, value, ct])!;
+    }
+
+    private async Task DeleteByPropertyGenericAsync<T>(string column, object value, CancellationToken ct)
+        where T : class, new()
+    {
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.Equal,
+                FieldValue = value.ToString(),
+                CSharpTypeName = TypeNameOf(value)  // D6
+            }
+        };
+        await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
+    {
+        if (values.Count == 0) return [];
+        var d = Descriptor(collection);
+        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
+        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+        var method = WhereInWithDeletedGenericAsyncDef.MakeGenericMethod(d.EntityType);
+        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [column, values, ct])!;
+    }
+
+    private async Task<IReadOnlyList<object>> WhereInWithDeletedGenericAsync<T>(
+        string column, IReadOnlyList<object> values, CancellationToken ct) where T : class, new()
+    {
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.In,
+                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+            }
+        };
+        var q = db.Queryable<T>();
+        if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+            q = q.ClearFilter<ISoftDeletable>();  // include trashed rows — Cascade must still find/recurse into them
+        var rows = await q.Where(conditionals).ToListAsync(ct);
+        return rows.Cast<object>().ToList();
+    }
 
     public async Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default)
     {
@@ -786,25 +901,14 @@ public sealed class SqlSugarItemRepository(
 
     /// <summary>
     /// Converts a string ID to the PK property type. Handles Guid and all IConvertible types.
+    /// Delegates entirely to the Application-layer twin so any unparseable id surfaces as a
+    /// mappable <see cref="QueryException"/> (-&gt; HTTP 400) instead of a raw FormatException/
+    /// ArgumentException that <c>StruoExceptionHandler.Map</c> cannot map and masks as a 500 (CS-2).
     /// </summary>
     private static object ConvertId(string id, EntityDescriptor d)
     {
         var idType = d.EntityType.GetProperty(d.IdProperty)!.PropertyType;
-        var targetType = Nullable.GetUnderlyingType(idType) ?? idType;
-
-        if (targetType == typeof(Guid))
-            return Guid.Parse(id);
-
-        try
-        {
-            return Convert.ChangeType(id, targetType);
-        }
-        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
-        {
-            throw new ArgumentException(
-                $"ID value '{id}' cannot be converted to type '{targetType.Name}' for collection '{d.EntityType.Name}'.",
-                nameof(id), ex);
-        }
+        return Struo.Application.Query.IdParsing.ParseTo(id, idType);
     }
 
     /// <summary>

@@ -632,42 +632,128 @@ public sealed class ItemService(
         }
     }
 
+    /// <summary>
+    /// Deletes an item. For a soft-deletable collection with <paramref name="purge"/> false, this
+    /// stamps <c>DeletedAt</c> (trash) — behavior unchanged from before Task 5. Otherwise (an explicit
+    /// purge, or a collection with no soft-delete tier at all) this is a permanent removal, and runs
+    /// the full referential-integrity pipeline (DB-1/DB-2): SetNull inbound FKs, recursively Cascade
+    /// inbound rows through the same core, delete M2M junction rows (both sides), delete translation
+    /// sidecar rows, delete revision history, then the row itself — all inside ONE transaction so a
+    /// mid-pipeline failure leaves nothing half-deleted.
+    /// </summary>
     public async Task<bool> DeleteAsync(string collection, string id, bool purge = false, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
         RequireSuperAdminForAdminOnly(meta);
 
-        // Enforce OnDelete.Restrict: for each inbound M2O relation with Restrict semantics,
-        // check whether any row in the source collection still references this id.
-        var inbound = graph.InboundRestrict(collection);
-        if (inbound.Count > 0)
-        {
-            // Coerce the string id to the PK's CLR type ONCE so QueryWhereInAsync receives a
-            // typed value that matches the FK column. Fail loudly on misconfiguration / bad id —
-            // a silent fallback would make the IN comparison miss and skip a real Restrict block.
-            var targetDesc = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
-            var pkProp = targetDesc.EntityType.GetProperty(targetDesc.IdProperty,
-                             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                         ?? throw new InvalidOperationException(
-                             $"Collection '{collection}' has no primary-key property '{targetDesc.IdProperty}'.");
-            var typedId = IdParsing.ParseTo(id, pkProp.PropertyType);
-
-            foreach (var (sourceCollection, foreignKey) in inbound)
-            {
-                var refs = await repository.QueryWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
-                if (refs.Count > 0)
-                    throw new RelationConflictException(
-                        $"Cannot delete '{collection}/{id}': referenced by '{sourceCollection}'.");
-            }
-        }
-
         if (meta.SoftDelete && !purge)
         {
+            // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
+            // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
+            // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.
+            await CheckRestrictAsync(collection, id, ct);
             var actor = currentUser.GetCurrentUserId();
             return await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
         }
-        return await repository.DeleteAsync(collection, id, ct);   // purge, or non-soft collection
+
+        var existed = false;
+        await repository.InTransactionAsync(async () =>
+        {
+            existed = await PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), ct);
+        }, ct);
+        return existed;
+    }
+
+    /// <summary>
+    /// Throws <see cref="RelationConflictException"/> if any inbound OnDelete.Restrict relation on
+    /// <paramref name="collection"/> still has a row referencing <paramref name="id"/>. Shared by the
+    /// soft-delete (trash) branch and, recursively, by every level of <see cref="PurgeCoreAsync"/>.
+    /// </summary>
+    private async Task CheckRestrictAsync(string collection, string id, CancellationToken ct)
+    {
+        var inbound = graph.InboundRestrict(collection);
+        if (inbound.Count == 0) return;
+
+        // Coerce the string id to the PK's CLR type ONCE so QueryWhereInAsync receives a typed
+        // value that matches the FK column. Fail loudly on misconfiguration / bad id — a silent
+        // fallback would make the IN comparison miss and skip a real Restrict block.
+        var typedId = TypedId(collection, id);
+        foreach (var (sourceCollection, foreignKey) in inbound)
+        {
+            var refs = await repository.QueryWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
+            if (refs.Count > 0)
+                throw new RelationConflictException(
+                    $"Cannot delete '{collection}/{id}': referenced by '{sourceCollection}'.");
+        }
+    }
+
+    /// <summary>
+    /// The recursive purge core (DB-1/DB-2, Task 5). Runs, in order: (1) the Restrict guard — same
+    /// as <see cref="CheckRestrictAsync"/>; (2) SetNull every inbound FK; (3) recursively purge every
+    /// inbound Cascade row through this SAME method (<paramref name="visited"/> is a cross-recursion
+    /// cycle guard: a (collection, id) pair already being purged is skipped rather than looping
+    /// forever on a cyclic Cascade graph); (4) delete this item's own M2M junction rows (parent side)
+    /// and any OTHER collection's M2M junction rows that target this item (target side); (5) delete
+    /// its translation sidecar rows; (6) delete its revision history; (7) delete the row itself.
+    /// Cascade-deleted rows go through steps 1-7 too, so their own junctions/translations/revisions
+    /// are cleaned up exactly like the top-level target. Returns whether the row existed (step 7's
+    /// result) — false for an id that does not exist, or one already visited in this purge.
+    /// </summary>
+    private async Task<bool> PurgeCoreAsync(
+        string collection, string id, HashSet<(string Collection, string Id)> visited, CancellationToken ct)
+    {
+        if (!visited.Add((collection, id))) return false;
+
+        var meta = Meta(collection);
+        await CheckRestrictAsync(collection, id, ct);
+        var typedId = TypedId(collection, id);
+
+        foreach (var (sourceCollection, foreignKey) in graph.InboundSetNull(collection))
+            await repository.SetForeignKeyNullAsync(sourceCollection, foreignKey, typedId, ct);
+
+        foreach (var (sourceCollection, foreignKey) in graph.InboundCascade(collection))
+        {
+            var srcDesc = registry.Get(sourceCollection);
+            if (srcDesc is null) continue;   // defensive: RelationshipGraph already validates targets are known
+            var srcIdProp = srcDesc.EntityType.GetProperty(srcDesc.IdProperty);
+            if (srcIdProp is null) continue;
+
+            // Bypasses the soft-delete filter: an already-trashed row of a Cascade source collection
+            // that still references the purge target must still be found and cascade-purged too.
+            var referencing = await repository.QueryWhereInWithDeletedAsync(sourceCollection, foreignKey, [typedId], ct);
+            foreach (var row in referencing)
+            {
+                var childId = srcIdProp.GetValue(row)?.ToString();
+                if (childId is not null)
+                    await PurgeCoreAsync(sourceCollection, childId, visited, ct);
+            }
+        }
+
+        foreach (var desc in m2mSource.M2MDescriptors(collection))
+            await repository.DeleteByPropertyAsync(desc.JunctionType, desc.ParentFkProperty, typedId, ct);
+        foreach (var inboundDesc in m2mSource.InboundM2MDescriptors(collection))
+            await repository.DeleteByPropertyAsync(
+                inboundDesc.Descriptor.JunctionType, inboundDesc.Descriptor.TargetFkProperty, typedId, ct);
+
+        if (meta.Translation is { } tm)
+            await repository.DeleteByPropertyAsync(tm.TranslationEntityType, tm.ForeignKeyProperty, typedId, ct);
+
+        if (meta.Revisions)
+            await revisions.DeleteForItemAsync(collection, id, ct);
+
+        return await repository.DeleteAsync(collection, id, ct);
+    }
+
+    /// <summary>Coerces a string id to <paramref name="collection"/>'s PK CLR type (e.g. Guid, long).</summary>
+    private object TypedId(string collection, string id)
+    {
+        var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
+        var pkProp = d.EntityType.GetProperty(d.IdProperty,
+                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                     ?? throw new InvalidOperationException(
+                         $"Collection '{collection}' has no primary-key property '{d.IdProperty}'.");
+        return IdParsing.ParseTo(id, pkProp.PropertyType);
     }
 
     /// <summary>
@@ -732,11 +818,15 @@ public sealed class ItemService(
     /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
     /// unknown revision or a non-revisioned collection (→ 404).
     /// <para>
-    /// The returned snapshot is the FULL item state as captured (see <see cref="RevisionSnapshotBuilder"/>),
-    /// with no field-level RBAC or hidden-field filtering applied — this is required so a revert can
-    /// restore every field, not just the ones the caller may read. Access is therefore gated only by
-    /// collection-level <see cref="Struo.Application.Security.IPermissionService.CanRead"/>; a future
-    /// field-level-read-grant feature must revisit this so it does not leak fields via the snapshot.
+    /// (SEC-2) The snapshot <see cref="RevisionSnapshotBuilder"/> captures is the FULL item state,
+    /// including <see cref="Struo.Domain.Metadata.Models.FieldMetadata.Hidden"/> fields — a revert needs
+    /// every field, not just the ones the caller may read. That full-fidelity snapshot is internal to
+    /// <see cref="RevertAsync"/> only (it reads the revision store directly, bypassing this method).
+    /// The snapshot returned HERE — to any external caller, i.e. REST <c>GET
+    /// /api/items/{collection}/{id}/revisions/{n}</c> or GraphQL <c>xRevision</c> — has hidden fields
+    /// redacted via <see cref="RevisionSnapshotRedactor.RedactHidden"/> before being handed back. Access
+    /// is otherwise gated only by collection-level <see cref="Struo.Application.Security.IPermissionService.CanRead"/>;
+    /// a future field-level-read-grant feature should still tighten this further.
     /// </para></summary>
     public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
@@ -744,7 +834,9 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         if (!meta.Revisions) return null;
-        return await revisions.GetAsync(collection, id, revisionNumber, ct);
+        var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
+        if (rec is null) return null;
+        return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta) };
     }
 
     /// <summary>

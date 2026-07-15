@@ -70,6 +70,39 @@ public class RevisionEndpointTests(ApiFactory factory)
         data2[0].GetProperty("revisionNumber").GetInt64().Should().Be(3);
     }
 
+    /// <summary>SEC-2: the REST revision-get endpoint must not leak Article's Hidden own-field
+    /// (<c>internalNote</c>) or its Hidden+Translatable field (<c>internalSlug</c>, nested under every
+    /// <c>translations.{locale}</c>), even though both were captured in full by the snapshot builder.</summary>
+    [Fact]
+    public async Task Get_revision_redacts_hidden_fields()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var create = await client.PostAsJsonAsync("/api/items/article", new
+        {
+            status = "draft",
+            internalNote = "secret-token",
+            translations = new Dictionary<string, object>
+            {
+                ["en"] = new { title = "HiddenFieldRedaction", internalSlug = "secret-en" },
+                ["zh-TW"] = new { title = "隱藏欄位", internalSlug = "secret-zh" },
+            }
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+
+        var rev1 = await client.GetAsync($"/api/items/article/{id}/revisions/1");
+        rev1.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await rev1.Content.ReadAsStringAsync();
+        body.Should().NotContain("secret-token");
+        body.Should().NotContain("secret-en");
+        body.Should().NotContain("secret-zh");
+        body.Should().NotContain("internalNote");
+        body.Should().NotContain("internalSlug");
+
+        var snapshot = Root(body).GetProperty("data").GetProperty("snapshot");
+        snapshot.GetProperty("status").GetString().Should().Be("draft"); // non-hidden fields untouched
+    }
+
     [Fact]
     public async Task Get_unknown_revision_is_404()
     {
