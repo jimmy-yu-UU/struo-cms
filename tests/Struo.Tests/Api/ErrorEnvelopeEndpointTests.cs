@@ -59,6 +59,23 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
         error.GetProperty("message").GetString().Should().Be("Resource not found."); // clean DefaultMessage(404), NOT a type name
     }
 
+    // CS-2: a malformed id on a by-id route must be a mapped 400 (QueryException), not a masked
+    // 500 from a raw FormatException/ArgumentException escaping ConvertId.
+    [Fact]
+    public async Task Malformed_id_is_bad_user_input_envelope_not_masked_500()
+    {
+        var client = _factory.CreateClient(); // article is public-read in test config
+        var resp = await client.GetAsync("/api/items/article/not-a-guid");
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var error = Root(await resp.Content.ReadAsStringAsync()).GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        var message = error.GetProperty("message").GetString();
+        message.Should().NotBeNullOrEmpty();
+        message.Should().NotContain("FormatException");
+        message.Should().NotContain("ArgumentException");
+        message.Should().NotContain("Exception");
+    }
+
     [Fact]
     public async Task Bad_login_is_unauthorized_envelope_via_fail_helper()
     {
