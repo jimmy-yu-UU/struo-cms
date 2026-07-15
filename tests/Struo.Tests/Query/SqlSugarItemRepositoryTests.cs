@@ -167,4 +167,29 @@ public class SqlSugarItemRepositoryTests : IDisposable
         var act = async () => await _repo.DeleteAsync("article", "not-a-guid");
         await act.Should().ThrowAsync<QueryException>();
     }
+
+    // CS-3: the by-id read path must forward the CancellationToken to the ORM query so an
+    // already-cancelled request stops at the DB call instead of running to completion.
+    [Fact]
+    public async Task GetByIdAsync_honors_cancellation()
+    {
+        var created = (Article)await _repo.CreateAsync("article", new Article { Status = "draft" });
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = async () => await _repo.GetByIdAsync("article", created.Id.ToString(),
+            DeletedFilter.Exclude, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    // CS-3: the create path must forward the CancellationToken to the ORM insert.
+    [Fact]
+    public async Task CreateAsync_honors_cancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = async () => await _repo.CreateAsync("article", new Article { Status = "draft" }, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
 }
