@@ -24,7 +24,7 @@ export function splitServerErrors(
   for (const d of details) {
     const canonical = canonicalByLower.get((d.field ?? '').toLowerCase())
     if (canonical !== undefined) {
-      if (!(canonical in fieldErrors)) fieldErrors[canonical] = d.message
+      if (!Object.hasOwn(fieldErrors, canonical)) fieldErrors[canonical] = d.message
     } else {
       leftover.push(d.message)
     }

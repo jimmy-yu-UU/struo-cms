@@ -1,0 +1,6 @@
+- generic [ref=e3]:
+  - heading "StruoCMS Admin" [level=1] [ref=e4]
+  - generic [ref=e5]:
+    - textbox "Email" [ref=e6]
+    - textbox "Password" [ref=e7]
+    - button "Sign in" [ref=e8]

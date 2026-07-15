@@ -231,6 +231,34 @@ describe('ItemFormView', () => {
     expect((w.vm as any).serverError).toBe('')
   })
 
+  it('init clears stale 409-recovery state (conflict + cached server copy) on re-invocation', async () => {
+    // Fix 1: a re-entrant init (e.g. route param change) must not carry item A's conflict banner
+    // or cached "reload latest" copy into item B.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    // Post-409 refresh caches item A's server copy in latestFromServer.
+    get.mockResolvedValueOnce({ id: '5', status: 'item-A-server', translations: {}, version: 9 })
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).conflict).toBe(true)
+
+    // Now init runs again for item B. Steady-state get() returns item B.
+    get.mockResolvedValue({ id: '6', status: 'item-B', translations: {}, version: 1 })
+    routeParams = { name: 'article', id: '6' }
+    await (w.vm as any).init()
+    expect((w.vm as any).conflict).toBe(false)
+    expect((w.vm as any).model.shared.status).toBe('item-B')
+
+    // The stale cached copy must be gone: reloadLatest is now a no-op, not a write of item A.
+    ;(w.vm as any).reloadLatest()
+    expect((w.vm as any).model.shared.status).toBe('item-B')
+  })
+
   it('falls back to notFound when the post-409 refresh 404s (item deleted)', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
