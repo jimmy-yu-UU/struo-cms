@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -8,6 +8,8 @@ import MediaGrid from '../media/MediaGrid.vue'
 import FileThumbnail, { type FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
+import { debounce } from '../../lib/debounce'
+import { createLatestWins } from '../../lib/latestWins'
 import type { FieldMeta } from '../../types/schema'
 
 defineOptions({ name: 'FilesField' })
@@ -80,7 +82,9 @@ async function openDialog(): Promise<void> {
   dialogOpen.value = true
   await loadOptions()
 }
+const optionsLoad = createLatestWins()
 async function loadOptions(): Promise<void> {
+  const token = optionsLoad.next()
   loadError.value = ''
   try {
     const res = await itemsApi.list('file', {
@@ -89,8 +93,10 @@ async function loadOptions(): Promise<void> {
       search: search.value || undefined,
       locale: langStore.defaultCode || undefined,
     })
+    if (!optionsLoad.isCurrent(token)) return
     options.value = res.data as unknown as FileRow[]
   } catch (e) {
+    if (!optionsLoad.isCurrent(token)) return
     loadError.value = e instanceof Error ? e.message : 'Failed to load files.'
   }
 }
@@ -104,8 +110,11 @@ function toggle(id: string): void {
   if (file) commit([...rows.value, file]) // append -> new files go last
 }
 
-watch(search, loadOptions)
-defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve })
+// Debounce only search-driven reloads; openDialog's direct loadOptions() stays immediate.
+const debouncedLoad = debounce(loadOptions, 300)
+watch(search, debouncedLoad)
+onBeforeUnmount(() => debouncedLoad.cancel())
+defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, search })
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import TreeSelect from 'primevue/treeselect'
@@ -8,6 +8,8 @@ import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { resolveDisplayLabel } from '../../lib/resolveDisplayLabel'
 import { buildRelationTree, type TreeNode } from '../../lib/buildRelationTree'
+import { debounce } from '../../lib/debounce'
+import { createLatestWins } from '../../lib/latestWins'
 import type { RelationMeta } from '../../types/schema'
 
 const props = defineProps<{
@@ -38,19 +40,24 @@ function toOption(row: Record<string, unknown>): Option {
   return { id: String(row.id), label, raw: row }
 }
 
+const optionsLoad = createLatestWins()
+
 async function loadOptions(): Promise<void> {
+  const token = optionsLoad.next()
   loading.value = true
   loadError.value = ''
   try {
     const res = await itemsApi.list(props.relation.targetCollection, {
       page: 0, rows: 25, search: search.value || undefined, locale: langStore.defaultCode || undefined,
     })
+    if (!optionsLoad.isCurrent(token)) return
     options.value = res.data.map(toOption)
     for (const o of options.value) labelById.value[o.id] = o.label
   } catch (e) {
+    if (!optionsLoad.isCurrent(token)) return
     loadError.value = e instanceof Error ? e.message : 'Failed to load options.'
   } finally {
-    loading.value = false
+    if (optionsLoad.isCurrent(token)) loading.value = false
   }
 }
 
@@ -92,13 +99,16 @@ function onTreeChange(selection: Record<string, boolean>): void {
   emit('update:modelValue', keys.length ? keys[0] : null)
 }
 
-watch(search, loadOptions)
+// Debounce only the search-driven reloads; the initial load must not wait 300ms.
+const debouncedLoad = debounce(loadOptions, 300)
+watch(search, debouncedLoad)
 onMounted(async () => {
   await loadOptions()
   await ensureSelectedLabels()
 })
+onBeforeUnmount(() => debouncedLoad.cancel())
 
-defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, loading, loadError })
+defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, loading, loadError, search })
 </script>
 
 <template>
