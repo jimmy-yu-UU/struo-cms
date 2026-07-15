@@ -127,8 +127,10 @@ public interface IItemRepository
         CancellationToken ct = default);
 
     // ── Purge referential-integrity primitives (DB-1/DB-2, Task 5) ─────────────
-    // Default (no-op / empty) implementations so pre-existing test doubles that predate this
-    // addition keep compiling unchanged; the real repository overrides all three.
+    // Default implementations THROW rather than silently no-op: a second implementation that forgot
+    // to override one of these would otherwise silently orphan referential rows on purge — the exact
+    // defect class DB-1/DB-2 exist to eliminate. The defaults still keep pre-existing test doubles
+    // compiling; a double that actually exercises purge must override them explicitly.
 
     /// <summary>
     /// Sets every row in <paramref name="sourceCollection"/> whose <paramref name="foreignKeyProperty"/>
@@ -138,7 +140,8 @@ public interface IItemRepository
     /// </summary>
     Task SetForeignKeyNullAsync(
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
-        Task.CompletedTask;
+        throw new NotSupportedException(
+            "IItemRepository.SetForeignKeyNullAsync must be overridden by implementations that support purge integrity.");
 
     /// <summary>
     /// Deletes every row of the given CLR <paramref name="entityType"/> (a junction or translation
@@ -148,7 +151,8 @@ public interface IItemRepository
     /// </summary>
     Task DeleteByPropertyAsync(
         Type entityType, string property, object value, CancellationToken ct = default) =>
-        Task.CompletedTask;
+        throw new NotSupportedException(
+            "IItemRepository.DeleteByPropertyAsync must be overridden by implementations that support purge integrity.");
 
     /// <summary>
     /// Like <see cref="QueryWhereInAsync"/> but bypasses the soft-delete query filter, so an
@@ -157,5 +161,6 @@ public interface IItemRepository
     /// </summary>
     Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<object>>([]);
+        throw new NotSupportedException(
+            "IItemRepository.QueryWhereInWithDeletedAsync must be overridden by implementations that support purge integrity.");
 }
