@@ -16,6 +16,7 @@ import { itemsApi } from '../api/itemsApi'
 import { selectListColumns } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
+import { createLatestWins } from '../lib/latestWins'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
@@ -60,7 +61,11 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
   return row[field.name]
 }
 
+// Latest-wins guard: a slow earlier load must not clobber a newer one's state.
+const listLoad = createLatestWins()
+
 async function loadItems(): Promise<void> {
+  const token = listLoad.next()
   await schema.load() // dedup via store's `loaded` flag; retries on hard refresh/deep link where the
   // parent's schema.load() hasn't resolved yet when this view's onMounted(loadItems) fires
   if (!meta.value || !canRead.value) return
@@ -79,14 +84,18 @@ async function loadItems(): Promise<void> {
       locale: langStore.defaultCode || undefined,
       deleted: mode.value === 'trash' ? 'only' : undefined,
     })
+    if (!listLoad.isCurrent(token)) return
     rows.value = res.data
     total.value = res.total
   } catch (e) {
+    if (!listLoad.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : 'Failed to load items.'
     rows.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    // Only the current load may clear the spinner; a stale response must not
+    // turn off the spinner of the newer request still in flight.
+    if (listLoad.isCurrent(token)) loading.value = false
   }
 }
 

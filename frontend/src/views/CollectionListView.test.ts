@@ -291,6 +291,32 @@ describe('CollectionListView', () => {
     expect(itemsApi.list).toHaveBeenCalled()
   })
 
+  it('latest response wins: a slow earlier list load does not clobber a newer one', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'initial' }], total: 1 })
+    const w = mount(CollectionListView)
+    await flushPromises()
+    // Two in-flight loads. The later one (B) resolves first; the earlier (A) resolves last.
+    let resolveA!: (v: unknown) => void
+    let resolveB!: (v: unknown) => void
+    const pA = new Promise((r) => { resolveA = r })
+    const pB = new Promise((r) => { resolveB = r })
+    vi.mocked(itemsApi.list)
+      .mockReturnValueOnce(pA as ReturnType<typeof itemsApi.list>)
+      .mockReturnValueOnce(pB as ReturnType<typeof itemsApi.list>)
+    const vm = w.vm as any
+    vm.loadItems() // A (older token)
+    vm.loadItems() // B (newer token)
+    await flushPromises() // both reach the awaited list() call
+    resolveB({ data: [{ status: 'newer' }], total: 1 })
+    await flushPromises()
+    resolveA({ data: [{ status: 'older' }], total: 1 })
+    await flushPromises()
+    expect(vm.rows).toEqual([{ status: 'newer' }])
+    expect(vm.loading).toBe(false)
+  })
+
   it('surfaces an inline error when a row action fails', async () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
