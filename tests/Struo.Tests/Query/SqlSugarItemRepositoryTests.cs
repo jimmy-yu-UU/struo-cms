@@ -30,7 +30,8 @@ public class SqlSugarItemRepositoryTests : IDisposable
         var collections = MetadataScanner.ScanTypes(
             [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]);
         var provider = new CachedMetadataProvider(collections);
-        var descriptors = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category), typeof(Tag)]);
+        var descriptors = MetadataScanner.ScanDescriptors(
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Localization.Language)]);
         var registry = new EntityRegistry(descriptors);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
@@ -191,5 +192,22 @@ public class SqlSugarItemRepositoryTests : IDisposable
 
         var act = async () => await _repo.CreateAsync("article", new Article { Status = "draft" }, cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
+        // Cancellation must stop the write BEFORE it reaches the DB, not just report afterwards.
+        // (Explicit None: SqlSugar keeps the last token on the scoped client's Ado, so a bare
+        // CountAsync() would re-observe the cancelled token instead of counting.)
+        (await _db.Queryable<Article>().CountAsync(CancellationToken.None)).Should().Be(0);
+    }
+
+    // CS-3 review fix: identity-PK collections (Language: long IsIdentity) get their id from the
+    // DB, so the create path must back-populate it on the returned entity — ExecuteCommandAsync
+    // alone would leave Id=0 and break the create response / GraphQL re-read.
+    [Fact]
+    public async Task CreateAsync_identity_pk_collection_back_populates_id()
+    {
+        _db.CodeFirst.InitTables<Struo.Infrastructure.Localization.Language>();
+        var created = (Struo.Infrastructure.Localization.Language)await _repo.CreateAsync(
+            "language", new Struo.Infrastructure.Localization.Language { Code = "en", Name = "English" });
+        created.Id.Should().BeGreaterThan(0, "the DB-generated identity must be read back onto the entity");
+        (await _repo.GetByIdAsync("language", created.Id.ToString())).Should().NotBeNull();
     }
 }

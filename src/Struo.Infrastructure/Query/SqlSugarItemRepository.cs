@@ -304,13 +304,19 @@ public sealed class SqlSugarItemRepository(
         return await (Task<object>)method.Invoke(this, [entity, ct])!;
     }
 
-    // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215). Its only effect beyond
-    // ExecuteCommandAsync is to back-populate a DB-generated identity column onto the entity — but
-    // every entity created through this path has a client-generated Guid PK (set in CreateAsync
-    // above), so there is nothing to read back and returning the same instance is equivalent while
-    // forwarding the token.
+    // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215); its only effect beyond
+    // ExecuteCommandAsync is to back-populate a DB-generated identity PK onto the entity. Most
+    // collections use client-generated Guid PKs (set in CreateAsync above) — nothing to read back,
+    // so ExecuteCommandAsync(ct) + returning the same instance is equivalent while forwarding the
+    // token. Identity-PK collections (e.g. Language: long IsIdentity) DO need the read-back, so
+    // they keep ExecuteReturnEntityAsync and — like the tran APIs — cannot forward ct.
     private async Task<object> CreateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
     {
+        var hasIdentityPk = db.EntityMaintenance.GetEntityInfo(typeof(T))
+            .Columns.Any(c => c.IsPrimarykey && c.IsIdentity);
+        if (hasIdentityPk)
+            return (await db.Insertable((T)entity).ExecuteReturnEntityAsync())!;
+
         await db.Insertable((T)entity).ExecuteCommandAsync(ct);
         return entity;
     }
