@@ -1,4 +1,4 @@
--- 0002__retroactive_add_version_columns.sql
+-- 002-retroactive-add-version-columns.sql (originally 0002__retroactive_add_version_columns.sql)
 -- Date: 2026-07-06
 -- Author: Claude (phase7g live-gate remediation, documenting prior audit finding D2)
 -- Ticket: architecture-audit-2026-07-06, finding D2 (optimistic-concurrency `version` column)

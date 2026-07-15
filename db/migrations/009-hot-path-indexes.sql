@@ -29,11 +29,11 @@
 -- ISoftDeletable, so none of them need entries here beyond what's listed.
 --
 -- IDENTIFIER NAMING — lowercase, unquoted (SqlSugar emits unquoted identifiers; Postgres folds to
--- lowercase; matches the convention documented in 005/006's headers). Index names follow
+-- lowercase; matches the convention documented in 007/008's headers). Index names follow
 -- `ix_<table>_<cols>`.
 --
 -- SOFT-DELETE SCOPE: only `Article` and `Category` implement `ISoftDeletable` as of this audit (see
--- 005-soft-delete-columns.sql header) — partial indexes below cover exactly those two tables. If a
+-- 007-soft-delete-columns.sql header) — partial indexes below cover exactly those two tables. If a
 -- future collection opts into ISoftDeletable, add `ix_<table>_live` for it here.
 --
 -- OUT OF SCOPE (considered, deliberately excluded):
