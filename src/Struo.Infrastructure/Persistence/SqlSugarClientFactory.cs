@@ -115,15 +115,38 @@ public static class SqlSugarClientFactory
             }
         };
 
-        var client = new SqlSugarClient(config);
+        // CS-1: GraphQL pins query/mutation roots to DependencyInjectionScope.Request
+        // (GraphQlServiceCollectionExtensions), so HotChocolate can run sibling root-field
+        // resolvers on separate threads that all share this one request-scoped ISqlSugarClient. A
+        // bare SqlSugarClient is not thread-safe for that — concurrent ADO operations on the shared
+        // connection intermittently throw ("connection already open") or otherwise fail.
+        // SqlSugarScope is SqlSugar's official thread-safe wrapper: it manages a distinct inner
+        // SqlSugarClient per logical async flow (AsyncLocal-keyed), and it still implements
+        // ISqlSugarClient, so this is a drop-in fix at the factory boundary — DI registration
+        // (AddScoped<ISqlSugarClient>) and every call site are unchanged.
+        //
+        // The soft-delete query filter and audit AOP must be attached via the ctor's configure
+        // action, NOT via `client.QueryFilter.AddTableFilter(...)` / `AuditAop.Register(client, ...)`
+        // called on the SqlSugarScope instance after construction. Post-construction attachment on
+        // SqlSugarScope only reaches whichever single inner context is current at that moment; every
+        // *other* inner context SqlSugarScope creates later (e.g. on another thread/async flow) is a
+        // fresh SqlSugarClient that never saw that call, so the floor and audit stamping would
+        // silently stop applying under concurrency. The configure-action overload
+        // (config, Action<SqlSugarClient>) runs for EVERY inner context SqlSugarScope creates, which
+        // is the semantically safe choice — confirmed by the full existing suite (soft-delete,
+        // audit-field, revisions-transaction tests) staying green with this shape.
+        var client = new SqlSugarScope(config, db =>
+        {
+            // Phase 9b: soft-delete floor. Every Queryable over an ISoftDeletable entity excludes
+            // rows whose DeletedAt is set. Applies to list/get/deep-expansion/cross-relation
+            // id-resolution/M2M existence/inbound-Restrict with no per-path code. Reads that need
+            // trashed rows (?deleted=only|with, restore, purge) clear this filter per-query (see the
+            // repository).
+            db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
 
-        // Phase 9b: soft-delete floor. Every Queryable over an ISoftDeletable entity excludes rows
-        // whose DeletedAt is set. Applies to list/get/deep-expansion/cross-relation id-resolution/
-        // M2M existence/inbound-Restrict with no per-path code. Reads that need trashed rows
-        // (?deleted=only|with, restore, purge) clear this filter per-query (see the repository).
-        client.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
+            AuditAop.Register(db, currentUser);
+        });
 
-        AuditAop.Register(client, currentUser);
         return client;
     }
 }
