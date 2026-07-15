@@ -24,9 +24,13 @@ public interface IRevisionStore
 
     /// <summary>
     /// Deletes every revision row for (collection, itemId) — called by purge (DB-1/DB-2, Task 5) so a
-    /// permanently-deleted item does not leave orphaned, un-RBAC'd snapshot history behind. Default
-    /// no-op so a test double that predates this addition keeps compiling unchanged.
+    /// permanently-deleted item does not leave orphaned, un-RBAC'd snapshot history behind. The
+    /// default THROWS rather than silently no-ops: an implementation that forgot to override would
+    /// otherwise leave orphaned snapshot history on purge with no failure signal — the exact defect
+    /// class DB-1/DB-2 exist to eliminate. (It still keeps pre-existing test doubles compiling; a
+    /// double whose collection is actually purged must override it explicitly.)
     /// </summary>
     Task DeleteForItemAsync(string collection, string itemId, CancellationToken ct = default) =>
-        Task.CompletedTask;
+        throw new NotSupportedException(
+            "IRevisionStore.DeleteForItemAsync must be overridden by implementations that support purge integrity.");
 }
