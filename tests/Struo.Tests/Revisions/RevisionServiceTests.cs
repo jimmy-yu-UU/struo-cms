@@ -99,6 +99,26 @@ public sealed class RevisionServiceHarness : IDisposable
     /// <summary>A partial update body (e.g. <c>{"status":"published"}</c>).</summary>
     public JsonElement Body(string status) => BodyOf(new { status });
 
+    /// <summary>A create body setting Article's Hidden own-field <c>internalNote</c> (SEC-2 fixture).</summary>
+    public JsonElement ArticleBodyWithInternalNote(string status, string internalNote) => BodyOf(new
+    {
+        status,
+        internalNote,
+        translations = new Dictionary<string, object> { ["en"] = new { title = "T" } }
+    });
+
+    /// <summary>A create body with en/zh-TW translations that also set the Hidden+Translatable
+    /// <c>internalSlug</c> field on Article's translation sidecar (SEC-2 fixture).</summary>
+    public JsonElement ArticleBodyWithInternalSlug() => BodyOf(new
+    {
+        status = "draft",
+        translations = new Dictionary<string, object>
+        {
+            ["en"] = new { title = "T-en", internalSlug = "secret-en" },
+            ["zh-TW"] = new { title = "T-zh", internalSlug = "secret-zh" },
+        }
+    });
+
     /// <summary>A partial update body re-pointing the M2O category FK and replacing the M2M tag set
     /// (e.g. to move an article to a different category and clear its tags).</summary>
     public JsonElement Body(Guid category, Guid[] tags) => BodyOf(new { categoryId = category, tags });
@@ -265,6 +285,73 @@ public sealed class RevisionServiceTests
         using var noRead = RevisionServiceHarness.Create(canRead: false);
         await Assert.ThrowsAsync<PermissionDeniedException>(
             () => noRead.Service.ListRevisionsAsync("article", id, default));
+    }
+
+    /// <summary>SEC-2: <c>GetRevisionAsync</c> is the externally-facing read (backs REST/GraphQL) — its
+    /// snapshot must have <c>internalNote</c> (a <c>[CmsField(Hidden = true)]</c> own-field on the sample
+    /// Article) redacted, even though <see cref="RevisionSnapshotBuilder"/> captured it in full.</summary>
+    [Fact]
+    public async Task GetRevision_redacts_hidden_own_field()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalNote("draft", "secret-token"));
+        var id = created["id"]!.ToString()!;
+
+        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        Assert.NotNull(rec);
+        Assert.DoesNotContain("secret-token", rec!.Snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("internalNote", rec.Snapshot, StringComparison.Ordinal);
+        Assert.Contains("\"status\":\"draft\"", rec.Snapshot, StringComparison.Ordinal); // non-hidden untouched
+    }
+
+    /// <summary>SEC-2: the same hidden field must also be stripped out of every
+    /// <c>translations.{locale}</c> object (Article's <c>internalSlug</c> is Hidden+Translatable).</summary>
+    [Fact]
+    public async Task GetRevision_redacts_hidden_translatable_field_in_every_locale()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalSlug());
+        var id = created["id"]!.ToString()!;
+
+        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        Assert.NotNull(rec);
+        using var doc = JsonDocument.Parse(rec!.Snapshot);
+        var translations = doc.RootElement.GetProperty("translations");
+        Assert.False(translations.GetProperty("en").TryGetProperty("internalSlug", out _));
+        Assert.False(translations.GetProperty("zh-TW").TryGetProperty("internalSlug", out _));
+        Assert.Equal("T-en", translations.GetProperty("en").GetProperty("title").GetString());
+        Assert.Equal("T-zh", translations.GetProperty("zh-TW").GetProperty("title").GetString());
+    }
+
+    /// <summary>SEC-2 counter-proof: <c>RevertAsync</c> must NOT go through the redacted read — it reads
+    /// the revision store directly (<c>ItemService.cs:710</c>), so a hidden field's value is still
+    /// restored on revert even though the externally-returned snapshot omits it. Rev 2 explicitly
+    /// CHANGES the hidden field to a different value first: with the write path's partial-merge
+    /// semantics, the live row can only get "secret-token" back if the revert body actually carried
+    /// <c>internalNote</c> — a redacted snapshot (key stripped) would leave "changed-token" in place.</summary>
+    [Fact]
+    public async Task Revert_restores_hidden_field_value_despite_external_redaction()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalNote("draft", "secret-token")); // rev 1
+        var id = created["id"]!.ToString()!;
+        // rev 2: overwrite the hidden field so rev 1's value survives ONLY via the revert body itself.
+        await h.Service.UpdateAsync("article", id,
+            h.ArticleBodyWithInternalNote("published", "changed-token"), default);
+
+        // Confirm the externally-visible view (GetRevisionAsync) is redacted, as above.
+        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        Assert.DoesNotContain("secret-token", rec!.Snapshot, StringComparison.Ordinal);
+
+        // Now revert to rev 1 and prove the hidden field's ORIGINAL value came back on the live row.
+        // Read the RAW entity via the repository (bypassing ItemService.Project, which itself skips
+        // Hidden fields on every read). Because rev 2 set InternalNote to "changed-token", this assert
+        // can only pass if RevertAsync applied the unredacted snapshot from the revision store — a
+        // redacted snapshot has no internalNote key, so partial-merge would keep "changed-token".
+        var reverted = await h.Service.RevertAsync("article", id, 1, default);
+        Assert.NotNull(reverted);
+        var rawEntity = (Struo.Sample.Blog.Article)(await h.Repository.GetByIdAsync("article", id, DeletedFilter.Exclude, default))!;
+        Assert.Equal("secret-token", rawEntity.InternalNote);
     }
 
     /// <summary>Builds a flat <see cref="DeepSpec"/> requesting the given top-level relation names

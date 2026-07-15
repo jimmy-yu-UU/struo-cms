@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
+import { schemaApi } from '../api/schemaApi'
 
 const pushMock = vi.fn()
 vi.mock('vue-router', () => ({
@@ -14,6 +15,9 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('../api/itemsApi', () => ({
   itemsApi: { list: vi.fn(), remove: vi.fn(), restore: vi.fn() },
+}))
+vi.mock('../api/schemaApi', () => ({
+  schemaApi: { getAll: vi.fn(), get: vi.fn() },
 }))
 vi.mock('primevue/datatable', () => ({ default: { name: 'DataTable', template: '<div><slot /></div>' } }))
 vi.mock('primevue/column', () => ({ default: { name: 'Column', template: '<div />' } }))
@@ -33,6 +37,7 @@ function seedSchema() {
       options: [{ value: 'draft', label: 'Draft' }] }],
     relations: [],
   }]
+  schema.loaded = true // pre-seeded directly (not via schemaApi); mark loaded so loadItems' schema.load() is a no-op
 }
 
 function seedSoftSchema() {
@@ -44,6 +49,7 @@ function seedSoftSchema() {
       options: [{ value: 'draft', label: 'Draft' }] }],
     relations: [],
   }]
+  schema.loaded = true
 }
 
 function seedLanguage() {
@@ -66,6 +72,31 @@ describe('CollectionListView', () => {
     expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
   })
 
+  it('deep link / hard refresh: loads schema itself (not pre-seeded) then loads items', async () => {
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    // schema store starts empty/unloaded here -- no seedSchema() call, unlike every other test in this file.
+    let resolveSchema!: (v: unknown) => void
+    const pending = new Promise((resolve) => { resolveSchema = resolve })
+    vi.mocked(schemaApi.getAll).mockReturnValue(pending as ReturnType<typeof schemaApi.getAll>)
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
+    const wrapper = mount(CollectionListView)
+    await flushPromises()
+    // Schema hasn't arrived yet: view must not have bailed out permanently.
+    expect(itemsApi.list).not.toHaveBeenCalled()
+    resolveSchema([{
+      name: 'article', label: 'Article', defaultDisplayField: 'status',
+      fields: [{ name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
+        sortable: true, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false,
+        options: [{ value: 'draft', label: 'Draft' }] }],
+      relations: [],
+    }])
+    await flushPromises()
+    expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
+    expect(wrapper.text()).not.toContain('Collection not found')
+    expect(wrapper.text()).not.toContain("don't have access")
+  })
+
   it('renders a translatable column from translations[locale] instead of "—"', async () => {
     const schema = useSchemaStore()
     schema.collections = [{
@@ -74,6 +105,7 @@ describe('CollectionListView', () => {
         sortable: true, readOnly: false, hidden: false, translatable: true, sort: 0, isSystem: false }],
       relations: [],
     }]
+    schema.loaded = true
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({

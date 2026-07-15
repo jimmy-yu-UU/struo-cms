@@ -89,6 +89,39 @@ public class GraphQlRevisionTests(ApiFactory factory)
         snapshot.GetProperty("status").GetString().Should().Be("draft");
     }
 
+    /// <summary>SEC-2: <c>xArticleRevision</c> shares <c>ItemService.GetRevisionAsync</c> with the REST
+    /// endpoint, so it must return the same redacted snapshot. Article's Hidden fields
+    /// (<c>internalNote</c>, <c>internalSlug</c>) are excluded from the GraphQL schema entirely (by
+    /// design — <see cref="GraphQlSchemaTests"/>), so they cannot be set via a GraphQL mutation; this
+    /// test seeds them over REST (which does not filter Hidden fields on write) on the SAME host/DB the
+    /// GraphQL endpoint reads from, then proves the GraphQL read redacts them regardless.</summary>
+    [Fact]
+    public async Task ArticleRevision_redacts_hidden_fields()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var create = await client.PostAsJsonAsync("/api/items/article", new
+        {
+            status = "draft",
+            internalNote = "gql-secret-token",
+            translations = new Dictionary<string, object>
+            {
+                ["en"] = new { title = "GqlHiddenFieldRedaction", internalSlug = "gql-secret-en" },
+            }
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = JsonDocument.Parse(await create.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("data").GetProperty("id").GetString()!;
+
+        var single = await PostGraphQlAsync(client,
+            $"{{ articleRevision(id: \"{id}\", revisionNumber: 1) {{ operation snapshot }} }}");
+        single.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
+        var snapshotRaw = single.GetProperty("data").GetProperty("articleRevision").GetProperty("snapshot").GetRawText();
+        snapshotRaw.Should().NotContain("gql-secret-token");
+        snapshotRaw.Should().NotContain("gql-secret-en");
+        snapshotRaw.Should().NotContain("internalNote");
+        snapshotRaw.Should().NotContain("internalSlug");
+    }
+
     [Fact]
     public async Task RevertArticle_unknown_revision_is_null()
     {

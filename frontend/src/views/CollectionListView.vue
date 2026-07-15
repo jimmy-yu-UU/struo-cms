@@ -61,6 +61,8 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
 }
 
 async function loadItems(): Promise<void> {
+  await schema.load() // dedup via store's `loaded` flag; retries on hard refresh/deep link where the
+  // parent's schema.load() hasn't resolved yet when this view's onMounted(loadItems) fires
   if (!meta.value || !canRead.value) return
   loading.value = true
   error.value = ''

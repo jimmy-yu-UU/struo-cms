@@ -125,4 +125,42 @@ public interface IItemRepository
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
         CancellationToken ct = default);
+
+    // ── Purge referential-integrity primitives (DB-1/DB-2, Task 5) ─────────────
+    // Default implementations THROW rather than silently no-op: a second implementation that forgot
+    // to override one of these would otherwise silently orphan referential rows on purge — the exact
+    // defect class DB-1/DB-2 exist to eliminate. The defaults still keep pre-existing test doubles
+    // compiling; a double that actually exercises purge must override them explicitly.
+
+    /// <summary>
+    /// Sets every row in <paramref name="sourceCollection"/> whose <paramref name="foreignKeyProperty"/>
+    /// (camelCase field name) equals <paramref name="typedId"/> to NULL (OnDelete.SetNull). Runs via
+    /// SqlSugar's <c>Updateable&lt;T&gt;</c>, which is NOT subject to the global soft-delete query
+    /// filter, so an already-trashed source row is still found and nulled.
+    /// </summary>
+    Task SetForeignKeyNullAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.SetForeignKeyNullAsync must be overridden by implementations that support purge integrity.");
+
+    /// <summary>
+    /// Deletes every row of the given CLR <paramref name="entityType"/> (a junction or translation
+    /// sidecar type — not necessarily a registered collection) whose <paramref name="property"/>
+    /// (CLR property name) equals <paramref name="value"/>. Used by purge to clean up M2M junction
+    /// rows and translation sidecar rows for a deleted item.
+    /// </summary>
+    Task DeleteByPropertyAsync(
+        Type entityType, string property, object value, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.DeleteByPropertyAsync must be overridden by implementations that support purge integrity.");
+
+    /// <summary>
+    /// Like <see cref="QueryWhereInAsync"/> but bypasses the soft-delete query filter, so an
+    /// already-trashed row of <paramref name="collection"/> that still references the purge target
+    /// is found too (Cascade must recurse into it, not silently skip it).
+    /// </summary>
+    Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.QueryWhereInWithDeletedAsync must be overridden by implementations that support purge integrity.");
 }

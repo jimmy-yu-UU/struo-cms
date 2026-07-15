@@ -63,7 +63,7 @@ public sealed class RelationPath
             ?? throw new QueryException($"Unknown collection '{current}' in path '{path}'.");
         var leafKnown =
             string.Equals(leaf, "id", StringComparison.OrdinalIgnoreCase) ||
-            terminal.Fields.Any(f => string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
+            terminal.Fields.Any(f => !f.Hidden && string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
         if (!leafKnown)
             throw new QueryException(
                 $"Unknown field '{leaf}' on collection '{current}' in path '{path}'.");
