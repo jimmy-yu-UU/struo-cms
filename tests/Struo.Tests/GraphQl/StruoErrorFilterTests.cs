@@ -1,6 +1,8 @@
 // tests/Struo.Tests/GraphQl/StruoErrorFilterTests.cs
+using System.Security.Claims;
 using AwesomeAssertions;
 using HotChocolate;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Struo.Api.GraphQl;
@@ -14,7 +16,23 @@ public class StruoErrorFilterTests
     private static IError Wrap(Exception ex) =>
         ErrorBuilder.New().SetMessage("original").SetException(ex).Build();
 
-    private readonly StruoErrorFilter _filter = new(NullLoggerFactory.Instance.CreateLogger<StruoErrorFilter>());
+    // No HttpContext ⇒ unauthenticated (non-HTTP execution path).
+    private static StruoErrorFilter FilterAnonymous() =>
+        new(NullLoggerFactory.Instance.CreateLogger<StruoErrorFilter>(),
+            new HttpContextAccessor { HttpContext = null });
+
+    // An authenticated HttpContext (a ClaimsPrincipal whose identity IsAuthenticated).
+    private static StruoErrorFilter FilterAuthenticated()
+    {
+        var ctx = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(authenticationType: "Test"))
+        };
+        return new(NullLoggerFactory.Instance.CreateLogger<StruoErrorFilter>(),
+            new HttpContextAccessor { HttpContext = ctx });
+    }
+
+    private readonly StruoErrorFilter _filter = FilterAnonymous();
 
     [Fact]
     public void QueryException_maps_to_BAD_USER_INPUT()
@@ -28,9 +46,23 @@ public class StruoErrorFilterTests
     public void CollectionNotFound_maps_to_NOT_FOUND()
         => _filter.OnError(Wrap(new CollectionNotFoundException("x"))).Code.Should().Be("NOT_FOUND");
 
+    // ARC-3 drift fix: with no HttpContext (unauthenticated), PermissionDenied is UNAUTHORIZED,
+    // matching REST semantics — not the old unconditional FORBIDDEN.
     [Fact]
-    public void PermissionDenied_maps_to_FORBIDDEN()
-        => _filter.OnError(Wrap(new PermissionDeniedException("no"))).Code.Should().Be("FORBIDDEN");
+    public void PermissionDenied_when_unauthenticated_maps_to_UNAUTHORIZED()
+    {
+        var e = FilterAnonymous().OnError(Wrap(new PermissionDeniedException("no")));
+        e.Code.Should().Be("UNAUTHORIZED");
+        e.Message.Should().Be("no");
+    }
+
+    [Fact]
+    public void PermissionDenied_when_authenticated_maps_to_FORBIDDEN()
+    {
+        var e = FilterAuthenticated().OnError(Wrap(new PermissionDeniedException("no")));
+        e.Code.Should().Be("FORBIDDEN");
+        e.Message.Should().Be("no");
+    }
 
     [Fact]
     public void Conflict_maps_to_CONFLICT()

@@ -517,8 +517,11 @@ public class GraphQlExecutionTests
     // — the sub-field names in the GraphQL query ("question"/"answer") are camelCase.
     private sealed record FaqRow(string Question, string Answer);
 
+    // ARC-3: this in-process executor has NO HttpContext, so the shared DomainErrorMap treats the
+    // caller as unauthenticated and PermissionDenied surfaces as UNAUTHORIZED (REST-parity), not the
+    // old unconditional FORBIDDEN. AddHttpContextAccessor is required so the filter can be activated.
     [Fact]
-    public async Task PermissionDenied_surfaces_as_FORBIDDEN_code()
+    public async Task PermissionDenied_without_http_context_surfaces_as_UNAUTHORIZED_code()
     {
         var ds = new FakeGraphQlDataSource
         {
@@ -531,6 +534,7 @@ public class GraphQlExecutionTests
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()
+            .AddHttpContextAccessor()
             .AddLogging();
         services.AddErrorFilter<StruoErrorFilter>(); // plain-IServiceCollection overload (see summary above)
 
@@ -545,7 +549,7 @@ public class GraphQlExecutionTests
 
         var json = (await executor.ExecuteAsync("{ articles { total } }")).ToJson();
 
-        json.Should().Contain("FORBIDDEN");
+        json.Should().Contain("UNAUTHORIZED");
     }
 
     [Fact]
