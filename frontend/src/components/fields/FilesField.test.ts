@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import FilesField from './FilesField.vue'
@@ -74,6 +75,29 @@ describe('FilesField', () => {
     await flushPromises()
     ;(w.vm as unknown as { toggle: (id: string) => void }).toggle('f3')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['f1', 'f3']])
+  })
+
+  it('debounces search-driven option reloads into a single request', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    // Empty model -> resolve() short-circuits with no list call on mount.
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: [] }, global: { stubs } })
+    await flushPromises()
+    listSpy.mockClear()
+    vi.useFakeTimers()
+    try {
+      ;(w.vm as any).search = 'a'
+      await nextTick()
+      ;(w.vm as any).search = 'ab'
+      await nextTick()
+      ;(w.vm as any).search = 'abc'
+      await nextTick()
+      expect(listSpy).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(listSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('toggling an already-selected file removes it', async () => {

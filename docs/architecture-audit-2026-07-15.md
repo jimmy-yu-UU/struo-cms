@@ -27,7 +27,16 @@
 > - ✅ **CS-4（= ARC-2）** 投影熱路徑快取 property accessor — `ba4ccbd`（`EntityDescriptor.Properties`（OrdinalIgnoreCase，每實例建一次）+ `PropertyAccessorCache`；零行為改變；寫入路徑延至 Batch 5／ARC-1）
 > - ✅ **ARC-3** REST／GraphQL error-code 映射單一真相 — `09808aa` + `0ed2865`（`DomainErrorMap` 單源 + `StatusFor`；GraphQL 未認證 `PermissionDenied` 改回 `UNAUTHORIZED`（漂移修復，對齊 REST 語意）；`DeletedAccessGuard` 去重；live：3 情境 parity 驗證）
 >
-> **Batch 3–5（前端 MED / LOW / ARC-1 重構）：** 待辦，見修復計畫。
+> **Batch 3 — 5 前端 MED（FE-2～FE-6）：✅ 完成、live gate 通過（真 PG + Playwright；新 e2e specs 6/6）、前端 309 綠 + build 綠、後端未動（732）。**
+> - ✅ **FE-2** 清單 stale-response 競態 — `f9f6412`（`lib/latestWins.ts` 遞增 token；`loadItems` 全部 state 寫入含 finally guard；AbortController 依計畫 YAGNI 不做）
+> - ✅ **FE-6** Relation/Files picker debounce + 排序 — `f9f6412`（`lib/debounce.ts` 300ms（含 cancel、unmount 清理）+ loadOptions latest-wins；live：連打 8 鍵 → 1 個 debounced search 請求（network log））
+> - ✅ **FE-3** 伺服器端 `error.details` 映回欄位錯誤 — `7c3dfd6`（`lib/applyServerErrors.ts` case-insensitive → meta 正名；leftover 退 banner；CMS `BAD_USER_INPUT` message-only 維持 banner 為既知界線；details 目前僅 model-binding 產（`Program.cs` `InvalidModelStateResponseFactory`），items API 不經之 — 單元證據為準）
+> - ✅ **FE-4** 樂觀鎖 409 恢復路徑 — `684617a` + `817568a`（**含 fact-check 新發現前置 bug：`setModel` 丟棄 version → UI 從未 echo、樂觀鎖實際失效**，一併修復；409 CONFLICT → 重抓只更新 `model.version` 不覆蓋使用者編輯 + conflict banner + Reload latest（套用衝突當下快取副本，過期會再 409 自恢復）；live e2e：雙寫者 409 → reload/再存兩路徑 + version 單調）
+> - ✅ **FE-5** dirty-state 離開守衛 — `8a8e9d5` + `817568a`（`lib/formDirty.ts` snapshot 排除 version（409 恢復不擾動 dirty）+ `onBeforeRouteLeave` async confirm + `beforeunload`；live e2e：dirty reject/accept、untouched（含 TipTap）無誤報、存檔後不問、Esc dismiss 後守衛仍作用）
+> - e2e：`conflict.spec.ts` + `unsaved-guard.spec.ts` 新增（`3827d41`）。final-review MUST-FIX（init 重置 conflict/latestFromServer）於 `817568a`。
+> - ⚠️ **live gate 新發現（本批範圍外，待列管）：** (a) **空白 optional DateTime 序列化為 `""` → Article UI 更新 400**（`fieldTypes/registry.ts` serialize + 後端 `DateTime?` 反序列化拒收；FE-4 live 因此改以 category 驗證 — 功能為 collection-generic）；(b) RelatedList 同 route-record params-only 導航繞過 leave guard，且被未 key 的 `<router-view>`（AppShell）遮蔽 — 成對列入下輪稽核；(c) 既有 e2e `items.spec`/`relations.spec` 對 RichText Body 的 textarea 假設過期（紅,非本批回歸）。
+>
+> **Batch 4–5（LOW / ARC-1 重構）：** 待辦，見修復計畫。
 
 ---
 
