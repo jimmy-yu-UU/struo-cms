@@ -210,4 +210,23 @@ public class SqlSugarItemRepositoryTests : IDisposable
         created.Id.Should().BeGreaterThan(0, "the DB-generated identity must be read back onto the entity");
         (await _repo.GetByIdAsync("language", created.Id.ToString())).Should().NotBeNull();
     }
+
+    // CS-3 review fix: the identity-PK create branch calls ExecuteReturnEntityAsync (no ct overload
+    // in SqlSugarCore 5.1.4.215), so it must observe an already-cancelled token pre-flight —
+    // symmetric with the Guid path's ExecuteCommandAsync(ct) semantics.
+    [Fact]
+    public async Task CreateAsync_identity_pk_honors_cancellation()
+    {
+        _db.CodeFirst.InitTables<Struo.Infrastructure.Localization.Language>();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = async () => await _repo.CreateAsync(
+            "language", new Struo.Infrastructure.Localization.Language { Code = "en", Name = "English" }, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        // Cancellation must stop the write BEFORE it reaches the DB. (Explicit None: SqlSugar keeps
+        // the last token on the scoped client's Ado, so a bare CountAsync() would re-observe the
+        // cancelled token instead of counting.)
+        (await _db.Queryable<Struo.Infrastructure.Localization.Language>().CountAsync(CancellationToken.None)).Should().Be(0);
+    }
 }
