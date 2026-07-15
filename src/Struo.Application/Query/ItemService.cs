@@ -4,6 +4,7 @@ using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
+using Struo.Application.Revisions;
 using Struo.Application.Security;
 using Struo.Domain.Auditing;
 using Struo.Domain.Localization;
@@ -28,7 +29,9 @@ public sealed class ItemService(
     ILanguageProvider languages,
     StruoQueryOptions options,
     IHtmlSanitizer sanitizer,
-    ICurrentUserAccessor currentUser)
+    ICurrentUserAccessor currentUser,
+    IRevisionStore revisions,
+    RevisionSnapshotBuilder snapshotBuilder)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -330,12 +333,20 @@ public sealed class ItemService(
             var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
             await SyncM2MAsync(collection, body, createdId, ct);
             await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+            if (meta.Revisions)
+            {
+                var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
+                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct);
+            }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
         return Project(created, meta, null);
     }
 
-    public async Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
+    public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
+        => UpdateCoreAsync(collection, id, body, "update", ct);
+
+    private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(string collection, string id, JsonElement body, string operation, CancellationToken ct)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
@@ -399,6 +410,11 @@ public sealed class ItemService(
             var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
             await SyncM2MAsync(collection, body, updatedId, ct);
             await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
+            if (meta.Revisions)
+            {
+                var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
+                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot, ct);
+            }
         }, ct);
         if (updated is null) return null;
         InvalidateLanguagesIfNeeded(collection);
