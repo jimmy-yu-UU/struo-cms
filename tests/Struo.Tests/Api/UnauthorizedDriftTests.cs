@@ -43,4 +43,26 @@ public class UnauthorizedDriftTests(ApiFactory factory)
         var code = errors[0].GetProperty("extensions").GetProperty("code").GetString();
         code.Should().Be("UNAUTHORIZED");
     }
+
+    /// <summary>
+    /// Pins the AUTHENTICATED half of the split over the real pipeline: an editor with read (but no
+    /// delete) on article trips the same viewing-deleted gate and must get <c>FORBIDDEN</c>. The
+    /// anonymous test above cannot distinguish "HttpContext present with anonymous principal" from
+    /// "HttpContext null" (both map to UNAUTHORIZED) — this test can: if HotChocolate ever ran
+    /// <c>StruoErrorFilter</c> on a path where <c>IHttpContextAccessor.HttpContext</c> is null, the
+    /// authenticated principal would silently degrade to UNAUTHORIZED and this test would fail.
+    /// </summary>
+    [Fact]
+    public async Task GraphQl_authenticated_without_delete_grant_viewing_deleted_is_FORBIDDEN()
+    {
+        var (client, _) = await _factory.CreateEditorClientAsync(
+            readCollections: ["article"], writeCollections: []); // authenticated, CanDelete=false
+        var resp = await client.PostAsJsonAsync(
+            "/graphql", new { query = "{ articles(deleted: WITH) { total } }" });
+        resp.StatusCode.Should().Be(HttpStatusCode.OK); // GraphQL keeps HTTP 200 semantics
+        var root = Root(await resp.Content.ReadAsStringAsync());
+        root.TryGetProperty("errors", out var errors).Should().BeTrue();
+        var code = errors[0].GetProperty("extensions").GetProperty("code").GetString();
+        code.Should().Be("FORBIDDEN");
+    }
 }
