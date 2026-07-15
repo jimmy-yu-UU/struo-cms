@@ -315,7 +315,10 @@ public sealed class SqlSugarItemRepository(
         var hasIdentityPk = db.EntityMaintenance.GetEntityInfo(typeof(T))
             .Columns.Any(c => c.IsPrimarykey && c.IsIdentity);
         if (hasIdentityPk)
+        {
+            ct.ThrowIfCancellationRequested();
             return (await db.Insertable((T)entity).ExecuteReturnEntityAsync())!;
+        }
 
         await db.Insertable((T)entity).ExecuteCommandAsync(ct);
         return entity;
