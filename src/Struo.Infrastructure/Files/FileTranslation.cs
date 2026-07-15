@@ -9,6 +9,9 @@ namespace Struo.Infrastructure.Files;
 /// <c>{ParentTypeName}Id</c> = <c>FileId</c> (MetadataScanner.ScanTranslations).
 /// </summary>
 [SugarTable("file_translations")]
+// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql — translation lookup key
+// (fileid, locale): same overlay/read pattern as article_translations.
+[SugarIndex("ix_file_translations_fk_locale", nameof(FileId), OrderByType.Asc, nameof(Locale), OrderByType.Asc)]
 public sealed class FileTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
