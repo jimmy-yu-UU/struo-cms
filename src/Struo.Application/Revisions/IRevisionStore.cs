@@ -1,0 +1,24 @@
+namespace Struo.Application.Revisions;
+
+/// <summary>Revision metadata (no snapshot payload) — for the newest-first history list.</summary>
+public sealed record RevisionInfo(long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy);
+
+/// <summary>A single revision including its stored snapshot JSON.</summary>
+public sealed record RevisionRecord(long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy, string Snapshot);
+
+/// <summary>
+/// Storage for per-item revision snapshots (Phase 9c). Backed by the framework `revisions` table.
+/// Implementations run on the request-scoped SqlSugar client, so <see cref="CaptureAsync"/> called
+/// inside <c>ItemService</c>'s write transaction commits atomically with the write it describes.
+/// </summary>
+public interface IRevisionStore
+{
+    /// Assigns the next per-(collection,itemId) RevisionNumber, stamps CreatedAt/By, inserts the snapshot.
+    Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default);
+
+    /// Newest-first metadata (no snapshot). Empty when the item has no revisions.
+    Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default);
+
+    /// One revision incl. snapshot, or null when (collection,itemId,revisionNumber) has no row.
+    Task<RevisionRecord?> GetAsync(string collection, string itemId, long revisionNumber, CancellationToken ct = default);
+}
