@@ -255,6 +255,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Tag>();
+        db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 

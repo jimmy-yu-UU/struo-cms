@@ -30,6 +30,8 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 {
     private readonly IReadOnlyDictionary<string, IReadOnlyList<RelationDescriptor>> _byCollection;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundRestrict;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundSetNull;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundCascade;
 
     public RelationshipGraph(
         IReadOnlyList<CollectionMetadata> collections,
@@ -37,7 +39,9 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
     {
         var known = collections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var map = new Dictionary<string, IReadOnlyList<RelationDescriptor>>(StringComparer.OrdinalIgnoreCase);
-        var inbound = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
+        var inboundRestrict = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
+        var inboundSetNull = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
+        var inboundCascade = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var c in collections)
         {
@@ -58,11 +62,18 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 
                 descriptors.Add(BuildDescriptor(entityType, r));
 
-                // Build inbound-restrict index for delete-guard
-                if (r.Kind == RelationKind.ManyToOne && r.OnDelete == OnDelete.Restrict)
+                // Build the inbound OnDelete indexes (Restrict/SetNull/Cascade) for delete-guard /
+                // purge (DB-1/DB-2, Task 5). Only M2O relations carry a real FK on the source side.
+                if (r.Kind == RelationKind.ManyToOne)
                 {
-                    if (!inbound.TryGetValue(r.TargetCollection, out var lst))
-                        inbound[r.TargetCollection] = lst = [];
+                    var bucket = r.OnDelete switch
+                    {
+                        OnDelete.SetNull => inboundSetNull,
+                        OnDelete.Cascade => inboundCascade,
+                        _ => inboundRestrict
+                    };
+                    if (!bucket.TryGetValue(r.TargetCollection, out var lst))
+                        bucket[r.TargetCollection] = lst = [];
                     lst.Add((c.Name, r.ForeignKey!));
                 }
             }
@@ -71,11 +82,17 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         }
 
         _byCollection = map;
-        _inboundRestrict = inbound.ToDictionary(
+        _inboundRestrict = Freeze(inboundRestrict);
+        _inboundSetNull = Freeze(inboundSetNull);
+        _inboundCascade = Freeze(inboundCascade);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> Freeze(
+        Dictionary<string, List<(string, string)>> source) =>
+        source.ToDictionary(
             k => k.Key,
             v => (IReadOnlyList<(string, string)>)v.Value,
             StringComparer.OrdinalIgnoreCase);
-    }
 
     // ── IRelationshipGraph ───────────────────────────────────────────────────
 
@@ -91,6 +108,14 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
     public IReadOnlyList<(string SourceCollection, string ForeignKey)> InboundRestrict(
         string targetCollection) =>
         _inboundRestrict.TryGetValue(targetCollection, out var l) ? l : [];
+
+    public IReadOnlyList<(string SourceCollection, string ForeignKey)> InboundSetNull(
+        string targetCollection) =>
+        _inboundSetNull.TryGetValue(targetCollection, out var l) ? l : [];
+
+    public IReadOnlyList<(string SourceCollection, string ForeignKey)> InboundCascade(
+        string targetCollection) =>
+        _inboundCascade.TryGetValue(targetCollection, out var l) ? l : [];
 
     // ── Infrastructure-only descriptor access ────────────────────────────────
 
@@ -112,6 +137,29 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                 d.JunctionParentFk!,
                 d.JunctionTargetFk!,
                 d.JunctionSort))
+            .ToList();
+
+    /// <summary>
+    /// Walks every known collection's own M2M descriptors and keeps the ones whose
+    /// <see cref="M2MDescriptor.TargetCollection"/> matches <paramref name="targetCollection"/> —
+    /// i.e. the junction rows purging <paramref name="targetCollection"/> must also clean up, even
+    /// though the relation is declared on a DIFFERENT ("owning") collection (DB-1/DB-2, Task 5).
+    /// </summary>
+    public IReadOnlyList<InboundM2MDescriptor> InboundM2MDescriptors(string targetCollection) =>
+        _byCollection
+            .SelectMany(kv => kv.Value
+                .Where(d => d.Meta.Kind == RelationKind.ManyToMany
+                            && d.JunctionType is not null
+                            && d.JunctionParentFk is not null
+                            && d.JunctionTargetFk is not null
+                            && string.Equals(d.Meta.TargetCollection, targetCollection, StringComparison.OrdinalIgnoreCase))
+                .Select(d => new InboundM2MDescriptor(kv.Key, new M2MDescriptor(
+                    d.Meta.Name,
+                    d.Meta.TargetCollection,
+                    d.JunctionType!,
+                    d.JunctionParentFk!,
+                    d.JunctionTargetFk!,
+                    d.JunctionSort))))
             .ToList();
 
     // ── Helpers ─────────────────────────────────────────────────────────────

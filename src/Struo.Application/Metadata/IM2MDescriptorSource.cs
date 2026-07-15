@@ -14,10 +14,26 @@ public sealed record M2MDescriptor(
     string? SortProperty);
 
 /// <summary>
+/// An M2M descriptor viewed from the TARGET side: <paramref name="SourceCollection"/> is the
+/// collection that declares the relation (the "owning"/parent side), and <see cref="Descriptor"/>
+/// is its normal (parent-side) M2M descriptor. Used by purge (DB-1/DB-2, Task 5) to find and clean
+/// up junction rows for a relation the purge target does not itself declare — e.g. purging a Tag
+/// must delete the Article-side <c>article_tags</c> rows whose <c>TagId</c> points at it, even
+/// though the M2M relation is declared on Article, not Tag.
+/// </summary>
+public sealed record InboundM2MDescriptor(string SourceCollection, M2MDescriptor Descriptor);
+
+/// <summary>
 /// Returns the M2M junction descriptors for a collection. Implemented by
 /// <c>RelationshipGraph</c> (Infrastructure) and injected into <see cref="Struo.Application.Query.ItemService"/>.
 /// </summary>
 public interface IM2MDescriptorSource
 {
     IReadOnlyList<M2MDescriptor> M2MDescriptors(string collection);
+
+    /// <summary>
+    /// M2M descriptors declared on OTHER collections whose target is <paramref name="targetCollection"/>
+    /// (DB-1/DB-2, Task 5). Default empty for any implementer that predates this addition.
+    /// </summary>
+    IReadOnlyList<InboundM2MDescriptor> InboundM2MDescriptors(string targetCollection) => [];
 }
