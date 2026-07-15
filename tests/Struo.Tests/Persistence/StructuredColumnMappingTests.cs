@@ -87,4 +87,21 @@ public class StructuredColumnMappingTests
             read.Faqs[0].A.Should().Be("答案");
         }
     }
+
+    [Fact]
+    public void Revisions_snapshot_column_is_text()
+    {
+        var db = new SqliteTestDatabase();
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        using (db)
+        {
+            client.CodeFirst.InitTables<Struo.Infrastructure.Revisions.Revision>();
+
+            var columns = client.DbMaintenance.GetColumnInfosByTableName("revisions", false);
+            var snapshot = columns.Single(c => c.DbColumnName.Equals("Snapshot", StringComparison.OrdinalIgnoreCase));
+            snapshot.DataType.Should().ContainEquivalentOf("text");
+        }
+    }
 }
