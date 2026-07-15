@@ -46,9 +46,22 @@
 --     relation; never traversed by RelationExpander/RelationFilterResolver, so it is not a join/filter
 --     hot path today.
 --
--- IDEMPOTENT (safe to re-run; `CREATE INDEX IF NOT EXISTS`). Applied to the live PG database only —
--- dev/test databases created via `InitTables` (CodeFirst) do NOT get these indexes, since no
--- SqlSugar index attribute exists on the entities (tracked separately as audit finding DB-5, batch 2).
+-- IDEMPOTENT (safe to re-run; `CREATE INDEX IF NOT EXISTS`).
+--
+-- CODEFIRST PARITY (DB-5, batch 2): the nine PLAIN btree indexes below now also exist as `[SugarIndex]`
+-- attributes on their owning entities (Article/Category/ArticleTag/ArticleTranslation → samples,
+-- FileTranslation/UserRole/Permission → Infrastructure), so a CodeFirst dev/test database (`InitTables`)
+-- gets the SAME indexes with the IDENTICAL names used here. Names match exactly, so this migration's
+-- `CREATE INDEX IF NOT EXISTS` overlaps idempotently with the CodeFirst emission on a live PG database
+-- (whichever ran first wins; the other is a no-op). A dev fail-fast (`SchemaGuard`) asserts the
+-- correctness-critical constraints at startup, but NOT these performance indexes (their absence is a
+-- latency regression, not a correctness gap — out of the guard's scope by design).
+--
+-- KNOWN ASYMMETRY — the two PARTIAL indexes (`ix_articles_live` / `ix_categories_live`, below, with
+-- `WHERE deletedat IS NULL`) CANNOT be expressed via `[SugarIndex]` (SqlSugar attributes have no filter
+-- clause). They stay MIGRATION-ONLY: they exist on live PG via this file, and are simply absent on a
+-- CodeFirst dev/test database. This is deliberate and is the one place CodeFirst and this migration
+-- diverge.
 
 -- ---------------------------------------------------------------------------------------------
 -- M2O foreign keys

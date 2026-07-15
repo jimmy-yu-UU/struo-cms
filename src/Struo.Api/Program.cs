@@ -123,6 +123,14 @@ try
             await MigrationRunner.ApplyAsync(db, migrationsPath, migrationLogger);
         }
 
+        // Dev fail-fast (DB-5): after InitTables + the migration runner have had their chance to create
+        // the schema, assert the correctness-critical constraints actually exist (the revisions
+        // composite UNIQUE — DB-4 backstop). Throws on divergence rather than running with a silent gap.
+        if (app.Environment.IsDevelopment())
+        {
+            await SchemaGuard.AssertCriticalConstraintsAsync(db, default);
+        }
+
         // Development-only seed data (languages, bootstrap admin, RBAC grants).
         if (app.Environment.IsDevelopment())
         {
