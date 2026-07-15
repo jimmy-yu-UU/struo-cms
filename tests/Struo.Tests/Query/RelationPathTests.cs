@@ -33,8 +33,15 @@ public class RelationPathTests
         public IReadOnlyList<CollectionMetadata> GetCollections() => [];
         public CollectionMetadata? GetCollection(string name) => name switch
         {
+            // A hidden credential-style field (mirrors User.Password), matching the H2 fixture
+            // in QueryValidatorTests. It must never be reachable as a relation-path leaf either —
+            // otherwise meta.total becomes a blind-extraction oracle via any M2O relation.
             "category" => new CollectionMetadata { Name = "category", Label = "Category", FieldGroups = [],
-                Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
+                Fields =
+                [
+                    new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text },
+                    new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true },
+                ] },
             "tag" => new CollectionMetadata { Name = "tag", Label = "Tag", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
             _ => null
@@ -81,6 +88,36 @@ public class RelationPathTests
     {
         var act = () => RelationPath.Parse("article", "category.nope", Graph, Md, 5);
         act.Should().Throw<QueryException>().WithMessage("*nope*");
+    }
+
+    // SEC-1: a Hidden field on the terminal collection of a relation path must be rejected as
+    // a leaf, just like the own-field whitelist in QueryValidator already does — otherwise
+    // meta.total becomes a blind-extraction oracle for hidden fields reachable across any
+    // M2O relation (e.g. a "user" relation pointing at User.Password).
+    [Fact]
+    public void Hidden_leaf_field_on_relation_path_throws()
+    {
+        var act = () => RelationPath.Parse("article", "category.secret", Graph, Md, 5);
+        act.Should().Throw<QueryException>().WithMessage("*Unknown field 'secret'*");
+    }
+
+    [Fact]
+    public void Hidden_leaf_field_message_matches_unknown_field_shape()
+    {
+        // The rejection message must read exactly like a truly-unknown field — otherwise the
+        // message itself becomes an oracle revealing that a hidden field named 'secret' exists.
+        var hiddenAct = () => RelationPath.Parse("article", "category.secret", Graph, Md, 5);
+        var unknownAct = () => RelationPath.Parse("article", "category.nope", Graph, Md, 5);
+        var hiddenMessage = hiddenAct.Should().Throw<QueryException>().Which.Message;
+        var unknownMessage = unknownAct.Should().Throw<QueryException>().Which.Message;
+        hiddenMessage.Replace("secret", "X").Should().Be(unknownMessage.Replace("nope", "X"));
+    }
+
+    [Fact]
+    public void Visible_leaf_field_on_relation_path_is_still_accepted()
+    {
+        var p = RelationPath.Parse("article", "category.name", Graph, Md, 5);
+        p.LeafField.Should().Be("name");
     }
 
     [Fact]
