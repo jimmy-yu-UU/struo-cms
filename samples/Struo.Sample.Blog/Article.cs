@@ -57,6 +57,12 @@ public sealed class Article : AuditableEntity, ISoftDeletable
     [CmsField(Label = "FAQs", Interface = FieldInterface.Repeater, Sort = 12, Group = "Content")]
     public List<FaqItem> Faqs { get; set; } = [];
 
+    // Hidden credential-shaped own-field (SEC-2 fixture): captured in full by RevisionSnapshotBuilder
+    // (revert must restore it) but must be redacted from any snapshot returned to an external caller.
+    [SugarColumn(IsNullable = true)]
+    [CmsField(Label = "Internal Note", Interface = FieldInterface.Text, Hidden = true, Sort = 13, Group = "Content")]
+    public string? InternalNote { get; set; }
+
     // --- relations ---
     [SugarColumn(IsNullable = true)]
     public Guid? CategoryId { get; set; }

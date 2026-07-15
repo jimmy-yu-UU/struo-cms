@@ -732,11 +732,15 @@ public sealed class ItemService(
     /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
     /// unknown revision or a non-revisioned collection (→ 404).
     /// <para>
-    /// The returned snapshot is the FULL item state as captured (see <see cref="RevisionSnapshotBuilder"/>),
-    /// with no field-level RBAC or hidden-field filtering applied — this is required so a revert can
-    /// restore every field, not just the ones the caller may read. Access is therefore gated only by
-    /// collection-level <see cref="Struo.Application.Security.IPermissionService.CanRead"/>; a future
-    /// field-level-read-grant feature must revisit this so it does not leak fields via the snapshot.
+    /// (SEC-2) The snapshot <see cref="RevisionSnapshotBuilder"/> captures is the FULL item state,
+    /// including <see cref="Struo.Domain.Metadata.Models.FieldMetadata.Hidden"/> fields — a revert needs
+    /// every field, not just the ones the caller may read. That full-fidelity snapshot is internal to
+    /// <see cref="RevertAsync"/> only (it reads the revision store directly, bypassing this method).
+    /// The snapshot returned HERE — to any external caller, i.e. REST <c>GET
+    /// /api/items/{collection}/{id}/revisions/{n}</c> or GraphQL <c>xRevision</c> — has hidden fields
+    /// redacted via <see cref="RevisionSnapshotRedactor.RedactHidden"/> before being handed back. Access
+    /// is otherwise gated only by collection-level <see cref="Struo.Application.Security.IPermissionService.CanRead"/>;
+    /// a future field-level-read-grant feature should still tighten this further.
     /// </para></summary>
     public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
@@ -744,7 +748,9 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         if (!meta.Revisions) return null;
-        return await revisions.GetAsync(collection, id, revisionNumber, ct);
+        var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
+        if (rec is null) return null;
+        return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta) };
     }
 
     /// <summary>
