@@ -3,6 +3,7 @@ using System.Text.Json;
 using Struo.Application.Configuration;
 using Struo.Application.Query;
 using Struo.Application.Revisions;
+using Struo.Application.Security;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
@@ -40,7 +41,7 @@ public sealed class RevisionServiceHarness : IDisposable
     /// roll-back test; it exists so future tests can inspect committed revisions directly).</summary>
     public IRevisionStore Store { get; }
 
-    private RevisionServiceHarness(bool failCapture)
+    private RevisionServiceHarness(bool failCapture, bool canRead)
     {
         var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
@@ -75,14 +76,17 @@ public sealed class RevisionServiceHarness : IDisposable
         IRevisionStore serviceStore = failCapture ? new ThrowingRevisionStore() : realStore;
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
 
+        IPermissionService perms = canRead ? new AllowAllPermissionService() : new DenyReadPermissionService();
+
         Repository = repo;
         Store = realStore;
-        Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
+        Service = new ItemService(repo, provider, registry, perms,
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
             revisionUser, serviceStore, snapshotBuilder);
     }
 
-    public static RevisionServiceHarness Create(bool failCapture = false) => new(failCapture);
+    public static RevisionServiceHarness Create(bool failCapture = false, bool canRead = true) =>
+        new(failCapture, canRead);
 
     public void Dispose() => _file.Dispose();
 
@@ -94,6 +98,10 @@ public sealed class RevisionServiceHarness : IDisposable
 
     /// <summary>A partial update body (e.g. <c>{"status":"published"}</c>).</summary>
     public JsonElement Body(string status) => BodyOf(new { status });
+
+    /// <summary>A partial update body re-pointing the M2O category FK and replacing the M2M tag set
+    /// (e.g. to move an article to a different category and clear its tags).</summary>
+    public JsonElement Body(Guid category, Guid[] tags) => BodyOf(new { categoryId = category, tags });
 
     /// <summary>The create-article call as an un-awaited Task, so a failing capture's exception can
     /// be observed via <c>Assert.ThrowsAnyAsync</c> around the whole write.</summary>
@@ -116,6 +124,36 @@ public sealed class RevisionServiceHarness : IDisposable
         return created["id"]!.ToString()!;
     }
 
+    public async Task<string> CreateTagAsync(string name)
+    {
+        var created = await Service.CreateAsync("tag", BodyOf(new { name }));
+        return created["id"]!.ToString()!;
+    }
+
+    /// <summary>Seeds an article referencing a category (M2O) and a tag (M2M), plus an en/zh-TW
+    /// translation, then returns the article id and the two category ids used by the revert test
+    /// (rev 1 = <c>catA</c>/<c>tag</c>; the caller subsequently updates to <c>catB</c>/no tags for rev 2).</summary>
+    public async Task<(string id, Guid catA, Guid catB, Guid tag)> SeedArticleForRevertAsync()
+    {
+        var catA = Guid.Parse(await CreateCategoryAsync("A"));
+        var catB = Guid.Parse(await CreateCategoryAsync("B"));
+        var tag = Guid.Parse(await CreateTagAsync("T"));
+
+        var created = await Service.CreateAsync("article", BodyOf(new
+        {
+            status = "draft",
+            categoryId = catA,
+            tags = new[] { tag },
+            translations = new Dictionary<string, object>
+            {
+                ["en"] = new { title = "T-en" },
+                ["zh-TW"] = new { title = "T-zh" },
+            }
+        }));
+        var id = created["id"]!.ToString()!;
+        return (id, catA, catB, tag);
+    }
+
     /// <summary>Simulates a capture-time failure (e.g. a storage error) so the roll-back test can
     /// prove the capture runs inside the same <c>InTransactionAsync</c> as the parent write.</summary>
     private sealed class ThrowingRevisionStore : IRevisionStore
@@ -126,6 +164,19 @@ public sealed class RevisionServiceHarness : IDisposable
             throw new NotImplementedException("Not expected to be called in the roll-back test.");
         public Task<RevisionRecord?> GetAsync(string collection, string itemId, long revisionNumber, CancellationToken ct = default) =>
             throw new NotImplementedException("Not expected to be called in the roll-back test.");
+    }
+
+    /// <summary>Denies <see cref="CanRead"/> only, so <c>ListRevisionsAsync</c>/<c>GetRevisionAsync</c>'s
+    /// read gate can be exercised in isolation; writes stay allowed (unused by the read-gate test, but
+    /// kept true so this harness variant could seed data itself if a future test needs it).</summary>
+    private sealed class DenyReadPermissionService : IPermissionService
+    {
+        public bool CanRead(string collection) => false;
+        public bool CanWrite(string collection) => true;
+        public bool CanDelete(string collection) => true;
+        public bool IsSuperAdmin => true;
+        public IReadOnlyCollection<string> ReadableFields(string collection, IEnumerable<string> allFieldNames) =>
+            allFieldNames.ToList();
     }
 }
 
@@ -162,4 +213,71 @@ public sealed class RevisionServiceTests
         var page = await h.Service.QueryAsync("article", new QueryModel(null, null, [], 100, 0, null), null, default);
         Assert.Empty(page.Data);
     }
+
+    [Fact]
+    public async Task Revert_reapplies_snapshot_and_appends_revert_revision()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");                       // rev 1 (create), status=draft
+        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // rev 2, status=published
+
+        var reverted = await h.Service.RevertAsync("article", id, 1, default);      // revert to rev 1 (draft)
+        Assert.NotNull(reverted);
+        Assert.Equal("draft", reverted!["status"]);                                 // current state matches rev 1
+
+        var list = await h.Service.ListRevisionsAsync("article", id, default);
+        Assert.Equal(3, list.Count);                                                // append-only: 1,2 preserved + revert
+        Assert.Equal("revert", list[0].Operation);
+    }
+
+    [Fact]
+    public async Task Revert_restores_relations_and_translations()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var (id, catA, catB, tag) = await h.SeedArticleForRevertAsync();            // rev1: category=catA, tags=[tag], zh-TW title
+        await h.Service.UpdateAsync("article", id, h.Body(category: catB, tags: []), default); // rev2: catB, no tags
+
+        await h.Service.RevertAsync("article", id, 1, default);
+        var now = await h.Service.GetAsync("article", id, DeepFor("category", "tags"), null, default);
+        Assert.Equal(catA.ToString(), CategoryIdOf(now!));                          // M2O FK restored
+        Assert.Single(TagsOf(now!));                                                // M2M restored
+        Assert.Equal(tag.ToString(), TagIdOf(now!, 0));
+    }
+
+    [Fact]
+    public async Task Revert_unknown_revision_returns_null()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");
+        Assert.Null(await h.Service.RevertAsync("article", id, 99, default));       // -> 404
+    }
+
+    [Fact]
+    public async Task GetRevision_returns_snapshot_and_list_is_read_gated()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");
+        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        Assert.NotNull(rec);
+        Assert.Contains("\"status\"", rec!.Snapshot, StringComparison.Ordinal);
+
+        using var noRead = RevisionServiceHarness.Create(canRead: false);
+        await Assert.ThrowsAsync<PermissionDeniedException>(
+            () => noRead.Service.ListRevisionsAsync("article", id, default));
+    }
+
+    /// <summary>Builds a flat <see cref="DeepSpec"/> requesting the given top-level relation names
+    /// (no field whitelist, no nested args) — enough for the revert-restore test to read back the
+    /// M2O <c>category</c> object and the M2M <c>tags</c> array on the projected item.</summary>
+    private static DeepSpec DeepFor(params string[] relations) =>
+        new(relations.ToDictionary(r => r, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase));
+
+    private static string CategoryIdOf(IReadOnlyDictionary<string, object?> row) =>
+        ((IReadOnlyDictionary<string, object?>)row["category"]!)["id"]!.ToString()!;
+
+    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> TagsOf(IReadOnlyDictionary<string, object?> row) =>
+        (IReadOnlyList<IReadOnlyDictionary<string, object?>>)row["tags"]!;
+
+    private static string TagIdOf(IReadOnlyDictionary<string, object?> row, int index) =>
+        TagsOf(row)[index]["id"]!.ToString()!;
 }

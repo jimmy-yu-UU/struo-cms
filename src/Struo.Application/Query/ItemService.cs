@@ -695,6 +695,52 @@ public sealed class ItemService(
     }
 
     /// <summary>
+    /// Reverts an item to a past revision by re-applying that revision's snapshot as a normal update
+    /// (append-only: a new "revert" revision is recorded; forward history is never deleted). Returns the
+    /// re-read item, or null for an unknown collection-revision/item (→ 404). Requires write permission.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, object?>?> RevertAsync(
+        string collection, string id, long revisionNumber, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
+        RequireSuperAdminForAdminOnly(meta);
+        if (!meta.Revisions) return null;                                   // collection keeps no revisions -> 404
+
+        var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
+        if (rec is null) return null;                                       // unknown revision/item -> 404
+
+        // The snapshot IS a valid update body by construction; drop `version` so revert does not echo a
+        // stale optimistic-concurrency token (it would 409 against the current row). Keep the JsonDocument
+        // alive across the awaited update (the body's JsonElement must stay valid).
+        using var doc = JsonDocument.Parse(
+            StripKeys(JsonDocument.Parse(rec.Snapshot).RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
+        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
+    }
+
+    /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
+    /// non-revisioned collection.</summary>
+    public async Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>> ListRevisionsAsync(
+        string collection, string id, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!meta.Revisions) return [];
+        return await revisions.ListAsync(collection, id, ct);
+    }
+
+    /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
+    /// unknown revision or a non-revisioned collection (→ 404).</summary>
+    public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
+        string collection, string id, long revisionNumber, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!meta.Revisions) return null;
+        return await revisions.GetAsync(collection, id, revisionNumber, ct);
+    }
+
+    /// <summary>
     /// Serialises <paramref name="source"/> as UTF-8 JSON with any top-level key in
     /// <paramref name="keysToRemove"/> omitted. Returns the raw bytes so the caller can
     /// parse them into a <c>using</c>-scoped <see cref="JsonDocument"/> and avoid a pool leak.
