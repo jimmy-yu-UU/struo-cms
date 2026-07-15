@@ -8,7 +8,7 @@
 
 ## 0. Role & mission
 
-You are a senior frontend engineer redesigning the **StruoCMS admin SPA** (`frontend/`, Vue 3.5 + TypeScript + PrimeVue 4.5). The **backend, API contract, routing, stores, and business logic are correct and must not change behaviorally.** Your job is a **presentation-layer redesign**: replace ad-hoc markup and leftover starter CSS with a coherent, token-driven, PrimeVue-based design system and re-skin every screen.
+You are a senior frontend engineer redesigning the **StruoCMS admin SPA** (`frontend/`, Vue + TypeScript + PrimeVue — use the versions already installed in `frontend/package.json`; never pin, downgrade, or hand-author a version). The **backend, API contract, routing, stores, and business logic are correct and must not change behaviorally.** Your job is a **presentation-layer redesign**: replace ad-hoc markup and leftover starter CSS with a coherent, token-driven, PrimeVue-based design system and re-skin every screen.
 
 **Prime directives**
 
@@ -38,8 +38,9 @@ You are a senior frontend engineer redesigning the **StruoCMS admin SPA** (`fron
 
 | Constraint | Detail |
 |---|---|
-| Framework | Vue 3.5 `<script setup lang="ts">`, Composition API, TypeScript strict. |
-| UI library | **PrimeVue 4.5** + `@primeuix/themes` (Aura) + `primeicons` 7. No new UI libraries. No PrimeFlex, no Tailwind unless already present (it is not — do **not** add it; use tokens + scoped CSS / small utility classes). |
+| Framework | Vue `<script setup lang="ts">`, Composition API, TypeScript strict. |
+| UI library | **PrimeVue** + `@primeuix/themes` (Aura) + `primeicons` — all already installed. Use the installed versions; do not pin or add UI libraries. No PrimeFlex, no Tailwind (not present — do **not** add it; use tokens + scoped CSS / small utility classes). |
+| Package management | **pnpm only** (`pnpm add` / `pnpm install`), never `npm`/`yarn`. **Never hand-author or pin a version string** — versions come only from the package manager (CLAUDE.md §17.5). If a package genuinely must be added, run `pnpm add <pkg>` so pnpm writes the latest resolved version. This redesign should require **no new dependencies**: every PrimeVue component referenced below ships inside the already-installed `primevue` package. |
 | Verification | `pnpm build` (`vue-tsc -b && vite build`) **must pass** — this is the type gate, stricter than `pnpm test`. `pnpm test` (vitest) must stay green. Existing component tests assert structure/behavior; if a re-skin changes DOM, update the test to match the new markup **only when the behavior is unchanged** — never weaken a behavioral assertion to make a test pass. |
 | API envelope | Responses are `{ success: true, data, meta? }` or `{ success: false, error: { code, message, details? } }`. `apiClient` already unwraps and throws `ApiError { status, code?, details? }`. Consume errors via `code`/`message`, never by string-matching. |
 | Immutability | Follow repo rule: never mutate props/store state in place; emit events / use store actions. |

@@ -38,7 +38,7 @@ StruoCMS 的後台**功能已經很成熟**——schema 驅動的內容集合、
 
 ### 3.1 為什麼以 PrimeVue Aura 為基底、並用 `definePreset` 擴充
 
-專案已經裝了 PrimeVue 4.5 與 Aura 主題。Aura 是乾淨、現代、中性的設計系統，天生支援亮／暗雙主題與完整 token 體系。與其自己從零刻一套視覺，不如**站在 Aura 的肩膀上**：用 `definePreset(Aura, …)` 只覆寫主色與 surface 色階，其餘沿用 Aura 的成熟預設。好處是——維護成本低、跨元件一致、未來升級 PrimeVue 也不易壞。
+專案已經裝了 PrimeVue 與 Aura 主題（沿用 `frontend/package.json` 已安裝的版本，不指定版本號）。Aura 是乾淨、現代、中性的設計系統，天生支援亮／暗雙主題與完整 token 體系。與其自己從零刻一套視覺，不如**站在 Aura 的肩膀上**：用 `definePreset(Aura, …)` 只覆寫主色與 surface 色階，其餘沿用 Aura 的成熟預設。好處是——維護成本低、跨元件一致、未來升級 PrimeVue 也不易壞。
 
 ### 3.2 為什麼主色用 sky／indigo（藍系）而非現有的紫色
 
@@ -148,6 +148,8 @@ StruoCMS 的後台**功能已經很成熟**——schema 驅動的內容集合、
 **新增**：`theme/preset.ts`、`composables/useTheme.ts`、`components/layout/PageHeader.vue`／`EmptyState.vue`／頂列與側邊欄子元件、`views/SettingsView.vue`、版本歷史 UI（相依於 schema 旗標）。
 **修改（只換樣板與樣式，保留 script 邏輯）**：`AppShell`、`CollectionNav`、`LoginView`／`DashboardView`／`CollectionListView`／`ItemFormView`／`MediaLibraryView`、`ItemForm`、媒體三元件、所有 `components/fields/*`、`main.ts`（preset＋ToastService）、`types/schema.ts`（加 `revisions?: boolean`）。
 **刪除／取代**：`style.css` 範本殘骸（換成 token 基底）、確認無引用後移除 `HelloWorld.vue` 與 hero／vue／vite 資產。
+
+**套件管理**：一律用 **pnpm**（`pnpm add`／`pnpm install`），不用 npm／yarn；**絕不寫死或指定版本號**——版本只由包管理器產生（CLAUDE.md §17.5）。真的需要新套件時才用 `pnpm add <pkg>` 讓 pnpm 寫入解析出的最新版本。本次改版**預期不需新增任何相依**：以下所有引用到的 PrimeVue 元件都在已安裝的 `primevue` 套件內。
 
 ---
 
