@@ -12,7 +12,7 @@ public sealed class SqlSugarRevisionStore(ISqlSugarClient db, ICurrentUserAccess
         // serialized, so max+1 is race-free here. MaxAsync over no rows returns null -> 0.
         var max = await db.Queryable<Revision>()
             .Where(r => r.CollectionName == collection && r.ItemId == itemId)
-            .MaxAsync(r => (long?)r.RevisionNumber);
+            .MaxAsync(r => (long?)r.RevisionNumber, ct);
 
         var row = new Revision
         {
@@ -25,7 +25,7 @@ public sealed class SqlSugarRevisionStore(ISqlSugarClient db, ICurrentUserAccess
             CreatedAt = DateTime.UtcNow,
             CreatedBy = currentUser.GetCurrentUserId()
         };
-        await db.Insertable(row).ExecuteCommandAsync();
+        await db.Insertable(row).ExecuteCommandAsync(ct);
     }
 
     public async Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default)
@@ -33,7 +33,7 @@ public sealed class SqlSugarRevisionStore(ISqlSugarClient db, ICurrentUserAccess
         var rows = await db.Queryable<Revision>()
             .Where(r => r.CollectionName == collection && r.ItemId == itemId)
             .OrderBy(r => r.RevisionNumber, OrderByType.Desc)
-            .ToListAsync();
+            .ToListAsync(ct);
         return rows.Select(r => new RevisionInfo(r.RevisionNumber, r.Operation, r.CreatedAt, r.CreatedBy)).ToList();
     }
 
@@ -41,7 +41,7 @@ public sealed class SqlSugarRevisionStore(ISqlSugarClient db, ICurrentUserAccess
     {
         var r = await db.Queryable<Revision>()
             .Where(x => x.CollectionName == collection && x.ItemId == itemId && x.RevisionNumber == revisionNumber)
-            .FirstAsync();
+            .FirstAsync(ct);
         return r is null ? null : new RevisionRecord(r.RevisionNumber, r.Operation, r.CreatedAt, r.CreatedBy, r.Snapshot);
     }
 }

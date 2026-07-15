@@ -730,7 +730,14 @@ public sealed class ItemService(
     }
 
     /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
-    /// unknown revision or a non-revisioned collection (→ 404).</summary>
+    /// unknown revision or a non-revisioned collection (→ 404).
+    /// <para>
+    /// The returned snapshot is the FULL item state as captured (see <see cref="RevisionSnapshotBuilder"/>),
+    /// with no field-level RBAC or hidden-field filtering applied — this is required so a revert can
+    /// restore every field, not just the ones the caller may read. Access is therefore gated only by
+    /// collection-level <see cref="Struo.Application.Security.IPermissionService.CanRead"/>; a future
+    /// field-level-read-grant feature must revisit this so it does not leak fields via the snapshot.
+    /// </para></summary>
     public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
     {

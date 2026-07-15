@@ -14,6 +14,10 @@ namespace Struo.Application.Query;
 /// must capture the whole item regardless of the writer's field grants — and (b) includes M2O foreign-key
 /// ids and M2M relation id arrays, so the result is exactly the shape <c>ItemService.UpdateAsync</c>
 /// consumes and revert round-trips through the normal write path.
+/// <para>
+/// The omission of RBAC/hidden-field filtering here is deliberate (see <see cref="ItemService.GetRevisionAsync"/>):
+/// a revert must be able to restore every field, so gating stays at the collection-read level only.
+/// </para>
 /// </summary>
 public sealed class RevisionSnapshotBuilder(
     IItemRepository repository,
