@@ -344,4 +344,26 @@ public class MetadataScannerTests
         Assert.True(metas.Single(m => m.Name == "article").SoftDelete);
         Assert.True(metas.Single(m => m.Name == "category").SoftDelete);
     }
+
+    [Fact]
+    public void Scan_marks_revisioned_collection()
+    {
+        var metas = MetadataScanner.ScanTypes([typeof(RevColl), typeof(PlainColl)]);
+        Assert.True(metas.Single(m => m.Name == "revColl").Revisions);
+        Assert.False(metas.Single(m => m.Name == "plainColl").Revisions);
+    }
+
+    [CmsCollection("RevColl", Revisions = true)]
+    private sealed class RevColl
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+    }
+
+    [CmsCollection("PlainColl")]
+    private sealed class PlainColl
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+    }
 }
