@@ -1,0 +1,13 @@
+- generic [ref=e9]:
+  - banner [ref=e10]:
+    - text: StruoCMS
+    - button "Log out" [ref=e11]
+  - navigation [ref=e12]:
+    - generic [ref=e13]:
+      - button "Media" [ref=e15]
+      - button "Content" [ref=e22]
+      - button "System" [ref=e29]
+  - main [ref=e35]:
+    - generic [ref=e36]:
+      - heading "Dashboard" [level=2] [ref=e37]
+      - paragraph [ref=e38]: You are signed in. Collection management arrives in Phase 7b.

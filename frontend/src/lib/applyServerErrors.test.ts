@@ -42,6 +42,17 @@ describe('splitServerErrors', () => {
     expect(r.leftover).toEqual([])
   })
 
+  it('handles a field canonically named like an Object.prototype key', () => {
+    // Guards against `canonical in fieldErrors` consulting the prototype chain: a field named
+    // 'constructor' would otherwise be seen as already-present and silently dropped.
+    const r = splitServerErrors(
+      [{ field: 'constructor', message: 'reserved-name error' }],
+      new Set(['constructor']),
+    )
+    expect(r.fieldErrors).toEqual({ constructor: 'reserved-name error' })
+    expect(r.leftover).toEqual([])
+  })
+
   it('returns empty results for undefined details', () => {
     const r = splitServerErrors(undefined, known)
     expect(r.fieldErrors).toEqual({})

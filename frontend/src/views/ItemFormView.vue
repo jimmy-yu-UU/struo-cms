@@ -74,6 +74,10 @@ async function init(): Promise<void> {
   serverError.value = ''
   notFound.value = false
   errors.value = {}
+  // Clear stale 409-recovery state so a re-entrant init (route param change) never carries item A's
+  // cached server copy or conflict banner into item B.
+  conflict.value = false
+  latestFromServer = null
   await Promise.all([schema.load(), langStore.load()])
   if (!meta.value) { loading.value = false; return }
   if (isCreate.value) {
@@ -152,6 +156,9 @@ async function recoverFromConflict(): Promise<void> {
 function reloadLatest(): void {
   if (!latestFromServer) return
   setModel(latestFromServer) // full overwrite: discard the user's edits for the server copy
+  // setModel aliases (does not clone) the objects, so drop the cached copy: subsequent user edits
+  // would otherwise silently mutate this "server copy" if it were reused.
+  latestFromServer = null
   conflict.value = false
   errors.value = {}
   serverError.value = ''
