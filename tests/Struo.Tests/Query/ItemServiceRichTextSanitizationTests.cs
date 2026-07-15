@@ -6,6 +6,7 @@ using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
+using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -29,6 +30,7 @@ public class ItemServiceRichTextSanitizationTests : IDisposable
         db.CodeFirst.InitTables<Tag>();
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var types = new[] { typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File) };
@@ -45,9 +47,12 @@ public class ItemServiceRichTextSanitizationTests : IDisposable
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
         var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
+        var revisionUser = new TestCurrentUserAccessor(Guid.Empty);
+        var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
+        var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            new TestCurrentUserAccessor(Guid.Empty));
+            revisionUser, revisionStore, snapshotBuilder);
     }
 
     public void Dispose() => _file.Dispose();

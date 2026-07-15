@@ -5,6 +5,7 @@ using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Application.Revisions;
 using Struo.Application.Security;
 using Struo.Domain.Localization;
 using Struo.Domain.Metadata.Models;
@@ -131,6 +132,18 @@ public class DeleteRestrictWithGuidPkTests
             Task.FromResult(f);
     }
 
+    // meta.Revisions is always false for StubMeta's CollectionMetadata, so CaptureAsync/BuildAsync
+    // are never invoked here — this stub only needs to satisfy the constructor.
+    private sealed class StubRevisionStore : IRevisionStore
+    {
+        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Not expected to be called: target collection is not revisioned.");
+        public Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<RevisionInfo>>([]);
+        public Task<RevisionRecord?> GetAsync(string collection, string itemId, long revisionNumber, CancellationToken ct = default) =>
+            Task.FromResult<RevisionRecord?>(null);
+    }
+
     // ── test ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -156,7 +169,8 @@ public class DeleteRestrictWithGuidPkTests
             graph, new StubExpander(), new StubM2M(),
             new StubFilterResolver(), new StubLanguages(),
             new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            new TestCurrentUserAccessor(Guid.Empty));
+            new TestCurrentUserAccessor(Guid.Empty),
+            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()));
 
         // Act: delete a Guid-keyed row that is still referenced — must throw RelationConflictException
         // (conflict / 409), NOT a QueryException from a failed Convert.ChangeType (spurious 400).

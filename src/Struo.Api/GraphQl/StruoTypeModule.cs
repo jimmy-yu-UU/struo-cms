@@ -30,6 +30,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
         types.Add(TagItemInputType());
         types.Add(TranslationType());
         types.Add(DeletedFilterEnumType());
+        types.Add(RevisionResolvers.RevisionType());
         types.AddRange(SharedFilterTypes.Build());
 
         var collections = metadata.GetCollections();
@@ -88,6 +89,11 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
         {
             config.Fields.Add(CollectionResolvers.SingleField(name, metadata));
             config.Fields.Add(CollectionResolvers.ListField(name, metadata));
+            if (metadata.GetCollection(name)?.Revisions == true)
+            {
+                config.Fields.Add(RevisionResolvers.RevisionsField(name));
+                config.Fields.Add(RevisionResolvers.RevisionField(name));
+            }
         }
         return ObjectTypeExtension.CreateUnsafe(config);
     }
@@ -101,6 +107,8 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
             config.Fields.Add(MutationResolvers.UpdateField(name, metadata));
             config.Fields.Add(MutationResolvers.DeleteField(name));
             config.Fields.Add(MutationResolvers.RestoreField(name));
+            if (metadata.GetCollection(name)?.Revisions == true)
+                config.Fields.Add(MutationResolvers.RevertField(name));
         }
         return ObjectTypeExtension.CreateUnsafe(config);
     }

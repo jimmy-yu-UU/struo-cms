@@ -4,6 +4,7 @@ using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
+using Struo.Application.Revisions;
 using Struo.Application.Security;
 using Struo.Domain.Auditing;
 using Struo.Domain.Localization;
@@ -28,7 +29,9 @@ public sealed class ItemService(
     ILanguageProvider languages,
     StruoQueryOptions options,
     IHtmlSanitizer sanitizer,
-    ICurrentUserAccessor currentUser)
+    ICurrentUserAccessor currentUser,
+    IRevisionStore revisions,
+    RevisionSnapshotBuilder snapshotBuilder)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -330,12 +333,20 @@ public sealed class ItemService(
             var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
             await SyncM2MAsync(collection, body, createdId, ct);
             await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+            if (meta.Revisions)
+            {
+                var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
+                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct);
+            }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
         return Project(created, meta, null);
     }
 
-    public async Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
+    public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
+        => UpdateCoreAsync(collection, id, body, "update", ct);
+
+    private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(string collection, string id, JsonElement body, string operation, CancellationToken ct)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
@@ -399,6 +410,11 @@ public sealed class ItemService(
             var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
             await SyncM2MAsync(collection, body, updatedId, ct);
             await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
+            if (meta.Revisions)
+            {
+                var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
+                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot, ct);
+            }
         }, ct);
         if (updated is null) return null;
         InvalidateLanguagesIfNeeded(collection);
@@ -676,6 +692,59 @@ public sealed class ItemService(
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : Project(restored, meta, null);
+    }
+
+    /// <summary>
+    /// Reverts an item to a past revision by re-applying that revision's snapshot as a normal update
+    /// (append-only: a new "revert" revision is recorded; forward history is never deleted). Returns the
+    /// re-read item, or null for an unknown collection-revision/item (→ 404). Requires write permission.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, object?>?> RevertAsync(
+        string collection, string id, long revisionNumber, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
+        RequireSuperAdminForAdminOnly(meta);
+        if (!meta.Revisions) return null;                                   // collection keeps no revisions -> 404
+
+        var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
+        if (rec is null) return null;                                       // unknown revision/item -> 404
+
+        // The snapshot IS a valid update body by construction; drop `version` so revert does not echo a
+        // stale optimistic-concurrency token (it would 409 against the current row). Keep the JsonDocument
+        // alive across the awaited update (the body's JsonElement must stay valid).
+        using var doc = JsonDocument.Parse(
+            StripKeys(JsonDocument.Parse(rec.Snapshot).RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
+        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
+    }
+
+    /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
+    /// non-revisioned collection.</summary>
+    public async Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>> ListRevisionsAsync(
+        string collection, string id, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!meta.Revisions) return [];
+        return await revisions.ListAsync(collection, id, ct);
+    }
+
+    /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
+    /// unknown revision or a non-revisioned collection (→ 404).
+    /// <para>
+    /// The returned snapshot is the FULL item state as captured (see <see cref="RevisionSnapshotBuilder"/>),
+    /// with no field-level RBAC or hidden-field filtering applied — this is required so a revert can
+    /// restore every field, not just the ones the caller may read. Access is therefore gated only by
+    /// collection-level <see cref="Struo.Application.Security.IPermissionService.CanRead"/>; a future
+    /// field-level-read-grant feature must revisit this so it does not leak fields via the snapshot.
+    /// </para></summary>
+    public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
+        string collection, string id, long revisionNumber, CancellationToken ct = default)
+    {
+        var meta = Meta(collection);
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!meta.Revisions) return null;
+        return await revisions.GetAsync(collection, id, revisionNumber, ct);
     }
 
     /// <summary>

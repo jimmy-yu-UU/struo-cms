@@ -9,6 +9,7 @@ using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
+using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -254,6 +255,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Tag>();
+        db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
@@ -273,9 +275,11 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
         var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
+        var revisionStore = new SqlSugarRevisionStore(db, currentUser);
+        var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         var service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser);
+            currentUser, revisionStore, snapshotBuilder);
 
         return new SoftDeleteRepositoryHarness(file, db, repo, service);
     }

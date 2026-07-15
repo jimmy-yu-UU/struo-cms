@@ -108,4 +108,36 @@ public sealed class ItemsController(ItemService items, IPermissionService permis
         var restored = await items.RestoreAsync(collection, id, ct);
         return restored is null ? NotFound() : Ok(restored);
     }
+
+    [HttpGet("{id}/revisions")]
+    public async Task<IActionResult> Revisions(string collection, string id, CancellationToken ct)
+    {
+        var list = await items.ListRevisionsAsync(collection, id, ct);
+        return Ok(list);   // EnvelopeResultFilter wraps -> { success, data: [ { revisionNumber, operation, createdAt, createdBy } ] }
+    }
+
+    [HttpGet("{id}/revisions/{revisionNumber:long}")]
+    public async Task<IActionResult> Revision(string collection, string id, long revisionNumber, CancellationToken ct)
+    {
+        var rec = await items.GetRevisionAsync(collection, id, revisionNumber, ct);
+        if (rec is null) return NotFound();
+        // Emit the stored snapshot as structured JSON (not a quoted string).
+        using var snapshotDoc = JsonDocument.Parse(rec.Snapshot);
+        return Ok(new
+        {
+            rec.RevisionNumber,
+            rec.Operation,
+            rec.CreatedAt,
+            rec.CreatedBy,
+            snapshot = snapshotDoc.RootElement.Clone()   // Clone so the value survives the using-scope dispose
+        });
+    }
+
+    [HttpPost("{id}/revisions/{revisionNumber:long}/revert")]
+    [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
+    public async Task<IActionResult> Revert(string collection, string id, long revisionNumber, CancellationToken ct)
+    {
+        var reverted = await items.RevertAsync(collection, id, revisionNumber, ct);
+        return reverted is null ? NotFound() : Ok(reverted);
+    }
 }

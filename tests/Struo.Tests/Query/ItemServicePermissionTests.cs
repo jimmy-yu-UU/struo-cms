@@ -8,6 +8,7 @@ using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
+using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -79,6 +80,7 @@ public class ItemServicePermissionTests : IDisposable
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
+        db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var scanTypes = new[]
@@ -102,9 +104,12 @@ public class ItemServicePermissionTests : IDisposable
         var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
         var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
+        var revisionUser = new TestCurrentUserAccessor(Guid.Empty);
+        var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
+        var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         return new ItemService(repo, provider, registry, permissions,
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            new TestCurrentUserAccessor(Guid.Empty));
+            revisionUser, revisionStore, snapshotBuilder);
     }
 
     public void Dispose() => _file.Dispose();

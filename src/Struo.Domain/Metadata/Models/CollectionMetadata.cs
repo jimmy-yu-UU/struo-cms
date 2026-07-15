@@ -21,6 +21,12 @@ public sealed record CollectionMetadata
     /// restore/purge surface applies (Phase 9b). Derived by the scanner from the interface — no attribute.
     /// </summary>
     public bool SoftDelete { get; init; }
+
+    /// <summary>
+    /// When true, the collection is revisioned: create/update append a snapshot to the `revisions` table
+    /// and a revert surface applies (Phase 9c). Derived by the scanner from `[CmsCollection(Revisions=true)]`.
+    /// </summary>
+    public bool Revisions { get; init; }
     public required IReadOnlyList<FieldGroupMetadata> FieldGroups { get; init; }
     public required IReadOnlyList<FieldMetadata> Fields { get; init; }
     public IReadOnlyList<RelationMetadata> Relations { get; init; } = [];

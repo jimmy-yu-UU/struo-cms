@@ -7,7 +7,7 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Sample.Blog;
 
 [SugarTable("articles")]
-[CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status))]
+[CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status), Revisions = true)]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
 [CmsFieldGroup("SEO", Label = "SEO", Sort = 2)]
 public sealed class Article : AuditableEntity, ISoftDeletable
