@@ -366,4 +366,33 @@ public class MetadataScannerTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
     }
+
+    // CS-4/ARC-2: EntityDescriptor.Properties caches CLR-property -> PropertyInfo (built once from
+    // EntityType) so projection/snapshot hot paths resolve accessors via a dictionary lookup instead
+    // of per-row Type.GetProperty reflection.
+    [Fact]
+    public void Descriptor_exposes_Properties_keyed_by_clr_property_name()
+    {
+        var d = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)])["article"];
+
+        // Every public instance property of the entity is present, keyed by its exact CLR name,
+        // and each entry is the real PropertyInfo declared on that type.
+        d.Properties.Should().ContainKey("Status");
+        d.Properties["Status"].Should().BeSameAs(typeof(Article).GetProperty("Status"));
+        d.Properties["Id"].Should().BeSameAs(typeof(Article).GetProperty("Id"));
+    }
+
+    [Fact]
+    public void Descriptor_Properties_lookup_is_case_insensitive()
+    {
+        var d = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)])["article"];
+
+        // Case-insensitive keying: a camelCase or lower-cased spelling resolves to the same accessor
+        // as the exact CLR name (mirrors the IgnoreCase binding the hot paths relied on).
+        d.Properties.GetValueOrDefault("status").Should().BeSameAs(d.Properties["Status"]);
+        d.Properties.GetValueOrDefault("STATUS").Should().BeSameAs(d.Properties["Status"]);
+
+        // Missing property resolves to null (preserves the old `GetProperty(...)?.` null semantics).
+        d.Properties.GetValueOrDefault("noSuchProperty").Should().BeNull();
+    }
 }

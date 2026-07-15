@@ -1,5 +1,4 @@
 // src/Struo.Application/Query/RevisionSnapshotBuilder.cs
-using System.Reflection;
 using System.Text.Json;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
@@ -38,7 +37,7 @@ public sealed class RevisionSnapshotBuilder(
         var d = registry.Get(collection)!;
         var snap = new Dictionary<string, object?>();
 
-        var idValue = d.EntityType.GetProperty(d.IdProperty)?.GetValue(entity);
+        var idValue = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entity);
         snap["id"] = idValue;
         if (entity is Struo.Domain.Auditing.AuditableEntity versioned)
             snap["version"] = versioned.Version;
@@ -50,7 +49,7 @@ public sealed class RevisionSnapshotBuilder(
             if (field.IsSystem) continue;                 // audit fields are server-managed, not part of a revert body
             if (field.Translatable) continue;             // translatable own-fields live in `translations` below
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var value = d.EntityType.GetProperty(prop)?.GetValue(entity);
+            var value = d.Properties.GetValueOrDefault(prop)?.GetValue(entity);
             if (field.Interface == FieldInterface.Json && value is string rawJson)
             {
                 try { value = JsonSerializer.Deserialize<JsonElement>(rawJson); }
@@ -64,9 +63,8 @@ public sealed class RevisionSnapshotBuilder(
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
-            var pi = d.EntityType.GetProperty(rel.ForeignKey,
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-            snap[rel.ForeignKey] = pi?.GetValue(entity);
+            // Properties is OrdinalIgnoreCase-keyed, matching the old IgnoreCase GetProperty binding.
+            snap[rel.ForeignKey] = d.Properties.GetValueOrDefault(rel.ForeignKey)?.GetValue(entity);
         }
 
         // (3) M2M relations as ordered id arrays under the relation name (e.g. "tags": ["<id>", ...]).
@@ -91,8 +89,7 @@ public sealed class RevisionSnapshotBuilder(
                 tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, [idValue], null, ct);
             var camelToClr = tm.Fields.ToDictionary(
                 f => f,
-                f => tm.TranslationEntityType.GetProperty(f,
-                        BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)?.Name ?? f,
+                f => PropertyAccessorCache.Resolve(tm.TranslationEntityType, f)?.Name ?? f,
                 StringComparer.OrdinalIgnoreCase);
 
             var byLocale = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -110,6 +107,5 @@ public sealed class RevisionSnapshotBuilder(
     }
 
     private static object? ReadProp(object o, string name) =>
-        o.GetType().GetProperty(name,
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)?.GetValue(o);
+        PropertyAccessorCache.Read(o, name);
 }
