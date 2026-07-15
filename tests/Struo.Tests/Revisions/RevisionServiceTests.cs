@@ -325,23 +325,29 @@ public sealed class RevisionServiceTests
 
     /// <summary>SEC-2 counter-proof: <c>RevertAsync</c> must NOT go through the redacted read — it reads
     /// the revision store directly (<c>ItemService.cs:710</c>), so a hidden field's value is still
-    /// restored on revert even though the externally-returned snapshot omits it.</summary>
+    /// restored on revert even though the externally-returned snapshot omits it. Rev 2 explicitly
+    /// CHANGES the hidden field to a different value first: with the write path's partial-merge
+    /// semantics, the live row can only get "secret-token" back if the revert body actually carried
+    /// <c>internalNote</c> — a redacted snapshot (key stripped) would leave "changed-token" in place.</summary>
     [Fact]
     public async Task Revert_restores_hidden_field_value_despite_external_redaction()
     {
         using var h = RevisionServiceHarness.Create();
         var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalNote("draft", "secret-token")); // rev 1
         var id = created["id"]!.ToString()!;
-        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // rev 2, clears nothing but changes status
+        // rev 2: overwrite the hidden field so rev 1's value survives ONLY via the revert body itself.
+        await h.Service.UpdateAsync("article", id,
+            h.ArticleBodyWithInternalNote("published", "changed-token"), default);
 
         // Confirm the externally-visible view (GetRevisionAsync) is redacted, as above.
         var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
         Assert.DoesNotContain("secret-token", rec!.Snapshot, StringComparison.Ordinal);
 
-        // Now revert to rev 1 and prove the hidden field's actual value came back on the live row.
+        // Now revert to rev 1 and prove the hidden field's ORIGINAL value came back on the live row.
         // Read the RAW entity via the repository (bypassing ItemService.Project, which itself skips
-        // Hidden fields on every read) — this can only be non-null if RevertAsync used the unredacted
-        // snapshot from the revision store rather than flowing through GetRevisionAsync's redaction.
+        // Hidden fields on every read). Because rev 2 set InternalNote to "changed-token", this assert
+        // can only pass if RevertAsync applied the unredacted snapshot from the revision store — a
+        // redacted snapshot has no internalNote key, so partial-merge would keep "changed-token".
         var reverted = await h.Service.RevertAsync("article", id, 1, default);
         Assert.NotNull(reverted);
         var rawEntity = (Struo.Sample.Blog.Article)(await h.Repository.GetByIdAsync("article", id, DeletedFilter.Exclude, default))!;
