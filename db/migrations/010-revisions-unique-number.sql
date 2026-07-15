@@ -50,6 +50,15 @@
 --   * Production / live PG — InitTables never runs; this migration is the sole path and is safe to
 --                           apply directly (it dedupes first, then swaps the index).
 -- See db/migrations/README.md for the same note.
+--
+-- ACCEPTED REDUNDANT DEV INDEX (decision 2026-07-15 live gate) — on Development DBs, InitTables ALSO
+-- creates its own unique index from the entity's UniqueGroupNameList, which SqlSugar names
+-- `index_revisions_collectionname_itemid_revisionnumber_unique`, over the SAME three columns as
+-- `ux_revisions_item_no` below. Dev DBs therefore carry BOTH indexes (redundant but harmless;
+-- write-amplification negligible at dev volumes). Production never runs InitTables, so it has ONLY
+-- `ux_revisions_item_no`. This redundancy is DELIBERATE — do NOT drop either: dropping the SqlSugar
+-- one just gets recreated on the next dev restart; dropping `ux_revisions_item_no` would leave
+-- production unprotected if this migration were ever skipped.
 -- ============================================================================================
 --
 -- IDEMPOTENT (safe to re-run): the DELETE is a no-op once no duplicates remain; DROP INDEX IF EXISTS /

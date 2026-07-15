@@ -17,8 +17,27 @@ NNN-short-kebab-description.sql
 - **`short-kebab-description`** — one logical change per file.
 - The **next migration** is simply the highest existing number **+ 1**. As of this file the series ends
   at `010`, so the next script is `011-…`.
-- One numbering scheme only. (Two legacy `0001__`/`0002__` files were folded into this series under
-  DB-6; their headers note the original filename.)
+- One numbering scheme only. (Two legacy `0001__`/`0002__` files plus a separate legacy `001-`…`007-`
+  series were folded into this single series under DB-6; each renamed file's header notes its original
+  filename.)
+
+### Renumber mapping (DB-6, audit Batch 2, 2026-07-15)
+
+The unified `001`–`010` series was assembled from two pre-existing schemes. `docs/ROADMAP.md` phase
+entries still quote the **old** names as a historical record; this is the authoritative old → new map:
+
+| Old filename                                     | New filename                                  |
+|--------------------------------------------------|-----------------------------------------------|
+| `0001__widen_content_bearing_text_columns.sql`   | `001-widen-content-bearing-text-columns.sql`  |
+| `0002__retroactive_add_version_columns.sql`       | `002-retroactive-add-version-columns.sql`     |
+| `001-article-multivalue-columns.sql`             | `003-article-multivalue-columns.sql`          |
+| `002-article-structured-columns.sql`             | `004-article-structured-columns.sql`          |
+| `003-article-files-column.sql`                   | `005-article-files-column.sql`                |
+| `004-article-repeater-column.sql`                | `006-article-repeater-column.sql`             |
+| `005-soft-delete-columns.sql`                    | `007-soft-delete-columns.sql`                 |
+| `006-revisions-table.sql`                        | `008-revisions-table.sql`                     |
+| `007-hot-path-indexes.sql`                       | `009-hot-path-indexes.sql`                    |
+| _(new in Batch 2 — no predecessor)_              | `010-revisions-unique-number.sql`             |
 
 Each file starts with a header comment: date, author, ticket/PR, and a one-line intent. Scripts must be
 **idempotent** (`IF NOT EXISTS`, guarded `ALTER`, `DO $$ … $$` existence checks) so a re-run is safe.
@@ -48,6 +67,18 @@ dev DB). Handling:
 - **Existing dev DB *with* duplicate revision rows** — apply `010` manually (`psql -f`) to dedupe
   **before** restarting the app, or drop the dev `revisions` table (dev data is disposable).
 - **Production / live PG** — `InitTables` never runs; `010` is the sole path and dedupes first, safely.
+
+#### Accepted redundant dev index (decision 2026-07-15 live gate)
+
+On **Development** databases `InitTables` also creates its *own* unique index from the entity's
+`UniqueGroupNameList` — SqlSugar names it `index_revisions_collectionname_itemid_revisionnumber_unique`
+— on the **same** three columns that `010` covers with `ux_revisions_item_no`. So a dev DB deliberately
+carries **both** indexes (redundant but harmless; write-amplification is negligible at dev volumes).
+**Production never runs `InitTables`, so it has only `ux_revisions_item_no`.** This redundancy is
+**accepted deliberately — do not "clean up" either index**:
+
+- dropping the SqlSugar-created one just gets it recreated on the next dev restart, and
+- dropping `ux_revisions_item_no` would leave **production unprotected** if `010` were ever skipped.
 
 ## Applying — the runner
 
