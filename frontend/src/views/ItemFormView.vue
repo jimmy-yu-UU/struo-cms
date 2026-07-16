@@ -111,11 +111,14 @@ async function onSubmit(): Promise<void> {
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
-    if (e instanceof ApiError && e.status === 409 && e.code === 'CONFLICT') {
-      // Optimistic-lock clash (D2): someone else changed the item since we loaded it. Recover by
-      // refreshing the concurrency token WITHOUT touching the user's in-progress edits, then let
-      // them either save again (overwrite) or reload the server copy. CONFLICT carries no details,
-      // so it never overlaps the FE-3 details-mapping branch below.
+    if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
+      // Optimistic-lock clash (D2 / API-1): only this specific code means "someone else changed the
+      // item since we loaded it". Recover by refreshing the concurrency token WITHOUT touching the
+      // user's in-progress edits, then let them either save again (overwrite) or reload the server
+      // copy. Other 409s (delete-restrict, duplicate email) keep the generic CONFLICT code and must
+      // NOT arm this recovery banner — they fall through to the serverError banner below. No
+      // fallback to 'CONFLICT' here is deliberate. VERSION_CONFLICT carries no details, so it never
+      // overlaps the FE-3 details-mapping branch below.
       await recoverFromConflict()
     } else if (e instanceof ApiError && e.details?.length) {
       // Server-side (ASP.NET model-binding) validation: map details back to

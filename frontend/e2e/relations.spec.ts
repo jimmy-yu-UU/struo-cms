@@ -94,8 +94,13 @@ async function pickFirstFromPicker(
   await page.keyboard.press('Escape')
   let label = ''
   await expect(async () => {
+    // Reopen only when THIS picker's overlay is absent, not when its first option is merely
+    // transiently invisible. Keying the reopen on the overlay (not an option) avoids clicking the
+    // trigger while the overlay is already open — which would toggle it shut mid-load and churn the
+    // retry. Same open -> read -> click sequence; only the reopen predicate is tightened.
+    const overlayEl = page.locator(overlay)
+    if (!(await overlayEl.isVisible().catch(() => false))) await trigger.click()
     const option = page.locator(`${overlay} [role="option"]`).first()
-    if (!(await option.isVisible().catch(() => false))) await trigger.click()
     await expect(option).toBeVisible({ timeout: 1000 })
     label = ((await option.textContent()) ?? '').trim()
     await option.click({ timeout: 2000 })
@@ -199,6 +204,10 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
   await page.getByPlaceholder('Search').fill(title)
+  // Count-settle (trash.spec.ts idiom): wait for the debounced server-side search to settle the tbody
+  // to its single "No records." empty row before asserting the deleted title is gone — otherwise the
+  // assertion could pass against the still-transitioning unfiltered list.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
 

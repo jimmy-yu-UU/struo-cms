@@ -64,6 +64,10 @@ async function openByTitle(page: Page, title: string): Promise<void> {
   await expect(page.getByText(title, { exact: true })).toBeVisible()
   await page.getByText(title, { exact: true }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
+  // Wait until init()'s async GET has populated the form before any field interaction — the URL
+  // asserting only proves the route changed, not that the item finished loading. Title showing its
+  // value means the load resolved (mirrors relations.spec.ts openArticleByTitle).
+  await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
 }
 
 test('create, edit, then delete an article', async ({ page }) => {
@@ -106,5 +110,10 @@ test('create, edit, then delete an article', async ({ page }) => {
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
   await page.getByPlaceholder('Search').fill(title)
+  // Count-settle (trash.spec.ts idiom): the debounced server-side search transitions the tbody from
+  // the unfiltered page to the filtered result. The deleted, uniquely-stamped title matches nothing,
+  // so wait for the table to settle to its single "No records." empty row before asserting the title
+  // is gone — otherwise the assertion could pass against the still-transitioning unfiltered list.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })

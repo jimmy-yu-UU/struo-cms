@@ -209,14 +209,14 @@ describe('ItemFormView', () => {
     expect(upd).toHaveBeenCalledWith('article', '5', expect.objectContaining({ version: 3 }))
   })
 
-  it('recovers from 409 CONFLICT: refreshes version, flags conflict, preserves edits, then re-saves', async () => {
+  it('recovers from 409 VERSION_CONFLICT: refreshes version, flags conflict, preserves edits, then re-saves', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     // Default (steady-state) load returns version 1; init runs via onMounted AND the explicit call.
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     const upd = vi.spyOn(itemsApi, 'update')
-      .mockRejectedValueOnce(new ApiError(409, 'The item was modified by someone else.', 'CONFLICT'))
+      .mockRejectedValueOnce(new ApiError(409, 'The item was modified by someone else.', 'VERSION_CONFLICT'))
       .mockResolvedValueOnce({ id: '5' })
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
@@ -233,12 +233,33 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
   })
 
+  it('generic 409 CONFLICT (e.g. duplicate email) shows the banner and does NOT trigger conflict recovery (API-1)', async () => {
+    // API-1: only optimistic-lock clashes carry code VERSION_CONFLICT. Other 409s (delete-restrict,
+    // duplicate email) keep the generic CONFLICT code and must NOT arm the "changed by someone else"
+    // recovery banner — they fall through to the plain serverError banner with no version refetch.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update')
+      .mockRejectedValueOnce(new ApiError(409, 'Email is already in use.', 'CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init() // init runs via onMounted AND this explicit call, so get is already called
+    const getCallsAfterLoad = get.mock.calls.length
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    await (w.vm as any).onSubmit()
+    // No conflict recovery: banner not armed, edits not touched, and NO recovery refetch (get unchanged).
+    expect((w.vm as any).conflict).toBe(false)
+    expect((w.vm as any).serverError).toBe('Email is already in use.')
+    expect(get.mock.calls.length).toBe(getCallsAfterLoad)
+  })
+
   it('Reload latest overwrites the model with the server copy and clears conflict', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
-    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -259,7 +280,7 @@ describe('ItemFormView', () => {
     setupStores()
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
-    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -285,7 +306,7 @@ describe('ItemFormView', () => {
     setupStores()
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
-    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -380,6 +401,41 @@ describe('ItemFormView', () => {
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // now dirty
     await (w.vm as any).onSubmit() // success -> re-baseline before navigate
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('re-baselines after Reload latest so leaving does not prompt', async () => {
+    // reloadLatest() overwrites the model with the server copy via setModel(), which re-snaps the
+    // baseline. The form is then clean, so the leave guard must resolve true without confirming.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit' // dirty
+    get.mockResolvedValueOnce({ id: '5', status: 'server-copy', translations: {}, version: 9 })
+    await (w.vm as any).onSubmit() // 409 -> conflict recovery, still dirty
+    ;(w.vm as any).reloadLatest() // full overwrite -> re-baseline -> clean
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('re-baselines after delete-accept so the subsequent navigation does not prompt the guard', async () => {
+    // onDelete's accept removes the item then captureBaseline()s before navigating: nothing is left
+    // to lose, so the leave guard fired by that navigation must resolve true without confirming.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit' // dirty before delete
+    ;(w.vm as any).onDelete()
+    await confirmRequire.mock.calls[0][0].accept() // delete confirm -> remove + re-baseline + push
+    confirmRequire.mockClear() // ignore the delete confirm; assert only the leave guard below
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
   })
