@@ -65,6 +65,27 @@ describe('buildItemPayload file/image fields', () => {
   })
 })
 
+describe('buildItemPayload date/time/dateTime fields', () => {
+  const dtMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    field('id', { isSystem: true }),
+    field('publishedAt', { interface: 'dateTime' }),
+  ]}
+  const langs: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
+
+  it('serializes an empty dateTime value as null (not "") on update, to avoid a backend DateTime? parse 400', () => {
+    const model: FormModel = { shared: { publishedAt: '' }, translations: {}, relations: {} }
+    const p = buildItemPayload(dtMeta, model, langs, 'update')
+    expect('publishedAt' in p).toBe(true)
+    expect(p.publishedAt).toBeNull()
+  })
+
+  it('round-trips a set dateTime value unchanged on update', () => {
+    const model: FormModel = { shared: { publishedAt: '2026-01-02T03:04:05Z' }, translations: {}, relations: {} }
+    const p = buildItemPayload(dtMeta, model, langs, 'update')
+    expect(p.publishedAt).toBe('2026-01-02T03:04:05Z')
+  })
+})
+
 describe('buildItemPayload relations', () => {
   it('writes M2O FK (camelCased) and M2M id array; omits relatedList and untouched relations', () => {
     const model: FormModel = {
