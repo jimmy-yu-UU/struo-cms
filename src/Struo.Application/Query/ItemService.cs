@@ -327,7 +327,7 @@ public sealed class ItemService(
         {
             created = await repository.CreateAsync(collection, entity, ct);
             var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
-            await SyncM2MAsync(collection, body, createdId, ct);
+            await SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
             if (meta.Revisions)
             {
@@ -404,7 +404,9 @@ public sealed class ItemService(
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
             var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
-            await SyncM2MAsync(collection, body, updatedId, ct);
+            // DB-9: a revert re-applies a past snapshot, which may reference an M2M target trashed since
+            // capture — tolerate it (operation == "revert"); every other write path stays strict.
+            await SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
             if (meta.Revisions)
             {
@@ -591,7 +593,7 @@ public sealed class ItemService(
     /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to replace the junction rows.
     /// Absent keys are silently skipped (partial updates are supported).
     /// </summary>
-    private async Task SyncM2MAsync(string collection, JsonElement body, object parentId, CancellationToken ct)
+    private async Task SyncM2MAsync(string collection, JsonElement body, object parentId, bool includeDeleted, CancellationToken ct)
     {
         var descs = m2mSource.M2MDescriptors(collection);
         if (descs.Count == 0) return;
@@ -602,16 +604,27 @@ public sealed class ItemService(
             if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
             if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
 
+            // DB-9: de-duplicate the incoming ids up front — `tags:[t1,t1]` is semantically `tags:[t1]`
+            // (a junction is a set). Distinct() returns a NEW list (no in-place mutation) and the typed
+            // boxed values (long / string) compare correctly under the default equality comparer. Without
+            // this, a repeated id inflated targetIds.Count so the count-based existence check below
+            // spuriously failed ("do not exist"), and the junction sync would attempt duplicate rows.
             var targetIds = idsElem.EnumerateArray()
                 .Select(e => e.ValueKind == JsonValueKind.Number
                     ? (object)e.GetInt64()
                     : (object)(e.GetString() ?? string.Empty))
+                .Distinct()
                 .ToList();
 
-            // Validate all target ids exist.
+            // Validate all target ids exist. DB-9: a REVERT (includeDeleted) may legitimately reference a
+            // target that has since been trashed — the snapshot was captured while it was still live — so
+            // it validates against the soft-delete-bypassing query; a normal write keeps the strict
+            // filtered check (a trashed target is not a valid new assignment).
             if (targetIds.Count > 0)
             {
-                var found = await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
+                var found = includeDeleted
+                    ? await repository.QueryWhereInWithDeletedAsync(desc.TargetCollection, "id", targetIds, ct)
+                    : await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
                 if (found.Count != targetIds.Count)
                     throw new QueryException(
                         $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
