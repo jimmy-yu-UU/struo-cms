@@ -14,7 +14,18 @@ public static class OidcWiring
 {
     public static IServiceCollection AddStruoOidc(this IServiceCollection services, IConfiguration config)
     {
-        services.Configure<OidcOptions>(config.GetSection(OidcOptions.SectionName));
+        // ARC-5: fail fast at boot. When OIDC is disabled validation always passes; when enabled it
+        // requires Authority/ClientId/ClientSecret to be present (a half-configured external login
+        // would otherwise only fail at the first sign-in attempt).
+        services.AddOptions<OidcOptions>()
+            .BindConfiguration(OidcOptions.SectionName)
+            .Validate(
+                o => !o.Enabled ||
+                     (!string.IsNullOrWhiteSpace(o.Authority)
+                      && !string.IsNullOrWhiteSpace(o.ClientId)
+                      && !string.IsNullOrWhiteSpace(o.ClientSecret)),
+                "Oidc enabled requires Authority, ClientId, ClientSecret")
+            .ValidateOnStart();
 
         var opts = config.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
         if (!opts.Enabled || string.IsNullOrWhiteSpace(opts.Authority))

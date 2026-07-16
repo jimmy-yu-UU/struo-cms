@@ -16,7 +16,13 @@ public static class DataServiceCollectionExtensions
 {
     public static IServiceCollection AddStruoData(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<StruoQueryOptions>(configuration.GetSection(StruoQueryOptions.SectionName));
+        // ARC-5: fail fast on out-of-range limits ([Range(1, int.MaxValue)]) at boot via
+        // ValidateOnStart, enforced by the BCL DataAnnotations validator. The unwrapped singleton
+        // below (StruoQueryOptions, injected directly into repositories/resolvers) is preserved.
+        services.AddOptions<StruoQueryOptions>()
+            .BindConfiguration(StruoQueryOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
         services.AddScoped<IPermissionService, RbacPermissionService>();
         services.AddScoped<ICurrentPermissions, CurrentPermissions>();
