@@ -1,6 +1,6 @@
 <!-- frontend/src/views/CollectionListView.vue -->
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -17,6 +17,7 @@ import { selectListColumns } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
+import { debounce } from '../lib/debounce'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
@@ -68,7 +69,13 @@ async function loadItems(): Promise<void> {
   const token = listLoad.next()
   await schema.load() // dedup via store's `loaded` flag; retries on hard refresh/deep link where the
   // parent's schema.load() hasn't resolved yet when this view's onMounted(loadItems) fires
-  if (!meta.value || !canRead.value) return
+  if (!meta.value || !canRead.value) {
+    // A bail still bumped the token above, so if a prior in-flight load turned the
+    // spinner on, this call has orphaned it — its finally now sees a stale token and
+    // will skip loading=false. Clear it here when we are the current load.
+    if (listLoad.isCurrent(token)) loading.value = false
+    return
+  }
   loading.value = true
   error.value = ''
   try {
@@ -112,14 +119,14 @@ function onSort(e: { sortField?: string | ((item: unknown) => string) | null; so
   loadItems()
 }
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
+// Trailing-edge search debounce via the shared helper; cancelable on unmount / collection switch.
+const debouncedSearch = debounce(() => {
+  page.value = 0
+  loadItems()
+}, 300)
 function onSearchInput(value: string): void {
   search.value = value
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    page.value = 0
-    loadItems()
-  }, 300)
+  debouncedSearch()
 }
 
 function onRowClick(e: { data: Record<string, unknown> }): void {
@@ -168,6 +175,7 @@ async function onRestore(row: Record<string, unknown>): Promise<void> {
 }
 
 watch(name, () => {
+  debouncedSearch.cancel() // a pending search must not hit the collection we just switched away from
   page.value = 0
   sortField.value = undefined
   sortOrder.value = undefined
@@ -177,6 +185,7 @@ watch(name, () => {
 })
 
 onMounted(loadItems)
+onUnmounted(() => debouncedSearch.cancel())
 
 defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, canDelete,
   mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading, error, cellValue })
