@@ -645,6 +645,16 @@ public sealed class ItemService(
 
         if (meta.SoftDelete && !purge)
         {
+            // Idempotent trash (DB-8 review): a row that is ALREADY trashed is a no-op — do not
+            // re-stamp DeletedAt, bump Version, or append a duplicate "delete" revision. SoftDeleteAsync
+            // uses Updateable<T>, which SqlSugar does NOT subject to the soft-delete query filter, so
+            // without this guard a repeat DELETE keeps re-stamping and polluting history. Mirrors the
+            // symmetric guard in RestoreAsync. Caller-visible success is unchanged: an already-trashed
+            // row still reports success (true), an unknown id still reports false — no 404 change.
+            var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+            if (existing is null) return false;                            // unknown id -> unchanged (false)
+            if (existing is ISoftDeletable { DeletedAt: not null }) return true; // already trashed -> no-op success
+
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
             // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.

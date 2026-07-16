@@ -127,6 +127,49 @@ public sealed class TrashRevisionTests
         Assert.Equal("delete", revs[0].Operation);
     }
 
+    // ── (f) re-trashing an already-trashed row is a no-op: no re-stamp, no version bump, no dup revision ─
+
+    [Fact]
+    public async Task Soft_delete_already_trashed_article_is_a_noop()
+    {
+        using var h = TrashRevisionHarness.Create();
+        var articleId = await h.CreateArticleAsync(status: "published");
+        Assert.True(await h.Service.DeleteAsync("article", articleId, purge: false)); // first trash
+
+        var afterFirst = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var versionAfterFirst = afterFirst.Version;
+        var deleteRevsAfterFirst = (await h.RevisionStore.ListAsync("article", articleId))
+            .Count(r => r.Operation == "delete");
+        Assert.Equal(1, deleteRevsAfterFirst);
+
+        // Second DELETE on the already-trashed row still reports success (unchanged semantics)…
+        Assert.True(await h.Service.DeleteAsync("article", articleId, purge: false));
+
+        // …but must NOT re-stamp / bump Version / append another "delete" revision.
+        var afterSecond = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        Assert.Equal(versionAfterFirst, afterSecond.Version);
+        Assert.Equal(1, (await h.RevisionStore.ListAsync("article", articleId)).Count(r => r.Operation == "delete"));
+    }
+
+    // ── (g) restoring an already-live row is a true no-op: no version bump, no "restore" revision ──
+
+    [Fact]
+    public async Task Restore_already_live_article_is_a_noop()
+    {
+        using var h = TrashRevisionHarness.Create();
+        var articleId = await h.CreateArticleAsync(status: "published"); // never trashed
+
+        var before = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var versionBefore = before.Version;
+
+        var restored = await h.Service.RestoreAsync("article", articleId); // already live
+
+        Assert.NotNull(restored); // still returns the live projection
+        var after = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        Assert.Equal(versionBefore, after.Version);
+        Assert.DoesNotContain(await h.RevisionStore.ListAsync("article", articleId), r => r.Operation == "restore");
+    }
+
     // ── (d) a mid-transaction failure at the revision-capture step rolls EVERYTHING back ──────────
 
     [Fact]
