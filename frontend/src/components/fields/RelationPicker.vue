@@ -76,6 +76,22 @@ async function ensureSelectedLabels(): Promise<void> {
   }
 }
 
+// Select/MultiSelect render labels from their options list only, so a preselected
+// id that is not on the current options page would show as a raw id. Merge any
+// such selected-but-absent ids (labelled from labelById, back-filled by
+// ensureSelectedLabels) into the rendered options without mutating either source.
+const displayOptions = computed<Option[]>(() => {
+  const selected = props.multiple
+    ? ((props.modelValue as string[] | null) ?? []).map(String)
+    : props.modelValue != null ? [String(props.modelValue)] : []
+  const present = new Set(options.value.map((o) => o.id))
+  const missingIds = [...new Set(selected.filter((id) => !present.has(id)))]
+  const missing: Option[] = missingIds.map((id) => ({
+    id, label: labelById.value[id] ?? id, raw: {},
+  }))
+  return [...options.value, ...missing]
+})
+
 const treeNodes = computed<TreeNode[]>(() => {
   if (!props.tree) return []
   const parentKey = props.relation.foreignKey
@@ -108,7 +124,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => debouncedLoad.cancel())
 
-defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, loading, loadError, search })
+defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOptions, loading, loadError, search })
 </script>
 
 <template>
@@ -128,7 +144,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, loading, lo
     <MultiSelect
       v-else-if="multiple"
       :model-value="modelValue"
-      :options="options"
+      :options="displayOptions"
       option-label="label"
       option-value="id"
       filter
@@ -141,7 +157,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, loading, lo
     <Select
       v-else
       :model-value="modelValue"
-      :options="options"
+      :options="displayOptions"
       option-label="label"
       option-value="id"
       filter

@@ -16,6 +16,12 @@ describe('itemsApi.list', () => {
     expect(res).toEqual({ data: [{ id: '1' }], total: 7 })
   })
 
+  it('falls back to data.length when the envelope has no meta', async () => {
+    vi.mocked(apiClient.getRaw).mockResolvedValue({ data: [{ id: '1' }, { id: '2' }] })
+    const res = await itemsApi.list('article', { page: 0, rows: 25 })
+    expect(res).toEqual({ data: [{ id: '1' }, { id: '2' }], total: 2 })
+  })
+
   it('omits sort/search when not provided', async () => {
     vi.mocked(apiClient.getRaw).mockResolvedValue({ data: [], meta: { total: 0 } })
     await itemsApi.list('article', { page: 0, rows: 25 })

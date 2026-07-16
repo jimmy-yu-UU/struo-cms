@@ -83,15 +83,15 @@ export class ApiClient {
     if (res.status === 401) this.onUnauthorized?.()
 
     if (!res.ok) {
-      let body: ApiErrorBody | undefined
+      let errBody: ApiErrorBody | undefined
       try {
-        body = (await res.json())?.error as ApiErrorBody | undefined
-      } catch { /* non-JSON error body: leave body undefined */ }
+        errBody = (await res.json())?.error as ApiErrorBody | undefined
+      } catch { /* non-JSON error body: leave errBody undefined */ }
       throw new ApiError(
         res.status,
-        body?.message ?? `Request failed (${res.status})`,
-        body?.code,
-        body?.details,
+        errBody?.message ?? `Request failed (${res.status})`,
+        errBody?.code,
+        errBody?.details,
       )
     }
 

@@ -142,6 +142,22 @@ describe('ItemFormView', () => {
     expect((w.vm as any).serverError).toContain('Server rejected a hidden field.')
   })
 
+  it('joins multiple leftover (unknown-field) messages with "; " in the banner', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    vi.spyOn(itemsApi, 'create').mockRejectedValue(
+      new ApiError(400, 'One or more validation errors occurred.', 'VALIDATION', [
+        { field: 'ghost1', message: 'First hidden problem.' },
+        { field: 'ghost2', message: 'Second hidden problem.' },
+      ]),
+    )
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).serverError).toBe('First hidden problem.; Second hidden problem.')
+  })
+
   it('falls back to serverError banner when the error has no details', async () => {
     routeParams = { name: 'article' }; routeName = 'collection-create'
     setupStores()

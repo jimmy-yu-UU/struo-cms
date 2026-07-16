@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import RichTextInput from './RichTextInput.vue'
@@ -9,6 +9,30 @@ const stubs = { Dialog: true, Button: true, InputText: true, MediaGrid: true }
 describe('RichTextInput', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('rejects a javascript: URL from the link prompt (defense-in-depth)', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: { stubs } })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { chain: () => unknown } }
+    vi.spyOn(window, 'prompt').mockReturnValue('javascript:alert(1)')
+    const chainSpy = vi.spyOn(vm.editor, 'chain')
+    await w.get('[data-cmd="link"]').trigger('click')
+    // The guard returns before any editor command runs, so no chain is built.
+    expect(chainSpy).not.toHaveBeenCalled()
+  })
+
+  it('applies an https: URL from the link prompt', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: { stubs } })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { chain: () => unknown } }
+    vi.spyOn(window, 'prompt').mockReturnValue('https://example.com')
+    const chainSpy = vi.spyOn(vm.editor, 'chain')
+    await w.get('[data-cmd="link"]').trigger('click')
+    expect(chainSpy).toHaveBeenCalled()
   })
 
   it('renders initial HTML content', async () => {

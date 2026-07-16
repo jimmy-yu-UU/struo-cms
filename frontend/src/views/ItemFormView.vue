@@ -124,7 +124,7 @@ async function onSubmit(): Promise<void> {
       const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields)
       // Replace (not mutate) so ItemForm's watch(props.errors) flips to the default locale tab.
       errors.value = { ...fieldErrors }
-      const banner = leftover.join(' ')
+      const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
     } else {
       serverError.value = e instanceof Error ? e.message : 'Save failed.'
@@ -258,8 +258,8 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, 
   gap: 1rem;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  border: 1px solid #f0ad4e;
-  background: #fff8ec;
+  border: 1px solid var(--p-amber-400, #f0ad4e);
+  background: var(--p-amber-50, #fff8ec);
   border-radius: 6px;
 }
 .conflict-text {

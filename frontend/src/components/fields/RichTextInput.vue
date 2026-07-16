@@ -19,6 +19,7 @@ import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import { fileContentDisplayUrl, absolutizeImageSrc, relativizeImageSrc } from '../../lib/richTextImages'
+import { isAllowedLinkUrl } from '../../lib/linkUrl'
 
 defineOptions({ name: 'RichTextInput' })
 
@@ -113,6 +114,7 @@ function setLink(): void {
   const url = window.prompt('Link URL', prev ?? 'https://')
   if (url === null) return
   if (url === '') { editor.value.chain().focus().unsetLink().run(); return }
+  if (!isAllowedLinkUrl(url)) return // defense-in-depth: silently reject javascript:/data:/etc.
   editor.value.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
 }
 
