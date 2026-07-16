@@ -79,4 +79,14 @@ describe('AppShell', () => {
     await wrapper.vm.$nextTick()
     expect(sidebar.drawerOpen).toBe(false)
   })
+
+  it('closes the drawer on Escape', async () => {
+    const schema = useSchemaStore()
+    vi.spyOn(schema, 'load').mockResolvedValue()
+    const sidebar = useSidebarStore()
+    mountShell()
+    sidebar.openDrawer()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(sidebar.drawerOpen).toBe(false)
+  })
 })
