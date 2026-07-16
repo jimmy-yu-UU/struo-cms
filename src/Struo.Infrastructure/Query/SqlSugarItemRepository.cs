@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
@@ -114,6 +115,66 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
+    // ARC-4 tail (§17.6): per-dispatcher open-instance delegate caches, keyed by closed entity type.
+    // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
+    // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
+    // replaced by a direct delegate call. The *Def MethodInfo fields above seed CreateDelegate; each
+    // delegate's FIRST parameter is the receiver (open-instance form), and the remaining parameters +
+    // return type match the corresponding private generic helper's EXACT closed signature. All helpers
+    // are async (or return the Task directly), so exceptions surface on the awaited Task identically to
+    // the old Invoke form (no TargetInvocationException wrapping to preserve).
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>> GetByIdInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, object, CancellationToken, Task<object>>> CreateInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, object, CancellationToken, Task>> UpdateInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, string, object, CancellationToken, Task>> SetForeignKeyNullInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, object, CancellationToken, Task>> DeleteByPropertyInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInWithDeletedInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, object, DateTime, Guid?, CancellationToken, Task<bool>>> SoftDeleteInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>> RestoreInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>> QueryIdsInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>> SyncM2MInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadTranslationsInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationParentIdsInvokers = new();
+
+    private static readonly ConcurrentDictionary<Type,
+        Func<SqlSugarItemRepository, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncTranslationsInvokers = new();
+
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, string? queryLocale = null,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
@@ -199,8 +260,10 @@ public sealed class SqlSugarItemRepository(
         }
 
         var orderBy = orderByBuilder.BuildOrderBy(query.Sort, d, collection, queryLocale);
-        var method = RunQueryAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<QueryResult>)method.Invoke(this, [conditionals, orderBy, query.Limit, query.Offset, deleted, ct])!;
+        var invoke = RunQueryInvokers.GetOrAdd(d.EntityType, static t =>
+            RunQueryAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>>());
+        return await invoke(this, conditionals, orderBy, query.Limit, query.Offset, deleted, ct);
     }
 
     private async Task<QueryResult> RunQueryAsync<T>(
@@ -247,8 +310,10 @@ public sealed class SqlSugarItemRepository(
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var d = Descriptor(collection);
-        var method = GetByIdGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<object?>)method.Invoke(this, [ConvertId(id, d), deleted, ct])!;
+        var invoke = GetByIdInvokers.GetOrAdd(d.EntityType, static t =>
+            GetByIdGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>>());
+        return await invoke(this, ConvertId(id, d), deleted, ct);
     }
 
     private async Task<object?> GetByIdGenericAsync<T>(object id, DeletedFilter deleted, CancellationToken ct) where T : class, new()
@@ -306,8 +371,10 @@ public sealed class SqlSugarItemRepository(
         var pk = d.EntityType.GetProperty(d.IdProperty)!;
         if (pk.PropertyType == typeof(Guid) && pk.GetValue(entity) is Guid cur && cur == Guid.Empty)
             pk.SetValue(entity, Guid.CreateVersion7());
-        var method = CreateGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<object>)method.Invoke(this, [entity, ct])!;
+        var invoke = CreateInvokers.GetOrAdd(d.EntityType, static t =>
+            CreateGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task<object>>>());
+        return await invoke(this, entity, ct);
     }
 
     // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215); its only effect beyond
@@ -341,8 +408,10 @@ public sealed class SqlSugarItemRepository(
         var clone = CloneEntity(entity, d.EntityType);
         d.EntityType.GetProperty(d.IdProperty)!.SetValue(clone, ConvertId(id, d));
 
-        var method = UpdateGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        await (Task)method.Invoke(this, [clone, ct])!;
+        var invoke = UpdateInvokers.GetOrAdd(d.EntityType, static t =>
+            UpdateGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task>>());
+        await invoke(this, clone, ct);
         return await GetByIdAsync(collection, id, ct: ct);
     }
 
@@ -379,8 +448,10 @@ public sealed class SqlSugarItemRepository(
         var existing = await GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (existing is null) return false;
 
-        var method = DeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        await (Task)method.Invoke(this, [ConvertId(id, d), ct])!;
+        var invoke = DeleteInvokers.GetOrAdd(d.EntityType, static t =>
+            DeleteGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task>>());
+        await invoke(this, ConvertId(id, d), ct);
         return true;
     }
 
@@ -395,8 +466,10 @@ public sealed class SqlSugarItemRepository(
         var d = Descriptor(sourceCollection);
         var clrProperty = d.FieldToProperty.TryGetValue(foreignKeyProperty, out var p) ? p : foreignKeyProperty;
         var fkColumn = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
-        var method = SetForeignKeyNullGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        await (Task)method.Invoke(this, [clrProperty, fkColumn, typedId, ct])!;
+        var invoke = SetForeignKeyNullInvokers.GetOrAdd(d.EntityType, static t =>
+            SetForeignKeyNullGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, string, object, CancellationToken, Task>>());
+        await invoke(this, clrProperty, fkColumn, typedId, ct);
     }
 
     private async Task SetForeignKeyNullGenericAsync<T>(
@@ -435,8 +508,10 @@ public sealed class SqlSugarItemRepository(
         Type entityType, string property, object value, CancellationToken ct = default)
     {
         var column = db.EntityMaintenance.GetDbColumnName(property, entityType);
-        var method = DeleteByPropertyGenericAsyncDef.MakeGenericMethod(entityType);
-        await (Task)method.Invoke(this, [column, value, ct])!;
+        var invoke = DeleteByPropertyInvokers.GetOrAdd(entityType, static t =>
+            DeleteByPropertyGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, object, CancellationToken, Task>>());
+        await invoke(this, column, value, ct);
     }
 
     private async Task DeleteByPropertyGenericAsync<T>(string column, object value, CancellationToken ct)
@@ -462,8 +537,10 @@ public sealed class SqlSugarItemRepository(
         var d = Descriptor(collection);
         var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
         var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
-        var method = WhereInWithDeletedGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [column, values, ct])!;
+        var invoke = WhereInWithDeletedInvokers.GetOrAdd(d.EntityType, static t =>
+            WhereInWithDeletedGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, column, values, ct);
     }
 
     private async Task<IReadOnlyList<object>> WhereInWithDeletedGenericAsync<T>(
@@ -495,8 +572,10 @@ public sealed class SqlSugarItemRepository(
         var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
         var typedId = ConvertId(id, d);
 
-        var method = SoftDeleteGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, deletedAt, deletedBy, ct])!;
+        var invoke = SoftDeleteInvokers.GetOrAdd(d.EntityType, static t =>
+            SoftDeleteGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, object, DateTime, Guid?, CancellationToken, Task<bool>>>());
+        return await invoke(this, idColumn, typedId, deletedAt, deletedBy, ct);
     }
 
     private async Task<bool> SoftDeleteGenericAsync<T>(
@@ -557,8 +636,10 @@ public sealed class SqlSugarItemRepository(
         var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
         var typedId = ConvertId(id, d);
 
-        var method = RestoreGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<bool>)method.Invoke(this, [idColumn, typedId, ct])!;
+        var invoke = RestoreInvokers.GetOrAdd(d.EntityType, static t =>
+            RestoreGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>>());
+        return await invoke(this, idColumn, typedId, ct);
     }
 
     private async Task<bool> RestoreGenericAsync<T>(string idColumn, object id, CancellationToken ct)
@@ -595,8 +676,10 @@ public sealed class SqlSugarItemRepository(
         if (values.Count == 0) return [];
 
         var column = db.EntityMaintenance.GetDbColumnName(propertyName, entityType);
-        var method = WhereInGenericAsyncDef.MakeGenericMethod(entityType);
-        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [column, values, ct])!;
+        var invoke = WhereInInvokers.GetOrAdd(entityType, static t =>
+            WhereInGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, column, values, ct);
     }
 
     private async Task<IReadOnlyList<object>> WhereInGenericAsync<T>(
@@ -644,8 +727,10 @@ public sealed class SqlSugarItemRepository(
         if (extraFilter is not null)
             conditionals.AddRange(ConditionalModelTranslator.Translate(extraFilter, null, [], d, db));
 
-        var method = WhereInFilteredGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [conditionals, ct])!;
+        var invoke = WhereInFilteredInvokers.GetOrAdd(d.EntityType, static t =>
+            WhereInFilteredGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, conditionals, ct);
     }
 
     private async Task<IReadOnlyList<object>> WhereInFilteredGenericAsync<T>(
@@ -660,8 +745,10 @@ public sealed class SqlSugarItemRepository(
     {
         var d = Descriptor(collection);
         var conditionals = ConditionalModelTranslator.Translate(leafCondition, null, [], d, db);
-        var method = QueryIdsGenericAsyncDef.MakeGenericMethod(d.EntityType);
-        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [conditionals, d.IdProperty, ct])!;
+        var invoke = QueryIdsInvokers.GetOrAdd(d.EntityType, static t =>
+            QueryIdsGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, conditionals, d.IdProperty, ct);
     }
 
     private async Task<IReadOnlyList<object>> QueryIdsGenericAsync<T>(
@@ -682,8 +769,10 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default)
     {
         var parentColumn = db.EntityMaintenance.GetDbColumnName(parentFkProperty, junctionType);
-        var method = SyncM2MGenericAsyncDef.MakeGenericMethod(junctionType);
-        await (Task)method.Invoke(this, [parentColumn, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct])!;
+        var invoke = SyncM2MInvokers.GetOrAdd(junctionType, static t =>
+            SyncM2MGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>>());
+        await invoke(this, parentColumn, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct);
     }
 
     private async Task SyncM2MGenericAsync<T>(
@@ -748,9 +837,10 @@ public sealed class SqlSugarItemRepository(
 
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
         var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-        var method = LoadTranslationsGenericAsyncDef.MakeGenericMethod(translationType);
-        return await (Task<IReadOnlyList<object>>)method.Invoke(
-            this, [fkColumn, parentIds, localeColumn, locale, ct])!;
+        var invoke = LoadTranslationsInvokers.GetOrAdd(translationType, static t =>
+            LoadTranslationsGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, fkColumn, parentIds, localeColumn, locale, ct);
     }
 
     private async Task<IReadOnlyList<object>> LoadTranslationsGenericAsync<T>(
@@ -811,8 +901,10 @@ public sealed class SqlSugarItemRepository(
         var conditionals = new List<IConditionalModel> { localeConditional };
         conditionals.AddRange(fieldConditionals);
 
-        var method = QueryTranslationParentIdsGenericAsyncDef.MakeGenericMethod(translationType);
-        return await (Task<IReadOnlyList<object>>)method.Invoke(this, [fkColumn, fkProperty, localeColumn, locale, conditionals, ct])!;
+        var invoke = QueryTranslationParentIdsInvokers.GetOrAdd(translationType, static t =>
+            QueryTranslationParentIdsGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, fkColumn, fkProperty, localeColumn, locale, conditionals, ct);
     }
 
     private async Task<IReadOnlyList<object>> QueryTranslationParentIdsGenericAsync<T>(
@@ -865,9 +957,10 @@ public sealed class SqlSugarItemRepository(
     {
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
         var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-        var method = SyncTranslationsGenericAsyncDef.MakeGenericMethod(translationType);
-        await (Task)method.Invoke(
-            this, [fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct])!;
+        var invoke = SyncTranslationsInvokers.GetOrAdd(translationType, static t =>
+            SyncTranslationsGenericAsyncDef.MakeGenericMethod(t)
+                .CreateDelegate<Func<SqlSugarItemRepository, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>>());
+        await invoke(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
     }
 
     private async Task SyncTranslationsGenericAsync<T>(
