@@ -55,6 +55,17 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
   await page.getByRole('option', { name: optionLabel }).click()
 }
 
+// The dev DB is populated and the article list is paginated, so a freshly-created row is not
+// guaranteed to be on page 1. Isolate it by its searchable Title (server-side search) first — the
+// list's Search box resets on every remount, so re-search each time we return to the list. Mirrors
+// the create-then-open idiom in conflict.spec.ts / unsaved-guard.spec.ts / trash.spec.ts.
+async function openByTitle(page: Page, title: string): Promise<void> {
+  await page.getByPlaceholder('Search').fill(title)
+  await expect(page.getByText(title, { exact: true })).toBeVisible()
+  await page.getByText(title, { exact: true }).click()
+  await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
+}
+
 test('create, edit, then delete an article', async ({ page }) => {
   await login(page)
 
@@ -70,27 +81,30 @@ test('create, edit, then delete an article', async ({ page }) => {
   const title = `E2E Title ${STAMP}`
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
-  await translatableFieldByLabel(page, 'Body').locator('textarea').fill('E2E body content.')
+  // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
+  // editor whose editable surface is a `.ProseMirror` contenteditable, NOT a <textarea> (Phase
+  // 7f/7g). contenteditable can't be `.fill()`ed — click to focus, then type via the keyboard
+  // (same idiom as conflict.spec.ts / unsaved-guard.spec.ts).
+  const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
+  await body.click()
+  await page.keyboard.type('E2E body content.')
   await page.getByRole('button', { name: 'Save' }).click()
 
-  // Back on the list; the new row is present (Title is a scalar, non-system
-  // field so selectListColumns() includes it as a column).
+  // Back on the list; the new row is present (Title is a scalar, non-system field so
+  // selectListColumns() includes it as a column). Open it, edit the shared field, save.
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await expect(page.getByText(title)).toBeVisible()
-
-  // Open it, edit the shared field, save.
-  await page.getByText(title).click()
-  await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
+  await openByTitle(page, title)
   await chooseStatus(page, 'Published')
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
 
   // Delete it.
-  await page.getByText(title).click()
+  await openByTitle(page, title)
   await page.getByRole('button', { name: 'Delete' }).click()
   // PrimeVue's default locale (@primevue/core config) sets acceptLabel = "Yes";
   // ItemFormView.vue's confirm.require() doesn't override it.
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await expect(page.getByText(title)).toHaveCount(0)
+  await page.getByPlaceholder('Search').fill(title)
+  await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
