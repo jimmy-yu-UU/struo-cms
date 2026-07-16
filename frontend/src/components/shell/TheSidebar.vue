@@ -49,10 +49,10 @@ function go(to: { name: string; params?: Record<string, string> }): void {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ collapsed: sidebar.collapsed }" aria-label="主導覽">
+  <aside class="sidebar" :class="{ collapsed: sidebar.collapsed }" :aria-label="t('shell.mainNav')">
     <div v-if="schema.loadError" class="nav-error" role="alert">
       <span>{{ schema.loadError }}</span>
-      <button type="button" @click="schema.load()">{{ t('common.confirm') }}</button>
+      <button type="button" @click="schema.load()">{{ t('common.retry') }}</button>
     </div>
     <template v-else>
       <!-- System (pinned) -->

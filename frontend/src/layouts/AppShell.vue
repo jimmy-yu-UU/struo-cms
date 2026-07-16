@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import Toast from 'primevue/toast'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useSidebarStore } from '../stores/sidebarStore'
@@ -11,9 +12,19 @@ import AppBreadcrumb from '../components/shell/AppBreadcrumb.vue'
 const schema = useSchemaStore()
 const sidebar = useSidebarStore()
 const route = useRoute()
+const { t } = useI18n()
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && sidebar.drawerOpen) sidebar.closeDrawer()
+}
 
 onMounted(() => {
   schema.load()
+  window.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
 })
 
 watch(
@@ -30,7 +41,7 @@ watch(
       v-if="sidebar.drawerOpen"
       type="button"
       class="scrim"
-      aria-label="關閉導覽選單"
+      :aria-label="t('shell.closeMenu')"
       @click="sidebar.closeDrawer()"
     />
     <main class="content">
