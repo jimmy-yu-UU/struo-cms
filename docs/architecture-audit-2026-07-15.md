@@ -36,7 +36,36 @@
 > - e2e：`conflict.spec.ts` + `unsaved-guard.spec.ts` 新增（`3827d41`）。final-review MUST-FIX（init 重置 conflict/latestFromServer）於 `817568a`。
 > - ⚠️ **live gate 新發現（本批範圍外，待列管）：** (a) **空白 optional DateTime 序列化為 `""` → Article UI 更新 400** — ✅ **已修（Batch 3b hotfix `f97da84`）**：`date`/`time`/`dateTime` serialize 空值改送 `null`（API 實證 null→200；後端不動）；(b) RelatedList 同 route-record params-only 導航繞過 leave guard，且被未 key 的 `<router-view>`（AppShell）遮蔽 — 成對列入下輪稽核；(c) 既有 e2e `items.spec`/`relations.spec` 對 RichText Body 的 textarea 假設過期 — ✅ **已修（Batch 3b `d9fa0de`）**：TipTap-aware 重寫 + `conflict.spec` 換回 article（Published At 留空，同時 live 實證 (a) 修復達 409 而非 400）；e2e 全套 **12/12** 綠、前端 312 綠 + build 綠（Batch 3b merged）。
 >
-> **Batch 4–5（LOW / ARC-1 重構）：** 待辦，見修復計畫。
+> **Batch 4 — LOW（SEC-4～6 / CS-5/7/8 / DB-7/9/10 / ARC-4～6 / FE-7～12）＋ DB-8 ＋ Batch 3 carry-over（NAV-1 / API-1）：✅ 完成、真 PG + MinIO live-gate 通過（2026-07-16）、後端 773 綠 / 前端 339 綠 + build、e2e 13/13 live。**
+> live gate（2026-07-16）：SEC-4 cost 400 `HC0047`、SEC-5 draft-file RBAC 404、SEC-6 白名單 + MinIO content-type/disposition、DB-8 version+revisions（psql 驗證）、DB-9 dedup、DB-10 唯一 23505 + migration 011 冪等、ARC-5 startup fail-fast、API-1 雙協定、NAV-1 e2e。
+> - ✅ **SEC-4** GraphQL cost analyzer（alias/batch 放大緩解）— `3079cd1`
+> - ✅ **SEC-5** 未發布檔案讀取 gate `CanRead(file)`（零權限者不再可讀 draft 檔）— `3079cd1`
+> - ✅ **SEC-6** 上傳白名單合理預設 + S3/MinIO 物件 content-type + presigned download disposition — `3079cd1`
+> - ⏸️ **SEC-3 — DEFERRED（使用者決策 2026-07-16）**：`appsettings.Development.json` 為 gitignored／僅本機，使用者判定無洩露風險；本輪不做輪換／遷移。
+> - ✅ **CS-5** `RevertAsync` 內層 `JsonDocument` pool buffer 洩漏（`using` 內層 snapshot doc）— `d38cc0a`
+> - ✅ **CS-7** `LanguageProvider` 快取併發競態（`Lazy<>` 快取）— `d38cc0a`
+> - ✅ **CS-8** `FileService.DeleteAsync` 改用 nesting-safe helper（非 raw BeginTran）— `d38cc0a`
+> - ✅ **DB-7** 新欄位 `timestamptz` 慣例文件化 — `2b85cbb`
+> - ✅ **DB-8** trash/restore 繞過樂觀鎖與 revision 歷史 — `e02eed6` + `bf8b181`（決策：trash/restore 遞增 version 並記 delete/restore revision；冪等守衛：已 trash 時跳過 version 遞增/revision）
+> - ✅ **DB-9** M2M 重複 id 誤判 + revert 對已 trash M2M target 容錯 — `2b85cbb`
+> - ✅ **DB-10** translation `(fk,locale)` 唯一約束（migration 011 + CodeFirst）— `2b85cbb`
+> - ✅ **ARC-4** `SqlSugarItemRepository` ORDER-BY 子查詢抽 `OrderByExpressionBuilder` — `178fbc9`（僅抽取、零行為改變；`MakeGenericMethod` delegate-cache 延至 Batch 5）
+> - ✅ **ARC-5** Options 啟動 fail-fast（`ValidateDataAnnotations` + `ValidateOnStart`：Database/Query/Oidc/Files）— `e7ec131`
+> - ✅ **ARC-6** `ItemsController` 改依 `IItemUseCases` 接縫（不再直依具體 `ItemService`）— `f8b1a8b`
+> - ✅ **FE-7** 搜尋 debounce timer 於 unmount/切換 collection 清除 — `9a09774`
+> - ✅ **FE-8 / FE-9** MediaLibrary 刪除確認 + 權限 gate；刪除死 scaffold（`HelloWorld.vue`）— `37ad267`
+> - ✅ **FE-10 / FE-11 / FE-12** RichText link protocol guard；apiClient list meta guard + `errBody` rename；RelationPicker 選中 label 併入 options — `2862e05`
+> - ⚠️ **Batch 4 carry-over（Batch 3 live 發現）：** (a) **NAV-1** — RelatedList 同 route-record params-only 導航繞過 leave guard + 未 key 的 `<router-view>`（AppShell）—— ✅ **已修 `27cf662`**（keyed router-view + route-update dirty guard，同一 record 導航重載表單並尊重未存編輯；一併解 Esc-dismiss 後 leave guard resolve）；(b) **API-1** — VERSION_CONFLICT 從 CONFLICT 拆出（REST + GraphQL + 前端）—— ✅ **已修 `0807bee`（後端雙協定拆分）+ `112c5f0`（前端衝突恢復僅 key 於 `VERSION_CONFLICT` + e2e settle/churn 強化）**。
+>
+> **下輪稽核候選（Batch 4 新發現 / 既有，列 backlog）：**
+> - `FilesController.CanReadUnpublishedAsync` 重複 middleware 的權限解析（7-dep ctor）。
+> - Bearer principal 無可解析 `NameIdentifier` 時落到 public floor（今日不可觸發；補明確 null guard）。
+> - `Program.cs` top-level catch 吞掉 startup 例外 → process exit 0（既有；orchestrator 看到乾淨結束）。
+> - `AddStruoInfrastructure`/`AddStruoData`/`AddStruoFiles` 忽略其 `IConfiguration` 參數（`BindConfiguration` 走 DI）。
+> - Presigned S3 URL 以 https scheme 發出而 MinIO endpoint 為 http（既有環境怪癖，live gate 觀察到；簽章僅 host，故 scheme 置換仍可用）。
+> - `MigrationRunner` 為 config-driven（`Database:MigrationsPath`）而 dev config 未設 → migration 011 於 gate 手動套用；須決定 dev 是否應設該路徑。
+>
+> **Batch 5（ARC-1 god-class 重構 + ARC-4 delegate-cache 尾巴 + CS-4/ARC-2 寫入路徑 accessor 快取）：** 待辦，見修復計畫。
 
 ---
 
