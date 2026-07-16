@@ -3,7 +3,12 @@ namespace Struo.Application.Files;
 /// <summary>Pluggable byte storage for file assets. Exactly one implementation is registered.</summary>
 public interface IFileStorage
 {
-    Task SaveAsync(string key, Stream content, CancellationToken ct = default);
+    /// <summary>
+    /// Persists the bytes under <paramref name="key"/>. <paramref name="contentType"/> is the
+    /// already-validated MIME type; backends that can record it (e.g. S3 object metadata) should, so
+    /// the type is served correctly on download. Backends that stream through the API (local) ignore it.
+    /// </summary>
+    Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default);
     Task<Stream> OpenReadAsync(string key, CancellationToken ct = default);
     Task DeleteAsync(string key, CancellationToken ct = default);
 
