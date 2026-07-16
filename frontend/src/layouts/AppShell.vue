@@ -16,13 +16,8 @@ onMounted(() => {
   schema.load()
 })
 
-// Close the mobile drawer whenever the route changes. Re-invoke useRoute() inside the
-// getter (rather than reading the captured `route` binding) so the watcher re-tracks the
-// router's current route object on every check — needed because vue-router's real route
-// object mutates in place, but test doubles (and some route-object replacements) swap in a
-// whole new object instead of mutating the existing one.
 watch(
-  () => useRoute().path,
+  () => route.path,
   () => sidebar.closeDrawer(),
 )
 </script>
