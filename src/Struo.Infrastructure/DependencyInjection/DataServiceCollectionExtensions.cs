@@ -36,6 +36,9 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<Struo.Application.Revisions.IRevisionStore, Struo.Infrastructure.Revisions.SqlSugarRevisionStore>();
         services.AddScoped<Struo.Application.Query.RevisionSnapshotBuilder>();
         services.AddScoped<ItemService>();
+        // ARC-6: expose the use-case seam controllers depend on, forwarding to the SAME scoped
+        // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.
+        services.AddScoped<IItemUseCases>(sp => sp.GetRequiredService<ItemService>());
         return services;
     }
 }

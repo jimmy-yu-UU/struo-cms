@@ -11,7 +11,7 @@ namespace Struo.Api.Controllers;
 
 [ApiController]
 [Route("api/items/{collection}")]
-public sealed class ItemsController(ItemService items, IPermissionService permissions) : ControllerBase
+public sealed class ItemsController(IItemUseCases items, IPermissionService permissions) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(string collection, CancellationToken ct)
