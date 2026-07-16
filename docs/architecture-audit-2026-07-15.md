@@ -34,7 +34,7 @@
 > - ✅ **FE-4** 樂觀鎖 409 恢復路徑 — `684617a` + `817568a`（**含 fact-check 新發現前置 bug：`setModel` 丟棄 version → UI 從未 echo、樂觀鎖實際失效**，一併修復；409 CONFLICT → 重抓只更新 `model.version` 不覆蓋使用者編輯 + conflict banner + Reload latest（套用衝突當下快取副本，過期會再 409 自恢復）；live e2e：雙寫者 409 → reload/再存兩路徑 + version 單調）
 > - ✅ **FE-5** dirty-state 離開守衛 — `8a8e9d5` + `817568a`（`lib/formDirty.ts` snapshot 排除 version（409 恢復不擾動 dirty）+ `onBeforeRouteLeave` async confirm + `beforeunload`；live e2e：dirty reject/accept、untouched（含 TipTap）無誤報、存檔後不問、Esc dismiss 後守衛仍作用）
 > - e2e：`conflict.spec.ts` + `unsaved-guard.spec.ts` 新增（`3827d41`）。final-review MUST-FIX（init 重置 conflict/latestFromServer）於 `817568a`。
-> - ⚠️ **live gate 新發現（本批範圍外，待列管）：** (a) **空白 optional DateTime 序列化為 `""` → Article UI 更新 400**（`fieldTypes/registry.ts` serialize + 後端 `DateTime?` 反序列化拒收；FE-4 live 因此改以 category 驗證 — 功能為 collection-generic）；(b) RelatedList 同 route-record params-only 導航繞過 leave guard，且被未 key 的 `<router-view>`（AppShell）遮蔽 — 成對列入下輪稽核；(c) 既有 e2e `items.spec`/`relations.spec` 對 RichText Body 的 textarea 假設過期（紅,非本批回歸）。
+> - ⚠️ **live gate 新發現（本批範圍外，待列管）：** (a) **空白 optional DateTime 序列化為 `""` → Article UI 更新 400** — ✅ **已修（Batch 3b hotfix `f97da84`）**：`date`/`time`/`dateTime` serialize 空值改送 `null`（API 實證 null→200；後端不動）；(b) RelatedList 同 route-record params-only 導航繞過 leave guard，且被未 key 的 `<router-view>`（AppShell）遮蔽 — 成對列入下輪稽核；(c) 既有 e2e `items.spec`/`relations.spec` 對 RichText Body 的 textarea 假設過期 — ✅ **已修（Batch 3b `d9fa0de`）**：TipTap-aware 重寫 + `conflict.spec` 換回 article（Published At 留空，同時 live 實證 (a) 修復達 409 而非 400）；e2e 全套 **12/12** 綠、前端 312 綠 + build 綠（Batch 3b merged）。
 >
 > **Batch 4–5（LOW / ARC-1 重構）：** 待辦，見修復計畫。
 
