@@ -11,12 +11,16 @@ import { useLanguageStore } from '../stores/languageStore'
 const push = vi.fn()
 let routeParams: Record<string, string> = {}
 let routeName = 'collection-item'
-// Capture the guard registered via onBeforeRouteLeave so tests can invoke it directly.
+// Capture the guards registered via onBeforeRouteLeave / onBeforeRouteUpdate so tests can invoke
+// them directly.
+type RouteLoc = { params: Record<string, string | undefined> }
 let leaveGuard: (() => Promise<boolean> | boolean) | null = null
+let updateGuard: ((to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) | null = null
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: routeParams, name: routeName }),
   useRouter: () => ({ push }),
   onBeforeRouteLeave: (guard: () => Promise<boolean> | boolean) => { leaveGuard = guard },
+  onBeforeRouteUpdate: (guard: (to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) => { updateGuard = guard },
 }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
@@ -51,6 +55,7 @@ describe('ItemFormView', () => {
     routeParams = {}
     routeName = 'collection-item'
     leaveGuard = null
+    updateGuard = null
   })
 
   it('edit path loads the item and inflates the model', async () => {
@@ -376,6 +381,84 @@ describe('ItemFormView', () => {
     ;(w.vm as any).model.shared.status = 'edited' // now dirty
     await (w.vm as any).onSubmit() // success -> re-baseline before navigate
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  // ---- fold-in (c): Esc/X dismiss must settle the leave-guard promise ------
+
+  it('leave guard: dismiss via onHide (Esc/backdrop/X) resolves the promise false', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // dirty
+
+    const p = Promise.resolve(leaveGuard!())
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    const opts = confirmRequire.mock.calls[0][0]
+    expect(typeof opts.onHide).toBe('function')
+    // Dismissing fires neither accept nor reject; only onHide. The promise must still settle so the
+    // router is not left awaiting forever. Assert via a timeout race: onHide -> resolves(false).
+    opts.onHide()
+    const settled = await Promise.race([
+      p,
+      new Promise((resolve) => setTimeout(() => resolve('PENDING'), 50)),
+    ])
+    expect(settled).toBe(false)
+  })
+
+  // ---- NAV-1: same-record (params-only) navigation dirty guard -------------
+
+  it('registers a route-update guard synchronously on setup', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    mount(ItemFormView, { global: { stubs } })
+    expect(typeof updateGuard).toBe('function')
+  })
+
+  it('route-update guard: params (id) change while dirty prompts; reject resolves false', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // dirty
+
+    const to = { params: { name: 'article', id: '6' } }
+    const from = { params: { name: 'article', id: '5' } }
+    const p = Promise.resolve(updateGuard!(to, from))
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    expect(confirmRequire.mock.calls[0][0].header).toBe('Unsaved changes')
+    confirmRequire.mock.calls[0][0].reject()
+    await expect(p).resolves.toBe(false)
+  })
+
+  it('route-update guard: params change while clean resolves true without prompting', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init() // clean
+
+    const to = { params: { name: 'article', id: '6' } }
+    const from = { params: { name: 'article', id: '5' } }
+    await expect(Promise.resolve(updateGuard!(to, from))).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('route-update guard: same id/name (e.g. query-only change) resolves true even when dirty', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // dirty
+
+    const to = { params: { name: 'article', id: '5' } }
+    const from = { params: { name: 'article', id: '5' } }
+    await expect(Promise.resolve(updateGuard!(to, from))).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
