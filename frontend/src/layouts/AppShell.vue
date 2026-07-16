@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import CollectionNav from '../components/CollectionNav.vue'
@@ -9,6 +10,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
 
 onMounted(() => {
   schema.load()
@@ -24,7 +26,7 @@ async function onLogout() {
   <div class="shell">
     <header>
       <span class="brand">StruoCMS</span>
-      <button type="button" class="logout" @click="onLogout">Log out</button>
+      <button type="button" class="logout" @click="onLogout">{{ t('common.logout') }}</button>
     </header>
     <nav><CollectionNav /></nav>
     <!-- Key on route.path so params-only navigations between records of the same route (e.g. a
