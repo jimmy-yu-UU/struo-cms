@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { reactive } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import CollectionListView from './CollectionListView.vue'
@@ -9,8 +10,11 @@ import { itemsApi } from '../api/itemsApi'
 import { schemaApi } from '../api/schemaApi'
 
 const pushMock = vi.fn()
+// Reactive route so tests can drive collection switches (watch(name)). Read lazily
+// inside useRoute()/setup (test time), so declaration order vs. the hoisted mock is safe.
+const mockRoute = reactive({ params: { name: 'article' } })
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { name: 'article' } }),
+  useRoute: () => mockRoute,
   useRouter: () => ({ push: pushMock }),
 }))
 vi.mock('../api/itemsApi', () => ({
@@ -60,7 +64,11 @@ function seedLanguage() {
 }
 
 describe('CollectionListView', () => {
-  beforeEach(() => { setActivePinia(createPinia()); vi.clearAllMocks(); pushMock.mockClear(); confirmRequire.mockClear() })
+  beforeEach(() => {
+    setActivePinia(createPinia()); vi.clearAllMocks(); pushMock.mockClear(); confirmRequire.mockClear()
+    mockRoute.params.name = 'article'
+  })
+  afterEach(() => { vi.useRealTimers() })
 
   it('loads items on mount for a readable collection', async () => {
     seedSchema()
@@ -329,5 +337,105 @@ describe('CollectionListView', () => {
     await (w.vm as any).onRestore({ id: '1' })
     await flushPromises()
     expect((w.vm as any).error).toContain('Restore failed.')
+  })
+
+  // FE-7 + fold-ins: search debounce hygiene (unmount/switch cancel) + bail clears orphaned spinner.
+  // Fake only setTimeout/clearTimeout so flushPromises (setImmediate-based) still resolves promises.
+  it('coalesces rapid search input into a single load after 300ms (debounce merge)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mount(CollectionListView)
+    await flushPromises() // initial onMounted load
+    vi.mocked(itemsApi.list).mockClear()
+    const vm = w.vm as any
+    vm.onSearchInput('a')
+    vm.onSearchInput('ab')
+    vm.onSearchInput('abc')
+    vi.advanceTimersByTime(299)
+    await flushPromises()
+    expect(itemsApi.list).not.toHaveBeenCalled() // still within the debounce window
+    vi.advanceTimersByTime(1)
+    await flushPromises()
+    expect(itemsApi.list).toHaveBeenCalledTimes(1)
+    expect(itemsApi.list).toHaveBeenCalledWith('article',
+      { page: 0, rows: 25, sort: undefined, search: 'abc', locale: 'en' })
+  })
+
+  it('unmount cancels a pending search: no list load fires after the component is gone', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mount(CollectionListView)
+    await flushPromises()
+    vi.mocked(itemsApi.list).mockClear()
+    ;(w.vm as any).onSearchInput('foo') // schedules a debounced load
+    w.unmount()
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    expect(itemsApi.list).not.toHaveBeenCalled()
+  })
+
+  it('switching collection cancels the pending search: only watch(name) reloads (not the typed search)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const article = {
+      name: 'article', label: 'Article', defaultDisplayField: 'status',
+      fields: [{ name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
+        sortable: true, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false,
+        options: [{ value: 'draft', label: 'Draft' }] }],
+      relations: [],
+    }
+    const schema = useSchemaStore()
+    schema.collections = [article, { ...article, name: 'other', label: 'Other' }]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mount(CollectionListView)
+    await flushPromises()
+    vi.mocked(itemsApi.list).mockClear()
+    ;(w.vm as any).onSearchInput('foo') // pending debounced search against 'article'
+    mockRoute.params.name = 'other' // switch collection -> watch(name) must cancel the pending search
+    await flushPromises()
+    // watch(name) fired exactly one reload for the new collection, with search reset.
+    expect(itemsApi.list).toHaveBeenCalledTimes(1)
+    expect(itemsApi.list).toHaveBeenCalledWith('other',
+      { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
+    // The cancelled search must never fire, even after its window elapses.
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    expect(itemsApi.list).toHaveBeenCalledTimes(1)
+    expect(itemsApi.list).not.toHaveBeenCalledWith('article',
+      { page: 0, rows: 25, sort: '-status', search: 'foo', locale: 'en' })
+  })
+
+  it('bail (no longer readable) clears the spinner it would otherwise orphan', async () => {
+    seedSchema(); seedLanguage()
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mount(CollectionListView)
+    await flushPromises()
+    const vm = w.vm as any
+    // Load A goes in-flight and turns the spinner on.
+    let resolveA!: (v: unknown) => void
+    const pA = new Promise((r) => { resolveA = r })
+    vi.mocked(itemsApi.list).mockReturnValueOnce(pA as ReturnType<typeof itemsApi.list>)
+    vm.loadItems() // A: token bumped, canRead true -> loading = true, awaits pA
+    await flushPromises()
+    expect(vm.loading).toBe(true)
+    // Load B bumps the token then bails (no longer readable). Without the fold-in fix,
+    // B returns without clearing loading, and A (now stale) skips its finally -> spinner stuck.
+    auth.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
+    vm.loadItems() // B: bails at the early return
+    await flushPromises()
+    expect(vm.loading).toBe(false)
+    // A resolving late must not resurrect the spinner or pollute rows.
+    resolveA({ data: [{ status: 'stale' }], total: 1 })
+    await flushPromises()
+    expect(vm.loading).toBe(false)
+    expect(vm.rows).toEqual([])
   })
 })
