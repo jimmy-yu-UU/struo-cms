@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
@@ -198,10 +198,23 @@ function guardLeave(): Promise<boolean> {
       message,
       accept: () => resolve(true),
       reject: () => resolve(false),
+      // fold-in (c): Esc / backdrop / X dismiss fires NEITHER accept nor reject, which would leave
+      // this promise (and the router navigation awaiting it) pending forever. onHide always fires on
+      // dismissal, so resolve(false) — treat a dismiss as "cancel navigation, stay here". If accept/
+      // reject already resolved, this second resolve is a harmless no-op (a Promise settles once).
+      onHide: () => resolve(false),
     })
   })
 }
 onBeforeRouteLeave(() => guardLeave())
+// NAV-1: a same-route-record, params-only navigation (RelatedList row click, create -> edit) does
+// NOT trigger onBeforeRouteLeave — the router treats it as an update of the reused component. Run the
+// same dirty guard here so unsaved edits are not silently discarded. Only guard an actual record
+// switch (id or collection changed); a query-only change keeps the user on the same item, so allow it.
+onBeforeRouteUpdate(async (to, from) => {
+  if (to.params.id !== from.params.id || to.params.name !== from.params.name) return guardLeave()
+  return true
+})
 
 // FE-5: warn before a full browser unload (tab close / reload / hard navigation) with unsaved
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom

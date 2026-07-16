@@ -5,7 +5,11 @@ import AppShell from './AppShell.vue'
 import { useAuthStore } from '../stores/authStore'
 
 const push = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }), RouterView: { template: '<div/>' } }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+  useRoute: () => ({ path: '/collections/article' }),
+  RouterView: { template: '<div/>' },
+}))
 
 describe('AppShell', () => {
   beforeEach(() => { setActivePinia(createPinia()); vi.clearAllMocks() })
