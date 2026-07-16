@@ -16,10 +16,17 @@ public static class DataServiceCollectionExtensions
 {
     public static IServiceCollection AddStruoData(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<StruoQueryOptions>(configuration.GetSection(StruoQueryOptions.SectionName));
+        // ARC-5: fail fast on out-of-range limits ([Range(1, int.MaxValue)]) at boot via
+        // ValidateOnStart, enforced by the BCL DataAnnotations validator. The unwrapped singleton
+        // below (StruoQueryOptions, injected directly into repositories/resolvers) is preserved.
+        services.AddOptions<StruoQueryOptions>()
+            .BindConfiguration(StruoQueryOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
         services.AddScoped<IPermissionService, RbacPermissionService>();
         services.AddScoped<ICurrentPermissions, CurrentPermissions>();
+        services.AddScoped<OrderByExpressionBuilder>();
         services.AddScoped<IItemRepository, SqlSugarItemRepository>();
         services.AddScoped<IRelationExpander, RelationExpander>();
         services.AddScoped<IRelationFilterResolver, RelationFilterResolver>();
@@ -29,6 +36,9 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<Struo.Application.Revisions.IRevisionStore, Struo.Infrastructure.Revisions.SqlSugarRevisionStore>();
         services.AddScoped<Struo.Application.Query.RevisionSnapshotBuilder>();
         services.AddScoped<ItemService>();
+        // ARC-6: expose the use-case seam controllers depend on, forwarding to the SAME scoped
+        // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.
+        services.AddScoped<IItemUseCases>(sp => sp.GetRequiredService<ItemService>());
         return services;
     }
 }

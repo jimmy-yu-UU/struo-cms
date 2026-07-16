@@ -15,7 +15,12 @@ namespace Struo.Infrastructure.Files;
 public sealed class FileTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+    // DB-10: composite UNIQUE (fileid, locale) — one translation row per parent per locale (deterministic
+    // overlay read). Same mechanism as Revision.cs; the non-unique [SugarIndex] above is KEPT
+    // (accepted-redundant dev index). Live-PostgreSQL DDL: db/migrations/011-translation-unique-locale.sql.
+    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
     public Guid FileId { get; set; }
+    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
     public string Locale { get; set; } = "";
 
     [SugarColumn(IsNullable = true)]

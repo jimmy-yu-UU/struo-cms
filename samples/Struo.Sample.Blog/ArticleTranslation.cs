@@ -11,7 +11,14 @@ namespace Struo.Sample.Blog;
 public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+    // DB-10: composite UNIQUE (articleid, locale) — a parent may have at most one translation row per
+    // locale, so an overlay read is deterministic. The two columns share one group name, so SqlSugar
+    // CodeFirst emits a single composite unique index (same mechanism as Revision.cs). The non-unique
+    // [SugarIndex] above is KEPT (accepted-redundant dev index; see db/migrations/README.md); the
+    // matching DDL for live PostgreSQL is db/migrations/011-translation-unique-locale.sql.
+    [SugarColumn(UniqueGroupNameList = ["ux_article_translations_fk_locale"])]
     public Guid ArticleId { get; set; }
+    [SugarColumn(UniqueGroupNameList = ["ux_article_translations_fk_locale"])]
     public string Locale { get; set; } = "";
     [CmsField(Label = "Title", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1, Group = "Content")]
     public string Title { get; set; } = "";

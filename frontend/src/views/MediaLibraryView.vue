@@ -1,19 +1,30 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import ConfirmDialog from 'primevue/confirmdialog'
+import { useConfirm } from 'primevue/useconfirm'
 import MediaGrid from '../components/media/MediaGrid.vue'
 import MediaUploadDropzone from '../components/media/MediaUploadDropzone.vue'
 import type { FileRow } from '../components/media/FileThumbnail.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
+import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/languageStore'
+import { deleteConfirm } from '../lib/deleteAction'
 
 const router = useRouter()
+const auth = useAuthStore()
+const confirm = useConfirm()
 const langStore = useLanguageStore()
 const files = ref<FileRow[]>([])
 const loading = ref(false)
 const error = ref('')
+
+// Media items are the 'file' collection; gate actions on its RBAC grants.
+// File delete is permanent (DELETE /files/{id}), so use the 'hard' confirm copy.
+const canWrite = computed(() => auth.canWrite('file'))
+const canDelete = computed(() => auth.canDelete('file'))
 
 async function load(): Promise<void> {
   loading.value = true
@@ -28,13 +39,18 @@ async function load(): Promise<void> {
   }
 }
 
-async function onDelete(id: string): Promise<void> {
-  try {
-    await filesApi.remove(id)
-    await load()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Delete failed.'
-  }
+function onDelete(id: string): void {
+  confirm.require({
+    ...deleteConfirm('hard'),
+    accept: async () => {
+      try {
+        await filesApi.remove(id)
+        await load()
+      } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Delete failed.'
+      }
+    },
+  })
 }
 
 function onEdit(id: string): void {
@@ -53,9 +69,10 @@ defineExpose({ load, onDelete, onEdit })
     <MediaGrid :files="files" />
     <div v-if="files.length" class="media-actions">
       <template v-for="f in files" :key="f.id">
-        <Button label="Edit" text size="small" @click="onEdit(f.id)" />
-        <Button label="Delete" text severity="danger" size="small" @click="onDelete(f.id)" />
+        <Button v-if="canWrite" label="Edit" text size="small" @click="onEdit(f.id)" />
+        <Button v-if="canDelete" label="Delete" text severity="danger" size="small" @click="onDelete(f.id)" />
       </template>
     </div>
+    <ConfirmDialog />
   </section>
 </template>

@@ -8,14 +8,17 @@ namespace Struo.Infrastructure.Persistence;
 /// throws with an actionable message if one is missing, rather than letting the app run with a silent
 /// gap.
 ///
-/// The one critical constraint today is the <c>revisions</c> composite UNIQUE index over
+/// The critical constraints today are (a) the <c>revisions</c> composite UNIQUE index over
 /// (collectionname, itemid, revisionnumber): the DB-4 (=CS-6) backstop that makes a lost-update race on
-/// per-item revision numbers fail closed. On live PostgreSQL it is created by
-/// <c>db/migrations/010-revisions-unique-number.sql</c> (name <c>ux_revisions_item_no</c>); on a
-/// CodeFirst dev/test database it is created by <c>InitTables</c> from <see cref="Revisions.Revision"/>'s
-/// <c>UniqueGroupNameList</c> (name <c>Index_revisions_…_Unique</c>). Because the NAME differs by backend
-/// and by creation path, the guard detects the index by uniqueness + column coverage, never by a fixed
-/// name.
+/// per-item revision numbers fail closed; and (b) the DB-10 UNIQUE (fk, locale) on each translation
+/// sidecar (<c>article_translations</c> / <c>file_translations</c>) that keeps per-locale overlay reads
+/// deterministic. On live PostgreSQL they are created by
+/// <c>db/migrations/010-revisions-unique-number.sql</c> and
+/// <c>db/migrations/011-translation-unique-locale.sql</c>; on a CodeFirst dev/test database they are
+/// created by <c>InitTables</c> from each entity's <c>UniqueGroupNameList</c>. Because the index NAME
+/// differs by backend and by creation path, the guard detects each index by uniqueness + column
+/// coverage, never by a fixed name. A translation table absent from the connected database is skipped
+/// rather than demanded.
 ///
 /// Deliberately NOT a general schema-diff engine (YAGNI): only correctness-critical constraints belong
 /// here. The hot-path performance indexes (009 / <c>[SugarIndex]</c>) are intentionally out of scope —
@@ -24,50 +27,82 @@ namespace Struo.Infrastructure.Persistence;
 /// </summary>
 public static class SchemaGuard
 {
-    private static readonly string[] RequiredRevisionsColumns = ["collectionname", "itemid", "revisionnumber"];
-
     public static async Task AssertCriticalConstraintsAsync(ISqlSugarClient db, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
-        var covered = db.CurrentConnectionConfig.DbType switch
-        {
-            DbType.PostgreSQL => await HasRevisionsUniqueAsync(db,
-                "SELECT indexdef FROM pg_indexes WHERE tablename = 'revisions'"),
-            // sqlite_master.sql holds the CREATE UNIQUE INDEX text for explicitly-created unique indexes
-            // (the CodeFirst composite). Auto-indexes (PK / column UNIQUE) have NULL sql and are excluded
-            // — correct, since the PK's unique index does not cover the three revision columns.
-            DbType.Sqlite => await HasRevisionsUniqueAsync(db,
-                "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='revisions' AND sql IS NOT NULL"),
-            // Other backends are experimental/unverified (CLAUDE.md §1); the guard cannot assert on them,
-            // so it stays out of the way rather than block startup on a backend it does not cover.
-            _ => true,
-        };
+        var dbType = db.CurrentConnectionConfig.DbType;
+        // Other backends are experimental/unverified (CLAUDE.md §1); the guard cannot assert on them, so
+        // it stays out of the way rather than block startup on a backend whose catalog it does not read.
+        if (dbType is not (DbType.PostgreSQL or DbType.Sqlite)) return;
 
-        if (!covered)
-        {
-            throw new InvalidOperationException(
-                "Critical schema constraint missing: the `revisions` table has no composite UNIQUE index " +
-                "over (collectionname, itemid, revisionnumber). This is the DB-4 backstop that makes a " +
-                "concurrent revision-number race fail closed. Apply " +
-                "db/migrations/010-revisions-unique-number.sql (live PostgreSQL), or recreate the dev " +
-                "schema so InitTables re-emits it from Revision's UniqueGroupNameList.");
-        }
+        // DB-4 backstop — the `revisions` composite UNIQUE (always present in the app schema; on a DB
+        // that somehow lacks the table the index query returns empty and this fails, which is correct).
+        await AssertUniqueCoverAsync(db, dbType, "revisions",
+            ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
+            "the `revisions` table has no composite UNIQUE index over " +
+            "(collectionname, itemid, revisionnumber). This is the DB-4 backstop that makes a concurrent " +
+            "revision-number race fail closed. Apply db/migrations/010-revisions-unique-number.sql (live " +
+            "PostgreSQL), or recreate the dev schema so InitTables re-emits it from Revision's " +
+            "UniqueGroupNameList.", ct);
+
+        // DB-10 backstop — each translation sidecar's UNIQUE (fk, locale). Skipped when the table is not
+        // present in this database (a host may not use a given sidecar), rather than demanding an index
+        // on a table that does not exist.
+        await AssertUniqueCoverAsync(db, dbType, "article_translations",
+            ["articleid", "locale"], requireTableExists: false,
+            "the `article_translations` table has no UNIQUE index over (articleid, locale). This is the " +
+            "DB-10 backstop that keeps per-locale overlay reads deterministic. Apply " +
+            "db/migrations/011-translation-unique-locale.sql (live PostgreSQL), or recreate the dev " +
+            "schema so InitTables re-emits it from ArticleTranslation's UniqueGroupNameList.", ct);
+        await AssertUniqueCoverAsync(db, dbType, "file_translations",
+            ["fileid", "locale"], requireTableExists: false,
+            "the `file_translations` table has no UNIQUE index over (fileid, locale). This is the DB-10 " +
+            "backstop that keeps per-locale overlay reads deterministic. Apply " +
+            "db/migrations/011-translation-unique-locale.sql (live PostgreSQL), or recreate the dev " +
+            "schema so InitTables re-emits it from FileTranslation's UniqueGroupNameList.", ct);
+    }
+
+    private static async Task AssertUniqueCoverAsync(
+        ISqlSugarClient db, DbType dbType, string table, string[] requiredColumns,
+        bool requireTableExists, string missingMessage, CancellationToken ct)
+    {
+        if (!requireTableExists && !await TableExistsAsync(db, dbType, table)) return;
+
+        if (!await HasUniqueCoverAsync(db, dbType, table, requiredColumns))
+            throw new InvalidOperationException("Critical schema constraint missing: " + missingMessage);
+    }
+
+    private static async Task<bool> TableExistsAsync(ISqlSugarClient db, DbType dbType, string table)
+    {
+        // Table name is a hardcoded literal (never user input); scoped to one read-only catalog query.
+        var query = dbType == DbType.PostgreSQL
+            ? $"SELECT count(*) FROM pg_tables WHERE tablename = '{table}'"
+            : $"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '{table}'";
+        var counts = await db.Ado.SqlQueryAsync<int>(query);
+        return counts.FirstOrDefault() > 0;
     }
 
     // Reading index metadata is the one place a raw catalog query is unavoidable: SqlSugar's ORM surface
     // does not expose "is there a UNIQUE index covering these columns". Scoped to a single read-only
-    // catalog query per backend; no user input is interpolated.
-    private static async Task<bool> HasRevisionsUniqueAsync(ISqlSugarClient db, string catalogQuery)
+    // catalog query per table; no user input is interpolated (table name is a hardcoded literal).
+    private static async Task<bool> HasUniqueCoverAsync(
+        ISqlSugarClient db, DbType dbType, string table, string[] requiredColumns)
     {
-        var defs = await db.Ado.SqlQueryAsync<string>(catalogQuery);
-        return defs.Any(IsRevisionsUniqueCover);
+        var query = dbType == DbType.PostgreSQL
+            ? $"SELECT indexdef FROM pg_indexes WHERE tablename = '{table}'"
+            // sqlite_master.sql holds the CREATE UNIQUE INDEX text for explicitly-created unique indexes
+            // (the CodeFirst composite). Auto-indexes (PK / column UNIQUE) have NULL sql and are excluded
+            // — correct, since a PK's unique index does not cover the composite columns asserted here.
+            : $"SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='{table}' AND sql IS NOT NULL";
+        var defs = await db.Ado.SqlQueryAsync<string>(query);
+        return defs.Any(indexDef => IsUniqueCover(indexDef, requiredColumns));
     }
 
-    private static bool IsRevisionsUniqueCover(string? indexDef)
+    private static bool IsUniqueCover(string? indexDef, string[] requiredColumns)
     {
         if (string.IsNullOrEmpty(indexDef)) return false;
         var d = indexDef.ToLowerInvariant();
-        return d.Contains("unique") && RequiredRevisionsColumns.All(d.Contains);
+        return d.Contains("unique") && requiredColumns.All(d.Contains);
     }
 }

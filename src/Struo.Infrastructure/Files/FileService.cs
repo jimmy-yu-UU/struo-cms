@@ -1,5 +1,6 @@
 using SqlSugar;
 using Struo.Application.Files;
+using Struo.Application.Query;
 using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Files;
@@ -13,7 +14,8 @@ public sealed class FileService(
     ISqlSugarClient db,
     IFileStorage storage,
     IImageDimensionReader images,
-    FileStorageOptions options)
+    FileStorageOptions options,
+    IItemRepository repository)
 {
     public async Task<File> UploadAsync(
         Stream content, string fileName, string contentType, long length, CancellationToken ct = default)
@@ -42,7 +44,7 @@ public sealed class FileService(
         buffer.Position = 0;
 
         var key = StorageKey.Create(fileName);
-        await storage.SaveAsync(key, buffer, ct);
+        await storage.SaveAsync(key, buffer, contentType, ct);
 
         var entity = new File
         {
@@ -72,11 +74,11 @@ public sealed class FileService(
         if (row is null) return false;
 
         var fkCol = db.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation));
-        try
+        // CS-8: delete the sidecar translations + the file row through the nesting-safe repository
+        // helper (join-if-active), so composing this inside a larger unit-of-work joins that outer
+        // transaction instead of opening — and prematurely committing — its own inner one.
+        await repository.InTransactionAsync(async () =>
         {
-            // Begin/Commit/RollbackTranAsync have no CancellationToken overloads (SqlSugar 5.1.4.215);
-            // the token is honored by the awaited Deleteable ORM calls inside the transaction.
-            await db.Ado.BeginTranAsync();
             await db.Deleteable<FileTranslation>()
                 .Where(new List<IConditionalModel>
                 {
@@ -86,14 +88,9 @@ public sealed class FileService(
                     }
                 }).ExecuteCommandAsync(ct);
             await db.Deleteable<File>().In(id).ExecuteCommandAsync(ct);
-            await db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await db.Ado.RollbackTranAsync();
-            throw;
-        }
+        }, ct);
 
+        // storage.DeleteAsync stays outside the transaction: best-effort (row gone, bytes orphaned).
         try { await storage.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
         return true;
     }

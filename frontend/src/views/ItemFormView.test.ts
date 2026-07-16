@@ -11,12 +11,16 @@ import { useLanguageStore } from '../stores/languageStore'
 const push = vi.fn()
 let routeParams: Record<string, string> = {}
 let routeName = 'collection-item'
-// Capture the guard registered via onBeforeRouteLeave so tests can invoke it directly.
+// Capture the guards registered via onBeforeRouteLeave / onBeforeRouteUpdate so tests can invoke
+// them directly.
+type RouteLoc = { params: Record<string, string | undefined> }
 let leaveGuard: (() => Promise<boolean> | boolean) | null = null
+let updateGuard: ((to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) | null = null
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: routeParams, name: routeName }),
   useRouter: () => ({ push }),
   onBeforeRouteLeave: (guard: () => Promise<boolean> | boolean) => { leaveGuard = guard },
+  onBeforeRouteUpdate: (guard: (to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) => { updateGuard = guard },
 }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
@@ -51,6 +55,7 @@ describe('ItemFormView', () => {
     routeParams = {}
     routeName = 'collection-item'
     leaveGuard = null
+    updateGuard = null
   })
 
   it('edit path loads the item and inflates the model', async () => {
@@ -142,6 +147,22 @@ describe('ItemFormView', () => {
     expect((w.vm as any).serverError).toContain('Server rejected a hidden field.')
   })
 
+  it('joins multiple leftover (unknown-field) messages with "; " in the banner', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    vi.spyOn(itemsApi, 'create').mockRejectedValue(
+      new ApiError(400, 'One or more validation errors occurred.', 'VALIDATION', [
+        { field: 'ghost1', message: 'First hidden problem.' },
+        { field: 'ghost2', message: 'Second hidden problem.' },
+      ]),
+    )
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).serverError).toBe('First hidden problem.; Second hidden problem.')
+  })
+
   it('falls back to serverError banner when the error has no details', async () => {
     routeParams = { name: 'article' }; routeName = 'collection-create'
     setupStores()
@@ -188,14 +209,14 @@ describe('ItemFormView', () => {
     expect(upd).toHaveBeenCalledWith('article', '5', expect.objectContaining({ version: 3 }))
   })
 
-  it('recovers from 409 CONFLICT: refreshes version, flags conflict, preserves edits, then re-saves', async () => {
+  it('recovers from 409 VERSION_CONFLICT: refreshes version, flags conflict, preserves edits, then re-saves', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     // Default (steady-state) load returns version 1; init runs via onMounted AND the explicit call.
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     const upd = vi.spyOn(itemsApi, 'update')
-      .mockRejectedValueOnce(new ApiError(409, 'The item was modified by someone else.', 'CONFLICT'))
+      .mockRejectedValueOnce(new ApiError(409, 'The item was modified by someone else.', 'VERSION_CONFLICT'))
       .mockResolvedValueOnce({ id: '5' })
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
@@ -212,12 +233,33 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
   })
 
+  it('generic 409 CONFLICT (e.g. duplicate email) shows the banner and does NOT trigger conflict recovery (API-1)', async () => {
+    // API-1: only optimistic-lock clashes carry code VERSION_CONFLICT. Other 409s (delete-restrict,
+    // duplicate email) keep the generic CONFLICT code and must NOT arm the "changed by someone else"
+    // recovery banner — they fall through to the plain serverError banner with no version refetch.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update')
+      .mockRejectedValueOnce(new ApiError(409, 'Email is already in use.', 'CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init() // init runs via onMounted AND this explicit call, so get is already called
+    const getCallsAfterLoad = get.mock.calls.length
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    await (w.vm as any).onSubmit()
+    // No conflict recovery: banner not armed, edits not touched, and NO recovery refetch (get unchanged).
+    expect((w.vm as any).conflict).toBe(false)
+    expect((w.vm as any).serverError).toBe('Email is already in use.')
+    expect(get.mock.calls.length).toBe(getCallsAfterLoad)
+  })
+
   it('Reload latest overwrites the model with the server copy and clears conflict', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
-    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -238,7 +280,7 @@ describe('ItemFormView', () => {
     setupStores()
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
-    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -264,7 +306,7 @@ describe('ItemFormView', () => {
     setupStores()
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
-    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'CONFLICT'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
     const w = mount(ItemFormView, { global: { stubs } })
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -360,6 +402,119 @@ describe('ItemFormView', () => {
     ;(w.vm as any).model.shared.status = 'edited' // now dirty
     await (w.vm as any).onSubmit() // success -> re-baseline before navigate
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('re-baselines after Reload latest so leaving does not prompt', async () => {
+    // reloadLatest() overwrites the model with the server copy via setModel(), which re-snaps the
+    // baseline. The form is then clean, so the leave guard must resolve true without confirming.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit' // dirty
+    get.mockResolvedValueOnce({ id: '5', status: 'server-copy', translations: {}, version: 9 })
+    await (w.vm as any).onSubmit() // 409 -> conflict recovery, still dirty
+    ;(w.vm as any).reloadLatest() // full overwrite -> re-baseline -> clean
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('re-baselines after delete-accept so the subsequent navigation does not prompt the guard', async () => {
+    // onDelete's accept removes the item then captureBaseline()s before navigating: nothing is left
+    // to lose, so the leave guard fired by that navigation must resolve true without confirming.
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit' // dirty before delete
+    ;(w.vm as any).onDelete()
+    await confirmRequire.mock.calls[0][0].accept() // delete confirm -> remove + re-baseline + push
+    confirmRequire.mockClear() // ignore the delete confirm; assert only the leave guard below
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  // ---- fold-in (c): Esc/X dismiss must settle the leave-guard promise ------
+
+  it('leave guard: dismiss via onHide (Esc/backdrop/X) resolves the promise false', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // dirty
+
+    const p = Promise.resolve(leaveGuard!())
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    const opts = confirmRequire.mock.calls[0][0]
+    expect(typeof opts.onHide).toBe('function')
+    // Dismissing fires neither accept nor reject; only onHide. The promise must still settle so the
+    // router is not left awaiting forever. Assert via a timeout race: onHide -> resolves(false).
+    opts.onHide()
+    const settled = await Promise.race([
+      p,
+      new Promise((resolve) => setTimeout(() => resolve('PENDING'), 50)),
+    ])
+    expect(settled).toBe(false)
+  })
+
+  // ---- NAV-1: same-record (params-only) navigation dirty guard -------------
+
+  it('registers a route-update guard synchronously on setup', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    mount(ItemFormView, { global: { stubs } })
+    expect(typeof updateGuard).toBe('function')
+  })
+
+  it('route-update guard: params (id) change while dirty prompts; reject resolves false', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // dirty
+
+    const to = { params: { name: 'article', id: '6' } }
+    const from = { params: { name: 'article', id: '5' } }
+    const p = Promise.resolve(updateGuard!(to, from))
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    expect(confirmRequire.mock.calls[0][0].header).toBe('Unsaved changes')
+    confirmRequire.mock.calls[0][0].reject()
+    await expect(p).resolves.toBe(false)
+  })
+
+  it('route-update guard: params change while clean resolves true without prompting', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init() // clean
+
+    const to = { params: { name: 'article', id: '6' } }
+    const from = { params: { name: 'article', id: '5' } }
+    await expect(Promise.resolve(updateGuard!(to, from))).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('route-update guard: same id/name (e.g. query-only change) resolves true even when dirty', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mount(ItemFormView, { global: { stubs } })
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited' // dirty
+
+    const to = { params: { name: 'article', id: '5' } }
+    const from = { params: { name: 'article', id: '5' } }
+    await expect(Promise.resolve(updateGuard!(to, from))).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 

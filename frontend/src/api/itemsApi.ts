@@ -14,7 +14,7 @@ export type ListOptions = {
 }
 export type ListResult = { data: Record<string, unknown>[]; total: number }
 
-type ListEnvelope = { data: Record<string, unknown>[]; meta: { total: number } }
+type ListEnvelope = { data: Record<string, unknown>[]; meta?: { total: number } }
 
 export const itemsApi = {
   async list(collection: string, opts: ListOptions): Promise<ListResult> {
@@ -24,7 +24,7 @@ export const itemsApi = {
     const qs = new URLSearchParams(params).toString()
     const path = qs ? `/items/${collection}?${qs}` : `/items/${collection}`
     const res = await apiClient.getRaw<ListEnvelope>(path)
-    return { data: res.data, total: res.meta.total }
+    return { data: res.data, total: res.meta?.total ?? res.data.length }
   },
 
   async get(

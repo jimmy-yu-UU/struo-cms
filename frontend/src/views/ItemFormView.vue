@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
@@ -111,11 +111,14 @@ async function onSubmit(): Promise<void> {
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
-    if (e instanceof ApiError && e.status === 409 && e.code === 'CONFLICT') {
-      // Optimistic-lock clash (D2): someone else changed the item since we loaded it. Recover by
-      // refreshing the concurrency token WITHOUT touching the user's in-progress edits, then let
-      // them either save again (overwrite) or reload the server copy. CONFLICT carries no details,
-      // so it never overlaps the FE-3 details-mapping branch below.
+    if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
+      // Optimistic-lock clash (D2 / API-1): only this specific code means "someone else changed the
+      // item since we loaded it". Recover by refreshing the concurrency token WITHOUT touching the
+      // user's in-progress edits, then let them either save again (overwrite) or reload the server
+      // copy. Other 409s (delete-restrict, duplicate email) keep the generic CONFLICT code and must
+      // NOT arm this recovery banner — they fall through to the serverError banner below. No
+      // fallback to 'CONFLICT' here is deliberate. VERSION_CONFLICT carries no details, so it never
+      // overlaps the FE-3 details-mapping branch below.
       await recoverFromConflict()
     } else if (e instanceof ApiError && e.details?.length) {
       // Server-side (ASP.NET model-binding) validation: map details back to
@@ -124,7 +127,7 @@ async function onSubmit(): Promise<void> {
       const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields)
       // Replace (not mutate) so ItemForm's watch(props.errors) flips to the default locale tab.
       errors.value = { ...fieldErrors }
-      const banner = leftover.join(' ')
+      const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
     } else {
       serverError.value = e instanceof Error ? e.message : 'Save failed.'
@@ -198,10 +201,23 @@ function guardLeave(): Promise<boolean> {
       message,
       accept: () => resolve(true),
       reject: () => resolve(false),
+      // fold-in (c): Esc / backdrop / X dismiss fires NEITHER accept nor reject, which would leave
+      // this promise (and the router navigation awaiting it) pending forever. onHide always fires on
+      // dismissal, so resolve(false) — treat a dismiss as "cancel navigation, stay here". If accept/
+      // reject already resolved, this second resolve is a harmless no-op (a Promise settles once).
+      onHide: () => resolve(false),
     })
   })
 }
 onBeforeRouteLeave(() => guardLeave())
+// NAV-1: a same-route-record, params-only navigation (RelatedList row click, create -> edit) does
+// NOT trigger onBeforeRouteLeave — the router treats it as an update of the reused component. Run the
+// same dirty guard here so unsaved edits are not silently discarded. Only guard an actual record
+// switch (id or collection changed); a query-only change keeps the user on the same item, so allow it.
+onBeforeRouteUpdate(async (to, from) => {
+  if (to.params.id !== from.params.id || to.params.name !== from.params.name) return guardLeave()
+  return true
+})
 
 // FE-5: warn before a full browser unload (tab close / reload / hard navigation) with unsaved
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
@@ -258,8 +274,8 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, 
   gap: 1rem;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  border: 1px solid #f0ad4e;
-  background: #fff8ec;
+  border: 1px solid var(--p-amber-400, #f0ad4e);
+  background: var(--p-amber-50, #fff8ec);
   border-radius: 6px;
 }
 .conflict-text {

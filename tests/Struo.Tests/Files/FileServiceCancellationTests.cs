@@ -16,7 +16,7 @@ public class FileServiceCancellationTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage
     {
-        public Task SaveAsync(string key, Stream content, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) => Task.FromResult<Stream>(new MemoryStream());
         public Task DeleteAsync(string key, CancellationToken ct = default) => Task.CompletedTask;
         public bool SupportsPresignedUrls => false;
@@ -38,7 +38,7 @@ public class FileServiceCancellationTests : IDisposable
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
         _db.CodeFirst.InitTables<File>();
-        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions());
+        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), null!);
     }
 
     public void Dispose() => _file.Dispose();

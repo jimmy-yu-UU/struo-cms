@@ -94,8 +94,13 @@ async function pickFirstFromPicker(
   await page.keyboard.press('Escape')
   let label = ''
   await expect(async () => {
+    // Reopen only when THIS picker's overlay is absent, not when its first option is merely
+    // transiently invisible. Keying the reopen on the overlay (not an option) avoids clicking the
+    // trigger while the overlay is already open — which would toggle it shut mid-load and churn the
+    // retry. Same open -> read -> click sequence; only the reopen predicate is tightened.
+    const overlayEl = page.locator(overlay)
+    if (!(await overlayEl.isVisible().catch(() => false))) await trigger.click()
     const option = page.locator(`${overlay} [role="option"]`).first()
-    if (!(await option.isVisible().catch(() => false))) await trigger.click()
     await expect(option).toBeVisible({ timeout: 1000 })
     label = ((await option.textContent()) ?? '').trim()
     await option.click({ timeout: 2000 })
@@ -199,5 +204,70 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
   await page.getByPlaceholder('Search').fill(title)
+  // Count-settle (trash.spec.ts idiom): wait for the debounced server-side search to settle the tbody
+  // to its single "No records." empty row before asserting the deleted title is gone — otherwise the
+  // assertion could pass against the still-transitioning unfiltered list.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
+})
+
+// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5080'
+// Rows this test creates; purged in afterEach. The seeded category is NOT purged (it pre-exists).
+let navCreated: { collection: string; id: string }[] = []
+test.afterEach(async ({ page }) => {
+  for (const c of navCreated) {
+    await page.request
+      .delete(`${API}/api/items/${c.collection}/${c.id}?purge=true`, { headers: { 'X-Struo-CSRF': '1' } })
+      .catch(() => undefined)
+  }
+  navCreated = []
+})
+
+// NAV-1 live gate: a RelatedList row click is a same-route-record, params-only navigation
+// (`collections/category/<id>` -> `collections/article/<id>`, both the `collection-item` route). Pre-
+// fix, AppShell's unkeyed <router-view> reused the ItemFormView instance: init() never re-ran (form
+// showed stale category data) and onBeforeRouteLeave never fired (dirty edits silently discarded).
+// Post-fix, the route-update dirty guard prompts, and the keyed <router-view> remounts + reloads the
+// target record on accept. Category.Articles is the sample's RelatedList (see the assertion above).
+test('NAV-1: dirty form + RelatedList row click prompts unsaved guard, then remounts to the target record', async ({ page }) => {
+  await login(page)
+
+  // Create an article assigned to a category so that category's Articles RelatedList has a row.
+  const title = `E2E Nav Article ${STAMP}`
+  await page.goto('/collections/article/new')
+  await chooseStatus(page, 'Draft')
+  await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
+  const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
+  await body.click()
+  await page.keyboard.type('E2E nav body content.')
+  const categoryName = await pickFirstCategory(page)
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page).toHaveURL(/\/collections\/article$/)
+
+  // Open the assigned category; wait for its form + Articles RelatedList row to load.
+  await page.goto('/collections/category')
+  await page.getByPlaceholder('Search').fill(categoryName)
+  await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
+  await page.getByText(categoryName, { exact: true }).click()
+  await expect(page).toHaveURL(/\/collections\/category\/[^/]+$/)
+  await expect(fieldByLabel(page, 'Articles').getByText(title)).toBeVisible()
+
+  // Dirty the category form (edit Name) so the guard has unsaved changes to protect.
+  const nameInput = fieldByLabel(page, 'Name').locator('input')
+  const originalName = await nameInput.inputValue()
+  await nameInput.fill(`${originalName} edited`)
+
+  // Click the article row in the RelatedList -> same-record params-only nav -> dirty guard prompts.
+  await fieldByLabel(page, 'Articles').getByText(title).click()
+  const guard = page.getByRole('alertdialog').filter({ hasText: 'Unsaved changes' })
+  await expect(guard).toBeVisible()
+
+  // Accept -> navigation proceeds, the keyed view remounts, and init() reloads the ARTICLE (Title
+  // populated) — proving the form no longer reuses stale category data.
+  await page.getByRole('button', { name: 'Yes' }).click()
+  await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
+  await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
+
+  navCreated.push({ collection: 'article', id: page.url().match(/\/collections\/article\/([^/]+)$/)![1] })
 })
