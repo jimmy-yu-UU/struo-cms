@@ -795,8 +795,9 @@ public sealed class ItemService(
         // The snapshot IS a valid update body by construction; drop `version` so revert does not echo a
         // stale optimistic-concurrency token (it would 409 against the current row). Keep the JsonDocument
         // alive across the awaited update (the body's JsonElement must stay valid).
+        using var src = JsonDocument.Parse(rec.Snapshot);
         using var doc = JsonDocument.Parse(
-            StripKeys(JsonDocument.Parse(rec.Snapshot).RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
+            StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
         return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
     }
 

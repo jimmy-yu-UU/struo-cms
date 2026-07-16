@@ -26,7 +26,7 @@ public class FileServiceValidationTests
     public async Task Upload_over_cap_throws()
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 4 };
-        var svc = new FileService(null!, new NoopStorage(), new NoopImages(), opts);
+        var svc = new FileService(null!, new NoopStorage(), new NoopImages(), opts, null!);
         var act = async () => await svc.UploadAsync(new MemoryStream(new byte[10]), "x.bin", "application/octet-stream", 10);
         await act.Should().ThrowAsync<QueryException>();
     }
@@ -35,7 +35,7 @@ public class FileServiceValidationTests
     public async Task Upload_disallowed_type_throws()
     {
         var opts = new FileStorageOptions { AllowedContentTypes = ["image/png"] };
-        var svc = new FileService(null!, new NoopStorage(), new NoopImages(), opts);
+        var svc = new FileService(null!, new NoopStorage(), new NoopImages(), opts, null!);
         var act = async () => await svc.UploadAsync(new MemoryStream([1]), "x.txt", "text/plain", 1);
         await act.Should().ThrowAsync<QueryException>();
     }
