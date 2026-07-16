@@ -18,4 +18,25 @@ export default {
     'zh-TW': '繁體中文',
     en: 'English',
   },
+  nav: {
+    dashboard: '儀表板',
+    media: '媒體庫',
+  },
+  shell: {
+    collapse: '收合側欄',
+    expand: '展開側欄',
+    openMenu: '開啟導覽選單',
+    closeMenu: '關閉導覽選單',
+    brandHome: '回到儀表板',
+    version: '重新設計原型',
+  },
+  user: {
+    account: '帳戶',
+    superAdmin: '超級管理員',
+    member: '一般使用者',
+  },
+  breadcrumb: {
+    newItem: '新增項目',
+    editItem: '編輯項目',
+  },
 }
