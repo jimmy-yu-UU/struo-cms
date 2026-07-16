@@ -511,11 +511,35 @@ public sealed class SqlSugarItemRepository(
         // CLR type (Guid), instead of boxing a bare `(object?)null` with no type info at all. An
         // untyped null parameter is sent to Npgsql as `text`, which PG rejects (42804) against a
         // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
-        var affected = await db.Updateable<T>()
-            .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy })
+        // DB-8: for AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
+        // the trash stamp so the history timeline advances and a stale client 409s after a restore.
+        var affected = await ApplyVersionBump(db.Updateable<T>()
+                .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy }))
             .Where($"{idColumn} = @__sdId", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;
+    }
+
+    // DB-8: chains a `Version = Version + 1` set onto the trash/restore UPDATE when T is an
+    // AuditableEntity subclass. Built as a dynamic member-init expression
+    // `it => new T { Version = it.Version + 1 }` (T is statically only ISoftDeletable, so Version can
+    // only be reached via reflection); SqlSugar's expression resolver turns `it.Version + 1` into the
+    // SQL fragment `version = version + 1` — no bound null parameter (no 42804 typed-null trap) and no
+    // CAS (delete/restore carry no client version; the decision is increment-only). Non-AuditableEntity
+    // ISoftDeletable types have no Version and are returned unchanged.
+    private static IUpdateable<T> ApplyVersionBump<T>(IUpdateable<T> updateable) where T : class, new()
+    {
+        if (!typeof(AuditableEntity).IsAssignableFrom(typeof(T))) return updateable;
+
+        var versionProp = typeof(T).GetProperty(
+            nameof(AuditableEntity.Version), BindingFlags.Public | BindingFlags.Instance)!;
+        var param = Expression.Parameter(typeof(T), "it");
+        var incremented = Expression.Add(
+            Expression.Property(param, versionProp), Expression.Constant(1L));
+        var setExpr = Expression.Lambda<Func<T, T>>(
+            Expression.MemberInit(Expression.New(typeof(T)), Expression.Bind(versionProp, incremented)),
+            param);
+        return updateable.SetColumns(setExpr);
     }
 
     public async Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default)
@@ -541,8 +565,9 @@ public sealed class SqlSugarItemRepository(
         // string-fieldName overload: it recognizes DeletedAt/DeletedBy as Nullable<DateTime>/
         // Nullable<Guid> and assigns the null parameter's DbType from the underlying type
         // (DateTime / Guid), which PG accepts against the timestamp/uuid columns.
-        var affected = await db.Updateable<T>()
-            .SetColumns(it => new T { DeletedAt = null, DeletedBy = null })
+        // DB-8: bump Version in the SAME UPDATE (AuditableEntity subclasses only) — see ApplyVersionBump.
+        var affected = await ApplyVersionBump(db.Updateable<T>()
+                .SetColumns(it => new T { DeletedAt = null, DeletedBy = null }))
             .Where($"{idColumn} = @__sdId", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;

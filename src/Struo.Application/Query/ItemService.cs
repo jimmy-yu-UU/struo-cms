@@ -650,7 +650,19 @@ public sealed class ItemService(
             // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.
             await CheckRestrictAsync(collection, id, ct);
             var actor = currentUser.GetCurrentUserId();
-            return await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+
+            // DB-8: trash bumps the item's Version (repository, AuditableEntity only) AND — for a
+            // revisioned collection — records a "delete" revision. Both must commit together with the
+            // trash stamp, so a capture failure rolls the whole trash back (no half-trashed row, no
+            // orphan revision).
+            var softDeleted = false;
+            await repository.InTransactionAsync(async () =>
+            {
+                softDeleted = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+                if (softDeleted)
+                    await CaptureRevisionAsync(collection, id, meta, "delete", ct);
+            }, ct);
+            return softDeleted;
         }
 
         var existed = false;
@@ -769,11 +781,37 @@ public sealed class ItemService(
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return null;                       // unknown id -> 404
 
+        // Only a genuinely-trashed row is restored (and recorded): an already-live row is a no-op, so
+        // it neither bumps Version nor records a spurious "restore" revision. DB-8: the restore clears
+        // DeletedAt, bumps Version (repository, AuditableEntity only) and — for a revisioned collection
+        // — records a "restore" revision, all in ONE transaction (capture failure rolls it all back).
         if (entity is ISoftDeletable sd && sd.DeletedAt is not null)
-            await repository.RestoreAsync(collection, id, ct);  // no-op idempotent if already live
+        {
+            await repository.InTransactionAsync(async () =>
+            {
+                await repository.RestoreAsync(collection, id, ct);
+                await CaptureRevisionAsync(collection, id, meta, "restore", ct);
+            }, ct);
+        }
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : Project(restored, meta, null);
+    }
+
+    /// <summary>
+    /// DB-8: for a revisioned collection, re-reads the just-trashed/just-restored row (ignoring the
+    /// soft-delete floor) and captures a revision under <paramref name="operation"/> ("delete" /
+    /// "restore"). No-op when the collection keeps no revisions or the row vanished. Must be called
+    /// inside the trash/restore transaction so the snapshot commits atomically with the state change.
+    /// </summary>
+    private async Task CaptureRevisionAsync(
+        string collection, string id, CollectionMetadata meta, string operation, CancellationToken ct)
+    {
+        if (!meta.Revisions) return;
+        var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (entity is null) return;
+        var snapshot = await snapshotBuilder.BuildAsync(collection, entity, ct);
+        await revisions.CaptureAsync(collection, id, operation, snapshot, ct);
     }
 
     /// <summary>
