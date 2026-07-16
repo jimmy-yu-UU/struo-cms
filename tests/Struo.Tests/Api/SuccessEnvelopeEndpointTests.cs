@@ -65,8 +65,8 @@ public class SuccessEnvelopeEndpointTests(ApiFactory factory)
         using var form = new MultipartFormDataContent();
         var bytes = new byte[] { 1, 2, 3, 4 };
         var part = new ByteArrayContent(bytes);
-        part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
-        form.Add(part, "file", "blob.bin");
+        part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain"); // whitelisted (SEC-6)
+        form.Add(part, "file", "blob.txt");
         var upload = await client.PostAsync("/api/files", form);
         upload.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await upload.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;

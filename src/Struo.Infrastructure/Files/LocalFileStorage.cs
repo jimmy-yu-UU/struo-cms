@@ -21,7 +21,9 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
         return full;
     }
 
-    public async Task SaveAsync(string key, Stream content, CancellationToken ct = default)
+    // contentType is ignored: local files are streamed back through the API, which sets the
+    // Content-Type from the persisted File row (FilesController.Download), not from the byte store.
+    public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default)
     {
         var path = FullPath(key);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

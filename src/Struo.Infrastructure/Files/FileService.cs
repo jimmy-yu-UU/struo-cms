@@ -44,7 +44,7 @@ public sealed class FileService(
         buffer.Position = 0;
 
         var key = StorageKey.Create(fileName);
-        await storage.SaveAsync(key, buffer, ct);
+        await storage.SaveAsync(key, buffer, contentType, ct);
 
         var entity = new File
         {
