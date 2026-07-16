@@ -28,7 +28,8 @@ public static class DomainErrorMap
             PermissionDeniedException when !authenticated => (ErrorCodes.Unauthorized, exception.Message),
             PermissionDeniedException => (ErrorCodes.Forbidden, exception.Message),
             CollectionNotFoundException => (ErrorCodes.NotFound, exception.Message),
-            RelationConflictException or ConcurrencyConflictException => (ErrorCodes.Conflict, exception.Message),
+            ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
+            RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
@@ -44,6 +45,7 @@ public static class DomainErrorMap
         ErrorCodes.Forbidden => StatusCodes.Status403Forbidden,
         ErrorCodes.NotFound => StatusCodes.Status404NotFound,
         ErrorCodes.Conflict => StatusCodes.Status409Conflict,
+        ErrorCodes.VersionConflict => StatusCodes.Status409Conflict,
         ErrorCodes.BadUserInput => StatusCodes.Status400BadRequest,
         ErrorCodes.Validation => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError,
