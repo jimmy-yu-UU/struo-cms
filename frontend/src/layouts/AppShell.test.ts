@@ -1,19 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { ref } from 'vue'
+import { reactive } from 'vue'
 import AppShell from './AppShell.vue'
 import { useSidebarStore } from '../stores/sidebarStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { i18n } from '../i18n'
 
-const routeRef = ref<{ path: string; name: string; params: Record<string, string> }>({
+const routeState = reactive<{ path: string; name: string; params: Record<string, string> }>({
   path: '/',
   name: 'dashboard',
   params: {},
 })
 vi.mock('vue-router', () => ({
-  useRoute: () => routeRef.value,
+  useRoute: () => routeState,
   useRouter: () => ({ push: vi.fn() }),
   RouterView: { template: '<div class="rv" />' },
 }))
@@ -32,7 +32,9 @@ describe('AppShell', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    routeRef.value = { path: '/', name: 'dashboard', params: {} }
+    routeState.path = '/'
+    routeState.name = 'dashboard'
+    routeState.params = {}
   })
 
   it('composes topbar, sidebar, breadcrumb, router-view and a toast host', () => {
@@ -72,7 +74,8 @@ describe('AppShell', () => {
     const wrapper = mountShell()
     sidebar.openDrawer()
     await wrapper.vm.$nextTick()
-    routeRef.value = { path: '/media', name: 'media', params: {} }
+    routeState.path = '/media'
+    routeState.name = 'media'
     await wrapper.vm.$nextTick()
     expect(sidebar.drawerOpen).toBe(false)
   })
