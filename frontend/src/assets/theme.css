@@ -115,3 +115,25 @@ html { font-family: var(--font); }
   .topbar { padding: 0 10px; }
   .lang-switcher { display: none; }
 }
+
+/* ---- FE-R1 shell: icon button, nav icon, caption, nav error ---- */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; border: none;
+  border-radius: var(--radius, 8px); background: transparent; color: var(--muted);
+  cursor: pointer; transition: background var(--speed, .15s), color var(--speed, .15s);
+}
+.icon-btn:hover { background: var(--bg); color: var(--fg); }
+@media (pointer: coarse) { .icon-btn { width: 44px; height: 44px; } }
+.nav-icon { width: 18px; text-align: center; flex: none; }
+.caption { font-size: .8rem; font-weight: 500; color: var(--muted); }
+.nav-error {
+  display: grid; gap: 8px; padding: 12px; margin: 4px 0;
+  border: 1px solid var(--danger); border-radius: var(--radius, 8px);
+  color: var(--danger); font-size: .85rem;
+}
+.nav-error button {
+  justify-self: start; padding: 6px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius, 8px); background: var(--surface); color: var(--fg); cursor: pointer;
+}
+.nav-error button:hover { background: var(--bg); }
