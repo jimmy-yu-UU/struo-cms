@@ -67,35 +67,70 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
   await page.getByRole('option', { name: optionLabel }).click()
 }
 
-// Article.Category is [CmsRelation(Interface = RelationInterface.Dropdown)] ->
-// RelationInput.vue renders RelationPicker.vue's plain (non-multiple) branch,
-// a PrimeVue <Select> (role="combobox" trigger + role="option" overlay) —
-// same click-trigger-then-click-option idiom as chooseStatus above. Options
-// are loaded async from the API (RelationPicker's onMounted loadOptions()),
-// so wait for at least one option to render before picking the first one —
-// the exact seeded category name isn't known to this spec (see top-of-file
-// seeding note), hence picking by position (`.first()`) rather than by name.
-async function pickFirstCategory(page: Page): Promise<void> {
-  const field = fieldByLabel(page, 'Category')
-  await field.getByRole('combobox').click()
-  const option = page.getByRole('option').first()
-  await expect(option).toBeVisible()
-  await option.click()
+// Open a relation picker and click its first option, returning that option's label. RelationPicker
+// loads its options asynchronously (onMounted loadOptions() -> API), which makes two things race:
+//   1. The overlay can pop open before any option exists — worst in edit mode, where the form is
+//      interactable the instant it loads (create mode hides the race behind the time spent filling
+//      Status/Title/Body). Verified live: the Category <Select> / Tags <MultiSelect> render 19/13
+//      options once the fetch resolves; the only failure mode is interacting before it does.
+//   2. When the options DO arrive the list re-renders and the overlay repositions, so a click on a
+//      pre-captured <li> hits a detached/moving element ("element is not stable" / "detached").
+// So open (or re-open) AND read-label AND click as one retried unit, re-grabbing the option each
+// attempt. Options are scoped to THIS picker's own overlay type — never page-wide getByRole('option')
+// — because a fast preceding interaction (e.g. chooseStatus's Select) can leave another overlay
+// momentarily open and a page-level query would resolve to its options (observed: Status "Draft").
+async function pickFirstFromPicker(
+  page: Page,
+  field: ReturnType<typeof fieldByLabel>,
+  multiple: boolean,
+): Promise<string> {
+  // MultiSelect's role="combobox" is a HIDDEN input behind the visible label/dropdown container
+  // (which intercepts pointer events); click the visible `.p-multiselect` root instead. The plain
+  // Select's combobox trigger is directly clickable (same idiom as chooseStatus).
+  const trigger = multiple ? field.locator('.p-multiselect') : field.getByRole('combobox')
+  const overlay = multiple ? '.p-multiselect-overlay' : '.p-select-overlay'
+  // Dismiss any stray overlay so only the target picker's overlay contributes options (PrimeVue
+  // removes a closed overlay from the DOM, so a scoped query then only ever sees the open one).
+  await page.keyboard.press('Escape')
+  let label = ''
+  await expect(async () => {
+    const option = page.locator(`${overlay} [role="option"]`).first()
+    if (!(await option.isVisible().catch(() => false))) await trigger.click()
+    await expect(option).toBeVisible({ timeout: 1000 })
+    label = ((await option.textContent()) ?? '').trim()
+    await option.click({ timeout: 2000 })
+  }).toPass({ timeout: 20000 })
+  return label
 }
 
-// Article.Tags is [CmsRelation(Interface = RelationInterface.TagSelect)] ->
-// RelationInput.vue renders RelationPicker.vue's `multiple` branch, a
-// PrimeVue <MultiSelect> (role="combobox" trigger + role="option" overlay
-// with checkboxes). Selecting an option does NOT close the overlay (multi-
-// select semantics), so press Escape afterwards to close it and commit the
-// selection, matching how a real user would dismiss the panel.
+// Article.Category is [CmsRelation(Interface = RelationInterface.Dropdown)] -> RelationPicker's plain
+// (non-multiple) <Select>. The exact seeded category name isn't known to this spec (see top-of-file
+// seeding note), so pick by position and capture the chosen category's label (DisplayTemplate =
+// "{Name}") — the RelatedList assertion opens THIS category rather than guessing a "first row"
+// (dropdown option order and category list row order need not agree in a populated DB).
+async function pickFirstCategory(page: Page): Promise<string> {
+  return pickFirstFromPicker(page, fieldByLabel(page, 'Category'), false)
+}
+
+// Article.Tags is [CmsRelation(Interface = RelationInterface.TagSelect)] -> RelationPicker's
+// `multiple` <MultiSelect>. Selecting an option does NOT close the overlay (multi-select semantics),
+// so press Escape afterwards to close it and commit the selection, as a real user would.
 async function pickFirstTag(page: Page): Promise<void> {
-  const field = fieldByLabel(page, 'Tags')
-  await field.getByRole('combobox').click()
-  const option = page.getByRole('option').first()
-  await expect(option).toBeVisible()
-  await option.click()
+  await pickFirstFromPicker(page, fieldByLabel(page, 'Tags'), true)
   await page.keyboard.press('Escape')
+}
+
+// Populated dev DB + pagination: isolate the article row by its searchable Title before opening
+// (the list's Search box resets on every remount). Mirrors conflict.spec.ts / trash.spec.ts.
+async function openArticleByTitle(page: Page, title: string): Promise<void> {
+  await page.getByPlaceholder('Search').fill(title)
+  await expect(page.getByText(title, { exact: true })).toBeVisible()
+  await page.getByText(title, { exact: true }).click()
+  await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
+  // Wait until init()'s async GET has populated the form before any field interaction. Without this,
+  // clicking a relation combobox can fire before RelationPicker mounted/loaded its options, opening
+  // an empty overlay whose options never resolve. Title showing its value means the load finished.
+  await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
 }
 
 test('create, edit relations, verify RelatedList, then delete an article', async ({ page }) => {
@@ -113,7 +148,13 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   const title = `E2E Relation Title ${STAMP}`
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
-  await translatableFieldByLabel(page, 'Body').locator('textarea').fill('E2E relations body content.')
+  // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
+  // editor whose editable surface is a `.ProseMirror` contenteditable, NOT a <textarea> (Phase
+  // 7f/7g). contenteditable can't be `.fill()`ed — click to focus, then type via the keyboard
+  // (same idiom as conflict.spec.ts / unsaved-guard.spec.ts).
+  const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
+  await body.click()
+  await page.keyboard.type('E2E relations body content.')
 
   // Relations section: pick a Category (Dropdown/Select) and a Tag (TagSelect/MultiSelect).
   await pickFirstCategory(page)
@@ -121,47 +162,42 @@ test('create, edit relations, verify RelatedList, then delete an article', async
 
   await page.getByRole('button', { name: 'Save' }).click()
 
-  // Back on the list; the new row is present BY ITS TRANSLATED TITLE — Title
-  // is a translatable scalar field so selectListColumns() includes it as a
-  // column, and (post-Phase-7d list-title fix) the row renders the resolved
-  // translation instead of "—".
+  // Back on the list; the new row is present BY ITS TRANSLATED TITLE — Title is a translatable
+  // scalar field so selectListColumns() includes it as a column, and (post-Phase-7d list-title fix)
+  // the row renders the resolved translation instead of "—". Open it, change the category and
+  // toggle the tag selection, save.
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await expect(page.getByText(title)).toBeVisible()
+  await openArticleByTitle(page, title)
 
-  // Open it, change the category and toggle the tag selection, save.
-  await page.getByText(title).click()
-  await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
-
-  // Re-pick the category (exercises changing a Dropdown relation that
-  // already has a value — RelationPicker's ensureSelectedLabels() must have
-  // resolved the current selection's label before this click).
-  await pickFirstCategory(page)
-  // Toggle the tag off then back on to exercise add/remove without depending
-  // on a second seeded tag being present.
+  // Re-pick the category (exercises changing a Dropdown relation that already has a value —
+  // RelationPicker's ensureSelectedLabels() must have resolved the current selection's label before
+  // this click). Capture the assigned category's name to drive the RelatedList assertion below.
+  const categoryName = await pickFirstCategory(page)
+  // Toggle the tag off then back on to exercise add/remove without depending on a second seeded tag.
   await pickFirstTag(page)
 
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await expect(page.getByText(title)).toBeVisible()
 
-  // Open the category item and confirm the article shows up in its
-  // Articles RelatedList (Category.Articles, DisplayTemplate = "{Title}").
-  // Navigate via the Category field's resolved label link is not exposed as
-  // a link, so browse the Category collection list instead.
+  // Open the ASSIGNED category and confirm the article shows up in its Articles RelatedList
+  // (Category.Articles, DisplayTemplate = "{Title}"). The Category field's resolved label is not a
+  // link, so browse the Category collection list and isolate the assigned category by its Name.
   await page.goto('/collections/category')
   await expect(page).toHaveURL(/\/collections\/category$/)
-  // Open the first category row (the one just assigned to the article above).
-  await page.locator('.p-datatable-tbody tr').first().click()
+  await page.getByPlaceholder('Search').fill(categoryName)
+  await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
+  await page.getByText(categoryName, { exact: true }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[^/]+$/)
   await expect(fieldByLabel(page, 'Articles').getByText(title)).toBeVisible()
 
   // Back to the article list; delete the article.
   await page.goto('/collections/article')
-  await page.getByText(title).click()
+  await openArticleByTitle(page, title)
   await page.getByRole('button', { name: 'Delete' }).click()
   // PrimeVue's default locale (@primevue/core config) sets acceptLabel = "Yes";
   // ItemFormView.vue's confirm.require() doesn't override it.
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await expect(page.getByText(title)).toHaveCount(0)
+  await page.getByPlaceholder('Search').fill(title)
+  await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
