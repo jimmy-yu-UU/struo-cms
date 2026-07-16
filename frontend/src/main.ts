@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
+import ToastService from 'primevue/toastservice'
 import 'primeicons/primeicons.css'
 import './assets/theme.css'
 import App from './App.vue'
@@ -20,6 +21,7 @@ app.use(pinia)
 app.use(PrimeVue, { theme: { preset: StruoPreset, options: { darkModeSelector: '.app-dark' } } })
 app.use(i18n)
 app.use(ConfirmationService)
+app.use(ToastService)
 
 useThemeStore(pinia).apply()
 useUiLocaleStore(pinia).set(resolveInitialUiLocale())
