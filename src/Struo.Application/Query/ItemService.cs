@@ -35,6 +35,7 @@ public sealed class ItemService(
 {
     private readonly RichTextCleaner richText = new(sanitizer);
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
+    private readonly ItemProjector projector = new(registry, permissions, metadata);
 
     public async Task<PagedResult> QueryAsync(
         string collection, QueryModel raw, string? locale = null,
@@ -59,7 +60,7 @@ public sealed class ItemService(
         var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, deleted, ct);
 
         var entities = result.Rows;
-        var rows = entities.Select(r => Project(r, meta, validated.Fields)).ToList();
+        var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
         await ExpandDeepAsync(collection, raw.Deep, entities, rows, queryLocale, ct);
         await OverlayTranslationsAsync(meta, entities, rows, locale, ct);
         return new PagedResult(rows, result.Total, validated.Limit, validated.Offset);
@@ -75,7 +76,7 @@ public sealed class ItemService(
         var entity = await repository.GetByIdAsync(collection, id, deleted, ct);
         if (entity is null) return null;
 
-        var projected = (Dictionary<string, object?>)Project(entity, meta, null);
+        var projected = (Dictionary<string, object?>)projector.Project(entity, meta, null);
         var queryLocale = meta.Translation is not null ? (locale ?? languages.DefaultCode()) : null;
         await ExpandDeepAsync(collection, deep, [entity], [projected], queryLocale, ct);
         await OverlayTranslationsAsync(meta, [entity], [projected], locale, ct);
@@ -173,7 +174,7 @@ public sealed class ItemService(
                 var files = await repository.QueryWhereInAsync("file", "id", imageIds, ct);
                 foreach (var f in files)
                 {
-                    var projected = ProjectFor("file", f, null);
+                    var projected = projector.ProjectFor("file", f, null);
                     if (projected.TryGetValue("id", out var idVal) && idVal is Guid g)
                         byId[g] = projected;
                 }
@@ -231,7 +232,7 @@ public sealed class ItemService(
             ?? throw new QueryException($"Cannot expand relations: a '{collection}' row has no id.");
 
         var nested = await expander.ExpandAsync(
-            collection, entities, deep, ProjectFor, ParentId, ReadProp, locale, ct);
+            collection, entities, deep, projector.ProjectFor, ParentId, ReadProp, locale, ct);
 
         for (var i = 0; i < entities.Count; i++)
         {
@@ -293,11 +294,6 @@ public sealed class ItemService(
         }
     }
 
-    /// <summary>Reuses the metadata projection for an arbitrary target collection.</summary>
-    private IReadOnlyDictionary<string, object?> ProjectFor(
-        string collectionName, object entity, IReadOnlyList<string>? fields) =>
-        Project(entity, Meta(collectionName), fields);
-
     /// <summary>
     /// Reads a property value off an entity by name. The name may be a CLR property name
     /// (e.g. junction <c>ArticleId</c>) or a camelCase field name (e.g. <c>authorId</c>, <c>id</c>),
@@ -322,7 +318,7 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             created = await repository.CreateAsync(collection, entity, ct);
-            var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
+            var createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
             if (meta.Revisions)
@@ -332,7 +328,7 @@ public sealed class ItemService(
             }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
-        return Project(created, meta, null);
+        return projector.Project(created, meta, null);
     }
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
@@ -361,7 +357,7 @@ public sealed class ItemService(
             if (field.IsSystem || field.ReadOnly) continue;
             if (!bodyKeys.Contains(field.Name)) continue;
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
+            var pi = d.Properties.GetValueOrDefault(prop);
             if (pi is not { CanWrite: true }) continue;
             pi.SetValue(existing, pi.GetValue(incoming));
         }
@@ -379,9 +375,7 @@ public sealed class ItemService(
             if (!bodyKeys.Contains(rel.ForeignKey)) continue;  // only overlay when the client sent this FK
             // ForeignKey is stored camelCase (e.g. "categoryId") but the CLR property is PascalCase
             // (e.g. CategoryId), so the lookup must be case-insensitive.
-            var pi = d.EntityType.GetProperty(rel.ForeignKey,
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance |
-                System.Reflection.BindingFlags.IgnoreCase);
+            var pi = d.Properties.GetValueOrDefault(rel.ForeignKey);
             if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
             pi.SetValue(existing, pi.GetValue(incoming));
         }
@@ -399,7 +393,7 @@ public sealed class ItemService(
         {
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
-            var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
+            var updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // DB-9: a revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
@@ -412,7 +406,7 @@ public sealed class ItemService(
         }, ct);
         if (updated is null) return null;
         InvalidateLanguagesIfNeeded(collection);
-        return Project(updated, meta, null);
+        return projector.Project(updated, meta, null);
     }
 
     private void InvalidateLanguagesIfNeeded(string collection)
@@ -770,7 +764,7 @@ public sealed class ItemService(
         }
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
-        return restored is null ? null : Project(restored, meta, null);
+        return restored is null ? null : projector.Project(restored, meta, null);
     }
 
     /// <summary>
@@ -860,54 +854,5 @@ public sealed class ItemService(
     {
         if (meta.AdminOnly && !permissions.IsSuperAdmin)
             throw new PermissionDeniedException($"Writes to '{meta.Name}' require a super-admin.");
-    }
-
-    private IReadOnlyDictionary<string, object?> Project(object entity, CollectionMetadata meta, IReadOnlyList<string>? fields)
-    {
-        var d = registry.Get(meta.Name)!;
-        var dict = new Dictionary<string, object?>();
-
-        const string idKey = "id";
-        // d.IdProperty is an exact CLR property name; d.Properties is keyed OrdinalIgnoreCase, so this
-        // resolves the same PropertyInfo the old case-sensitive GetProperty(d.IdProperty) returned.
-        dict[idKey] = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entity);
-
-        // Always expose the concurrency token (like id, independent of field selection) so the client
-        // can echo it back on update for optimistic-locking (D2).
-        if (entity is Struo.Domain.Auditing.AuditableEntity versioned)
-            dict["version"] = versioned.Version;
-
-        var wanted = fields is { Count: > 0 } ? fields.ToHashSet(StringComparer.OrdinalIgnoreCase) : null;
-        var readable = permissions.ReadableFields(meta.Name, meta.Fields.Select(f => f.Name))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var field in meta.Fields)
-        {
-            if (field.Hidden) continue;
-            if (field.Name == idKey) continue;
-            if (wanted is not null && !wanted.Contains(field.Name)) continue;
-            if (!readable.Contains(field.Name)) continue;
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            // `prop` is an exact CLR property name (a FieldToProperty value); the OrdinalIgnoreCase
-            // Properties map returns the same PropertyInfo the old case-sensitive GetProperty(prop) did.
-            var value = d.Properties.GetValueOrDefault(prop)?.GetValue(entity);
-            // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
-            // emits structured JSON, not a quoted string. Null stays null.
-            if (field.Interface == FieldInterface.Json && value is string rawJson)
-            {
-                try
-                {
-                    value = JsonSerializer.Deserialize<JsonElement>(rawJson);
-                }
-                catch (JsonException)
-                {
-                    // Defensive: the write path only ever stores valid JSON, so this is unreachable
-                    // via the API. Guards against out-of-band/legacy rows holding non-JSON text —
-                    // leave the raw string so the rest of the page still loads instead of a 500.
-                }
-            }
-            dict[field.Name] = value;
-        }
-        return dict;
     }
 }
