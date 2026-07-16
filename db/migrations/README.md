@@ -16,7 +16,7 @@ NNN-short-kebab-description.sql
   apply order (ordinal filename sort), so it must be monotonic and gap-free.
 - **`short-kebab-description`** — one logical change per file.
 - The **next migration** is simply the highest existing number **+ 1**. As of this file the series ends
-  at `010`, so the next script is `011-…`.
+  at `011`, so the next script is `012-…`.
 - One numbering scheme only. (Two legacy `0001__`/`0002__` files plus a separate legacy `001-`…`007-`
   series were folded into this single series under DB-6; each renamed file's header notes its original
   filename.)
@@ -38,10 +38,25 @@ entries still quote the **old** names as a historical record; this is the author
 | `006-revisions-table.sql`                        | `008-revisions-table.sql`                     |
 | `007-hot-path-indexes.sql`                       | `009-hot-path-indexes.sql`                    |
 | _(new in Batch 2 — no predecessor)_              | `010-revisions-unique-number.sql`             |
+| _(new in Batch 4 — no predecessor)_              | `011-translation-unique-locale.sql`           |
 
 Each file starts with a header comment: date, author, ticket/PR, and a one-line intent. Scripts must be
 **idempotent** (`IF NOT EXISTS`, guarded `ALTER`, `DO $$ … $$` existence checks) so a re-run is safe.
 Forward-only — no automatic `down`; write a compensating forward script if a rollback is needed.
+
+## Timestamp convention (DB-7)
+
+New columns and new tables that store an instant use **`timestamptz`** (timestamp *with* time zone),
+never bare `timestamp`. Store UTC; let the client localise. The precedent is the runner's own tracking
+table — `schema_migrations (filename text PRIMARY KEY, appliedat timestamptz)`, created by
+`MigrationRunner` (whose code comment states the same convention). Any future `NNN-…` script that adds a
+temporal column must follow it.
+
+Existing `timestamp` columns are **not** retro-migrated to `timestamptz`: a retro-conversion re-anchors
+already-stored values against the session time zone (a silent data shift for anything not written in
+UTC), so the cost/risk outweighs the benefit for columns already in production. The convention binds new
+schema only; leave historical columns as-is unless a specific defect requires a deliberate, reviewed
+conversion script.
 
 ## Ordering constraints (do not reorder)
 

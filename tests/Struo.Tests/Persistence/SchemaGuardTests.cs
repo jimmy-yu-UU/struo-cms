@@ -57,4 +57,57 @@ public sealed class SchemaGuardTests
                 .Which.Message.Should().Contain("revisions");
         }
     }
+
+    // ── DB-10: the guard also asserts a UNIQUE (fk, locale) on each translation sidecar that EXISTS ──
+
+    [Fact]
+    public async Task Passes_when_translation_unique_indexes_present()
+    {
+        var (db, client) = NewClient();
+        using (db)
+        {
+            client.CodeFirst.InitTables(typeof(Revision));
+            client.CodeFirst.InitTables(typeof(Struo.Sample.Blog.ArticleTranslation)); // UniqueGroupNameList
+            client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Files.FileTranslation));
+
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            await act.Should().NotThrowAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Throws_when_article_translations_lacks_the_fk_locale_unique_index()
+    {
+        var (db, client) = NewClient();
+        using (db)
+        {
+            client.CodeFirst.InitTables(typeof(Revision)); // valid revisions unique (checked first)
+            // article_translations WITH the lookup key but WITHOUT the unique over (articleid, locale) —
+            // simulating a DB where 011 never ran.
+            client.Ado.ExecuteCommand(
+                "CREATE TABLE article_translations (id integer primary key, articleid text, " +
+                "locale text, title text)");
+            client.Ado.ExecuteCommand(
+                "CREATE INDEX ix_article_translations_fk_locale ON article_translations (articleid, locale)");
+
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            (await act.Should().ThrowAsync<InvalidOperationException>())
+                .Which.Message.Should().Contain("article_translations");
+        }
+    }
+
+    [Fact]
+    public async Task Skips_a_translation_table_that_does_not_exist()
+    {
+        var (db, client) = NewClient();
+        using (db)
+        {
+            // Only revisions exists; neither translation sidecar is present -> guard must not require
+            // a unique index on a table the database does not have.
+            client.CodeFirst.InitTables(typeof(Revision));
+
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            await act.Should().NotThrowAsync();
+        }
+    }
 }
