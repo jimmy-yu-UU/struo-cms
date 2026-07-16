@@ -31,7 +31,7 @@ public sealed class ItemService(
     IHtmlSanitizer sanitizer,
     ICurrentUserAccessor currentUser,
     IRevisionStore revisions,
-    RevisionSnapshotBuilder snapshotBuilder)
+    RevisionSnapshotBuilder snapshotBuilder) : IItemUseCases
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
