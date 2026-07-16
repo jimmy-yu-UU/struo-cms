@@ -65,7 +65,11 @@
 > - Presigned S3 URL 以 https scheme 發出而 MinIO endpoint 為 http（既有環境怪癖，live gate 觀察到；簽章僅 host，故 scheme 置換仍可用）。
 > - `MigrationRunner` 為 config-driven（`Database:MigrationsPath`）而 dev config 未設 → migration 011 於 gate 手動套用；須決定 dev 是否應設該路徑。
 >
-> **Batch 5（ARC-1 god-class 重構 + ARC-4 delegate-cache 尾巴 + CS-4/ARC-2 寫入路徑 accessor 快取）：** 待辦，見修復計畫。
+> **Batch 5（ARC-1 god-class 重構 + ARC-4 delegate-cache 尾巴 + CS-4/ARC-2 寫入路徑 accessor 快取）— ✅ 完成（2026-07-16）：**
+> - ✅ **ARC-1** `ItemService` 1251→**399 行**純編排層 — 分四步全綠 commit（`1244250` ItemDeserializer + per-interface `IFieldValidator` registry（Tags/OptionMultiValue/KeyValue/Files/Repeater，phase 順序與例外訊息逐字保留）+ `SyncTranslationsAsync` Required/MaxLength 去重入 `FieldValueRules`；`8efd3de` ItemProjector；`eef1891` TranslationOverlay + DeepExpansionCoordinator；`f70feb3` ItemWriteSideSync + ItemPurgePipeline）。ctor 簽章凍結（16 個測試建構點零改動）、協作類別以欄位初始化自建（ARC-4 前例）；全批 `git diff -- tests/` 為空。
+> - ✅ **CS-4/ARC-2 寫入路徑** accessor 快取 — `8efd3de`（Create/Update id 讀取、field-overlay、FK-overlay 換 `EntityDescriptor.Properties`（OrdinalIgnoreCase，同一 PropertyInfo）；ItemDeserializer 內同步換用）。
+> - ✅ **ARC-4 尾巴** `MakeGenericMethod` delegate-cache — `0ad2328`（**17** 個 dispatch 站點（原估 ~14）全轉 cached open-instance delegate，per-dispatcher `ConcurrentDictionary<Type,Func<…>>`；helper 皆 async 故例外面完全一致；ctor 不變）。**OrderByExpressionBuilder ctor 注入改判 YAGNI 不做**（無 Batch-5 直接消費者，rewire 只會攪動 18 個測試建構點；DI scoped 註冊 + 自建維持現狀，決策記於 batch5 計畫）。
+> - Gate：後端 773 全綠（測試零改動）+ 真 PG live 回歸 15/15（登入/CRUD/兩則 400 驗證訊息逐字/i18n overlay/M2M+deep/CAS+`VERSION_CONFLICT`/revisions list+revert/trash 204/`?deleted=only`/restore/purge）。
 
 ---
 
