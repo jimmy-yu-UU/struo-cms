@@ -1,0 +1,41 @@
+/* StruoCMS design tokens — source of truth: brand-spec.md (OKLch core) + prototype palette. */
+:root {
+  --bg: oklch(0.984 0.003 247.9);
+  --surface: oklch(1 0 0);
+  --fg: oklch(0.208 0.042 265.8);
+  --muted: oklch(0.554 0.046 257.4);
+  --border: oklch(0.929 0.013 255.5);
+  --accent: oklch(0.588 0.158 241.9);
+  --success: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --speed: .15s;
+  --sidebar-w: 260px;
+  --shadow-1: 0 1px 2px color-mix(in srgb, #020617 6%, transparent);
+  --shadow-2: 0 6px 24px color-mix(in srgb, #020617 9%, transparent);
+  --shadow-3: 0 24px 64px color-mix(in srgb, #020617 24%, transparent);
+  --font: system-ui, 'Segoe UI', 'Noto Sans TC', Roboto, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  color-scheme: light;
+}
+.app-dark {
+  --bg: oklch(0.129 0.042 264.7);
+  --surface: oklch(0.208 0.042 265.8);
+  --fg: oklch(0.968 0.007 247.9);
+  --muted: oklch(0.704 0.04 256.8);
+  --border: oklch(0.279 0.041 260.0);
+  --accent: oklch(0.746 0.16 232.7);
+  --success: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .45);
+  --shadow-2: 0 6px 24px rgb(0 0 0 / .5);
+  --shadow-3: 0 24px 64px rgb(0 0 0 / .65);
+  color-scheme: dark;
+}
+html { font-family: var(--font); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
