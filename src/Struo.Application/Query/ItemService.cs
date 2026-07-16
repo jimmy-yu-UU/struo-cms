@@ -31,7 +31,7 @@ public sealed class ItemService(
     IHtmlSanitizer sanitizer,
     ICurrentUserAccessor currentUser,
     IRevisionStore revisions,
-    RevisionSnapshotBuilder snapshotBuilder)
+    RevisionSnapshotBuilder snapshotBuilder) : IItemUseCases
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -327,7 +327,7 @@ public sealed class ItemService(
         {
             created = await repository.CreateAsync(collection, entity, ct);
             var createdId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(created)!;
-            await SyncM2MAsync(collection, body, createdId, ct);
+            await SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
             if (meta.Revisions)
             {
@@ -404,7 +404,9 @@ public sealed class ItemService(
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
             var updatedId = d.EntityType.GetProperty(d.IdProperty)!.GetValue(updated)!;
-            await SyncM2MAsync(collection, body, updatedId, ct);
+            // DB-9: a revert re-applies a past snapshot, which may reference an M2M target trashed since
+            // capture — tolerate it (operation == "revert"); every other write path stays strict.
+            await SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
             if (meta.Revisions)
             {
@@ -591,7 +593,7 @@ public sealed class ItemService(
     /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to replace the junction rows.
     /// Absent keys are silently skipped (partial updates are supported).
     /// </summary>
-    private async Task SyncM2MAsync(string collection, JsonElement body, object parentId, CancellationToken ct)
+    private async Task SyncM2MAsync(string collection, JsonElement body, object parentId, bool includeDeleted, CancellationToken ct)
     {
         var descs = m2mSource.M2MDescriptors(collection);
         if (descs.Count == 0) return;
@@ -602,16 +604,27 @@ public sealed class ItemService(
             if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
             if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
 
+            // DB-9: de-duplicate the incoming ids up front — `tags:[t1,t1]` is semantically `tags:[t1]`
+            // (a junction is a set). Distinct() returns a NEW list (no in-place mutation) and the typed
+            // boxed values (long / string) compare correctly under the default equality comparer. Without
+            // this, a repeated id inflated targetIds.Count so the count-based existence check below
+            // spuriously failed ("do not exist"), and the junction sync would attempt duplicate rows.
             var targetIds = idsElem.EnumerateArray()
                 .Select(e => e.ValueKind == JsonValueKind.Number
                     ? (object)e.GetInt64()
                     : (object)(e.GetString() ?? string.Empty))
+                .Distinct()
                 .ToList();
 
-            // Validate all target ids exist.
+            // Validate all target ids exist. DB-9: a REVERT (includeDeleted) may legitimately reference a
+            // target that has since been trashed — the snapshot was captured while it was still live — so
+            // it validates against the soft-delete-bypassing query; a normal write keeps the strict
+            // filtered check (a trashed target is not a valid new assignment).
             if (targetIds.Count > 0)
             {
-                var found = await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
+                var found = includeDeleted
+                    ? await repository.QueryWhereInWithDeletedAsync(desc.TargetCollection, "id", targetIds, ct)
+                    : await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
                 if (found.Count != targetIds.Count)
                     throw new QueryException(
                         $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
@@ -645,12 +658,34 @@ public sealed class ItemService(
 
         if (meta.SoftDelete && !purge)
         {
+            // Idempotent trash (DB-8 review): a row that is ALREADY trashed is a no-op — do not
+            // re-stamp DeletedAt, bump Version, or append a duplicate "delete" revision. SoftDeleteAsync
+            // uses Updateable<T>, which SqlSugar does NOT subject to the soft-delete query filter, so
+            // without this guard a repeat DELETE keeps re-stamping and polluting history. Mirrors the
+            // symmetric guard in RestoreAsync. Caller-visible success is unchanged: an already-trashed
+            // row still reports success (true), an unknown id still reports false — no 404 change.
+            var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+            if (existing is null) return false;                            // unknown id -> unchanged (false)
+            if (existing is ISoftDeletable { DeletedAt: not null }) return true; // already trashed -> no-op success
+
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
             // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.
             await CheckRestrictAsync(collection, id, ct);
             var actor = currentUser.GetCurrentUserId();
-            return await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+
+            // DB-8: trash bumps the item's Version (repository, AuditableEntity only) AND — for a
+            // revisioned collection — records a "delete" revision. Both must commit together with the
+            // trash stamp, so a capture failure rolls the whole trash back (no half-trashed row, no
+            // orphan revision).
+            var softDeleted = false;
+            await repository.InTransactionAsync(async () =>
+            {
+                softDeleted = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+                if (softDeleted)
+                    await CaptureRevisionAsync(collection, id, meta, "delete", ct);
+            }, ct);
+            return softDeleted;
         }
 
         var existed = false;
@@ -769,11 +804,37 @@ public sealed class ItemService(
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return null;                       // unknown id -> 404
 
+        // Only a genuinely-trashed row is restored (and recorded): an already-live row is a no-op, so
+        // it neither bumps Version nor records a spurious "restore" revision. DB-8: the restore clears
+        // DeletedAt, bumps Version (repository, AuditableEntity only) and — for a revisioned collection
+        // — records a "restore" revision, all in ONE transaction (capture failure rolls it all back).
         if (entity is ISoftDeletable sd && sd.DeletedAt is not null)
-            await repository.RestoreAsync(collection, id, ct);  // no-op idempotent if already live
+        {
+            await repository.InTransactionAsync(async () =>
+            {
+                await repository.RestoreAsync(collection, id, ct);
+                await CaptureRevisionAsync(collection, id, meta, "restore", ct);
+            }, ct);
+        }
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : Project(restored, meta, null);
+    }
+
+    /// <summary>
+    /// DB-8: for a revisioned collection, re-reads the just-trashed/just-restored row (ignoring the
+    /// soft-delete floor) and captures a revision under <paramref name="operation"/> ("delete" /
+    /// "restore"). No-op when the collection keeps no revisions or the row vanished. Must be called
+    /// inside the trash/restore transaction so the snapshot commits atomically with the state change.
+    /// </summary>
+    private async Task CaptureRevisionAsync(
+        string collection, string id, CollectionMetadata meta, string operation, CancellationToken ct)
+    {
+        if (!meta.Revisions) return;
+        var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (entity is null) return;
+        var snapshot = await snapshotBuilder.BuildAsync(collection, entity, ct);
+        await revisions.CaptureAsync(collection, id, operation, snapshot, ct);
     }
 
     /// <summary>
@@ -795,8 +856,9 @@ public sealed class ItemService(
         // The snapshot IS a valid update body by construction; drop `version` so revert does not echo a
         // stale optimistic-concurrency token (it would 409 against the current row). Keep the JsonDocument
         // alive across the awaited update (the body's JsonElement must stay valid).
+        using var src = JsonDocument.Parse(rec.Snapshot);
         using var doc = JsonDocument.Parse(
-            StripKeys(JsonDocument.Parse(rec.Snapshot).RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
+            StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
         return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
     }
 

@@ -100,4 +100,36 @@ describe('RelationPicker', () => {
     await (w.vm as any).ensureSelectedLabels()
     expect(getSpy).toHaveBeenCalledWith('category', 'c9', expect.objectContaining({}))
   })
+
+  it('merges a preselected-but-absent id into displayOptions using labelById', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'c9', name: 'Archived' })
+    const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { stubs } })
+    await flushPromises() // mount: loadOptions (empty) + ensureSelectedLabels settle
+    const disp = (w.vm as any).displayOptions
+    expect(disp).toHaveLength(1)
+    expect(disp[0]).toEqual({ id: 'c9', label: 'Archived', raw: {} })
+  })
+
+  it('ignores a stale load that resolves after a newer one (latest-wins)', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { stubs } })
+    await flushPromises() // let the mount load settle first
+    let resolveStale!: (v: { data: Record<string, unknown>[]; total: number }) => void
+    let resolveFresh!: (v: { data: Record<string, unknown>[]; total: number }) => void
+    const stale = new Promise<{ data: Record<string, unknown>[]; total: number }>((r) => (resolveStale = r))
+    const fresh = new Promise<{ data: Record<string, unknown>[]; total: number }>((r) => (resolveFresh = r))
+    listSpy.mockReturnValueOnce(stale as never).mockReturnValueOnce(fresh as never)
+    const pStale = (w.vm as any).loadOptions() // older token
+    const pFresh = (w.vm as any).loadOptions() // newer token supersedes
+    resolveFresh({ data: [{ id: 'new', name: 'New' }], total: 1 })
+    await pFresh
+    resolveStale({ data: [{ id: 'old', name: 'Old' }], total: 1 }) // stale resolves last
+    await pStale
+    await flushPromises()
+    expect((w.vm as any).options).toHaveLength(1)
+    expect((w.vm as any).options[0].id).toBe('new')
+  })
 })

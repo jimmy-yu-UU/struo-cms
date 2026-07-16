@@ -46,6 +46,26 @@ public static class GraphQlServiceCollectionExtensions
             .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
             .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
             .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
+            // SEC-4: static cost analysis is the alias-amplification defense — HotChocolate 16.4.0 has
+            // no dedicated alias/operation-count rule, but every aliased selection accrues its own
+            // field cost, so a request that repeats an expensive list field under N aliases costs ~N×
+            // and is rejected before any resolver (and thus any DB call) runs. This complements the
+            // max-execution-depth rule and the accepted-absent rate limiting (audit H1/SEC-4).
+            .AddCostAnalyzer()
+            .ModifyCostOptions(o =>
+            {
+                o.EnforceCostLimits = true;
+                // Calibrated empirically against the full GraphQL suite (see GraphQlCostAnalysisTests):
+                //   - heaviest LEGITIMATE query (3-root articles/categories/tags, the concurrency
+                //     smoke test) measures fieldCost = 33;
+                //   - a 50-alias `articles { items { id } }` amplification measures fieldCost = 550.
+                // 150 sits between them (~4.5x headroom over legitimate traffic, rejects the bomb at
+                // ~0.27x). The default 1000-tier would NOT catch a cheap-field alias bomb (550 < 1000),
+                // so it is deliberately lowered. Note the HotChocolate 16.4.0 default MaxFieldCost is
+                // 1000; this is the smallest round value that separates our observed legit/abuse costs.
+                o.MaxFieldCost = 150.0;
+                o.MaxTypeCost = 150.0;
+            })
             .DisableIntrospection(!env.IsDevelopment())
             // Pin both root scopes to Request explicitly (Mutation would otherwise fall back to
             // HotChocolate's implicit default) so resolvers — query AND mutation — resolve scoped

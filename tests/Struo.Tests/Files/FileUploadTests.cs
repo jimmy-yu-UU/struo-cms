@@ -41,7 +41,8 @@ public class FileUploadTests(ApiFactory factory)
     public async Task Upload_multibyte_filename_round_trips()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await c.PostAsync("/api/files", Multipart([1, 2, 3], "報告.bin", "application/octet-stream"));
+        // Content type is a whitelisted default (SEC-6); the test's subject is the multibyte filename.
+        var resp = await c.PostAsync("/api/files", Multipart([1, 2, 3], "報告.bin", "text/plain"));
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetProperty("fileName").GetString().Should().Be("報告.bin");
     }

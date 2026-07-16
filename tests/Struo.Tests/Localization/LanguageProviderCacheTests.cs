@@ -1,0 +1,96 @@
+using System.Collections.Concurrent;
+using System.Reflection;
+using AwesomeAssertions;
+using SqlSugar;
+using Struo.Application.Configuration;
+using Struo.Domain.Localization;
+using Struo.Infrastructure.Localization;
+using Struo.Infrastructure.Persistence;
+using Struo.Tests.Support;
+using Xunit;
+
+namespace Struo.Tests.Localization;
+
+// CS-7: LanguageProvider's per-scope cache must load at most once even under concurrent GraphQL
+// resolvers. The old `_cache ??=` is a non-atomic read-then-write, so racing callers could each run
+// the underlying query (benign but wasteful) and observe different list instances. The fix stores a
+// Lazy<IReadOnlyList<LanguageInfo>> (ExecutionAndPublication), and Invalidate() swaps in a fresh Lazy
+// rather than mutating the old value (immutability rule).
+public class LanguageProviderCacheTests : IDisposable
+{
+    private readonly SqliteTestDatabase _file = new();
+    private readonly ISqlSugarClient _db;
+    private readonly LanguageProvider _provider;
+
+    public LanguageProviderCacheTests()
+    {
+        _db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        _db.CodeFirst.InitTables<Language>();
+        LanguageSeeder.SeedAsync(_db).GetAwaiter().GetResult();
+        _provider = new LanguageProvider(_db);
+    }
+
+    public void Dispose() => _file.Dispose();
+
+    // Deterministic RED anchor (sanctioned by the task brief): the cache field must be a Lazy<> so the
+    // load is atomic. The old `IReadOnlyList<LanguageInfo>?` field fails this; the Lazy<> field passes.
+    [Fact]
+    public void Cache_is_backed_by_a_lazy_so_the_load_is_atomic()
+    {
+        var lazyField = typeof(LanguageProvider)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .FirstOrDefault(f => f.FieldType == typeof(Lazy<IReadOnlyList<LanguageInfo>>));
+
+        lazyField.Should().NotBeNull(
+            "the per-scope cache must be a Lazy<IReadOnlyList<LanguageInfo>> so concurrent callers cannot double-load");
+    }
+
+    // Regression guard for the observable thread-safety improvement: every concurrent caller sees the
+    // SAME cached list instance. (Under `??=` a lost race can hand different instances to callers; the
+    // race is provider-dependent so this is a guard, with the type assertion above as the RED anchor.)
+    [Fact]
+    public async Task Concurrent_Enabled_returns_a_single_shared_instance()
+    {
+        var results = new ConcurrentBag<IReadOnlyList<LanguageInfo>>();
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, 32),
+            new ParallelOptions { MaxDegreeOfParallelism = 8 },
+            (_, _) => { results.Add(_provider.Enabled()); return ValueTask.CompletedTask; });
+
+        results.Distinct(ReferenceEqualityComparer.Instance).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Enabled_reflects_seeded_languages()
+    {
+        _provider.Enabled().Select(l => l.Code).Should().Contain(["en", "zh-TW"]);
+        _provider.DefaultCode().Should().Be("en");
+        _provider.IsEnabled("EN").Should().BeTrue();       // case-insensitive
+        _provider.IsEnabled("fr").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Invalidate_swaps_in_a_fresh_load_without_mutating_the_old_snapshot()
+    {
+        var before = _provider.Enabled();
+        before.Any(l => l.Code == "fr").Should().BeFalse();
+
+        await _db.Insertable(new Language
+        {
+            Code = "fr", Name = "Français", IsDefault = false, Enabled = true, Sort = 9,
+        }).ExecuteCommandAsync();
+
+        // Not yet visible: the cached snapshot is untouched.
+        _provider.IsEnabled("fr").Should().BeFalse();
+        before.Any(l => l.Code == "fr").Should().BeFalse();
+
+        _provider.Invalidate();
+
+        var after = _provider.Enabled();
+        ReferenceEquals(after, before).Should().BeFalse("Invalidate must swap in a fresh Lazy, not reuse the old value");
+        after.Any(l => l.Code == "fr").Should().BeTrue();
+        before.Any(l => l.Code == "fr").Should().BeFalse("the previously returned snapshot must remain unmutated");
+    }
+}

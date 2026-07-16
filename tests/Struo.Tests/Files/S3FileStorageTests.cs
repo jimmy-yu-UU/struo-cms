@@ -49,7 +49,7 @@ public class S3FileStorageTests
         using var s = new S3FileStorage(opts);
         var key = "it/" + Guid.NewGuid().ToString("N") + ".txt";
 
-        await s.SaveAsync(key, new MemoryStream(Encoding.UTF8.GetBytes("s3-hello")));
+        await s.SaveAsync(key, new MemoryStream(Encoding.UTF8.GetBytes("s3-hello")), "text/plain");
         await using (var read = await s.OpenReadAsync(key))
         using (var sr = new StreamReader(read))
             (await sr.ReadToEndAsync()).Should().Be("s3-hello");

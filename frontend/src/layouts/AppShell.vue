@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import CollectionNav from '../components/CollectionNav.vue'
@@ -8,6 +8,7 @@ import CollectionNav from '../components/CollectionNav.vue'
 const auth = useAuthStore()
 const schema = useSchemaStore()
 const router = useRouter()
+const route = useRoute()
 
 onMounted(() => {
   schema.load()
@@ -26,6 +27,10 @@ async function onLogout() {
       <button type="button" class="logout" @click="onLogout">Log out</button>
     </header>
     <nav><CollectionNav /></nav>
-    <main><router-view /></main>
+    <!-- Key on route.path so params-only navigations between records of the same route (e.g. a
+         RelatedList row click collection-item/A -> collection-item/B, or create -> edit) remount the
+         view: init() re-runs and the form loads the target item instead of reusing stale data.
+         `path` excludes query, so list page/sort (component-local state) never force a remount. -->
+    <main><router-view :key="route.path" /></main>
   </div>
 </template>

@@ -19,7 +19,7 @@ public class LocalFileStorageTests : IDisposable
     {
         var storage = NewStorage();
         var key = "2026/06/" + Guid.NewGuid().ToString("N") + ".txt";
-        await storage.SaveAsync(key, new MemoryStream(Encoding.UTF8.GetBytes("hello")));
+        await storage.SaveAsync(key, new MemoryStream(Encoding.UTF8.GetBytes("hello")), "text/plain");
 
         await using var read = await storage.OpenReadAsync(key);
         using var sr = new StreamReader(read);
@@ -31,7 +31,7 @@ public class LocalFileStorageTests : IDisposable
     {
         var storage = NewStorage();
         var key = "a/b/" + Guid.NewGuid().ToString("N");
-        await storage.SaveAsync(key, new MemoryStream([1, 2, 3]));
+        await storage.SaveAsync(key, new MemoryStream([1, 2, 3]), "application/octet-stream");
         await storage.DeleteAsync(key);
         var act = async () => await storage.OpenReadAsync(key);
         await act.Should().ThrowAsync<FileNotFoundException>();
