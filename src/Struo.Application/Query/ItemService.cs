@@ -33,12 +33,8 @@ public sealed class ItemService(
     IRevisionStore revisions,
     RevisionSnapshotBuilder snapshotBuilder) : IItemUseCases
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
-
-    private static readonly HashSet<FieldInterface> MultiValueInterfaces =
-    [
-        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags
-    ];
+    private readonly RichTextCleaner richText = new(sanitizer);
+    private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
 
     public async Task<PagedResult> QueryAsync(
         string collection, QueryModel raw, string? locale = null,
@@ -316,7 +312,7 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
         ValidateLanguageCodeIfNeeded(collection, body);
-        var entity = Deserialize(collection, body, meta);
+        var entity = deserializer.Deserialize(collection, body, meta);
         var d = registry.Get(collection)!;
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
@@ -356,7 +352,7 @@ public sealed class ItemService(
         // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
         var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
-        var incoming = Deserialize(collection, body, meta);
+        var incoming = deserializer.Deserialize(collection, body, meta);
         var bodyKeys = body.ValueKind == JsonValueKind.Object
             ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -395,7 +391,7 @@ public sealed class ItemService(
         // writer already moved the row on. Absent a client version we fall back to the freshly-loaded
         // value (no protection, but backward compatible for callers that don't track versions).
         if (existing is Struo.Domain.Auditing.AuditableEntity ex)
-            ex.Version = TryReadVersion(body) ?? ex.Version;
+            ex.Version = JsonBodyUtil.TryReadVersion(body) ?? ex.Version;
 
         // Parent row + M2M + translations commit atomically (see CreateAsync).
         object? updated = null;
@@ -499,9 +495,9 @@ public sealed class ItemService(
                 if (!allowed.Contains(field.Name))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                var value = JsonValue(field.Value);
-                if (value is string s && IsRichTextField(meta, field.Name))
-                    value = SanitizeRichText(s);
+                var value = JsonBodyUtil.JsonValue(field.Value);
+                if (value is string s && RichTextCleaner.IsRichTextField(meta, field.Name))
+                    value = richText.Sanitize(s);
                 fieldValues[field.Name] = value;
             }
 
@@ -509,17 +505,14 @@ public sealed class ItemService(
             foreach (var rf in requiredFields)
             {
                 var has = fieldValues.TryGetValue(rf, out var v);
-                if (!has || v is null || (v is string s && string.IsNullOrWhiteSpace(s)))
-                    throw new QueryException(
-                        $"Required translation field '{rf}' is missing for locale '{locale}'.");
+                FieldValueRules.RequireTranslation(rf, locale, has, v);
             }
 
             // Max length — CMS-layer limit (7g.5), measured after RichText sanitization.
             foreach (var (name, value) in fieldValues)
             {
-                if (value is string sv && maxLengths.TryGetValue(name, out var max) && sv.Length > max)
-                    throw new QueryException(
-                        $"Field '{name}' exceeds maximum length {max} for locale '{locale}'.");
+                if (value is string sv && maxLengths.TryGetValue(name, out var max))
+                    FieldValueRules.CheckMaxLengthTranslation(name, max, locale, sv);
             }
 
             perLocale[locale] = fieldValues;
@@ -544,47 +537,6 @@ public sealed class ItemService(
             perLocale,
             ct);
     }
-
-    /// <summary>Converts a JSON value to a CLR primitive for translation field storage.</summary>
-    private static object? JsonValue(JsonElement e) => e.ValueKind switch
-    {
-        JsonValueKind.String => e.GetString(),
-        JsonValueKind.Number => e.TryGetInt64(out var l) ? l : e.GetDouble(),
-        JsonValueKind.True => true,
-        JsonValueKind.False => false,
-        JsonValueKind.Null => null,
-        _ => e.GetRawText()
-    };
-
-    /// <summary>
-    /// Sanitizes a RichText field value: null stays null; otherwise the HTML is run through the
-    /// sanitizer and, if the cleaned result is visually blank (no text and no void media), coerced
-    /// to null so blank editor documents (<c>&lt;p&gt;&lt;/p&gt;</c>) do not create dirty rows and
-    /// so a required RichText field treats blank as missing.
-    /// </summary>
-    private string? SanitizeRichText(string? raw)
-    {
-        if (raw is null) return null;
-        var clean = sanitizer.Sanitize(raw);
-        return IsBlankHtml(clean) ? null : clean;
-    }
-
-    private static bool IsBlankHtml(string html)
-    {
-        if (string.IsNullOrWhiteSpace(html)) return true;
-        // Void/media content counts as non-blank.
-        if (html.Contains("<img", StringComparison.OrdinalIgnoreCase) ||
-            html.Contains("<hr", StringComparison.OrdinalIgnoreCase)) return false;
-        // Strip tags and non-breaking spaces; blank if nothing meaningful remains.
-        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", string.Empty)
-            .Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase);
-        return string.IsNullOrWhiteSpace(text);
-    }
-
-    private static bool IsRichTextField(CollectionMetadata meta, string fieldName) =>
-        meta.Fields.Any(f =>
-            string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
-            f.Interface == FieldInterface.RichText);
 
     /// <summary>
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
@@ -858,7 +810,7 @@ public sealed class ItemService(
         // alive across the awaited update (the body's JsonElement must stay valid).
         using var src = JsonDocument.Parse(rec.Snapshot);
         using var doc = JsonDocument.Parse(
-            StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
+            JsonBodyUtil.StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
         return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
     }
 
@@ -897,43 +849,8 @@ public sealed class ItemService(
         return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta) };
     }
 
-    /// <summary>
-    /// Serialises <paramref name="source"/> as UTF-8 JSON with any top-level key in
-    /// <paramref name="keysToRemove"/> omitted. Returns the raw bytes so the caller can
-    /// parse them into a <c>using</c>-scoped <see cref="JsonDocument"/> and avoid a pool leak.
-    /// </summary>
-    private static byte[] StripKeys(JsonElement source, IReadOnlySet<string> keysToRemove)
-    {
-        using var ms = new System.IO.MemoryStream();
-        using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
-        {
-            writer.WriteStartObject();
-            foreach (var prop in source.EnumerateObject())
-            {
-                if (!keysToRemove.Contains(prop.Name))
-                    prop.WriteTo(writer);
-            }
-            writer.WriteEndObject();
-        }
-        return ms.ToArray();
-    }
-
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);
-
-    // Reads the optimistic-concurrency token the client echoed back, if any. Accepts a JSON number or
-    // a numeric string; returns null when absent or unparseable (treated as "no version supplied").
-    private static long? TryReadVersion(JsonElement body)
-    {
-        if (body.ValueKind != JsonValueKind.Object) return null;
-        if (!body.TryGetProperty("version", out var v)) return null;
-        return v.ValueKind switch
-        {
-            JsonValueKind.Number when v.TryGetInt64(out var n) => n,
-            JsonValueKind.String when long.TryParse(v.GetString(), out var n) => n,
-            _ => null
-        };
-    }
 
     // Writes to an AdminOnly collection (identity/authorization tables: user/role/permission/userRole)
     // require a super-admin even when the caller holds a per-collection write/delete grant. Otherwise a
@@ -943,261 +860,6 @@ public sealed class ItemService(
     {
         if (meta.AdminOnly && !permissions.IsSuperAdmin)
             throw new PermissionDeniedException($"Writes to '{meta.Name}' require a super-admin.");
-    }
-
-    private object Deserialize(string collection, JsonElement body, CollectionMetadata meta)
-    {
-        var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
-
-        // Strip M2M relation keys (e.g. "tags": [1,2]) from the body before deserializing into
-        // the entity type — those keys hold id arrays, not nested objects, so JSON deserialization
-        // would fail trying to convert a long into the target entity type.
-        var stripNames = m2mSource.M2MDescriptors(collection)
-            .Select(r => r.RelationName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // The translation sidecar payload ("translations": { locale: {...} }) is not a parent
-        // property — strip it so deserialization into the parent entity doesn't choke on it.
-        if (meta.Translation is not null) stripNames.Add("translations");
-
-        // Json fields carry an arbitrary JSON object/array/scalar; binding that into their string
-        // property would make System.Text.Json throw. Strip them here and set the raw text below.
-        foreach (var jsonField in meta.Fields.Where(f => f.Interface == FieldInterface.Json))
-            stripNames.Add(jsonField.Name);
-
-        object entity;
-        if (stripNames.Count > 0)
-        {
-            // Parse into a using-scoped document so the ArrayPool buffer is returned promptly.
-            using var stripped = JsonDocument.Parse(StripKeys(body, stripNames));
-            try
-            {
-                entity = stripped.RootElement.Deserialize(d.EntityType, JsonOpts)
-                         ?? throw new QueryException("Request body could not be parsed.");
-            }
-            catch (JsonException)
-            {
-                // A field's JSON value is the wrong shape for its bound property (e.g. a KeyValue
-                // entry given a number/object instead of a string) — a client error, not a 500.
-                throw new QueryException("Request body could not be parsed.");
-            }
-        }
-        else
-        {
-            try
-            {
-                entity = body.Deserialize(d.EntityType, JsonOpts)
-                         ?? throw new QueryException("Request body could not be parsed.");
-            }
-            catch (JsonException)
-            {
-                throw new QueryException("Request body could not be parsed.");
-            }
-        }
-
-        // Set each Json field's string property from the original body's raw text (stripped above).
-        // Present + non-null => store the raw JSON text; absent or explicit JSON null => leave null.
-        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable))
-        {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true } || pi.PropertyType != typeof(string)) continue;
-            if (body.ValueKind == JsonValueKind.Object
-                && body.TryGetProperty(field.Name, out var el)
-                && el.ValueKind != JsonValueKind.Null)
-            {
-                pi.SetValue(entity, el.GetRawText());
-            }
-        }
-
-        // strip system/read-only fields (audit AOP / identity own them); only nullable props can be nulled
-        foreach (var field in meta.Fields.Where(f => f.IsSystem || f.ReadOnly))
-        {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true }) continue;
-            var canBeNull = !pi.PropertyType.IsValueType || Nullable.GetUnderlyingType(pi.PropertyType) is not null;
-            if (canBeNull) pi.SetValue(entity, null);
-        }
-
-        // Sanitize non-translatable RichText field values on the entity before required validation,
-        // so stored HTML is XSS-clean and a blank editor document is treated as missing.
-        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.RichText && !f.Translatable))
-        {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true } || pi.PropertyType != typeof(string)) continue;
-            if (pi.GetValue(entity) is string raw)
-                pi.SetValue(entity, SanitizeRichText(raw));
-        }
-
-        // required validation — skip translatable fields (they live on the sidecar entity and
-        // are validated per-locale in SyncTranslationsAsync, not on the parent).
-        foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
-        {
-            var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.EntityType.GetProperty(prop) : null;
-            var value = pi?.GetValue(entity);
-            if (value is null || (value is string s && string.IsNullOrWhiteSpace(s)))
-                throw new QueryException($"Field '{field.Name}' is required.");
-        }
-
-        // Max length — CMS-layer limit (7g.5); the DB column width is SqlSugar's separate concern.
-        // Runs after RichText sanitization so the stored value is what gets measured.
-        foreach (var field in meta.Fields.Where(f => f.MaxLength is > 0 && !f.Translatable))
-        {
-            var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.EntityType.GetProperty(prop) : null;
-            if (pi?.GetValue(entity) is string value && value.Length > field.MaxLength!.Value)
-                throw new QueryException($"Field '{field.Name}' exceeds maximum length {field.MaxLength}.");
-        }
-
-        // Multi-value fields (MultiSelect/CheckboxGroup/Tags) live on the parent entity as
-        // List<string> / List<TagItem>. Validate membership / non-blank tags, enforce Required as
-        // non-empty, de-duplicate, and coerce blank tag labels to null. Non-translatable only.
-        foreach (var field in meta.Fields.Where(f => MultiValueInterfaces.Contains(f.Interface) && !f.Translatable))
-        {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true }) continue;
-
-            if (field.Interface == FieldInterface.Tags)
-            {
-                var tags = (pi.GetValue(entity) as IEnumerable<TagItem>) ?? [];
-                var seen = new HashSet<string>(StringComparer.Ordinal);
-                var cleaned = new List<TagItem>();
-                foreach (var t in tags)
-                {
-                    if (t is null || string.IsNullOrWhiteSpace(t.Value))
-                        throw new QueryException($"Field '{field.Name}' has a tag with an empty value.");
-                    if (!seen.Add(t.Value)) continue; // de-dup by value, keep first
-                    var label = string.IsNullOrWhiteSpace(t.Label) ? null : t.Label;
-                    cleaned.Add(new TagItem(t.Value, label));
-                }
-                if (field.Required && cleaned.Count == 0)
-                    throw new QueryException($"Field '{field.Name}' is required.");
-                pi.SetValue(entity, cleaned);
-            }
-            else // option-bound MultiSelect / CheckboxGroup
-            {
-                var values = (pi.GetValue(entity) as IEnumerable<string>) ?? [];
-                var allowed = (field.Options ?? []).Select(o => o.Value).ToHashSet(StringComparer.Ordinal);
-                var seen = new HashSet<string>(StringComparer.Ordinal);
-                var cleaned = new List<string>();
-                foreach (var v in values)
-                {
-                    if (v is null) continue;
-                    if (!allowed.Contains(v))
-                        throw new QueryException($"Field '{field.Name}' has value '{v}' not in its options.");
-                    if (seen.Add(v)) cleaned.Add(v); // de-dup, keep first
-                }
-                if (field.Required && cleaned.Count == 0)
-                    throw new QueryException($"Field '{field.Name}' is required.");
-                pi.SetValue(entity, cleaned);
-            }
-        }
-
-        // KeyValue fields (Dictionary<string,string>) live on the parent entity. Reject blank keys and
-        // enforce Required as a non-empty map. Values may be empty; duplicate keys are impossible
-        // (System.Text.Json last-wins bind). Non-translatable only.
-        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.KeyValue && !f.Translatable))
-        {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true }) continue;
-
-            var map = pi.GetValue(entity) as IDictionary<string, string>;
-            if (map is not null)
-            {
-                foreach (var key in map.Keys)
-                    if (string.IsNullOrWhiteSpace(key))
-                        throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
-            }
-            if (field.Required && (map is null || map.Count == 0))
-                throw new QueryException($"Field '{field.Name}' is required.");
-        }
-
-        // Files fields (List<Guid>) live on the parent entity as an ordered list of file ids. Drop
-        // Guid.Empty, de-duplicate keeping first (preserves order), and enforce Required as a non-empty
-        // list. No existence check — mirrors the scalar File/Image field (a deleted file degrades to a
-        // raw-id fallback in the picker). A non-guid array element already 400s at the deserialize
-        // guard. Non-translatable only.
-        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Files && !f.Translatable))
-        {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true }) continue;
-
-            var ids = (pi.GetValue(entity) as IEnumerable<Guid>) ?? [];
-            var seen = new HashSet<Guid>();
-            var cleaned = new List<Guid>();
-            foreach (var id in ids)
-            {
-                if (id == Guid.Empty) continue;
-                if (seen.Add(id)) cleaned.Add(id); // de-dup, keep first (preserves order)
-            }
-            if (field.Required && cleaned.Count == 0)
-                throw new QueryException($"Field '{field.Name}' is required.");
-            pi.SetValue(entity, cleaned);
-        }
-
-        // Repeater fields (List<TChild>) live on the parent entity as an ordered list of typed child
-        // objects. Drop fully-blank rows (every sub-field null or whitespace string), enforce each
-        // kept row's sub-field Required / Select-Radio option membership / MaxLength, and enforce the
-        // parent Required as a non-empty list. Non-translatable only. A wrong-shaped element already
-        // 400s at the deserialize guard.
-        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Repeater && !f.Translatable))
-        {
-            if (field.Fields is null) continue;
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            var pi = d.EntityType.GetProperty(prop);
-            if (pi is not { CanWrite: true }) continue;
-            if (pi.GetValue(entity) is not System.Collections.IEnumerable rowsEnum) continue;
-
-            var cleaned = (System.Collections.IList)Activator.CreateInstance(pi.PropertyType)!;
-
-            var rowIndex = 0;
-            foreach (var row in rowsEnum)
-            {
-                rowIndex++;
-                if (row is null) continue;
-
-                // Blank-row detection: every sub-field is null or a whitespace-only string.
-                var allBlank = true;
-                foreach (var sub in field.Fields)
-                {
-                    var v = ReadProp(row, sub.Name);
-                    if (v is null) continue;
-                    if (v is string sv && string.IsNullOrWhiteSpace(sv)) continue;
-                    allBlank = false; break;
-                }
-                if (allBlank) continue;
-
-                foreach (var sub in field.Fields)
-                {
-                    var v = ReadProp(row, sub.Name);
-                    var sv = v as string;
-
-                    if (sub.Required && (v is null || (sv is not null && string.IsNullOrWhiteSpace(sv))))
-                        throw new QueryException(
-                            $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' is required.");
-
-                    if (sv is not null && sub.MaxLength is > 0 && sv.Length > sub.MaxLength.Value)
-                        throw new QueryException(
-                            $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' exceeds maximum length {sub.MaxLength}.");
-
-                    if (sv is not null && sub.Options is { Count: > 0 } &&
-                        !string.IsNullOrEmpty(sv) &&
-                        !sub.Options.Any(o => string.Equals(o.Value, sv, StringComparison.Ordinal)))
-                        throw new QueryException(
-                            $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' value '{sv}' is not in its options.");
-                }
-                cleaned.Add(row);
-            }
-
-            if (field.Required && cleaned.Count == 0)
-                throw new QueryException($"Field '{field.Name}' is required.");
-            pi.SetValue(entity, cleaned);
-        }
-        return entity;
     }
 
     private IReadOnlyDictionary<string, object?> Project(object entity, CollectionMetadata meta, IReadOnlyList<string>? fields)
