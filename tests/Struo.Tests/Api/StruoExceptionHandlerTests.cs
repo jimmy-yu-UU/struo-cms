@@ -32,15 +32,21 @@ public class StruoExceptionHandlerTests
         body.Code.Should().Be("NOT_FOUND");
     }
 
-    [Theory]
-    [InlineData(typeof(RelationConflictException))]
-    [InlineData(typeof(ConcurrencyConflictException))]
-    public void Conflicts_are_409(System.Type exType)
+    [Fact]
+    public void RelationConflict_is_409_CONFLICT()
     {
-        var ex = (System.Exception)System.Activator.CreateInstance(exType, "c")!;
-        var (status, body) = StruoExceptionHandler.Map(ex, true);
+        var (status, body) = StruoExceptionHandler.Map(new RelationConflictException("c"), true);
         status.Should().Be(409);
         body.Code.Should().Be("CONFLICT");
+    }
+
+    // API-1: optimistic-lock CAS miss splits to VERSION_CONFLICT (still 409) over REST.
+    [Fact]
+    public void ConcurrencyConflict_is_409_VERSION_CONFLICT()
+    {
+        var (status, body) = StruoExceptionHandler.Map(new ConcurrencyConflictException("stale"), true);
+        status.Should().Be(409);
+        body.Code.Should().Be("VERSION_CONFLICT");
     }
 
     [Fact]

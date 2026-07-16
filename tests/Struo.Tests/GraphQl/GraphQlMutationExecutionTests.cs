@@ -302,8 +302,11 @@ public class GraphQlMutationExecutionTests
         node.GetProperty("status").GetString().Should().Be("archived");
     }
 
+    // API-1: optimistic-lock CAS miss surfaces over the GraphQL pipeline as extensions.code ==
+    // VERSION_CONFLICT (not the generic CONFLICT). Asserted on the parsed extensions.code exactly —
+    // a substring Contains("CONFLICT") would falsely pass since VERSION_CONFLICT contains it.
     [Fact]
-    public async Task Update_version_conflict_maps_to_CONFLICT()
+    public async Task Update_version_conflict_maps_to_VERSION_CONFLICT()
     {
         var ds = new FakeGraphQlDataSource
         {
@@ -313,7 +316,10 @@ public class GraphQlMutationExecutionTests
         var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
             "mutation { updateArticle(id: \"5\", input: { status: \"x\", version: 1 }) { id } }")).ToJson();
 
-        json.Should().Contain("CONFLICT");
+        using var doc = JsonDocument.Parse(json);
+        var code = doc.RootElement.GetProperty("errors")[0]
+            .GetProperty("extensions").GetProperty("code").GetString();
+        code.Should().Be("VERSION_CONFLICT");
     }
 
     [Fact]
