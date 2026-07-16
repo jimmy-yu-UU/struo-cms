@@ -311,6 +311,17 @@ Gate：`pnpm test` + `pnpm build` + Playwright（FE-4 409 流程、FE-5 離開�
 - **資料組：** DB-7（新欄位 timestamptz 慣例文件化）、DB-8（**依 user 決策**）、DB-9（M2M targetIds 去重 + revert 時清 soft-delete filter）、DB-10（translation `(fk,locale)` UNIQUE，migration + CodeFirst）
 - **架構/前端組：** ARC-4（`OrderByExpressionBuilder` 抽檔 + open-generic delegate cache）、ARC-5（options `ValidateOnStart` + `[Required]`）、ARC-6（`ItemsController` 依 `IItemUseCases` 接縫）、FE-7~12（timer 清理、MediaLibrary confirm+gate、刪 HelloWorld.vue、setLink protocol 驗證、errBody 改名+meta 守衛、RelationPicker 選中 label 併入 options）
 
+## Batch 3/3b 帶入項（2026-07-16 記載；開批出細部 plan 時納入）
+
+**併入既有項目（fold-in）：**
+- FE-7 擴充範圍（同一函式/同類 timer 衛生，Batch 3 review 指定 fold 入此項）：(a) `CollectionListView.loadItems` token 在 `meta/canRead` early-return **之前**取號 → bail 的呼叫可孤兒化 in-flight load 的 `loading=true`（自癒、無害，仍該修）；(b) `searchTimer` 手寫 debounce 收斂到 `lib/debounce.ts`（含 unmount cancel — FE-7 本體）。
+- FE 組新增小項：(c) FE-5 離開守衛 confirm 以 Esc/X 關閉時 guard promise 永不 resolve（安全方向：使用者留下；正解 = PrimeVue `onHide` resolve false）；(d) FE-4 conflict banner 硬編色票（`#f0ad4e`/`#fff8ec`）改 theme token；(e) `applyServerErrors` leftover join `' '` → `'; '`；(f) e2e 繼承 minors：items/relations 最終 row-gone 斷言借用 trash.spec 的 count-settle idiom、`openByTitle` 補 form-load settle、relations picker `toPass` 重開 churn。
+- 測試補強（Batch 3 review 指出的 gap，順手補）：spinner-preservation interleaving（stale A 先 resolve 時 loading 須為新請求保留）；picker 元件級 latest-wins race 測試；`reloadLatest`/delete-accept 的 re-baseline view 測試。
+
+**新獨立項（開批時 triage：入 Batch 4 或標「下輪稽核」）：**
+- **NAV-1（成對，行為變更需完整測試）：** `RelatedList.vue:62` 同 route-record params-only 導航繞過 `onBeforeRouteLeave` + `AppShell.vue:29` 未 key 的 `<router-view>`（表單於同 record 導航不重載 — 兩 bug 互相遮蔽，今日無資料遺失）。修法 = `<router-view :key>`（或 `onBeforeRouteUpdate` + init 重跑）**且**離開守衛同步接手該路徑；`ItemFormView.init()` 已重置 conflict/latestFromServer（817568a）為此鋪路。
+- **API-1（後端 API 語意變更）：** 樂觀鎖版本衝突與其他 CONFLICT 分碼（如 `VERSION_CONFLICT` vs `CONFLICT`）— 否則未來 users UI 若復用 ItemFormView，duplicate-email 409 會誤觸「changed by someone else」conflict-recovery banner。REST/GraphQL 雙協定同步 + 前端 FE-4 分支跟進。
+
 Gate：雙端測試全綠 + live 抽查（SEC-5 檔案權限、DB-10 unique）+ 標 ✅。
 
 # Batch 5 — ARC-1 ItemService 重構（最後；批次開始時出細部 plan）
