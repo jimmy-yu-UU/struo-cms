@@ -107,6 +107,10 @@ function def(opts: {
 }
 
 const fileSerialize = (v: unknown): unknown => (v === '' ? null : v)
+// date/time/dateTime: an empty picker value ('' | null | undefined) must serialise to null so the
+// backend's DateTime? deserialiser never receives "" (JsonException -> 400). Valid ISO strings pass
+// through unchanged. `empty`/`parse`/`defaultValue` stay '' — this only affects the outbound payload.
+const dateTimeSerialize = (v: unknown): unknown => (v === '' || v == null ? null : v)
 const readonlyDef = def({ component: ReadonlyField })
 
 const jsonDef: FieldTypeDef = {
@@ -195,9 +199,9 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   rating: def({ component: NumberField, listColumn: asString }),
   boolean: def({ component: BooleanField, listColumn: asYesNo }),
   checkbox: def({ component: BooleanField, listColumn: asYesNo }),
-  date: def({ component: DateField, listColumn: asDate }),
-  time: def({ component: DateField, listColumn: asDate }),
-  dateTime: def({ component: DateField, listColumn: asDate }),
+  date: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
+  time: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
+  dateTime: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
   select: def({ component: SelectField, listColumn: asOption }),
   radio: def({ component: RadioField, listColumn: asOption }),
   divider: def({ component: DividerField }),

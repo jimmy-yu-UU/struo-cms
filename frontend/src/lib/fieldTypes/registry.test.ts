@@ -55,6 +55,17 @@ describe('field-type registry', () => {
     expect(getFieldType('text').serialize('', field({ interface: 'text' }))).toBe('')
   })
 
+  it('serialize coerces empty date/time/dateTime to null and passes ISO strings through', () => {
+    for (const i of ['date', 'time', 'dateTime']) {
+      const f = field({ interface: i })
+      expect(getFieldType(i).serialize('', f), `${i} ''`).toBeNull()
+      expect(getFieldType(i).serialize(null, f), `${i} null`).toBeNull()
+      expect(getFieldType(i).serialize(undefined, f), `${i} undefined`).toBeNull()
+      const iso = '2026-01-02T03:04:05Z'
+      expect(getFieldType(i).serialize(iso, f), `${i} iso`).toBe(iso)
+    }
+  })
+
   it('list formatters match the legacy formatCell output', () => {
     const sel = field({ interface: 'select', options: [{ value: 'draft', label: 'Draft' }] })
     expect(getFieldType('select').listColumn!.format('draft', sel)).toBe(formatCell('draft', sel))
