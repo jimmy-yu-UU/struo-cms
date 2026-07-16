@@ -26,6 +26,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
         services.AddScoped<IPermissionService, RbacPermissionService>();
         services.AddScoped<ICurrentPermissions, CurrentPermissions>();
+        services.AddScoped<OrderByExpressionBuilder>();
         services.AddScoped<IItemRepository, SqlSugarItemRepository>();
         services.AddScoped<IRelationExpander, RelationExpander>();
         services.AddScoped<IRelationFilterResolver, RelationFilterResolver>();
