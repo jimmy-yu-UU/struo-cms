@@ -22,6 +22,8 @@ public class InfrastructureRegistrationTests
             .Build();
 
         var services = new ServiceCollection();
+        // ARC-5: options now bind via BindConfiguration, which resolves IConfiguration from DI.
+        services.AddSingleton<IConfiguration>(config);
         services.AddStruoInfrastructure(config);
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();

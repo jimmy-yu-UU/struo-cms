@@ -14,7 +14,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddStruoInfrastructure(
         this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<DatabaseOptions>(configuration.GetSection(DatabaseOptions.SectionName));
+        // ARC-5: fail fast. BindConfiguration + ValidateOnStart makes a missing/empty connection
+        // string kill the host at boot (or at the first options materialization — e.g. when the
+        // ISqlSugarClient factory below reads IOptions<DatabaseOptions>.Value) instead of surfacing
+        // as a confusing 500 on the first DB access. DataAnnotations ([Required]) are enforced via
+        // the BCL validator (no Microsoft.Extensions.Options.DataAnnotations package needed here).
+        services.AddOptions<DatabaseOptions>()
+            .BindConfiguration(DatabaseOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<DatabaseOptions>, DataAnnotationsValidateOptions<DatabaseOptions>>();
         services.AddSingleton<ICurrentUserAccessor, StubCurrentUserAccessor>();
         services.AddSingleton<Struo.Application.Security.IPasswordHasher, Identity.Argon2idPasswordHasher>();
         services.AddScoped<Struo.Application.Security.IUserCredentialStore, Identity.SqlSugarUserCredentialStore>();
