@@ -6,8 +6,8 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// When <paramref name="meta"/> declares a translation sidecar, batch-loads the translation
-/// rows for all parent ids (optionally filtered to <paramref name="locale"/>), groups them by
+/// When <c>meta</c> declares a translation sidecar, batch-loads the translation
+/// rows for all parent ids (optionally filtered to <c>locale</c>), groups them by
 /// the parent FK, and attaches a <c>translations</c> map
 /// (<c>{ locale: { camelField: value } }</c>) onto each projected row.
 /// </summary>
