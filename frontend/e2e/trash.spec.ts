@@ -46,6 +46,11 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
   // filter to isolate it. The search state persists across the Active/Trash switch.
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
+  // The search is debounced + server-side, so the list transitions unfiltered (up to a full page of
+  // rows) → filtered. Acting during that transition lets a rowByTitle() action fire against the
+  // mid-re-render DataTable and hit a strict-mode ambiguity. The stamp is unique, so wait for the
+  // list to settle to exactly the one matching row before any inline row action.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
 
   // Soft-delete from the Active list (inline action). Confirm = "Yes".
   await rowByTitle(page, title).getByRole('button', { name: 'Delete', exact: true }).click()
