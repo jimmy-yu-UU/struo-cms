@@ -79,4 +79,18 @@ export default {
     loading: 'Loading dashboard…',
     error: 'Could not load dashboard data.',
   },
+  collectionList: {
+    count: '{n} items',
+    new: 'New',
+    searchPlaceholder: 'Search…',
+    range: 'Showing {from}–{to} of {total}',
+    active: 'Active',
+    trash: 'Trash',
+    delete: 'Delete',
+    restore: 'Restore',
+    purge: 'Delete permanently',
+    empty: 'No records',
+    notFound: 'Collection not found',
+    noAccess: "You don't have access to this collection",
+  },
 }
