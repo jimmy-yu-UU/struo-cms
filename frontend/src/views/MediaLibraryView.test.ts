@@ -2,112 +2,106 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import Button from 'primevue/button'
 import MediaLibraryView from './MediaLibraryView.vue'
-import MediaUploadDropzone from '../components/media/MediaUploadDropzone.vue'
+import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import { itemsApi } from '../api/itemsApi'
-import { filesApi } from '../api/filesApi'
 import { useAuthStore } from '../stores/authStore'
 import type { CurrentUser } from '../stores/authStore'
 
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: vi.fn() }) }))
+vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: vi.fn() }) }))
+
 const i18n = createI18n({
-  legacy: false,
-  locale: 'en',
-  fallbackLocale: 'en',
-  messages: { en: { media: { dropzone: 'Drop files here or click to upload' } } },
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { media: {
+    title: 'Media Library', count: '{n} files', upload: 'Upload', searchPlaceholder: 'Search files…',
+    typeAll: 'All types', typeImage: 'Images', typeVideo: 'Video', sortNewest: 'Newest', sortName: 'By name',
+    viewGrid: 'Grid view', viewList: 'List view', empty: 'No media files', loadFailed: 'Failed to load media',
+  }, collectionList: { range: 'Showing {from}–{to} of {total}' } } },
 })
 
-const push = vi.fn()
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push }),
-}))
+const rows = [{ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1, width: 10, height: 10, createdAt: '2026-07-01T00:00:00Z' }]
 
-const confirmRequire = vi.fn()
-vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
-vi.mock('primevue/confirmdialog', () => ({ default: { name: 'ConfirmDialog', template: '<div />' } }))
-
-const rows = [{ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 }]
+const stubs = {
+  PageHeader: { name: 'PageHeader', template: '<div><slot name="actions" /></div>' },
+  ListToolbar: { name: 'ListToolbar', template: '<div><slot name="filters" /></div>', props: ['searchValue', 'searchPlaceholder'] },
+  TableFooter: { name: 'TableFooter', template: '<div />', props: ['first', 'rows', 'total'] },
+  Paginator: { name: 'Paginator', template: '<div />' },
+  Select: { name: 'Select', template: '<div />' },
+  SelectButton: { name: 'SelectButton', template: '<div />' },
+  Button: { name: 'Button', template: '<button><slot /></button>', props: ['label'] },
+  ConfirmDialog: { name: 'ConfirmDialog', template: '<div />' },
+  MediaDetailDialog: { name: 'MediaDetailDialog', template: '<div />', props: ['file', 'canWrite', 'canDelete'] },
+}
 
 function seedUser(perms: Partial<Record<'read' | 'write' | 'delete', boolean>>): void {
   const auth = useAuthStore()
-  auth.user = {
-    id: 'u1',
-    isSuperAdmin: false,
-    permissions: { file: { read: true, write: false, delete: false, ...perms } },
-  } as CurrentUser
+  auth.user = { id: 'u1', isSuperAdmin: false, permissions: { file: { read: true, write: false, delete: false, ...perms } } } as CurrentUser
 }
 
-function actionLabels(w: ReturnType<typeof mount>): string[] {
-  return w.findAllComponents(Button).map((b) => b.props('label') as string)
+function mountView() {
+  return mount(MediaLibraryView, { global: { plugins: [i18n], stubs } })
 }
 
 describe('MediaLibraryView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
-    push.mockClear()
-    confirmRequire.mockClear()
   })
 
   it('loads files into the grid on mount', async () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    const w = mountView()
     await flushPromises()
     expect(itemsApi.list).toHaveBeenCalledWith('file', expect.objectContaining({ page: 0 }))
     expect(w.findAll('.media-tile')).toHaveLength(1)
   })
 
-  it('confirms before deleting: remove is NOT called until accept runs', async () => {
+  it('applies the image type filter and reloads', async () => {
     const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const del = vi.spyOn(filesApi, 'remove').mockResolvedValue()
-    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    const w = mountView()
     await flushPromises()
-
-    await (w.vm as unknown as { onDelete: (id: string) => void }).onDelete('f1')
-    expect(confirmRequire).toHaveBeenCalledTimes(1)
-    expect(del).not.toHaveBeenCalled()
-    expect(list).toHaveBeenCalledTimes(1) // no reload yet
-
-    const accept = confirmRequire.mock.calls[0][0].accept as () => Promise<void>
-    await accept()
+    await (w.vm as unknown as { onType: (t: string) => void }).onType('image')
     await flushPromises()
-    expect(del).toHaveBeenCalledWith('f1')
-    expect(list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
+      filter: { contentType: { op: '_starts_with', value: 'image/' } },
+    }))
   })
 
-  it('hides Delete/Edit actions for a user without file permissions', async () => {
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
-    seedUser({ write: false, delete: false })
-    await flushPromises()
-    const labels = actionLabels(w)
-    expect(labels).not.toContain('Delete')
-    expect(labels).not.toContain('Edit')
-  })
-
-  it('renders Delete/Edit actions for a user with write+delete on file', async () => {
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
-    seedUser({ write: true, delete: true })
-    await flushPromises()
-    const labels = actionLabels(w)
-    expect(labels).toContain('Delete')
-    expect(labels).toContain('Edit')
-  })
-
-  it('reloads once per upload batch (on the dropzone "done" event), not once per uploaded file', async () => {
+  it('sorts by name', async () => {
     const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onSort: (s: string) => void }).onSort('name')
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ sort: 'fileName' }))
+  })
+
+  it('opens the detail dialog for a clicked tile', async () => {
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
+    const w = mountView()
+    await flushPromises()
+    await w.find('.media-tile').trigger('click')
+    expect(w.findComponent({ name: 'MediaDetailDialog' }).props('file')).toEqual(rows[0])
+  })
+
+  it('reloads once per upload batch (dialog done event)', async () => {
+    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
+    const w = mountView()
     await flushPromises()
     expect(list).toHaveBeenCalledTimes(1)
-
-    const dropzone = w.findComponent(MediaUploadDropzone)
-    // Simulate an N-file batch: several 'uploaded' events, then a single 'done'.
-    dropzone.vm.$emit('uploaded', { id: 'f2' })
-    dropzone.vm.$emit('uploaded', { id: 'f3' })
-    dropzone.vm.$emit('done')
+    w.findComponent(MediaUploadDialog).vm.$emit('done')
     await flushPromises()
-
     expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('hides Upload for a user without write on file', async () => {
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
+    const w = mountView()
+    seedUser({ write: false })
+    await flushPromises()
+    const labels = w.findAllComponents({ name: 'Button' }).map((b) => b.props('label'))
+    expect(labels).not.toContain('Upload')
   })
 })
