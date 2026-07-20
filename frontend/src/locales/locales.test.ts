@@ -19,4 +19,9 @@ describe('locale packs', () => {
     expect(zhTW.common.logout).toBe('登出')
     expect(en.common.logout).toBe('Log out')
   })
+
+  it('carries the itemForm namespace in both packs', () => {
+    expect(zhTW.itemForm.save).toBe('儲存')
+    expect(en.itemForm.save).toBe('Save')
+  })
 })
