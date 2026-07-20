@@ -19,4 +19,13 @@ describe('PageHeader', () => {
     const w = mount(PageHeader, { props: { title: 'Articles' }, slots: { actions: '<button>New</button>' } })
     expect(w.get('.head-actions').text()).toBe('New')
   })
+  it('renders the lead slot inside .head-lead when provided', () => {
+    const w = mount(PageHeader, { props: { title: 'Edit' }, slots: { lead: '<button>Back</button>' } })
+    expect(w.find('.head-lead').exists()).toBe(true)
+    expect(w.get('.head-lead').text()).toBe('Back')
+  })
+  it('omits the .head-lead wrapper when no lead slot is given', () => {
+    const w = mount(PageHeader, { props: { title: 'Edit' } })
+    expect(w.find('.head-lead').exists()).toBe(false)
+  })
 })
