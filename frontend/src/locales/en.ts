@@ -41,4 +41,13 @@ export default {
     newItem: 'New item',
     editItem: 'Edit item',
   },
+  login: {
+    subtitle: 'Content management system',
+    email: 'Email',
+    password: 'Password',
+    submit: 'Sign in',
+    or: 'or',
+    ssoMicrosoft: 'Sign in with Microsoft 365',
+    failed: 'Login failed. Please try again.',
+  },
 }

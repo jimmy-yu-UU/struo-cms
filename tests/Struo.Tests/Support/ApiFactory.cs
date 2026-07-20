@@ -36,7 +36,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Rbac:PublicReadCollections:0"] = "article",
                 ["Rbac:PublicReadCollections:1"] = "category",
                 ["Rbac:PublicReadCollections:2"] = "file",
-                ["Rbac:PublicReadCollections:3"] = "language"
+                ["Rbac:PublicReadCollections:3"] = "language",
+                // Pin OIDC off by default so the IT suite is deterministic regardless of a developer's
+                // local, gitignored appsettings.Development.json (which may carry real tenant config for
+                // manual OIDC testing). Tests that need it on layer an override via WithWebHostBuilder.
+                ["Oidc:Enabled"] = "false"
             }));
     }
 

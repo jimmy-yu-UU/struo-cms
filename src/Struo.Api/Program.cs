@@ -62,6 +62,8 @@ try
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
     builder.Services.AddStruoCors(builder.Configuration);
     builder.Services.AddStruoOidc(builder.Configuration);
+    builder.Services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
+        .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();

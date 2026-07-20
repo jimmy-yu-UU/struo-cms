@@ -14,6 +14,7 @@ import { i18n } from './i18n'
 import { useThemeStore } from './stores/themeStore'
 import { useUiLocaleStore } from './stores/uiLocaleStore'
 import { resolveInitialUiLocale } from './theme/resolveInitialUiLocale'
+import { useAppConfigStore } from './stores/appConfigStore'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -32,8 +33,11 @@ apiClient.setUnauthorizedHandler(() => {
   if (router.currentRoute.value.name !== 'login') router.push({ name: 'login' })
 })
 
-// Resolve any existing session before the router/guard runs, then mount.
-auth.fetchCurrentUser().finally(() => {
+// Resolve the public app config (branding + oidc) and any existing session before mount,
+// so the brand renders without a flash. Neither rejection blocks mounting.
+const appConfig = useAppConfigStore(pinia)
+Promise.allSettled([auth.fetchCurrentUser(), appConfig.load()]).finally(() => {
+  document.title = appConfig.brandName
   app.use(router)
   app.mount('#app')
 })

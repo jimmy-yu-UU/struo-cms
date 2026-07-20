@@ -12,6 +12,7 @@ const stubs = {
   UiLanguageSwitcher: { template: '<div class="stub-lang" />' },
   ThemeToggle: { template: '<div class="stub-theme" />' },
   UserMenu: { template: '<div class="stub-user" />' },
+  BrandMark: { template: '<span class="stub-brandmark" />' },
 }
 
 describe('TheTopbar', () => {
@@ -40,5 +41,12 @@ describe('TheTopbar', () => {
     expect(wrapper.find('.stub-lang').exists()).toBe(true)
     expect(wrapper.find('.stub-theme').exists()).toBe(true)
     expect(wrapper.find('.stub-user').exists()).toBe(true)
+  })
+
+  it('renders the configured brand name', async () => {
+    const { useAppConfigStore } = await import('../../stores/appConfigStore')
+    useAppConfigStore().brandName = 'Acme Docs'
+    const wrapper = mount(TheTopbar, { global: { plugins: [i18n], stubs } })
+    expect(wrapper.find('.brand-btn').text()).toContain('Acme Docs')
   })
 })

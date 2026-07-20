@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { storeToRefs } from 'pinia'
 import { useSidebarStore } from '../../stores/sidebarStore'
+import { useAppConfigStore } from '../../stores/appConfigStore'
 import UiLanguageSwitcher from './UiLanguageSwitcher.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import UserMenu from './UserMenu.vue'
+import BrandMark from './BrandMark.vue'
 
 const sidebar = useSidebarStore()
 const router = useRouter()
 const { t } = useI18n()
+const { brandName } = storeToRefs(useAppConfigStore())
 </script>
 
 <template>
@@ -27,7 +31,7 @@ const { t } = useI18n()
       :aria-label="t('shell.brandHome')"
       @click="router.push({ name: 'dashboard' })"
     >
-      <span class="mark">S</span><b>StruoCMS</b>
+      <BrandMark /><b>{{ brandName }}</b>
     </button>
     <div class="spacer" />
     <UiLanguageSwitcher />
