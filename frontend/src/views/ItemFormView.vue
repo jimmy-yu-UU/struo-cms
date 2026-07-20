@@ -2,9 +2,11 @@
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import { useI18n } from 'vue-i18n'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
 import ItemForm from '../components/ItemForm.vue'
+import PageHeader from '../components/common/PageHeader.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -25,6 +27,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 const confirm = useConfirm()
+const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
 const id = computed(() => (route.params.id as string | undefined) ?? undefined)
@@ -238,19 +241,27 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, 
 <template>
   <section class="item-form-view">
     <ConfirmDialog />
-    <p v-if="loading" class="notice">Loading…</p>
-    <p v-else-if="!meta" class="notice">Collection not found.</p>
-    <p v-else-if="notFound" class="notice">Item not found.</p>
-    <p v-else-if="isCreate && !canWrite" class="notice">You don't have permission to create items here.</p>
+    <p v-if="loading" class="notice">{{ t('itemForm.loading') }}</p>
+    <p v-else-if="!meta" class="notice">{{ t('itemForm.collectionNotFound') }}</p>
+    <p v-else-if="notFound" class="notice">{{ t('itemForm.itemNotFound') }}</p>
+    <p v-else-if="isCreate && !canWrite" class="notice">{{ t('itemForm.noCreatePermission') }}</p>
     <template v-else>
-      <header class="form-header">
-        <h2>{{ isCreate ? `New ${meta.label}` : `Edit ${meta.label}` }}</h2>
-        <Button v-if="!isCreate && canDelete" label="Delete" severity="danger" @click="onDelete" />
-      </header>
+      <PageHeader :title="isCreate ? t('itemForm.new', { label: meta.label }) : t('itemForm.edit', { label: meta.label })">
+        <template #lead>
+          <Button text severity="secondary" icon="pi pi-chevron-left"
+                  :aria-label="t('itemForm.back')" @click="onCancel" />
+        </template>
+        <template #actions>
+          <Button v-if="!isCreate && canDelete" :label="t('itemForm.delete')" severity="danger" @click="onDelete" />
+          <Button v-if="canWrite" :label="t('itemForm.save')" :loading="submitting" @click="onSubmit" />
+        </template>
+      </PageHeader>
+
       <div v-if="conflict" class="conflict-banner" role="alert">
-        <span class="conflict-text">This item was changed by someone else. Review your edits and save again to overwrite, or reload the latest version.</span>
-        <Button label="Reload latest" severity="secondary" size="small" @click="reloadLatest" />
+        <span class="conflict-text">{{ t('itemForm.conflictText') }}</span>
+        <Button :label="t('itemForm.reloadLatest')" severity="secondary" size="small" @click="reloadLatest" />
       </div>
+
       <ItemForm
         :meta="meta"
         :item-id="id"
@@ -261,24 +272,24 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, 
         :disabled="!canWrite"
         :submitting="submitting"
         @submit="onSubmit"
-        @cancel="onCancel"
       />
     </template>
   </section>
 </template>
 
 <style scoped>
+.item-form-view { display: grid; gap: 4px; }
+.notice { color: var(--muted); }
 .conflict-banner {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  border: 1px solid var(--p-amber-400, #f0ad4e);
-  background: var(--p-amber-50, #fff8ec);
-  border-radius: 6px;
+  border: 1px solid var(--warn, #d97706);
+  background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
+  border-radius: var(--radius, 8px);
+  color: var(--fg);
 }
-.conflict-text {
-  flex: 1;
-}
+.conflict-text { flex: 1; }
 </style>
