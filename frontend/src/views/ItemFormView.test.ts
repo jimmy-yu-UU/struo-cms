@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import ItemFormView from './ItemFormView.vue'
 import { itemsApi } from '../api/itemsApi'
 import { ApiError } from '../api/apiClient'
@@ -34,6 +35,20 @@ const meta = { name: 'article', label: 'Article', fields: [
 ]}
 const stubs = { ItemForm: true, Button: true, ConfirmDialog: true }
 
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { itemForm: {
+    loading: 'Loading…', collectionNotFound: 'Collection not found', itemNotFound: 'Item not found',
+    noCreatePermission: "You don't have permission to create items here",
+    new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', back: 'Back to list',
+    relations: 'Relations', translatableBadge: 'Translatable',
+    conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
+  } } },
+})
+function mountView() {
+  return mount(ItemFormView, { global: { plugins: [i18n], stubs } })
+}
+
 function setupStores(opts: { superAdmin?: boolean } = {}) {
   const auth = useAuthStore()
   auth.user = { id: '1', isSuperAdmin: opts.superAdmin ?? true, permissions: {} }
@@ -62,7 +77,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     const spy = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     expect(spy).toHaveBeenCalledWith('article', '5', expect.objectContaining({ deep: ['category'], locale: 'en' }))
     expect((w.vm as any).model.shared.status).toBe('published')
@@ -74,7 +89,7 @@ describe('ItemFormView', () => {
     const spy = vi.spyOn(itemsApi, 'get').mockResolvedValue({
       id: '5', status: 'published', translations: {}, category: { id: 'cat-1' },
     })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     expect(spy).toHaveBeenCalledWith('article', '5', expect.objectContaining({ deep: ['category'] }))
   })
@@ -85,7 +100,7 @@ describe('ItemFormView', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({
       id: '5', status: 'published', translations: {}, category: { id: 'cat-1' },
     })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     expect((w.vm as any).model.relations.category).toBe('cat-1')
   })
@@ -94,7 +109,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article' }; routeName = 'collection-create'
     setupStores()
     const spy = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'draft'
     await (w.vm as any).onSubmit()
@@ -106,7 +121,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article' }; routeName = 'collection-create'
     setupStores()
     const spy = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     await (w.vm as any).onSubmit()
     expect(spy).not.toHaveBeenCalled()
@@ -121,7 +136,7 @@ describe('ItemFormView', () => {
         { field: 'status', message: 'Status is already taken.' },
       ]),
     )
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'draft' // pass client validation
     await (w.vm as any).onSubmit()
@@ -139,7 +154,7 @@ describe('ItemFormView', () => {
         { field: 'mystery', message: 'Server rejected a hidden field.' },
       ]),
     )
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'draft'
     await (w.vm as any).onSubmit()
@@ -156,7 +171,7 @@ describe('ItemFormView', () => {
         { field: 'ghost2', message: 'Second hidden problem.' },
       ]),
     )
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'draft'
     await (w.vm as any).onSubmit()
@@ -169,7 +184,7 @@ describe('ItemFormView', () => {
     vi.spyOn(itemsApi, 'create').mockRejectedValue(
       new ApiError(400, 'Title is required.', 'BAD_USER_INPUT'),
     )
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'draft'
     await (w.vm as any).onSubmit()
@@ -182,7 +197,7 @@ describe('ItemFormView', () => {
     setupStores()
     // CJK message that does NOT match the old /not found/i regex — only the code branch can pass this.
     vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(404, '找不到資源', 'NOT_FOUND'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     expect((w.vm as any).notFound).toBe(true)
   })
@@ -191,7 +206,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     expect((w.vm as any).notFound).toBe(false)
     expect((w.vm as any).serverError).toBe('Boom')
@@ -202,7 +217,7 @@ describe('ItemFormView', () => {
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 3 })
     const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5' })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited'
     await (w.vm as any).onSubmit()
@@ -218,7 +233,7 @@ describe('ItemFormView', () => {
     const upd = vi.spyOn(itemsApi, 'update')
       .mockRejectedValueOnce(new ApiError(409, 'The item was modified by someone else.', 'VERSION_CONFLICT'))
       .mockResolvedValueOnce({ id: '5' })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
     // The next get call is the post-409 recovery refresh: return the bumped server version.
@@ -243,7 +258,7 @@ describe('ItemFormView', () => {
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'update')
       .mockRejectedValueOnce(new ApiError(409, 'Email is already in use.', 'CONFLICT'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init() // init runs via onMounted AND this explicit call, so get is already called
     const getCallsAfterLoad = get.mock.calls.length
     ;(w.vm as any).model.shared.status = 'my-edit'
@@ -260,7 +275,7 @@ describe('ItemFormView', () => {
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
     get.mockResolvedValueOnce({ id: '5', status: 'server-copy', translations: {}, version: 9 })
@@ -281,7 +296,7 @@ describe('ItemFormView', () => {
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
     // Post-409 refresh caches item A's server copy in latestFromServer.
@@ -307,7 +322,7 @@ describe('ItemFormView', () => {
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit'
     get.mockRejectedValueOnce(new ApiError(404, '找不到資源', 'NOT_FOUND'))
@@ -321,7 +336,7 @@ describe('ItemFormView', () => {
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
     const rm = vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).onDelete()
     expect(confirmRequire).toHaveBeenCalled()
@@ -336,7 +351,7 @@ describe('ItemFormView', () => {
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue({ ...meta, softDelete: true })
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).onDelete()
     expect(confirmRequire.mock.calls[0][0].message).toContain('restore')
@@ -346,7 +361,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores() // meta has no softDelete
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).onDelete()
     expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
@@ -358,7 +373,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    mount(ItemFormView, { global: { stubs } })
+    mountView()
     expect(typeof leaveGuard).toBe('function')
   })
 
@@ -366,7 +381,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
@@ -376,7 +391,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited'
 
@@ -397,7 +412,7 @@ describe('ItemFormView', () => {
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5' })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // now dirty
     await (w.vm as any).onSubmit() // success -> re-baseline before navigate
@@ -413,7 +428,7 @@ describe('ItemFormView', () => {
     const get = vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit' // dirty
     get.mockResolvedValueOnce({ id: '5', status: 'server-copy', translations: {}, version: 9 })
@@ -430,7 +445,7 @@ describe('ItemFormView', () => {
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit' // dirty before delete
     ;(w.vm as any).onDelete()
@@ -446,7 +461,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // dirty
 
@@ -470,7 +485,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    mount(ItemFormView, { global: { stubs } })
+    mountView()
     expect(typeof updateGuard).toBe('function')
   })
 
@@ -478,7 +493,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // dirty
 
@@ -495,7 +510,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init() // clean
 
     const to = { params: { name: 'article', id: '6' } }
@@ -508,7 +523,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // dirty
 
@@ -524,7 +539,7 @@ describe('ItemFormView', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
     const addSpy = vi.spyOn(window, 'addEventListener')
     const removeSpy = vi.spyOn(window, 'removeEventListener')
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     expect(addSpy.mock.calls.some((c) => c[0] === 'beforeunload')).toBe(true)
     w.unmount()
@@ -536,7 +551,7 @@ describe('ItemFormView', () => {
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
     const addSpy = vi.spyOn(window, 'addEventListener')
-    const w = mount(ItemFormView, { global: { stubs } })
+    const w = mountView()
     await w.vm.init()
     const handler = addSpy.mock.calls.find((c) => c[0] === 'beforeunload')![1] as (e: Event) => void
 
@@ -548,5 +563,26 @@ describe('ItemFormView', () => {
     const dirty = { preventDefault: vi.fn(), returnValue: undefined } as unknown as Event
     handler(dirty)
     expect((dirty as unknown as { preventDefault: ReturnType<typeof vi.fn> }).preventDefault).toHaveBeenCalled()
+  })
+
+  it('renders the page-head title from i18n in edit mode', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    expect(w.get('.page-head h1').text()).toBe('Edit Article')
+  })
+  it('shows the conflict banner text from i18n when a version conflict is armed', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    const get = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'my-edit'
+    get.mockResolvedValueOnce({ id: '5', status: 'x', translations: {}, version: 9 })
+    await (w.vm as any).onSubmit()
+    expect(w.get('.conflict-banner').text()).toContain('changed by someone else')
   })
 })
