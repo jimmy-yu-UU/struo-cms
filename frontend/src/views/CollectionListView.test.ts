@@ -2,12 +2,32 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { reactive } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import CollectionListView from './CollectionListView.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { schemaApi } from '../api/schemaApi'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: {
+    en: {
+      collectionList: {
+        count: '{n} items', new: 'New', searchPlaceholder: 'Search…',
+        range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
+        delete: 'Delete', restore: 'Restore', purge: 'Delete permanently',
+        empty: 'No records', notFound: 'Collection not found',
+        noAccess: "You don't have access to this collection",
+      },
+    },
+  },
+})
+
+function mountView() {
+  return mount(CollectionListView, { global: { plugins: [i18n] } })
+}
 
 const pushMock = vi.fn()
 // Reactive route so tests can drive collection switches (watch(name)). Read lazily
@@ -75,7 +95,7 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
-    mount(CollectionListView)
+    mountView()
     await flushPromises()
     expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
   })
@@ -88,7 +108,7 @@ describe('CollectionListView', () => {
     const pending = new Promise((resolve) => { resolveSchema = resolve })
     vi.mocked(schemaApi.getAll).mockReturnValue(pending as ReturnType<typeof schemaApi.getAll>)
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     // Schema hasn't arrived yet: view must not have bailed out permanently.
     expect(itemsApi.list).not.toHaveBeenCalled()
@@ -120,7 +140,7 @@ describe('CollectionListView', () => {
       data: [{ id: '1', translations: { en: { title: 'Hello' } } }],
       total: 1,
     })
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     const vm = wrapper.vm as unknown as {
       cellValue: (row: Record<string, unknown>, field: unknown) => unknown
@@ -134,7 +154,7 @@ describe('CollectionListView', () => {
     seedSchema()
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: false, permissions: {} }
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     expect(itemsApi.list).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain("don't have access")
@@ -145,7 +165,7 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockRejectedValue(new Error('Server error.'))
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).toContain('Server error.')
   })
@@ -155,7 +175,7 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     vi.mocked(itemsApi.list).mockClear()
     ;(wrapper.vm as unknown as { onSort: (e: unknown) => void }).onSort({ sortField: 'status', sortOrder: -1 })
@@ -168,7 +188,7 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     const vm: any = wrapper.vm
     vm.onRowClick({ data: { id: '42' } })
@@ -180,7 +200,7 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const wrapper = mount(CollectionListView)
+    const wrapper = mountView()
     await flushPromises()
     const vm: any = wrapper.vm
     vm.onNew()
@@ -191,7 +211,7 @@ describe('CollectionListView', () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     expect((w.vm as any).showTrashSwitch).toBe(true)
   })
@@ -200,7 +220,7 @@ describe('CollectionListView', () => {
     seedSchema(); seedLanguage() // seedSchema's article has no softDelete
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     expect((w.vm as any).showTrashSwitch).toBe(false)
   })
@@ -210,7 +230,7 @@ describe('CollectionListView', () => {
     useAuthStore().user = { id: 'u1', isSuperAdmin: false,
       permissions: { article: { read: true, write: false, delete: false } } }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     expect((w.vm as any).showTrashSwitch).toBe(false)
   })
@@ -219,7 +239,7 @@ describe('CollectionListView', () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     vi.mocked(itemsApi.list).mockClear()
     ;(w.vm as any).setMode('trash')
@@ -232,7 +252,7 @@ describe('CollectionListView', () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     ;(w.vm as any).setMode('trash')
     ;(w.vm as any).onRowClick({ data: { id: '42' } })
@@ -244,7 +264,7 @@ describe('CollectionListView', () => {
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
     vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     ;(w.vm as any).onDelete({ id: '1' })
     const arg = confirmRequire.mock.calls[0][0]
@@ -260,7 +280,7 @@ describe('CollectionListView', () => {
     seedSchema(); seedLanguage() // no softDelete
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', status: 'draft' }], total: 1 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     ;(w.vm as any).onDelete({ id: '1' })
     expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
@@ -271,7 +291,7 @@ describe('CollectionListView', () => {
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
     vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     ;(w.vm as any).setMode('trash')
     await flushPromises()
@@ -287,7 +307,7 @@ describe('CollectionListView', () => {
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
     vi.mocked(itemsApi.restore).mockResolvedValue({ id: '1' })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     ;(w.vm as any).setMode('trash')
     await flushPromises()
@@ -303,7 +323,7 @@ describe('CollectionListView', () => {
     seedSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'initial' }], total: 1 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     // Two in-flight loads. The later one (B) resolves first; the earlier (A) resolves last.
     let resolveA!: (v: unknown) => void
@@ -330,7 +350,7 @@ describe('CollectionListView', () => {
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
     vi.mocked(itemsApi.restore).mockRejectedValue(new Error('Restore failed.'))
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     ;(w.vm as any).setMode('trash')
     await flushPromises()
@@ -346,7 +366,7 @@ describe('CollectionListView', () => {
     seedSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises() // initial onMounted load
     vi.mocked(itemsApi.list).mockClear()
     const vm = w.vm as any
@@ -368,7 +388,7 @@ describe('CollectionListView', () => {
     seedSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     vi.mocked(itemsApi.list).mockClear()
     ;(w.vm as any).onSearchInput('foo') // schedules a debounced load
@@ -393,7 +413,7 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     vi.mocked(itemsApi.list).mockClear()
     ;(w.vm as any).onSearchInput('foo') // pending debounced search against 'article'
@@ -416,7 +436,7 @@ describe('CollectionListView', () => {
     const auth = useAuthStore()
     auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mount(CollectionListView)
+    const w = mountView()
     await flushPromises()
     const vm = w.vm as any
     // Load A goes in-flight and turns the spinner on.
@@ -437,5 +457,15 @@ describe('CollectionListView', () => {
     await flushPromises()
     expect(vm.loading).toBe(false)
     expect(vm.rows).toEqual([])
+  })
+
+  it('renders the PageHeader title and count caption', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('h1').text()).toBe('Article')
+    expect(w.text()).toContain('1 items') // collectionList.count with n=total
   })
 })
