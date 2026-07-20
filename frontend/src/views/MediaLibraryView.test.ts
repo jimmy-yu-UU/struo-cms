@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import MediaLibraryView from './MediaLibraryView.vue'
 import MediaUploadDropzone from '../components/media/MediaUploadDropzone.vue'
@@ -8,6 +9,13 @@ import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
 import { useAuthStore } from '../stores/authStore'
 import type { CurrentUser } from '../stores/authStore'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  fallbackLocale: 'en',
+  messages: { en: { media: { dropzone: 'Drop files here or click to upload' } } },
+})
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({
@@ -43,7 +51,7 @@ describe('MediaLibraryView', () => {
 
   it('loads files into the grid on mount', async () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { stubs: { RouterLink: true } } })
+    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     await flushPromises()
     expect(itemsApi.list).toHaveBeenCalledWith('file', expect.objectContaining({ page: 0 }))
     expect(w.findAll('.media-tile')).toHaveLength(1)
@@ -52,7 +60,7 @@ describe('MediaLibraryView', () => {
   it('confirms before deleting: remove is NOT called until accept runs', async () => {
     const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
     const del = vi.spyOn(filesApi, 'remove').mockResolvedValue()
-    const w = mount(MediaLibraryView, { global: { stubs: { RouterLink: true } } })
+    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     await flushPromises()
 
     await (w.vm as unknown as { onDelete: (id: string) => void }).onDelete('f1')
@@ -69,7 +77,7 @@ describe('MediaLibraryView', () => {
 
   it('hides Delete/Edit actions for a user without file permissions', async () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { stubs: { RouterLink: true } } })
+    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     seedUser({ write: false, delete: false })
     await flushPromises()
     const labels = actionLabels(w)
@@ -79,7 +87,7 @@ describe('MediaLibraryView', () => {
 
   it('renders Delete/Edit actions for a user with write+delete on file', async () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { stubs: { RouterLink: true } } })
+    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     seedUser({ write: true, delete: true })
     await flushPromises()
     const labels = actionLabels(w)
@@ -89,7 +97,7 @@ describe('MediaLibraryView', () => {
 
   it('reloads once per upload batch (on the dropzone "done" event), not once per uploaded file', async () => {
     const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
-    const w = mount(MediaLibraryView, { global: { stubs: { RouterLink: true } } })
+    const w = mount(MediaLibraryView, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     await flushPromises()
     expect(list).toHaveBeenCalledTimes(1)
 
