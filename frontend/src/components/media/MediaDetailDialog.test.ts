@@ -103,6 +103,42 @@ describe('MediaDetailDialog', () => {
     expect(w.emitted('saved')).toBeFalsy()
   })
 
+  it('preserves per-locale edits when switching locales, then saves both in the payload', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      setField: (n: string, v: string) => void
+      activeLocale: string
+      model: { translations: Record<string, Record<string, unknown>> }
+      onSave: () => Promise<void>
+    }
+
+    vm.activeLocale = 'en'
+    await w.vm.$nextTick()
+    vm.setField('title', 'Hello EN')
+    await w.vm.$nextTick()
+
+    vm.activeLocale = 'zh-TW'
+    await w.vm.$nextTick()
+    vm.setField('title', '哈囉')
+    await w.vm.$nextTick()
+
+    expect(vm.model.translations.en.title).toBe('Hello EN')
+    expect(vm.model.translations['zh-TW'].title).toBe('哈囉')
+
+    await vm.onSave()
+    await flushPromises()
+
+    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({
+      translations: expect.objectContaining({
+        en: expect.objectContaining({ title: 'Hello EN' }),
+        'zh-TW': expect.objectContaining({ title: '哈囉' }),
+      }),
+    }))
+  })
+
   it('deletes via filesApi.remove after confirm accept and emits deleted', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
