@@ -79,4 +79,18 @@ export default {
     loading: '載入儀表板中…',
     error: '無法載入儀表板資料。',
   },
+  collectionList: {
+    count: '共 {n} 筆',
+    new: '新增',
+    searchPlaceholder: '搜尋…',
+    range: '顯示 {from}–{to} / 共 {total} 筆',
+    active: '使用中',
+    trash: '回收桶',
+    delete: '刪除',
+    restore: '還原',
+    purge: '永久刪除',
+    empty: '沒有資料',
+    notFound: '找不到集合',
+    noAccess: '您沒有此集合的存取權',
+  },
 }
