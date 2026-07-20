@@ -2,13 +2,16 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import SelectButton from 'primevue/selectbutton'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
+import PageHeader from '../components/common/PageHeader.vue'
+import ListToolbar from '../components/common/ListToolbar.vue'
+import TableFooter from '../components/common/TableFooter.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -26,6 +29,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 const confirm = useConfirm()
+const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
 const meta = computed(() => schema.get(name.value))
@@ -34,10 +38,10 @@ const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
 const mode = ref<'active' | 'trash'>('active')
 const showTrashSwitch = computed(() => !!meta.value?.softDelete && canDelete.value)
-const modeOptions = [
-  { label: 'Active', value: 'active' as const },
-  { label: 'Trash', value: 'trash' as const },
-]
+const modeOptions = computed(() => [
+  { label: t('collectionList.active'), value: 'active' as const },
+  { label: t('collectionList.trash'), value: 'trash' as const },
+])
 const columns = computed(() => (meta.value ? selectListColumns(meta.value) : []))
 
 const rows = ref<Record<string, unknown>[]>([])
@@ -195,30 +199,35 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
   <section class="collection-list">
     <ConfirmDialog />
     <template v-if="!meta">
-      <p class="notice">Collection not found.</p>
+      <p class="notice">{{ t('collectionList.notFound') }}</p>
     </template>
     <template v-else-if="!canRead">
-      <p class="notice">You don't have access to this collection.</p>
+      <p class="notice">{{ t('collectionList.noAccess') }}</p>
     </template>
     <template v-else>
-      <header class="list-header">
-        <h2>{{ meta.label }}</h2>
-        <SelectButton
-          v-if="showTrashSwitch"
-          :model-value="mode"
-          :options="modeOptions"
-          option-label="label"
-          option-value="value"
-          :allow-empty="false"
-          @update:model-value="setMode($event)"
-        />
-        <InputText
-          type="text"
-          placeholder="Search"
-          @input="onSearchInput(($event.target as HTMLInputElement).value)"
-        />
-        <Button v-if="canWrite" label="New" icon="pi pi-plus" @click="onNew" />
-      </header>
+      <PageHeader :title="meta.label" :caption="t('collectionList.count', { n: total })">
+        <template #actions>
+          <Button v-if="canWrite" :label="t('collectionList.new')" icon="pi pi-plus" @click="onNew" />
+        </template>
+      </PageHeader>
+
+      <ListToolbar
+        :search-value="search"
+        :search-placeholder="t('collectionList.searchPlaceholder')"
+        @search="onSearchInput"
+      >
+        <template #filters>
+          <SelectButton
+            v-if="showTrashSwitch"
+            :model-value="mode"
+            :options="modeOptions"
+            option-label="label"
+            option-value="value"
+            :allow-empty="false"
+            @update:model-value="setMode($event)"
+          />
+        </template>
+      </ListToolbar>
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
@@ -247,15 +256,18 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
         <Column v-if="canDelete" header="" :style="{ width: '12rem' }">
           <template #body="{ data }">
             <template v-if="mode === 'active'">
-              <Button label="Delete" severity="danger" text size="small" @click.stop="onDelete(data)" />
+              <Button :label="t('collectionList.delete')" severity="danger" text size="small" @click.stop="onDelete(data)" />
             </template>
             <template v-else>
-              <Button label="Restore" text size="small" @click.stop="onRestore(data)" />
-              <Button label="Delete permanently" severity="danger" text size="small" @click.stop="onPurge(data)" />
+              <Button :label="t('collectionList.restore')" text size="small" @click.stop="onRestore(data)" />
+              <Button :label="t('collectionList.purge')" severity="danger" text size="small" @click.stop="onPurge(data)" />
             </template>
           </template>
         </Column>
-        <template #empty>No records.</template>
+        <template #empty>{{ t('collectionList.empty') }}</template>
+        <template #paginatorstart>
+          <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
+        </template>
       </DataTable>
     </template>
   </section>
