@@ -50,4 +50,33 @@ export default {
     ssoMicrosoft: 'Sign in with Microsoft 365',
     failed: 'Login failed. Please try again.',
   },
+  dashboard: {
+    title: 'Dashboard',
+    greeting: {
+      morning: 'Good morning — here is your site at a glance today.',
+      afternoon: 'Good afternoon — here is your site at a glance today.',
+      evening: 'Good evening — here is your site at a glance today.',
+    },
+    stats: {
+      items: 'Content items',
+      collections: 'Collections',
+      media: 'Media files',
+      users: 'Users',
+    },
+    recent: {
+      title: 'Recent updates',
+      colTitle: 'Title',
+      colCollection: 'Collection',
+      colUpdated: 'Updated',
+      empty: 'No recent content updates yet.',
+    },
+    quick: {
+      title: 'Quick actions',
+      uploadMedia: 'Upload media',
+      newItem: 'New {label}',
+      empty: 'No quick actions available.',
+    },
+    loading: 'Loading dashboard…',
+    error: 'Could not load dashboard data.',
+  },
 }
