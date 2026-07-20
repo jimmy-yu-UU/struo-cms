@@ -107,4 +107,5 @@ export class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient(import.meta.env.VITE_API_BASE_URL || '/api')
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+export const apiClient = new ApiClient(apiBaseUrl)

@@ -41,4 +41,13 @@ export default {
     newItem: '新增項目',
     editItem: '編輯項目',
   },
+  login: {
+    subtitle: '內容管理系統',
+    email: '電子郵件',
+    password: '密碼',
+    submit: '登入',
+    or: '或',
+    ssoMicrosoft: '使用 Microsoft 365 登入',
+    failed: '登入失敗,請稍後再試。',
+  },
 }
