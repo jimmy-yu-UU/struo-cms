@@ -618,14 +618,16 @@ describe('ItemFormView', () => {
     expect(w.find('revision-history-drawer-stub').exists()).toBe(false)
   })
 
-  it('onReverted applies the reverted item into the form model and re-baselines', async () => {
+  it('onReverted re-fetches the full item (translations/relations) instead of trusting the emitted payload, and re-baselines', async () => {
     routeParams = { name: 'article', id: '5' }
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue({ ...meta, revisions: true })
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    const get = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
     const w = mountView()
     await w.vm.init()
-    ;(w.vm as any).onReverted({ id: '5', status: 'reverted-status', translations: {}, version: 4 })
+    ;(w.vm as any).model.shared.status = 'edited' // make dirty first so re-baseline is meaningful
+    get.mockResolvedValueOnce({ id: '5', status: 'reverted-status', translations: {}, version: 4 })
+    await (w.vm as any).onReverted()
     expect((w.vm as any).model.shared.status).toBe('reverted-status')
     expect((w.vm as any).model.version).toBe(4)
     // re-baselined: leaving must not prompt
