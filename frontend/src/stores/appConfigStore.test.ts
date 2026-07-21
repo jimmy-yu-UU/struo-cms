@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAppConfigStore } from './appConfigStore'
 import * as api from '../api/appConfigApi'
+import * as settingsApi from '../api/settingsApi'
 
 describe('appConfigStore', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -39,5 +40,14 @@ describe('appConfigStore', () => {
     expect(store.brandInitial).toBe('A')
     store.brandName = ''
     expect(store.brandInitial).toBe('')
+  })
+
+  it('saveBranding updates store state from the response', async () => {
+    setActivePinia(createPinia())
+    const store = useAppConfigStore()
+    vi.spyOn(settingsApi, 'updateBranding').mockResolvedValue({ brandName: 'New', brandLogoUrl: null })
+    await store.saveBranding({ brandName: 'New', logoFileId: null })
+    expect(store.brandName).toBe('New')
+    expect(store.brandLogoUrl).toBeNull()
   })
 })

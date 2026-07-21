@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { getAppConfig } from '../api/appConfigApi'
+import { updateBranding, type BrandingUpdate } from '../api/settingsApi'
 
 export const useAppConfigStore = defineStore('appConfig', {
   state: () => ({
@@ -20,6 +21,11 @@ export const useAppConfigStore = defineStore('appConfig', {
       } catch {
         // config unavailable — keep safe defaults; branding/SSO degrade, password login still works
       }
+    },
+    async saveBranding(body: BrandingUpdate): Promise<void> {
+      const res = await updateBranding(body)
+      this.brandName = res.brandName
+      this.brandLogoUrl = res.brandLogoUrl
     },
   },
 })
