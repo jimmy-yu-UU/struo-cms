@@ -33,7 +33,7 @@ const meta = { name: 'article', label: 'Article', fields: [
   { name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false },
   { name: 'comments', label: 'Comments', kind: 'oneToMany', targetCollection: 'comment', interface: 'relatedList', foreignKey: 'ArticleId', displayTemplate: '{Body}', editable: false, selfReferencing: false },
 ]}
-const stubs = { ItemForm: true, Button: true, ConfirmDialog: true }
+const stubs = { ItemForm: true, Button: true, ConfirmDialog: true, RevisionHistoryDrawer: true }
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -43,7 +43,9 @@ const i18n = createI18n({
     new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', back: 'Back to list',
     relations: 'Relations', translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
-  } } },
+  },
+    revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}' },
+  } },
 })
 function mountView() {
   return mount(ItemFormView, { global: { plugins: [i18n], stubs } })
@@ -584,5 +586,50 @@ describe('ItemFormView', () => {
     get.mockResolvedValueOnce({ id: '5', status: 'x', translations: {}, version: 9 })
     await (w.vm as any).onSubmit()
     expect(w.get('.conflict-banner').text()).toContain('changed by someone else')
+  })
+
+  // ---- FE-R7: revision history drawer --------------------------------------
+
+  it('renders the history drawer only for revisioned collections in edit mode', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue({ ...meta, revisions: true })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    expect(w.find('revision-history-drawer-stub').exists()).toBe(true)
+  })
+
+  it('does not render the history drawer when the collection is not revisioned', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores() // meta has no revisions flag
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    expect(w.find('revision-history-drawer-stub').exists()).toBe(false)
+  })
+
+  it('does not render the history drawer in create mode even if revisioned', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue({ ...meta, revisions: true })
+    const w = mountView()
+    await w.vm.init()
+    expect(w.find('revision-history-drawer-stub').exists()).toBe(false)
+  })
+
+  it('onReverted applies the reverted item into the form model and re-baselines', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue({ ...meta, revisions: true })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 1 })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).onReverted({ id: '5', status: 'reverted-status', translations: {}, version: 4 })
+    expect((w.vm as any).model.shared.status).toBe('reverted-status')
+    expect((w.vm as any).model.version).toBe(4)
+    // re-baselined: leaving must not prompt
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
   })
 })
