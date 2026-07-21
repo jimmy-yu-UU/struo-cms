@@ -173,14 +173,22 @@ function reloadLatest(): void {
   serverError.value = ''
 }
 
-function onReverted(item: Record<string, unknown>): void {
-  if (!meta.value) return
-  // Apply the reverted item exactly like a fresh load: setModel re-baselines, so the form is not
-  // considered dirty afterwards (same contract as reloadLatest). The drawer already toasts success
-  // for the revert action itself; this refreshes the on-screen form to match.
-  setModel(parseItemToForm(meta.value, item, langStore.languages))
-  errors.value = {}
-  serverError.value = ''
+async function onReverted(): Promise<void> {
+  if (!meta.value || id.value === undefined) return
+  // The POST /revert response omits translations + relations, so re-fetch the full item (same shape
+  // as the edit-load) rather than trusting the emitted payload. setModel re-baselines, so the form
+  // is not considered dirty afterward. The drawer owns the success toast.
+  try {
+    const item = await itemsApi.get(name.value, id.value, {
+      deep: editableRelations.value,
+      locale: langStore.defaultCode,
+    })
+    setModel(parseItemToForm(meta.value, item, langStore.languages))
+    errors.value = {}
+    serverError.value = ''
+  } catch (e) {
+    serverError.value = e instanceof Error ? e.message : 'Failed to reload item.'
+  }
 }
 
 function onDelete(): void {
