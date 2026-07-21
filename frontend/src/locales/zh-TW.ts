@@ -150,8 +150,6 @@ export default {
     loadError: '無法載入修訂紀錄',
     retry: '重試',
     empty: '尚無修訂紀錄',
-    colRevision: '版本',
-    colOperation: '操作',
     colWhen: '時間',
     colWho: '操作者',
     opCreate: '新建',

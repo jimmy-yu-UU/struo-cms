@@ -150,8 +150,6 @@ export default {
     loadError: 'Failed to load revisions',
     retry: 'Retry',
     empty: 'No revisions yet',
-    colRevision: 'Revision',
-    colOperation: 'Operation',
     colWhen: 'Time',
     colWho: 'By',
     opCreate: 'Created',
