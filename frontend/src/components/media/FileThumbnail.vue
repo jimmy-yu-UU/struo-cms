@@ -2,7 +2,16 @@
 import { ref, computed } from 'vue'
 import { filesApi } from '../../api/filesApi'
 
-export type FileRow = { id: string; fileName: string; contentType: string; size: number }
+export type FileRow = {
+  id: string
+  fileName: string
+  contentType: string
+  size: number
+  width?: number | null
+  height?: number | null
+  status?: string
+  createdAt?: string
+}
 
 const props = defineProps<{ file: FileRow }>()
 const broken = ref(false)
@@ -23,17 +32,15 @@ const src = computed(() => filesApi.contentUrl(props.file.id))
 <style scoped>
 .file-thumb {
   width: 100%;
-  height: 100px;
+  height: 120px;
   display: flex;
 }
-
 .file-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: var(--radius, 8px);
 }
-
 .file-chip {
   width: 100%;
   height: 100%;
@@ -41,24 +48,23 @@ const src = computed(() => filesApi.contentUrl(props.file.id))
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--code-bg);
-  padding: 4px;
+  border-radius: var(--radius, 8px);
+  background: var(--bg);
+  padding: 8px;
   overflow: hidden;
 }
-
 .file-chip__name {
   font-size: 12px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--fg);
 }
-
 .file-chip__meta {
   font-size: 11px;
-  color: var(--text);
+  color: var(--muted);
 }
 </style>
