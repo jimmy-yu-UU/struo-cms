@@ -7,6 +7,7 @@ import DashboardView from '../views/DashboardView.vue'
 import CollectionListView from '../views/CollectionListView.vue'
 import ItemFormView from '../views/ItemFormView.vue'
 import MediaLibraryView from '../views/MediaLibraryView.vue'
+import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -18,6 +19,7 @@ const router = createRouter({
       children: [
         { path: '', name: 'dashboard', component: DashboardView },
         { path: 'media', name: 'media', component: MediaLibraryView },
+        { path: 'settings', name: 'settings', component: SettingsView },
         { path: 'collections/:name', name: 'collection-list', component: CollectionListView },
         { path: 'collections/:name/new', name: 'collection-create', component: ItemFormView },
         { path: 'collections/:name/:id', name: 'collection-item', component: ItemFormView },
