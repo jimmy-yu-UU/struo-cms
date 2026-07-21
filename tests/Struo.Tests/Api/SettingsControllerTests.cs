@@ -22,6 +22,29 @@ public class SettingsControllerTests(ApiFactory factory)
         await db.Deleteable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).ExecuteCommandAsync();
     }
 
+    /// <summary>Seeds a minimal <see cref="Struo.Infrastructure.Files.File"/> row, mirroring the
+    /// insert idiom used by FileServiceTransactionTests / ExternalLoginProvisioningTests (scoped
+    /// <see cref="ISqlSugarClient"/> off the DI container, not the unit-level SqliteTestDatabase).</summary>
+    private async Task<Guid> SeedFileAsync(string status)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var id = Guid.NewGuid();
+        await db.Insertable(new Struo.Infrastructure.Files.File
+        {
+            Id = id, StorageKey = "k", FileName = "logo.png", ContentType = "image/png",
+            Size = 1, Status = status,
+        }).ExecuteCommandAsync();
+        return id;
+    }
+
+    private async Task DeleteFileAsync(Guid id)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        await db.Deleteable<Struo.Infrastructure.Files.File>().Where(f => f.Id == id).ExecuteCommandAsync();
+    }
+
     [Fact]
     public async Task Put_requires_super_admin()
     {
@@ -75,5 +98,44 @@ public class SettingsControllerTests(ApiFactory factory)
             cfg.RootElement.GetProperty("data").GetProperty("brandName").GetString().Should().Be("My Brand");
         }
         finally { await ClearAsync(); }
+    }
+
+    [Fact]
+    public async Task Put_with_published_logo_file_sets_brandLogoUrl()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var fileId = await SeedFileAsync("published");
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/settings/branding",
+                new { brandName = "Logo Brand", logoFileId = fileId });
+            resp.StatusCode.Should().Be(HttpStatusCode.OK);
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var data = doc.RootElement.GetProperty("data");
+            data.GetProperty("brandLogoUrl").GetString().Should().Be($"/api/files/{fileId}/content");
+        }
+        finally
+        {
+            await ClearAsync();
+            await DeleteFileAsync(fileId);
+        }
+    }
+
+    [Fact]
+    public async Task Put_rejects_unpublished_logo_file()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var fileId = await SeedFileAsync("draft");
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/settings/branding",
+                new { brandName = "Draft Logo Brand", logoFileId = fileId });
+            resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+        finally
+        {
+            await ClearAsync();
+            await DeleteFileAsync(fileId);
+        }
     }
 }
