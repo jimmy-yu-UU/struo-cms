@@ -3,14 +3,16 @@ import { computed } from 'vue'
 import Button from 'primevue/button'
 import { useI18n } from 'vue-i18n'
 import { revisionOperationKey } from '../../lib/revisionOperation'
+import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import type { RevisionDetail } from '../../api/itemsApi'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   detail: RevisionDetail | null
   loading: boolean
   error: string
   canRevert: boolean
-}>()
+  reverting?: boolean
+}>(), { reverting: false })
 const emit = defineEmits<{ (e: 'revert', revisionNumber: number): void }>()
 const { t } = useI18n()
 
@@ -18,7 +20,7 @@ const operationLabel = computed(() =>
   props.detail ? t(revisionOperationKey(props.detail.operation)) : '',
 )
 const whenText = computed(() =>
-  props.detail ? new Date(props.detail.createdAt).toLocaleString() : '',
+  props.detail ? formatRevisionTime(props.detail.createdAt) : '',
 )
 const whoText = computed(() => props.detail?.createdBy ?? t('revisions.system'))
 const prettyJson = computed(() => {
@@ -57,6 +59,8 @@ const prettyJson = computed(() => {
           :label="t('revisions.revert')"
           icon="pi pi-replay"
           severity="warn"
+          :loading="reverting"
+          :disabled="reverting"
           @click="emit('revert', detail.revisionNumber)"
         />
       </div>
