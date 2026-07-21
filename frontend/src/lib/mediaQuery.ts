@@ -1,0 +1,18 @@
+import type { FilterSpec } from './buildListQuery'
+
+export type MediaType = 'all' | 'image' | 'video'
+export type MediaSort = 'newest' | 'name'
+
+// image/ and video/ each map to a single contentType starts-with condition (backend
+// QueryOperator.StartsWith, REST token `_starts_with`; contentType is a non-hidden [CmsField]
+// so QueryValidator allows it). "Documents" is intentionally omitted — application/* + text/*
+// has no clean single-condition mapping and there is no NotStartsWith operator (see spec §0).
+export function mediaTypeFilter(type: MediaType): FilterSpec | undefined {
+  if (type === 'image') return { contentType: { op: '_starts_with', value: 'image/' } }
+  if (type === 'video') return { contentType: { op: '_starts_with', value: 'video/' } }
+  return undefined
+}
+
+export function mediaSort(sort: MediaSort): string {
+  return sort === 'name' ? 'fileName' : '-createdAt'
+}

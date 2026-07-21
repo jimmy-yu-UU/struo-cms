@@ -36,4 +36,12 @@ describe('MediaGrid', () => {
     expect(w.findAll('.media-tile')[1].classes()).toContain('is-selected')
     expect(w.findAll('.media-tile')[0].classes()).not.toContain('is-selected')
   })
+
+  it('emits open with the id on click when not selectable', async () => {
+    const w = mount(MediaGrid, { props: { files } })
+    await w.findAll('.media-tile')[0].trigger('click')
+    expect(w.emitted('open')?.[0]).toEqual(['f1'])
+    expect(w.emitted('select')).toBeUndefined()
+    expect(w.emitted('toggle')).toBeUndefined()
+  })
 })

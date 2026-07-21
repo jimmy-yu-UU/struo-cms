@@ -50,7 +50,7 @@ defineExpose({ uploadFiles })
     @drop.prevent="onDrop"
   >
     <label class="dropzone__label">
-      <span>Drop files here or click to upload</span>
+      <span>{{ $t('media.dropzone') }}</span>
       <input type="file" multiple class="dropzone__input" @change="onInput" />
     </label>
     <ul v-if="rows.length" class="dropzone__rows">
@@ -64,15 +64,16 @@ defineExpose({ uploadFiles })
 <style scoped>
 .dropzone {
   border: 2px dashed var(--border);
-  border-radius: 6px;
-  padding: 20px;
+  border-radius: var(--radius, 8px);
+  padding: 24px;
   text-align: center;
-  transition: border-color 0.2s, background-color 0.2s;
+  background: var(--surface);
+  transition: border-color var(--speed, .15s), background-color var(--speed, .15s);
 }
 
 .dropzone.is-dragging {
   border-color: var(--accent);
-  background: var(--accent-bg);
+  background: var(--bg);
 }
 
 .dropzone__label {
@@ -99,6 +100,6 @@ defineExpose({ uploadFiles })
 }
 
 .dropzone__rows li.error {
-  color: #d33;
+  color: var(--danger);
 }
 </style>
