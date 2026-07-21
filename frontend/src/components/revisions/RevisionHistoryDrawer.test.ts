@@ -21,7 +21,16 @@ const i18n = createI18n({
   } } },
 })
 // Stub Drawer so its content always renders (teleport/visible internals are not under test).
-const stubs = { Drawer: { template: '<div class="drawer"><slot /></div>' }, Button: true, ConfirmDialog: true }
+// Button is a functional stub (not `true`) so click handlers wired to it (e.g. the retry button) are exercisable.
+const stubs = {
+  Drawer: { template: '<div class="drawer"><slot /></div>' },
+  Button: {
+    props: ['label', 'size', 'text', 'icon', 'severity'],
+    emits: ['click'],
+    template: '<button class="stub-btn" @click="$emit(\'click\')"><slot/>{{ label }}</button>',
+  },
+  ConfirmDialog: true,
+}
 
 type DrawerProps = { visible?: boolean; collection?: string; itemId?: string; canRevert?: boolean }
 
@@ -61,6 +70,26 @@ describe('RevisionHistoryDrawer', () => {
     const w = mountDrawer()
     await w.vm.load()
     expect((w.vm as any).listError).toBe('Failed to load revisions')
+  })
+
+  it('retry button re-loads the list after a failed load', async () => {
+    const list = vi.spyOn(itemsApi, 'listRevisions').mockRejectedValue(new Error('net'))
+    const w = mountDrawer()
+    await w.vm.load()
+    expect((w.vm as any).listError).toBe('Failed to load revisions')
+    const retryBtn = w.find('.rev-notice.rev-error .stub-btn')
+    expect(retryBtn.exists()).toBe(true)
+
+    list.mockResolvedValue(rows)
+    const callsBefore = list.mock.calls.length
+    await retryBtn.trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await w.vm.$nextTick()
+
+    expect(list.mock.calls.length).toBeGreaterThan(callsBefore)
+    expect((w.vm as any).listError).toBe('')
+    expect((w.vm as any).revisions).toHaveLength(2)
+    expect(w.text()).not.toContain('Failed to load revisions')
   })
 
   it('select loads the detail for a revision', async () => {
