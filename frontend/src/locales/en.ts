@@ -22,6 +22,7 @@ export default {
   nav: {
     dashboard: 'Dashboard',
     media: 'Media Library',
+    settings: 'Settings',
   },
   shell: {
     collapse: 'Collapse sidebar',
@@ -165,5 +166,19 @@ export default {
     revertFailed: 'Revert failed',
     detailError: 'Failed to load this revision',
     selectHint: 'Select a revision to view its snapshot',
+  },
+  settings: {
+    title: 'Site Settings',
+    branding: 'Branding',
+    brandName: 'Site name',
+    logo: 'Logo',
+    uploadLogo: 'Upload new logo',
+    removeLogo: 'Remove logo',
+    save: 'Save changes',
+    saved: 'Settings saved',
+    saveFailed: 'Save failed',
+    nameRequired: 'Site name is required',
+    nameTooLong: 'Site name must be at most 100 characters',
+    notPermitted: 'Admin role required',
   },
 }
