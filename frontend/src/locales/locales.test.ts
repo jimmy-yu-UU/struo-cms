@@ -24,4 +24,9 @@ describe('locale packs', () => {
     expect(zhTW.itemForm.save).toBe('儲存')
     expect(en.itemForm.save).toBe('Save')
   })
+
+  it('carries the revisions namespace in both packs', () => {
+    expect(zhTW.revisions.open).toBe('歷史紀錄')
+    expect(en.revisions.open).toBe('History')
+  })
 })
