@@ -21,6 +21,8 @@ const canReadMedia = computed(
   () => auth.user?.isSuperAdmin === true || auth.user?.permissions?.file?.read === true,
 )
 
+const isSuperAdmin = computed(() => auth.user?.isSuperAdmin === true)
+
 const groups = computed(() =>
   buildNav(schema.collections, auth.user?.isSuperAdmin ?? false, auth.user?.permissions ?? {}),
 )
@@ -68,6 +70,13 @@ function go(to: { name: string; params?: Record<string, string> }): void {
         icon="pi pi-images"
         :active="route.name === 'media'"
         @activate="go({ name: 'media' })"
+      />
+      <SidebarNavItem
+        v-if="isSuperAdmin"
+        :label="t('nav.settings')"
+        icon="pi pi-cog"
+        :active="route.name === 'settings'"
+        @activate="go({ name: 'settings' })"
       />
       <hr class="nav-sep" aria-hidden="true" />
 

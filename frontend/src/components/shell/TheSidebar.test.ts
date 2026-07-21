@@ -76,6 +76,16 @@ describe('TheSidebar', () => {
     expect(article.classes()).toContain('active')
   })
 
+  it('shows the settings item only for super-admins', () => {
+    seed(true, {})
+    const admin = mountSidebar()
+    expect(admin.findAll('.nav-label').map((n) => n.text())).toContain('設定')
+
+    seed(false, {})
+    const editor = mountSidebar()
+    expect(editor.findAll('.nav-label').map((n) => n.text())).not.toContain('設定')
+  })
+
   it('shows a retry affordance on schema load error', async () => {
     seed(true, {})
     const schema = useSchemaStore()
