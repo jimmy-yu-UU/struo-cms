@@ -8,6 +8,7 @@ import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
 import RevisionSnapshotView from './RevisionSnapshotView.vue'
 import { revisionOperationKey } from '../../lib/revisionOperation'
+import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import { itemsApi, type RevisionInfo, type RevisionDetail } from '../../api/itemsApi'
 
 const props = defineProps<{
@@ -40,7 +41,7 @@ function opLabel(op: string): string {
   return t(revisionOperationKey(op))
 }
 function whenLabel(iso: string): string {
-  return new Date(iso).toLocaleString()
+  return formatRevisionTime(iso)
 }
 
 async function load(): Promise<void> {
@@ -72,6 +73,7 @@ async function select(rev: RevisionInfo): Promise<void> {
 }
 
 function onRevert(n: number): void {
+  if (reverting.value) return
   confirm.require({
     group: 'revisions',
     header: t('revisions.revertConfirmHeader'),
@@ -139,7 +141,8 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
         :detail="detail"
         :loading="detailLoading"
         :error="detailError"
-        :can-revert="canRevert && !reverting"
+        :can-revert="canRevert"
+        :reverting="reverting"
         @revert="onRevert"
       />
     </div>
