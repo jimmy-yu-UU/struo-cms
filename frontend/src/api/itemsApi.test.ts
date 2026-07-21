@@ -111,3 +111,30 @@ describe('itemsApi soft-delete ops', () => {
     expect(res).toEqual({ id: '1', status: 'draft' })
   })
 })
+
+describe('itemsApi revisions', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('listRevisions gets the revisions path and unwraps the array', async () => {
+    const rows = [{ revisionNumber: 2, operation: 'update', createdAt: '2026-07-21T00:00:00Z', createdBy: 'u1' }]
+    const spy = vi.spyOn(apiClient, 'get').mockResolvedValue(rows)
+    const res = await itemsApi.listRevisions('article', '5')
+    expect(spy).toHaveBeenCalledWith('/items/article/5/revisions')
+    expect(res).toEqual(rows)
+  })
+
+  it('getRevision gets the numbered path and returns the snapshot record', async () => {
+    const rec = { revisionNumber: 2, operation: 'update', createdAt: '2026-07-21T00:00:00Z', createdBy: null, snapshot: { status: 'draft' } }
+    const spy = vi.spyOn(apiClient, 'get').mockResolvedValue(rec)
+    const res = await itemsApi.getRevision('article', '5', 2)
+    expect(spy).toHaveBeenCalledWith('/items/article/5/revisions/2')
+    expect(res).toEqual(rec)
+  })
+
+  it('revert posts the revert path and returns the reverted item', async () => {
+    const spy = vi.spyOn(apiClient, 'post').mockResolvedValue({ id: '5', status: 'draft' })
+    const res = await itemsApi.revert('article', '5', 2)
+    expect(spy).toHaveBeenCalledWith('/items/article/5/revisions/2/revert')
+    expect(res).toEqual({ id: '5', status: 'draft' })
+  })
+})
