@@ -73,6 +73,7 @@ async function select(rev: RevisionInfo): Promise<void> {
 
 function onRevert(n: number): void {
   confirm.require({
+    group: 'revisions',
     header: t('revisions.revertConfirmHeader'),
     message: t('revisions.revertConfirmMessage', { n }),
     accept: async () => {
@@ -109,7 +110,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
     :style="{ width: '46rem', maxWidth: '100vw' }"
     @update:visible="(v: boolean) => emit('update:visible', v)"
   >
-    <ConfirmDialog />
+    <ConfirmDialog group="revisions" />
     <div class="rev-layout">
       <aside class="rev-list">
         <p v-if="listLoading" class="rev-notice">{{ t('revisions.loading') }}</p>
