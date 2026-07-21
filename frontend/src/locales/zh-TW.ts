@@ -22,6 +22,7 @@ export default {
   nav: {
     dashboard: '儀表板',
     media: '媒體庫',
+    settings: '設定',
   },
   shell: {
     collapse: '收合側欄',
@@ -165,5 +166,19 @@ export default {
     revertFailed: '還原失敗',
     detailError: '無法載入此版快照',
     selectHint: '選擇左側的版本以檢視快照',
+  },
+  settings: {
+    title: '站台設定',
+    branding: '品牌',
+    brandName: '網站名稱',
+    logo: 'Logo',
+    uploadLogo: '上傳新 Logo',
+    removeLogo: '移除 Logo',
+    save: '儲存變更',
+    saved: '設定已儲存',
+    saveFailed: '儲存失敗',
+    nameRequired: '網站名稱為必填',
+    nameTooLong: '網站名稱不可超過 100 字',
+    notPermitted: '需要管理員權限',
   },
 }

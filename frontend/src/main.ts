@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
@@ -37,7 +37,9 @@ apiClient.setUnauthorizedHandler(() => {
 // so the brand renders without a flash. Neither rejection blocks mounting.
 const appConfig = useAppConfigStore(pinia)
 Promise.allSettled([auth.fetchCurrentUser(), appConfig.load()]).finally(() => {
-  document.title = appConfig.brandName
+  // Keep the tab title in sync with the brand name reactively: it changes at runtime when a
+  // super-admin edits branding (Site Settings), not only at bootstrap. `immediate` sets it now.
+  watch(() => appConfig.brandName, (name) => { document.title = name }, { immediate: true })
   app.use(router)
   app.mount('#app')
 })
