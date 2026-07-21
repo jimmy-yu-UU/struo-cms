@@ -16,6 +16,14 @@ export type ListResult = { data: Record<string, unknown>[]; total: number }
 
 type ListEnvelope = { data: Record<string, unknown>[]; meta?: { total: number } }
 
+export type RevisionInfo = {
+  revisionNumber: number
+  operation: string
+  createdAt: string
+  createdBy: string | null
+}
+export type RevisionDetail = RevisionInfo & { snapshot: unknown }
+
 export const itemsApi = {
   async list(collection: string, opts: ListOptions): Promise<ListResult> {
     const params = buildListQuery(
@@ -50,5 +58,14 @@ export const itemsApi = {
   },
   async restore(collection: string, id: string): Promise<Record<string, unknown>> {
     return apiClient.post<Record<string, unknown>>(`/items/${collection}/${id}/restore`)
+  },
+  async listRevisions(collection: string, id: string): Promise<RevisionInfo[]> {
+    return apiClient.get<RevisionInfo[]>(`/items/${collection}/${id}/revisions`)
+  },
+  async getRevision(collection: string, id: string, n: number): Promise<RevisionDetail> {
+    return apiClient.get<RevisionDetail>(`/items/${collection}/${id}/revisions/${n}`)
+  },
+  async revert(collection: string, id: string, n: number): Promise<Record<string, unknown>> {
+    return apiClient.post<Record<string, unknown>>(`/items/${collection}/${id}/revisions/${n}/revert`)
   },
 }
