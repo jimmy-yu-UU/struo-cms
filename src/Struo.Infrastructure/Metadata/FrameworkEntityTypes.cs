@@ -17,5 +17,6 @@ public static class FrameworkEntityTypes
         typeof(Struo.Infrastructure.Identity.Permission),
         typeof(Struo.Infrastructure.Identity.UserRole),
         typeof(Struo.Infrastructure.Revisions.Revision),
+        typeof(Struo.Infrastructure.Settings.SiteSettings),
     ];
 }

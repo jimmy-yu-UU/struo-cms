@@ -34,6 +34,7 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<ILanguageProvider, LanguageProvider>();
         services.AddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();
         services.AddScoped<Struo.Application.Revisions.IRevisionStore, Struo.Infrastructure.Revisions.SqlSugarRevisionStore>();
+        services.AddScoped<Struo.Application.Settings.ISiteSettingsStore, Struo.Infrastructure.Settings.SqlSugarSiteSettingsStore>();
         services.AddScoped<Struo.Application.Query.RevisionSnapshotBuilder>();
         services.AddScoped<ItemService>();
         // ARC-6: expose the use-case seam controllers depend on, forwarding to the SAME scoped
