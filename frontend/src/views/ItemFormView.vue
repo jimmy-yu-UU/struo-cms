@@ -7,6 +7,7 @@ import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
 import ItemForm from '../components/ItemForm.vue'
 import PageHeader from '../components/common/PageHeader.vue'
+import RevisionHistoryDrawer from '../components/revisions/RevisionHistoryDrawer.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -31,6 +32,7 @@ const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
 const id = computed(() => (route.params.id as string | undefined) ?? undefined)
+const idStr = computed(() => id.value ?? '')
 const isCreate = computed(() => id.value === undefined)
 const meta = computed(() => schema.get(name.value))
 const editableRelations = computed(() =>
@@ -48,6 +50,7 @@ const loading = ref(true)
 const submitting = ref(false)
 const notFound = ref(false)
 const conflict = ref(false)
+const showHistory = ref(false)
 // Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
 let latestFromServer: FormModel | null = null
 // Last committed snapshot of the user-editable model; the leave/unload guards compare against it
@@ -170,6 +173,24 @@ function reloadLatest(): void {
   serverError.value = ''
 }
 
+async function onReverted(): Promise<void> {
+  if (!meta.value || id.value === undefined) return
+  // The POST /revert response omits translations + relations, so re-fetch the full item (same shape
+  // as the edit-load) rather than trusting the emitted payload. setModel re-baselines, so the form
+  // is not considered dirty afterward. The drawer owns the success toast.
+  try {
+    const item = await itemsApi.get(name.value, id.value, {
+      deep: editableRelations.value,
+      locale: langStore.defaultCode,
+    })
+    setModel(parseItemToForm(meta.value, item, langStore.languages))
+    errors.value = {}
+    serverError.value = ''
+  } catch (e) {
+    serverError.value = e instanceof Error ? e.message : 'Failed to reload item.'
+  }
+}
+
 function onDelete(): void {
   const { header, message } = deleteConfirm(deleteKindFor(meta.value))
   confirm.require({
@@ -235,7 +256,7 @@ onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 onMounted(init)
-defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, serverError, notFound, loading, conflict })
+defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, showHistory, model, errors, serverError, notFound, loading, conflict })
 </script>
 
 <template>
@@ -252,6 +273,8 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, 
                   :aria-label="t('itemForm.back')" @click="onCancel" />
         </template>
         <template #actions>
+          <Button v-if="!isCreate && meta.revisions" :label="t('revisions.open')" icon="pi pi-history"
+                  severity="secondary" text @click="showHistory = true" />
           <Button v-if="!isCreate && canDelete" :label="t('itemForm.delete')" severity="danger" @click="onDelete" />
           <Button v-if="canWrite" :label="t('itemForm.save')" :loading="submitting" @click="onSubmit" />
         </template>
@@ -272,6 +295,15 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, model, errors, 
         :disabled="!canWrite"
         :submitting="submitting"
         @submit="onSubmit"
+      />
+
+      <RevisionHistoryDrawer
+        v-if="!isCreate && meta.revisions"
+        v-model:visible="showHistory"
+        :collection="name"
+        :item-id="idStr"
+        :can-revert="canWrite"
+        @reverted="onReverted"
       />
     </template>
   </section>

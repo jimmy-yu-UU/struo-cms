@@ -44,6 +44,7 @@ export type CollectionMeta = {
   group?: string | null
   defaultDisplayField?: string | null
   softDelete?: boolean // Phase 9b: true when the collection's entity implements ISoftDeletable
+  revisions?: boolean // Phase 9c: true when the collection is revisioned ([CmsCollection(Revisions=true)])
   fields: FieldMeta[]
   relations: RelationMeta[]
 }
