@@ -106,6 +106,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
     position="right"
     :header="t('revisions.title')"
     class="rev-drawer"
+    :style="{ width: '46rem', maxWidth: '100vw' }"
     @update:visible="(v: boolean) => emit('update:visible', v)"
   >
     <ConfirmDialog />
@@ -145,7 +146,6 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
 </template>
 
 <style scoped>
-.rev-drawer :deep(.p-drawer) { width: 46rem; max-width: 100vw; }
 .rev-layout { display: grid; grid-template-columns: 16rem 1fr; gap: 20px; height: 100%; min-height: 0; }
 .rev-list { border-right: 1px solid var(--border); padding-right: 12px; overflow: auto; }
 .rev-notice { color: var(--muted); margin: 0; display: flex; align-items: center; gap: 8px; }
