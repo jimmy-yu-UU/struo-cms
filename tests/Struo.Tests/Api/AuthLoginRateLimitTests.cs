@@ -99,4 +99,28 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
             logoutResp.StatusCode.Should().NotBe((HttpStatusCode)429);
         }
     }
+
+    [Fact]
+    public async Task Login_with_limiter_disabled_never_returns_429_even_beyond_permit_limit()
+    {
+        // RateLimiting:Login:Enabled=false must make the "login" policy a true no-op: a PermitLimit
+        // small enough to trip the limiter if it were active (proven by the enabled-case tests
+        // above using the same value) must NOT produce a 429 here. Every attempt should reach the
+        // controller and fail auth normally (401), proving per-IP limiting is fully delegated
+        // elsewhere (e.g. edge/ingress) for this deployment.
+        var f = _factory.WithWebHostBuilder(b =>
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["RateLimiting:Login:Enabled"] = "false",
+                ["RateLimiting:Login:PermitLimit"] = "1",
+                ["RateLimiting:Login:WindowSeconds"] = "60",
+            })));
+        var client = f.CreateClient();
+
+        for (var i = 0; i < 5; i++)
+        {
+            var resp = await LoginAsync(client);
+            resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        }
+    }
 }

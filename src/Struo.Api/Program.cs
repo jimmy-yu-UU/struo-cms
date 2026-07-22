@@ -112,6 +112,19 @@ try
             // this host is configured with UseForwardedHeaders (deliberately out of scope here) —
             // otherwise every login attempt through that proxy shares a single partition/bucket.
             var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            // RateLimiting:Login:Enabled toggle (config-driven, see LoginRateLimitOptions): when
+            // disabled, return a no-op limiter for this partition. The "login" policy still EXISTS
+            // (so [EnableRateLimiting("login")] never throws "no policy named login"); it simply
+            // never rejects. Intended for multi-pod Kubernetes deployments where per-IP rate
+            // limiting is delegated to the ingress/edge/WAF — that layer sees the real client IP and
+            // sits in front of ALL pods, whereas this limiter's state is in-memory and per-pod, so
+            // it can never enforce a true global limit across replicas in that topology.
+            if (!loginOptions.Enabled)
+            {
+                return RateLimitPartition.GetNoLimiter<string>(partitionKey);
+            }
+
             return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = loginOptions.PermitLimit,
