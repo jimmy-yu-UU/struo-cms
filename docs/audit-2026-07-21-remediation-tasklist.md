@@ -12,7 +12,7 @@
 | 批次 | 內容 | 狀態 |
 |------|------|------|
 | Batch 1 | 1 HIGH + 高價值 MED（後端/安全/資料） | ✅ 完成（Sonnet 實作 + Fable 複核 PASS + live PG gate 4/4 PASS，`dotnet test` 795 綠）；已提交分支 `audit-2026-07-21-batch1` |
-| Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ✅ 完成（commit `66e37d7`，分支 `audit-2026-07-21-batch2`）。BL-1/CS-9/SEC-10/SEC-7 + DB-14 決策；Sonnet ×3 平行實作 + Fable ×3 對抗複核（PASS/PASS-WITH-NITS，nits 已修）；`dotnet test` **815 綠**；live PG gate 2/2 PASS（SEC-10 delete 僅清 logofileid、brandname 保留、無 42804；SEC-7 login 429 envelope+Retry-After） |
+| Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ✅ 完成（commit `a735dc3`，分支 `audit-2026-07-21-batch2`）。BL-1/CS-9/SEC-10/SEC-7 + DB-14 決策；Sonnet ×3 平行實作 + Fable ×3 對抗複核（PASS/PASS-WITH-NITS，nits 已修）；`dotnet test` **815 綠**；live PG gate 2/2 PASS（SEC-10 delete 僅清 logofileid、brandname 保留、無 42804；SEC-7 login 429 envelope+Retry-After） |
 | Batch 3 | 前端 MED（7 項） | ☐ 未開始 |
 | Batch 4 | 測試缺口（e2e + 單元補洞） | ☐ 未開始 |
 | Batch 5 | LOW 批次（後端/資料/前端/測試） | ☐ 未開始 |
