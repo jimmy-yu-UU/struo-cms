@@ -15,7 +15,7 @@ public class UserCollectionTests(ApiFactory factory)
     [Fact]
     public async Task User_schema_does_not_expose_password_or_accessToken()
     {
-        var c = _factory.CreateClient();
+        var c = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var resp = await c.GetAsync("/api/schema/user");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields");
