@@ -166,4 +166,28 @@ describe('RevisionHistoryDrawer', () => {
     expect(w.emitted('reverted')).toBeUndefined()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
   })
+
+  // Pins the `watch(() => props.visible, ...)` contract itself (rather than calling load()
+  // directly as every test above does) — deleting the watch would leave this test red while
+  // leaving all the others green.
+  it('the visible watch loads on open and does not load while closed', async () => {
+    const list = vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows)
+    const w = mountDrawer({ visible: false })
+    await w.vm.$nextTick()
+    expect(list).not.toHaveBeenCalled()
+
+    await w.setProps({ visible: true })
+    await w.vm.$nextTick()
+    expect(list).toHaveBeenCalledWith('article', '5')
+  })
+
+  // Pins the `{ immediate: true }` option specifically: a drawer mounted already-open must load
+  // without any prop change. Without immediate, mounting with visible:true would not fire the
+  // watch, so this asserts the eager first run (no manual load()/setProps here).
+  it('loads immediately when mounted already-open', async () => {
+    const list = vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows)
+    mountDrawer({ visible: true })
+    await Promise.resolve()
+    expect(list).toHaveBeenCalledWith('article', '5')
+  })
 })
