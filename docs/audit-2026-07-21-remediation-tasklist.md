@@ -190,6 +190,7 @@
 - [ ] **SEC-9 LOW** — 上傳全檔緩衝 `MemoryStream`（25MB×併發 記憶體放大）。`FileService.cs:31-32`：magic-bytes 只需前 12 bytes；改 spool-to-temp（`FileBufferingReadStream`）或串流直上 storage。
 - [ ] **🔶決策 SEC-11 LOW** — 白名單允許 `image/svg+xml` 且無 magic-bytes/無 sanitize，靠 attachment disposition 緩解（logo `<img>` 路徑實際安全）。若不需向量 logo 直接移出白名單最乾淨；否則上傳時剝除 SVG script/event handler。
 - [ ] **SEC-12 LOW** — `MediaDetailDialog.vue:130-136` 剪貼簿失敗靜默吞。加失敗 toast。
+- [ ] **AUTH-2 LOW（Batch 4 複核揭露）** — CSRF 403 回非 envelope 形狀 body（`{error:{message}}`，缺 `success:false` 與 `error.code`）。`CsrfProtectionMiddleware.cs:28-30` 自訂 body；AUTH-1 修完後這是唯一仍非 envelope 的 auth-adjacent 錯誤路徑，前端依 `error.code` 分支會拿到 undefined。**修法**：比照 AUTH-1 用 `Envelope.Error(ErrorCodes.Forbidden, ...)` + `WriteAsJsonAsync`。
 
 ### 資料庫
 - [ ] **DB-16 LOW** — 建議補索引：`users` 的 `lower(email)` functional index（登入/SSO 路徑；009 header 自承留給 identity-perf pass）、`users.accesstoken`（每 bearer 請求一次；併入 DB-13 即解）、`files.contenttype text_pattern_ops`（FE-R6 型別過濾 `LIKE 'image/%'`）、各 collection `(deletedat, updatedat)` 部分索引（dashboard/列表排序）。
@@ -205,6 +206,7 @@
 - [ ] **FE-22 LOW** — `as unknown as FileRow[]` 雙重強轉 ×6（MediaLibraryView/FilePicker/FilesField/RichTextInput）。集中 `toFileRow()` 轉換/驗證函式。
 - [ ] **FE-23 LOW** — catch-fallback 英文字串未收斂且持續擴散（FE-R5 延後項增生：ItemFormView 5 處 + CollectionListView 2 處 + field 元件 + stores）。統一 `t('common.xxxFailed')` 一次收斂。
 - [ ] **FE-24 LOW** — `languageStore.load()` 缺並發去重（schemaStore 有 loadPromise，此處只有 loaded 旗標；Dashboard fan-out 可能重複打 `/languages`）。複製 loadPromise 模式。
+- [ ] **FE-30 LOW（Batch 4 複核揭露）** — `MediaDetailDialog.vue:192,196` Title/Alt 輸入於 `load()` in-flight 期間未 disable；dialog `visible`（`props.file!==null`）早於 `load()` 完成（`activeLocale` 初始 `''`）→ 快打字落入 `translations['']` 遭 `parseItemToForm` 清空。Batch 4 e2e 已用 `waitForResponse(GET /items/file/)` 規避，元件 UX race 仍在。**修法**：load 期間 `:disabled="loading"` 或顯示 skeleton。
 
 ### FE-R5/R6 當初延後 Minor（本輪確認全部仍未修）
 - [ ] **FE-25 LOW** — media list `<tr>` 鍵盤 a11y（`MediaFileList.vue:29` 無 tabindex/role/keydown；MediaGrid 用真 `<button>` 可對照）。
