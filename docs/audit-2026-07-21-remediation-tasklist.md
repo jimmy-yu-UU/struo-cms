@@ -15,7 +15,7 @@
 | Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ✅ 完成（commit `a735dc3`，分支 `audit-2026-07-21-batch2`）。BL-1/CS-9/SEC-10/SEC-7 + DB-14 決策；Sonnet ×3 平行實作 + Fable ×3 對抗複核（PASS/PASS-WITH-NITS，nits 已修）；`dotnet test` **815 綠**；live PG gate 2/2 PASS（SEC-10 delete 僅清 logofileid、brandname 保留、無 42804；SEC-7 login 429 envelope+Retry-After） |
 | Batch 3 | 前端 MED（7 項） | ✅ 完成（commit `c443fb4`,分支 `audit-2026-07-21-batch3`）。FE-13～FE-19 全數修復;Sonnet ×4 平行實作(2 波)+ Fable ×3 對抗複核(FE-14/15/16/18 PASS、FE-17/19 PASS-WITH-NITS,nits 已修:active-button `#fff`→`var(--surface)` 暗色對比、bullet/ordered 可見字改語言中立 pi 圖示、drawer `load()` 追加 latest-wins invalidate);frontend vitest **520 綠**(515→520)、`pnpm build`(vue-tsc)通過 |
 | Batch 4 | 測試缺口（e2e + 單元補洞） | ✅ 完成（分支 `audit-2026-07-21-batch4`）。TEST-2/3/4/5 + TEST-6（3 支新 e2e spec）+ TEST-SQLITE-GATE；Sonnet ×3 平行實作（後端/前端單元/e2e，檔案不相交）+ Fable ×3 對抗複核。後端 `dotnet test` **818 綠**、前端 vitest **526 綠**、`pnpm build` 通過、`playwright test --list` 17 支全數收集。**+ 後續（同分支）：AUTH-1 修（401/403 envelope）、E2E-1 修（e2e locale fixture）、E2E-2 修（gold specs 選擇器漂移）；Sonnet ×3 修 + Fable ×3 複核；`dotnet test` 818 綠；live e2e `playwright --workers=1` 17/17 全綠。** 新增追蹤 AUTH-2（CSRF 非 envelope）、FE-30（MediaDetailDialog load race）待 Batch 5 |
-| Batch 5 | LOW 批次（後端/資料/前端/測試） | ☐ 未開始 |
+| Batch 5 | LOW 批次（後端/資料/前端/測試） | 🔄 進行中。**migration 核心重整已完成**（branch `audit-2026-07-21-batch5`）：13 支範例糾纏 migration → 單一 `001-core-baseline.sql` 核心 bootstrap 基線（pg_dump 自 core-only InitTables 產生 + 硬化冪等）；BL-5/SEC-11/DB-20 決策定案；**live PG gate PASS**（Production 模式對空 DB 純靠 runner 自舉 9 核心表 + `/health/ready` 200）。Sonnet ×2 實作 + Fable ×1 複核（PASS-WITH-NITS）。其餘 LOW 項（BL-2/BL-4/SEC-9/SEC-12/AUTH-2、DB-16~21、FE-20~30、TEST-7~9）待後續。 |
 
 ---
 
@@ -185,19 +185,19 @@
 ### 後端 / 架構
 - [ ] **BL-2 LOW** — Bearer principal 無 `NameIdentifier` 落到 public floor（今日不可觸發）。`FilesController.cs:126-128`＋`HttpContextCurrentUserAccessor.cs:10-11`：adopt principal 後 `GetCurrentUserId() is null → return false` 一行防禦。
 - [ ] **BL-4 LOW** — `AddStruoInfrastructure`/`AddStruoData`/`AddStruoFiles` 忽略 `IConfiguration` 參數（簽章騙人）。移除參數為佳（call site 僅 Program.cs 三處）。
-- [ ] **🔶決策 BL-5 LOW** — dev 未設 `Database:MigrationsPath` → migration 腳本在 dev 從不排練，未來 ALTER 型腳本首跑就在 prod。建議 dev 設 `"db/migrations"`（InitTables 先跑、腳本冪等，安全）。
+- [x] **🔶決策 BL-5 LOW** ✅ 已拍板並以 **migration 核心重整**收斂（2026-07-22）。決策：**dev 維持 `MigrationsPath` 空（dev 用 InitTables）；migration 是 prod 產物**。原本的顧慮（dev 從不排練 migration）在重整後改由「單一 `001-core-baseline.sql` 核心 bootstrap 基線」承接——prod 純靠 runner 套此基線即可自舉核心 schema（不依賴 dev-only InitTables）。**重要脈絡（使用者重新定位）**：本專案是可重複使用的**核心-only CMS 模板**（見 CLAUDE.md §0），舊 13 支 migration 混入大量範例 Blog（Article/Tag/Category）DDL，不該進核心路徑。無正式 prod DB → 自由 rebaseline。做法：`InitTables(FrameworkEntityTypes.All)` 對乾淨 PG → `pg_dump --schema-only` → 硬化冪等（`IF NOT EXISTS`、PK inline）。範例 migration 全刪（dev 由範例 entity 經 InitTables 建；下游 fork 自寫）。**副產品**：dev/prod 索引名一致，消除舊「冗余 dev 索引」名稱分歧。⚠️ **實測確認 BL-5 CWD 路徑陷阱**：`dbrun --project src/Struo.Api` 的 CWD=專案目錄，相對 `db/migrations` 解析失敗 → runner 拋 `DirectoryNotFoundException` 並 fail-loud；prod 須用**絕對路徑**（容器路徑），gate 改用絕對路徑後 PASS。Plan：`docs/superpowers/plans/2026-07-22-migration-core-rebaseline.md`。
 - [ ] **ARC-8 LOW** — `SqlSugarItemRepository.cs` 1076 行仍超過 800 上限。非急迫；下次觸碰時抽 translation 相關成 `SqlSugarTranslationRepository`。
 - [ ] **SEC-9 LOW** — 上傳全檔緩衝 `MemoryStream`（25MB×併發 記憶體放大）。`FileService.cs:31-32`：magic-bytes 只需前 12 bytes；改 spool-to-temp（`FileBufferingReadStream`）或串流直上 storage。
-- [ ] **🔶決策 SEC-11 LOW** — 白名單允許 `image/svg+xml` 且無 magic-bytes/無 sanitize，靠 attachment disposition 緩解（logo `<img>` 路徑實際安全）。若不需向量 logo 直接移出白名單最乾淨；否則上傳時剝除 SVG script/event handler。
+- [x] **🔶決策 SEC-11 LOW** ✅ 已拍板（2026-07-22）：**接受現有緩解，不改碼**。SVG 上傳靠 attachment `Content-Disposition` + logo 走 `<img>`（中和 script）在今日路徑實際安全；latent 風險僅在未來若新增 inline 供檔路徑才成立。記錄接受，不移出白名單、不加 sanitize（YAGNI）。若未來新增 SVG inline 服務路徑須重評。
 - [ ] **SEC-12 LOW** — `MediaDetailDialog.vue:130-136` 剪貼簿失敗靜默吞。加失敗 toast。
 - [ ] **AUTH-2 LOW（Batch 4 複核揭露）** — CSRF 403 回非 envelope 形狀 body（`{error:{message}}`，缺 `success:false` 與 `error.code`）。`CsrfProtectionMiddleware.cs:28-30` 自訂 body；AUTH-1 修完後這是唯一仍非 envelope 的 auth-adjacent 錯誤路徑，前端依 `error.code` 分支會拿到 undefined。**修法**：比照 AUTH-1 用 `Envelope.Error(ErrorCodes.Forbidden, ...)` + `WriteAsJsonAsync`。
 
 ### 資料庫
-- [ ] **DB-16 LOW** — 建議補索引：`users` 的 `lower(email)` functional index（登入/SSO 路徑；009 header 自承留給 identity-perf pass）、`users.accesstoken`（每 bearer 請求一次；併入 DB-13 即解）、`files.contenttype text_pattern_ops`（FE-R6 型別過濾 `LIKE 'image/%'`）、各 collection `(deletedat, updatedat)` 部分索引（dashboard/列表排序）。
+- [ ] **DB-16 LOW** — 建議補索引：`users` 的 `lower(email)` functional index（登入/SSO 路徑；009 header 自承留給 identity-perf pass）、`users.accesstoken`（每 bearer 請求一次；已於核心基線 `index_users_accesstoken_unique` 解）、`files.contenttype text_pattern_ops`（FE-R6 型別過濾 `LIKE 'image/%'`）、各 collection `(deletedat, updatedat)` 部分索引（dashboard/列表排序）。**重整後定位**：核心索引（lower(email)、files.contenttype text_pattern_ops）宜以新 `002-…` migration 或 entity `[SugarIndex]` 加入核心基線；collection 部分索引屬範例/下游。**新增（Fable 複核揭露）**：`file_translations` 現有冗余對——unique index + 同欄 `ix_file_translations_fk_locale` btree（皆源自 `FileTranslation.cs` 屬性，基線忠實重現）；`ix_*` 被 unique 完全覆蓋、純寫放大。修法：刪 `FileTranslation.cs` 的 `[SugarIndex]` 再重生基線（不可只改基線，會 dev/prod 漂移）。
 - [ ] **DB-17 LOW** — 翻譯搜尋抓整列 sidecar（含 body 大欄位）只為取 fk；IN 改寫無上限。`SqlSugarItemRepository.cs:910-923`、`RelationFilterResolver.cs:30-42`：`.Select` 只投影 fk；IN >5k 改子查詢。
 - [ ] **DB-18 LOW** — revision 列表把 Snapshot 全文一起抓回（FE-R7 抽屜每開一次拉全部版本完整快照）。`SqlSugarRevisionStore.cs:31-38`：`.Select` 只投影 metadata 欄位。
 - [ ] **DB-19 LOW** — soft-delete 分支 restrict 檢查在 txn 外（purge 已在 txn 內，不對稱）；restore 併發可重複記 revision（僅歷史噪音）。`ItemService.cs:252-259,297-303`：檢查移進 txn；restore UPDATE 加 `WHERE deletedat IS NOT NULL`。
-- [ ] **DB-20 LOW** — migrations README 漂移（「next is 012」但 012 已存在）；012 header 缺 Date/Author/Ticket 欄位。
+- [x] **DB-20 LOW** ✅ 已吸收進 migration 重整（2026-07-22）：`db/migrations/README.md` + `docs/migration-strategy.md` 全面改寫為 baseline-first 模型（移除過時的 DB-6 renumber 表與 010 hazard 段）；舊 012/013 header 隨檔一併刪除。next migration 現為 `002-…`。
 - [ ] **DB-21 LOW** — 每次 item update 4 次 SELECT（CAS 已保證正確性；`UpdateAsync` 內存在性預讀可省）。純效率。
 
 ### 前端
@@ -222,14 +222,23 @@
 
 ---
 
+### Batch 5 執行紀錄 — migration 核心重整（2026-07-22，branch `audit-2026-07-21-batch5`）
+- **緣起**：使用者重新定位專案本質 = 可重複使用的**核心-only CMS 模板**（無業務功能，下游 fork 自行擴充）。審核先前把全部 13 支 migration（含大量範例 Blog DDL）當 prod schema；使用者指出核心路徑不該挾帶範例內容 → 決定重訂純核心基線。已入 `CLAUDE.md §0`（專案定位）避免未來再搞錯。
+- **決策**（皆 2026-07-22 拍板）：無正式 prod DB → 自由 rebaseline；**完整核心 bootstrap 基線**（非只約束/索引）；範例 migration **從 repo 刪除**；BL-5 = dev 維持 InitTables、基線為 prod 產物；SEC-11 = 接受不改。
+- **產物**：`db/migrations/001-core-baseline.sql` — 9 核心表（languages/files/file_translations/users/roles/permissions/user_roles/revisions/site_settings）+ PK/unique/btree，`InitTables(FrameworkEntityTypes.All)` → `pg_dump --schema-only` → 硬化冪等。舊 13 支刪除。
+- **流程**（依偏好模型）：Sonnet ×2 平行實作（叢集 A=測試 IndexParity 重定向核心-only + 新 CoreBaselineParityTests + repoint SchemaGuard 操作訊息/entity 註解 009-013→001-core-baseline；叢集 B=README/migration-strategy/appsettings 改寫 baseline-first；檔案不相交）+ Fable ×1 對抗複核基線 SQL（**PASS-WITH-NITS**：header 誇大「消除冗余索引 wart」→ 更正為「名稱一致」、unique 索引非約束、補既有 DB tracking 註記；redundant fk btree → DB-16 追蹤）。
+- **驗證證據**：後端 `dotnet test` **813 綠**（818→813，−5＝移除範例 index parity theory cases，已核帳）；`dotnet build` 通過。**live PG gate PASS**（實跑，見 [[db-verify-live-postgres]]）：對**空** DB `struo_prod_sim` 以 `ASPNETCORE_ENVIRONMENT=Production` 啟動（InitTables 關、seeders 關）、`Database__MigrationsPath` 絕對路徑 → runner 套 `001-core-baseline.sql`（log 確認）→ `Now listening` / `Hosting environment: Production` → `/health/ready` **HTTP 200** → DB 恰 **10 表（9 核心 + schema_migrations）**、`schema_migrations` 記錄該檔。基線二次套用冪等（同一 schema，欄位/索引與 InitTables 輸出 byte-identical，diff 證實）。**authed 核心流程**（login/user/file/revision/settings）因 Production seeders 為 dev-gated 未於 baseline-only DB 直跑，改由「基線 schema ≡ InitTables schema（已證 byte-identical）＋ 全 813 測試/前次 live e2e 17/17 皆對 InitTables schema 實跑」遞移涵蓋。
+- **commits**：`816d3b3` 基線 / `53aa9a4` 刪舊 / `cf1f30e` §0+plan / `de01934` 測試 / `8e90280` docs+repoint+Fable 修正。⏳ 尚未 push。
+- **殘留 Batch 5 LOW（未做，下一份計畫）**：BL-2/BL-4/SEC-9/SEC-12/AUTH-2、DB-16(核心索引+冗余btree)/DB-17/DB-18/DB-19/DB-21、FE-20~30、TEST-7~9；ARC-8 明示延後。
+
 ## 決策項彙總（需使用者拍板，標 🔶）
 
 | ID | 問題 | 選項 |
 |----|------|------|
 | SEC-7 | 全站無 rate limiting（H1 deferred 現況） | ✅ **已拍板（2026-07-22）：窄化 app-layer login limiter + config 快取**。僅 `POST /api/auth/login` per-IP fixed window + `/api/config` IMemoryCache；全域/流量限制交 web server。 |
 | DB-14 | 零 FK constraint | ✅ **已拍板（2026-07-22）：維持 app-only + 明文接受**。不建 FK（避免重開 InitTables-vs-migration parity 破口；pipeline 已審核正確；覆蓋本不完整）。缺口清單見 DB-14 條目。 |
-| SEC-11 | SVG 上傳白名單 | (a) 移出白名單；(b) 上傳時 sanitize；(c) 接受現有 disposition 緩解 |
-| BL-5 | dev 是否設 `MigrationsPath` | 建議設 `"db/migrations"` 讓 dev boot 排練 prod migration 路徑 |
+| SEC-11 | SVG 上傳白名單 | ✅ **已拍板（2026-07-22）：(c) 接受現有 disposition 緩解，不改碼**。詳見 Batch 5 SEC-11 條目。 |
+| BL-5 | dev 是否設 `MigrationsPath` | ✅ **已拍板（2026-07-22）：dev 維持空，以 migration 核心重整收斂**（單一 `001-core-baseline.sql` 核心 bootstrap 基線；migration=prod 產物）。詳見 Batch 5 BL-5 條目 + plan `2026-07-22-migration-core-rebaseline.md`。 |
 
 ## 各軌審核確認健康的部分（無需動作，留存證據）
 
