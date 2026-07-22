@@ -13,7 +13,7 @@
 |------|------|------|
 | Batch 1 | 1 HIGH + 高價值 MED（後端/安全/資料） | ✅ 完成（Sonnet 實作 + Fable 複核 PASS + live PG gate 4/4 PASS，`dotnet test` 795 綠）；已提交分支 `audit-2026-07-21-batch1` |
 | Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ✅ 完成（commit `a735dc3`，分支 `audit-2026-07-21-batch2`）。BL-1/CS-9/SEC-10/SEC-7 + DB-14 決策；Sonnet ×3 平行實作 + Fable ×3 對抗複核（PASS/PASS-WITH-NITS，nits 已修）；`dotnet test` **815 綠**；live PG gate 2/2 PASS（SEC-10 delete 僅清 logofileid、brandname 保留、無 42804；SEC-7 login 429 envelope+Retry-After） |
-| Batch 3 | 前端 MED（7 項） | ☐ 未開始 |
+| Batch 3 | 前端 MED（7 項） | ✅ 完成（commit `c443fb4`,分支 `audit-2026-07-21-batch3`）。FE-13～FE-19 全數修復;Sonnet ×4 平行實作(2 波)+ Fable ×3 對抗複核(FE-14/15/16/18 PASS、FE-17/19 PASS-WITH-NITS,nits 已修:active-button `#fff`→`var(--surface)` 暗色對比、bullet/ordered 可見字改語言中立 pi 圖示、drawer `load()` 追加 latest-wins invalidate);frontend vitest **520 綠**(515→520)、`pnpm build`(vue-tsc)通過 |
 | Batch 4 | 測試缺口（e2e + 單元補洞） | ☐ 未開始 |
 | Batch 5 | LOW 批次（後端/資料/前端/測試） | ☐ 未開始 |
 
@@ -100,35 +100,41 @@
 
 ## Batch 3 — 前端 MED（7 項）
 
-- [ ] **FE-13 MED — SettingsView 重複掛載 `<Toast />` → toast 顯示兩次**
+- [x] **FE-13 MED — SettingsView 重複掛載 `<Toast />` → toast 顯示兩次** ✅ 已修（刪 SettingsView 的 `<Toast/>` 元素 + import;`useToast()` 保留;AppShell 全域 outlet 為唯一來源）。
   `SettingsView.vue:95` vs `AppShell.vue:55`（全域已有）。FE-R7「parent+child 重複 ConfirmDialog」教訓在 Toast 上重演。
   **修法**：刪 SettingsView 的 `<Toast />` 與 import。
 
-- [ ] **FE-18 MED — MediaDetailDialog 409 後無恢復路徑：version 滯留，重存永遠 409 且丟編輯**
+- [x] **FE-18 MED — MediaDetailDialog 409 後無恢復路徑：version 滯留，重存永遠 409 且丟編輯** ✅ 已修（409 時 refetch + immutable `{ ...model.value, version }` 只刷新 version、保留使用者 title/alt 編輯,下次存檔覆寫成功;refetch 失敗走 error banner 不拋。TDD RED→GREEN。Fable PASS)。
   `MediaDetailDialog.vue:103-104` 只設 `conflict=true`；對照 `ItemFormView.recoverFromConflict()`（`ItemFormView.vue:146-163`）保留編輯刷新 token。
   **修法**：conflict 時重抓 item 僅更新 `model.value.version`（保留使用者編輯），或加「重新載入」按鈕。
 
-- [ ] **FE-19 MED — 暗色主題下 RichText 彈出面板/表格退回淺色硬編碼色（使用不存在的 CSS token）**
+- [x] **FE-19 MED — 暗色主題下 RichText 彈出面板/表格退回淺色硬編碼色（使用不存在的 CSS token）** ✅ 已修（`--surface-0`→`--surface`、`--surface-border`→`--border`、`--surface-100`→`--bg`、`--primary-color`→`--accent`,drop 無用 hex fallback;複核追加 active-button `color:#fff`→`var(--surface)` 修暗色對比 ~2.2:1→合格。僅 4 檔 `<style>`。Fable PASS-WITH-NITS,nit 已修)。
   `RichTextColorMenu.vue:55-59`、`RichTextTableMenu.vue:38-40`、`RichTextInput.vue:199-208`、`RepeaterField.vue:93`：`var(--surface-0, #fff)` 等 token 全案無定義 → 永遠 hex fallback，暗色下白底面板。
   **修法**：改用 R0 token（`--surface`/`--border`/`--accent`）。
 
-- [ ] **FE-14 MED — RevisionHistoryDrawer `select()` 無 latest-wins → 快速點選顯示錯誤 revision**
+- [x] **FE-14 MED — RevisionHistoryDrawer `select()` 無 latest-wins → 快速點選顯示錯誤 revision** ✅ 已修（`createLatestWins` 守 detail/detailError/detailLoading(含 finally)三處寫入;`selected` 仍同步跟最新點選;複核追加 `load()` 內 `detailLoad.next()` 使關閉/重開時 in-flight 響應失效。TDD RED→GREEN。Fable PASS)。
   `RevisionHistoryDrawer.vue:47-73`：A→B 快速點選，A 慢回覆蓋 `detail`，高亮 B 內容卻是 A。
   **修法**：套 `createLatestWins`，或寫回前檢查 `selected.value?.revisionNumber === rev.revisionNumber`。
 
-- [ ] **FE-15 MED — FilePicker 搜尋每鍵擊即發請求、無 debounce、無 latest-wins（SettingsView 曝險面擴大）**
+- [x] **FE-15 MED — FilePicker 搜尋每鍵擊即發請求、無 debounce、無 latest-wins（SettingsView 曝險面擴大）** ✅ 已修（FilePicker + RichText 圖片搜尋均改 `debounce(300)` + `createLatestWins`(守成功/錯誤兩路寫入),對照 FilesField 參考實作;openDialog 直呼維持即時。新增 debounce/latest-wins 回歸測試。Fable PASS)。
   `FilePicker.vue:64,37-47`；同型：`FilesField.vue:97` 附近、`RichTextInput.vue:192`。
   **修法**：改用 `lib/debounce(300)` + `createLatestWins`，與清單頁一致。
 
-- [ ] **FE-16 MED — 確認對話框文案硬編碼英文（unsavedConfirm / deleteConfirm / purgeConfirm）— zh-TW 使用者看到英文**
+- [x] **FE-16 MED — 確認對話框文案硬編碼英文（unsavedConfirm / deleteConfirm / purgeConfirm）— zh-TW 使用者看到英文** ✅ 已修（三 helper 改收 `t` 參數並回傳翻譯後 `{header,message}`;新增 `confirm` i18n ns(8 keys,en/zh-TW 對稱);6 個 call site 全數傳 `t`。Fable PASS,無殘留舊簽章)。
   `lib/formDirty.ts:27-32`、`lib/deleteAction.ts:7-15`；ItemFormView/CollectionListView/SettingsView/MediaDetailDialog 全數使用。
   **修法**：helper 改回傳 i18n key 或接受 `t` 參數；zh-TW/en 補 key（locales.test.ts 會強制對稱）。
 
-- [ ] **FE-17 MED — FilePicker 及 field 層元件 UI 字串硬編碼英文（含 RichText 工具列 aria-label）**
+- [x] **FE-17 MED — FilePicker 及 field 層元件 UI 字串硬編碼英文（含 RichText 工具列 aria-label）** ✅ 已修（新增 `fields` i18n ns(含 `fields.richtext.*`,en/zh-TW 對稱);FilePicker/FilesField/RelationPicker/RichText 工具列 17 顆按鈕 aria-label+title 全數遷移;複核追加 bullet/ordered 可見字「• List / 1. List」→ 語言中立 `pi pi-list`/`pi pi-sort-numeric-down` 圖示。Fable PASS-WITH-NITS,nit 已修)。
   `FilePicker.vue:76-85`、`FilesField.vue:143`、`RichTextInput.vue:145-192`、`RelationPicker.vue:58`。FilePicker 現直接出現在 Settings 頁。
   **修法**：建 `fields` i18n namespace 逐步遷移；優先 FilePicker。
 
 ---
+
+### Batch 3 執行紀錄（2026-07-22）
+- 流程：因 7 項在 `RichTextInput.vue`/`FilePicker.vue`/`MediaDetailDialog.vue`/`SettingsView.vue`/locales 有大量檔案重疊,拆成 **Wave A（3 個 Sonnet 5 平行,檔案完全不相交:FE-19 / FE-14 / FE-18）→ Wave B 循序（B1=FE-16+FE-13,B2=FE-15+FE-17;兩者皆改 locales 故不可平行）**。各波完成後由 orchestrator 集中跑 `pnpm vitest run` + `pnpm build`。最後 **3 個 Fable 5 子代理對抗式複核**（依實作叢集分組）。
+- 驗證證據：frontend `pnpm vitest run` **520/520 全綠**（基準 515 + FE-14/18/15 新增 5 測試）;`pnpm build`（vue-tsc）通過,僅既有 chunk-size 警告。
+- Fable 複核結論：FE-14 / FE-15 / FE-16 / FE-18 **PASS**;FE-17 / FE-19 **PASS-WITH-NITS**。攔截並修掉的 nits:(1) FE-19 active-button `color:#fff` 在暗色 `--accent`(L=0.746) 上僅 ~2.2:1 → 改 `var(--surface)`(雙主題皆合格);(2) FE-17 可見字「• List / 1. List」仍含英文 → 改語言中立 `pi pi-list` / `pi pi-sort-numeric-down`;(3) FE-14 `load()` 未使 in-flight detail load 失效(既有、非回歸)→ 追加 `detailLoad.next()` 硬化。無 FAIL、無 scope creep。
+- 未觸碰：`docs/struo-cms-frontend-design/`（session 起始即為 untracked 原型目錄,非本批工作）。⏳ 尚未 push;無 DB 行為改動故不需 live PG gate。
 
 ## Batch 4 — 測試缺口
 
