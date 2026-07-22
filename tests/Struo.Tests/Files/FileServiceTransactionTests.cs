@@ -49,6 +49,9 @@ public class FileServiceTransactionTests : IDisposable
             new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<File>();
         _db.CodeFirst.InitTables<FileTranslation>();
+        // SEC-10/DB-15: DeleteAsync now also clears site_settings.logofileid when applicable, so the
+        // table must exist even though this test's own scenarios never seed a row into it.
+        _db.CodeFirst.InitTables<Struo.Infrastructure.Settings.SiteSettings>();
 
         var collections = MetadataScanner.ScanTypes([typeof(File)]);
         var provider = new CachedMetadataProvider(collections);

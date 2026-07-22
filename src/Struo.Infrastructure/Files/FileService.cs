@@ -2,6 +2,7 @@ using SqlSugar;
 using Struo.Application.Files;
 using Struo.Application.Query;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Settings;
 
 namespace Struo.Infrastructure.Files;
 
@@ -88,6 +89,18 @@ public sealed class FileService(
                     }
                 }).ExecuteCommandAsync(ct);
             await db.Deleteable<File>().In(id).ExecuteCommandAsync(ct);
+
+            // SEC-10/DB-15: SettingsController only validates the logo file is published at SAVE
+            // time (TOCTOU) — if this deleted file was the current brand logo, clear the reference
+            // now rather than leaving site_settings.logofileid dangling. Entity-typed SetColumns
+            // (see SqlSugarSiteSettingsStore.UpdateRowAsync) so the nullable column gets a typed
+            // NULL, avoiding the Postgres 42804 error a plain NULL literal triggers via SqlSugar's
+            // untyped SetColumns overload. A no-op (0 rows affected) when this file was never the
+            // logo, or when no site_settings row exists yet.
+            await db.Updateable<SiteSettings>()
+                .SetColumns(s => new SiteSettings { LogoFileId = null })
+                .Where(s => s.LogoFileId == id)
+                .ExecuteCommandAsync(ct);
         }, ct);
 
         // storage.DeleteAsync stays outside the transaction: best-effort (row gone, bytes orphaned).

@@ -40,7 +40,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // Pin OIDC off by default so the IT suite is deterministic regardless of a developer's
                 // local, gitignored appsettings.Development.json (which may carry real tenant config for
                 // manual OIDC testing). Tests that need it on layer an override via WithWebHostBuilder.
-                ["Oidc:Enabled"] = "false"
+                ["Oidc:Enabled"] = "false",
+                // SEC-7: the whole suite shares this ApiFactory instance (and its client-IP partition,
+                // since TestServer has a fixed connection IP) across ~55 test classes that each log in
+                // one or more test users via CreateAuthenticatedClientAsync/CreateEditorClientAsync/
+                // CreateRolelessClientAsync. A production-sized PermitLimit (5/60s) would make the
+                // suite itself trip the 429 the limiter exists to produce. Kept generously high here;
+                // AuthLoginRateLimitTests exercises the real limiter behavior on its own isolated
+                // derived host via WithWebHostBuilder with a small, dedicated PermitLimit.
+                ["RateLimiting:Login:PermitLimit"] = "100000",
+                ["RateLimiting:Login:WindowSeconds"] = "60"
             }));
     }
 

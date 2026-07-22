@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using Struo.Api.Controllers;
 using Struo.Infrastructure.Settings;
 using Struo.Tests.Support;
 using Xunit;
@@ -20,6 +22,10 @@ public class SettingsControllerTests(ApiFactory factory)
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         await db.Deleteable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).ExecuteCommandAsync();
+        // SEC-7: the successful PUT already evicted /api/config's cache, but this raw cleanup
+        // delete does not — evict again so a later test in the shared collection never observes a
+        // stale cached branding value from this test's teardown.
+        scope.ServiceProvider.GetRequiredService<IMemoryCache>().Remove(ConfigController.CacheKey);
     }
 
     /// <summary>Seeds a minimal <see cref="Struo.Infrastructure.Files.File"/> row, mirroring the
