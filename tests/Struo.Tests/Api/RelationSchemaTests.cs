@@ -15,7 +15,7 @@ public class RelationSchemaTests(ApiFactory factory)
     [Fact]
     public async Task Article_schema_includes_relations()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var body = await (await client.GetAsync("/api/schema/article")).Content.ReadAsStringAsync();
         body.Should().Contain("\"relations\"");
         body.Should().Contain("\"name\":\"category\"");
@@ -45,7 +45,7 @@ public class RelationSchemaTests(ApiFactory factory)
     [Fact]
     public async Task Category_schema_includes_self_referencing_tree()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var body = await (await client.GetAsync("/api/schema/category")).Content.ReadAsStringAsync();
         body.Should().Contain("\"name\":\"parent\"");
         body.Should().Contain("\"selfReferencing\":true");

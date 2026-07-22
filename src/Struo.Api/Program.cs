@@ -152,6 +152,11 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "StruoCMS host terminated unexpectedly");
+    // BL-3: without this, a startup exception (e.g. ValidateOnStart's OptionsValidationException) is
+    // logged but swallowed here — the process still exits 0, so an orchestrator/supervisor sees a
+    // "successful" exit and never restarts or alerts. Force a non-zero exit code so process-exit-code
+    // monitoring reflects the actual failure.
+    Environment.ExitCode = 1;
 }
 finally
 {

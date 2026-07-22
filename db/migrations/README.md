@@ -16,7 +16,7 @@ NNN-short-kebab-description.sql
   apply order (ordinal filename sort), so it must be monotonic and gap-free.
 - **`short-kebab-description`** — one logical change per file.
 - The **next migration** is simply the highest existing number **+ 1**. As of this file the series ends
-  at `011`, so the next script is `012-…`.
+  at `013`, so the next script is `014-…`.
 - One numbering scheme only. (Two legacy `0001__`/`0002__` files plus a separate legacy `001-`…`007-`
   series were folded into this single series under DB-6; each renamed file's header notes its original
   filename.)
