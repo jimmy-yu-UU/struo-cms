@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.WebUtilities;
 using SqlSugar;
 using Struo.Application.Files;
 using Struo.Application.Query;
@@ -28,20 +29,30 @@ public sealed class FileService(
             !options.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             throw new QueryException($"Content type '{contentType}' is not allowed.");
 
-        // Buffer once so we can read dimensions AND persist from the same bytes.
-        await using var buffer = new MemoryStream();
-        await content.CopyToAsync(buffer, ct);
+        // SEC-9: spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
+        // small uploads (<= 64KB) stay in memory exactly as before, but anything larger spills to a
+        // temp file, so N concurrent large uploads no longer amplify memory by up to MaxUploadBytes
+        // each. Access below mixes sequential forward reads (which pull more from `content` on demand)
+        // and backward seeks to already-read offsets; the header sniff + image probe seek freely, then
+        // the stream is fully drained once (line ~55) before the save read so Length is the true total.
+        await using var buffer = new FileBufferingReadStream(content, memoryThreshold: 64 * 1024);
 
         // Conservative content sniff (L2): if the client claims a type we have a signature for, the
         // leading bytes must match it — blocks e.g. a script stored as image/png. Unknown types pass.
-        buffer.Position = 0;
         var header = new byte[12];
-        var read = buffer.Read(header, 0, header.Length);
+        var read = await buffer.ReadAsync(header.AsMemory(0, header.Length), ct);
         if (!FileSignatureValidator.IsConsistent(header.AsSpan(0, read), contentType))
             throw new QueryException($"File contents do not match the declared content type '{contentType}'.");
 
         buffer.Position = 0;
         var dims = images.TryRead(buffer, contentType);
+
+        // FileBufferingReadStream.Length only reflects bytes buffered SO FAR, not the true total,
+        // until the inner stream has been fully consumed — S3FileStorage's PutObjectRequest reads
+        // Stream.Length to size the upload, so an under-drained buffer here would ship a truncated
+        // Content-Length. Force a full drain (spilling to the temp file past the memory threshold,
+        // same as a large upload always would) before rewinding for the actual save read.
+        await buffer.CopyToAsync(Stream.Null, ct);
         buffer.Position = 0;
 
         var key = StorageKey.Create(fileName);

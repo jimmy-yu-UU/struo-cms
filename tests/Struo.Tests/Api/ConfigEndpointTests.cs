@@ -30,6 +30,9 @@ public class ConfigEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Config_is_anonymous_and_returns_defaults()
     {
+        // TEST-8: self-contained — don't rely on another test's teardown to leave a clean singleton
+        // row (and evicted cache) behind; clear it here too.
+        await ClearAsync();
         var client = _factory.CreateClient(); // no auth
         var response = await client.GetAsync("/api/config");
         response.StatusCode.Should().Be(HttpStatusCode.OK);

@@ -33,10 +33,11 @@
 -- verbatim so a dev InitTables schema and a prod baseline schema carry IDENTICAL index names. This fixes
 -- the pre-rebaseline NAME divergence (the old 011 migration's unique index was `ux_file_translations_fk_locale`
 -- while dev InitTables emitted `index_file_translations_fileid_locale_unique` for the same columns).
--- NOT eliminated: file_translations still carries a redundant pair over identical (fileid, locale) — the
--- unique index plus a plain btree `ix_file_translations_fk_locale` (both from FileTranslation.cs attributes,
--- faithfully reproduced here). Dropping the redundant btree is a Batch-5 LOW (edit the entity + regenerate;
--- fixing it in this file alone would reintroduce dev/prod drift).
+-- DB-16 (Batch 5, resolved): file_translations PREVIOUSLY carried a redundant pair over identical
+-- (fileid, locale) — the unique index plus a plain btree `ix_file_translations_fk_locale`. The plain btree
+-- was dropped (pure write amplification; the unique index serves the same lookup) by removing the
+-- [SugarIndex] from FileTranslation.cs and regenerating — so dev InitTables and this baseline stay in
+-- parity (verified: a fresh core InitTables schema and this file carry an identical 19-index set).
 --
 -- PRE-EXISTING DATABASES — tracking is by filename in schema_migrations. A database that had applied the
 -- old 001–013 filenames (none exist in this template today) keeps those rows AND additionally runs+records
@@ -195,8 +196,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS index_users_email_unique
 -- ----------------------------------------------------------------------------------------------------
 -- Hot-path btree indexes
 -- ----------------------------------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS ix_file_translations_fk_locale
-    ON public.file_translations USING btree (fileid, locale);
 CREATE INDEX IF NOT EXISTS ix_permissions_roleid
     ON public.permissions USING btree (roleid);
 CREATE INDEX IF NOT EXISTS ix_user_roles_roleid

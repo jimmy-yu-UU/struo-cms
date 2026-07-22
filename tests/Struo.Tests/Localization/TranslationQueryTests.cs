@@ -41,6 +41,26 @@ public class TranslationQueryTests(ApiFactory factory)
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit).And.HaveCount(1);
     }
 
+    /// <summary>DB-17: the translatable-field filter path now projects only the FK column at the SQL
+    /// level instead of materializing whole translation rows. Assert it still returns EVERY matching
+    /// parent — not just the first — proving the projected result set is a full, correctly-deduped
+    /// list of ids rather than e.g. a single scalar.</summary>
+    [Fact]
+    public async Task Filter_translatable_field_matches_multiple_items()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var zhTitle = $"SharedZh-{tag}";
+        var hit1 = await NewArticle(c, "EnA", zhTitle);
+        var hit2 = await NewArticle(c, "EnB", zhTitle);
+        await NewArticle(c, "EnC", $"Other-{tag}");
+
+        var env = JsonSerializer.SerializeToElement(new { filter = new Dictionary<string, object> { ["title"] = Eq(zhTitle) } });
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
+        var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
+        ids.Should().BeEquivalentTo([hit1, hit2]);
+    }
+
     [Fact]
     public async Task Sort_translatable_field_at_locale()
     {

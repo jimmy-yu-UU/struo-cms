@@ -61,8 +61,13 @@ public sealed class FileAccessPolicy(
         // `currentUser` (IHttpContextAccessor), not from this parameter, so a non-ambient HttpContext
         // here would resolve the wrong (anonymous) user instead of the bearer identity just adopted.
         httpContext.User = bearer.Principal;
+        var bearerUserId = currentUser.GetCurrentUserId();
+        // BL-2: a bearer principal that authenticated but carries no resolvable NameIdentifier must
+        // never fall through to the (still anonymous) public-floor snapshot — deny outright rather
+        // than resolving grants for a null user id.
+        if (bearerUserId is null) return false;
         await PermissionResolutionMiddleware.ResolveAndSetAsync(
-            currentUser.GetCurrentUserId(), permissionStore, currentPermissions, ct);
+            bearerUserId, permissionStore, currentPermissions, ct);
         return permissions.CanRead(FileCollection);
     }
 }
