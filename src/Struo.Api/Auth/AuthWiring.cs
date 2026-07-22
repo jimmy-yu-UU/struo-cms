@@ -1,11 +1,24 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Struo.Api.Http;
 using Struo.Application.Abstractions;
 
 namespace Struo.Api.Auth;
 
 public static class AuthWiring
 {
+    // AUTH-1: [Authorize]-attribute-level challenges run inside the cookie handler, before MVC
+    // gets a chance to run — so EnvelopeResultFilter never sees these responses and they used to
+    // go out with an empty body, unlike in-action PermissionDeniedException 401/403s (mapped by
+    // DomainErrorMap) which DO carry an envelope. OnRedirectToLogin/OnRedirectToAccessDenied below
+    // write the same envelope shape directly. HttpResponse.WriteAsJsonAsync resolves
+    // Microsoft.AspNetCore.Http.Json.JsonOptions (a separate registration from the MVC JsonOptions
+    // configured in Program.cs) when no options are passed, so an explicit camelCase options
+    // instance is supplied here rather than relying on DI to already agree.
+    private static readonly JsonSerializerOptions EnvelopeJsonOptions = new(JsonSerializerDefaults.Web);
+
     public static IServiceCollection AddStruoAuth(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
         services.AddHttpContextAccessor();
@@ -35,9 +48,23 @@ public static class AuthWiring
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.SlidingExpiration = true;
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
-                // API, not MVC views: return 401/403 instead of redirecting.
-                options.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
-                options.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
+                // API, not MVC views: return 401/403 with an error envelope instead of redirecting.
+                // AUTH-1: body added alongside the pre-existing status-code-only behavior (which is
+                // preserved verbatim) so attribute-level challenges match the in-action error shape.
+                options.Events.OnRedirectToLogin = ctx =>
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return ctx.Response.WriteAsJsonAsync(
+                        Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required."),
+                        EnvelopeJsonOptions);
+                };
+                options.Events.OnRedirectToAccessDenied = ctx =>
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return ctx.Response.WriteAsJsonAsync(
+                        Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden."),
+                        EnvelopeJsonOptions);
+                };
             })
             .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(
                 AuthSchemes.Bearer, _ => { });

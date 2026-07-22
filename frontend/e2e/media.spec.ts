@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import { type Page } from '@playwright/test'
 
 // Audit 2026-07-21 Batch 4 (TEST-6) live gate: Media Library upload + per-locale Title/Alt save
 // (FE-R6). Upload goes through a real <input type="file"> via Playwright's setInputFiles() with an
@@ -25,10 +26,6 @@ const PNG_1X1 = Buffer.from(
 let uploadedFileId: string | undefined
 
 async function login(page: Page): Promise<void> {
-  // UI locale defaults to zh-TW (resolveInitialUiLocale reads only localStorage['struo.uiLocale']);
-  // a fresh Playwright context starts with empty storage, so seed 'en' BEFORE the first navigation
-  // or every i18n-driven label below (Upload, Upload files, Search files…, Save) renders in Chinese.
-  await page.addInitScript(() => { try { localStorage.setItem('struo.uiLocale', 'en') } catch { /* ignore */ } })
   await page.goto('/')
   await expect(page).toHaveURL(/\/login$/)
   await page.fill('input[type="email"]', EMAIL)
@@ -75,9 +72,22 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
 // idiom as items.spec.ts / conflict.spec.ts) and opens its detail dialog.
 async function openDetailByName(page: Page, fileName: string): Promise<void> {
   await page.getByPlaceholder('Search files…').fill(fileName)
-  await expect(page.getByText(fileName, { exact: true })).toBeVisible()
-  await page.getByText(fileName, { exact: true }).click()
+  // Each grid tile is a <button class="media-tile"> containing BOTH a FileThumbnail chip
+  // (.file-chip__name) and .media-tile__name — both render the filename, so an unscoped
+  // getByText(fileName) matches two nodes in the same tile (strict-mode violation). Match the tile's
+  // own name span and click the enclosing tile button (MediaGrid emits `open` -> detail dialog).
+  const tile = page.locator('.media-tile', { has: page.locator('.media-tile__name', { hasText: fileName }) })
+  await expect(tile).toBeVisible()
+  // The dialog becomes visible (props.file !== null) BEFORE MediaDetailDialog.load() finishes its
+  // async GET — and load() sets activeLocale (initially '') and resets model. Wait for that GET so
+  // fields go into the right translation bucket (a fill before load() lands in translations[''] and
+  // is then clobbered) and the reopened values are populated before we assert.
+  const loaded = page.waitForResponse(
+    (r) => /\/api\/items\/file\//.test(r.url()) && r.request().method() === 'GET',
+  )
+  await tile.click()
   await expect(detailDialog(page)).toBeVisible()
+  await loaded
 }
 
 test.afterEach(async ({ page }) => {

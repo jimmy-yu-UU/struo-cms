@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import { type Page } from '@playwright/test'
 
 // Audit 2026-07-21 Batch 4 (TEST-6) live gate: revision history + revert (FE-R7 / 9c-fe).
 //
@@ -23,10 +24,6 @@ const API = process.env.E2E_API ?? 'http://localhost:5080'
 let createdId: string | undefined
 
 async function login(page: Page): Promise<void> {
-  // UI locale defaults to zh-TW (resolveInitialUiLocale reads only localStorage['struo.uiLocale']);
-  // a fresh Playwright context starts with empty storage, so seed 'en' BEFORE the first navigation
-  // or every i18n-driven label below (History, Revert to this revision, Confirm revert, Save) is Chinese.
-  await page.addInitScript(() => { try { localStorage.setItem('struo.uiLocale', 'en') } catch { /* ignore */ } })
   await page.goto('/')
   await expect(page).toHaveURL(/\/login$/)
   await page.fill('input[type="email"]', EMAIL)
