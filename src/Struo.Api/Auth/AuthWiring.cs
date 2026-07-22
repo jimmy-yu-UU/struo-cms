@@ -57,6 +57,11 @@ public static class AuthWiring
             });
 
         services.AddAuthorization();
+
+        // BL-1: FilesController's file-collection RBAC decisions, extracted off its constructor.
+        // Scoped so it shares the per-request ICurrentPermissions/IPermissionService instances.
+        services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
+
         return services;
     }
 }

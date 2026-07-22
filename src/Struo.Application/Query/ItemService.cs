@@ -105,6 +105,12 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
+        // CS-9: a non-object top-level body (array/scalar) reaches ValidateLanguageCodeIfNeeded /
+        // Deserialize below, both of which assume an object and throw an unhandled
+        // InvalidOperationException (-> 500) otherwise. Reject it here as the established
+        // client-error (-> 400) path instead.
+        if (body.ValueKind != JsonValueKind.Object)
+            throw new QueryException("Request body must be a JSON object.");
         ValidateLanguageCodeIfNeeded(collection, body);
         var entity = deserializer.Deserialize(collection, body, meta);
         var d = registry.Get(collection)!;
@@ -137,6 +143,10 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
+        // CS-9: same non-object-body guard as CreateAsync — placed identically, right after the
+        // permission checks and before ValidateLanguageCodeIfNeeded/Deserialize.
+        if (body.ValueKind != JsonValueKind.Object)
+            throw new QueryException("Request body must be a JSON object.");
         ValidateLanguageCodeIfNeeded(collection, body);
         var d = registry.Get(collection)!;
 

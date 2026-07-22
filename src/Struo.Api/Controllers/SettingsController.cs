@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Api.Http;
@@ -22,7 +23,7 @@ public sealed record UpdateBrandingRequest(string? BrandName, Guid? LogoFileId);
 [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
 public sealed class SettingsController(
     ISiteSettingsStore settings, FileService files, IOptions<BrandingOptions> branding,
-    ICurrentPermissions permissions, ICurrentUserAccessor currentUser) : ControllerBase
+    ICurrentPermissions permissions, ICurrentUserAccessor currentUser, IMemoryCache cache) : ControllerBase
 {
     private const int MaxBrandNameLength = 100;
 
@@ -48,6 +49,10 @@ public sealed class SettingsController(
         }
 
         await settings.UpsertAsync(name, body.LogoFileId, currentUser.GetCurrentUserId(), ct);
+
+        // SEC-7: evict the /api/config cache immediately so this save is reflected right away
+        // rather than waiting out ConfigController's 30s TTL.
+        cache.Remove(ConfigController.CacheKey);
 
         var logoUrl = body.LogoFileId is { } id ? $"/api/files/{id}/content" : branding.Value.LogoUrl;
         return Ok(new { brandName = name, brandLogoUrl = logoUrl });

@@ -1,8 +1,12 @@
 // src/Struo.Api/Program.cs
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Serilog;
 using SqlSugar;
@@ -64,12 +68,59 @@ try
     builder.Services.AddStruoOidc(builder.Configuration);
     builder.Services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
         .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
+    // SEC-7: config-bound tuning for the login rate limiter below (defaults: 5 attempts / 60s).
+    builder.Services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
+        .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
+    // SEC-7: /api/config is anonymous and previously hit the DB on every request; cached with a
+    // short TTL (ConfigController) and evicted immediately on a branding save (SettingsController).
+    builder.Services.AddMemoryCache();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"])
         .AddCheck<Struo.Infrastructure.Health.CacheReadinessCheck>("cache", tags: ["ready"]);
+
+    // SEC-7: app-layer login rate limiter — fixed-window, partitioned by client IP, applied ONLY to
+    // POST /api/auth/login via [EnableRateLimiting("login")] on the action. Deliberately NOT a
+    // global limiter: every anonymous login attempt burns full Argon2id CPU (timing-equalized by
+    // design), making it a DoS amplifier if left unbounded, whereas the rest of the API is not.
+    // Volumetric/global throttling is a web-server-edge concern, out of scope here.
+    builder.Services.AddRateLimiter(rateLimiterOptions =>
+    {
+        rateLimiterOptions.OnRejected = async (context, ct) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            {
+                context.HttpContext.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            }
+            await context.HttpContext.Response.WriteAsJsonAsync(
+                Struo.Api.Http.Envelope.Error(
+                    Struo.Api.Http.ErrorCodes.TooManyRequests, "Too many login attempts. Please try again later."),
+                cancellationToken: ct);
+        };
+
+        rateLimiterOptions.AddPolicy("login", httpContext =>
+        {
+            var loginOptions = httpContext.RequestServices
+                .GetRequiredService<IOptions<Struo.Application.Configuration.LoginRateLimitOptions>>().Value;
+
+            // Partition key = client IP. NOTE: behind a reverse proxy, RemoteIpAddress reflects the
+            // proxy's own address unless the proxy is configured to forward the real client IP AND
+            // this host is configured with UseForwardedHeaders (deliberately out of scope here) —
+            // otherwise every login attempt through that proxy shares a single partition/bucket.
+            var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = loginOptions.PermitLimit,
+                Window = TimeSpan.FromSeconds(loginOptions.WindowSeconds),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            });
+        });
+    });
 
     var app = builder.Build();
 
@@ -80,6 +131,7 @@ try
     app.UseExceptionHandler();
     app.UseMiddleware<Struo.Api.Auth.CsrfProtectionMiddleware>();
     app.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>();
+    app.UseRateLimiter();
 
     app.MapControllers();
     app.MapStruoGraphQl();

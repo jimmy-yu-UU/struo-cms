@@ -12,7 +12,7 @@
 | 批次 | 內容 | 狀態 |
 |------|------|------|
 | Batch 1 | 1 HIGH + 高價值 MED（後端/安全/資料） | ✅ 完成（Sonnet 實作 + Fable 複核 PASS + live PG gate 4/4 PASS，`dotnet test` 795 綠）；已提交分支 `audit-2026-07-21-batch1` |
-| Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ☐ 未開始 |
+| Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ✅ 完成（commit `66e37d7`，分支 `audit-2026-07-21-batch2`）。BL-1/CS-9/SEC-10/SEC-7 + DB-14 決策；Sonnet ×3 平行實作 + Fable ×3 對抗複核（PASS/PASS-WITH-NITS，nits 已修）；`dotnet test` **815 綠**；live PG gate 2/2 PASS（SEC-10 delete 僅清 logofileid、brandname 保留、無 42804；SEC-7 login 429 envelope+Retry-After） |
 | Batch 3 | 前端 MED（7 項） | ☐ 未開始 |
 | Batch 4 | 測試缺口（e2e + 單元補洞） | ☐ 未開始 |
 | Batch 5 | LOW 批次（後端/資料/前端/測試） | ☐ 未開始 |
@@ -73,25 +73,24 @@
 
 ## Batch 2 — 後端/資料 MED 尾巴 + 決策項
 
-- [ ] **BL-1 MED — `FilesController.CanReadUnpublishedAsync` 重複 middleware 權限解析（7-dep ctor）**
+- [x] **BL-1 MED — `FilesController.CanReadUnpublishedAsync` 重複 middleware 權限解析（7-dep ctor）** ✅ 已修（抽 `IFileAccessPolicy`/`FileAccessPolicy`，吸收 `IPermissionService`/`ICurrentUserAccessor`/`IRolePermissionStore`/`ICurrentPermissions`；FilesController ctor 7→**4**；bearer-adopt 序列抽成 `PermissionResolutionMiddleware.ResolveAndSetAsync` 由 middleware（cookie 路徑）與 policy（bearer 路徑）共用，重複消除；scoped 註冊於 `AuthWiring.cs`）。Fable 複核 **PASS**：bearer-path ordering 逐字保留、SEC-5 `FileUnpublishedRbacTests` 全綠、DI lifetime 正確、404-not-403 決策仍在 controller。
   `FilesController.cs:19-22,115-130`：controller 內重演 `PermissionResolutionMiddleware` 整套 bearer 解析。
-  **修法**：抽 `IBearerPermissionProbe`（或 middleware 二段式），ctor 依賴收斂至 ≤4。
 
-- [ ] **🔶決策 SEC-7 MED — 全站仍無 rate limiting（前次 H1 deferred 的現況確認，非新回歸）**
+- [ ] **🔶決策 SEC-7 MED — 全站仍無 rate limiting（前次 H1 deferred 的現況確認，非新回歸）** ✅ 決策（2026-07-22）：**窄化 app-layer login limiter + config 快取**。理由：邊緣/全域流量限制交給使用者原計畫的 web server（那才是它的強項）；但 per-account login 退避 + 保護 Argon2 CPU 放大面是 web server 做不到、且屬 SEC-7 安全核心，故在應用層做**且僅針對 `POST /api/auth/login`**。不做全域 token-bucket（避與 web server 重疊）。
   `Program.cs` pipeline 無 `AddRateLimiter`；`POST /api/auth/login` 可無限暴力嘗試，且 timing-equalized Argon2id 讓每個匿名請求都燒滿 Argon2 成本（CPU DoS 放大）；匿名 `/api/config` 每次命中查 DB 無快取。
-  **修法（若解除 deferred）**：.NET 內建 `AddRateLimiter` — login per-IP fixed window（5 次/分 + 帳號級退避）、全域 token-bucket 保底；`/api/config` 加 `IMemoryCache`（30-60s）。**需使用者決策是否本輪處理 H1。**
+  **修法（已採納，窄化版）**：.NET 內建 `AddRateLimiter` — 僅 login endpoint per-IP fixed window（可設定，預設 5 次/分）；`app.UseRateLimiter()`；`[EnableRateLimiting("login")]`；OnRejected 回 429 且用標準 envelope（新增 `TOO_MANY_REQUESTS` code）。`/api/config` 加 `IMemoryCache`（30s）+ SettingsController upsert 成功時 evict。**不含**全域 token-bucket。
+  ✅ 已修：`LoginRateLimitOptions`（`RateLimiting:Login` PermitLimit/WindowSeconds）；partition key = `Connection.RemoteIpAddress`（null→"unknown" fail-closed）；`[EnableRateLimiting("login")]` 僅 Login（logout/me/oidc 不限）；`Retry-After` 用 `Math.Ceiling`。測試以 `WithWebHostBuilder` 起獨立小限額 host 實測 429（base factory 高限額不遮蔽）。Fable 複核 **PASS-WITH-NITS**。
+  🚩 **MED-1 部署註記（accepted-risk，須入部署文件）**：程式僅依 `Connection.RemoteIpAddress` 分區，**未**加 `UseForwardedHeaders`。若部署在反向代理/LB 之後而未設 ForwardedHeaders，所有用戶會塌縮成代理單一 IP 桶 → 攻擊者每分 5 次錯誤登入即可鎖死全站登入（限流器反成 DoS）。**部署於代理後務必設定 ForwardedHeaders（含 KnownProxies）使 RemoteIpAddress 反映真實客戶端**；與使用者原計畫「邊緣層 rate limiting」相輔（邊緣擋量、應用層擋 per-account/Argon2）。
 
-- [ ] **🔶決策 DB-14 MED — 仍然零 FK constraint（上次明示接受的殘留，本輪列出完整清單供再決策）**
-  完整性全靠 app-side purge pipeline + 交易；READ COMMITTED 下 restrict 檢查與刪除 commit 之間的併發插入無 DB 端 backstop。缺口清單（核心七條）：`articles.categoryid`→categories、`categories.parentid`（自參照）、`article_tags.articleid/.tagid`、`article_translations.articleid`、`file_translations.fileid`、`user_roles.userid/.roleid`、`permissions.roleid`；另 `site_settings.logofileid`→files、`articles.heroimageid`→files。結構上無法建 FK：`revisions.itemid`（polymorphic）、`articles.gallery`（JSON 陣列）。
-  **修法（若採納）**：核心七條補 `NOT VALID` FK + `VALIDATE CONSTRAINT` 作 fail-closed backstop；若續留 app-only，把本清單記入 audit doc 作明示接受。
+- [x] **🔶決策 DB-14 MED — 仍然零 FK constraint（上次明示接受的殘留，本輪列出完整清單供再決策）** ✅ 決策（2026-07-22）：**維持 app-only + 明文接受（本項即為紀錄）**，不建 FK。理由：(1) app-side purge pipeline 經本輪與前輪審核確認正確（parent-last 刪除順序、交易邊界、restrict 檢查）；(2) 補 FK 僅能經 migration 建立，SqlSugar InitTables（dev）不會建 → 會重新打開 Batch 1 剛關閉的 InitTables-vs-migration parity 破口（DB-12/DB-13 同源問題）；(3) 覆蓋本就不完整——`revisions.itemid`（polymorphic）、`articles.gallery`（JSON 陣列）結構上無法建 FK，app-side 檢查仍須保留。故 DB 端 backstop 帶來的防禦增益不足以抵銷 parity 迴歸成本。
+  **明示接受的完整性缺口清單（app-side pipeline 負責，無 DB 端 FK backstop）**：核心七條 `articles.categoryid`→categories、`categories.parentid`（自參照）、`article_tags.articleid/.tagid`、`article_translations.articleid`、`file_translations.fileid`、`user_roles.userid/.roleid`、`permissions.roleid`；File-picker 純量欄位 `site_settings.logofileid`→files、`articles.heroimageid`→files。**風險**：READ COMMITTED 下 restrict 檢查與刪除 commit 之間的併發插入無 DB 端 backstop（app pipeline 在單一交易內執行以縮小窗口）。**未來若引入繞過 purge pipeline 的寫入路徑，須重新評估本決策。**
+  完整性全靠 app-side purge pipeline + 交易；READ COMMITTED 下 restrict 檢查與刪除 commit 之間的併發插入無 DB 端 backstop。
 
-- [ ] **CS-9 LOW（同家族三站點，建議一次修）— 寫入路徑 body 形狀邊角以 500 收場而非 400**
-  (1) `ItemDeserializer.cs:46`→`JsonBodyUtil.cs:23`：有 strip 欄位的 collection 收非物件 body（`[1,2]`／`"x"`）→ `EnumerateObject()` 炸 500；(2) `ItemWriteSideSync.cs:146-149`：M2M 陣列元素 `1.5`／`true` → 500；(3) `ItemService.cs:224`：language collection 非物件 body 同炸。Batch 5 逐字搬移如實保留的既有缺口，非重構引入。
-  **修法**：Create/Update 入口統一 `ValueKind != Object → QueryException`；M2M 元素改 `TryGetInt64` + ValueKind 檢查。
+- [x] **CS-9 LOW（同家族三站點，一次修）— 寫入路徑 body 形狀邊角以 500 收場而非 400** ✅ 已修（CreateAsync/UpdateCoreAsync 入口統一 `body.ValueKind != Object → QueryException`（400），位於權限檢查後、Deserialize 前，兩處對稱；SyncM2MAsync 元素改 `TryGetInt64`（拒非整數/溢位）+ ValueKind switch（bool/null/object/array → QueryException），保留 `.Distinct()` 與 includeDeleted 分支）。TDD RED→GREEN 8 測試。Fable 複核 **PASS-WITH-NITS**（無 MED+；LOW-2 註解措辭已於 cleanup 修正）。
+  (1) `ItemDeserializer.cs:46`→`JsonBodyUtil.cs:23`；(2) `ItemWriteSideSync.cs:146-149`；(3) `ItemService.cs:224`。Batch 5 逐字搬移如實保留的既有缺口，非重構引入。
 
-- [ ] **SEC-10 LOW — 品牌 logo 生命週期 TOCTOU：logo 檔事後被 unpublish/刪除 → 匿名登入頁破圖**（合併 DB-15、TEST-10）
+- [x] **SEC-10 LOW — 品牌 logo 生命週期 TOCTOU：logo 檔事後被 unpublish/刪除 → 匿名登入頁破圖**（合併 DB-15、TEST-10）✅ 已修（`ConfigController` 產 URL 前經 `files.GetAsync` 重新確認 file 存在且 `Status=="published"`，否則回退 appsettings `LogoUrl`；`FileService.DeleteAsync` 在既有 `InTransactionAsync` 內加 entity-typed `SetColumns(s => new SiteSettings{LogoFileId=null}).Where(LogoFileId==id)` 清理，單成員 initializer 僅更新該欄、42804-safe）。TEST-10 定案：檔案事後消失/unpublish → config 回退。Fable 複核 **PASS-WITH-NITS**：SetColumns 單欄語意經三重佐證確認**不會**誤清 BrandName（非資料遺失）。⏳ live PG gate：delete-path UPDATE 的 `WHERE logofileid=@uuid` + typed-NULL 需實跑 PG。**殘留（已接受）**：deletion 不 evict `/api/config` 快取 → ≤30s TTL 內仍可能供舊 URL（破圖窗口從「永遠」縮至 ≤30s）；Infrastructure 依 §2 不可引用 Api 層快取 key。中期：file delete 時對 metadata 已知的 Image/File/Files 欄位做 Restrict-or-SetNull 掃描（未做，超本項範圍）。
   `SettingsController.cs:42-48` 只在儲存時驗證 published；`ConfigController.cs:29-31` 事後無條件產 URL；`FileService.DeleteAsync`（`FileService.cs:71-96`）不清理 `site_settings.logofileid`（也不清 `articles.heroimageid`/`gallery`/OG image 等 File-picker 純量欄位——讀取端有優雅降級，屬資料衛生）。
-  **修法**：`ConfigController` 產 URL 前重新確認 file 存在且 published，否則回退 appsettings `LogoUrl`；`FileService.DeleteAsync` 加 `site_settings.logofileid` 清理；先以測試把「檔案事後消失時 config 行為」定案（TEST-10）。中期：file delete 時對 metadata 已知的 Image/File/Files 欄位做 Restrict-or-SetNull 掃描。
 
 ---
 
@@ -198,8 +197,8 @@
 
 | ID | 問題 | 選項 |
 |----|------|------|
-| SEC-7 | 全站無 rate limiting（H1 deferred 現況） | (a) 本輪實作 `AddRateLimiter`（login + 全域 + config 快取）；(b) 續留 deferred 並記錄 |
-| DB-14 | 零 FK constraint | (a) 核心七條補 `NOT VALID` FK backstop；(b) 明示接受 app-only 並記入 audit doc |
+| SEC-7 | 全站無 rate limiting（H1 deferred 現況） | ✅ **已拍板（2026-07-22）：窄化 app-layer login limiter + config 快取**。僅 `POST /api/auth/login` per-IP fixed window + `/api/config` IMemoryCache；全域/流量限制交 web server。 |
+| DB-14 | 零 FK constraint | ✅ **已拍板（2026-07-22）：維持 app-only + 明文接受**。不建 FK（避免重開 InitTables-vs-migration parity 破口；pipeline 已審核正確；覆蓋本不完整）。缺口清單見 DB-14 條目。 |
 | SEC-11 | SVG 上傳白名單 | (a) 移出白名單；(b) 上傳時 sanitize；(c) 接受現有 disposition 緩解 |
 | BL-5 | dev 是否設 `MigrationsPath` | 建議設 `"db/migrations"` 讓 dev boot 排練 prod migration 路徑 |
 

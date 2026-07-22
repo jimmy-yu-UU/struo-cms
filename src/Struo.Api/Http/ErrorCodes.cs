@@ -13,6 +13,10 @@ public static class ErrorCodes
     public const string BadUserInput = "BAD_USER_INPUT";
     public const string Validation = "VALIDATION";
     public const string Internal = "INTERNAL_SERVER_ERROR";
+    // SEC-7: the app-layer login rate limiter (Program.cs, Microsoft.AspNetCore.RateLimiting)
+    // writes this code directly from its OnRejected callback (no exception is thrown, so
+    // DomainErrorMap is never consulted for this one).
+    public const string TooManyRequests = "TOO_MANY_REQUESTS";
 
     public static string ForStatus(int status) => status switch
     {
@@ -21,6 +25,7 @@ public static class ErrorCodes
         403 => Forbidden,
         404 => NotFound,
         409 => Conflict,
+        429 => TooManyRequests,
         _ => Internal,
     };
 }
