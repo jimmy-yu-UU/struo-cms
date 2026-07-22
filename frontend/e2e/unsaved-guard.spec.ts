@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import { type Page } from '@playwright/test'
 
 // FE-5 live gate: dirty-state leave guard.
 //
@@ -86,13 +87,13 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
   return id
 }
 
-// Click a collection link in the sidebar PanelMenu, expanding its group first if collapsed.
+// Click a collection link in the sidebar. FE-R1: the sidebar is the <aside class="sidebar">
+// (the <nav> element now belongs to the breadcrumb), and collection links render as plain
+// buttons (SidebarNavItem) rather than a PrimeVue PanelMenu. Groups mount expanded by default
+// (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh mount.
 async function navSidebar(page: Page, label: string): Promise<void> {
-  const nav = page.locator('nav')
-  const item = nav.getByText(label, { exact: true })
-  if (!(await item.isVisible().catch(() => false))) {
-    await nav.getByText('Content', { exact: true }).click()
-  }
+  const sidebar = page.locator('aside.sidebar')
+  const item = sidebar.getByRole('button', { name: label, exact: true })
   await expect(item).toBeVisible()
   await item.click()
 }

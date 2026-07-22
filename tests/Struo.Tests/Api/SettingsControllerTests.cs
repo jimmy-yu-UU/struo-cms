@@ -67,22 +67,21 @@ public class SettingsControllerTests(ApiFactory factory)
     /// request carries the session cookie (<see cref="Struo.Api.Auth.CsrfProtectionMiddleware"/>), which
     /// an anonymous request lacks. Either way the request falls through to the [Authorize] challenge.
     ///
-    /// FINDING (verified empirically, not per the audit's stated expectation): the challenge is
-    /// 401 as expected, but the body is EMPTY — no error envelope. Cookie auth's
-    /// <c>OnRedirectToLogin</c> event (AuthWiring.cs) sets <c>Response.StatusCode</c> directly and
-    /// returns, short-circuiting before MVC's <see cref="Struo.Api.Http.EnvelopeResultFilter"/> ever
-    /// runs, unlike the exception-driven 401s covered by UnauthorizedDriftTests (thrown
-    /// PermissionDeniedException inside an action, mapped by DomainErrorMap → does get an envelope).
-    /// So [Authorize]-attribute-level 401s and in-action-exception 401s are inconsistent: only the
-    /// latter carry <c>error.code</c>. Asserting status-only here because no code is available to
-    /// assert — see task rule "do not assert status only if the code is available".</summary>
+    /// FIXED (AUTH-1, audit batch 4 follow-up): the challenge is 401 as expected, and now carries
+    /// an error envelope. Cookie auth's <c>OnRedirectToLogin</c> event (AuthWiring.cs) still sets
+    /// <c>Response.StatusCode</c> directly and short-circuits before MVC's
+    /// <see cref="Struo.Api.Http.EnvelopeResultFilter"/> ever runs — but it now also writes the same
+    /// envelope shape the filter would have produced, so [Authorize]-attribute-level 401s and
+    /// in-action-exception 401s (covered by UnauthorizedDriftTests, thrown PermissionDeniedException
+    /// mapped by DomainErrorMap) agree on <c>error.code</c>.</summary>
     [Fact]
-    public async Task Put_anonymous_is_401_with_no_envelope_body()
+    public async Task Put_anonymous_is_401_with_unauthorized_envelope()
     {
         var client = _factory.CreateClient(); // anonymous, no cookie, no CSRF header
         var resp = await client.PutAsJsonAsync("/api/settings/branding", new { brandName = "X", logoFileId = (string?)null });
         resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        (await resp.Content.ReadAsStringAsync()).Should().BeEmpty();
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("UNAUTHORIZED");
     }
 
     [Fact]

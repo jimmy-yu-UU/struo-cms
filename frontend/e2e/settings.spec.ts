@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import { type Page } from '@playwright/test'
 
 // Audit 2026-07-21 Batch 4 (TEST-6) live gate: Site Settings branding editor (/settings,
 // super-admin only) — save-then-persist, and the FE-5-style unsaved-changes leave guard
@@ -24,10 +25,6 @@ type Branding = { brandName: string; logoFileId: string | null }
 let original: Branding | undefined
 
 async function login(page: Page): Promise<void> {
-  // UI locale defaults to zh-TW (resolveInitialUiLocale reads only localStorage['struo.uiLocale']);
-  // a fresh Playwright context starts with empty storage, so seed 'en' BEFORE the first navigation
-  // or every i18n-driven label below (Site name, Settings saved, Unsaved changes) renders in Chinese.
-  await page.addInitScript(() => { try { localStorage.setItem('struo.uiLocale', 'en') } catch { /* ignore */ } })
   await page.goto('/')
   await expect(page).toHaveURL(/\/login$/)
   await page.fill('input[type="email"]', EMAIL)
