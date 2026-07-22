@@ -1,5 +1,22 @@
 # StruoCMS — Working Rules (condensed)
 
+## Purpose (§0 — read first)
+StruoCMS is a **reusable, headless CMS *template***, not a finished product. It ships **only core
+framework/system capability** (metadata-driven collections, identity/RBAC, files/media, revisions,
+i18n, site-settings, the query DSL, REST + GraphQL, the admin SPA shell). It contains **no business
+content models** — downstream teams fork this template and add their own collections + migrations for
+their actual project. Therefore:
+- `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is a **demo only** — it shows *how* to define
+  collections; it is NOT part of the shipped core and is deleted on fork. Never treat sample tables
+  (`articles`/`tags`/`categories`/`article_*`) as core.
+- **Core = `src/Struo.*` framework + `FrameworkEntityTypes.All`** (languages/files/file_translations/
+  users/roles/permissions/user_roles/revisions/site_settings). If unsure whether something is core or
+  sample, it's core only if it lives in `src/Struo.*`.
+- `db/migrations/` carries **core-only** schema (`001-core-baseline.sql` = the prod bootstrap). Sample
+  schema is built by dev `InitTables` from sample entities; downstream forks write their own migrations.
+- When adding capability, ask "does every downstream CMS need this, or is it business-specific?"
+  Business-specific → belongs in the sample or downstream, not core (YAGNI at the template level).
+
 ## Stack (§1)
 .NET 10 / C# latest · SqlSugarCore · DB: **PostgreSQL** (runtime, supported) + SQLite (tests only);
 MySQL/SqlServer/Oracle are type-mapped but **unverified/experimental** (raw ORDER-BY subqueries and
