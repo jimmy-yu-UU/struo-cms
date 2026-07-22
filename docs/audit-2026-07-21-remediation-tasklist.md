@@ -14,7 +14,7 @@
 | Batch 1 | 1 HIGH + 高價值 MED（後端/安全/資料） | ✅ 完成（Sonnet 實作 + Fable 複核 PASS + live PG gate 4/4 PASS，`dotnet test` 795 綠）；已提交分支 `audit-2026-07-21-batch1` |
 | Batch 2 | 後端/資料 MED 尾巴 + 決策項 | ✅ 完成（commit `a735dc3`，分支 `audit-2026-07-21-batch2`）。BL-1/CS-9/SEC-10/SEC-7 + DB-14 決策；Sonnet ×3 平行實作 + Fable ×3 對抗複核（PASS/PASS-WITH-NITS，nits 已修）；`dotnet test` **815 綠**；live PG gate 2/2 PASS（SEC-10 delete 僅清 logofileid、brandname 保留、無 42804；SEC-7 login 429 envelope+Retry-After） |
 | Batch 3 | 前端 MED（7 項） | ✅ 完成（commit `c443fb4`,分支 `audit-2026-07-21-batch3`）。FE-13～FE-19 全數修復;Sonnet ×4 平行實作(2 波)+ Fable ×3 對抗複核(FE-14/15/16/18 PASS、FE-17/19 PASS-WITH-NITS,nits 已修:active-button `#fff`→`var(--surface)` 暗色對比、bullet/ordered 可見字改語言中立 pi 圖示、drawer `load()` 追加 latest-wins invalidate);frontend vitest **520 綠**(515→520)、`pnpm build`(vue-tsc)通過 |
-| Batch 4 | 測試缺口（e2e + 單元補洞） | ☐ 未開始 |
+| Batch 4 | 測試缺口（e2e + 單元補洞） | ✅ 完成（分支 `audit-2026-07-21-batch4`）。TEST-2/3/4/5 + TEST-6（3 支新 e2e spec）+ TEST-SQLITE-GATE；Sonnet ×3 平行實作（後端/前端單元/e2e，檔案不相交）+ Fable ×3 對抗複核。後端 `dotnet test` **818 綠**、前端 vitest **526 綠**、`pnpm build` 通過、`playwright test --list` 17 支全數收集。複核揭露 2 項新發現（AUTH-1 401 無 envelope、E2E-1 全套 e2e locale 種子）已記於下。⚠️ **e2e 三支尚未 live-run**（需起後端+前端+seed admin），列為後續 gate |
 | Batch 5 | LOW 批次（後端/資料/前端/測試） | ☐ 未開始 |
 
 ---
@@ -138,28 +138,37 @@
 
 ## Batch 4 — 測試缺口
 
-- [ ] **TEST-6 MED — e2e 缺三條關鍵 journey：revisions revert、settings 品牌儲存、media library**
+- [x] **TEST-6 MED — e2e 缺三條關鍵 journey：revisions revert、settings 品牌儲存、media library** ✅ 已補（新增 `frontend/e2e/revisions.spec.ts`、`settings.spec.ts`（2 test：儲存→reload 持久化 + dirty-guard reject）、`media.spec.ts`（上傳→per-locale Title/Alt→reopen 驗證））。全依 `conflict.spec.ts` 慣例（CSRF header、localhost cookie、`.field:visible` scoping、afterEach purge/restore）。`playwright test --list` 17 支全收集。Fable 複核：revisions/media **PASS-WITH-NITS**、settings **FAIL→已修**。⚠️ **尚未 live-run**（需後端 5080 + 前端 5173 + seed admin），為後續 gate。
   FE-R7 的 3 個 live-smoke bug 全是單元測試結構上抓不到的，目前只靠一次性手動 smoke。
-  **修法**：優先補 `revisions.spec.ts`（create→edit→revert→斷言復原）與 `settings.spec.ts`（儲存→重整→brandName 生效 + dirty guard）；media 上傳/detail 次之。
 
-- [ ] **TEST-4 MED — SettingsView logo 流程整條無測試**
-  `SettingsView.test.ts:34` 把 FilePicker/Dropzone stub 死，7 測試全走 brandName。未覆蓋：`SettingsView.vue:44-50` mount 時 URL→fileId regex 還原（格式一變靜默失效）、`:52-54` onUploaded、`:65-67` save 失敗 toast、名稱>100 前端擋下。
-  **修法**：各補 1 測試；dropzone 用帶 emit 的 functional stub。
+- [x] **TEST-4 MED — SettingsView logo 流程整條無測試** ✅ 已修（toast mock 改 hoisted 可斷言 spy；MediaUploadDropzone 改帶 emit 的 functional stub；補 4 測試：mount 時 URL→fileId regex 還原並流入 save payload / onUploaded 更新 logoFileId / save 失敗 error toast / 名稱>100 擋下且 warn（並斷言 `summary` 區分 nameRequired vs nameTooLong 分支））。Fable PASS-WITH-NITS，nits 已修。
+  `SettingsView.test.ts:34` 把 FilePicker/Dropzone stub 死，7 測試全走 brandName。
 
-- [ ] **TEST-2 MED — ConfigController「已存 BrandName 空白 → 回退 appsettings」分支無測試**
-  `ConfigController.cs:26-28`；store 本身不驗證空白（seeding/未來寫入方）。
-  **修法**：`store.UpsertAsync("   ", ...)` 後打 `/api/config` 斷言回 `StruoCMS`。
+- [x] **TEST-2 MED — ConfigController「已存 BrandName 空白 → 回退 appsettings」分支無測試** ✅ 已修（`store.UpsertAsync("   ", null, null)` → evict cache → `/api/config` 斷言 `StruoCMS`；`finally` 刪 singleton row + 再 evict。複核追加 precondition 斷言 `GetAsync().BrandName == "   "` 防未來 store 加驗證後測試靜默失效；setup 移入 `try` 使 cleanup 結構性保證）。Fable PASS-WITH-NITS，nits 已修。
+  `ConfigController.cs:41-43`；store 本身不驗證空白（seeding/未來寫入方）。
 
-- [ ] **TEST-3 MED — SettingsController 無「匿名 PUT → 401」測試**
+- [x] **TEST-3 MED — SettingsController 無「匿名 PUT → 401」測試** ✅ 已修（`_factory.CreateClient()` 匿名 PUT 斷言 401）。**複核揭露真相（見 AUTH-1）：401 body 為空、無 envelope**（`OnRedirectToLogin` 在 MVC filter 前短路），故測試釘住實際行為（401 + empty body）並記錄 finding，不弱化亦不改 middleware。Fable PASS-WITH-NITS。
   `SettingsControllerTests.cs:48-54` 只測 roleless 403；`UnauthorizedDriftTests` 掃不到此端點。
-  **修法**：`_factory.CreateClient()` 直接 PUT 斷言 401 + envelope code。
 
-- [ ] **TEST-5 MED — RevisionHistoryDrawer「visible watch 開啟即載入」未被測到 + 測試直打 vm 內部（實作細節反模式）**
-  `RevisionHistoryDrawer.vue:97-99` watch 被誤刪測試照綠；`defineExpose` + `(w.vm as any)` 斷言、`setTimeout(0)` 輕微 flaky 風險。
-  **修法**：補 `visible:false→setProps(true)` 斷言 `listRevisions` 被呼叫；長期改 DOM 斷言。
+- [x] **TEST-5 MED — RevisionHistoryDrawer「visible watch 開啟即載入」未被測到** ✅ 已修（補 `visible:false`→不呼叫、`setProps(true)`→`listRevisions('article','5')` 被呼叫，直接釘住 watch；複核追加 `visible:true` mount 即載入案例，專門釘 `{ immediate: true }` 選項）。反模式（測試打 vm 內部）為長期 LOW，本輪僅補 watch 覆蓋。Fable PASS-WITH-NITS，nit 已修。
+  `RevisionHistoryDrawer.vue:107-111` watch 被誤刪測試照綠。
 
-- [ ] **TEST-SQLITE-GATE（流程項）— SQLite vs PG 落差清單納入 live PG gate 慣例**
-  需 gate：site_settings 併發 23505（=DB-11）、`SetColumns` typed-NULL 回歸、migration 012 vs InitTables parity（=DB-12；`SchemaGuardTests` 不含 site_settings，可考慮補）。已覆蓋可接受：logoFileId uuid、timestamptz Kind 往返（欄位不對外）。
+- [x] **TEST-SQLITE-GATE（流程項）— SQLite vs PG 落差清單納入 live PG gate 慣例** ✅ 已記錄為慣例。清單：site_settings 併發 23505（=DB-11，**Batch 1 live PG gate 已實跑 8 路併發 PASS**）、`SetColumns` typed-NULL 回歸（=SEC-10，Batch 2 live PG gate 已跑）、migration 012 vs InitTables parity（=DB-12，Batch 1 已記部署 caveat）。可接受已覆蓋：logoFileId uuid、timestamptz Kind 往返。剩餘可選：`SchemaGuardTests` 補 site_settings 一致性檢查（LOW，未做）。
+
+---
+
+### Batch 4 執行紀錄（2026-07-22）
+- 流程：3 個 Sonnet 5 子代理平行實作（A=後端 TEST-2/3、B=前端單元 TEST-4/5、C=e2e TEST-6；三叢集檔案完全不相交）→ 3 個 Fable 5 子代理對抗式複核（依叢集分組）→ orchestrator 依複核回饋補修 → 統一驗證。
+- 驗證證據：後端 `dotnet test` **818/818 全綠**（+2 新測試）；前端 `pnpm vitest run` **526/526 全綠**（520→526，+6：TEST-4 ×4、TEST-5 ×2）；`pnpm build`（vue-tsc）通過；`playwright test --list` **17 支全收集**（含 3 支新 spec）。
+- Fable 複核結論：後端 / 前端單元 **PASS-WITH-NITS**（nits 全修：ConfigEndpoint 未用 using 移除、precondition 斷言、setup 移入 try、TEST-3 註解機制修正為 pipeline order、warn-toast summary 區分、RevisionDrawer immediate:true 補釘）；e2e revisions/media **PASS-WITH-NITS**、settings **FAIL→已修**（見下）。
+- e2e settings.spec 兩個 CRITICAL（複核攔截，已修）：(1) `apiGetBranding` 未解 envelope → `captureOriginal` 取到 undefined → afterEach restore PUT 空白名 400 被吞 → **會永久污染共用 singleton row**；(2) `getByTestId('save')` 抓 `data-testid`≠`data-test` → 必逾時。另修 nav locator 由 `nav`（實為 breadcrumb）明確化為 `.p-breadcrumb`。
+- 未觸碰：`docs/struo-cms-frontend-design/`（session 起始即為 untracked 原型目錄）。⏳ 尚未 push；後端測試無 DB 行為改動故不需 live PG gate（皆為既有行為之測試補洞）。
+
+### Batch 4 衍生的新發現項目（複核過程中揭露）
+- [ ] **AUTH-1 LOW — attribute 層 401（`[Authorize]` challenge）回空 body、無錯誤 envelope，與 in-action 401 不一致**
+  `src/Struo.Api/Auth/AuthWiring.cs:39` `OnRedirectToLogin` 直接設 `Response.StatusCode=401` 並 return，在 `UseAuthorization`（早於 MVC）階段短路，`EnvelopeResultFilter` 從不執行 → 空 body。對照 in-action `PermissionDeniedException` → `DomainErrorMap` → 帶 `error.code:"UNAUTHORIZED"`。影響所有 `[Authorize]` 端點（session 過期/缺失），非僅 Settings。SPA 401→login 導向依 HTTP status 非 code，故無功能破壞，屬 API 合約不一致。**修法（Batch 5）**：`OnRedirectToLogin`/`OnRedirectToAccessDenied` 以 `WriteAsJsonAsync` 寫入對應 envelope（比照 DomainErrorMap 的 UNAUTHORIZED/FORBIDDEN），然後把 TEST-3 斷言由「empty body」翻轉為「envelope code」。TEST-3 目前註解已標明此翻轉點。
+- [ ] **E2E-1（流程/技術債）— 預設 UI locale = zh-TW + Playwright 空 localStorage → 所有 i18n 字串型 e2e selector 落到中文而失敗**
+  `frontend/src/theme/resolveInitialUiLocale.ts:3`：`DEFAULT_UI_LOCALE='zh-TW'`，僅讀 `localStorage['struo.uiLocale']`、無 `navigator.language` 回退。新增三支 spec 已在 `login()` 用 `page.addInitScript` 於首次導航前 seed `'en'`。**但既有「gold」specs（conflict/items/trash/relations/unsaved-guard/auth/collections）自 FE-R0 i18n 改版後同樣潛在失效**（當初 live-verify 早於 i18n），**live-run 前須為整套 e2e 統一補 locale seed**（或 `playwright.config.ts` 用 storageState / 共用 fixture 一次處理）。
 
 ---
 
