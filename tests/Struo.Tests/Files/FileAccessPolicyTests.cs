@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.Auth;
 using Struo.Application.Abstractions;
 using Struo.Application.Security;
@@ -79,5 +82,58 @@ public class FileAccessPolicyTests
         var result = await policy.CanReadUnpublishedAsync(new DefaultHttpContext(), CancellationToken.None);
 
         result.Should().BeFalse();
+    }
+
+    // BL-2: a defensive floor. In practice BearerTokenAuthenticationHandler always stamps a
+    // NameIdentifier claim (see HttpContextCurrentUserAccessor), but if a bearer principal is ever
+    // adopted WITHOUT one, GetCurrentUserId() resolves to null — which must never be treated as "no
+    // permission snapshot yet resolved, fall through to the public floor". It must be denied outright,
+    // never silently promoted to whatever CanRead("file") happens to be for the (still) anonymous
+    // snapshot — the fake IRolePermissionStore throwing proves the resolve-and-set path is never
+    // reached once the guard trips.
+    private sealed class FakeAuthenticationService(ClaimsPrincipal principal) : IAuthenticationService
+    {
+        public Task<AuthenticateResult> AuthenticateAsync(HttpContext context, string? scheme) =>
+            Task.FromResult(AuthenticateResult.Success(
+                new AuthenticationTicket(principal, scheme ?? AuthSchemes.Bearer)));
+
+        public Task ChallengeAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) =>
+            throw new InvalidOperationException("Not expected to be called.");
+
+        public Task ForbidAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) =>
+            throw new InvalidOperationException("Not expected to be called.");
+
+        public Task SignInAsync(
+            HttpContext context, string? scheme, ClaimsPrincipal principal2, AuthenticationProperties? properties) =>
+            throw new InvalidOperationException("Not expected to be called.");
+
+        public Task SignOutAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) =>
+            throw new InvalidOperationException("Not expected to be called.");
+    }
+
+    [Fact]
+    public async Task CanReadUnpublishedAsync_bearer_path_denies_when_adopted_principal_has_no_user_id()
+    {
+        // A bearer principal with NO NameIdentifier claim — GetCurrentUserId() will read back null
+        // from the REAL accessor (wired below via IHttpContextAccessor), matching how the production
+        // code resolves it after adopting httpContext.User = bearer.Principal.
+        var identity = new ClaimsIdentity(authenticationType: "Bearer"); // no claims at all
+        var principalWithoutUserId = new ClaimsPrincipal(identity);
+
+        var httpContext = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAuthenticationService>(new FakeAuthenticationService(principalWithoutUserId));
+        httpContext.RequestServices = services.BuildServiceProvider();
+
+        var accessor = new HttpContextAccessor { HttpContext = httpContext };
+        var policy = new FileAccessPolicy(
+            new FakePermissionService(read: true, write: false, delete: false),
+            new HttpContextCurrentUserAccessor(accessor),
+            new UnusedRolePermissionStore(),
+            new CurrentPermissions());
+
+        var result = await policy.CanReadUnpublishedAsync(httpContext, CancellationToken.None);
+
+        result.Should().BeFalse("a bearer principal with no resolvable user id must never fall through to the public floor");
     }
 }

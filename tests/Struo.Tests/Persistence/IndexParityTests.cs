@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
-using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
@@ -13,6 +12,8 @@ namespace Struo.Tests.Persistence;
 /// Core index parity: the plain btree indexes declared as [SugarIndex] on core framework entities are
 /// emitted by CodeFirst (InitTables) in dev/test AND captured in db/migrations/001-core-baseline.sql for
 /// production. Sample (Blog) index parity is the sample's own concern and no longer asserted here.
+/// (DB-16: FileTranslation's redundant plain btree was dropped — its (fileid, locale) lookup is served by
+/// the composite UNIQUE index — so FileTranslation no longer contributes a mapped plain btree here.)
 /// </summary>
 public sealed class IndexParityTests
 {
@@ -27,12 +28,11 @@ public sealed class IndexParityTests
 
     private static readonly Type[] CoreIndexedEntities =
     [
-        typeof(FileTranslation), typeof(UserRole), typeof(Permission),
+        typeof(UserRole), typeof(Permission),
     ];
 
     public static TheoryData<string> CoreMappedIndexNames() =>
     [
-        "ix_file_translations_fk_locale",
         "ix_user_roles_userid",
         "ix_user_roles_roleid",
         "ix_permissions_roleid",

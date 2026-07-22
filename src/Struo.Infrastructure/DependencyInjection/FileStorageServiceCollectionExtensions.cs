@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Struo.Application.Files;
@@ -8,7 +7,7 @@ namespace Struo.Infrastructure.DependencyInjection;
 
 public static class FileStorageServiceCollectionExtensions
 {
-    public static IServiceCollection AddStruoFiles(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddStruoFiles(this IServiceCollection services)
     {
         // Bind via configuration (IOptions pattern, mirroring AddStruoData) so the FINAL merged
         // configuration is used — config sources added after this call (e.g. an integration-test

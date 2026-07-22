@@ -58,11 +58,11 @@ try
     builder.Services.AddExceptionHandler<Struo.Api.Http.StruoExceptionHandler>();
 
     builder.Services.AddOpenApi();
-    builder.Services.AddStruoInfrastructure(builder.Configuration);
+    builder.Services.AddStruoInfrastructure();
     builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
-    builder.Services.AddStruoData(builder.Configuration);
+    builder.Services.AddStruoData();
     builder.Services.AddStruoGraphQl(builder.Environment);
-    builder.Services.AddStruoFiles(builder.Configuration);
+    builder.Services.AddStruoFiles();
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
     builder.Services.AddStruoCors(builder.Configuration);
     builder.Services.AddStruoOidc(builder.Configuration);

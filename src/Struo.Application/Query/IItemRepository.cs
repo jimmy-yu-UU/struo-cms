@@ -23,7 +23,9 @@ public interface IItemRepository
     /// Operates against the id regardless of the soft-delete filter (Updateable is not subject to the
     /// query filter), so an already-trashed row is still located — idempotent.</summary>
     Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default);
-    /// <summary>Clears DeletedAt/DeletedBy (restore). Returns false if the id is unknown. Filter-cleared.</summary>
+    /// <summary>Clears DeletedAt/DeletedBy (restore) via an atomic <c>WHERE deletedat IS NOT NULL</c> UPDATE.
+    /// Returns false if the id is unknown OR the row is already live (nothing to restore); callers use the
+    /// affected-rows result to decide whether to record a "restore" revision (DB-19). Filter-cleared.</summary>
     Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default);
 
     /// <summary>

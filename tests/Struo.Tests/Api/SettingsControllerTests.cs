@@ -57,6 +57,10 @@ public class SettingsControllerTests(ApiFactory factory)
         var (client, _) = await _factory.CreateRolelessClientAsync();
         var resp = await client.PutAsJsonAsync("/api/settings/branding", new { brandName = "X", logoFileId = (string?)null });
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        // TEST-7: pin the actual code SettingsController.UpdateBranding returns for this branch
+        // (ErrorCodes.Forbidden), not just the status code.
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("FORBIDDEN");
     }
 
     /// <summary>TEST-3 (audit batch 4): anonymous callers get 401, not 403 CSRF. Deliberately sent
@@ -90,6 +94,9 @@ public class SettingsControllerTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var resp = await client.PutAsJsonAsync("/api/settings/branding", new { brandName = "   ", logoFileId = (string?)null });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        // TEST-7: SettingsController.UpdateBranding maps this branch to ErrorCodes.BadUserInput.
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
     }
 
     [Fact]
@@ -99,6 +106,8 @@ public class SettingsControllerTests(ApiFactory factory)
         var resp = await client.PutAsJsonAsync("/api/settings/branding",
             new { brandName = new string('a', 101), logoFileId = (string?)null });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
     }
 
     [Fact]
@@ -108,6 +117,8 @@ public class SettingsControllerTests(ApiFactory factory)
         var resp = await client.PutAsJsonAsync("/api/settings/branding",
             new { brandName = "Brand", logoFileId = Guid.NewGuid() });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
     }
 
     [Fact]
@@ -124,6 +135,28 @@ public class SettingsControllerTests(ApiFactory factory)
             data.GetProperty("brandName").GetString().Should().Be("My Brand");
 
             // Anonymous /api/config now reflects the saved name.
+            using var cfg = JsonDocument.Parse(
+                await (await _factory.CreateClient().GetAsync("/api/config")).Content.ReadAsStringAsync());
+            cfg.RootElement.GetProperty("data").GetProperty("brandName").GetString().Should().Be("My Brand");
+        }
+        finally { await ClearAsync(); }
+    }
+
+    // TEST-9: pins the ACTUAL behavior read off SettingsController.UpdateBranding —
+    // `body.BrandName?.Trim()` — so surrounding whitespace is stripped before it is persisted and
+    // echoed back, rather than being preserved verbatim.
+    [Fact]
+    public async Task Put_trims_surrounding_whitespace_from_brand_name()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/settings/branding",
+                new { brandName = "  My Brand  ", logoFileId = (string?)null });
+            resp.StatusCode.Should().Be(HttpStatusCode.OK);
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            doc.RootElement.GetProperty("data").GetProperty("brandName").GetString().Should().Be("My Brand");
+
             using var cfg = JsonDocument.Parse(
                 await (await _factory.CreateClient().GetAsync("/api/config")).Content.ReadAsStringAsync());
             cfg.RootElement.GetProperty("data").GetProperty("brandName").GetString().Should().Be("My Brand");
