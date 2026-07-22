@@ -21,7 +21,7 @@ public sealed class SiteSettings
 
     [SugarColumn(IsNullable = true)] public Guid? LogoFileId { get; set; }
 
-    // DB-12: matches db/migrations/012-site-settings-table.sql's `updatedat timestamptz` (and the DB-7
+    // DB-12: matches db/migrations/001-core-baseline.sql's `updatedat timestamptz` (and the DB-7
     // timestamptz convention for new temporal columns) so a CodeFirst dev/test InitTables build creates
     // the SAME column type Postgres production gets from the migration, instead of silently diverging to
     // bare `timestamp`. Verified compatible with the SQLite test provider: SQLite does not validate
