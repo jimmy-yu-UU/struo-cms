@@ -13,15 +13,14 @@ namespace Struo.Infrastructure.Persistence;
 /// per-item revision numbers fail closed; and (b) the DB-10 UNIQUE (fk, locale) on each translation
 /// sidecar (<c>article_translations</c> / <c>file_translations</c>) that keeps per-locale overlay reads
 /// deterministic. On live PostgreSQL they are created by
-/// <c>db/migrations/010-revisions-unique-number.sql</c> and
-/// <c>db/migrations/011-translation-unique-locale.sql</c>; on a CodeFirst dev/test database they are
+/// <c>db/migrations/001-core-baseline.sql</c>; on a CodeFirst dev/test database they are
 /// created by <c>InitTables</c> from each entity's <c>UniqueGroupNameList</c>. Because the index NAME
 /// differs by backend and by creation path, the guard detects each index by uniqueness + column
 /// coverage, never by a fixed name. A translation table absent from the connected database is skipped
 /// rather than demanded.
 ///
 /// Deliberately NOT a general schema-diff engine (YAGNI): only correctness-critical constraints belong
-/// here. The hot-path performance indexes (009 / <c>[SugarIndex]</c>) are intentionally out of scope —
+/// here. The hot-path performance indexes (<c>[SugarIndex]</c>) are intentionally out of scope —
 /// their absence degrades latency, it does not corrupt data. Called in Development startup only, after
 /// InitTables + the migration runner (Program.cs).
 /// </summary>
@@ -42,7 +41,7 @@ public static class SchemaGuard
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
             "the `revisions` table has no composite UNIQUE index over " +
             "(collectionname, itemid, revisionnumber). This is the DB-4 backstop that makes a concurrent " +
-            "revision-number race fail closed. Apply db/migrations/010-revisions-unique-number.sql (live " +
+            "revision-number race fail closed. Apply db/migrations/001-core-baseline.sql (live " +
             "PostgreSQL), or recreate the dev schema so InitTables re-emits it from Revision's " +
             "UniqueGroupNameList.", ct);
 
@@ -53,13 +52,13 @@ public static class SchemaGuard
             ["articleid", "locale"], requireTableExists: false,
             "the `article_translations` table has no UNIQUE index over (articleid, locale). This is the " +
             "DB-10 backstop that keeps per-locale overlay reads deterministic. Apply " +
-            "db/migrations/011-translation-unique-locale.sql (live PostgreSQL), or recreate the dev " +
+            "db/migrations/001-core-baseline.sql (live PostgreSQL), or recreate the dev " +
             "schema so InitTables re-emits it from ArticleTranslation's UniqueGroupNameList.", ct);
         await AssertUniqueCoverAsync(db, dbType, "file_translations",
             ["fileid", "locale"], requireTableExists: false,
             "the `file_translations` table has no UNIQUE index over (fileid, locale). This is the DB-10 " +
             "backstop that keeps per-locale overlay reads deterministic. Apply " +
-            "db/migrations/011-translation-unique-locale.sql (live PostgreSQL), or recreate the dev " +
+            "db/migrations/001-core-baseline.sql (live PostgreSQL), or recreate the dev " +
             "schema so InitTables re-emits it from FileTranslation's UniqueGroupNameList.", ct);
     }
 

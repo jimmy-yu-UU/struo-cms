@@ -6,7 +6,9 @@
 --
 -- CORE BOOTSTRAP BASELINE. Creates the complete core-framework schema — the 9 FrameworkEntityTypes
 -- tables (languages / files / file_translations / users / roles / permissions / user_roles / revisions /
--- site_settings) plus their PKs, unique constraints, and indexes. Machine-generated from
+-- site_settings) plus their PKs, unique indexes, and hot-path indexes. (Uniqueness is enforced via
+-- CREATE UNIQUE INDEX, not ADD CONSTRAINT UNIQUE — so pg_constraint shows only PKs, matching InitTables.)
+-- Machine-generated from
 -- InitTables(FrameworkEntityTypes.All) on PostgreSQL via `pg_dump --schema-only`, then hardened to be
 -- idempotent (IF NOT EXISTS throughout; PKs inlined) and stripped of pg_dump session preamble.
 --
@@ -28,9 +30,17 @@
 -- deliberately out of scope here — doing it only in this file would reintroduce a dev/prod parity gap.
 --
 -- IDENTIFIER NAMING — lowercase, unquoted; SqlSugar-emitted index names (index_*_unique / ix_*) are kept
--- verbatim so a dev InitTables schema and a prod baseline schema carry IDENTICAL index names (this
--- eliminates the pre-rebaseline "accepted redundant dev index" wart, where dev carried two differently
--- named indexes over the same columns).
+-- verbatim so a dev InitTables schema and a prod baseline schema carry IDENTICAL index names. This fixes
+-- the pre-rebaseline NAME divergence (the old 011 migration's unique index was `ux_file_translations_fk_locale`
+-- while dev InitTables emitted `index_file_translations_fileid_locale_unique` for the same columns).
+-- NOT eliminated: file_translations still carries a redundant pair over identical (fileid, locale) — the
+-- unique index plus a plain btree `ix_file_translations_fk_locale` (both from FileTranslation.cs attributes,
+-- faithfully reproduced here). Dropping the redundant btree is a Batch-5 LOW (edit the entity + regenerate;
+-- fixing it in this file alone would reintroduce dev/prod drift).
+--
+-- PRE-EXISTING DATABASES — tracking is by filename in schema_migrations. A database that had applied the
+-- old 001–013 filenames (none exist in this template today) keeps those rows AND additionally runs+records
+-- `001-core-baseline.sql` once; that run is a harmless idempotent no-op. Fresh/empty databases just get this.
 
 -- ----------------------------------------------------------------------------------------------------
 -- Sequences (bigint identity PKs: languages, file_translations)

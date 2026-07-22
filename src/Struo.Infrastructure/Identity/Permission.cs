@@ -8,7 +8,7 @@ namespace Struo.Infrastructure.Identity;
 /// <summary>A role's read/write/delete grant for one collection. Collection route is
 /// <c>permission</c>. Unique on (<see cref="RoleId"/>, <see cref="Collection"/>).</summary>
 [SugarTable("permissions")]
-// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql — RBAC effective-permission
+// DB-5: CodeFirst parity with db/migrations/001-core-baseline.sql — RBAC effective-permission
 // resolution scans permissions by roleid per authenticated request.
 [SugarIndex("ix_permissions_roleid", nameof(RoleId), OrderByType.Asc)]
 [CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true)]
