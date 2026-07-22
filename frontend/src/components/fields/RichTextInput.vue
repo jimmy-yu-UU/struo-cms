@@ -23,6 +23,7 @@ import { fileContentDisplayUrl, absolutizeImageSrc, relativizeImageSrc } from '.
 import { isAllowedLinkUrl } from '../../lib/linkUrl'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
+import { toFileRows } from '../../lib/toFileRow'
 
 defineOptions({ name: 'RichTextInput' })
 
@@ -46,7 +47,7 @@ async function loadImages(): Promise<void> {
       locale: langStore.defaultCode || undefined,
     })
     if (!imagesLoad.isCurrent(token)) return
-    files.value = res.data as unknown as FileRow[]
+    files.value = toFileRows(res.data)
   } catch (e) {
     if (!imagesLoad.isCurrent(token)) return
     imageError.value = e instanceof Error ? e.message : t('fields.loadFilesFailed')

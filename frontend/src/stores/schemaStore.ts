@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { schemaApi } from '../api/schemaApi'
+import { i18n } from '../i18n'
 import type { CollectionMeta } from '../types/schema'
 
 export const useSchemaStore = defineStore('schema', {
@@ -22,7 +23,7 @@ export const useSchemaStore = defineStore('schema', {
           this.loaded = true
           this.loadError = ''
         } catch (e) {
-          this.loadError = e instanceof Error ? e.message : 'Failed to load schema.'
+          this.loadError = e instanceof Error ? e.message : i18n.global.t('common.loadFailed')
         } finally {
           this.loadPromise = null
         }

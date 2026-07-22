@@ -96,7 +96,7 @@ defineExpose({ uploadFiles })
 }
 
 .dropzone__rows li.uploading {
-  color: var(--text);
+  color: var(--muted);
 }
 
 .dropzone__rows li.error {

@@ -171,7 +171,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
   background: transparent; color: var(--fg);
 }
 .rev-item:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
-.rev-item--active { border-color: var(--border); background: color-mix(in srgb, var(--primary, #38bdf8) 10%, transparent); }
+.rev-item--active { border-color: var(--border); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .rev-item__num { font-weight: 700; font-variant-numeric: tabular-nums; }
 .rev-item__op { font-size: .85rem; }
 .rev-item__when { font-size: .75rem; color: var(--muted); }

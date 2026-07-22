@@ -149,7 +149,9 @@ async function onCopyUrl(): Promise<void> {
     await navigator.clipboard.writeText(fileUrl.value)
     toast.add({ severity: 'success', summary: t('media.urlCopied'), life: 2000 })
   } catch {
-    /* clipboard unavailable (e.g. insecure context) — silently ignore */
+    // Clipboard unavailable (e.g. insecure context, permission denied) — surface it (SEC-12)
+    // rather than silently doing nothing, so the user knows the copy did not happen.
+    toast.add({ severity: 'error', summary: t('media.copyFailed'), life: 3500 })
   }
 }
 
@@ -189,11 +191,11 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
         />
         <label class="md-field">
           <span>{{ $t('media.fieldTitle') }}</span>
-          <InputText :model-value="(activeValues.title as string) ?? ''" @update:model-value="setField('title', $event ?? '')" :disabled="!canWrite" />
+          <InputText :model-value="(activeValues.title as string) ?? ''" @update:model-value="setField('title', $event ?? '')" :disabled="!canWrite || loading" />
         </label>
         <label class="md-field">
           <span>{{ $t('media.fieldAlt') }}</span>
-          <InputText :model-value="(activeValues.alt as string) ?? ''" @update:model-value="setField('alt', $event ?? '')" :disabled="!canWrite" />
+          <InputText :model-value="(activeValues.alt as string) ?? ''" @update:model-value="setField('alt', $event ?? '')" :disabled="!canWrite || loading" />
         </label>
 
         <div class="md-kv"><span>{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>

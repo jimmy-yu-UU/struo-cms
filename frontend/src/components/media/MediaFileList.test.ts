@@ -33,4 +33,20 @@ describe('MediaFileList', () => {
     await w.findAll('.media-list__row')[0].trigger('click')
     expect(w.emitted('open')?.[0]).toEqual(['f1'])
   })
+
+  it('is keyboard-focusable and exposes a button role (FE-25)', () => {
+    const w = mountList()
+    const row = w.findAll('.media-list__row')[0]
+    expect(row.attributes('role')).toBe('button')
+    expect(row.attributes('tabindex')).toBe('0')
+  })
+
+  it('emits open on Enter and Space, but not on other keys', async () => {
+    const w = mountList()
+    const row = w.findAll('.media-list__row')[0]
+    await row.trigger('keydown', { key: 'Enter' })
+    await row.trigger('keydown', { key: ' ' })
+    await row.trigger('keydown', { key: 'Tab' })
+    expect(w.emitted('open')).toEqual([['f1'], ['f1']])
+  })
 })

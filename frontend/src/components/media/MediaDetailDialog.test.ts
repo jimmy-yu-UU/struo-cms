@@ -20,7 +20,8 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { media: {
     detailTitle: 'File details', fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
-    copyUrl: 'Copy URL', urlCopied: 'URL copied', status: 'Status', openInEditor: 'Open in full editor',
+    copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL', status: 'Status',
+    openInEditor: 'Open in full editor',
     save: 'Save', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
   } } },
@@ -69,6 +70,10 @@ describe('MediaDetailDialog', () => {
     vi.restoreAllMocks()
     push.mockClear(); confirmRequire.mockClear(); toastAdd.mockClear()
     seedStores()
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    })
   })
 
   it('loads the item and exposes a per-locale model', async () => {
@@ -179,6 +184,40 @@ describe('MediaDetailDialog', () => {
       translations: expect.objectContaining({ en: expect.objectContaining({ title: 'Edited Title' }) }),
     }))
     expect(w.emitted('saved')).toBeTruthy()
+  })
+
+  it('copies the file URL and shows a success toast (SEC-12)', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    await (w.vm as unknown as { onCopyUrl: () => Promise<void> }).onCopyUrl()
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('f1'))
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: 'URL copied' }))
+  })
+
+  it('shows a failure toast when the clipboard write rejects, instead of failing silently (SEC-12)', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
+    const w = mountDialog()
+    await flushPromises()
+    await (w.vm as unknown as { onCopyUrl: () => Promise<void> }).onCopyUrl()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'Could not copy URL' }))
+  })
+
+  it('disables the Title/Alt inputs while loading, not just when read-only (FE-30)', async () => {
+    let resolveGet!: (v: unknown) => void
+    vi.spyOn(itemsApi, 'get').mockReturnValue(new Promise((r) => (resolveGet = r)) as never)
+    const w = mountDialog()
+    // Synchronous portion of load() (up to its first await) has already run as part of mount, so
+    // the initial render reflects loading === true before we resolve the pending itemsApi.get.
+    const inputs = w.findAllComponents({ name: 'InputText' })
+    // The two per-locale text inputs (title, alt) are the first two InputText instances rendered.
+    // Vue renders a `true` boolean attribute as the empty string (`disabled=""`), so assert
+    // presence rather than truthiness.
+    expect(inputs[0].attributes('disabled')).toBe('')
+    resolveGet(item)
+    await flushPromises()
+    expect(w.findAllComponents({ name: 'InputText' })[0].attributes('disabled')).toBeFalsy()
   })
 
   it('deletes via filesApi.remove after confirm accept and emits deleted', async () => {

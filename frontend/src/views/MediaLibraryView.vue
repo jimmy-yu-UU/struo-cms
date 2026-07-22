@@ -19,6 +19,7 @@ import { useLanguageStore } from '../stores/languageStore'
 import { debounce } from '../lib/debounce'
 import { createLatestWins } from '../lib/latestWins'
 import { mediaTypeFilter, mediaSort, type MediaType, type MediaSort } from '../lib/mediaQuery'
+import { toFileRows } from '../lib/toFileRow'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -71,7 +72,7 @@ async function load(): Promise<void> {
       locale: langStore.defaultCode || undefined,
     })
     if (!mediaLoad.isCurrent(token)) return
-    files.value = res.data as unknown as FileRow[]
+    files.value = toFileRows(res.data)
     total.value = res.total
   } catch (e) {
     if (!mediaLoad.isCurrent(token)) return
@@ -103,7 +104,9 @@ function onPage(e: { page: number; rows: number }): void {
 function openDetail(id: string): void {
   selected.value = files.value.find((f) => f.id === id) ?? null
 }
-function onDeleted(): void { selected.value = null; load() }
+// FE-27: use reload() (page-clamp to 0), not load() -- deleting the last item on the last page
+// must not strand the user on a now-out-of-range empty page.
+function onDeleted(): void { selected.value = null; reload() }
 
 onMounted(load)
 onUnmounted(() => debouncedSearch.cancel())

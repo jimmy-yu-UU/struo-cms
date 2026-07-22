@@ -10,6 +10,7 @@ import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
+import { toFileRows } from '../../lib/toFileRow'
 
 defineOptions({ name: 'FilePicker' })
 
@@ -47,7 +48,7 @@ async function loadOptions(): Promise<void> {
       page: 0, rows: 50, search: search.value || undefined, locale: langStore.defaultCode || undefined,
     })
     if (!optionsLoad.isCurrent(token)) return
-    files.value = res.data as unknown as FileRow[]
+    files.value = toFileRows(res.data)
   } catch (e) {
     if (!optionsLoad.isCurrent(token)) return
     loadError.value = e instanceof Error ? e.message : t('fields.loadFilesFailed')
@@ -121,7 +122,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 
 .file-picker__missing,
 .file-picker__empty {
-  color: var(--text);
+  color: var(--muted);
   font-style: italic;
 }
 
