@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import RelationInput from './RelationInput.vue'
 import RelationPicker from './RelationPicker.vue'
 import RelatedList from './RelatedList.vue'
@@ -8,6 +9,11 @@ import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import type { RelationMeta, CollectionMeta } from '../../types/schema'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.' } } },
+})
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({
@@ -68,7 +74,7 @@ describe('RelationInput', () => {
     setupStores()
     const w = mount(RelationInput, {
       props: { relation: rel({ interface: 'dropdown' }), modelValue: null },
-      global: { stubs },
+      global: { plugins: [i18n], stubs },
     })
     expect(w.findComponent(RelationPicker).exists()).toBe(true)
   })
@@ -77,7 +83,7 @@ describe('RelationInput', () => {
     setupStores()
     const w = mount(RelationInput, {
       props: { relation: rel({ interface: 'tagSelect' }), modelValue: null },
-      global: { stubs },
+      global: { plugins: [i18n], stubs },
     })
     const picker = w.findComponent(RelationPicker)
     expect(picker.exists()).toBe(true)
@@ -88,7 +94,7 @@ describe('RelationInput', () => {
     setupStores()
     const w = mount(RelationInput, {
       props: { relation: rel({ interface: 'treeSelect', selfReferencing: true }), modelValue: null, excludeId: 'x1' },
-      global: { stubs },
+      global: { plugins: [i18n], stubs },
     })
     const picker = w.findComponent(RelationPicker)
     expect(picker.exists()).toBe(true)
@@ -104,7 +110,7 @@ describe('RelationInput', () => {
         modelValue: null,
         parentId: 'p1',
       },
-      global: { stubs },
+      global: { plugins: [i18n], stubs },
     })
     expect(w.findComponent(RelatedList).exists()).toBe(true)
   })
@@ -113,7 +119,7 @@ describe('RelationInput', () => {
     setupStores()
     const w = mount(RelationInput, {
       props: { relation: rel({ interface: 'filePicker' }), modelValue: null },
-      global: { stubs },
+      global: { plugins: [i18n], stubs },
     })
     expect(w.findComponent(RelationPicker).exists()).toBe(false)
     expect(w.findComponent(RelatedList).exists()).toBe(false)

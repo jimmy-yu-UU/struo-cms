@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -17,6 +18,7 @@ defineOptions({ name: 'FilesField' })
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string[]): void }>()
 
+const { t } = useI18n()
 const langStore = useLanguageStore()
 
 type Row = FileRow & { missing?: boolean }
@@ -97,7 +99,7 @@ async function loadOptions(): Promise<void> {
     options.value = res.data as unknown as FileRow[]
   } catch (e) {
     if (!optionsLoad.isCurrent(token)) return
-    loadError.value = e instanceof Error ? e.message : 'Failed to load files.'
+    loadError.value = e instanceof Error ? e.message : t('fields.loadFilesFailed')
   }
 }
 function toggle(id: string): void {
@@ -134,16 +136,16 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
         </div>
       </template>
     </OrderList>
-    <p v-else class="files-field__empty">No files selected</p>
+    <p v-else class="files-field__empty">{{ t('fields.noFilesSelected') }}</p>
 
-    <Button class="files-add" label="Select files" size="small" :disabled="disabled" @click="openDialog" />
+    <Button class="files-add" :label="t('fields.selectFiles')" size="small" :disabled="disabled" @click="openDialog" />
 
-    <Dialog v-model:visible="dialogOpen" modal header="Select files" :style="{ width: '60rem' }">
+    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectFiles')" :style="{ width: '60rem' }">
       <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
-      <InputText v-model="search" placeholder="Search files…" class="files-field__search" />
+      <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="files-field__search" />
       <MediaGrid :files="options" multiple :selected-ids="currentIds()" @toggle="toggle" />
       <template #footer>
-        <Button label="Done" @click="dialogOpen = false" />
+        <Button :label="t('fields.done')" @click="dialogOpen = false" />
       </template>
     </Dialog>
   </div>

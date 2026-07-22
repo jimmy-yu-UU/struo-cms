@@ -101,7 +101,11 @@ async function onSave(): Promise<void> {
     emit('close')
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
+      // Optimistic-lock clash (D2): someone else changed the item since we loaded it. Recover by
+      // refreshing only the concurrency token, preserving the user's in-progress edits, so the
+      // next Save overwrites with the current version instead of 409-ing forever (FE-18).
       conflict.value = true
+      await recoverFromConflict()
     } else {
       error.value = e instanceof Error ? e.message : t('media.saveFailed')
     }
@@ -110,11 +114,24 @@ async function onSave(): Promise<void> {
   }
 }
 
+async function recoverFromConflict(): Promise<void> {
+  if (!props.file) return
+  try {
+    const fresh = await itemsApi.get('file', props.file.id)
+    const version = typeof fresh.version === 'number' ? (fresh.version as number) : undefined
+    model.value = { ...model.value, version }
+  } catch (e) {
+    // The file may have been deleted in the interim: surface via the existing error banner
+    // rather than throwing uncaught. conflict stays true so the notice remains visible.
+    error.value = e instanceof Error ? e.message : t('media.saveFailed')
+  }
+}
+
 function onDelete(): void {
   if (!props.file) return
   const id = props.file.id
   confirm.require({
-    ...deleteConfirm('hard'),
+    ...deleteConfirm(t, 'hard'),
     accept: async () => {
       try {
         await filesApi.remove(id)

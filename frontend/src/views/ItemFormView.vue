@@ -192,7 +192,7 @@ async function onReverted(): Promise<void> {
 }
 
 function onDelete(): void {
-  const { header, message } = deleteConfirm(deleteKindFor(meta.value))
+  const { header, message } = deleteConfirm(t, deleteKindFor(meta.value))
   confirm.require({
     header,
     message,
@@ -218,7 +218,7 @@ function onCancel(): void {
 // resolve(true) allows the navigation, resolve(false) cancels it and keeps the user here.
 function guardLeave(): Promise<boolean> {
   if (!isDirty(baseline.value, model)) return Promise.resolve(true)
-  const { header, message } = unsavedConfirm()
+  const { header, message } = unsavedConfirm(t)
   return new Promise<boolean>((resolve) => {
     confirm.require({
       header,

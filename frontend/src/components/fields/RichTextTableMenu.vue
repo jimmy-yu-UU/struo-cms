@@ -35,8 +35,8 @@ function run(action: TableAction): void {
 .table-menu { position: relative; display: inline-block; }
 .table-menu__trigger { min-width: 30px; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: 4px; }
 .table-menu__trigger:disabled { opacity: 0.5; cursor: not-allowed; }
-.table-menu__panel { position: absolute; z-index: 10; top: 100%; left: 0; margin-top: 4px; padding: 4px; background: var(--surface-0, #fff); border: 1px solid var(--surface-border, #d0d0d0); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); width: max-content; display: flex; flex-direction: column; }
+.table-menu__panel { position: absolute; z-index: 10; top: 100%; left: 0; margin-top: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); width: max-content; display: flex; flex-direction: column; }
 .table-menu__item { text-align: left; padding: 4px 10px; cursor: pointer; background: transparent; border: none; border-radius: 4px; }
-.table-menu__item:hover:not(:disabled) { background: var(--surface-100, #f4f4f5); }
+.table-menu__item:hover:not(:disabled) { background: var(--bg); }
 .table-menu__item:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

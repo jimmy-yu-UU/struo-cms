@@ -139,6 +139,48 @@ describe('MediaDetailDialog', () => {
     }))
   })
 
+  it('recovers from 409 by refreshing the version while preserving edits, so a second save succeeds', async () => {
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValueOnce(item as never) // initial load
+      .mockResolvedValueOnce({ ...item, version: 5 } as never) // recovery refetch
+    const update = vi.spyOn(itemsApi, 'update')
+      .mockRejectedValueOnce(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+      .mockResolvedValueOnce({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      setField: (n: string, v: string) => void
+      activeLocale: string
+      model: { version?: number; translations: Record<string, Record<string, unknown>> }
+      onSave: () => Promise<void>
+      conflict: boolean
+    }
+
+    vm.activeLocale = 'en'
+    await w.vm.$nextTick()
+    vm.setField('title', 'Edited Title')
+    await w.vm.$nextTick()
+
+    await vm.onSave()
+    await flushPromises()
+
+    // conflict recovery: version refreshed, edits preserved, no data loss
+    expect(vm.conflict).toBe(true)
+    expect(vm.model.version).toBe(5)
+    expect(vm.model.translations.en.title).toBe('Edited Title')
+    expect(get).toHaveBeenCalledTimes(2)
+
+    // a subsequent save now sends the fresh version and succeeds
+    await vm.onSave()
+    await flushPromises()
+
+    expect(update).toHaveBeenLastCalledWith('file', 'f1', expect.objectContaining({
+      version: 5,
+      translations: expect.objectContaining({ en: expect.objectContaining({ title: 'Edited Title' }) }),
+    }))
+    expect(w.emitted('saved')).toBeTruthy()
+  })
+
   it('deletes via filesApi.remove after confirm accept and emits deleted', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()

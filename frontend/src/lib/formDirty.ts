@@ -23,10 +23,13 @@ export function isDirty(baseline: string, model: FormModel): boolean {
 }
 
 // Confirm copy for the leave guard — mirrors the pure-helper convention in
-// deleteAction.ts. No i18n; English literals.
-export function unsavedConfirm(): { header: string; message: string } {
+// deleteAction.ts. i18n via an injected translator (FE-16); callers pass their
+// own `t` from useI18n() so the copy renders in the active UI locale.
+type Translate = (key: string) => string
+
+export function unsavedConfirm(t: Translate): { header: string; message: string } {
   return {
-    header: 'Unsaved changes',
-    message: 'You have unsaved changes. Leave this page and discard them?',
+    header: t('confirm.unsavedHeader'),
+    message: t('confirm.unsavedMessage'),
   }
 }
