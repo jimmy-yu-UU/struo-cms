@@ -1,12 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import PrimeVue from 'primevue/config'
 import FieldInput from './FieldInput.vue'
 import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import type { FieldMeta } from '../../types/schema'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: {
+    noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
+    searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
+  } } },
+})
 
 function field(over: Partial<FieldMeta> = {}): FieldMeta {
   return { name: 'f', label: 'F', interface: 'text', required: false, searchable: false, sortable: false,
@@ -68,7 +77,7 @@ describe('FieldInput', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
     const w = mount(FieldInput, {
       props: { field: field({ name: 'heroImageId', label: 'Hero', interface: 'image' }), modelValue: null },
-      global: { stubs: { ...stubs, Dialog: true, Button: true, MediaGrid: true } },
+      global: { plugins: [i18n], stubs: { ...stubs, Dialog: true, Button: true, MediaGrid: true } },
     })
     await flushPromises()
     const picker = w.findComponent(FilePicker)

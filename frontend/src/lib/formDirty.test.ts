@@ -48,9 +48,10 @@ describe('snapshotModel / isDirty', () => {
 })
 
 describe('unsavedConfirm', () => {
-  it('returns the Unsaved changes header and a non-empty message', () => {
-    const c = unsavedConfirm()
-    expect(c.header).toBe('Unsaved changes')
-    expect(c.message.length).toBeGreaterThan(0)
+  it('resolves the header and message via the injected translator (FE-16)', () => {
+    const t = (key: string): string => key
+    const c = unsavedConfirm(t)
+    expect(c.header).toBe('confirm.unsavedHeader')
+    expect(c.message).toBe('confirm.unsavedMessage')
   })
 })

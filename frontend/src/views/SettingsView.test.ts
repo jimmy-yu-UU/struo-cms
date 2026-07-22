@@ -25,6 +25,10 @@ const i18n = createI18n({ legacy: false, locale: 'en', messages: { en: {
     uploadLogo: 'Upload new logo', removeLogo: 'Remove logo', save: 'Save changes', saved: 'Settings saved',
     saveFailed: 'Save failed', nameRequired: 'Site name is required', nameTooLong: 'too long',
     notPermitted: 'Admin role required' },
+  confirm: {
+    unsavedHeader: 'Unsaved changes',
+    unsavedMessage: 'You have unsaved changes. Leave this page and discard them?',
+  },
 } } })
 
 function mountView() {

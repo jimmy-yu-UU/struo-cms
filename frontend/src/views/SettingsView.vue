@@ -7,7 +7,6 @@ import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import ConfirmDialog from 'primevue/confirmdialog'
 import InputText from 'primevue/inputtext'
-import Toast from 'primevue/toast'
 import PageHeader from '../components/common/PageHeader.vue'
 import FilePicker from '../components/fields/FilePicker.vue'
 import MediaUploadDropzone from '../components/media/MediaUploadDropzone.vue'
@@ -75,7 +74,7 @@ async function save(): Promise<void> {
 // the same unsavedConfirm() copy as the item form rather than duplicating an i18n key.
 function guardLeave(): Promise<boolean> {
   if (!isAdmin.value || !dirty.value) return Promise.resolve(true)
-  const { header, message } = unsavedConfirm()
+  const { header, message } = unsavedConfirm(t)
   return new Promise<boolean>((resolve) => {
     confirm.require({
       header,
@@ -92,7 +91,6 @@ onBeforeRouteLeave(() => guardLeave())
 </script>
 
 <template>
-  <Toast />
   <ConfirmDialog />
   <div v-if="!isAdmin" class="settings-denied" role="alert">{{ t('settings.notPermitted') }}</div>
   <template v-else>

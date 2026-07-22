@@ -2,10 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import FilesField from './FilesField.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import type { FieldMeta } from '../../types/schema'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: {
+    noFilesSelected: 'No files selected', selectFiles: 'Select files', searchFiles: 'Search files…',
+    done: 'Done', loadFilesFailed: 'Failed to load files.',
+  } } },
+})
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'gallery', label: 'Gallery', required: false, searchable: false, sortable: false,
@@ -33,7 +42,7 @@ describe('FilesField', () => {
     setupStores()
     // Return out of model order to prove the component re-orders to the model.
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f2, f1], total: 2 })
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     expect((w.vm as unknown as { currentIds: () => string[] }).currentIds()).toEqual(['f1', 'f2'])
   })
@@ -41,7 +50,7 @@ describe('FilesField', () => {
   it('keeps a missing id as a raw-id fallback row', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f1], total: 1 }) // f2 gone
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     expect((w.vm as unknown as { currentIds: () => string[] }).currentIds()).toEqual(['f1', 'f2'])
   })
@@ -49,7 +58,7 @@ describe('FilesField', () => {
   it('reorder emits the new id order', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f1, f2], total: 2 })
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     ;(w.vm as unknown as { onReorder: (v: unknown[]) => void }).onReorder([f2, f1])
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['f2', 'f1']])
@@ -58,7 +67,7 @@ describe('FilesField', () => {
   it('removeAt emits the shortened array immutably', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f1, f2], total: 2 })
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     ;(w.vm as unknown as { removeAt: (i: number) => void }).removeAt(0)
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['f2']])
@@ -68,7 +77,7 @@ describe('FilesField', () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list')
     listSpy.mockResolvedValueOnce({ data: [f1], total: 1 })   // mount resolve
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1'] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1'] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     listSpy.mockResolvedValueOnce({ data: [f1, f3], total: 2 }) // dialog options
     await (w.vm as unknown as { openDialog: () => Promise<void> }).openDialog()
@@ -81,7 +90,7 @@ describe('FilesField', () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
     // Empty model -> resolve() short-circuits with no list call on mount.
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: [] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: [] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     listSpy.mockClear()
     vi.useFakeTimers()
@@ -103,7 +112,7 @@ describe('FilesField', () => {
   it('toggling an already-selected file removes it', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f1, f2], total: 2 })
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { stubs } })
+    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     ;(w.vm as unknown as { toggle: (id: string) => void }).toggle('f1')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['f2']])

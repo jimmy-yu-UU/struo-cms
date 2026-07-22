@@ -165,12 +165,12 @@ async function runAction(fn: () => Promise<void>): Promise<void> {
 
 function onDelete(row: Record<string, unknown>): void {
   const kind = deleteKindFor(meta.value)
-  const { header, message } = deleteConfirm(kind)
+  const { header, message } = deleteConfirm(t, kind)
   confirm.require({ header, message, accept: () => runAction(() => itemsApi.remove(name.value, rowId(row))) })
 }
 
 function onPurge(row: Record<string, unknown>): void {
-  const { header, message } = purgeConfirm()
+  const { header, message } = purgeConfirm(t)
   confirm.require({ header, message, accept: () => runAction(() => itemsApi.remove(name.value, rowId(row), { purge: true })) })
 }
 

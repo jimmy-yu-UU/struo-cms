@@ -21,6 +21,14 @@ const i18n = createI18n({
         empty: 'No records', notFound: 'Collection not found',
         noAccess: "You don't have access to this collection",
       },
+      confirm: {
+        softDeleteHeader: 'Move to trash',
+        softDeleteMessage: 'Move this item to trash? You can restore it later.',
+        hardDeleteHeader: 'Confirm delete',
+        hardDeleteMessage: 'Delete this item? This cannot be undone.',
+        purgeHeader: 'Delete permanently',
+        purgeMessage: 'Permanently delete this item? This cannot be undone.',
+      },
     },
   },
 })

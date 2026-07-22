@@ -14,11 +14,20 @@ import type { FieldMeta } from '../../types/schema'
 import { setActivePinia, createPinia } from 'pinia'
 import { flushPromises } from '@vue/test-utils'
 import { vi } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import RichTextField from './RichTextField.vue'
 import FileField from './FileField.vue'
 import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: {
+    noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
+    searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
+  } } },
+})
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
@@ -117,7 +126,7 @@ describe('field components (rich-text + file wrappers)', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
     const w = mount(FileField, {
       props: { field: field({ name: 'heroImageId', interface: 'image' }), modelValue: null },
-      global: { stubs: { Dialog: true, Button: true, MediaGrid: true } },
+      global: { plugins: [i18n], stubs: { Dialog: true, Button: true, MediaGrid: true } },
     })
     await flushPromises()
     const picker = w.findComponent(FilePicker)

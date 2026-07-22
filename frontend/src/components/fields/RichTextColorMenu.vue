@@ -52,9 +52,9 @@ function clear(): void {
 .color-menu { position: relative; display: inline-block; }
 .color-menu__trigger { min-width: 30px; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: 4px; font-weight: 700; }
 .color-menu__trigger:disabled { opacity: 0.5; cursor: not-allowed; }
-.color-menu__panel { position: absolute; z-index: 10; top: 100%; left: 0; margin-top: 4px; padding: 8px; background: var(--surface-0, #fff); border: 1px solid var(--surface-border, #d0d0d0); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); width: max-content; }
+.color-menu__panel { position: absolute; z-index: 10; top: 100%; left: 0; margin-top: 4px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); width: max-content; }
 .color-menu__swatches { display: grid; grid-template-columns: repeat(5, 22px); gap: 6px; }
-.color-menu__swatch { width: 22px; height: 22px; border: 1px solid var(--surface-border, #d0d0d0); border-radius: 4px; cursor: pointer; }
+.color-menu__swatch { width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
 .color-menu__free { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.85rem; cursor: pointer; }
-.color-menu__clear { display: block; margin-top: 8px; width: 100%; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid var(--surface-border, #d0d0d0); border-radius: 4px; }
+.color-menu__clear { display: block; margin-top: 8px; width: 100%; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid var(--border); border-radius: 4px; }
 </style>
