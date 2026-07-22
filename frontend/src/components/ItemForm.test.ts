@@ -8,7 +8,10 @@ import type { FormModel } from '../types/itemForm'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { itemForm: { relations: 'Relations', translatableBadge: 'Translatable' } } },
+  messages: { en: { itemForm: {
+    relations: 'Relations', translatableBadge: 'Translatable',
+    localeComplete: 'Has content', localeIncomplete: 'No content yet',
+  } } },
 })
 type ItemFormProps = InstanceType<typeof ItemForm>['$props']
 function mountForm(props: Record<string, unknown>, extraStubs: Record<string, unknown> = {}) {
@@ -77,6 +80,15 @@ describe('ItemForm', () => {
     expect(dots).toHaveLength(2)          // one per locale
     expect(dots[0].classes()).not.toContain('off') // en has content
     expect(dots[1].classes()).toContain('off')     // zh-TW empty
+  })
+  it('gives each completeness dot an accessible label instead of hiding it (FE-29)', () => {
+    const withContent: FormModel = { shared: { status: 'draft' },
+      translations: { en: { title: 'Hi' }, 'zh-TW': { title: '' } }, relations: {} }
+    const w = mountForm({ meta, model: withContent, locales, errors: {} })
+    const dots = w.findAll('.dot')
+    expect(dots[0].attributes('aria-hidden')).toBeUndefined()
+    expect(dots[0].attributes('aria-label')).toBe('Has content')
+    expect(dots[1].attributes('aria-label')).toBe('No content yet')
   })
   it('renders no dots when there is only one locale', () => {
     const w = mountForm({ meta, model, locales: [{ code: 'en', name: 'English', isDefault: true }], errors: {} })

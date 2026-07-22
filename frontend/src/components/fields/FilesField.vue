@@ -11,6 +11,7 @@ import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
+import { toFileRows } from '../../lib/toFileRow'
 import type { FieldMeta } from '../../types/schema'
 
 defineOptions({ name: 'FilesField' })
@@ -47,7 +48,7 @@ async function resolve(ids: string[]): Promise<void> {
       filter: { id: { op: '_in', value: ids.join(',') } },
       locale: langStore.defaultCode || undefined,
     })
-    found = res.data as unknown as FileRow[]
+    found = toFileRows(res.data)
   } catch {
     found = []
   }
@@ -96,7 +97,7 @@ async function loadOptions(): Promise<void> {
       locale: langStore.defaultCode || undefined,
     })
     if (!optionsLoad.isCurrent(token)) return
-    options.value = res.data as unknown as FileRow[]
+    options.value = toFileRows(res.data)
   } catch (e) {
     if (!optionsLoad.isCurrent(token)) return
     loadError.value = e instanceof Error ? e.message : t('fields.loadFilesFailed')
@@ -175,7 +176,7 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
   white-space: nowrap;
 }
 .files-field__empty {
-  color: var(--text);
+  color: var(--muted);
   font-style: italic;
 }
 .files-field__search {

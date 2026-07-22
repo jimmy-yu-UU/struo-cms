@@ -100,7 +100,7 @@ async function loadItems(): Promise<void> {
     total.value = res.total
   } catch (e) {
     if (!listLoad.isCurrent(token)) return
-    error.value = e instanceof Error ? e.message : 'Failed to load items.'
+    error.value = e instanceof Error ? e.message : t('common.loadFailed')
     rows.value = []
     total.value = 0
   } finally {
@@ -159,7 +159,7 @@ async function runAction(fn: () => Promise<void>): Promise<void> {
     await fn()
     await loadItems()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Action failed.'
+    error.value = e instanceof Error ? e.message : t('common.actionFailed')
   }
 }
 

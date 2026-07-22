@@ -96,6 +96,18 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenCalledTimes(2)
   })
 
+  it('resets to page 0 after a delete (FE-27: deleting the last item on the last page must not strand an empty page)', async () => {
+    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onPage: (e: { page: number; rows: number }) => void }).onPage({ page: 1, rows: 24 })
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
+    await (w.vm as unknown as { onDeleted: () => void }).onDeleted()
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 0 }))
+  })
+
   it('hides Upload for a user without write on file', async () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
     const w = mountView()

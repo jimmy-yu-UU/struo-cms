@@ -11,6 +11,14 @@ function dims(f: FileRow): string {
 function uploaded(f: FileRow): string {
   return f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '—'
 }
+// FE-25: the row is a clickable target (mirrors MediaGrid's real <button> tiles) but a native
+// <tr> has no built-in keyboard affordance, so wire Enter/Space to the same 'open' emit.
+function onKeydown(e: KeyboardEvent, id: string): void {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    emit('open', id)
+  }
+}
 </script>
 
 <template>
@@ -26,7 +34,15 @@ function uploaded(f: FileRow): string {
       </tr>
     </thead>
     <tbody>
-      <tr v-for="f in files" :key="f.id" class="media-list__row" @click="emit('open', f.id)">
+      <tr
+        v-for="f in files"
+        :key="f.id"
+        class="media-list__row"
+        role="button"
+        tabindex="0"
+        @click="emit('open', f.id)"
+        @keydown="onKeydown($event, f.id)"
+      >
         <td class="media-list__thumb"><FileThumbnail :file="f" /></td>
         <td class="media-list__name">{{ f.fileName }}</td>
         <td>{{ f.contentType }}</td>

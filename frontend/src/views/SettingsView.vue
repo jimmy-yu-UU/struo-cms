@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useI18n } from 'vue-i18n'
@@ -88,6 +88,18 @@ function guardLeave(): Promise<boolean> {
   })
 }
 onBeforeRouteLeave(() => guardLeave())
+
+// Mirrors ItemFormView's FE-5 onBeforeUnload guard: warn before a full browser unload (tab close /
+// reload / hard navigation) with unsaved edits — guardLeave above only catches SPA route changes.
+// The browser shows its own native dialog; preventDefault is all that is needed.
+function onBeforeUnload(e: BeforeUnloadEvent): void {
+  if (isAdmin.value && dirty.value) {
+    e.preventDefault()
+    e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 </script>
 
 <template>
@@ -120,5 +132,5 @@ onBeforeRouteLeave(() => guardLeave())
 .settings-section { max-width: 640px; display: flex; flex-direction: column; gap: 20px; }
 .settings-field { display: flex; flex-direction: column; gap: 8px; }
 .settings-actions { margin-top: 8px; }
-.settings-denied { padding: 24px; color: var(--text); }
+.settings-denied { padding: 24px; color: var(--muted); }
 </style>

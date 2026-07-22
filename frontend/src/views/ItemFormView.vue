@@ -97,7 +97,7 @@ async function init(): Promise<void> {
       setModel(parseItemToForm(meta.value, item, langStore.languages))
     } catch (e) {
       if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
-      else serverError.value = e instanceof Error ? e.message : 'Failed to load item.'
+      else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
     }
   }
   loading.value = false
@@ -136,7 +136,7 @@ async function onSubmit(): Promise<void> {
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
     } else {
-      serverError.value = e instanceof Error ? e.message : 'Save failed.'
+      serverError.value = e instanceof Error ? e.message : t('common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -158,7 +158,7 @@ async function recoverFromConflict(): Promise<void> {
     // The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
     conflict.value = false
     if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
-    else serverError.value = e instanceof Error ? e.message : 'Failed to reload item.'
+    else serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
   }
 }
 
@@ -187,7 +187,7 @@ async function onReverted(): Promise<void> {
     errors.value = {}
     serverError.value = ''
   } catch (e) {
-    serverError.value = e instanceof Error ? e.message : 'Failed to reload item.'
+    serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
   }
 }
 
@@ -202,7 +202,7 @@ function onDelete(): void {
         captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
         router.push({ name: 'collection-list', params: { name: name.value } })
       } catch (e) {
-        serverError.value = e instanceof Error ? e.message : 'Delete failed.'
+        serverError.value = e instanceof Error ? e.message : t('common.deleteFailed')
       }
     },
   })
@@ -293,7 +293,6 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :errors="errors"
         :server-error="serverError"
         :disabled="!canWrite"
-        :submitting="submitting"
         @submit="onSubmit"
       />
 

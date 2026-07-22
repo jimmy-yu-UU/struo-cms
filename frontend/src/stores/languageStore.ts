@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { languagesApi } from '../api/languagesApi'
+import { i18n } from '../i18n'
 import type { LanguageInfo } from '../types/schema'
 
 export const useLanguageStore = defineStore('language', {
@@ -7,21 +8,31 @@ export const useLanguageStore = defineStore('language', {
     languages: [] as LanguageInfo[],
     loaded: false,
     loadError: '',
+    // In-flight fetch, shared by concurrent load() callers (e.g. the dashboard's fan-out of
+    // itemsApi calls all calling load() before any has resolved) so a race never triggers two
+    // languagesApi.getEnabled() requests (FE-24, mirrors schemaStore's loadPromise pattern).
+    loadPromise: null as Promise<void> | null,
   }),
   getters: {
     defaultCode: (state): string =>
       state.languages.find((l) => l.isDefault)?.code ?? state.languages[0]?.code ?? '',
   },
   actions: {
-    async load(): Promise<void> {
-      if (this.loaded) return
-      try {
-        this.languages = await languagesApi.getEnabled()
-        this.loaded = true
-        this.loadError = ''
-      } catch (e) {
-        this.loadError = e instanceof Error ? e.message : 'Failed to load languages.'
-      }
+    load(): Promise<void> {
+      if (this.loaded) return Promise.resolve()
+      if (this.loadPromise) return this.loadPromise
+      this.loadPromise = (async () => {
+        try {
+          this.languages = await languagesApi.getEnabled()
+          this.loaded = true
+          this.loadError = ''
+        } catch (e) {
+          this.loadError = e instanceof Error ? e.message : i18n.global.t('common.loadFailed')
+        } finally {
+          this.loadPromise = null
+        }
+      })()
+      return this.loadPromise
     },
   },
 })
