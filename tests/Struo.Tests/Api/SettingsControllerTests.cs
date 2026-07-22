@@ -59,6 +59,32 @@ public class SettingsControllerTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    /// <summary>TEST-3 (audit batch 4): anonymous callers get 401, not 403 CSRF. Deliberately sent
+    /// WITHOUT the X-Struo-CSRF header, matching a real anonymous SPA caller. CSRF is not in play for
+    /// two independent reasons: (1) UseAuthorization runs BEFORE CsrfProtectionMiddleware in the
+    /// pipeline (Program.cs), so an unauthorized request 401s before the CSRF gate is even reached;
+    /// and (2) even were the order reversed, CsrfProtectionMiddleware only demands the header when the
+    /// request carries the session cookie (<see cref="Struo.Api.Auth.CsrfProtectionMiddleware"/>), which
+    /// an anonymous request lacks. Either way the request falls through to the [Authorize] challenge.
+    ///
+    /// FINDING (verified empirically, not per the audit's stated expectation): the challenge is
+    /// 401 as expected, but the body is EMPTY — no error envelope. Cookie auth's
+    /// <c>OnRedirectToLogin</c> event (AuthWiring.cs) sets <c>Response.StatusCode</c> directly and
+    /// returns, short-circuiting before MVC's <see cref="Struo.Api.Http.EnvelopeResultFilter"/> ever
+    /// runs, unlike the exception-driven 401s covered by UnauthorizedDriftTests (thrown
+    /// PermissionDeniedException inside an action, mapped by DomainErrorMap → does get an envelope).
+    /// So [Authorize]-attribute-level 401s and in-action-exception 401s are inconsistent: only the
+    /// latter carry <c>error.code</c>. Asserting status-only here because no code is available to
+    /// assert — see task rule "do not assert status only if the code is available".</summary>
+    [Fact]
+    public async Task Put_anonymous_is_401_with_no_envelope_body()
+    {
+        var client = _factory.CreateClient(); // anonymous, no cookie, no CSRF header
+        var resp = await client.PutAsJsonAsync("/api/settings/branding", new { brandName = "X", logoFileId = (string?)null });
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await resp.Content.ReadAsStringAsync()).Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Put_rejects_empty_name()
     {
