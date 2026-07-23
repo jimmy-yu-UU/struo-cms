@@ -93,10 +93,12 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
 .nav-parent .nav-chev { margin-left: auto; width: 14px; transition: transform var(--speed, .15s); }
 .nav-group.open .nav-parent .nav-chev { transform: rotate(180deg); }
 .nav-sub { display: grid; gap: 2px; padding-left: 18px; }
+.collapse-chev { width: 14px; text-align: center; flex: none; transition: transform var(--speed, .15s); }
+.shell.collapsed .collapse-chev { transform: rotate(180deg); }
 .side-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
 .shell.collapsed .nav-label, .shell.collapsed .side-ver, .shell.collapsed .nav-chev { display: none; }
 .shell.collapsed .nav-item { justify-content: center; padding: 9px; }
-.shell.collapsed .nav-sub { padding-left: 0; }
+.shell.collapsed .nav-sub { display: none; }
 .scrim { position: fixed; inset: 56px 0 0 0; background: var(--overlay); z-index: 35; border: none; padding: 0; }
 .content { grid-area: main; overflow-y: auto; overflow-x: clip; background: var(--surface); }
 .page { padding: 24px 28px 48px; }
