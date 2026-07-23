@@ -70,6 +70,7 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
 function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
+const linkField = computed(() => columns.value.find((c) => !isSelectField(c.field))?.field)
 function tagSeverity(v: unknown): 'success' | 'warn' | 'secondary' {
   const s = String(v ?? '').toLowerCase()
   if (s === 'published') return 'success'
@@ -267,7 +268,7 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
                 :value="formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!)"
                 :severity="tagSeverity(cellValue(data, fieldOf(col.field)!))"
               />
-              <span v-else :class="{ 'row-link': col.field === columns[0]?.field }">
+              <span v-else :class="{ 'row-link': col.field === linkField }">
                 {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
               </span>
             </template>
