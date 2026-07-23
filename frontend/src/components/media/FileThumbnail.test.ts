@@ -13,16 +13,20 @@ describe('FileThumbnail', () => {
     expect(el.attributes('src')).toMatch(/\/files\/f1\/content$/)
   })
 
-  it('renders a chip (no img) for non-image content types', () => {
+  it('renders a chip (no img) for non-image content types, icon + content type only (no filename dupe with the media-tile caption)', () => {
     const w = mount(FileThumbnail, { props: { file: doc } })
     expect(w.find('img').exists()).toBe(false)
-    expect(w.text()).toContain('a.pdf')
+    expect(w.find('.file-chip__icon').exists()).toBe(true)
+    expect(w.text()).toContain('application/pdf')
+    expect(w.text()).not.toContain('a.pdf')
   })
 
   it('falls back to chip when the image fails to load', async () => {
     const w = mount(FileThumbnail, { props: { file: img } })
     await w.find('img').trigger('error')
     expect(w.find('img').exists()).toBe(false)
-    expect(w.text()).toContain('a.png')
+    expect(w.find('.file-chip__icon').exists()).toBe(true)
+    expect(w.text()).toContain('image/png')
+    expect(w.text()).not.toContain('a.png')
   })
 })
