@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { RecentRow } from '../../lib/aggregateRecentUpdates'
+import { formatDateTime } from '../../lib/formatDateTime'
 
 defineProps<{ rows: RecentRow[] }>()
 defineEmits<{ (e: 'select', row: RecentRow): void }>()
 const { t } = useI18n()
 
 function formatUpdated(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return formatDateTime(iso)
 }
 </script>
 
