@@ -34,5 +34,12 @@ export const useLanguageStore = defineStore('language', {
       })()
       return this.loadPromise
     },
+    // The Language collection is edited through the generic item form; after such a save the
+    // enabled-languages snapshot is stale (new locale tabs won't appear until refetched).
+    async reload(): Promise<void> {
+      if (this.loadPromise) await this.loadPromise // let an in-flight load settle before resetting
+      this.loaded = false
+      await this.load()
+    },
   },
 })

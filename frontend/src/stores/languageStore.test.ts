@@ -51,4 +51,36 @@ describe('languageStore', () => {
     expect(store.loaded).toBe(true)
     expect(spy).toHaveBeenCalledTimes(2)
   })
+
+  it('reload() bypasses the loaded guard and refetches', async () => {
+    const spy = vi.spyOn(languagesApi, 'getEnabled').mockResolvedValueOnce([
+      { code: 'en', name: 'English', isDefault: true },
+    ])
+    const store = useLanguageStore()
+    await store.load()
+    expect(store.languages).toHaveLength(1)
+
+    spy.mockResolvedValueOnce([
+      { code: 'en', name: 'English', isDefault: true },
+      { code: 'zh-CN', name: '简体中文', isDefault: false },
+    ])
+    await store.reload()
+    expect(store.languages).toHaveLength(2)
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('reload() awaits an in-flight load() before resetting (no race with a concurrent load())', async () => {
+    let resolveFetch!: (v: unknown) => void
+    const pending = new Promise((resolve) => { resolveFetch = resolve })
+    const spy = vi.spyOn(languagesApi, 'getEnabled')
+      .mockReturnValueOnce(pending as ReturnType<typeof languagesApi.getEnabled>)
+      .mockResolvedValueOnce([{ code: 'en', name: 'English', isDefault: true }, { code: 'fr', name: 'Français', isDefault: false }])
+    const store = useLanguageStore()
+    const loadP = store.load() // in-flight, not yet resolved
+    const reloadP = store.reload() // must wait for loadP's fetch to settle before resetting `loaded`
+    resolveFetch([{ code: 'en', name: 'English', isDefault: true }])
+    await Promise.all([loadP, reloadP])
+    expect(spy).toHaveBeenCalledTimes(2) // one for the in-flight load, one for reload's own refetch
+    expect(store.languages).toHaveLength(2)
+  })
 })
