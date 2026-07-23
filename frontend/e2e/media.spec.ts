@@ -72,10 +72,10 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
 // idiom as items.spec.ts / conflict.spec.ts) and opens its detail dialog.
 async function openDetailByName(page: Page, fileName: string): Promise<void> {
   await page.getByPlaceholder('Search files…').fill(fileName)
-  // Each grid tile is a <button class="media-tile"> containing BOTH a FileThumbnail chip
-  // (.file-chip__name) and .media-tile__name — both render the filename, so an unscoped
-  // getByText(fileName) matches two nodes in the same tile (strict-mode violation). Match the tile's
-  // own name span and click the enclosing tile button (MediaGrid emits `open` -> detail dialog).
+  // Each grid tile is a <button class="media-tile">; the filename lives only in its
+  // .media-tile__name caption now (FileThumbnail's non-image chip shows icon + content type,
+  // not the filename, to avoid duplicating it). Scope to that span rather than an unscoped
+  // getByText(fileName) and click the enclosing tile button (MediaGrid emits `open` -> detail dialog).
   const tile = page.locator('.media-tile', { has: page.locator('.media-tile__name', { hasText: fileName }) })
   await expect(tile).toBeVisible()
   // The dialog becomes visible (props.file !== null) BEFORE MediaDetailDialog.load() finishes its

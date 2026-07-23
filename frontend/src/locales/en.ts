@@ -46,7 +46,7 @@ export default {
     closeMenu: 'Close navigation menu',
     mainNav: 'Main navigation',
     brandHome: 'Back to dashboard',
-    version: 'Redesign prototype',
+    version: 'Admin console',
   },
   user: {
     account: 'Account',

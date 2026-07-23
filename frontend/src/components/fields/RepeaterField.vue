@@ -82,7 +82,7 @@ function setSub(i: number, name: string, v: unknown): void {
       </div>
     </div>
     <p v-if="!rows.length" class="repeater-field__empty">No items</p>
-    <Button class="repeater-add" icon="pi pi-plus" label="Add" size="small" :disabled="disabled" @click="add" />
+    <Button class="repeater-add" icon="pi pi-plus" label="Add" severity="secondary" outlined size="small" :disabled="disabled" @click="add" />
   </div>
 </template>
 

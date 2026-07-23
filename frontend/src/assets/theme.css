@@ -16,6 +16,7 @@
   --shadow-1: 0 1px 2px color-mix(in srgb, #020617 6%, transparent);
   --shadow-2: 0 6px 24px color-mix(in srgb, #020617 9%, transparent);
   --shadow-3: 0 24px 64px color-mix(in srgb, #020617 24%, transparent);
+  --overlay: rgb(0 0 0 / .5);
   --font: system-ui, 'Segoe UI', 'Noto Sans TC', Roboto, sans-serif;
   --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
   color-scheme: light;
@@ -33,9 +34,11 @@
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45);
   --shadow-2: 0 6px 24px rgb(0 0 0 / .5);
   --shadow-3: 0 24px 64px rgb(0 0 0 / .65);
+  --overlay: rgb(0 0 0 / .65);
   color-scheme: dark;
 }
 html { font-family: var(--font); }
+body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-level scrollbar */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
@@ -51,14 +54,15 @@ html { font-family: var(--font); }
 }
 .shell.collapsed { --sidebar-w: 76px; }
 .topbar {
-  grid-area: top; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+  grid-area: top; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 16px;
   background: var(--surface); border-bottom: 1px solid var(--border); z-index: 50;
 }
 .topbar .spacer { flex: 1; }
 .topbar .brand-btn {
   display: flex; align-items: center; gap: 10px; border: none; background: transparent;
-  padding: 4px 10px; border-radius: var(--radius, 8px); cursor: pointer; color: var(--fg);
+  padding: 4px 10px; border-radius: var(--radius, 8px); cursor: pointer; color: var(--fg); min-width: 0;
 }
+.topbar .brand-btn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .brand-btn:hover { background: var(--bg); }
 .topbar .mark {
   width: 28px; height: 28px; border-radius: 8px; background: var(--accent);
@@ -74,7 +78,9 @@ html { font-family: var(--font); }
   width: 30px; height: 30px; border-radius: 999px; background: var(--bg);
   border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted);
 }
-.user-role { font-size: .8rem; color: var(--muted); }
+.user-name { display: grid; text-align: left; line-height: 1.2; }
+.user-name b { font-size: .83rem; }
+.user-name span { font-size: .7rem; color: var(--muted); }
 .sidebar {
   grid-area: side; display: flex; flex-direction: column; gap: 4px; padding: 14px 12px;
   background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto;
@@ -90,15 +96,18 @@ html { font-family: var(--font); }
 .nav-parent .nav-chev { margin-left: auto; width: 14px; transition: transform var(--speed, .15s); }
 .nav-group.open .nav-parent .nav-chev { transform: rotate(180deg); }
 .nav-sub { display: grid; gap: 2px; padding-left: 18px; }
+.collapse-chev { width: 14px; text-align: center; flex: none; transition: transform var(--speed, .15s); }
+.shell.collapsed .collapse-chev { transform: rotate(180deg); }
 .side-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
 .shell.collapsed .nav-label, .shell.collapsed .side-ver, .shell.collapsed .nav-chev { display: none; }
 .shell.collapsed .nav-item { justify-content: center; padding: 9px; }
-.shell.collapsed .nav-sub { padding-left: 0; }
-.scrim { position: fixed; inset: 56px 0 0 0; background: rgb(0 0 0 / .5); z-index: 35; border: none; padding: 0; }
-.content { grid-area: main; overflow-y: auto; background: var(--surface); }
+.shell.collapsed .nav-sub { display: none; }
+.scrim { position: fixed; inset: 56px 0 0 0; background: var(--overlay); z-index: 35; border: none; padding: 0; }
+/* min-width: 0 — grid items default to min-width:auto and refuse to shrink below their
+   widest child, blowing the shell past the viewport on narrow screens. */
+.content { grid-area: main; min-width: 0; overflow-y: auto; overflow-x: clip; background: var(--surface); }
 .page { padding: 24px 28px 48px; }
 .app-breadcrumb { margin-bottom: 14px; background: transparent; border: none; padding: 0; }
-.only-mobile { display: none; }
 @media (max-width: 1023px) {
   .shell { grid-template-columns: 1fr; grid-template-areas: 'top' 'main'; }
   .sidebar {
@@ -107,13 +116,13 @@ html { font-family: var(--font); }
     z-index: 40; box-shadow: var(--shadow-2);
   }
   .shell.drawer .sidebar { transform: none; }
-  .only-mobile { display: inline-flex; }
-  .user-role { display: none; }
+  .user-name { display: none; }
 }
 @media (max-width: 520px) {
   .page { padding: 16px 14px 40px; }
   .topbar { padding: 0 10px; }
-  .lang-switcher { display: none; }
+  /* 0,2,0 specificity: must beat PrimeVue's runtime-injected .p-select{display:inline-flex} */
+  .topbar .lang-switcher { display: none; }
 }
 
 /* ---- FE-R1 shell: icon button, nav icon, caption, nav error ---- */
@@ -137,3 +146,12 @@ html { font-family: var(--font); }
   border-radius: var(--radius, 8px); background: var(--surface); color: var(--fg); cursor: pointer;
 }
 .nav-error button:hover { background: var(--bg); }
+
+/* ---- visibility utilities — keep LAST in this file: they must win source-order ties
+   against same-specificity display rules like .icon-btn / .nav-item (the desktop
+   hamburger bug was exactly this ordering trap). ---- */
+.only-mobile { display: none; }
+@media (max-width: 1023px) {
+  .only-mobile { display: inline-flex; }
+  .only-desktop { display: none; }
+}

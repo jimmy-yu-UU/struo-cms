@@ -4,6 +4,8 @@ import type { CollectionPermission } from '../types/schema'
 
 export type CurrentUser = {
   id: string
+  email?: string | null
+  name?: string | null
   isSuperAdmin: boolean
   permissions: Record<string, CollectionPermission>
 }

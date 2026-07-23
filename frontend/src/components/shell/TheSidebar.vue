@@ -33,6 +33,13 @@ function isOpen(group: string): boolean {
   return open[group] ?? true
 }
 function toggleGroup(group: string): void {
+  // Collapsed rail: a group click means "let me navigate" — expand the sidebar and
+  // make sure the group is open (prototype behavior), never toggle it shut blindly.
+  if (sidebar.collapsed) {
+    sidebar.expand()
+    open[group] = true
+    return
+  }
   open[group] = !isOpen(group)
 }
 
@@ -99,6 +106,7 @@ function go(to: { name: string; params?: Record<string, string> }): void {
             :aria-expanded="isOpen(g.group)"
             @click="toggleGroup(g.group)"
           >
+            <i class="nav-icon pi pi-folder" aria-hidden="true" />
             <span class="nav-label">{{ g.group }}</span>
             <i class="pi pi-angle-down nav-chev" aria-hidden="true" />
           </button>
@@ -118,11 +126,11 @@ function go(to: { name: string; params?: Record<string, string> }): void {
       <div class="side-foot">
         <button
           type="button"
-          class="nav-item collapse-btn"
+          class="nav-item collapse-btn only-desktop"
           :aria-label="sidebar.collapsed ? t('shell.expand') : t('shell.collapse')"
           @click="sidebar.toggleCollapse()"
         >
-          <i class="pi pi-angle-left nav-chev" aria-hidden="true" />
+          <i class="pi pi-angle-left collapse-chev" aria-hidden="true" />
           <span class="nav-label">{{ t('shell.collapse') }}</span>
         </button>
         <p class="caption side-ver">v0.9.0 · {{ t('shell.version') }}</p>

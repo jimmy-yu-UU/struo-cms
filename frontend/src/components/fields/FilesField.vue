@@ -139,7 +139,7 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
     </OrderList>
     <p v-else class="files-field__empty">{{ t('fields.noFilesSelected') }}</p>
 
-    <Button class="files-add" :label="t('fields.selectFiles')" size="small" :disabled="disabled" @click="openDialog" />
+    <Button class="files-add" :label="t('fields.selectFiles')" severity="secondary" outlined size="small" :disabled="disabled" @click="openDialog" />
 
     <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectFiles')" :style="{ width: '60rem' }">
       <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>

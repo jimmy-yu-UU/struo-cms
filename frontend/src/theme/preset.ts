@@ -11,6 +11,7 @@ export const struoPresetConfig = {
     },
     colorScheme: {
       light: {
+        primary: { color: '{primary.600}', hoverColor: '{primary.700}', activeColor: '{primary.800}' },
         surface: {
           0: '#ffffff', 50: '{slate.50}', 100: '{slate.100}', 200: '{slate.200}',
           300: '{slate.300}', 400: '{slate.400}', 500: '{slate.500}', 600: '{slate.600}',
@@ -18,6 +19,7 @@ export const struoPresetConfig = {
         },
       },
       dark: {
+        primary: { color: '{primary.400}', hoverColor: '{primary.300}', activeColor: '{primary.200}' },
         surface: {
           0: '#ffffff', 50: '{slate.50}', 100: '{slate.100}', 200: '{slate.200}',
           300: '{slate.300}', 400: '{slate.400}', 500: '{slate.500}', 600: '{slate.600}',

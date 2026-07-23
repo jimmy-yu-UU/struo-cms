@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 import { formatFileSize } from '../../lib/formatFileSize'
+import { formatDateTime } from '../../lib/formatDateTime'
 
 defineProps<{ files: FileRow[] }>()
 const emit = defineEmits<{ (e: 'open', id: string): void }>()
@@ -9,7 +10,7 @@ function dims(f: FileRow): string {
   return f.width && f.height ? `${f.width}×${f.height}` : '—'
 }
 function uploaded(f: FileRow): string {
-  return f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '—'
+  return formatDateTime(f.createdAt ?? null)
 }
 </script>
 

@@ -19,6 +19,7 @@ import { parseItemToForm } from '../../lib/parseItemToForm'
 import { buildItemPayload } from '../../lib/buildItemPayload'
 import { deleteConfirm } from '../../lib/deleteAction'
 import { formatFileSize } from '../../lib/formatFileSize'
+import { formatDateTime } from '../../lib/formatDateTime'
 import type { FormModel } from '../../types/itemForm'
 
 const props = defineProps<{ file: FileRow | null; canWrite: boolean; canDelete: boolean }>()
@@ -57,7 +58,7 @@ const sizeText = computed(() =>
   typeof raw.value?.size === 'number' ? formatFileSize(raw.value.size as number) : '—',
 )
 const uploadedText = computed(() =>
-  typeof raw.value?.createdAt === 'string' ? new Date(raw.value.createdAt as string).toLocaleString() : '—',
+  typeof raw.value?.createdAt === 'string' ? formatDateTime(raw.value.createdAt as string) : '—',
 )
 const statusText = computed(() => (raw.value?.status as string | undefined) ?? '—')
 const fileUrl = computed(() => (props.file ? filesApi.contentUrl(props.file.id) : ''))

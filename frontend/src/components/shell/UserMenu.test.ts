@@ -16,6 +16,10 @@ vi.mock('primevue/menu', () => ({
   },
 }))
 
+function mountMenu() {
+  return mount(UserMenu, { global: { plugins: [i18n] } })
+}
+
 describe('UserMenu', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -26,14 +30,14 @@ describe('UserMenu', () => {
   it('shows the super-admin role label', () => {
     const auth = useAuthStore()
     auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    const wrapper = mount(UserMenu, { global: { plugins: [i18n] } })
+    const wrapper = mountMenu()
     expect(wrapper.find('.user-role').text()).toBe('超級管理員')
   })
 
   it('shows the member role label for a non-super-admin', () => {
     const auth = useAuthStore()
     auth.user = { id: 'u2', isSuperAdmin: false, permissions: {} }
-    const wrapper = mount(UserMenu, { global: { plugins: [i18n] } })
+    const wrapper = mountMenu()
     expect(wrapper.find('.user-role').text()).toBe('一般使用者')
   })
 
@@ -41,7 +45,7 @@ describe('UserMenu', () => {
     const auth = useAuthStore()
     auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const logoutSpy = vi.spyOn(auth, 'logout').mockResolvedValue()
-    const wrapper = mount(UserMenu, { global: { plugins: [i18n] } })
+    const wrapper = mountMenu()
     const model = (wrapper.vm as unknown as { menuModel: { label: string; command: () => void }[] }).menuModel
     const logout = model.find((m) => m.label === '登出')!
     expect(logout).toBeTruthy()
@@ -49,5 +53,19 @@ describe('UserMenu', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(logoutSpy).toHaveBeenCalledOnce()
     expect(push).toHaveBeenCalledWith({ name: 'login' })
+  })
+
+  it('shows the user name (fallback email) next to the avatar', () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', email: 'a@b.c', name: '陳雅婷', isSuperAdmin: true, permissions: {} }
+    const wrapper = mountMenu()
+    expect(wrapper.find('.user-name b').text()).toBe('陳雅婷')
+  })
+
+  it('falls back to email when name is missing', () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', email: 'a@b.c', name: null, isSuperAdmin: false, permissions: {} }
+    const wrapper = mountMenu()
+    expect(wrapper.find('.user-name b').text()).toBe('a@b.c')
   })
 })
