@@ -21,6 +21,7 @@ import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { debounce } from '../lib/debounce'
+import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
@@ -60,8 +61,7 @@ function fieldOf(colField: string): FieldMeta | undefined {
 
 function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
   if (field.translatable) {
-    const t = (row.translations as Record<string, Record<string, unknown>> | undefined)?.[langStore.defaultCode]
-    return t?.[field.name]
+    return pickTranslated(row.translations as TranslationMap, langStore.defaultCode, field.name)
   }
   return row[field.name]
 }
