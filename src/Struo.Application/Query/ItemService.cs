@@ -105,6 +105,12 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
+        // CS-9: a non-object top-level body (array/scalar) reaches ValidateLanguageCodeIfNeeded /
+        // Deserialize below, both of which assume an object and throw an unhandled
+        // InvalidOperationException (-> 500) otherwise. Reject it here as the established
+        // client-error (-> 400) path instead.
+        if (body.ValueKind != JsonValueKind.Object)
+            throw new QueryException("Request body must be a JSON object.");
         ValidateLanguageCodeIfNeeded(collection, body);
         var entity = deserializer.Deserialize(collection, body, meta);
         var d = registry.Get(collection)!;
@@ -137,6 +143,10 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
+        // CS-9: same non-object-body guard as CreateAsync — placed identically, right after the
+        // permission checks and before ValidateLanguageCodeIfNeeded/Deserialize.
+        if (body.ValueKind != JsonValueKind.Object)
+            throw new QueryException("Request body must be a JSON object.");
         ValidateLanguageCodeIfNeeded(collection, body);
         var d = registry.Get(collection)!;
 
@@ -243,34 +253,45 @@ public sealed class ItemService(
 
         if (meta.SoftDelete && !purge)
         {
-            // Idempotent trash (DB-8 review): a row that is ALREADY trashed is a no-op — do not
-            // re-stamp DeletedAt, bump Version, or append a duplicate "delete" revision. SoftDeleteAsync
-            // uses Updateable<T>, which SqlSugar does NOT subject to the soft-delete query filter, so
-            // without this guard a repeat DELETE keeps re-stamping and polluting history. Mirrors the
-            // symmetric guard in RestoreAsync. Caller-visible success is unchanged: an already-trashed
-            // row still reports success (true), an unknown id still reports false — no 404 change.
+            // Pre-read resolves ONLY unknown-id -> 404 (mirrors RestoreAsync's pre-read below). Whether
+            // the row is ACTUALLY (still) live and gets trashed BY THIS CALL is decided inside the
+            // transaction by repository.SoftDeleteAsync's own atomic "WHERE deletedat IS NULL" UPDATE
+            // (affected-rows > 0) — not by inspecting this pre-read snapshot. DB-22: a decision made here,
+            // outside the transaction, would leave a TOCTOU window where two concurrent DELETEs of the
+            // same live row could each pass the check and both re-stamp/re-version and double-record a
+            // "delete" revision. An already-trashed row (or one trashed by a concurrent request first) is
+            // a no-op: no Version bump, no revision — but caller-visible success is unchanged (the row
+            // exists, so this call still reports true; only an unknown id reports false).
             var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
-            if (existing is null) return false;                            // unknown id -> unchanged (false)
-            if (existing is ISoftDeletable { DeletedAt: not null }) return true; // already trashed -> no-op success
+            if (existing is null) return false; // unknown id -> unchanged (false)
 
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
             // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.
-            await this.purge.CheckRestrictAsync(collection, id, ct);
+            // DB-19/DB-22: the check runs INSIDE the same transaction as the trash write (mirroring the
+            // purge branch's boundary below and RestoreAsync's boundary), narrowing the check-to-write
+            // window to purge-parity. Under PG READ COMMITTED a plain SELECT takes no row lock, so a
+            // referencing row committed by another txn between the check and the commit is still possible
+            // — full closure would need FK/locking (DB-14 accepted app-only), so this narrows rather than
+            // eliminates the race. Note this now runs even when the row turns out to already be trashed
+            // (affected = 0 below) — harmless (a pure read-only guard), and simpler/more consistent than
+            // the previous pre-read short-circuit that skipped it entirely for a repeat DELETE.
             var actor = currentUser.GetCurrentUserId();
 
             // DB-8: trash bumps the item's Version (repository, AuditableEntity only) AND — for a
             // revisioned collection — records a "delete" revision. Both must commit together with the
             // trash stamp, so a capture failure rolls the whole trash back (no half-trashed row, no
-            // orphan revision).
-            var softDeleted = false;
+            // orphan revision). DB-22: revision capture is gated on the atomic UPDATE actually having
+            // affected the row, so a losing concurrent DELETE (or a repeat DELETE of an already-trashed
+            // row) records nothing.
             await repository.InTransactionAsync(async () =>
             {
-                softDeleted = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
-                if (softDeleted)
+                await this.purge.CheckRestrictAsync(collection, id, ct);
+                var softDeletedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+                if (softDeletedNow)
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
             }, ct);
-            return softDeleted;
+            return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
         var existed = false;
@@ -293,19 +314,26 @@ public sealed class ItemService(
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
         RequireSuperAdminForAdminOnly(meta);
 
-        // Find the row ignoring the soft-delete floor (it is, by definition, trashed).
+        // Find the row ignoring the soft-delete floor (it is, by definition, trashed). This pre-read
+        // only resolves unknown-id -> 404 and confirms the collection is soft-deletable; it is NOT
+        // relied on to decide whether a restore actually happens (see DB-19 note below).
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return null;                       // unknown id -> 404
 
-        // Only a genuinely-trashed row is restored (and recorded): an already-live row is a no-op (no
-        // Version bump, no spurious "restore" revision). DB-8: the restore clears DeletedAt, bumps Version
-        // and — for a revisioned collection — records a "restore" revision, all in ONE txn (capture rolls back).
-        if (entity is ISoftDeletable sd && sd.DeletedAt is not null)
+        // DB-8: the restore clears DeletedAt, bumps Version and — for a revisioned collection — records
+        // a "restore" revision, all in ONE txn (capture rolls back with it).
+        // DB-19: whether a row is ACTUALLY restored is decided by repository.RestoreAsync's atomic
+        // "WHERE deletedat IS NOT NULL" UPDATE (affected-rows > 0), not by inspecting this pre-read
+        // snapshot — a pre-read check here would leave a TOCTOU window where two concurrent restores of
+        // the same row could each pass the check and double-record a "restore" revision. An already-live
+        // row (or one restored by a concurrent request first) is a no-op: no Version bump, no revision.
+        if (entity is ISoftDeletable)
         {
             await repository.InTransactionAsync(async () =>
             {
-                await repository.RestoreAsync(collection, id, ct);
-                await CaptureRevisionAsync(collection, id, meta, "restore", ct);
+                var restoredNow = await repository.RestoreAsync(collection, id, ct);
+                if (restoredNow)
+                    await CaptureRevisionAsync(collection, id, meta, "restore", ct);
             }, ct);
         }
 

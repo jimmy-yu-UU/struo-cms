@@ -26,9 +26,25 @@ function uploaded(f: FileRow): string {
       </tr>
     </thead>
     <tbody>
-      <tr v-for="f in files" :key="f.id" class="media-list__row" @click="emit('open', f.id)">
+      <!--
+        FE-25: a table row is not a button, so it must not claim `role="button"` (that gave
+        screen readers contradictory roles). Table semantics stay intact on the <tr>; the real,
+        natively keyboard-activatable <button> in the name cell (mirrors MediaGrid's tile
+        buttons) is the accessible primary action. The row keeps its own @click purely as a
+        mouse convenience so clicking anywhere in the row still opens the item, same as before.
+      -->
+      <tr
+        v-for="f in files"
+        :key="f.id"
+        class="media-list__row"
+        @click="emit('open', f.id)"
+      >
         <td class="media-list__thumb"><FileThumbnail :file="f" /></td>
-        <td class="media-list__name">{{ f.fileName }}</td>
+        <td class="media-list__name">
+          <button type="button" class="media-list__open" @click.stop="emit('open', f.id)">
+            {{ f.fileName }}
+          </button>
+        </td>
         <td>{{ f.contentType }}</td>
         <td>{{ formatFileSize(f.size) }}</td>
         <td>{{ dims(f) }}</td>
@@ -65,5 +81,22 @@ function uploaded(f: FileRow): string {
 .media-list__thumb-col { width: 64px; }
 .media-list__thumb { width: 56px; }
 .media-list__thumb :deep(.file-thumb) { height: 44px; width: 56px; }
-.media-list__name { font-weight: 500; }
+.media-list__name { font-weight: 500; padding: 0; }
+.media-list__open {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.media-list__open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 </style>

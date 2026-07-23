@@ -9,6 +9,14 @@
 > backends. Numbering was also unified to a single contiguous `NNN-description.sql` series (the
 > `0001__…` examples below are historical). See
 > [`db/migrations/README.md`](../db/migrations/README.md) for the current convention and runbook.
+>
+> **Update (2026-07-22 rebaseline):** the baseline described below as aspirational is now realized.
+> `db/migrations/001-core-baseline.sql` exists, reproducing the **core-framework** `InitTables` output
+> only (the 9 `FrameworkEntityTypes` tables) — not the whole application. It was machine-generated via
+> `InitTables(FrameworkEntityTypes.All)` + `pg_dump --schema-only`, then hardened to idempotent. The 13
+> historical sample-entangled scripts that previously lived in this folder were superseded and removed.
+> Sample/business schema (the Blog demo, and any downstream fork's own collections) is intentionally out
+> of scope for this template's core folder — see [`db/migrations/README.md`](../db/migrations/README.md).
 
 ## The problem
 
@@ -37,23 +45,30 @@ environments (staging → prod), and diff-able.
 
 ```
 db/migrations/
-  0001__baseline.sql              -- full schema matching the current InitTables output
-  0002__add_users_token_columns.sql
-  0003__article_add_hero_image.sql
+  001-core-baseline.sql            -- core-framework schema matching InitTables(FrameworkEntityTypes.All)
+  002-add-users-token-columns.sql
+  003-article-add-hero-image.sql
   ...
 ```
 
-- Zero-padded sequence prefix + `__` + short snake_case description.
+- Zero-padded, contiguous, single-series numeric prefix + `-` + short kebab-case description. The prefix
+  is the apply order (ordinal filename sort), so it must be monotonic and gap-free.
 - One logical change per file. Forward-only (no automatic `down`); write a compensating script if a
   rollback is needed.
 - Each file starts with a comment: date, author, ticket/PR, and a one-line intent.
 - Idempotency where practical (`IF NOT EXISTS`, guarded `ALTER`), so a re-run is safe.
 
+See [`db/migrations/README.md`](../db/migrations/README.md) for the authoritative, current convention.
+
 ## Baseline
 
-`0001__baseline.sql` should reproduce what `InitTables` currently generates for the target provider
-(PostgreSQL). Generate it once from a fresh dev database (e.g. `pg_dump --schema-only`), review it, and
-commit. From then on, every entity change that alters the schema gets a numbered follow-up script — and
+`001-core-baseline.sql` reproduces what `InitTables` generates for the **core framework** entity set
+(`FrameworkEntityTypes.All`) on PostgreSQL — it does not cover the whole application. It was generated
+from a fresh scratch database running `InitTables(FrameworkEntityTypes.All)`, dumped with
+`pg_dump --schema-only`, reviewed, and hardened to idempotent. Sample/business schema (this template's
+Blog demo, or a downstream fork's own collections) is **not** part of the core baseline — it lives in
+its own `NNN-…` migrations, added by whoever owns that schema, starting after the core baseline. From the
+baseline forward, every entity change that alters the core schema gets a numbered follow-up script — and
 the entity change and its migration script land in the **same PR**.
 
 ## Applying to production (manual runbook)

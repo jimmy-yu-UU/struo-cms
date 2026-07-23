@@ -21,7 +21,7 @@ public sealed class Revision
     // rolls back with the item write) instead of silently duplicating a revision number. The three
     // columns share one group name so SqlSugar CodeFirst emits a single composite unique index
     // (ux_revisions_item_no) — the same mechanism the Identity entities use (see UserRole). The
-    // matching physical DDL for live/existing databases lives in db/migrations/010-revisions-unique-number.sql.
+    // matching physical DDL for live/existing databases lives in db/migrations/001-core-baseline.sql.
     [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public string CollectionName { get; set; } = "";
     [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]

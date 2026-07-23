@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 // Phase 9a-fe: the SPA detects a 404 by the response envelope's error code
 // (`error.code === 'NOT_FOUND'`), not by matching the error message text.
@@ -20,5 +20,6 @@ test('a non-existent item id renders the not-found view (driven by error code)',
   // `{ success:false, error:{ code:'NOT_FOUND', … } }` envelope. The view must
   // show "Item not found." via the code branch (not the old message match).
   await page.goto('/collections/article/00000000-0000-0000-0000-000000000000')
-  await expect(page.getByText('Item not found.', { exact: true })).toBeVisible()
+  // en locale's itemForm.itemNotFound has no trailing period ("Item not found").
+  await expect(page.getByText('Item not found', { exact: true })).toBeVisible()
 })

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
@@ -15,6 +15,8 @@ test('login → dashboard → logout', async ({ page }) => {
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-  await page.click('button.logout')
+  // FE-R1: logout moved into the UserMenu popover (no more standalone `button.logout`).
+  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('menuitem', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })

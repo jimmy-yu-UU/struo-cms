@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import TreeSelect from 'primevue/treeselect'
@@ -22,6 +23,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
+const { t } = useI18n()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 
@@ -55,7 +57,7 @@ async function loadOptions(): Promise<void> {
     for (const o of options.value) labelById.value[o.id] = o.label
   } catch (e) {
     if (!optionsLoad.isCurrent(token)) return
-    loadError.value = e instanceof Error ? e.message : 'Failed to load options.'
+    loadError.value = e instanceof Error ? e.message : t('fields.loadOptionsFailed')
   } finally {
     if (optionsLoad.isCurrent(token)) loading.value = false
   }

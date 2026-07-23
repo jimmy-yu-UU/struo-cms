@@ -100,7 +100,7 @@ async function loadItems(): Promise<void> {
     total.value = res.total
   } catch (e) {
     if (!listLoad.isCurrent(token)) return
-    error.value = e instanceof Error ? e.message : 'Failed to load items.'
+    error.value = e instanceof Error ? e.message : t('common.loadFailed')
     rows.value = []
     total.value = 0
   } finally {
@@ -159,18 +159,18 @@ async function runAction(fn: () => Promise<void>): Promise<void> {
     await fn()
     await loadItems()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Action failed.'
+    error.value = e instanceof Error ? e.message : t('common.actionFailed')
   }
 }
 
 function onDelete(row: Record<string, unknown>): void {
   const kind = deleteKindFor(meta.value)
-  const { header, message } = deleteConfirm(kind)
+  const { header, message } = deleteConfirm(t, kind)
   confirm.require({ header, message, accept: () => runAction(() => itemsApi.remove(name.value, rowId(row))) })
 }
 
 function onPurge(row: Record<string, unknown>): void {
-  const { header, message } = purgeConfirm()
+  const { header, message } = purgeConfirm(t)
   confirm.require({ header, message, accept: () => runAction(() => itemsApi.remove(name.value, rowId(row), { purge: true })) })
 }
 

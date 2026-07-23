@@ -76,6 +76,26 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
         message.Should().NotContain("Exception");
     }
 
+    // AUTH-2: CsrfProtectionMiddleware used to write a bespoke `{ error: { message } }` body on
+    // rejection instead of the standard envelope every other error path uses (see AUTH-1's
+    // OnRedirectToAccessDenied for the pattern this must match).
+    [Fact]
+    public async Task Csrf_rejected_write_is_forbidden_envelope()
+    {
+        // CreateAuthenticatedClientAsync mirrors the SPA and pre-adds the CSRF header for its own
+        // login call (see ApiFactory) — strip it back off so this request exercises the actual
+        // rejection path (cookie present, header missing).
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        client.DefaultRequestHeaders.Remove(Struo.Api.Auth.CsrfProtectionMiddleware.HeaderName);
+        var resp = await client.PutAsJsonAsync(
+            "/api/settings/branding", new { brandName = "X", logoFileId = (string?)null });
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var root = Root(await resp.Content.ReadAsStringAsync());
+        root.GetProperty("success").GetBoolean().Should().BeFalse();
+        root.GetProperty("error").GetProperty("code").GetString().Should().Be("FORBIDDEN");
+        root.GetProperty("error").GetProperty("message").GetString().Should().NotBeNullOrEmpty();
+    }
+
     [Fact]
     public async Task Bad_login_is_unauthorized_envelope_via_fail_helper()
     {

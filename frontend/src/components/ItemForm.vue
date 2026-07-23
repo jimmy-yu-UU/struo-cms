@@ -20,7 +20,6 @@ const props = defineProps<{
   errors: Record<string, string>
   serverError?: string
   disabled?: boolean
-  submitting?: boolean
   itemId?: string
 }>()
 const emit = defineEmits<{ (e: 'submit'): void }>()
@@ -33,6 +32,11 @@ const activeLocale = ref(props.locales[0]?.code ?? '')
 const showDots = computed(() => fields.value.translatable.length > 0 && props.locales.length > 1)
 function localeFilled(code: string): boolean {
   return hasLocaleContent(fields.value.translatable, props.model.translations[code] ?? {})
+}
+// FE-29: the dot is the only signal of per-locale completeness; give it an accessible label
+// instead of aria-hiding it outright so screen reader users get the same information.
+function dotLabel(code: string): string {
+  return t(localeFilled(code) ? 'itemForm.localeComplete' : 'itemForm.localeIncomplete')
 }
 
 // Surface default-locale validation errors even if the user is on another locale's tab.
@@ -71,7 +75,7 @@ defineExpose({ activeLocale })
     <Tabs v-if="fields.translatable.length" v-model:value="activeLocale">
       <TabList>
         <Tab v-for="loc in locales" :key="loc.code" :value="loc.code">
-          <span v-if="showDots" class="dot" :class="{ off: !localeFilled(loc.code) }" aria-hidden="true" />
+          <span v-if="showDots" class="dot" :class="{ off: !localeFilled(loc.code) }" role="img" :aria-label="dotLabel(loc.code)" />
           {{ loc.name }}<span v-if="loc.isDefault"> *</span>
         </Tab>
       </TabList>

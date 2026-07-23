@@ -31,6 +31,7 @@ public static class DomainErrorMap
             ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
+            PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
 
@@ -48,6 +49,7 @@ public static class DomainErrorMap
         ErrorCodes.VersionConflict => StatusCodes.Status409Conflict,
         ErrorCodes.BadUserInput => StatusCodes.Status400BadRequest,
         ErrorCodes.Validation => StatusCodes.Status400BadRequest,
+        ErrorCodes.PayloadTooLarge => StatusCodes.Status413PayloadTooLarge,
         _ => StatusCodes.Status500InternalServerError,
     };
 }

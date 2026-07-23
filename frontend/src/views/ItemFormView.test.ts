@@ -45,6 +45,14 @@ const i18n = createI18n({
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
   },
     revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}' },
+    confirm: {
+      unsavedHeader: 'Unsaved changes',
+      unsavedMessage: 'You have unsaved changes. Leave this page and discard them?',
+      softDeleteHeader: 'Move to trash',
+      softDeleteMessage: 'Move this item to trash? You can restore it later.',
+      hardDeleteHeader: 'Confirm delete',
+      hardDeleteMessage: 'Delete this item? This cannot be undone.',
+    },
   } },
 })
 function mountView() {

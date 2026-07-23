@@ -33,4 +33,41 @@ describe('MediaFileList', () => {
     await w.findAll('.media-list__row')[0].trigger('click')
     expect(w.emitted('open')?.[0]).toEqual(['f1'])
   })
+
+  it('exposes a real, focusable <button> instead of an ARIA-button row hack (FE-25)', () => {
+    const w = mountList()
+    const row = w.findAll('.media-list__row')[0]
+    // A <tr> is not a button; screen readers get contradictory roles when it claims to be one.
+    // Table semantics must stay intact -- no role/tabindex overrides on the row itself.
+    expect(row.attributes('role')).toBeUndefined()
+    expect(row.attributes('tabindex')).toBeUndefined()
+    const btn = row.find('button')
+    expect(btn.exists()).toBe(true)
+    expect(btn.element.tagName).toBe('BUTTON')
+  })
+
+  it('emits open when the row button is activated (FE-25)', async () => {
+    const w = mountList()
+    const btn = w.findAll('.media-list__row')[0].find('button')
+    // Real <button> elements are natively keyboard-activatable: the HTML spec guarantees Enter
+    // and Space dispatch a click. jsdom doesn't simulate that browser default action, so we
+    // assert the click the browser dispatches on activation -- backed by the real <button> tag
+    // assertion above, which is what actually gives us Enter/Space + tab-order for free.
+    await btn.trigger('click')
+    expect(w.emitted('open')?.[0]).toEqual(['f1'])
+  })
+
+  it('still opens on a plain row click outside the button (visible click behavior unchanged)', async () => {
+    const w = mountList()
+    const row = w.findAll('.media-list__row')[0]
+    await row.find('td.media-list__thumb').trigger('click')
+    expect(w.emitted('open')?.[0]).toEqual(['f1'])
+  })
+
+  it('does not double-emit when the button itself is clicked', async () => {
+    const w = mountList()
+    const btn = w.findAll('.media-list__row')[0].find('button')
+    await btn.trigger('click')
+    expect(w.emitted('open')).toEqual([['f1']])
+  })
 })

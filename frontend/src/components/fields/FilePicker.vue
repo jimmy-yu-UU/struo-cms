@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -7,12 +8,16 @@ import MediaGrid from '../media/MediaGrid.vue'
 import FileThumbnail, { type FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
+import { debounce } from '../../lib/debounce'
+import { createLatestWins } from '../../lib/latestWins'
+import { toFileRows } from '../../lib/toFileRow'
 
 defineOptions({ name: 'FilePicker' })
 
 const props = defineProps<{ modelValue: string | null; image?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | null): void }>()
 
+const { t } = useI18n()
 const langStore = useLanguageStore()
 const current = ref<FileRow | null>(null)
 const missingId = ref<string | null>(null)
@@ -34,15 +39,19 @@ async function resolveCurrent(): Promise<void> {
   }
 }
 
+const optionsLoad = createLatestWins()
 async function loadOptions(): Promise<void> {
+  const token = optionsLoad.next()
   loadError.value = ''
   try {
     const res = await itemsApi.list('file', {
       page: 0, rows: 50, search: search.value || undefined, locale: langStore.defaultCode || undefined,
     })
-    files.value = res.data as unknown as FileRow[]
+    if (!optionsLoad.isCurrent(token)) return
+    files.value = toFileRows(res.data)
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : 'Failed to load files.'
+    if (!optionsLoad.isCurrent(token)) return
+    loadError.value = e instanceof Error ? e.message : t('fields.loadFilesFailed')
   }
 }
 
@@ -61,9 +70,12 @@ function clear(): void {
 }
 
 watch(() => props.modelValue, resolveCurrent)
-watch(search, loadOptions)
+// Debounce only search-driven reloads; openDialog's direct loadOptions() stays immediate.
+const debouncedLoad = debounce(loadOptions, 300)
+watch(search, debouncedLoad)
 onMounted(resolveCurrent)
-defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions })
+onBeforeUnmount(() => debouncedLoad.cancel())
+defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, search })
 </script>
 
 <template>
@@ -73,16 +85,16 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions })
       <span>{{ current.fileName }}</span>
     </div>
     <span v-else-if="missingId" class="file-picker__missing">{{ missingId }}</span>
-    <span v-else class="file-picker__empty">No file selected</span>
+    <span v-else class="file-picker__empty">{{ t('fields.noFileSelected') }}</span>
 
     <div class="file-picker__actions">
-      <Button label="Select" size="small" :disabled="disabled" @click="openDialog" />
-      <Button v-if="modelValue" label="Clear" size="small" text :disabled="disabled" @click="clear" />
+      <Button :label="t('fields.selectFile')" size="small" :disabled="disabled" @click="openDialog" />
+      <Button v-if="modelValue" :label="t('fields.clear')" size="small" text :disabled="disabled" @click="clear" />
     </div>
 
-    <Dialog v-model:visible="dialogOpen" modal header="Select a file" :style="{ width: '60rem' }">
+    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectAFile')" :style="{ width: '60rem' }">
       <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
-      <InputText v-model="search" placeholder="Search files…" class="file-picker__search" />
+      <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
       <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
     </Dialog>
   </div>
@@ -110,7 +122,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions })
 
 .file-picker__missing,
 .file-picker__empty {
-  color: var(--text);
+  color: var(--muted);
   font-style: italic;
 }
 

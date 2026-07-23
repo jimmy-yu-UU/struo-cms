@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import RevisionSnapshotView from './RevisionSnapshotView.vue'
 import { revisionOperationKey } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
+import { createLatestWins } from '../../lib/latestWins'
 import { itemsApi, type RevisionInfo, type RevisionDetail } from '../../api/itemsApi'
 
 const props = defineProps<{
@@ -37,6 +38,8 @@ const reverting = ref(false)
 
 const isEmpty = computed(() => !listLoading.value && !listError.value && revisions.value.length === 0)
 
+const detailLoad = createLatestWins()
+
 function opLabel(op: string): string {
   return t(revisionOperationKey(op))
 }
@@ -49,6 +52,9 @@ async function load(): Promise<void> {
   listError.value = ''
   selected.value = null
   detail.value = null
+  detailLoad.next() // invalidate any in-flight select() detail load so a stale response can't repaint after a reload
+  detailError.value = ''
+  detailLoading.value = false
   try {
     revisions.value = await itemsApi.listRevisions(props.collection, props.itemId)
   } catch {
@@ -59,16 +65,20 @@ async function load(): Promise<void> {
 }
 
 async function select(rev: RevisionInfo): Promise<void> {
+  const token = detailLoad.next()
   selected.value = rev
   detail.value = null
   detailLoading.value = true
   detailError.value = ''
   try {
-    detail.value = await itemsApi.getRevision(props.collection, props.itemId, rev.revisionNumber)
+    const res = await itemsApi.getRevision(props.collection, props.itemId, rev.revisionNumber)
+    if (!detailLoad.isCurrent(token)) return
+    detail.value = res
   } catch {
+    if (!detailLoad.isCurrent(token)) return
     detailError.value = t('revisions.detailError')
   } finally {
-    detailLoading.value = false
+    if (detailLoad.isCurrent(token)) detailLoading.value = false
   }
 }
 
@@ -161,7 +171,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
   background: transparent; color: var(--fg);
 }
 .rev-item:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
-.rev-item--active { border-color: var(--border); background: color-mix(in srgb, var(--primary, #38bdf8) 10%, transparent); }
+.rev-item--active { border-color: var(--border); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .rev-item__num { font-weight: 700; font-variant-numeric: tabular-nums; }
 .rev-item__op { font-size: .85rem; }
 .rev-item__when { font-size: .75rem; color: var(--muted); }

@@ -65,6 +65,57 @@ public class GanssHtmlSanitizerTests
         clean.Should().Contain("rel=").And.Contain("noopener");
     }
 
+    // DEP-1 (AngleSharp 0.17 -> 1.5): PostProcessNode must strip a client-supplied `target` from
+    // every surviving anchor, not just add rel=noopener — a lingering target="_blank" combined
+    // with a stripped rel is the classic reverse-tabnabbing gap.
+    [Fact]
+    public void Strips_target_from_anchors()
+    {
+        var clean = _s.Sanitize("<a href=\"https://ok\" target=\"_blank\">l</a>");
+        clean.Should().NotContain("target");
+        clean.Should().Contain("rel=").And.Contain("noopener");
+    }
+
+    // DEP-1: obfuscated/dangerous URL schemes in an anchor's href must not survive sanitization,
+    // regardless of case, embedded control characters, or use of data: URIs — while a normal
+    // https link is preserved. Exercises the parser's URL/scheme handling, a common regression
+    // surface across an AngleSharp major-version bump.
+    [Theory]
+    [InlineData("<a href=\"JaVaScRiPt:alert(1)\">x</a>")]
+    [InlineData("<a href=\"java&#09;script:alert(1)\">x</a>")]
+    [InlineData("<a href=\"data:text/html,<script>alert(1)</script>\">x</a>")]
+    public void Neutralizes_obfuscated_dangerous_href_schemes(string html)
+    {
+        var clean = _s.Sanitize(html);
+        clean.Should().NotContain("javascript:", "no live javascript: link may survive")
+             .And.NotContain("data:text/html", "no live data:text/html link may survive")
+             .And.NotContain("<script", "no executable payload may survive");
+    }
+
+    [Fact]
+    public void Preserves_normal_https_anchor_alongside_dangerous_ones()
+    {
+        var clean = _s.Sanitize("<a href=\"https://ok\">good</a><a href=\"javascript:alert(1)\">bad</a>");
+        clean.Should().Contain("href=\"https://ok\"").And.Contain("good");
+        clean.Should().NotContain("javascript:");
+    }
+
+    // DEP-1: mXSS via foreign-content (svg/math) parsing quirks — a common regression class when
+    // a parser is upgraded, since these payloads rely on the HTML parser's foreign-content
+    // insertion-mode handling (e.g. re-parsing <style>/<title> contents as HTML once serialized).
+    [Theory]
+    [InlineData("<svg><style><img src=x onerror=alert(1)></style></svg>")]
+    [InlineData("<svg><script>alert(1)</script></svg>")]
+    [InlineData("<math><mtext><table><mglyph><style><img src=x onerror=alert(1)></style></mglyph></table></mtext></math>")]
+    public void Neutralizes_foreign_content_mxss_payloads(string html)
+    {
+        var clean = _s.Sanitize(html);
+        clean.Should().NotContain("<script", "no script tag may survive")
+             .And.NotContain("onerror=", "no event-handler attribute may survive")
+             .And.NotContain("<svg", "the disallowed foreign-content tag itself must be stripped")
+             .And.NotContain("<math");
+    }
+
     [Fact]
     public void Keeps_basic_table_markup()
     {

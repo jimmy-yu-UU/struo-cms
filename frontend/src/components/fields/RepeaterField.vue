@@ -90,7 +90,7 @@ function setSub(i: number, name: string, v: unknown): void {
 .repeater-field { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .repeater-row {
   display: flex; gap: 12px; width: 100%;
-  border: 1px solid var(--surface-border, #333); border-radius: 6px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 6px; padding: 12px;
 }
 .repeater-row__fields { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .repeater-subfield { display: flex; flex-direction: column; gap: 4px; }

@@ -103,6 +103,44 @@ describe('RevisionHistoryDrawer', () => {
     expect((w.vm as any).detail).toEqual(detail)
   })
 
+  it('select is latest-wins: a slow stale response must not clobber a newer selection', async () => {
+    vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows)
+
+    type Deferred<T> = { promise: Promise<T>; resolve: (v: T) => void }
+    function deferred<T>(): Deferred<T> {
+      let resolve!: (v: T) => void
+      const promise = new Promise<T>((r) => { resolve = r })
+      return { promise, resolve }
+    }
+
+    const detailA = { ...rows[0], snapshot: { status: 'A' } } // revisionNumber 2, selected first
+    const detailB = { ...rows[1], snapshot: { status: 'B' } } // revisionNumber 1, selected second (latest)
+    const dA = deferred<typeof detailA>()
+    const dB = deferred<typeof detailB>()
+    vi.spyOn(itemsApi, 'getRevision').mockImplementation((_c, _i, n) => {
+      return n === rows[0].revisionNumber ? dA.promise : dB.promise
+    })
+
+    const w = mountDrawer()
+    await w.vm.load()
+
+    // Click A, then quickly click B before A's response arrives.
+    const selectA = (w.vm as any).select(rows[0])
+    const selectB = (w.vm as any).select(rows[1])
+
+    // B (the latest click) resolves first; A (the stale, earlier click) resolves after.
+    dB.resolve(detailB)
+    await selectB
+    await w.vm.$nextTick()
+    dA.resolve(detailA)
+    await selectA
+    await w.vm.$nextTick()
+
+    expect((w.vm as any).selected).toEqual(rows[1])
+    expect((w.vm as any).detail).toEqual(detailB)
+    expect((w.vm as any).detailLoading).toBe(false)
+  })
+
   it('onRevert confirms, reverts, emits reverted, reloads, and toasts success', async () => {
     const list = vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows)
     vi.spyOn(itemsApi, 'revert').mockResolvedValue({ id: '5', status: 'draft' })
@@ -127,5 +165,29 @@ describe('RevisionHistoryDrawer', () => {
     await confirmRequire.mock.calls[0][0].accept()
     expect(w.emitted('reverted')).toBeUndefined()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
+  })
+
+  // Pins the `watch(() => props.visible, ...)` contract itself (rather than calling load()
+  // directly as every test above does) — deleting the watch would leave this test red while
+  // leaving all the others green.
+  it('the visible watch loads on open and does not load while closed', async () => {
+    const list = vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows)
+    const w = mountDrawer({ visible: false })
+    await w.vm.$nextTick()
+    expect(list).not.toHaveBeenCalled()
+
+    await w.setProps({ visible: true })
+    await w.vm.$nextTick()
+    expect(list).toHaveBeenCalledWith('article', '5')
+  })
+
+  // Pins the `{ immediate: true }` option specifically: a drawer mounted already-open must load
+  // without any prop change. Without immediate, mounting with visible:true would not fire the
+  // watch, so this asserts the eager first run (no manual load()/setProps here).
+  it('loads immediately when mounted already-open', async () => {
+    const list = vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows)
+    mountDrawer({ visible: true })
+    await Promise.resolve()
+    expect(list).toHaveBeenCalledWith('article', '5')
   })
 })

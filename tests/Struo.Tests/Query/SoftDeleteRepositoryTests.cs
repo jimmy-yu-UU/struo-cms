@@ -121,6 +121,97 @@ public class SoftDeleteRepositoryTests
         Assert.Null(await h.Service.RestoreAsync("article", Guid.NewGuid().ToString(), default));
     }
 
+    // ── DB-19: restore idempotency (no double Version bump / duplicate revision) ───────────────
+
+    /// <summary>DB-19: restoring a row that is ALREADY live (a second RestoreAsync call after the
+    /// first already succeeded) must be a true no-op — no Version bump, no extra "restore" revision.
+    /// The decision now comes from repository.RestoreAsync's own atomic "WHERE deletedat IS NOT NULL"
+    /// UPDATE (affected-rows), not from a separate pre-read snapshot in ItemService, so this also
+    /// covers the case a naive pre-read-based guard would miss under concurrent restores.</summary>
+    [Fact]
+    public async Task Restore_of_an_already_live_row_is_a_true_no_op()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        // InsertArticleAsync writes via the raw repository (bypassing ItemService.CreateAsync), so it
+        // captures no revision — the FIRST revision on this item is the "delete" below.
+        var id = await h.InsertArticleAsync(status: "published");
+        await h.Service.DeleteAsync("article", id.ToString(), purge: false, default);  // rev 1 (delete)
+        var first = await h.Service.RestoreAsync("article", id.ToString(), default);   // rev 2 (restore)
+        Assert.NotNull(first);
+
+        var afterFirst = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.Exclude, default))!;
+        var revisionsAfterFirst = await h.Service.ListRevisionsAsync("article", id.ToString(), default);
+        Assert.Equal(2, revisionsAfterFirst.Count);
+
+        // Second restore of the now-live row: still succeeds (idempotent 200, not an error) but must
+        // NOT bump Version again or append a 4th revision.
+        var second = await h.Service.RestoreAsync("article", id.ToString(), default);
+        Assert.NotNull(second);
+
+        var afterSecond = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.Exclude, default))!;
+        var revisionsAfterSecond = await h.Service.ListRevisionsAsync("article", id.ToString(), default);
+
+        Assert.Equal(afterFirst.Version, afterSecond.Version);
+        Assert.Equal(revisionsAfterFirst.Count, revisionsAfterSecond.Count);
+    }
+
+    /// <summary>DB-19, repository layer: RestoreAsync against a row that was NEVER soft-deleted (no
+    /// ItemService pre-read involved at all) must report false (no row matched the atomic
+    /// "deletedat IS NOT NULL" guard) and must not touch Version.</summary>
+    [Fact]
+    public async Task RestoreAsync_on_a_never_trashed_row_returns_false_and_does_not_bump_version()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var id = await h.InsertArticleAsync(status: "published");
+        var before = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.Exclude, default))!;
+
+        var restored = await h.Repository.RestoreAsync("article", id.ToString(), default);
+        Assert.False(restored);
+
+        var after = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.Exclude, default))!;
+        Assert.Equal(before.Version, after.Version);
+    }
+
+    // ── DB-22: soft-delete (trash) idempotency, mirroring DB-19's restore fix ──────────────────
+
+    /// <summary>DB-22, repository layer: SoftDeleteAsync called a SECOND time directly against a row
+    /// that is ALREADY trashed (no ItemService pre-read guard involved — called straight on the
+    /// repository) must report false: no row matches the atomic "deletedat IS NULL" guard, so neither
+    /// DeletedAt nor Version is touched again. Before the fix, SoftDeleteGenericAsync's UPDATE located
+    /// the row by id alone (Updateable&lt;T&gt; ignores the soft-delete query filter) and re-stamped/
+    /// re-versioned unconditionally, which is exactly the race two concurrent DELETEs of the same live
+    /// row could exploit to double-record a "delete" revision. Mirrors
+    /// RestoreAsync_on_a_never_trashed_row_returns_false_and_does_not_bump_version (DB-19).</summary>
+    [Fact]
+    public async Task SoftDeleteAsync_on_an_already_trashed_row_returns_false_and_does_not_bump_version()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var id = await h.InsertArticleAsync(status: "published");
+
+        var firstDeleted = await h.Repository.SoftDeleteAsync(
+            "article", id.ToString(), DateTime.UtcNow, null, default);
+        Assert.True(firstDeleted);
+
+        var afterFirst = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.With, default))!;
+        var deletedAtAfterFirst = ((ISoftDeletable)afterFirst).DeletedAt;
+
+        // Second SoftDeleteAsync call directly on the repository (bypassing ItemService entirely)
+        // against the now-already-trashed row must be a true no-op at the SQL level.
+        var secondDeleted = await h.Repository.SoftDeleteAsync(
+            "article", id.ToString(), DateTime.UtcNow, null, default);
+        Assert.False(secondDeleted);
+
+        var afterSecond = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.With, default))!;
+        Assert.Equal(afterFirst.Version, afterSecond.Version);
+        Assert.Equal(deletedAtAfterFirst, ((ISoftDeletable)afterSecond).DeletedAt);
+    }
+
     // ── Final-review fix (Important #1): engine-level exclusion regressions ────
 
     [Fact]
