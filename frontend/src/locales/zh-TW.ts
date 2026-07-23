@@ -103,6 +103,7 @@ export default {
     active: '使用中',
     trash: '回收桶',
     edit: '編輯',
+    view: '檢視',
     delete: '刪除',
     restore: '還原',
     purge: '永久刪除',

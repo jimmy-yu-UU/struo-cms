@@ -9,6 +9,7 @@ import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { schemaApi } from '../api/schemaApi'
+import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -17,7 +18,7 @@ const i18n = createI18n({
       collectionList: {
         count: '{n} items', new: 'New', searchPlaceholder: 'Search…',
         range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
-        edit: 'Edit', delete: 'Delete', restore: 'Restore', purge: 'Delete permanently',
+        edit: 'Edit', view: 'View', delete: 'Delete', restore: 'Restore', purge: 'Delete permanently',
         empty: 'No records', notFound: 'Collection not found',
         noAccess: "You don't have access to this collection",
         trashNotice: 'You are viewing the trash. Items here are hidden from the site and API; restore them or delete them permanently.',
@@ -230,6 +231,20 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
   })
 
+  it('read-only viewer sees a view (eye) action instead of edit, and onEdit still navigates', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: false,
+      permissions: { article: { read: true, write: false, delete: false } } }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', status: 'draft' }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.html()).toContain('pi-eye')
+    expect(w.html()).not.toContain('pi-pencil')
+    const vm: any = w.vm
+    vm.onEdit({ id: '42' })
+    expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
+  })
+
   it('clicking a row body does not navigate', async () => {
     seedSchema()
     seedLanguage()
@@ -371,6 +386,46 @@ describe('CollectionListView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
     expect(itemsApi.restore).toHaveBeenCalledWith('article', '1')
     expect(itemsApi.list).toHaveBeenCalled()
+  })
+
+  it('deleting a row in the Language collection reloads the language store', async () => {
+    mockRoute.params.name = LANGUAGE_COLLECTION
+    const schema = useSchemaStore()
+    schema.collections = [{
+      name: LANGUAGE_COLLECTION, label: 'Language', defaultDisplayField: 'code',
+      fields: [{ name: 'code', label: 'Code', interface: 'text', required: true, searchable: false,
+        sortable: false, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false }],
+      relations: [],
+    }]
+    schema.loaded = true
+    const lang = seedLanguage()
+    const reloadSpy = vi.spyOn(lang, 'reload').mockResolvedValue(undefined)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', code: 'en' }], total: 1 })
+    vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).onDelete({ id: '1' })
+    const arg = confirmRequire.mock.calls[0][0]
+    await arg.accept()
+    await flushPromises()
+    expect(reloadSpy).toHaveBeenCalled()
+  })
+
+  it('deleting a row in a non-Language collection does not reload the language store', async () => {
+    seedSchema() // article, no softDelete
+    const lang = seedLanguage()
+    const reloadSpy = vi.spyOn(lang, 'reload').mockResolvedValue(undefined)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', status: 'draft' }], total: 1 })
+    vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).onDelete({ id: '1' })
+    const arg = confirmRequire.mock.calls[0][0]
+    await arg.accept()
+    await flushPromises()
+    expect(reloadSpy).not.toHaveBeenCalled()
   })
 
   it('latest response wins: a slow earlier list load does not clobber a newer one', async () => {
