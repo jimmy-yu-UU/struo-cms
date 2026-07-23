@@ -12,6 +12,10 @@ function labelFor(action: QuickAction): string {
     ? t('dashboard.quick.uploadMedia')
     : t('dashboard.quick.newItem', { label: action.label })
 }
+
+function iconFor(action: QuickAction): string {
+  return action.kind === 'uploadMedia' ? 'pi pi-upload' : 'pi pi-plus'
+}
 </script>
 
 <template>
@@ -24,6 +28,7 @@ function labelFor(action: QuickAction): string {
       class="quick__btn"
       severity="secondary"
       :label="labelFor(action)"
+      :icon="iconFor(action)"
       @click="$emit('run', action)"
     />
   </div>

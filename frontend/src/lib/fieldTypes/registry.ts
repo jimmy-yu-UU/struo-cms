@@ -19,12 +19,13 @@ import JsonField from '../../components/fields/JsonField.vue'
 import KeyValueField from '../../components/fields/KeyValueField.vue'
 import FilesField from '../../components/fields/FilesField.vue'
 import RepeaterField from '../../components/fields/RepeaterField.vue'
+import { formatDateTime } from '../formatDateTime'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => String(v) }
 const asYesNo: ListColumn = { format: (v) => (v ? 'Yes' : 'No') }
 const asDate: ListColumn = {
-  format: (v) => { const d = new Date(String(v)); return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString() },
+  format: (v) => { const s = formatDateTime(String(v)); return s === '—' ? String(v) : s },
 }
 const asOption: ListColumn = {
   format: (v, f) => { const o = f.options?.find((x) => x.value === String(v)); return o ? o.label : String(v) },

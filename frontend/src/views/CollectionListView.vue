@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
+import Tag from 'primevue/tag'
 import SelectButton from 'primevue/selectbutton'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
@@ -64,6 +65,16 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
     return pickTranslated(row.translations as TranslationMap, langStore.defaultCode, field.name)
   }
   return row[field.name]
+}
+
+function isSelectField(colField: string): boolean {
+  return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
+}
+function tagSeverity(v: unknown): 'success' | 'warn' | 'secondary' {
+  const s = String(v ?? '').toLowerCase()
+  if (s === 'published') return 'success'
+  if (s === 'archived') return 'warn'
+  return 'secondary'
 }
 
 // Latest-wins guard: a slow earlier load must not clobber a newer one's state.
@@ -251,17 +262,30 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
             :sortable="col.sortable"
           >
             <template #body="{ data }">
-              {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
+              <Tag
+                v-if="isSelectField(col.field) && cellValue(data, fieldOf(col.field)!) != null && cellValue(data, fieldOf(col.field)!) !== ''"
+                :value="formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!)"
+                :severity="tagSeverity(cellValue(data, fieldOf(col.field)!))"
+              />
+              <span v-else :class="{ 'row-link': col.field === columns[0]?.field }">
+                {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
+              </span>
             </template>
           </Column>
-          <Column v-if="canDelete" header="" :style="{ width: '12rem' }">
+          <Column v-if="canDelete" header="" :style="{ width: '8rem' }">
             <template #body="{ data }">
               <template v-if="mode === 'active'">
-                <Button :label="t('collectionList.delete')" severity="danger" text size="small" @click.stop="onDelete(data)" />
+                <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                        :title="t('collectionList.delete')" :aria-label="t('collectionList.delete')"
+                        @click.stop="onDelete(data)" />
               </template>
               <template v-else>
-                <Button :label="t('collectionList.restore')" text size="small" @click.stop="onRestore(data)" />
-                <Button :label="t('collectionList.purge')" severity="danger" text size="small" @click.stop="onPurge(data)" />
+                <Button icon="pi pi-undo" text rounded size="small"
+                        :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+                        @click.stop="onRestore(data)" />
+                <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                        :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+                        @click.stop="onPurge(data)" />
               </template>
             </template>
           </Column>
@@ -278,4 +302,6 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
 <style scoped>
 /* Wide tables scroll inside their own container; the page itself never scrolls sideways. */
 .table-scroll { overflow-x: auto; }
+:deep(.row-link) { font-weight: 600; }
+:deep(tr:hover .row-link) { color: var(--accent); text-decoration: underline; }
 </style>
