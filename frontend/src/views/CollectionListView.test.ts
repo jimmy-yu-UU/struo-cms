@@ -158,6 +158,43 @@ describe('CollectionListView', () => {
     expect(vm.cellValue(vm.rows[0], titleField)).toBe('Hello')
   })
 
+  // Finding: the "title-ish" cell should read as a link, but `columns[0]` can be a select
+  // field (e.g. Article's defaultDisplayField=Status sorts first). Select fields always
+  // render the Tag branch, so `col.field === columns[0]?.field` never marks a span at all
+  // in that case. `linkField` must skip select columns and pick the first non-select one.
+  // (Column/DataTable are lightweight stubs in this file that don't forward the #body
+  // scoped slot -- see `cellValue`/`isSelectField` assertions elsewhere in this file for
+  // the same reason -- so this asserts via the exposed computed/helper that the template's
+  // `:class="{ 'row-link': col.field === linkField }"` binding is driven by directly.)
+  it('linkField skips a select-interface first column and lands on the first non-select column', async () => {
+    const schema = useSchemaStore()
+    schema.collections = [{
+      name: 'article', label: 'Article', defaultDisplayField: 'status',
+      fields: [
+        { name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
+          sortable: true, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false,
+          options: [{ value: 'draft', label: 'Draft' }] },
+        { name: 'title', label: 'Title', interface: 'text', required: false, searchable: false,
+          sortable: true, readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
+      ],
+      relations: [],
+    }]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft', title: 'Hello' }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as any
+    // Sanity: defaultDisplayField really does sort the select column first.
+    expect(vm.columns[0].field).toBe('status')
+    expect(vm.columns[1].field).toBe('title')
+    expect(vm.isSelectField('status')).toBe(true)
+    expect(vm.isSelectField('title')).toBe(false)
+    // The fix: the link marker lands on the text column, not the select column.
+    expect(vm.linkField).toBe('title')
+  })
+
   it('shows a permission message and makes no API call when not readable', async () => {
     seedSchema()
     seedLanguage()
