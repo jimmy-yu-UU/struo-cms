@@ -1,5 +1,4 @@
 // src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
@@ -14,7 +13,7 @@ namespace Struo.Infrastructure.DependencyInjection;
 
 public static class DataServiceCollectionExtensions
 {
-    public static IServiceCollection AddStruoData(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddStruoData(this IServiceCollection services)
     {
         // ARC-5: fail fast on out-of-range limits ([Range(1, int.MaxValue)]) at boot via
         // ValidateOnStart, enforced by the BCL DataAnnotations validator. The unwrapped singleton

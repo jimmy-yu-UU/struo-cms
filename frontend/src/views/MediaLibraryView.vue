@@ -19,6 +19,7 @@ import { useLanguageStore } from '../stores/languageStore'
 import { debounce } from '../lib/debounce'
 import { createLatestWins } from '../lib/latestWins'
 import { mediaTypeFilter, mediaSort, type MediaType, type MediaSort } from '../lib/mediaQuery'
+import { toFileRows } from '../lib/toFileRow'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -71,7 +72,7 @@ async function load(): Promise<void> {
       locale: langStore.defaultCode || undefined,
     })
     if (!mediaLoad.isCurrent(token)) return
-    files.value = res.data as unknown as FileRow[]
+    files.value = toFileRows(res.data)
     total.value = res.total
   } catch (e) {
     if (!mediaLoad.isCurrent(token)) return
@@ -103,7 +104,19 @@ function onPage(e: { page: number; rows: number }): void {
 function openDetail(id: string): void {
   selected.value = files.value.find((f) => f.id === id) ?? null
 }
-function onDeleted(): void { selected.value = null; load() }
+// FE-27: preserve the user's page position on delete instead of always resetting to page 0.
+// Refresh at the current page first; only if the new total no longer covers that page (e.g.
+// the deleted item was the last one on the last page) do we clamp down to the new last valid
+// page and reload -- never below page 0.
+async function loadClampingToLastValidPage(): Promise<void> {
+  await load()
+  const lastValidPage = Math.max(0, Math.ceil(total.value / perPage.value) - 1)
+  if (page.value > lastValidPage) {
+    page.value = lastValidPage
+    await load()
+  }
+}
+function onDeleted(): void { selected.value = null; loadClampingToLastValidPage() }
 
 onMounted(load)
 onUnmounted(() => debouncedSearch.cancel())

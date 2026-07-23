@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SqlSugar;
@@ -11,8 +10,7 @@ namespace Struo.Infrastructure.DependencyInjection;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddStruoInfrastructure(
-        this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddStruoInfrastructure(this IServiceCollection services)
     {
         // ARC-5: fail fast. BindConfiguration + ValidateOnStart makes a missing/empty connection
         // string kill the host at boot (or at the first options materialization — e.g. when the

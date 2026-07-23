@@ -143,10 +143,25 @@ public sealed class ItemWriteSideSync(
             // boxed values (long / string) compare correctly under the default equality comparer. Without
             // this, a repeated id inflated targetIds.Count so the count-based existence check below
             // spuriously failed ("do not exist"), and the junction sync would attempt duplicate rows.
+            //
+            // CS-9: each element must be coerced safely. `e.GetInt64()` throws FormatException on a
+            // non-integer number (e.g. 1.5). A JSON `null` element was already handled pre-fix —
+            // `e.GetString()` returns null (not a throw) for Null, which coerced to "" and was rejected
+            // by the "do not exist" existence check below (already a 400); only bool/object/array
+            // elements previously fell into the "else" branch and threw InvalidOperationException from
+            // `e.GetString()`. That IOE and the FormatException above were both unhandled (-> 500);
+            // this switch newly rejects them as a QueryException (-> 400) client error instead, matching
+            // every other malformed-input rejection on this path.
             var targetIds = idsElem.EnumerateArray()
-                .Select(e => e.ValueKind == JsonValueKind.Number
-                    ? (object)e.GetInt64()
-                    : (object)(e.GetString() ?? string.Empty))
+                .Select(e => e.ValueKind switch
+                {
+                    JsonValueKind.Number when e.TryGetInt64(out var n) => (object)n,
+                    JsonValueKind.Number => throw new QueryException(
+                        $"One or more ids in '{desc.RelationName}' are not valid."),
+                    JsonValueKind.String => (object)(e.GetString() ?? string.Empty),
+                    _ => throw new QueryException(
+                        $"One or more ids in '{desc.RelationName}' are not valid."),
+                })
                 .Distinct()
                 .ToList();
 

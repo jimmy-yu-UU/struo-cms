@@ -94,6 +94,15 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(string), typeof(string), typeof(string), typeof(List<IConditionalModel>), typeof(CancellationToken)])!;
 
+    // DB-17: second-level dispatcher (T fixed by the call above, TFk resolved at runtime from the FK
+    // property's actual CLR type) so the FK-only SQL projection below can be expressed as a genuinely
+    // typed `Expression<Func<T, TFk>>` — SqlSugar's Select() does not translate a boxed
+    // `Convert(member, object)` lambda into a single-column projection.
+    private static readonly MethodInfo QueryTranslationFkSelectGenericAsyncDef =
+        typeof(SqlSugarItemRepository).GetMethod(nameof(QueryTranslationFkSelectGenericAsync),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            [typeof(List<IConditionalModel>), typeof(LambdaExpression), typeof(CancellationToken)])!;
+
     private static readonly MethodInfo SyncTranslationsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SyncTranslationsGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -171,6 +180,11 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationParentIdsInvokers = new();
+
+    // DB-17: keyed by (translation entity type, FK CLR type) — two independent type parameters, so a
+    // single-Type ConcurrentDictionary (the pattern every other Invokers cache above uses) doesn't fit.
+    private static readonly ConcurrentDictionary<(Type EntityType, Type FkType),
+        Func<SqlSugarItemRepository, List<IConditionalModel>, LambdaExpression, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationFkSelectInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncTranslationsInvokers = new();
@@ -582,9 +596,13 @@ public sealed class SqlSugarItemRepository(
         string idColumn, object id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct)
         where T : class, ISoftDeletable, new()
     {
-        // Updateable<T> is not subject to the ISoftDeletable query filter, so the row is located by
-        // id regardless of its current DeletedAt — soft-deleting an already-trashed row still
-        // matches (idempotent) rather than silently affecting zero rows.
+        // Updateable<T> is not subject to the ISoftDeletable query filter, so without an explicit
+        // guard the row would be located by id alone regardless of its current DeletedAt. DB-22: the
+        // WHERE below adds "deletedat IS NULL" so trashing an already-trashed row is an atomic no-op
+        // AT THE SQL LEVEL (affected = 0) — not merely a pre-read check in ItemService, which would
+        // leave a TOCTOU window where two concurrent DELETEs of the same live row could each pass the
+        // check and both re-stamp/re-version and double-record a "delete" revision. Mirrors
+        // RestoreGenericAsync's identical "deletedat IS NOT NULL" guard (DB-19) on the opposite side.
         // Parameter named "__sdId" (not "@id"): SqlSugar auto-binds an internal "@id" placeholder of
         // its own on Updateable<T>() for an entity whose PK property is named "Id" — colliding with a
         // plain "@id" here silently rebinds to that internal (unset/default) parameter instead of ours.
@@ -598,9 +616,10 @@ public sealed class SqlSugarItemRepository(
         // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
         // DB-8: for AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
         // the trash stamp so the history timeline advances and a stale client 409s after a restore.
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
         var affected = await ApplyVersionBump(db.Updateable<T>()
                 .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy }))
-            .Where($"{idColumn} = @__sdId", new { __sdId = id })
+            .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NULL", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;
     }
@@ -653,9 +672,15 @@ public sealed class SqlSugarItemRepository(
         // Nullable<Guid> and assigns the null parameter's DbType from the underlying type
         // (DateTime / Guid), which PG accepts against the timestamp/uuid columns.
         // DB-8: bump Version in the SAME UPDATE (AuditableEntity subclasses only) — see ApplyVersionBump.
+        // DB-19: guard the UPDATE itself with "deletedat IS NOT NULL" so restoring an already-live row
+        // is an atomic no-op at the SQL level (affected = 0) — not merely a pre-read check in
+        // ItemService, which would leave a TOCTOU window between the check and this UPDATE where two
+        // concurrent restores of the same row could each re-stamp/re-version and double-record a
+        // "restore" revision.
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
         var affected = await ApplyVersionBump(db.Updateable<T>()
                 .SetColumns(it => new T { DeletedAt = null, DeletedBy = null }))
-            .Where($"{idColumn} = @__sdId", new { __sdId = id })
+            .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NOT NULL", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;
     }
@@ -911,15 +936,36 @@ public sealed class SqlSugarItemRepository(
         string fkColumn, string fkProperty, string localeColumn, string locale,
         List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
     {
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         var fkProp = typeof(T).GetProperty(fkProperty,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         if (fkProp is null) return [];
-        return rows
-            .Select(r => fkProp.GetValue(r))
+
+        // DB-17: project ONLY the FK column at the SQL level instead of materializing whole
+        // translation rows (which carry potentially-large body/text columns) just to read one value
+        // out of each. The lambda's return type must be the FK's REAL CLR type (Guid/string/...) —
+        // SqlSugar's Select() does not turn a boxed `Convert(member, object)` body into a one-column
+        // projection, it silently produces an empty/garbage result — so TFk is resolved and dispatched
+        // via a second generic layer below rather than boxed here.
+        var param = Expression.Parameter(typeof(T), "x");
+        var selectBody = Expression.Property(param, fkProp);
+        var selector = Expression.Lambda(selectBody, param);
+
+        var invoke = QueryTranslationFkSelectInvokers.GetOrAdd((typeof(T), fkProp.PropertyType), static key =>
+            QueryTranslationFkSelectGenericAsyncDef.MakeGenericMethod(key.EntityType, key.FkType)
+                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, LambdaExpression, CancellationToken, Task<IReadOnlyList<object>>>>());
+        return await invoke(this, conditionals, selector, ct);
+    }
+
+    private async Task<IReadOnlyList<object>> QueryTranslationFkSelectGenericAsync<T, TFk>(
+        List<IConditionalModel> conditionals, LambdaExpression selector, CancellationToken ct) where T : class, new()
+    {
+        var typedSelector = (Expression<Func<T, TFk>>)selector;
+        var values = await db.Queryable<T>().Where(conditionals).Select(typedSelector).ToListAsync(ct);
+        return values
+            .Cast<object>()
             .Where(v => v is not null)
             .Distinct()
-            .ToList()!;
+            .ToList();
     }
 
     /// <summary>

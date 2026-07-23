@@ -75,8 +75,8 @@ const prettyJson = computed(() => {
 .rev-summary { display: grid; gap: 8px; }
 .rev-summary__row { display: flex; align-items: center; gap: 10px; }
 .rev-badge {
-  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--primary, var(--fg));
-  background: color-mix(in srgb, var(--primary, #38bdf8) 12%, transparent);
+  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   padding: 2px 8px; border-radius: var(--radius, 8px);
 }
 .rev-op { font-weight: 600; color: var(--fg); }

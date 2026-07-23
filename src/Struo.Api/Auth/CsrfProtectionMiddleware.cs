@@ -1,3 +1,6 @@
+using Struo.Api.Http;
+using ErrorCodes = Struo.Api.Http.ErrorCodes;
+
 namespace Struo.Api.Auth;
 
 /// <summary>
@@ -26,8 +29,13 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
         if (RequiresCsrfHeader(context.Request))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            // AUTH-2: this middleware runs before MVC, so EnvelopeResultFilter never sees this
+            // response; the camelCase envelope must be written by hand via the shared options
+            // (see EnvelopeJsonOptionsHolder) rather than relying on WriteAsJsonAsync's default
+            // (non-camelCase) HttpResponseJsonOptions.
             await context.Response.WriteAsJsonAsync(
-                new { error = new { message = $"Missing required '{HeaderName}' header." } });
+                Envelope.Error(ErrorCodes.Forbidden, $"Missing required '{HeaderName}' header."),
+                EnvelopeJsonOptionsHolder.Instance);
             return;
         }
 

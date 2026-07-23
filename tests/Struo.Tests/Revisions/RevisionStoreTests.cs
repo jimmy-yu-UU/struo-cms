@@ -53,6 +53,27 @@ public sealed class RevisionStoreTests
         Assert.Equal(1L, b[0].RevisionNumber);                               // per-item sequence, not global
     }
 
+    /// <summary>DB-18: ListAsync now projects the SQL SELECT to only the metadata columns
+    /// (RevisionNumber/Operation/CreatedAt/CreatedBy) instead of materializing the full row incl.
+    /// Snapshot. Assert every metadata field the projection selects — including CreatedAt/CreatedBy,
+    /// which the other list test above does not check — still round-trips correctly.</summary>
+    [Fact]
+    public async Task List_projection_preserves_every_metadata_field()
+    {
+        using var h = RevisionStoreHarness.Create();
+        var before = DateTime.UtcNow.AddSeconds(-1);
+        await h.Store.CaptureAsync("article", "meta-check", "create", "{\"large\":\"payload\"}", default);
+
+        var list = await h.Store.ListAsync("article", "meta-check", default);
+        Assert.Single(list);
+        var info = list[0];
+        Assert.Equal(1L, info.RevisionNumber);
+        Assert.Equal("create", info.Operation);
+        Assert.True(info.CreatedAt >= before);
+        // RevisionStoreHarness stamps CreatedBy from its own TestCurrentUserAccessor(Tester).
+        Assert.Equal(Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), info.CreatedBy);
+    }
+
     [Fact]
     public async Task Get_returns_snapshot_with_cjk_intact()
     {

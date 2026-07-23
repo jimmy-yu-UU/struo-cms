@@ -2,11 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import RelationPicker from './RelationPicker.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import type { RelationMeta, CollectionMeta } from '../../types/schema'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.' } } },
+})
 
 const targetMeta: CollectionMeta = {
   name: 'category',
@@ -54,7 +60,7 @@ describe('RelationPicker', () => {
   it('lazy-loads options via itemsApi.list and resolves labels', async () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'Tech' }], total: 1 })
-    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { stubs } })
+    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { plugins: [i18n], stubs } })
     await (w.vm as any).loadOptions()
     expect(listSpy).toHaveBeenCalledWith('category', expect.objectContaining({ page: 0 }))
     expect((w.vm as any).options).toHaveLength(1)
@@ -64,7 +70,7 @@ describe('RelationPicker', () => {
   it('emits update:modelValue on single-select change', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { stubs } })
+    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { plugins: [i18n], stubs } })
     ;(w.vm as any).onChange('c1')
     expect(w.emitted('update:modelValue')).toBeTruthy()
     expect(w.emitted('update:modelValue')![0]).toEqual(['c1'])
@@ -73,7 +79,7 @@ describe('RelationPicker', () => {
   it('debounces search-driven reloads into a single request', async () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { stubs } })
+    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { plugins: [i18n], stubs } })
     await flushPromises() // mount load settles under real timers
     listSpy.mockClear()
     vi.useFakeTimers()
@@ -96,7 +102,7 @@ describe('RelationPicker', () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
     const getSpy = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'c9', name: 'Archived' })
-    const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { stubs } })
+    const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { plugins: [i18n], stubs } })
     await (w.vm as any).ensureSelectedLabels()
     expect(getSpy).toHaveBeenCalledWith('category', 'c9', expect.objectContaining({}))
   })
@@ -105,7 +111,7 @@ describe('RelationPicker', () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'c9', name: 'Archived' })
-    const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { stubs } })
+    const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { plugins: [i18n], stubs } })
     await flushPromises() // mount: loadOptions (empty) + ensureSelectedLabels settle
     const disp = (w.vm as any).displayOptions
     expect(disp).toHaveLength(1)
@@ -115,7 +121,7 @@ describe('RelationPicker', () => {
   it('ignores a stale load that resolves after a newer one (latest-wins)', async () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { stubs } })
+    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { plugins: [i18n], stubs } })
     await flushPromises() // let the mount load settle first
     let resolveStale!: (v: { data: Record<string, unknown>[]; total: number }) => void
     let resolveFresh!: (v: { data: Record<string, unknown>[]; total: number }) => void

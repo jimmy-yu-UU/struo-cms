@@ -38,14 +38,25 @@ public sealed class TranslationOverlay(IItemRepository repository, IEntityRegist
         var tRows = await repository.LoadTranslationsAsync(
             tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, ids, locale, ct);
 
-        // Map camelCase translatable field -> CLR property name on the translation entity.
-        var camelToClr = tm.Fields.ToDictionary(
-            f => f,
-            f => tm.TranslationEntityType
-                     .GetProperty(f, System.Reflection.BindingFlags.Public |
-                                     System.Reflection.BindingFlags.Instance |
-                                     System.Reflection.BindingFlags.IgnoreCase)?.Name ?? f,
+        // SEC-13: never surface a Hidden translatable field through the overlay. ItemProjector already
+        // strips Hidden fields from the parent dict, but that guard doesn't reach this class's
+        // separately-built `translations` map — so without this filter a Hidden+Translatable field
+        // (e.g. Article's `internalSlug`) leaks back in under every locale. Mirrors the same check in
+        // RevisionSnapshotRedactor.
+        var hiddenTranslatable = new HashSet<string>(
+            meta.Fields.Where(f => f.Translatable && f.Hidden).Select(f => f.Name),
             StringComparer.OrdinalIgnoreCase);
+
+        // Map camelCase translatable field -> CLR property name on the translation entity.
+        var camelToClr = tm.Fields
+            .Where(f => !hiddenTranslatable.Contains(f))
+            .ToDictionary(
+                f => f,
+                f => tm.TranslationEntityType
+                         .GetProperty(f, System.Reflection.BindingFlags.Public |
+                                         System.Reflection.BindingFlags.Instance |
+                                         System.Reflection.BindingFlags.IgnoreCase)?.Name ?? f,
+                StringComparer.OrdinalIgnoreCase);
 
         // Group translation rows by parent id (string-keyed for cross-type comparison safety).
         var grouped = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>();
@@ -65,8 +76,14 @@ public sealed class TranslationOverlay(IItemRepository repository, IEntityRegist
         }
 
         // --- per-locale image resolution (Phase 5.6) ---
+        // SEC-13 (Fable follow-up): also exclude Hidden fields here. The value itself can't leak (a
+        // Hidden field is already absent from fieldMap via the camelToClr filter above), but without
+        // this the L~112 TryGetValue-miss branch would still WRITE `fieldMap[resolvedKey] = null` for a
+        // future Hidden+Translatable "xxxId" image field -- leaking the field's NAME (as an explicit
+        // null) into every locale even though its value never does.
         var imageFields = meta.Fields
-            .Where(f => f.Translatable && f.Interface is FieldInterface.Image or FieldInterface.File or FieldInterface.Files)
+            .Where(f => f.Translatable && !f.Hidden
+                && f.Interface is FieldInterface.Image or FieldInterface.File or FieldInterface.Files)
             .Select(f => f.Name)
             .ToList();
 

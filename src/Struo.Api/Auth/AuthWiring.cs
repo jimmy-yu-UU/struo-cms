@@ -1,11 +1,19 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Struo.Api.Http;
 using Struo.Application.Abstractions;
 
 namespace Struo.Api.Auth;
 
 public static class AuthWiring
 {
+    // AUTH-1: [Authorize]-attribute-level challenges run inside the cookie handler, before MVC
+    // gets a chance to run — so EnvelopeResultFilter never sees these responses and they used to
+    // go out with an empty body, unlike in-action PermissionDeniedException 401/403s (mapped by
+    // DomainErrorMap) which DO carry an envelope. OnRedirectToLogin/OnRedirectToAccessDenied below
+    // write the same envelope shape directly, using the shared camelCase options (see
+    // EnvelopeJsonOptionsHolder) rather than relying on DI to already agree.
     public static IServiceCollection AddStruoAuth(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
         services.AddHttpContextAccessor();
@@ -35,9 +43,23 @@ public static class AuthWiring
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.SlidingExpiration = true;
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
-                // API, not MVC views: return 401/403 instead of redirecting.
-                options.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
-                options.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
+                // API, not MVC views: return 401/403 with an error envelope instead of redirecting.
+                // AUTH-1: body added alongside the pre-existing status-code-only behavior (which is
+                // preserved verbatim) so attribute-level challenges match the in-action error shape.
+                options.Events.OnRedirectToLogin = ctx =>
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return ctx.Response.WriteAsJsonAsync(
+                        Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required."),
+                        EnvelopeJsonOptionsHolder.Instance);
+                };
+                options.Events.OnRedirectToAccessDenied = ctx =>
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return ctx.Response.WriteAsJsonAsync(
+                        Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden."),
+                        EnvelopeJsonOptionsHolder.Instance);
+                };
             })
             .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(
                 AuthSchemes.Bearer, _ => { });
@@ -57,6 +79,11 @@ public static class AuthWiring
             });
 
         services.AddAuthorization();
+
+        // BL-1: FilesController's file-collection RBAC decisions, extracted off its constructor.
+        // Scoped so it shares the per-request ICurrentPermissions/IPermissionService instances.
+        services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
+
         return services;
     }
 }

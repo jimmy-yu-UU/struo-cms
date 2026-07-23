@@ -47,9 +47,9 @@ public sealed class OptionsValidationTests
 
             var builder = Host.CreateApplicationBuilder();
             builder.Configuration.AddInMemoryCollection(settings);
-            builder.Services.AddStruoInfrastructure(builder.Configuration);
-            builder.Services.AddStruoData(builder.Configuration);
-            builder.Services.AddStruoFiles(builder.Configuration);
+            builder.Services.AddStruoInfrastructure();
+            builder.Services.AddStruoData();
+            builder.Services.AddStruoFiles();
             builder.Services.AddStruoOidc(builder.Configuration);
 
             using var host = builder.Build();

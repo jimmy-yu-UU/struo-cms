@@ -30,9 +30,13 @@ public sealed class SqlSugarRevisionStore(ISqlSugarClient db, ICurrentUserAccess
 
     public async Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default)
     {
+        // DB-18: project only the metadata columns the list needs — the full `Snapshot` text column
+        // (potentially large) is never read here; the detail path (GetAsync) fetches it separately,
+        // and RevisionInfo never carried it in the first place, so the API response is unaffected.
         var rows = await db.Queryable<Revision>()
             .Where(r => r.CollectionName == collection && r.ItemId == itemId)
             .OrderBy(r => r.RevisionNumber, OrderByType.Desc)
+            .Select(r => new { r.RevisionNumber, r.Operation, r.CreatedAt, r.CreatedBy })
             .ToListAsync(ct);
         return rows.Select(r => new RevisionInfo(r.RevisionNumber, r.Operation, r.CreatedAt, r.CreatedBy)).ToList();
     }

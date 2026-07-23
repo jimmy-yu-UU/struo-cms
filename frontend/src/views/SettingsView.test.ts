@@ -9,7 +9,10 @@ import { useAuthStore } from '../stores/authStore'
 // Real useToast() throws "No PrimeVue Toast provided!" without a ToastService
 // provider (see node_modules/primevue/usetoast) — mock it like the codebase's
 // other Toast-using component tests (MediaDetailDialog.test.ts, RevisionHistoryDrawer.test.ts).
-vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: vi.fn() }) }))
+// Hoisted so `add` is a stable, assertable spy (mirrors RevisionHistoryDrawer.test.ts) rather than
+// a fresh vi.fn() handed out per useToast() call.
+const toastAdd = vi.fn()
+vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 // Capture the guard registered via onBeforeRouteLeave (FE-5 pattern, same mocking approach as
 // ItemFormView.test.ts) so tests can invoke it directly without a real router.
@@ -25,13 +28,23 @@ const i18n = createI18n({ legacy: false, locale: 'en', messages: { en: {
     uploadLogo: 'Upload new logo', removeLogo: 'Remove logo', save: 'Save changes', saved: 'Settings saved',
     saveFailed: 'Save failed', nameRequired: 'Site name is required', nameTooLong: 'too long',
     notPermitted: 'Admin role required' },
+  confirm: {
+    unsavedHeader: 'Unsaved changes',
+    unsavedMessage: 'You have unsaved changes. Leave this page and discard them?',
+  },
 } } })
 
 function mountView() {
   return mount(SettingsView, {
     global: {
       plugins: [i18n],
-      stubs: { FilePicker: true, MediaUploadDropzone: true, PageHeader: true, ConfirmDialog: true,
+      stubs: { FilePicker: true, PageHeader: true, ConfirmDialog: true,
+        // Functional stub (not `true`) so tests can trigger the `uploaded` event onUploaded()
+        // is wired to, mirroring the Button stub below.
+        MediaUploadDropzone: {
+          emits: ['uploaded'],
+          template: '<button data-test="upload" @click="$emit(\'uploaded\', { id: \'file-99\' })">up</button>',
+        },
         Button: { template: '<button @click="$emit(\'click\')"><slot/></button>' },
         InputText: { props: ['modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"/>' },
         Toast: true },
@@ -43,6 +56,7 @@ describe('SettingsView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     confirmRequire.mockClear()
+    toastAdd.mockClear()
     leaveGuard = null
   })
 
@@ -123,5 +137,54 @@ describe('SettingsView', () => {
     mountView()
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  // ---- logo flow (TEST-4: mount-time restore / upload / save failure / name-too-long) ----------
+
+  it('recovers logoFileId from cfg.brandLogoUrl on mount and includes it in the save payload', async () => {
+    const auth = useAuthStore(); auth.user = { id: '1', isSuperAdmin: true, permissions: {} } as never
+    const cfg = useAppConfigStore()
+    cfg.brandName = 'Old'
+    cfg.brandLogoUrl = '/api/files/abc-123/content'
+    const save = vi.spyOn(cfg, 'saveBranding').mockResolvedValue()
+    const wrapper = mountView()
+    await wrapper.find('input').setValue('New Brand')
+    await wrapper.find('[data-test="save"]').trigger('click')
+    expect(save).toHaveBeenCalledWith({ brandName: 'New Brand', logoFileId: 'abc-123' })
+  })
+
+  it('onUploaded sets logoFileId from the dropzone uploaded event and includes it in the save payload', async () => {
+    const auth = useAuthStore(); auth.user = { id: '1', isSuperAdmin: true, permissions: {} } as never
+    const cfg = useAppConfigStore(); cfg.brandName = 'Old'
+    const save = vi.spyOn(cfg, 'saveBranding').mockResolvedValue()
+    const wrapper = mountView()
+    await wrapper.find('[data-test="upload"]').trigger('click')
+    await wrapper.find('input').setValue('New Brand')
+    await wrapper.find('[data-test="save"]').trigger('click')
+    expect(save).toHaveBeenCalledWith({ brandName: 'New Brand', logoFileId: 'file-99' })
+  })
+
+  it('shows an error toast when saveBranding rejects', async () => {
+    const auth = useAuthStore(); auth.user = { id: '1', isSuperAdmin: true, permissions: {} } as never
+    const cfg = useAppConfigStore(); cfg.brandName = 'Old'
+    vi.spyOn(cfg, 'saveBranding').mockRejectedValue(new Error('boom'))
+    const wrapper = mountView()
+    await wrapper.find('input').setValue('New Brand')
+    await wrapper.find('[data-test="save"]').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
+  })
+
+  it('blocks save and warns when the name exceeds 100 characters', async () => {
+    const auth = useAuthStore(); auth.user = { id: '1', isSuperAdmin: true, permissions: {} } as never
+    const cfg = useAppConfigStore(); cfg.brandName = 'Old'
+    const save = vi.spyOn(cfg, 'saveBranding').mockResolvedValue()
+    const wrapper = mountView()
+    await wrapper.find('input').setValue('a'.repeat(101))
+    await wrapper.find('[data-test="save"]').trigger('click')
+    expect(save).not.toHaveBeenCalled()
+    // Pin the specific branch: nameRequired and nameTooLong both warn, so also assert the message
+    // so a future swap of the two guards can't leave this test green (i18n key stubbed at top).
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn', summary: 'too long' }))
   })
 })

@@ -14,7 +14,7 @@ public class SchemaEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Schema_lists_all_collections()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var response = await client.GetAsync("/api/schema");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -26,7 +26,7 @@ public class SchemaEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Schema_for_collection_includes_interfaces_options_and_seo()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var response = await client.GetAsync("/api/schema/article");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -52,7 +52,7 @@ public class SchemaEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Schema_for_unknown_collection_returns_404()
     {
-        var client = _factory.CreateClient();
+        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var response = await client.GetAsync("/api/schema/does-not-exist");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

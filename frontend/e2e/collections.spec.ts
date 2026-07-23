@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
@@ -11,14 +11,16 @@ test('browse a collection list', async ({ page }) => {
   await page.click('button[type="submit"]')
   await expect(page).toHaveURL(/\/$/)
 
-  // Open the Article collection from the nav (PanelMenu group must be expanded to reveal the leaf).
-  await page.getByText('Content', { exact: true }).click()
-  await page.getByText('Article', { exact: true }).click()
+  // FE-R1: the sidebar is now an <aside> with collection links rendered directly as buttons
+  // (no PanelMenu); the "Content" group is expanded by default, so no group-expand click needed.
+  await page.locator('aside.sidebar').getByRole('button', { name: 'Article', exact: true }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
 
-  // The list renders its column header (DefaultDisplayField "Status").
+  // The list renders its column header (DefaultDisplayField is still "Status" on Article).
   await expect(page.getByText('Status', { exact: true })).toBeVisible()
 
-  await page.click('button.logout')
+  // FE-R1: logout moved into the UserMenu popover (no more standalone `button.logout`).
+  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('menuitem', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })
