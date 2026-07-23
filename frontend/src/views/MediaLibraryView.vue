@@ -104,9 +104,19 @@ function onPage(e: { page: number; rows: number }): void {
 function openDetail(id: string): void {
   selected.value = files.value.find((f) => f.id === id) ?? null
 }
-// FE-27: use reload() (page-clamp to 0), not load() -- deleting the last item on the last page
-// must not strand the user on a now-out-of-range empty page.
-function onDeleted(): void { selected.value = null; reload() }
+// FE-27: preserve the user's page position on delete instead of always resetting to page 0.
+// Refresh at the current page first; only if the new total no longer covers that page (e.g.
+// the deleted item was the last one on the last page) do we clamp down to the new last valid
+// page and reload -- never below page 0.
+async function loadClampingToLastValidPage(): Promise<void> {
+  await load()
+  const lastValidPage = Math.max(0, Math.ceil(total.value / perPage.value) - 1)
+  if (page.value > lastValidPage) {
+    page.value = lastValidPage
+    await load()
+  }
+}
+function onDeleted(): void { selected.value = null; loadClampingToLastValidPage() }
 
 onMounted(load)
 onUnmounted(() => debouncedSearch.cancel())
