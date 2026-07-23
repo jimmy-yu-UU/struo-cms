@@ -23,6 +23,7 @@ import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { debounce } from '../lib/debounce'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
+import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
@@ -173,6 +174,8 @@ async function runAction(fn: () => Promise<void>): Promise<void> {
   try {
     await fn()
     await loadItems()
+    // Mutating a Language row changes which locale tabs every other form/list shows.
+    if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('common.actionFailed')
   }
@@ -284,11 +287,12 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite
               <span class="datetime">{{ formatDeletedAt(data.deletedAt) }}</span>
             </template>
           </Column>
-          <Column v-if="canWrite || canDelete" header="" :style="{ width: '8rem' }">
+          <Column v-if="canRead || canDelete" header="" :style="{ width: '8rem' }">
             <template #body="{ data }">
               <template v-if="mode === 'active'">
-                <Button v-if="canWrite" icon="pi pi-pencil" text rounded size="small"
-                        :title="t('collectionList.edit')" :aria-label="t('collectionList.edit')"
+                <Button :icon="canWrite ? 'pi pi-pencil' : 'pi pi-eye'" text rounded size="small"
+                        :title="canWrite ? t('collectionList.edit') : t('collectionList.view')"
+                        :aria-label="canWrite ? t('collectionList.edit') : t('collectionList.view')"
                         @click="onEdit(data)" />
                 <Button v-if="canDelete" icon="pi pi-trash" severity="danger" text rounded size="small"
                         :title="t('collectionList.delete')" :aria-label="t('collectionList.delete')"

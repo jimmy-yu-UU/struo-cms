@@ -103,6 +103,7 @@ export default {
     active: 'Active',
     trash: 'Trash',
     edit: 'Edit',
+    view: 'View',
     delete: 'Delete',
     restore: 'Restore',
     purge: 'Delete permanently',
