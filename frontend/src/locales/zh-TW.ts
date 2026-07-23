@@ -46,7 +46,7 @@ export default {
     closeMenu: '關閉導覽選單',
     mainNav: '主導覽',
     brandHome: '回到儀表板',
-    version: '重新設計原型',
+    version: '管理後台',
   },
   user: {
     account: '帳戶',

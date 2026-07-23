@@ -78,7 +78,9 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
   width: 30px; height: 30px; border-radius: 999px; background: var(--bg);
   border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted);
 }
-.user-role { font-size: .8rem; color: var(--muted); }
+.user-name { display: grid; text-align: left; line-height: 1.2; }
+.user-name b { font-size: .83rem; }
+.user-name span { font-size: .7rem; color: var(--muted); }
 .sidebar {
   grid-area: side; display: flex; flex-direction: column; gap: 4px; padding: 14px 12px;
   background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto;
@@ -114,7 +116,7 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
     z-index: 40; box-shadow: var(--shadow-2);
   }
   .shell.drawer .sidebar { transform: none; }
-  .user-role { display: none; }
+  .user-name { display: none; }
 }
 @media (max-width: 520px) {
   .page { padding: 16px 14px 40px; }
