@@ -231,44 +231,51 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-      <DataTable
-        :value="rows"
-        lazy
-        paginator
-        :rows="perPage"
-        :total-records="total"
-        :loading="loading"
-        @page="onPage"
-        @sort="onSort"
-        @row-click="onRowClick"
-      >
-        <Column
-          v-for="col in columns"
-          :key="col.field"
-          :field="col.field"
-          :header="col.header"
-          :sortable="col.sortable"
+      <div class="table-scroll">
+        <DataTable
+          :value="rows"
+          lazy
+          paginator
+          :rows="perPage"
+          :total-records="total"
+          :loading="loading"
+          @page="onPage"
+          @sort="onSort"
+          @row-click="onRowClick"
         >
-          <template #body="{ data }">
-            {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
-          </template>
-        </Column>
-        <Column v-if="canDelete" header="" :style="{ width: '12rem' }">
-          <template #body="{ data }">
-            <template v-if="mode === 'active'">
-              <Button :label="t('collectionList.delete')" severity="danger" text size="small" @click.stop="onDelete(data)" />
+          <Column
+            v-for="col in columns"
+            :key="col.field"
+            :field="col.field"
+            :header="col.header"
+            :sortable="col.sortable"
+          >
+            <template #body="{ data }">
+              {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
             </template>
-            <template v-else>
-              <Button :label="t('collectionList.restore')" text size="small" @click.stop="onRestore(data)" />
-              <Button :label="t('collectionList.purge')" severity="danger" text size="small" @click.stop="onPurge(data)" />
+          </Column>
+          <Column v-if="canDelete" header="" :style="{ width: '12rem' }">
+            <template #body="{ data }">
+              <template v-if="mode === 'active'">
+                <Button :label="t('collectionList.delete')" severity="danger" text size="small" @click.stop="onDelete(data)" />
+              </template>
+              <template v-else>
+                <Button :label="t('collectionList.restore')" text size="small" @click.stop="onRestore(data)" />
+                <Button :label="t('collectionList.purge')" severity="danger" text size="small" @click.stop="onPurge(data)" />
+              </template>
             </template>
+          </Column>
+          <template #empty>{{ t('collectionList.empty') }}</template>
+          <template #paginatorstart>
+            <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
           </template>
-        </Column>
-        <template #empty>{{ t('collectionList.empty') }}</template>
-        <template #paginatorstart>
-          <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
-        </template>
-      </DataTable>
+        </DataTable>
+      </div>
     </template>
   </section>
 </template>
+
+<style scoped>
+/* Wide tables scroll inside their own container; the page itself never scrolls sideways. */
+.table-scroll { overflow-x: auto; }
+</style>
