@@ -88,7 +88,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
     <span v-else class="file-picker__empty">{{ t('fields.noFileSelected') }}</span>
 
     <div class="file-picker__actions">
-      <Button :label="t('fields.selectFile')" size="small" :disabled="disabled" @click="openDialog" />
+      <Button :label="t('fields.selectFile')" severity="secondary" outlined size="small" :disabled="disabled" @click="openDialog" />
       <Button v-if="modelValue" :label="t('fields.clear')" size="small" text :disabled="disabled" @click="clear" />
     </div>
 
