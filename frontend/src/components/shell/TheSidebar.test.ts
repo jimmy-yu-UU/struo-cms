@@ -96,4 +96,42 @@ describe('TheSidebar', () => {
     await wrapper.find('[role="alert"] button').trigger('click')
     expect(loadSpy).toHaveBeenCalledOnce()
   })
+
+  it('collapse button keeps a visible chevron class that is never nav-chev', () => {
+    seed(true, {})
+    const wrapper = mountSidebar()
+    const btn = wrapper.find('button.collapse-btn')
+    expect(btn.exists()).toBe(true)
+    expect(btn.classes()).toContain('only-desktop')
+    expect(btn.find('i.collapse-chev').exists()).toBe(true)
+    expect(btn.find('i.nav-chev').exists()).toBe(false)
+  })
+
+  it('group headers render a leading icon so they stay visible when collapsed', () => {
+    seed(true, {})
+    const wrapper = mountSidebar()
+    const parent = wrapper.find('button.nav-parent')
+    expect(parent.find('i.nav-icon').exists()).toBe(true)
+  })
+
+  it('clicking a group while collapsed expands the sidebar and opens the group', async () => {
+    seed(true, {})
+    const sidebar = useSidebarStore()
+    sidebar.toggleCollapse() // -> collapsed
+    const wrapper = mountSidebar()
+    const parent = wrapper.find('button.nav-parent')
+    await parent.trigger('click')
+    expect(sidebar.collapsed).toBe(false)
+    expect(parent.attributes('aria-expanded')).toBe('true')
+  })
+
+  it('clicking a group while collapsed does not close an already-open group', async () => {
+    seed(true, {})
+    const sidebar = useSidebarStore()
+    sidebar.toggleCollapse()
+    const wrapper = mountSidebar()
+    // group defaults open; the collapsed-click must keep it open, not toggle it shut
+    await wrapper.find('button.nav-parent').trigger('click')
+    expect(wrapper.find('.nav-group').classes()).toContain('open')
+  })
 })
