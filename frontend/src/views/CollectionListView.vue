@@ -70,7 +70,6 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
 function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
-const linkField = computed(() => columns.value.find((c) => !isSelectField(c.field))?.field)
 function tagSeverity(v: unknown): 'success' | 'warn' | 'secondary' {
   const s = String(v ?? '').toLowerCase()
   if (s === 'published') return 'success'
@@ -145,9 +144,8 @@ function onSearchInput(value: string): void {
   debouncedSearch()
 }
 
-function onRowClick(e: { data: Record<string, unknown> }): void {
-  if (mode.value === 'trash') return
-  const rid = e.data.id
+function onEdit(row: Record<string, unknown>): void {
+  const rid = row.id
   if (rid != null) router.push({ name: 'collection-item', params: { name: name.value, id: String(rid) } })
 }
 
@@ -203,7 +201,7 @@ watch(name, () => {
 onMounted(loadItems)
 onUnmounted(() => debouncedSearch.cancel())
 
-defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, canDelete,
+defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite, canDelete,
   mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading, error, cellValue })
 </script>
 
@@ -253,7 +251,6 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
           :loading="loading"
           @page="onPage"
           @sort="onSort"
-          @row-click="onRowClick"
         >
           <Column
             v-for="col in columns"
@@ -268,25 +265,28 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
                 :value="formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!)"
                 :severity="tagSeverity(cellValue(data, fieldOf(col.field)!))"
               />
-              <span v-else :class="{ 'row-link': col.field === linkField }">
+              <span v-else>
                 {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
               </span>
             </template>
           </Column>
-          <Column v-if="canDelete" header="" :style="{ width: '8rem' }">
+          <Column v-if="canWrite || canDelete" header="" :style="{ width: '8rem' }">
             <template #body="{ data }">
               <template v-if="mode === 'active'">
-                <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                <Button v-if="canWrite" icon="pi pi-pencil" text rounded size="small"
+                        :title="t('collectionList.edit')" :aria-label="t('collectionList.edit')"
+                        @click="onEdit(data)" />
+                <Button v-if="canDelete" icon="pi pi-trash" severity="danger" text rounded size="small"
                         :title="t('collectionList.delete')" :aria-label="t('collectionList.delete')"
-                        @click.stop="onDelete(data)" />
+                        @click="onDelete(data)" />
               </template>
               <template v-else>
                 <Button icon="pi pi-undo" text rounded size="small"
                         :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
-                        @click.stop="onRestore(data)" />
+                        @click="onRestore(data)" />
                 <Button icon="pi pi-trash" severity="danger" text rounded size="small"
                         :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
-                        @click.stop="onPurge(data)" />
+                        @click="onPurge(data)" />
               </template>
             </template>
           </Column>
@@ -303,6 +303,4 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
 <style scoped>
 /* Wide tables scroll inside their own container; the page itself never scrolls sideways. */
 .table-scroll { overflow-x: auto; }
-:deep(.row-link) { font-weight: 600; }
-:deep(tr:hover .row-link) { color: var(--accent); text-decoration: underline; }
 </style>

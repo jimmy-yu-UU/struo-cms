@@ -102,6 +102,7 @@ export default {
     range: '顯示 {from}–{to} / 共 {total} 筆',
     active: '使用中',
     trash: '回收桶',
+    edit: '編輯',
     delete: '刪除',
     restore: '還原',
     purge: '永久刪除',
