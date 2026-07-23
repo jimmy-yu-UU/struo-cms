@@ -20,6 +20,7 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, isDirty, unsavedConfirm } from '../lib/formDirty'
+import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 
 const route = useRoute()
@@ -114,6 +115,8 @@ async function onSubmit(): Promise<void> {
     if (isCreate.value) await itemsApi.create(name.value, payload)
     else await itemsApi.update(name.value, id.value!, payload)
     conflict.value = false
+    // Editing the Language collection changes which locale tabs every other form shows.
+    if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
@@ -199,6 +202,8 @@ function onDelete(): void {
     accept: async () => {
       try {
         await itemsApi.remove(name.value, id.value!)
+        // Editing the Language collection changes which locale tabs every other form shows.
+        if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
         captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
         router.push({ name: 'collection-list', params: { name: name.value } })
       } catch (e) {

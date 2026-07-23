@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { reactive } from 'vue'
+import { reactive, computed, provide, inject } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -9,6 +9,7 @@ import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { schemaApi } from '../api/schemaApi'
+import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -17,9 +18,11 @@ const i18n = createI18n({
       collectionList: {
         count: '{n} items', new: 'New', searchPlaceholder: 'Search…',
         range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
-        delete: 'Delete', restore: 'Restore', purge: 'Delete permanently',
+        edit: 'Edit', view: 'View', delete: 'Delete', restore: 'Restore', purge: 'Delete permanently',
         empty: 'No records', notFound: 'Collection not found',
         noAccess: "You don't have access to this collection",
+        trashNotice: 'You are viewing the trash. Items here are hidden from the site and API; restore them or delete them permanently.',
+        deletedAt: 'Deleted at', emptyTrash: 'Trash is empty',
       },
       confirm: {
         softDeleteHeader: 'Move to trash',
@@ -51,8 +54,33 @@ vi.mock('../api/itemsApi', () => ({
 vi.mock('../api/schemaApi', () => ({
   schemaApi: { getAll: vi.fn(), get: vi.fn() },
 }))
-vi.mock('primevue/datatable', () => ({ default: { name: 'DataTable', template: '<div><slot /></div>' } }))
-vi.mock('primevue/column', () => ({ default: { name: 'Column', template: '<div />' } }))
+// The DataTable/Column stubs render just enough real markup for the row-click and
+// icon-presence assertions below: a single <tbody><tr> to click on, and each Column's
+// #body scoped slot rendered once so action-button icons appear in the DOM. Neither
+// stub replicates PrimeVue's real per-row Column dispatch (only the first `value` row
+// is ever rendered) -- a reactive `computed` provide/inject plumbs that single row's
+// real data down to each Column so cell-content assertions (e.g. the deletedAt column)
+// can see it, and stay current when `value` changes after an async reload.
+vi.mock('primevue/datatable', () => ({
+  default: {
+    name: 'DataTable',
+    props: ['value'],
+    setup(props: { value: Record<string, unknown>[] }) {
+      provide('rowData', computed(() => props.value?.[0] ?? {}))
+      return {}
+    },
+    template: '<table><tbody><tr><slot /></tr></tbody></table>',
+  },
+}))
+vi.mock('primevue/column', () => ({
+  default: {
+    name: 'Column',
+    setup() {
+      return { rowData: inject('rowData', computed(() => ({}))) }
+    },
+    template: '<div><slot name="body" :data="rowData" /></div>',
+  },
+}))
 vi.mock('primevue/inputtext', () => ({ default: { name: 'InputText', template: '<input />' } }))
 vi.mock('primevue/selectbutton', () => ({ default: { name: 'SelectButton', template: '<div />' } }))
 vi.mock('primevue/confirmdialog', () => ({ default: { name: 'ConfirmDialog', template: '<div />' } }))
@@ -158,43 +186,6 @@ describe('CollectionListView', () => {
     expect(vm.cellValue(vm.rows[0], titleField)).toBe('Hello')
   })
 
-  // Finding: the "title-ish" cell should read as a link, but `columns[0]` can be a select
-  // field (e.g. Article's defaultDisplayField=Status sorts first). Select fields always
-  // render the Tag branch, so `col.field === columns[0]?.field` never marks a span at all
-  // in that case. `linkField` must skip select columns and pick the first non-select one.
-  // (Column/DataTable are lightweight stubs in this file that don't forward the #body
-  // scoped slot -- see `cellValue`/`isSelectField` assertions elsewhere in this file for
-  // the same reason -- so this asserts via the exposed computed/helper that the template's
-  // `:class="{ 'row-link': col.field === linkField }"` binding is driven by directly.)
-  it('linkField skips a select-interface first column and lands on the first non-select column', async () => {
-    const schema = useSchemaStore()
-    schema.collections = [{
-      name: 'article', label: 'Article', defaultDisplayField: 'status',
-      fields: [
-        { name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
-          sortable: true, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false,
-          options: [{ value: 'draft', label: 'Draft' }] },
-        { name: 'title', label: 'Title', interface: 'text', required: false, searchable: false,
-          sortable: true, readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
-      ],
-      relations: [],
-    }]
-    schema.loaded = true
-    seedLanguage()
-    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft', title: 'Hello' }], total: 1 })
-    const w = mountView()
-    await flushPromises()
-    const vm = w.vm as any
-    // Sanity: defaultDisplayField really does sort the select column first.
-    expect(vm.columns[0].field).toBe('status')
-    expect(vm.columns[1].field).toBe('title')
-    expect(vm.isSelectField('status')).toBe(true)
-    expect(vm.isSelectField('title')).toBe(false)
-    // The fix: the link marker lands on the text column, not the select column.
-    expect(vm.linkField).toBe('title')
-  })
-
   it('shows a permission message and makes no API call when not readable', async () => {
     seedSchema()
     seedLanguage()
@@ -228,7 +219,7 @@ describe('CollectionListView', () => {
     expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: '-status', search: undefined, locale: 'en' })
   })
 
-  it('navigates to the item on row click', async () => {
+  it('onEdit navigates to the item edit page', async () => {
     seedSchema()
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
@@ -236,8 +227,40 @@ describe('CollectionListView', () => {
     const wrapper = mountView()
     await flushPromises()
     const vm: any = wrapper.vm
-    vm.onRowClick({ data: { id: '42' } })
+    vm.onEdit({ id: '42' })
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
+  })
+
+  it('read-only viewer sees a view (eye) action instead of edit, and onEdit still navigates', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: false,
+      permissions: { article: { read: true, write: false, delete: false } } }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', status: 'draft' }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.html()).toContain('pi-eye')
+    expect(w.html()).not.toContain('pi-pencil')
+    const vm: any = w.vm
+    vm.onEdit({ id: '42' })
+    expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
+  })
+
+  it('clicking a row body does not navigate', async () => {
+    seedSchema()
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', translations: {} }], total: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    // Emit the DataTable's own row-click component event (not a native DOM click on the
+    // stub's <tr>, which the stub never translates into anything) -- this is what a real
+    // PrimeVue DataTable emits on row click. If a listener were ever bound back onto
+    // DataTable (e.g. @row-click="onEdit"), Vue attribute fallthrough would deliver it as
+    // an onRowClick prop on the stub, and $emit('row-click', ...) below would invoke it,
+    // driving pushMock -- so this assertion actually fails against that regression.
+    wrapper.findComponent({ name: 'DataTable' }).vm.$emit('row-click', { data: { id: '42' } })
+    await flushPromises()
+    expect(pushMock).not.toHaveBeenCalled()
   })
 
   it('New button navigates to create when canWrite', async () => {
@@ -293,15 +316,16 @@ describe('CollectionListView', () => {
       { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en', deleted: 'only' })
   })
 
-  it('does not navigate on row click in trash mode', async () => {
+  it('edit button renders only in active mode; trash rows have no edit action', async () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42' }], total: 1 })
     const w = mountView()
     await flushPromises()
+    expect(w.html()).toContain('pi-pencil')
     ;(w.vm as any).setMode('trash')
-    ;(w.vm as any).onRowClick({ data: { id: '42' } })
-    expect(pushMock).not.toHaveBeenCalled()
+    await flushPromises()
+    expect(w.html()).not.toContain('pi-pencil')
   })
 
   it('active delete on a soft-delete collection soft-deletes (no purge) and reloads', async () => {
@@ -362,6 +386,46 @@ describe('CollectionListView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
     expect(itemsApi.restore).toHaveBeenCalledWith('article', '1')
     expect(itemsApi.list).toHaveBeenCalled()
+  })
+
+  it('deleting a row in the Language collection reloads the language store', async () => {
+    mockRoute.params.name = LANGUAGE_COLLECTION
+    const schema = useSchemaStore()
+    schema.collections = [{
+      name: LANGUAGE_COLLECTION, label: 'Language', defaultDisplayField: 'code',
+      fields: [{ name: 'code', label: 'Code', interface: 'text', required: true, searchable: false,
+        sortable: false, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false }],
+      relations: [],
+    }]
+    schema.loaded = true
+    const lang = seedLanguage()
+    const reloadSpy = vi.spyOn(lang, 'reload').mockResolvedValue(undefined)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', code: 'en' }], total: 1 })
+    vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).onDelete({ id: '1' })
+    const arg = confirmRequire.mock.calls[0][0]
+    await arg.accept()
+    await flushPromises()
+    expect(reloadSpy).toHaveBeenCalled()
+  })
+
+  it('deleting a row in a non-Language collection does not reload the language store', async () => {
+    seedSchema() // article, no softDelete
+    const lang = seedLanguage()
+    const reloadSpy = vi.spyOn(lang, 'reload').mockResolvedValue(undefined)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', status: 'draft' }], total: 1 })
+    vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).onDelete({ id: '1' })
+    const arg = confirmRequire.mock.calls[0][0]
+    await arg.accept()
+    await flushPromises()
+    expect(reloadSpy).not.toHaveBeenCalled()
   })
 
   it('latest response wins: a slow earlier list load does not clobber a newer one', async () => {
@@ -512,5 +576,34 @@ describe('CollectionListView', () => {
     await flushPromises()
     expect(w.get('h1').text()).toBe('Article')
     expect(w.text()).toContain('1 items') // collectionList.count with n=total
+  })
+
+  it('trash mode shows notice banner and deletedAt column', async () => {
+    seedSoftSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({
+      data: [{ id: '42', deletedAt: '2026-07-23T10:00:00Z', translations: {} }], total: 1,
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.trash-banner').exists()).toBe(false)
+    ;(w.vm as any).setMode('trash')
+    await flushPromises()
+    expect(w.find('.trash-banner').exists()).toBe(true)
+    expect(w.text()).toContain('2026')
+  })
+
+  // Carried over from Task 3 review: the columns/isSelectField helpers are still live
+  // (they drive the Tag branch) even though linkField/row-link coverage was removed.
+  it('orders the default display field first and detects select-type columns', async () => {
+    seedSchema(); seedLanguage() // seedSchema's article has defaultDisplayField: 'status' (interface: select)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as any
+    expect(vm.columns[0].field).toBe('status')
+    expect(vm.isSelectField('status')).toBe(true)
+    expect(vm.isSelectField('title')).toBe(false)
   })
 })

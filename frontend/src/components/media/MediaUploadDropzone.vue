@@ -63,6 +63,11 @@ defineExpose({ uploadFiles })
 
 <style scoped>
 .dropzone {
+  display: flex;
+  flex-direction: column;
+  /* Large, roughly-square drop target so files are easy to drag in; capped so it never
+     overflows shorter viewports. Width is driven by the dialog (~78vw). */
+  min-height: min(68vh, 680px);
   border: 2px dashed var(--border);
   border-radius: var(--radius, 8px);
   padding: 24px;
@@ -77,9 +82,12 @@ defineExpose({ uploadFiles })
 }
 
 .dropzone__label {
+  /* Fill the whole tall dropzone so clicking/dropping anywhere in the area works. */
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   cursor: pointer;
 }

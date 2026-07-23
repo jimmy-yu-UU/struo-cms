@@ -13,20 +13,23 @@ describe('FileThumbnail', () => {
     expect(el.attributes('src')).toMatch(/\/files\/f1\/content$/)
   })
 
-  it('renders a chip (no img) for non-image content types, icon + content type only (no filename dupe with the media-tile caption)', () => {
+  it('renders a chip (no img) for non-image types: format icon + short label, not the raw MIME or filename', () => {
     const w = mount(FileThumbnail, { props: { file: doc } })
     expect(w.find('img').exists()).toBe(false)
-    expect(w.find('.file-chip__icon').exists()).toBe(true)
-    expect(w.text()).toContain('application/pdf')
+    expect(w.find('.file-chip__icon').classes()).toContain('pi-file-pdf')
+    expect(w.find('.file-chip__meta').text()).toBe('PDF')
+    // the long/ugly MIME string and the filename must NOT appear (the tile caption shows the name)
+    expect(w.text()).not.toContain('application/pdf')
     expect(w.text()).not.toContain('a.pdf')
   })
 
-  it('falls back to chip when the image fails to load', async () => {
+  it('falls back to chip with a format icon when the image fails to load', async () => {
     const w = mount(FileThumbnail, { props: { file: img } })
     await w.find('img').trigger('error')
     expect(w.find('img').exists()).toBe(false)
-    expect(w.find('.file-chip__icon').exists()).toBe(true)
-    expect(w.text()).toContain('image/png')
+    expect(w.find('.file-chip__icon').classes()).toContain('pi-image')
+    expect(w.find('.file-chip__meta').text()).toBe('PNG')
+    expect(w.text()).not.toContain('image/png')
     expect(w.text()).not.toContain('a.png')
   })
 })

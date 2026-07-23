@@ -23,6 +23,7 @@ import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { debounce } from '../lib/debounce'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
+import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
 import type { FieldMeta } from '../types/schema'
 
 const route = useRoute()
@@ -70,12 +71,16 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
 function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
-const linkField = computed(() => columns.value.find((c) => !isSelectField(c.field))?.field)
 function tagSeverity(v: unknown): 'success' | 'warn' | 'secondary' {
   const s = String(v ?? '').toLowerCase()
   if (s === 'published') return 'success'
   if (s === 'archived') return 'warn'
   return 'secondary'
+}
+function formatDeletedAt(v: unknown): string {
+  if (v == null || v === '') return ''
+  const d = new Date(String(v))
+  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString()
 }
 
 // Latest-wins guard: a slow earlier load must not clobber a newer one's state.
@@ -145,9 +150,8 @@ function onSearchInput(value: string): void {
   debouncedSearch()
 }
 
-function onRowClick(e: { data: Record<string, unknown> }): void {
-  if (mode.value === 'trash') return
-  const rid = e.data.id
+function onEdit(row: Record<string, unknown>): void {
+  const rid = row.id
   if (rid != null) router.push({ name: 'collection-item', params: { name: name.value, id: String(rid) } })
 }
 
@@ -170,6 +174,8 @@ async function runAction(fn: () => Promise<void>): Promise<void> {
   try {
     await fn()
     await loadItems()
+    // Mutating a Language row changes which locale tabs every other form/list shows.
+    if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('common.actionFailed')
   }
@@ -203,7 +209,7 @@ watch(name, () => {
 onMounted(loadItems)
 onUnmounted(() => debouncedSearch.cancel())
 
-defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canWrite, canDelete,
+defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite, canDelete,
   mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading, error, cellValue })
 </script>
 
@@ -241,6 +247,10 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
         </template>
       </ListToolbar>
 
+      <p v-if="mode === 'trash'" class="trash-banner" role="status">
+        <i class="pi pi-trash" aria-hidden="true" /> {{ t('collectionList.trashNotice') }}
+      </p>
+
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <div class="table-scroll">
@@ -253,7 +263,6 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
           :loading="loading"
           @page="onPage"
           @sort="onSort"
-          @row-click="onRowClick"
         >
           <Column
             v-for="col in columns"
@@ -268,29 +277,38 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
                 :value="formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!)"
                 :severity="tagSeverity(cellValue(data, fieldOf(col.field)!))"
               />
-              <span v-else :class="{ 'row-link': col.field === linkField }">
+              <span v-else>
                 {{ formatCell(cellValue(data, fieldOf(col.field)!), fieldOf(col.field)!) }}
               </span>
             </template>
           </Column>
-          <Column v-if="canDelete" header="" :style="{ width: '8rem' }">
+          <Column v-if="mode === 'trash'" field="deletedAt" :header="t('collectionList.deletedAt')">
+            <template #body="{ data }">
+              <span class="datetime">{{ formatDeletedAt(data.deletedAt) }}</span>
+            </template>
+          </Column>
+          <Column v-if="canRead || canDelete" header="" :style="{ width: '8rem' }">
             <template #body="{ data }">
               <template v-if="mode === 'active'">
-                <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                <Button :icon="canWrite ? 'pi pi-pencil' : 'pi pi-eye'" text rounded size="small"
+                        :title="canWrite ? t('collectionList.edit') : t('collectionList.view')"
+                        :aria-label="canWrite ? t('collectionList.edit') : t('collectionList.view')"
+                        @click="onEdit(data)" />
+                <Button v-if="canDelete" icon="pi pi-trash" severity="danger" text rounded size="small"
                         :title="t('collectionList.delete')" :aria-label="t('collectionList.delete')"
-                        @click.stop="onDelete(data)" />
+                        @click="onDelete(data)" />
               </template>
               <template v-else>
-                <Button icon="pi pi-undo" text rounded size="small"
+                <Button v-if="canDelete" icon="pi pi-undo" text rounded size="small"
                         :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
-                        @click.stop="onRestore(data)" />
-                <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                        @click="onRestore(data)" />
+                <Button v-if="canDelete" icon="pi pi-trash" severity="danger" text rounded size="small"
                         :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
-                        @click.stop="onPurge(data)" />
+                        @click="onPurge(data)" />
               </template>
             </template>
           </Column>
-          <template #empty>{{ t('collectionList.empty') }}</template>
+          <template #empty>{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'collectionList.empty') }}</template>
           <template #paginatorstart>
             <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
           </template>
@@ -303,6 +321,11 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onRowClick, onNew, canW
 <style scoped>
 /* Wide tables scroll inside their own container; the page itself never scrolls sideways. */
 .table-scroll { overflow-x: auto; }
-:deep(.row-link) { font-weight: 600; }
-:deep(tr:hover .row-link) { color: var(--accent); text-decoration: underline; }
+.trash-banner {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  padding: 10px 14px; border: 1px solid var(--warn, #d97706);
+  background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
+  border-radius: var(--radius, 8px); color: var(--fg); font-size: .9rem;
+}
+.datetime { font-variant-numeric: tabular-nums; color: var(--muted); }
 </style>

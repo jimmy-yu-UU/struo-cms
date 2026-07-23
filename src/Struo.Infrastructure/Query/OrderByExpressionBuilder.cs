@@ -11,8 +11,10 @@ namespace Struo.Infrastructure.Query;
 /// <summary>
 /// Builds SQL ORDER BY expressions for item queries: plain columns, locale-scoped translatable
 /// fields (correlated subquery), and to-one relation paths (correlated subquery with one JOIN per
-/// hop). Extracted verbatim from <see cref="SqlSugarItemRepository"/> (ARC-4) — zero behavior
-/// change; the SQL text is moved unchanged, including the locale-literal quote-doubling guard.
+/// hop). Extracted from <see cref="SqlSugarItemRepository"/> (ARC-4); now also injects a stable
+/// default order and a PK tiebreak (問題 11) — no client sort would otherwise leave PostgreSQL's
+/// heap order in effect, so an UPDATE (which rewrites the tuple elsewhere in the heap) makes the
+/// edited row visibly jump position in the admin list.
 /// </summary>
 public sealed class OrderByExpressionBuilder(
     ISqlSugarClient db,
@@ -23,7 +25,12 @@ public sealed class OrderByExpressionBuilder(
 {
     public string? BuildOrderBy(IReadOnlyList<SortField> sort, EntityDescriptor d, string collection, string? queryLocale = null)
     {
-        if (sort.Count == 0) return null;
+        var idCol = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
+        // No client sort: PostgreSQL heap order is unstable across UPDATEs (MVCC rewrites the tuple
+        // elsewhere), so an edited row visibly jumps in the list. Default to newest-first with the PK
+        // (UUIDv7 = time-ordered) as tiebreak; entities without CreatedAt fall back to PK alone.
+        if (sort.Count == 0) return DefaultOrderBy(d, idCol);
+
         var collMeta = metadata.GetCollection(collection);
         var translatableFields = collMeta?.Translation?.Fields ?? [];
 
@@ -44,7 +51,24 @@ public sealed class OrderByExpressionBuilder(
             var col = db.EntityMaintenance.GetDbColumnName(prop, d.EntityType);
             return $"{col} {(s.Descending ? "DESC" : "ASC")}";
         });
-        return string.Join(", ", parts);
+        var expr = string.Join(", ", parts);
+
+        // Stable pagination: a client sort on a non-unique column leaves tied rows in undefined
+        // order, so Skip/Take can repeat or drop rows across pages. Append the PK unless the
+        // caller already sorts by it.
+        if (!sort.Any(s => string.Equals(s.Field, "id", StringComparison.OrdinalIgnoreCase)))
+            expr = $"{expr}, {idCol} ASC";
+        return expr;
+    }
+
+    private string DefaultOrderBy(EntityDescriptor d, string idCol)
+    {
+        if (d.Properties.ContainsKey("CreatedAt"))
+        {
+            var createdCol = db.EntityMaintenance.GetDbColumnName("CreatedAt", d.EntityType);
+            return $"{createdCol} DESC, {idCol} ASC";
+        }
+        return $"{idCol} ASC";
     }
 
     /// <summary>

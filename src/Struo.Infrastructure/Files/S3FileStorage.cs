@@ -24,15 +24,24 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         _bucket = bucket;
     }
 
-    private static IAmazonS3 CreateClient(FileStorageOptions.S3Options s3) =>
-        new AmazonS3Client(
-            s3.AccessKey, s3.SecretKey,
-            new AmazonS3Config
-            {
-                ServiceURL = s3.Endpoint,
-                ForcePathStyle = s3.ForcePathStyle,
-                AuthenticationRegion = s3.Region,
-            });
+    internal static IAmazonS3 CreateClient(FileStorageOptions.S3Options s3)
+    {
+        var config = new AmazonS3Config
+        {
+            ForcePathStyle = s3.ForcePathStyle,
+            AuthenticationRegion = s3.Region,
+            // Presigned URLs must carry the endpoint's real scheme: the SDK defaults to https,
+            // which an http-only MinIO refuses after the redirect.
+            UseHttp = s3.Endpoint?.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true,
+        };
+        // AmazonS3Config requires exactly one of ServiceURL/RegionEndpoint. Production always supplies
+        // Endpoint (FileStorageOptions.Validate() enforces it when Backend=s3); the RegionEndpoint
+        // fallback only exists so this factory stays constructible for a null endpoint in isolation
+        // (e.g. unit tests), never on the real save/read/presign path.
+        if (s3.Endpoint is null) config.RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(s3.Region);
+        else config.ServiceURL = s3.Endpoint;
+        return new AmazonS3Client(s3.AccessKey, s3.SecretKey, config);
+    }
 
     public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
         // SEC-6: record the validated content type as S3 object metadata so a presigned/direct GET

@@ -7,6 +7,12 @@ public sealed class FileStorageOptions
     public string Backend { get; set; } = "local";          // "local" | "s3"
     public long MaxUploadBytes { get; set; } = 26_214_400;   // 25 MB
     public string[] AllowedContentTypes { get; set; } = [];  // empty = allow all
+
+    // When true, GET /api/files/{id}/content 302-redirects to a storage presigned URL (offloads
+    // bytes to S3/CDN). Default false: the API streams the bytes itself, which keeps the storage
+    // endpoint private and works when the browser cannot reach storage (or its scheme) directly.
+    public bool PresignedRedirect { get; set; } = false;
+
     public LocalOptions Local { get; set; } = new();
     public S3Options S3 { get; set; } = new();
 
