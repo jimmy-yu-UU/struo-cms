@@ -114,6 +114,8 @@ async function onSubmit(): Promise<void> {
     if (isCreate.value) await itemsApi.create(name.value, payload)
     else await itemsApi.update(name.value, id.value!, payload)
     conflict.value = false
+    // Editing the Language collection changes which locale tabs every other form shows.
+    if (name.value === 'language') await langStore.reload()
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
@@ -199,6 +201,8 @@ function onDelete(): void {
     accept: async () => {
       try {
         await itemsApi.remove(name.value, id.value!)
+        // Editing the Language collection changes which locale tabs every other form shows.
+        if (name.value === 'language') await langStore.reload()
         captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
         router.push({ name: 'collection-list', params: { name: name.value } })
       } catch (e) {
