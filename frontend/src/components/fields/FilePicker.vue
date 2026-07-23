@@ -92,7 +92,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
       <Button v-if="modelValue" :label="t('fields.clear')" size="small" text :disabled="disabled" @click="clear" />
     </div>
 
-    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectAFile')" :style="{ width: '60rem' }">
+    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectAFile')" :style="{ width: 'min(78vw, 1300px)' }" :breakpoints="{ '960px': '95vw' }">
       <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
       <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
       <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
