@@ -14,7 +14,8 @@ const emit = defineEmits<{
     :visible="visible"
     modal
     :header="$t('media.uploadTitle')"
-    :style="{ width: '32rem' }"
+    :style="{ width: 'min(78vw, 1100px)' }"
+    :breakpoints="{ '960px': '95vw' }"
     :dismissable-mask="true"
     @update:visible="emit('update:visible', $event)"
   >
