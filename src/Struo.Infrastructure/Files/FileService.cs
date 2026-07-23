@@ -35,26 +35,58 @@ public sealed class FileService(
         // each. Access below mixes sequential forward reads (which pull more from `content` on demand)
         // and backward seeks to already-read offsets; the header sniff + image probe seek freely, then
         // the stream is fully drained once (line ~55) before the save read so Length is the true total.
-        await using var buffer = new FileBufferingReadStream(content, memoryThreshold: 64 * 1024);
+        //
+        // SEC-15: `length` above is the client-DECLARED size (from Content-Length) — a client that
+        // lies (declares small, streams large) would otherwise sail past that guard and spool
+        // unbounded bytes to a temp file. `bufferLimit` caps what FileBufferingReadStream will ever
+        // buffer/spill to MaxUploadBytes regardless of what the client claimed; once actual bytes
+        // exceed it, the stream throws IOException("Buffer limit exceeded.") on the next read, which
+        // is caught below and re-surfaced as a proper 413. tempFileDirectoryAccessor reproduces the
+        // framework default (ASPNETCORE_TEMP env var, else the OS temp dir) since that default lives
+        // on an internal type we cannot reference directly.
+        await using var buffer = new FileBufferingReadStream(
+            content,
+            memoryThreshold: 64 * 1024,
+            bufferLimit: options.MaxUploadBytes,
+            tempFileDirectoryAccessor: () =>
+                Environment.GetEnvironmentVariable("ASPNETCORE_TEMP") is { Length: > 0 } dir
+                    ? dir
+                    : Path.GetTempPath());
 
-        // Conservative content sniff (L2): if the client claims a type we have a signature for, the
-        // leading bytes must match it — blocks e.g. a script stored as image/png. Unknown types pass.
-        var header = new byte[12];
-        var read = await buffer.ReadAsync(header.AsMemory(0, header.Length), ct);
-        if (!FileSignatureValidator.IsConsistent(header.AsSpan(0, read), contentType))
-            throw new QueryException($"File contents do not match the declared content type '{contentType}'.");
+        try
+        {
+            // Conservative content sniff (L2): if the client claims a type we have a signature for,
+            // the leading bytes must match it — blocks e.g. a script stored as image/png. Unknown
+            // types pass.
+            var header = new byte[12];
+            var read = await buffer.ReadAsync(header.AsMemory(0, header.Length), ct);
+            if (!FileSignatureValidator.IsConsistent(header.AsSpan(0, read), contentType))
+                throw new QueryException($"File contents do not match the declared content type '{contentType}'.");
 
-        buffer.Position = 0;
-        var dims = images.TryRead(buffer, contentType);
+            buffer.Position = 0;
+            var dims = images.TryRead(buffer, contentType);
 
-        // FileBufferingReadStream.Length only reflects bytes buffered SO FAR, not the true total,
-        // until the inner stream has been fully consumed — S3FileStorage's PutObjectRequest reads
-        // Stream.Length to size the upload, so an under-drained buffer here would ship a truncated
-        // Content-Length. Force a full drain (spilling to the temp file past the memory threshold,
-        // same as a large upload always would) before rewinding for the actual save read.
-        await buffer.CopyToAsync(Stream.Null, ct);
-        buffer.Position = 0;
+            // FileBufferingReadStream.Length only reflects bytes buffered SO FAR, not the true total,
+            // until the inner stream has been fully consumed — S3FileStorage's PutObjectRequest reads
+            // Stream.Length to size the upload, so an under-drained buffer here would ship a truncated
+            // Content-Length. Force a full drain (spilling to the temp file past the memory threshold,
+            // same as a large upload always would) before rewinding for the actual save read.
+            await buffer.CopyToAsync(Stream.Null, ct);
+            buffer.Position = 0;
 
+            return await SaveAsync(buffer, fileName, contentType, dims, ct);
+        }
+        catch (IOException ex) when (ex.Message.Contains("Buffer limit", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new PayloadTooLargeException(
+                $"File exceeds the maximum size of {options.MaxUploadBytes} bytes.");
+        }
+    }
+
+    private async Task<File> SaveAsync(
+        Stream buffer, string fileName, string contentType, (int Width, int Height)? dims,
+        CancellationToken ct)
+    {
         var key = StorageKey.Create(fileName);
         await storage.SaveAsync(key, buffer, contentType, ct);
 
@@ -64,7 +96,11 @@ public sealed class FileService(
             StorageKey = key,
             FileName = fileName,
             ContentType = contentType,
-            Size = length,
+            // SEC-15: `length` is the client-declared Content-Length, which a lying client can
+            // understate; `buffer` has already been fully drained (see UploadAsync) so its Length
+            // is the true byte count actually stored, and overflow past MaxUploadBytes has already
+            // thrown by this point.
+            Size = buffer.Length,
             Width = dims?.Width,
             Height = dims?.Height,
             Status = "published",

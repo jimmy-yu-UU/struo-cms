@@ -39,4 +39,18 @@ public class FileServiceValidationTests
         var act = async () => await svc.UploadAsync(new MemoryStream([1]), "x.txt", "text/plain", 1);
         await act.Should().ThrowAsync<QueryException>();
     }
+
+    // SEC-15: a client that lies about Content-Length (declares small, streams large) must not be
+    // able to spool unbounded bytes past MaxUploadBytes to a temp file. The declared-length guard
+    // above only sees `length`; the actual stream here is far bigger than the cap.
+    [Fact]
+    public async Task Upload_whose_actual_bytes_exceed_cap_despite_small_declared_length_throws_PayloadTooLarge()
+    {
+        var opts = new FileStorageOptions { MaxUploadBytes = 100 };
+        var svc = new FileService(null!, new NoopStorage(), new NoopImages(), opts, null!);
+        var actualBytes = new byte[10_000]; // far beyond MaxUploadBytes
+        var act = async () => await svc.UploadAsync(
+            new MemoryStream(actualBytes), "x.bin", "application/octet-stream", length: 50 /* declared, under cap */);
+        await act.Should().ThrowAsync<PayloadTooLargeException>();
+    }
 }

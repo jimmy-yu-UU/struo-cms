@@ -3,6 +3,7 @@ using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Application.Query;
+using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Files;
@@ -107,5 +108,63 @@ public class FileServiceTransactionTests : IDisposable
 
         result.Should().BeTrue();
         (await _db.Queryable<File>().In(id).AnyAsync()).Should().BeFalse();
+    }
+
+    // SEC-15 sanity: bounding FileBufferingReadStream to MaxUploadBytes must not break a normal
+    // upload whose declared length and actual bytes agree and sit under the cap.
+    [Fact]
+    public async Task Upload_within_cap_still_succeeds_end_to_end()
+    {
+        var bytes = new byte[50];
+        var file = await _svc.UploadAsync(
+            new MemoryStream(bytes), "x.bin", "application/octet-stream", length: 50);
+
+        file.Size.Should().Be(50);
+        (await _db.Queryable<File>().In(file.Id).AnyAsync()).Should().BeTrue();
+    }
+
+    // SEC-15: the stored File.Size must reflect the ACTUAL uploaded byte count, not the
+    // client-declared Content-Length — a client understating its length (both figures under the
+    // cap) must not cause a wrong Size to be persisted.
+    [Fact]
+    public async Task Upload_declaring_smaller_length_than_actual_bytes_stores_actual_byte_count()
+    {
+        var actualBytes = new byte[200];
+        var file = await _svc.UploadAsync(
+            new MemoryStream(actualBytes), "x.bin", "application/octet-stream", length: 50 /* declared, smaller than actual */);
+
+        file.Size.Should().Be(200, "Size must reflect the actual bytes read, not the client-declared length");
+        var stored = await _db.Queryable<File>().In(file.Id).FirstAsync();
+        stored!.Size.Should().Be(200);
+    }
+
+    // SEC-15 exact-boundary: actual bytes exactly at MaxUploadBytes must succeed and record that
+    // exact size.
+    [Fact]
+    public async Task Upload_with_actual_bytes_exactly_at_cap_succeeds()
+    {
+        var opts = new FileStorageOptions { MaxUploadBytes = 64 };
+        var svc = new FileService(_db, new NoopStorage(), new NoopImages(), opts, _repo);
+        var actualBytes = new byte[64];
+
+        var file = await svc.UploadAsync(
+            new MemoryStream(actualBytes), "x.bin", "application/octet-stream", length: 1 /* declared, irrelevant */);
+
+        file.Size.Should().Be(64);
+    }
+
+    // SEC-15 exact-boundary: one byte over MaxUploadBytes must throw PayloadTooLargeException,
+    // even though the declared length is well under the cap.
+    [Fact]
+    public async Task Upload_with_actual_bytes_one_over_cap_throws_PayloadTooLarge()
+    {
+        var opts = new FileStorageOptions { MaxUploadBytes = 64 };
+        var svc = new FileService(_db, new NoopStorage(), new NoopImages(), opts, _repo);
+        var actualBytes = new byte[65];
+
+        var act = async () => await svc.UploadAsync(
+            new MemoryStream(actualBytes), "x.bin", "application/octet-stream", length: 1 /* declared, irrelevant */);
+
+        await act.Should().ThrowAsync<PayloadTooLargeException>();
     }
 }

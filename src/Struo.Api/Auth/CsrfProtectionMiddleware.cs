@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Struo.Api.Http;
 using ErrorCodes = Struo.Api.Http.ErrorCodes;
 
@@ -25,19 +24,18 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
     private static readonly HashSet<string> SafeMethods =
         new(StringComparer.OrdinalIgnoreCase) { "GET", "HEAD", "OPTIONS", "TRACE" };
 
-    // AUTH-2: mirrors AuthWiring's EnvelopeJsonOptions — this middleware runs before MVC, so
-    // EnvelopeResultFilter never sees this response; the camelCase envelope must be written by hand
-    // rather than relying on WriteAsJsonAsync's default (non-camelCase) HttpResponseJsonOptions.
-    private static readonly JsonSerializerOptions EnvelopeJsonOptions = new(JsonSerializerDefaults.Web);
-
     public async Task InvokeAsync(HttpContext context)
     {
         if (RequiresCsrfHeader(context.Request))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            // AUTH-2: this middleware runs before MVC, so EnvelopeResultFilter never sees this
+            // response; the camelCase envelope must be written by hand via the shared options
+            // (see EnvelopeJsonOptionsHolder) rather than relying on WriteAsJsonAsync's default
+            // (non-camelCase) HttpResponseJsonOptions.
             await context.Response.WriteAsJsonAsync(
                 Envelope.Error(ErrorCodes.Forbidden, $"Missing required '{HeaderName}' header."),
-                EnvelopeJsonOptions);
+                EnvelopeJsonOptionsHolder.Instance);
             return;
         }
 

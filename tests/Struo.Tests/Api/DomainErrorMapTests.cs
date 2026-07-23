@@ -70,6 +70,18 @@ public class DomainErrorMapTests
         message.Should().Be("bad");
     }
 
+    // SEC-15: a lying/streaming upload whose actual bytes exceed MaxUploadBytes must map to a
+    // dedicated 413, distinct from QueryException's generic 400 BAD_USER_INPUT above.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PayloadTooLarge_is_PAYLOAD_TOO_LARGE_regardless_of_auth(bool authenticated)
+    {
+        var (code, message) = DomainErrorMap.Map(new PayloadTooLargeException("too big"), authenticated);
+        code.Should().Be("PAYLOAD_TOO_LARGE");
+        message.Should().Be("too big");
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -89,6 +101,7 @@ public class DomainErrorMapTests
     [InlineData("VERSION_CONFLICT", 409)]
     [InlineData("BAD_USER_INPUT", 400)]
     [InlineData("VALIDATION", 400)]
+    [InlineData("PAYLOAD_TOO_LARGE", 413)]
     [InlineData("INTERNAL_SERVER_ERROR", 500)]
     public void StatusFor_maps_each_code_to_its_http_status(string code, int expected)
         => DomainErrorMap.StatusFor(code).Should().Be(expected);
@@ -99,4 +112,8 @@ public class DomainErrorMapTests
     [Fact]
     public void ForStatus_409_stays_generic_CONFLICT()
         => ErrorCodes.ForStatus(409).Should().Be("CONFLICT");
+
+    [Fact]
+    public void ForStatus_413_is_PAYLOAD_TOO_LARGE()
+        => ErrorCodes.ForStatus(413).Should().Be("PAYLOAD_TOO_LARGE");
 }
