@@ -100,7 +100,9 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
 .shell.collapsed .nav-item { justify-content: center; padding: 9px; }
 .shell.collapsed .nav-sub { display: none; }
 .scrim { position: fixed; inset: 56px 0 0 0; background: var(--overlay); z-index: 35; border: none; padding: 0; }
-.content { grid-area: main; overflow-y: auto; overflow-x: clip; background: var(--surface); }
+/* min-width: 0 — grid items default to min-width:auto and refuse to shrink below their
+   widest child, blowing the shell past the viewport on narrow screens. */
+.content { grid-area: main; min-width: 0; overflow-y: auto; overflow-x: clip; background: var(--surface); }
 .page { padding: 24px 28px 48px; }
 .app-breadcrumb { margin-bottom: 14px; background: transparent; border: none; padding: 0; }
 @media (max-width: 1023px) {
