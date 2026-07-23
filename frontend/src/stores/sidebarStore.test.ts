@@ -46,4 +46,20 @@ describe('sidebarStore', () => {
     expect(s.drawerOpen).toBe(true)
     expect(localStorage.getItem('struo.sidebar')).toBeNull()
   })
+
+  it('expand() un-collapses and persists', () => {
+    const s = useSidebarStore()
+    s.toggleCollapse() // -> collapsed
+    s.expand()
+    expect(s.collapsed).toBe(false)
+    expect(localStorage.getItem('struo.sidebar')).toBe('expanded')
+  })
+
+  it('expand() is a no-op when already expanded', () => {
+    const s = useSidebarStore()
+    localStorage.setItem('struo.sidebar', 'sentinel')
+    s.expand()
+    expect(s.collapsed).toBe(false)
+    expect(localStorage.getItem('struo.sidebar')).toBe('sentinel') // untouched
+  })
 })
