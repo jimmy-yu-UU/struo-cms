@@ -56,12 +56,10 @@
 - ⏳ **尚未 commit**；⏳ **尚未跑 live PG gate**（見下方清單）。
 
 ### Batch 1 衍生的新發現項目（本輪修復過程中揭露）
-- [ ] **SEC-14 LOW — `SchemaService.WithoutHiddenFields` 未過濾 `meta.Translation.Fields`，`/api/schema/{c}` 的 `translation.fields` 仍列出 hidden translatable 欄位「名稱」**
+- [x] **SEC-14 LOW — `SchemaService.WithoutHiddenFields` 未過濾 `meta.Translation.Fields`，`/api/schema/{c}` 的 `translation.fields` 仍列出 hidden translatable 欄位「名稱」** ✅ 已修（2026-07-23，後續追蹤批；commit `9477b83`）。`WithoutHiddenFields` 一併 `Translation = tm with { Fields = tm.Fields.Where(visibleFieldNames.Contains).ToList() }`（無 sidecar 則 null），與 `Fields` 過濾同源身分（皆 `Camel(prop.Name)`，不可變不破快取）。**前端消費確認**：`frontend/src/types/schema.ts` 的 `CollectionMeta` 無 `translation` 欄，全 `frontend/src` 不讀 `translation.fields`（僅 `translations` 資料 + vue-i18n），確認安全。測試以 sample `Article.internalSlug`（真 Hidden+Translatable）釘住不現於 `translation.fields`、`title` 仍在。Fable **PASS**。
   `src/Struo.Application/Metadata/SchemaService.cs:23-24` 只重寫 `meta.Fields`，未處理 `TranslationMetadata.Fields`。SEC-8 後僅已登入者可見、且只洩名稱不洩值（值由 SEC-13 已堵），GraphQL 側無平行洩漏（`CollectionSchemaBuilder.cs:176` 已過濾）。
-  **修法**：`WithoutHiddenFields` 一併 `Translation = tm with { Fields = 過濾後 }`。**修前先查前端是否消費 `translation.fields`（schemaStore 型別/用法）避免 FE 破壞。**
-- [ ] **DEP-1 MED — `HtmlSanitizer` 的間接依賴 `AngleSharp 0.17.1` 觸發 NuGet 安全公告 NU1902（GHSA-pgww-w46g-26qg），配 `TreatWarningsAsErrors` 使 build 全壞**
-  現況：`Directory.Build.props` 已加**單條 advisory 抑制**（標 TEMP）讓 build 能跑（複核認定做法恰當、不過度）。這是環境/上游公告變動，非本 repo 程式碼問題。
-  **長期修法**：升級 `HtmlSanitizer` 至引用已修補 AngleSharp 的版本（用 `dotnet add package` 取得最新版），或加直接 AngleSharp 引用壓過 transitive，然後移除抑制。**注意**：AngleSharp 是 RichText sanitizer 的核心，升級後必須複核 sanitizer 行為未變（§8 XSS 防線）。
+- [x] **DEP-1 MED — `HtmlSanitizer` 的間接依賴 `AngleSharp 0.17.1` 觸發 NuGet 安全公告 NU1902（GHSA-pgww-w46g-26qg），配 `TreatWarningsAsErrors` 使 build 全壞** ✅ 已修（2026-07-23，後續追蹤批；commit `9477b83`）。**🔶使用者決策（2026-07-23）：採用 beta + 留追蹤項**。案(b)（直接 AngleSharp 覆蓋）走不通——HtmlSanitizer 9.0.x 以 exact-pin `[0.17.1]` 鎖死，強拉 1.5.2 觸 **NU1608 還原錯誤**（非警告）。故採案(a)：`dotnet add package HtmlSanitizer --version 9.1.968-beta`（唯一拉到已修補 AngleSharp 的線），解出 `AngleSharp 1.5.2`（修補 CVE）+ `AngleSharp.Css 1.0.0-beta.216`；移除 `Directory.Build.props` 的 TEMP 抑制。**sanitizer 行為經硬化測試證實不變**（新增 mXSS/foreign-content、obfuscated href-scheme、target 移除共 8 例，全數中和；§8 XSS 防線成立）。⚠️ **殘留追蹤**：待穩定版 9.1.x 採用 AngleSharp 1.x 後 re-pin 掉 `-beta`。
+  現況（已解）：`Directory.Build.props` 原有**單條 advisory 抑制**（標 TEMP），本批已移除。
 
 ### Batch 1 live PG gate 清單 — ✅ 全數 PASS（2026-07-22 實地驗證，Sonnet 執行 + 貼證據）
 - [x] **DB-11 併發**：清空 `site_settings` 後 8 路真併發 PUT（同秒處理）→ 全部 200、後端 log 零 Exception、事後 `count(*)=1`（LWW 符合預期）。driver 確認 Npgsql **5.0.18**。
@@ -248,10 +246,23 @@
   - **TEST-7/8/9** ✅ settings 拒絕案斷言 `error.code`（FORBIDDEN/BAD_USER_INPUT）；config defaults 自含 ClearAsync；brandName trim（`"  My Brand  "`→`"My Brand"`,經 /api/config 驗證持久化）釘住。
 - **驗證證據**：後端 `dotnet test` **819 綠**（813→816 backend-core→820 db→819 DB-16 移 1 theory case）；前端 vitest **539 綠**、`pnpm build` 通過；**live PG+MinIO gate PASS**（DB-19 restore 無 42804/二次冪等/不重複 revision、DB-18 list-vs-detail、DB-17 Guid FK-select、SEC-9 >64KB 與 <64KB 上傳/下載 byte 吻合 204800/10240、回歸 smoke 全綠）；**DB-16 parity zero-diff** 已證。
 - **commits**：`f3c69fc` 後端/db + `390d0d6` 前端 +（本 doc commit）。⏳ 尚未 push。
-- **複核揭露的新追蹤項（未做，下一批）**：
-  - [ ] **SEC-15 LOW（SEC-9 複核揭露）** — `FileBufferingReadStream` 未帶 `bufferLimit` → 謊報 Content-Length 的 client 仍可把超過 `MaxUploadBytes` 的位元組 spool 到 temp（磁碟放大；舊 MemoryStream 路徑同樣信任 declared length,非回歸）。**修法**：ctor 傳 `bufferLimit: options.MaxUploadBytes`,並把逾量 IOException 映成 400/413（需錯誤映射 + 測試 + live gate,故獨立追蹤而非塞進本批）。
-  - [ ] **DB-22 LOW（DB-19 複核揭露）** — soft-delete **trash 側**仍為 txn 外預讀 no-op guard（`SoftDeleteGenericAsync` 的 WHERE 無 `deletedat IS NULL`）→ 兩個併發 DELETE 同一 live row 可各自通過預讀而重複 re-stamp/記 "delete" revision（restore 側已由 DB-19 原子化修掉,trash 側不對稱殘留）。**修法**：比照 restore,`SoftDeleteGenericAsync` 加 `AND deletedat IS NULL` + 僅 `affected>0` 記 revision（行為變更,需 live PG gate）。
-  - LOW 殘留 nits（未修,已記錄）：AUTH-2 `EnvelopeJsonOptions` 與 AuthWiring 重複（cosmetic,可抽 shared 防漂移）；FE-25 `<tr role="button">` 犧牲 table 語意（真 `<button>` 較佳）；FE-27 `reload()` 重設到第一頁而非 clamp（丟失頁位置,與既有 onType/onSort 一致）。
+- **複核揭露的新追蹤項** → **✅ 全數已修（2026-07-23，後續追蹤批；見下方執行紀錄）**：
+  - [x] **SEC-15 LOW（SEC-9 複核揭露）** ✅ 已修（commit `9477b83`）— ctor 傳 `bufferLimit: options.MaxUploadBytes`（accessor overload，複製 ASP.NET 內建 temp-dir 預設解析）；逾量 IOException（訊息含 "Buffer limit"，failure 方向安全且被 e2e 測試釘住）映成新 `PayloadTooLargeException` → 413 `PAYLOAD_TOO_LARGE`（`ErrorCodes`+`DomainErrorMap`，REST/GraphQL 共用）。附帶修正 `Size = buffer.Length`（實際 bytes，非 client 宣稱長度）。live MinIO gate PASS（byte-exact + Size 實測）。
+  - [x] **DB-22 LOW（DB-19 複核揭露）** ✅ 已修（commit `9477b83`）— 比照 DB-19 restore：`SoftDeleteGenericAsync` WHERE 加 `AND deletedat IS NULL`、僅 `affected>0` 記 "delete" revision、restrict 檢查+UPDATE+revision 收進單一 txn（移除 txn 外預讀短路，僅保留 unknown-id→404）；typed-NULL entity-typed SetColumns 逐字保留。live PG 併發 gate PASS（double-DELETE → 單一 deletedat/version 0→1 一次/一筆 delete revision/雙 204/無 PG 錯誤）。
+  - [x] **AUTH-2 `EnvelopeJsonOptions` 重複** ✅ 已修（commit `9477b83`）— 抽 `src/Struo.Api/Http/EnvelopeJsonOptionsHolder.cs` 單一 shared instance，AuthWiring + CSRF 共用（純重構）。
+  - [x] **FE-25 `<tr role="button">` 犧牲 table 語意** ✅ 已修（commit `e0851da`）— 改為 name cell 內真 `<button>`（比照 MediaGrid），移除 tr 的 role/tabindex/keydown hack，原生 Enter/Space + tab order。
+  - [x] **FE-27 `reload()` 重設第一頁** ✅ 已修（commit `e0851da`）— 刪除改 clamp 至最後有效頁（保留頁位置，刪末頁末筆不再停在超範圍空頁）。
+  - **本追蹤批複核揭露的新殘留（未修，已記錄）**：DEP-1 `-beta` 待穩定版 re-pin；SEC-15 optional counted-drain 硬化 + exact-boundary 已補測；DB-22 N1（極窄 race 下 concurrent-purge 使 already-trashed DELETE 回 204 而非 404，較 idempotent，可接受）/N2（trashed 後若出現 live restrict referencer，repeat DELETE 回 409 而非靜默成功，近乎不可達，可接受）。
+
+### 後續追蹤批 執行紀錄（2026-07-23，branch `audit-2026-07-21-batch5`）
+- **緣起**：Batch 5 及其複核揭露的最後掃尾追蹤項——SEC-15 / DB-22（Fable 新發現）、SEC-14 / DEP-1（Batch 1 積壓）、AUTH-2/FE-25/FE-27 殘留 nits。使用者指示「開始修接下來的 batch，修改用 Sonnet 5 子代理、複核用 Fable 5 子代理」。
+- **流程**（依偏好模型）：Wave 1 平行 = FE（Sonnet：FE-25/FE-27）‖ BE1（Sonnet：DEP-1→SEC-15→AUTH-2→SEC-14，同一 agent 內序列避免 .NET build 競合）；Wave 2 = BE2（Sonnet：DB-22，BE1 後序跑）。**Fable ×3 對抗複核**（FE / BE1 / BE2 分組，全靜態不 build 避免競合）→ orchestrator 統一 nit 修正（Sonnet ×1）→ 統一驗證 + orchestrator 親跑 live gate（Sonnet-run + evidence）。
+- **🔶 DEP-1 決策（2026-07-23）**：採用 HtmlSanitizer `9.1.968-beta` + 留追蹤項（詳見 DEP-1 條目）。
+- **完成項**：SEC-15 / DB-22 / SEC-14 / DEP-1 / AUTH-2 nit / FE-25 nit / FE-27 nit（見各條目 ✅）。
+- **複核結論**：FE-25/FE-27 **PASS-WITH-NITS**、SEC-15/DEP-1 **PASS-WITH-NITS**、AUTH-2/SEC-14/DB-22 **PASS**——**無阻擋提交項**；nits 已一次性補修（SEC-15 `Size=實際bytes`+境界測試、sanitizer mXSS/scheme/target 硬化 8 例、AUTH-2 檔名整合、FE-27 call-count 斷言）。
+- **驗證證據**：後端 `dotnet test` **837 綠**（826→+11：Files 3 + sanitizer 8），`dotnet build` 0 warning/0 error（NU1902 已真正解除，非抑制）；前端 vitest **542 綠**、`pnpm build`（vue-tsc）通過。**live PG+MinIO gate PASS**（orchestrator 親跑，Sonnet-run + evidence）：SEC-15 200KB(spill)/10KB(in-mem) 上下 byte-exact（sha256 一致）+ `Size`=實際 bytes（API 與 DB 皆吻合）；DB-22 併發 double-DELETE → `deletedat` 單一 stamp、`version` 0→1 一次、delete revision 恰 1 筆、雙 204、無 PG 錯誤；purge cleanup 乾淨。sanitizer 8 例全數中和（beta 大版號跳躍零回歸）。
+- **commits**：`9477b83` 後端/db + `e0851da` 前端 +（本 doc commit）。
+- **本批定位**：此為 audit-2026-07-21 的最後掃尾。至此**所有 HIGH/MED/LOW 追蹤項均已修或明示接受/延後**（延後：DB-16 part2 效能索引、ARC-8、DB-21；接受不改：SEC-7 決策、DB-14、SEC-11；新殘留：DEP-1 待穩定版 re-pin）。
 
 ## 決策項彙總（需使用者拍板，標 🔶）
 
@@ -261,6 +272,7 @@
 | DB-14 | 零 FK constraint | ✅ **已拍板（2026-07-22）：維持 app-only + 明文接受**。不建 FK（避免重開 InitTables-vs-migration parity 破口；pipeline 已審核正確；覆蓋本不完整）。缺口清單見 DB-14 條目。 |
 | SEC-11 | SVG 上傳白名單 | ✅ **已拍板（2026-07-22）：(c) 接受現有 disposition 緩解，不改碼**。詳見 Batch 5 SEC-11 條目。 |
 | BL-5 | dev 是否設 `MigrationsPath` | ✅ **已拍板（2026-07-22）：dev 維持空，以 migration 核心重整收斂**（單一 `001-core-baseline.sql` 核心 bootstrap 基線；migration=prod 產物）。詳見 Batch 5 BL-5 條目 + plan `2026-07-22-migration-core-rebaseline.md`。 |
+| DEP-1 | HtmlSanitizer 的 AngleSharp NU1902（升級 or 維持抑制） | ✅ **已拍板（2026-07-23）：採用 `HtmlSanitizer 9.1.968-beta` + 留追蹤項**。beta 是唯一拉到已修補 AngleSharp 1.5.2 的線（案 b 直接覆蓋觸 NU1608 死路）；sanitizer 行為經硬化測試證實不變；待穩定版 9.1.x 採用 AngleSharp 1.x 後 re-pin。詳見 DEP-1 條目。 |
 
 ## 各軌審核確認健康的部分（無需動作，留存證據）
 
