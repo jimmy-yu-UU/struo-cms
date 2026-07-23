@@ -219,7 +219,14 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', translations: {} }], total: 1 })
     const wrapper = mountView()
     await flushPromises()
-    await wrapper.find('tbody tr').trigger('click')
+    // Emit the DataTable's own row-click component event (not a native DOM click on the
+    // stub's <tr>, which the stub never translates into anything) -- this is what a real
+    // PrimeVue DataTable emits on row click. If a listener were ever bound back onto
+    // DataTable (e.g. @row-click="onEdit"), Vue attribute fallthrough would deliver it as
+    // an onRowClick prop on the stub, and $emit('row-click', ...) below would invoke it,
+    // driving pushMock -- so this assertion actually fails against that regression.
+    wrapper.findComponent({ name: 'DataTable' }).vm.$emit('row-click', { data: { id: '42' } })
+    await flushPromises()
     expect(pushMock).not.toHaveBeenCalled()
   })
 
