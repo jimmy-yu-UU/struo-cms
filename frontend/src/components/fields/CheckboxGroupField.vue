@@ -13,3 +13,7 @@ defineEmits<{ (e: 'update:modelValue', v: string[]): void }>()
     </label>
   </div>
 </template>
+<style scoped>
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.checkbox-option { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+</style>

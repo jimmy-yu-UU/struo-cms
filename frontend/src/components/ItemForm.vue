@@ -51,27 +51,6 @@ defineExpose({ activeLocale })
   <form class="item-form" @submit.prevent="emit('submit')">
     <p v-if="serverError" class="error" role="alert">{{ serverError }}</p>
 
-    <div v-for="f in fields.shared" :key="f.name" class="field">
-      <label :for="f.name">{{ f.label }}<span v-if="f.required" class="req">*</span></label>
-      <FieldInput :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
-      <small v-if="f.helpText" class="help">{{ f.helpText }}</small>
-      <small v-if="errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
-    </div>
-
-    <section v-if="meta.relations && meta.relations.length" class="relations">
-      <h3>{{ t('itemForm.relations') }}</h3>
-      <div v-for="rel in meta.relations" :key="rel.name" class="field">
-        <label>{{ rel.label }}</label>
-        <RelationInput
-          :relation="rel"
-          v-model="model.relations[rel.name]"
-          :disabled="disabled"
-          :parent-id="itemId"
-          :exclude-id="rel.selfReferencing ? itemId : undefined"
-        />
-      </div>
-    </section>
-
     <Tabs v-if="fields.translatable.length" v-model:value="activeLocale">
       <TabList>
         <Tab v-for="loc in locales" :key="loc.code" :value="loc.code">
@@ -94,13 +73,37 @@ defineExpose({ activeLocale })
         </TabPanel>
       </TabPanels>
     </Tabs>
+
+    <div v-for="f in fields.shared" :key="f.name" class="field">
+      <label :for="f.name">{{ f.label }}<span v-if="f.required" class="req">*</span></label>
+      <FieldInput :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
+      <small v-if="f.helpText" class="help">{{ f.helpText }}</small>
+      <small v-if="errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
+    </div>
+
+    <section v-if="meta.relations && meta.relations.length" class="relations">
+      <h3>{{ t('itemForm.relations') }}</h3>
+      <div v-for="rel in meta.relations" :key="rel.name" class="field">
+        <label>{{ rel.label }}</label>
+        <RelationInput
+          :relation="rel"
+          v-model="model.relations[rel.name]"
+          :disabled="disabled"
+          :parent-id="itemId"
+          :exclude-id="rel.selfReferencing ? itemId : undefined"
+        />
+      </div>
+    </section>
   </form>
 </template>
 
 <style scoped>
-.item-form { display: grid; gap: 18px; }
+.item-form { display: grid; gap: 18px; max-width: 860px; }
 .error { color: var(--danger, #dc2626); margin: 0; }
 .field { display: grid; gap: 6px; }
+.field :deep(.p-select),
+.field :deep(.p-multiselect),
+.field :deep(.p-treeselect) { width: 100%; max-width: 480px; }
 .field label { font-size: 0.9rem; font-weight: 500; color: var(--fg); }
 .req { color: var(--danger, #dc2626); margin-left: 2px; }
 .help { color: var(--muted); font-size: 0.8rem; }

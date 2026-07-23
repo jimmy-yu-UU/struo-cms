@@ -23,7 +23,7 @@ const src = computed(() => filesApi.contentUrl(props.file.id))
   <div class="file-thumb">
     <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" @error="broken = true" />
     <div v-else class="file-chip">
-      <span class="file-chip__name">{{ file.fileName }}</span>
+      <i class="pi pi-file file-chip__icon" aria-hidden="true" />
       <span class="file-chip__meta">{{ file.contentType }}</span>
     </div>
   </div>
@@ -55,14 +55,7 @@ const src = computed(() => filesApi.contentUrl(props.file.id))
   padding: 8px;
   overflow: hidden;
 }
-.file-chip__name {
-  font-size: 12px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg);
-}
+.file-chip__icon { font-size: 20px; color: var(--muted); }
 .file-chip__meta {
   font-size: 11px;
   color: var(--muted);
