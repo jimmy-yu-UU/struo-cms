@@ -84,6 +84,9 @@ pages) is explicitly out of scope.
   - Sidebar caption "v0.9.0 · 重新設計原型" → neutral copy (drop the prototype placeholder).
   - UserMenu: header with display name + email, separator, 登出 (data from `auth.user`).
   - Topbar shows user name (fallback email), role as caption.
+  - Requires one small backend change (the only one in this remediation): `/api/auth/me`
+    currently returns only `{id, isSuperAdmin, permissions}` — extend it with `email` +
+    `name` (User entity already has both; same `ISqlSugarClient` pattern as UsersController).
 - **B2-7 Media library**: remove duplicated filename on tiles (chip + caption both show it).
   Broken thumbnails are a MinIO presigned-URL env issue (https vs http) — out of frontend
   scope, tracked here for ops.
