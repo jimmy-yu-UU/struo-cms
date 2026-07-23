@@ -101,6 +101,9 @@ defineExpose({ activeLocale })
 .item-form { display: grid; gap: 18px; max-width: 860px; }
 .error { color: var(--danger, #dc2626); margin: 0; }
 .field { display: grid; gap: 6px; }
+/* Translatable fields live inside PrimeVue's tab panel, not as direct .item-form grid children —
+   mirror the form's 18px rhythm inside the panel. */
+.item-form :deep(.p-tabpanel) { display: grid; gap: 18px; }
 .field :deep(.p-select),
 .field :deep(.p-multiselect),
 .field :deep(.p-treeselect) { width: 100%; max-width: 480px; }
