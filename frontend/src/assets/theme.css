@@ -54,14 +54,15 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
 }
 .shell.collapsed { --sidebar-w: 76px; }
 .topbar {
-  grid-area: top; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+  grid-area: top; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 16px;
   background: var(--surface); border-bottom: 1px solid var(--border); z-index: 50;
 }
 .topbar .spacer { flex: 1; }
 .topbar .brand-btn {
   display: flex; align-items: center; gap: 10px; border: none; background: transparent;
-  padding: 4px 10px; border-radius: var(--radius, 8px); cursor: pointer; color: var(--fg);
+  padding: 4px 10px; border-radius: var(--radius, 8px); cursor: pointer; color: var(--fg); min-width: 0;
 }
+.topbar .brand-btn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .brand-btn:hover { background: var(--bg); }
 .topbar .mark {
   width: 28px; height: 28px; border-radius: 8px; background: var(--accent);
@@ -118,7 +119,8 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
 @media (max-width: 520px) {
   .page { padding: 16px 14px 40px; }
   .topbar { padding: 0 10px; }
-  .lang-switcher { display: none; }
+  /* 0,2,0 specificity: must beat PrimeVue's runtime-injected .p-select{display:inline-flex} */
+  .topbar .lang-switcher { display: none; }
 }
 
 /* ---- FE-R1 shell: icon button, nav icon, caption, nav error ---- */
