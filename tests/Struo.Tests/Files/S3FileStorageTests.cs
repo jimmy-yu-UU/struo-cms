@@ -59,4 +59,20 @@ public class S3FileStorageTests
 
         await s.DeleteAsync(key);
     }
+
+    [Theory]
+    [InlineData("http://localhost:9000", true)]
+    [InlineData("https://minio.example.com", false)]
+    [InlineData(null, false)]
+    public void CreateClient_derives_UseHttp_from_endpoint_scheme(string? endpoint, bool expectedUseHttp)
+    {
+        // A presigned URL must carry the endpoint's real scheme: the AWS SDK defaults to https,
+        // which dev MinIO (http-only) refuses after the 302.
+        var s3 = new FileStorageOptions.S3Options
+        {
+            Endpoint = endpoint, Bucket = "b", AccessKey = "k", SecretKey = "s",
+        };
+        using var client = (Amazon.S3.AmazonS3Client)S3FileStorage.CreateClient(s3);
+        ((Amazon.S3.AmazonS3Config)client.Config).UseHttp.Should().Be(expectedUseHttp);
+    }
 }

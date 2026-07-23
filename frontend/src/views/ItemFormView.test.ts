@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import ItemFormView from './ItemFormView.vue'
@@ -8,6 +8,7 @@ import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
+import { languagesApi } from '../api/languagesApi'
 
 const push = vi.fn()
 let routeParams: Record<string, string> = {}
@@ -641,5 +642,67 @@ describe('ItemFormView', () => {
     // re-baselined: leaving must not prompt
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  // ---- Task 5: language list refresh after editing the Language collection -------
+
+  const languageMeta = { name: 'language', label: 'Language', fields: [
+    { name: 'code', label: 'Code', interface: 'text', required: true, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
+  ], relations: [] }
+
+  it('saving a language item reloads the language store', async () => {
+    routeParams = { name: 'language' }; routeName = 'collection-create'
+    const auth = useAuthStore()
+    auth.user = { id: '1', isSuperAdmin: true, permissions: {} }
+    const schema = useSchemaStore()
+    schema.load = vi.fn().mockResolvedValue(undefined)
+    schema.get = vi.fn().mockReturnValue(languageMeta) as never
+    // Deliberately do NOT stub languageStore.load here: this test exercises the real load/reload
+    // implementation so the refetch-on-save can be observed at the languagesApi boundary.
+    vi.spyOn(languagesApi, 'getEnabled').mockResolvedValue([
+      { code: 'en', name: 'English', isDefault: true },
+    ])
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-lang' })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.code = 'fr'
+    const callsBefore = vi.mocked(languagesApi.getEnabled).mock.calls.length
+    await (w.vm as any).onSubmit()
+    await flushPromises()
+    expect(vi.mocked(languagesApi.getEnabled).mock.calls.length).toBeGreaterThan(callsBefore)
+  })
+
+  it('does not reload the language store when saving a non-language collection', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+    const reloadSpy = vi.spyOn(useLanguageStore(), 'reload')
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect(reloadSpy).not.toHaveBeenCalled()
+  })
+
+  it('deleting a language item reloads the language store', async () => {
+    routeParams = { name: 'language', id: '5' }
+    const auth = useAuthStore()
+    auth.user = { id: '1', isSuperAdmin: true, permissions: {} }
+    const schema = useSchemaStore()
+    schema.load = vi.fn().mockResolvedValue(undefined)
+    schema.get = vi.fn().mockReturnValue(languageMeta) as never
+    vi.spyOn(languagesApi, 'getEnabled').mockResolvedValue([
+      { code: 'en', name: 'English', isDefault: true },
+    ])
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', code: 'en', translations: {} })
+    vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
+    const w = mountView()
+    await w.vm.init()
+    const callsBefore = vi.mocked(languagesApi.getEnabled).mock.calls.length
+    ;(w.vm as any).onDelete()
+    await confirmRequire.mock.calls[0][0].accept()
+    await flushPromises()
+    expect(vi.mocked(languagesApi.getEnabled).mock.calls.length).toBeGreaterThan(callsBefore)
   })
 })

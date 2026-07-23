@@ -141,7 +141,7 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
 
     <Button class="files-add" :label="t('fields.selectFiles')" severity="secondary" outlined size="small" :disabled="disabled" @click="openDialog" />
 
-    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectFiles')" :style="{ width: '60rem' }">
+    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectFiles')" :style="{ width: 'min(78vw, 1300px)' }" :breakpoints="{ '960px': '95vw' }">
       <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
       <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="files-field__search" />
       <MediaGrid :files="options" multiple :selected-ids="currentIds()" @toggle="toggle" />

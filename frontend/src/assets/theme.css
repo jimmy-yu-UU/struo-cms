@@ -39,6 +39,12 @@
 }
 html { font-family: var(--font); }
 body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-level scrollbar */
+/* Theme toggle: fade the token-driven colors instead of hard-cutting. Scoped to color properties
+   only — a bare `transition: all` would fight the component transitions below (nav, shell grid).
+   The reduced-motion block right after this disables it wholesale. */
+*, *::before, *::after {
+  transition: background-color var(--speed) ease, border-color var(--speed) ease, color var(--speed) ease;
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }

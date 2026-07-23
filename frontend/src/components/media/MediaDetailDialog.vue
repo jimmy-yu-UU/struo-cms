@@ -171,7 +171,8 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
     :visible="visible"
     modal
     :header="$t('media.detailTitle')"
-    :style="{ width: '52rem' }"
+    :style="{ width: 'min(78vw, 1100px)' }"
+    :breakpoints="{ '960px': '95vw' }"
     :dismissable-mask="true"
     @update:visible="(v: boolean) => { if (!v) emit('close') }"
   >

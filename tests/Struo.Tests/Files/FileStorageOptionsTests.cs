@@ -31,4 +31,12 @@ public class FileStorageOptionsTests
     public void Valid_local_passes() =>
         new FileStorageOptions { Backend = "local", Local = new() { RootPath = "App_Data/uploads" } }
             .Invoking(x => x.Validate()).Should().NotThrow();
+
+    [Fact]
+    public void PresignedRedirect_defaults_to_false()
+    {
+        // Admin thumbnails consume /api/files/{id}/content directly; the safe default is to proxy
+        // bytes through the API. Redirect-to-storage is a deployment opt-in.
+        new FileStorageOptions().PresignedRedirect.Should().BeFalse();
+    }
 }

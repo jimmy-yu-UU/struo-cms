@@ -68,9 +68,15 @@ public sealed class FilesController(
         // isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
 
-        var presigned = await storage.GetPresignedUrlAsync(
-            row.StorageKey, TimeSpan.FromSeconds(options.S3.PresignTtlSeconds), ct);
-        if (presigned is not null) return Redirect(presigned);   // 302 (S3/MinIO)
+        // The admin SPA loads thumbnails/previews from this endpoint, so by default the API streams
+        // the bytes itself. Redirecting to storage is an explicit deployment opt-in
+        // (Struo:Files:PresignedRedirect) for setups where the browser can reach storage/CDN.
+        if (options.PresignedRedirect)
+        {
+            var presigned = await storage.GetPresignedUrlAsync(
+                row.StorageKey, TimeSpan.FromSeconds(options.S3.PresignTtlSeconds), ct);
+            if (presigned is not null) return Redirect(presigned);   // 302 (S3/MinIO)
+        }
 
         var stream = await storage.OpenReadAsync(row.StorageKey, ct);
         return File(stream, row.ContentType, fileDownloadName: row.FileName);
