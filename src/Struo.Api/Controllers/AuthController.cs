@@ -44,9 +44,11 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     [HttpGet("me")]
-    public IActionResult Me(
+    public async Task<IActionResult> Me(
         [FromServices] Struo.Application.Security.ICurrentPermissions permissions,
-        [FromServices] Struo.Application.Metadata.SchemaService schema)
+        [FromServices] Struo.Application.Metadata.SchemaService schema,
+        [FromServices] SqlSugar.ISqlSugarClient db,
+        CancellationToken ct)
     {
         var eff = permissions.Current;
         var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
@@ -62,9 +64,22 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
             }
         }
 
+        var uid = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        string? email = null;
+        string? name = null;
+        if (Guid.TryParse(uid, out var userId))
+        {
+            var u = await db.Queryable<Struo.Infrastructure.Identity.User>()
+                .Where(x => x.Id == userId).FirstAsync(ct);
+            email = u?.Email;
+            name = u?.Name;
+        }
+
         return Ok(new
         {
-            id = User.FindFirstValue(ClaimTypes.NameIdentifier),
+            id = uid,
+            email,
+            name,
             isSuperAdmin = eff.IsSuperAdmin,
             permissions = map
         });
