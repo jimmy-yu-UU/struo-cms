@@ -76,6 +76,11 @@ function tagSeverity(v: unknown): 'success' | 'warn' | 'secondary' {
   if (s === 'archived') return 'warn'
   return 'secondary'
 }
+function formatDeletedAt(v: unknown): string {
+  if (v == null || v === '') return ''
+  const d = new Date(String(v))
+  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString()
+}
 
 // Latest-wins guard: a slow earlier load must not clobber a newer one's state.
 const listLoad = createLatestWins()
@@ -239,6 +244,10 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite
         </template>
       </ListToolbar>
 
+      <p v-if="mode === 'trash'" class="trash-banner" role="status">
+        <i class="pi pi-trash" aria-hidden="true" /> {{ t('collectionList.trashNotice') }}
+      </p>
+
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <div class="table-scroll">
@@ -270,6 +279,11 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite
               </span>
             </template>
           </Column>
+          <Column v-if="mode === 'trash'" field="deletedAt" :header="t('collectionList.deletedAt')">
+            <template #body="{ data }">
+              <span class="datetime">{{ formatDeletedAt(data.deletedAt) }}</span>
+            </template>
+          </Column>
           <Column v-if="canWrite || canDelete" header="" :style="{ width: '8rem' }">
             <template #body="{ data }">
               <template v-if="mode === 'active'">
@@ -281,16 +295,16 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite
                         @click="onDelete(data)" />
               </template>
               <template v-else>
-                <Button icon="pi pi-undo" text rounded size="small"
+                <Button v-if="canDelete" icon="pi pi-undo" text rounded size="small"
                         :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
                         @click="onRestore(data)" />
-                <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                <Button v-if="canDelete" icon="pi pi-trash" severity="danger" text rounded size="small"
                         :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
                         @click="onPurge(data)" />
               </template>
             </template>
           </Column>
-          <template #empty>{{ t('collectionList.empty') }}</template>
+          <template #empty>{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'collectionList.empty') }}</template>
           <template #paginatorstart>
             <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
           </template>
@@ -303,4 +317,11 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite
 <style scoped>
 /* Wide tables scroll inside their own container; the page itself never scrolls sideways. */
 .table-scroll { overflow-x: auto; }
+.trash-banner {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  padding: 10px 14px; border: 1px solid var(--warn, #d97706);
+  background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
+  border-radius: var(--radius, 8px); color: var(--fg); font-size: .9rem;
+}
+.datetime { font-variant-numeric: tabular-nums; color: var(--muted); }
 </style>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { reactive } from 'vue'
+import { reactive, computed, provide, inject } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -20,6 +20,8 @@ const i18n = createI18n({
         edit: 'Edit', delete: 'Delete', restore: 'Restore', purge: 'Delete permanently',
         empty: 'No records', notFound: 'Collection not found',
         noAccess: "You don't have access to this collection",
+        trashNotice: 'You are viewing the trash. Items here are hidden from the site and API; restore them or delete them permanently.',
+        deletedAt: 'Deleted at', emptyTrash: 'Trash is empty',
       },
       confirm: {
         softDeleteHeader: 'Move to trash',
@@ -53,14 +55,30 @@ vi.mock('../api/schemaApi', () => ({
 }))
 // The DataTable/Column stubs render just enough real markup for the row-click and
 // icon-presence assertions below: a single <tbody><tr> to click on, and each Column's
-// #body scoped slot rendered once (with a dummy `data`) so action-button icons appear
-// in the DOM. Neither stub replicates PrimeVue's real per-row Column dispatch -- no test
-// here depends on cell content matching a specific row.
+// #body scoped slot rendered once so action-button icons appear in the DOM. Neither
+// stub replicates PrimeVue's real per-row Column dispatch (only the first `value` row
+// is ever rendered) -- a reactive `computed` provide/inject plumbs that single row's
+// real data down to each Column so cell-content assertions (e.g. the deletedAt column)
+// can see it, and stay current when `value` changes after an async reload.
 vi.mock('primevue/datatable', () => ({
-  default: { name: 'DataTable', template: '<table><tbody><tr><slot /></tr></tbody></table>' },
+  default: {
+    name: 'DataTable',
+    props: ['value'],
+    setup(props: { value: Record<string, unknown>[] }) {
+      provide('rowData', computed(() => props.value?.[0] ?? {}))
+      return {}
+    },
+    template: '<table><tbody><tr><slot /></tr></tbody></table>',
+  },
 }))
 vi.mock('primevue/column', () => ({
-  default: { name: 'Column', template: '<div><slot name="body" :data="{}" /></div>' },
+  default: {
+    name: 'Column',
+    setup() {
+      return { rowData: inject('rowData', computed(() => ({}))) }
+    },
+    template: '<div><slot name="body" :data="rowData" /></div>',
+  },
 }))
 vi.mock('primevue/inputtext', () => ({ default: { name: 'InputText', template: '<input />' } }))
 vi.mock('primevue/selectbutton', () => ({ default: { name: 'SelectButton', template: '<div />' } }))
@@ -503,5 +521,34 @@ describe('CollectionListView', () => {
     await flushPromises()
     expect(w.get('h1').text()).toBe('Article')
     expect(w.text()).toContain('1 items') // collectionList.count with n=total
+  })
+
+  it('trash mode shows notice banner and deletedAt column', async () => {
+    seedSoftSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({
+      data: [{ id: '42', deletedAt: '2026-07-23T10:00:00Z', translations: {} }], total: 1,
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.trash-banner').exists()).toBe(false)
+    ;(w.vm as any).setMode('trash')
+    await flushPromises()
+    expect(w.find('.trash-banner').exists()).toBe(true)
+    expect(w.text()).toContain('2026')
+  })
+
+  // Carried over from Task 3 review: the columns/isSelectField helpers are still live
+  // (they drive the Tag branch) even though linkField/row-link coverage was removed.
+  it('orders the default display field first and detects select-type columns', async () => {
+    seedSchema(); seedLanguage() // seedSchema's article has defaultDisplayField: 'status' (interface: select)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as any
+    expect(vm.columns[0].field).toBe('status')
+    expect(vm.isSelectField('status')).toBe(true)
+    expect(vm.isSelectField('title')).toBe(false)
   })
 })

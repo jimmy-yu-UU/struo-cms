@@ -109,6 +109,9 @@ export default {
     empty: 'No records',
     notFound: 'Collection not found',
     noAccess: "You don't have access to this collection",
+    trashNotice: 'You are viewing the trash. Items here are hidden from the site and API; restore them or delete them permanently.',
+    deletedAt: 'Deleted at',
+    emptyTrash: 'Trash is empty',
   },
   itemForm: {
     loading: 'Loading…',
