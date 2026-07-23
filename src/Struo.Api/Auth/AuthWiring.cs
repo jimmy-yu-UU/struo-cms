@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -13,12 +12,8 @@ public static class AuthWiring
     // gets a chance to run — so EnvelopeResultFilter never sees these responses and they used to
     // go out with an empty body, unlike in-action PermissionDeniedException 401/403s (mapped by
     // DomainErrorMap) which DO carry an envelope. OnRedirectToLogin/OnRedirectToAccessDenied below
-    // write the same envelope shape directly. HttpResponse.WriteAsJsonAsync resolves
-    // Microsoft.AspNetCore.Http.Json.JsonOptions (a separate registration from the MVC JsonOptions
-    // configured in Program.cs) when no options are passed, so an explicit camelCase options
-    // instance is supplied here rather than relying on DI to already agree.
-    private static readonly JsonSerializerOptions EnvelopeJsonOptions = new(JsonSerializerDefaults.Web);
-
+    // write the same envelope shape directly, using the shared camelCase options (see
+    // EnvelopeJsonOptionsHolder) rather than relying on DI to already agree.
     public static IServiceCollection AddStruoAuth(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
         services.AddHttpContextAccessor();
@@ -56,14 +51,14 @@ public static class AuthWiring
                     ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     return ctx.Response.WriteAsJsonAsync(
                         Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required."),
-                        EnvelopeJsonOptions);
+                        EnvelopeJsonOptionsHolder.Instance);
                 };
                 options.Events.OnRedirectToAccessDenied = ctx =>
                 {
                     ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return ctx.Response.WriteAsJsonAsync(
                         Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden."),
-                        EnvelopeJsonOptions);
+                        EnvelopeJsonOptionsHolder.Instance);
                 };
             })
             .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(

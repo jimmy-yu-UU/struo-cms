@@ -69,13 +69,18 @@ public sealed class SchemaControllerTests
         // SchemaService.WithoutHiddenFields still applies for authenticated callers -- SEC-8 only
         // changes anonymous access, it doesn't relax the pre-existing Hidden-field guarantee: the
         // Hidden top-level field (internalNote) and the Hidden+Translatable field (internalSlug) must
-        // still be absent from the "fields" array. (Note: TranslationMetadata.Fields, a separate raw
-        // sidecar field-name list under "translation", is untouched by WithoutHiddenFields and still
-        // names "internalSlug" -- a pre-existing, narrower field-name-discovery gap out of SEC-8's
-        // scope, not asserted against here.)
+        // still be absent from the "fields" array.
         var fieldNames = data.GetProperty("fields").EnumerateArray()
             .Select(f => f.GetProperty("name").GetString()).ToList();
         fieldNames.Should().NotContain("internalNote");
         fieldNames.Should().NotContain("internalSlug");
+
+        // SEC-14: TranslationMetadata.Fields is a second, separate raw sidecar field-name list under
+        // "translation.fields" -- it must be filtered the same way, or the Hidden+Translatable field's
+        // NAME (internalSlug) still leaked here even after SEC-13 redacted its VALUE.
+        var translationFieldNames = data.GetProperty("translation").GetProperty("fields")
+            .EnumerateArray().Select(f => f.GetString()).ToList();
+        translationFieldNames.Should().NotContain("internalSlug");
+        translationFieldNames.Should().Contain("title"); // an ordinary translatable field still lists
     }
 }

@@ -596,9 +596,13 @@ public sealed class SqlSugarItemRepository(
         string idColumn, object id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct)
         where T : class, ISoftDeletable, new()
     {
-        // Updateable<T> is not subject to the ISoftDeletable query filter, so the row is located by
-        // id regardless of its current DeletedAt — soft-deleting an already-trashed row still
-        // matches (idempotent) rather than silently affecting zero rows.
+        // Updateable<T> is not subject to the ISoftDeletable query filter, so without an explicit
+        // guard the row would be located by id alone regardless of its current DeletedAt. DB-22: the
+        // WHERE below adds "deletedat IS NULL" so trashing an already-trashed row is an atomic no-op
+        // AT THE SQL LEVEL (affected = 0) — not merely a pre-read check in ItemService, which would
+        // leave a TOCTOU window where two concurrent DELETEs of the same live row could each pass the
+        // check and both re-stamp/re-version and double-record a "delete" revision. Mirrors
+        // RestoreGenericAsync's identical "deletedat IS NOT NULL" guard (DB-19) on the opposite side.
         // Parameter named "__sdId" (not "@id"): SqlSugar auto-binds an internal "@id" placeholder of
         // its own on Updateable<T>() for an entity whose PK property is named "Id" — colliding with a
         // plain "@id" here silently rebinds to that internal (unset/default) parameter instead of ours.
@@ -612,9 +616,10 @@ public sealed class SqlSugarItemRepository(
         // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
         // DB-8: for AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
         // the trash stamp so the history timeline advances and a stale client 409s after a restore.
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
         var affected = await ApplyVersionBump(db.Updateable<T>()
                 .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy }))
-            .Where($"{idColumn} = @__sdId", new { __sdId = id })
+            .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NULL", new { __sdId = id })
             .ExecuteCommandAsync(ct);
         return affected > 0;
     }

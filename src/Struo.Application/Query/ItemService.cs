@@ -253,41 +253,45 @@ public sealed class ItemService(
 
         if (meta.SoftDelete && !purge)
         {
-            // Idempotent trash (DB-8 review): a row that is ALREADY trashed is a no-op — do not
-            // re-stamp DeletedAt, bump Version, or append a duplicate "delete" revision. SoftDeleteAsync
-            // uses Updateable<T>, which SqlSugar does NOT subject to the soft-delete query filter, so
-            // without this guard a repeat DELETE keeps re-stamping and polluting history. (This is a
-            // pre-read no-op guard; RestoreAsync instead uses an atomic affected-rows UPDATE — the residual
-            // concurrent-double-DELETE re-stamp window on this trash side is tracked as DB-22.)
-            // Caller-visible success is unchanged: an already-trashed row still reports success (true),
-            // an unknown id still reports false — no 404 change.
+            // Pre-read resolves ONLY unknown-id -> 404 (mirrors RestoreAsync's pre-read below). Whether
+            // the row is ACTUALLY (still) live and gets trashed BY THIS CALL is decided inside the
+            // transaction by repository.SoftDeleteAsync's own atomic "WHERE deletedat IS NULL" UPDATE
+            // (affected-rows > 0) — not by inspecting this pre-read snapshot. DB-22: a decision made here,
+            // outside the transaction, would leave a TOCTOU window where two concurrent DELETEs of the
+            // same live row could each pass the check and both re-stamp/re-version and double-record a
+            // "delete" revision. An already-trashed row (or one trashed by a concurrent request first) is
+            // a no-op: no Version bump, no revision — but caller-visible success is unchanged (the row
+            // exists, so this call still reports true; only an unknown id reports false).
             var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
-            if (existing is null) return false;                            // unknown id -> unchanged (false)
-            if (existing is ISoftDeletable { DeletedAt: not null }) return true; // already trashed -> no-op success
+            if (existing is null) return false; // unknown id -> unchanged (false)
 
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
             // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.
-            // DB-19: the check runs INSIDE the same transaction as the trash write (mirroring the purge
-            // branch's boundary below), narrowing the check-to-write window to purge-parity. Under PG
-            // READ COMMITTED a plain SELECT takes no row lock, so a referencing row committed by another
-            // txn between the check and the commit is still possible — full closure would need FK/locking
-            // (DB-14 accepted app-only), so this narrows rather than eliminates the race.
+            // DB-19/DB-22: the check runs INSIDE the same transaction as the trash write (mirroring the
+            // purge branch's boundary below and RestoreAsync's boundary), narrowing the check-to-write
+            // window to purge-parity. Under PG READ COMMITTED a plain SELECT takes no row lock, so a
+            // referencing row committed by another txn between the check and the commit is still possible
+            // — full closure would need FK/locking (DB-14 accepted app-only), so this narrows rather than
+            // eliminates the race. Note this now runs even when the row turns out to already be trashed
+            // (affected = 0 below) — harmless (a pure read-only guard), and simpler/more consistent than
+            // the previous pre-read short-circuit that skipped it entirely for a repeat DELETE.
             var actor = currentUser.GetCurrentUserId();
 
             // DB-8: trash bumps the item's Version (repository, AuditableEntity only) AND — for a
             // revisioned collection — records a "delete" revision. Both must commit together with the
             // trash stamp, so a capture failure rolls the whole trash back (no half-trashed row, no
-            // orphan revision).
-            var softDeleted = false;
+            // orphan revision). DB-22: revision capture is gated on the atomic UPDATE actually having
+            // affected the row, so a losing concurrent DELETE (or a repeat DELETE of an already-trashed
+            // row) records nothing.
             await repository.InTransactionAsync(async () =>
             {
                 await this.purge.CheckRestrictAsync(collection, id, ct);
-                softDeleted = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
-                if (softDeleted)
+                var softDeletedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+                if (softDeletedNow)
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
             }, ct);
-            return softDeleted;
+            return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
         var existed = false;

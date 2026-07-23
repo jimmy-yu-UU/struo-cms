@@ -17,6 +17,9 @@ public static class ErrorCodes
     // writes this code directly from its OnRejected callback (no exception is thrown, so
     // DomainErrorMap is never consulted for this one).
     public const string TooManyRequests = "TOO_MANY_REQUESTS";
+    // SEC-15: a lying/streaming upload whose actual bytes exceed FileStorageOptions.MaxUploadBytes
+    // even though the declared Content-Length passed the up-front check.
+    public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
 
     public static string ForStatus(int status) => status switch
     {
@@ -25,6 +28,7 @@ public static class ErrorCodes
         403 => Forbidden,
         404 => NotFound,
         409 => Conflict,
+        413 => PayloadTooLarge,
         429 => TooManyRequests,
         _ => Internal,
     };

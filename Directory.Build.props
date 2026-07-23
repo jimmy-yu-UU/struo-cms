@@ -8,18 +8,4 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
-  <!--
-    TEMP (2026-07-21, audit-2026-07-21 Batch 1 / B-group DB-11): a NuGet security-advisory feed update
-    published TODAY started flagging the transitive AngleSharp 0.17.1 (pulled in by HtmlSanitizer) as
-    NU1902 (moderate), which TreatWarningsAsErrors promotes to a build-breaking error — this now blocks
-    `dotnet restore`/`dotnet test` for the WHOLE solution, unrelated to any change in this batch (repro'd
-    on a clean `git stash`, i.e. present before this batch touched anything). Suppressing this ONE
-    advisory id (not lowering NuGetAuditLevel globally) to unblock local verification. Orchestrator:
-    please re-evaluate — either bump/replace HtmlSanitizer's AngleSharp dependency in a follow-up, or
-    confirm the risk is acceptable and keep this suppression, or remove it once the underlying package is
-    patched. Not scoped to this batch's 3 tasks; flagging rather than silently absorbing.
-  -->
-  <ItemGroup>
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-pgww-w46g-26qg" />
-  </ItemGroup>
 </Project>

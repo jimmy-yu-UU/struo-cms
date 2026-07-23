@@ -176,6 +176,42 @@ public class SoftDeleteRepositoryTests
         Assert.Equal(before.Version, after.Version);
     }
 
+    // ── DB-22: soft-delete (trash) idempotency, mirroring DB-19's restore fix ──────────────────
+
+    /// <summary>DB-22, repository layer: SoftDeleteAsync called a SECOND time directly against a row
+    /// that is ALREADY trashed (no ItemService pre-read guard involved — called straight on the
+    /// repository) must report false: no row matches the atomic "deletedat IS NULL" guard, so neither
+    /// DeletedAt nor Version is touched again. Before the fix, SoftDeleteGenericAsync's UPDATE located
+    /// the row by id alone (Updateable&lt;T&gt; ignores the soft-delete query filter) and re-stamped/
+    /// re-versioned unconditionally, which is exactly the race two concurrent DELETEs of the same live
+    /// row could exploit to double-record a "delete" revision. Mirrors
+    /// RestoreAsync_on_a_never_trashed_row_returns_false_and_does_not_bump_version (DB-19).</summary>
+    [Fact]
+    public async Task SoftDeleteAsync_on_an_already_trashed_row_returns_false_and_does_not_bump_version()
+    {
+        using var h = SoftDeleteRepositoryHarness.Create();
+        var id = await h.InsertArticleAsync(status: "published");
+
+        var firstDeleted = await h.Repository.SoftDeleteAsync(
+            "article", id.ToString(), DateTime.UtcNow, null, default);
+        Assert.True(firstDeleted);
+
+        var afterFirst = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.With, default))!;
+        var deletedAtAfterFirst = ((ISoftDeletable)afterFirst).DeletedAt;
+
+        // Second SoftDeleteAsync call directly on the repository (bypassing ItemService entirely)
+        // against the now-already-trashed row must be a true no-op at the SQL level.
+        var secondDeleted = await h.Repository.SoftDeleteAsync(
+            "article", id.ToString(), DateTime.UtcNow, null, default);
+        Assert.False(secondDeleted);
+
+        var afterSecond = (AuditableEntity)(await h.Repository.GetByIdAsync(
+            "article", id.ToString(), DeletedFilter.With, default))!;
+        Assert.Equal(afterFirst.Version, afterSecond.Version);
+        Assert.Equal(deletedAtAfterFirst, ((ISoftDeletable)afterSecond).DeletedAt);
+    }
+
     // ── Final-review fix (Important #1): engine-level exclusion regressions ────
 
     [Fact]
