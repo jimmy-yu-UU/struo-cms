@@ -14,6 +14,8 @@ export function buildBreadcrumb(
 
   if (name === 'dashboard') return [{ label: t('nav.dashboard') }]
   if (name === 'media') return [{ ...HOME, label: t('nav.dashboard') }, { label: t('nav.media') }]
+  if (name === 'settings')
+    return [{ ...HOME, label: t('nav.dashboard') }, { label: t('nav.settings') }]
 
   const collectionName = params.name ?? ''
   const meta = collections.find((c) => c.name === collectionName)
@@ -22,6 +24,9 @@ export function buildBreadcrumb(
   if (meta?.group && meta.group.trim() !== '') crumbs.push({ label: meta.group })
 
   const collectionLabel = meta?.label ?? collectionName
+  // Unknown route with no collection param: never emit an empty-label crumb.
+  if (collectionLabel === '') return crumbs
+
   const isLeaf = name === 'collection-create' || name === 'collection-item'
   crumbs.push(
     isLeaf

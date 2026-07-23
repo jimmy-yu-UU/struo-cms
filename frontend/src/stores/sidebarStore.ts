@@ -19,6 +19,15 @@ export const useSidebarStore = defineStore('sidebar', {
         /* localStorage unavailable — state still applied in-memory */
       }
     },
+    expand(): void {
+      if (!this.collapsed) return
+      this.collapsed = false
+      try {
+        localStorage.setItem('struo.sidebar', 'expanded')
+      } catch {
+        /* localStorage unavailable — state still applied in-memory */
+      }
+    },
     openDrawer(): void {
       this.drawerOpen = true
     },

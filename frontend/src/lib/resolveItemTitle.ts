@@ -1,4 +1,5 @@
 import type { CollectionMeta } from '../types/schema'
+import { pickTranslated } from './pickTranslated'
 
 export type TitleRow = Record<string, unknown> & {
   id?: unknown
@@ -18,8 +19,7 @@ export function readField(
   const field = targetMeta.fields.find((f) => f.name.toLowerCase() === fieldKey.toLowerCase())
   const key = field?.name ?? camel(fieldKey)
   if (field?.translatable) {
-    const t = row.translations?.[locale]
-    return t?.[key]
+    return pickTranslated(row.translations, locale, key)
   }
   return row[key]
 }

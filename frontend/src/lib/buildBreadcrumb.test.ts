@@ -56,4 +56,18 @@ describe('buildBreadcrumb', () => {
     const c = buildBreadcrumb({ name: 'collection-list', params: { name: 'ghost' } }, collections, t)
     expect(c).toEqual([{ label: 'nav.dashboard', to: { name: 'dashboard' } }, { label: 'ghost' }])
   })
+
+  it('settings route -> dashboard link + settings leaf', () => {
+    const crumbs = buildBreadcrumb({ name: 'settings', params: {} }, [], t)
+    expect(crumbs).toEqual([
+      { label: t('nav.dashboard'), to: { name: 'dashboard' } },
+      { label: t('nav.settings') },
+    ])
+  })
+
+  it('unknown non-collection route degrades to dashboard only (no empty crumb)', () => {
+    const crumbs = buildBreadcrumb({ name: 'not-found', params: {} }, [], t)
+    expect(crumbs).toEqual([{ label: t('nav.dashboard'), to: { name: 'dashboard' } }])
+    for (const c of crumbs) expect(c.label).not.toBe('')
+  })
 })
