@@ -109,6 +109,9 @@ export default {
     empty: '沒有資料',
     notFound: '找不到集合',
     noAccess: '您沒有此集合的存取權',
+    trashNotice: '目前檢視的是回收桶。此處項目已對站台與 API 隱藏，可還原或永久刪除。',
+    deletedAt: '刪除時間',
+    emptyTrash: '回收桶是空的',
   },
   itemForm: {
     loading: '載入中…',
