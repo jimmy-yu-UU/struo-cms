@@ -11,14 +11,6 @@ function dims(f: FileRow): string {
 function uploaded(f: FileRow): string {
   return f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '—'
 }
-// FE-25: the row is a clickable target (mirrors MediaGrid's real <button> tiles) but a native
-// <tr> has no built-in keyboard affordance, so wire Enter/Space to the same 'open' emit.
-function onKeydown(e: KeyboardEvent, id: string): void {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault()
-    emit('open', id)
-  }
-}
 </script>
 
 <template>
@@ -34,17 +26,25 @@ function onKeydown(e: KeyboardEvent, id: string): void {
       </tr>
     </thead>
     <tbody>
+      <!--
+        FE-25: a table row is not a button, so it must not claim `role="button"` (that gave
+        screen readers contradictory roles). Table semantics stay intact on the <tr>; the real,
+        natively keyboard-activatable <button> in the name cell (mirrors MediaGrid's tile
+        buttons) is the accessible primary action. The row keeps its own @click purely as a
+        mouse convenience so clicking anywhere in the row still opens the item, same as before.
+      -->
       <tr
         v-for="f in files"
         :key="f.id"
         class="media-list__row"
-        role="button"
-        tabindex="0"
         @click="emit('open', f.id)"
-        @keydown="onKeydown($event, f.id)"
       >
         <td class="media-list__thumb"><FileThumbnail :file="f" /></td>
-        <td class="media-list__name">{{ f.fileName }}</td>
+        <td class="media-list__name">
+          <button type="button" class="media-list__open" @click.stop="emit('open', f.id)">
+            {{ f.fileName }}
+          </button>
+        </td>
         <td>{{ f.contentType }}</td>
         <td>{{ formatFileSize(f.size) }}</td>
         <td>{{ dims(f) }}</td>
@@ -81,5 +81,22 @@ function onKeydown(e: KeyboardEvent, id: string): void {
 .media-list__thumb-col { width: 64px; }
 .media-list__thumb { width: 56px; }
 .media-list__thumb :deep(.file-thumb) { height: 44px; width: 56px; }
-.media-list__name { font-weight: 500; }
+.media-list__name { font-weight: 500; padding: 0; }
+.media-list__open {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.media-list__open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 </style>

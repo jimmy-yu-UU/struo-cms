@@ -96,8 +96,8 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenCalledTimes(2)
   })
 
-  it('resets to page 0 after a delete (FE-27: deleting the last item on the last page must not strand an empty page)', async () => {
-    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 1 })
+  it('stays on the current page after a delete when it is still in range (FE-27)', async () => {
+    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: rows as never, total: 100 })
     const w = mountView()
     await flushPromises()
     await (w.vm as unknown as { onPage: (e: { page: number; rows: number }) => void }).onPage({ page: 1, rows: 24 })
@@ -105,7 +105,34 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
     await (w.vm as unknown as { onDeleted: () => void }).onDeleted()
     await flushPromises()
-    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 0 }))
+    // total (100) still covers page 1 (24 rows/page -> 5 pages, indices 0-4), so the delete
+    // refresh must not reset the user back to page 0.
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
+    // FE-27: exactly one reload for the delete -- mount (1) + onPage (2) + onDeleted's single
+    // refresh (3). A redundant extra load at the same page would still pass the LastCalledWith
+    // assertion above, so pin the call count too.
+    expect(list).toHaveBeenCalledTimes(3)
+  })
+
+  it('clamps to the last valid page after a delete strands the current page out of range (FE-27)', async () => {
+    const list = vi.spyOn(itemsApi, 'list')
+      .mockResolvedValueOnce({ data: rows as never, total: 1 }) // initial mount load (page 0)
+      .mockResolvedValueOnce({ data: rows as never, total: 73 }) // onPage(2) load -- page 2 valid (3 pages)
+      .mockResolvedValueOnce({ data: [] as never, total: 30 }) // onDeleted's refresh at page 2 -- now out of range (2 pages left)
+      .mockResolvedValueOnce({ data: rows as never, total: 30 }) // clamped reload at page 1 (last valid page)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onPage: (e: { page: number; rows: number }) => void }).onPage({ page: 2, rows: 24 })
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 2 }))
+    await (w.vm as unknown as { onDeleted: () => void }).onDeleted()
+    await flushPromises()
+    // Deleting the last item on the last page must clamp to the new last valid page (1),
+    // never reset all the way back to page 0 and never leave the user on the stale, now
+    // out-of-range page 2.
+    expect(list).toHaveBeenNthCalledWith(3, 'file', expect.objectContaining({ page: 2 }))
+    expect(list).toHaveBeenNthCalledWith(4, 'file', expect.objectContaining({ page: 1 }))
+    expect(list).toHaveBeenCalledTimes(4)
   })
 
   it('hides Upload for a user without write on file', async () => {
