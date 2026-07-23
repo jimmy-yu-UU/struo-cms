@@ -102,6 +102,7 @@ export default {
     range: 'Showing {from}–{to} of {total}',
     active: 'Active',
     trash: 'Trash',
+    edit: 'Edit',
     delete: 'Delete',
     restore: 'Restore',
     purge: 'Delete permanently',
