@@ -35,6 +35,9 @@ public class FileAccessPolicyTests
     {
         public Task<RolePermissionData> LoadForUserAsync(Guid? userId, CancellationToken ct = default) =>
             throw new InvalidOperationException("Not expected to be called on the fast (already-authenticated) path.");
+
+        public Task<RolePermissionData> LoadForRolesAsync(IReadOnlyList<Guid> roleIds, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Not expected to be called on the fast (already-authenticated) path.");
     }
 
     [Fact]

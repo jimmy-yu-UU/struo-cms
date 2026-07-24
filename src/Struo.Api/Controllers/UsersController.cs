@@ -114,7 +114,43 @@ public sealed class UsersController(
         if (!await db.Queryable<User>().Where(u => u.Id == id).AnyAsync(ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
 
-        var eff = PermissionResolver.Resolve(await rolePermissions.LoadForUserAsync(id, ct));
+        RolePermissionData data;
+        // Read the raw query directly rather than via a bound `string? roles` parameter: ASP.NET
+        // Core's SimpleTypeModelBinder binds an empty query VALUE to null for string parameters,
+        // which would make "?roles=" indistinguishable from the param being absent entirely — and
+        // the whole point of this endpoint is that those two cases mean different things (absent =
+        // stored roles, empty = hypothetical public-floor preview).
+        if (!Request.Query.TryGetValue("roles", out var rolesValues))
+        {
+            data = await rolePermissions.LoadForUserAsync(id, ct);
+        }
+        else
+        {
+            var roles = rolesValues.ToString();
+            // B.1 #2: hypothetical preview of an unsaved role selection. Empty -> public floor.
+            var parts = roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var ids = new List<Guid>(parts.Length);
+            foreach (var p in parts)
+            {
+                if (!Guid.TryParse(p, out var rid))
+                    return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                        $"Malformed role id: {p}");
+                ids.Add(rid);
+            }
+            data = await rolePermissions.LoadForRolesAsync(ids, ct);
+            // Unknown ids silently shrinking the preview would show grants that don't match the
+            // selection — reject instead. (Empty request -> public role loads; roles named
+            // 'public' are still a real match, so only compare when ids were requested.)
+            if (ids.Count > 0)
+            {
+                var loaded = data.Roles.Select(r => r.Id).ToHashSet();
+                var missing = ids.Where(i => !loaded.Contains(i)).ToList();
+                if (missing.Count > 0)
+                    return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                        $"Unknown role ids: {string.Join(", ", missing)}");
+            }
+        }
+        var eff = PermissionResolver.Resolve(data);
         var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         if (!eff.IsSuperAdmin)
         {
