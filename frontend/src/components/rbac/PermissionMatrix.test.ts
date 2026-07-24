@@ -13,13 +13,16 @@ import { rbacApi } from '../../api/rbacApi'
 vi.mock('../../api/rbacApi', () => ({
   rbacApi: { getRolePermissions: vi.fn(), putRolePermissions: vi.fn() },
 }))
-vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn() }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean } = {}) {
+function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean } = {}) {
   return mount(PermissionMatrix, {
-    props: { roleId: props.roleId ?? 'r1', isSuperAdminRole: props.isSuperAdminRole ?? false },
+    props: {
+      roleId: props.roleId ?? 'r1',
+      isSuperAdminRole: props.isSuperAdminRole ?? false,
+      createMode: props.createMode ?? false,
+    },
     global: { plugins: [PrimeVue, ToastService, ConfirmationService, i18n] },
   })
 }
@@ -84,5 +87,45 @@ describe('PermissionMatrix', () => {
       { collection: 'article', canRead: true, canWrite: true, canDelete: false },
     ])
     expect(vm.dirty).toBe(false)
+  })
+
+  // Task 2: PermissionMatrix no longer owns a route-leave guard — ItemFormView owns the ONE guard
+  // and folds in this component's `dirty` state instead. save() must report success/failure so the
+  // parent form's Save can flush the matrix and know whether to keep the user on the page.
+  it('save resolves true on success and false on failure', async () => {
+    seedSchema()
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const w = mountMatrix()
+    await flushPromises()
+    const vm: any = w.vm
+    vm.toggle('article', 'write', true)
+    await expect(vm.save()).resolves.toBe(true)
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new Error('boom'))
+    vm.toggle('article', 'delete', true)
+    await expect(vm.save()).resolves.toBe(false)
+  })
+
+  // ---- Task 3: create-mode buffer (no GET, no own Save button, currentEntries()) ----
+
+  it('createMode renders the table without a GET and without the save button', async () => {
+    seedSchema()
+    const w = mountMatrix({ createMode: true })
+    await flushPromises()
+    expect(w.find('table').exists()).toBe(true)
+    expect(rbacApi.getRolePermissions).not.toHaveBeenCalled()
+    expect(w.findComponent({ name: 'Button' }).exists()).toBe(false)
+  })
+
+  it('currentEntries() returns only non-all-false rows after toggles, in create mode', async () => {
+    seedSchema()
+    const w = mountMatrix({ createMode: true })
+    await flushPromises()
+    const vm: any = w.vm
+    vm.toggle('article', 'read', true)
+    vm.toggle('article', 'write', true)
+    vm.toggle('user', 'read', false) // stays all-false -> must not be included
+    expect(vm.currentEntries()).toEqual([
+      { collection: 'article', canRead: true, canWrite: true, canDelete: false },
+    ])
   })
 })

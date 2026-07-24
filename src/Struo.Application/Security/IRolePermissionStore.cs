@@ -17,4 +17,12 @@ public sealed record RolePermissionData(
 public interface IRolePermissionStore
 {
     Task<RolePermissionData> LoadForUserAsync(Guid? userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Loads RBAC data for a HYPOTHETICAL role set (User-form preview of an unsaved TagSelect
+    /// selection). An empty list follows the same public-role floor as a role-less user.
+    /// Ids not matching an existing role are simply absent from the result — the caller decides
+    /// whether that is an error.
+    /// </summary>
+    Task<RolePermissionData> LoadForRolesAsync(IReadOnlyList<Guid> roleIds, CancellationToken ct = default);
 }

@@ -97,4 +97,49 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
         data.GetProperty("isSuperAdmin").GetBoolean().Should().BeTrue();
         data.GetProperty("permissions").EnumerateObject().Should().BeEmpty();
     }
+
+    // B.1 #2: the User form previews the CURRENT TagSelect selection before saving.
+    [Fact]
+    public async Task Roles_query_overrides_the_stored_role_set()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var storedRole = await CreateRoleWithGrantAsync(admin, "article", read: true, write: false);
+        var hypoRole = await CreateRoleWithGrantAsync(admin, "tag", read: true, write: true);
+        var userId = await CreateUserWithRolesAsync(admin, [storedRole]);
+
+        var data = (await admin.GetFromJsonAsync<JsonElement>(
+                $"/api/users/{userId}/effective-permissions?roles={hypoRole}"))
+            .GetProperty("data");
+        var perms = data.GetProperty("permissions");
+        perms.TryGetProperty("article", out _).Should().BeFalse("stored roles must be ignored");
+        perms.GetProperty("tag").GetProperty("write").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Empty_roles_query_previews_the_public_floor()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var role = await CreateRoleWithGrantAsync(admin, "article", read: true, write: true);
+        var userId = await CreateUserWithRolesAsync(admin, [role]);
+
+        var data = (await admin.GetFromJsonAsync<JsonElement>(
+                $"/api/users/{userId}/effective-permissions?roles="))
+            .GetProperty("data");
+        data.GetProperty("isSuperAdmin").GetBoolean().Should().BeFalse();
+        foreach (var p in data.GetProperty("permissions").EnumerateObject())
+        {
+            p.Value.GetProperty("write").GetBoolean().Should().BeFalse("public floor is read-only");
+        }
+    }
+
+    [Fact]
+    public async Task Unknown_or_malformed_role_id_is_400()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var userId = await CreateUserWithRolesAsync(admin, []);
+        (await admin.GetAsync($"/api/users/{userId}/effective-permissions?roles={Guid.NewGuid()}"))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await admin.GetAsync($"/api/users/{userId}/effective-permissions?roles=not-a-guid"))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

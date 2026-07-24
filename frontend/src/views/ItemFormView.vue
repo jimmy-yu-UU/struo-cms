@@ -2,6 +2,7 @@
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
@@ -14,6 +15,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
+import { rbacApi } from '../api/rbacApi'
 import { ApiError } from '../api/apiClient'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
@@ -31,6 +33,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 const confirm = useConfirm()
+const toast = useToast()
 const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
@@ -49,13 +52,20 @@ const canDelete = computed(() => auth.canDelete(name.value))
 // Batch B: RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
 // grant on role/user could open the form, but the matrix/preview endpoints would 403.
 const savedRoleIsSuperAdmin = ref(false)
-const effPanel = ref<InstanceType<typeof EffectivePermissionsPanel> | null>(null)
+// Task 2: the view owns the ONE leave guard for both the generic form and the matrix — see
+// guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
+const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
+// Task 3: also shown in create mode, buffered locally by the matrix (no role id to GET/PUT
+// against yet) — onSubmit's create path flushes the buffer once the role exists.
 const showMatrix = computed(
-  () => !isCreate.value && name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
+  () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
 )
 const showEffective = computed(
   () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
 )
+// Task 4: the effective-permissions preview follows the CURRENT (possibly unsaved) Roles
+// TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
+const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
@@ -128,18 +138,63 @@ async function onSubmit(): Promise<void> {
   serverError.value = ''
   try {
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update')
-    if (isCreate.value) await itemsApi.create(name.value, payload)
-    else await itemsApi.update(name.value, id.value!, payload)
+    // Task 3: capture the created item so a role-create can PUT its buffered grants against the
+    // freshly-minted id (created.id) below.
+    const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
+    const updated = !isCreate.value ? await itemsApi.update(name.value, id.value!, payload) : undefined
     conflict.value = false
+    // Final-review fix: the update DID succeed even if the matrix flush below fails — refresh the
+    // concurrency token from the response and re-baseline the FORM now, before the matrix flush.
+    // Returning early (matrix failure) must never discard a successful update: doing so left the
+    // saved edits reading dirty (bogus unsaved-changes prompt on leave) and a retry echoing the
+    // stale version (bogus 409 VERSION_CONFLICT against the user's own prior save).
+    if (updated && typeof (updated as Record<string, unknown>).version === 'number') {
+      model.version = (updated as Record<string, unknown>).version as number
+    }
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
-    // Spec §2b: refresh the preview after a user save (roles may have changed). Today onSubmit
-    // navigates to the list right after, unmounting this view — so this is a no-op in practice
-    // and only becomes observable if save-in-place ever lands. Kept deliberately; remove the
-    // navigation assumption here if that happens.
-    if (name.value === USER_COLLECTION) void effPanel.value?.reload()
-    captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
+    captureBaseline() // form saved successfully: clear its own dirty flag before the matrix flush
+    // Task 2: one form Save also flushes a dirty permission matrix, so the user only has to click
+    // Save once. The matrix flush runs AFTER the form is already baselined above: if the matrix's
+    // own PUT fails, its own error toast already fired, and we keep the user on the page (matrix
+    // stays dirty, form does not) instead of navigating away and losing the unsaved grants.
+    if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
+      const ok = await matrix.value.save()
+      if (!ok) return
+    }
+    // Task 3: role create — the matrix has no role id to PUT against until now, so it only buffers
+    // toggles locally. Flush that buffer against the id the create just returned. On failure, the
+    // role itself DID get created: warn and route to its edit page (where the matrix can retry)
+    // instead of the normal list navigation, which would otherwise hide the lost grants.
+    if (isCreate.value && name.value === ROLE_COLLECTION && created) {
+      const entries = matrix.value?.currentEntries() ?? []
+      if (entries.length > 0) {
+        try {
+          await rbacApi.putRolePermissions(String(created.id), entries)
+        } catch {
+          toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
+          // Review fix: the role WAS created, only the grants PUT failed. Re-baseline the matrix
+          // before navigating to its edit page (the form itself was already re-baselined above) —
+          // the create-mode buffer is discarded on this remount anyway (the edit-mode matrix
+          // instance re-GETs grants from the server), so nothing is lost, and leaving the matrix
+          // baseline stale would make the unified leave guard block the very navigation this
+          // failure path performs.
+          matrix.value?.markFlushed()
+          router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
+          return
+        }
+      }
+      // Review fix: grants are now flushed (PUT succeeded above) or there was nothing to flush
+      // (buffer held only all-false rows, e.g. toggled back off) — either way re-baseline the
+      // matrix so `dirty` clears. Without this, create mode's baseline never leaves '{}' and the
+      // unified leave guard fires an "Unsaved changes" prompt on the successful navigation below;
+      // picking "stay" there would leave the user on the create form, risking a duplicate role on
+      // a second Save.
+      matrix.value?.markFlushed()
+    }
+    // Note: the form itself was already re-baselined above (right after the create/update calls),
+    // before either matrix flush — no second captureBaseline() needed here.
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
@@ -247,7 +302,10 @@ function onCancel(): void {
 // synchronously in setup so vue-router picks it up. Returns a Promise the router awaits:
 // resolve(true) allows the navigation, resolve(false) cancels it and keeps the user here.
 function guardLeave(): Promise<boolean> {
-  if (!isDirty(baseline.value, model)) return Promise.resolve(true)
+  // Task 2: unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
+  // grants, so a single confirm covers both instead of two independently-registered guards firing
+  // sequentially on the same navigation.
+  if (!(isDirty(baseline.value, model) || (matrix.value?.dirty ?? false))) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
   return new Promise<boolean>((resolve) => {
     confirm.require({
@@ -277,7 +335,7 @@ onBeforeRouteUpdate(async (to, from) => {
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
 // text is not honoured by modern browsers.
 function onBeforeUnload(e: BeforeUnloadEvent): void {
-  if (isDirty(baseline.value, model)) {
+  if (isDirty(baseline.value, model) || (matrix.value?.dirty ?? false)) {
     e.preventDefault()
     e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
   }
@@ -286,7 +344,7 @@ onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 onMounted(init)
-defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, showHistory, model, errors, serverError, notFound, loading, conflict })
+defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, showHistory, model, errors, serverError, notFound, loading, conflict, guardLeave })
 </script>
 
 <template>
@@ -328,10 +386,12 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
 
       <PermissionMatrix
         v-if="showMatrix"
+        ref="matrix"
         :role-id="idStr"
         :is-super-admin-role="savedRoleIsSuperAdmin"
+        :create-mode="isCreate"
       />
-      <EffectivePermissionsPanel v-if="showEffective" ref="effPanel" :user-id="idStr" />
+      <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
 
       <RevisionHistoryDrawer
         v-if="!isCreate && meta.revisions"
