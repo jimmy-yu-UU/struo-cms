@@ -3,7 +3,9 @@ using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
+using Struo.Application.Localization;
 using Struo.Application.Query;
+using Struo.Domain.Localization;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
@@ -37,6 +39,14 @@ public class FileServiceLogoLifecycleTests : IDisposable
         public (int Width, int Height)? TryRead(Stream seekable, string contentType) => null;
     }
 
+    private sealed class StubLanguages : ILanguageProvider
+    {
+        public IReadOnlyList<LanguageInfo> Enabled() => [];
+        public string DefaultCode() => "en";
+        public bool IsEnabled(string code) => true;
+        public void Invalidate() { }
+    }
+
     private static readonly Guid Tester = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     private readonly SqliteTestDatabase _file = new();
@@ -63,7 +73,7 @@ public class FileServiceLogoLifecycleTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
-        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), repo);
+        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), repo, new StubLanguages());
     }
 
     public void Dispose() => _file.Dispose();

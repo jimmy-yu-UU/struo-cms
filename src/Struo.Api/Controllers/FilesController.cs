@@ -34,12 +34,22 @@ public sealed class FilesController(
         var file = form.Files.GetFile("file");
         if (file is null) return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Missing 'file' part.");
 
+        Guid? folderId = null;
+        var folderRaw = form["folderId"].ToString();
+        if (!string.IsNullOrEmpty(folderRaw))
+        {
+            if (!Guid.TryParse(folderRaw, out var parsedFolder))
+                return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Invalid 'folderId'.");
+            folderId = parsedFolder;
+        }
+
         await using var stream = file.OpenReadStream();
-        var created = await files.UploadAsync(stream, file.FileName, file.ContentType, file.Length, ct);
+        var created = await files.UploadAsync(stream, file.FileName, file.ContentType, file.Length, folderId, ct);
         return StatusCode(StatusCodes.Status201Created, new
         {
             id = created.Id, fileName = created.FileName, contentType = created.ContentType,
-            size = created.Size, width = created.Width, height = created.Height, status = created.Status
+            size = created.Size, width = created.Width, height = created.Height, status = created.Status,
+            folderId = created.FolderId
         });
     }
 
@@ -55,7 +65,8 @@ public sealed class FilesController(
         return Ok(new
         {
             id = row.Id, fileName = row.FileName, contentType = row.ContentType,
-            size = row.Size, width = row.Width, height = row.Height, status = row.Status
+            size = row.Size, width = row.Width, height = row.Height, status = row.Status,
+            folderId = row.FolderId
         });
     }
 

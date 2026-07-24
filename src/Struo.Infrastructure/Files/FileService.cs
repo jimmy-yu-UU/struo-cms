@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.WebUtilities;
 using SqlSugar;
 using Struo.Application.Files;
+using Struo.Application.Localization;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Settings;
@@ -17,10 +18,12 @@ public sealed class FileService(
     IFileStorage storage,
     IImageDimensionReader images,
     FileStorageOptions options,
-    IItemRepository repository)
+    IItemRepository repository,
+    ILanguageProvider languages)
 {
     public async Task<File> UploadAsync(
-        Stream content, string fileName, string contentType, long length, CancellationToken ct = default)
+        Stream content, string fileName, string contentType, long length, Guid? folderId = null,
+        CancellationToken ct = default)
     {
         if (length <= 0) throw new QueryException("Empty file.");
         if (length > options.MaxUploadBytes)
@@ -74,7 +77,7 @@ public sealed class FileService(
             await buffer.CopyToAsync(Stream.Null, ct);
             buffer.Position = 0;
 
-            return await SaveAsync(buffer, fileName, contentType, dims, ct);
+            return await SaveAsync(buffer, fileName, contentType, dims, folderId, ct);
         }
         catch (IOException ex) when (ex.Message.Contains("Buffer limit", StringComparison.OrdinalIgnoreCase))
         {
@@ -85,8 +88,16 @@ public sealed class FileService(
 
     private async Task<File> SaveAsync(
         Stream buffer, string fileName, string contentType, (int Width, int Height)? dims,
-        CancellationToken ct)
+        Guid? folderId, CancellationToken ct)
     {
+        if (folderId is { } fid)
+        {
+            // App-only existence check (DB-14 accepted stance: no DB FK). A folder deleted between
+            // this check and the insert is the same narrow race every FK-less write here has.
+            var folder = await db.Queryable<MediaFolder>().In(fid).FirstAsync(ct);
+            if (folder is null) throw new QueryException($"Folder '{fid}' does not exist.");
+        }
+
         var key = StorageKey.Create(fileName);
         await storage.SaveAsync(key, buffer, contentType, ct);
 
@@ -104,11 +115,29 @@ public sealed class FileService(
             Width = dims?.Width,
             Height = dims?.Height,
             Status = "published",
+            FolderId = folderId,
         };
+
+        // #7: seed the default-locale Title from the filename (extension stripped) so an upload is
+        // immediately human-readable everywhere. Dotfiles ("." prefix strips to empty) fall back to
+        // the full name; clamp to the column width (varchar 255). Same transaction as the file row —
+        // a seed failure must not leave a title-less file (repository join-if-active, CS-8).
+        var title = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(title)) title = fileName;
+        if (title.Length > 255) title = title[..255];
+        var translation = new FileTranslation
+        {
+            FileId = entity.Id, Locale = languages.DefaultCode(), Title = title,
+        };
+
         // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215); the File PK is a
         // client-generated Guid set above, so there is no DB-generated value to read back and
         // ExecuteCommandAsync(ct) + returning the same instance is equivalent while forwarding ct.
-        await db.Insertable(entity).ExecuteCommandAsync(ct);
+        await repository.InTransactionAsync(async () =>
+        {
+            await db.Insertable(entity).ExecuteCommandAsync(ct);
+            await db.Insertable(translation).ExecuteCommandAsync(ct);
+        }, ct);
         return entity;
     }
 
