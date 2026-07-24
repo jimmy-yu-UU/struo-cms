@@ -26,9 +26,9 @@
 | 2 | 列表明確編輯/刪除按鈕、列點擊不導航 | ✅ 完成 | Batch A |
 | 3 | Role 內編輯權限（矩陣） | ✅ 完成 | Batch B (651c1f1) + B.1 (ac8bbe8) |
 | 4 | 關聯顯示名稱、User 內編輯角色 + 有效權限 | ✅ 完成 | Batch B + B.1 |
-| 5 | **媒體庫資料夾（純系統整理，與實體儲存解耦）** | ⬜ 待做 | **Batch C** |
-| 6 | 死圖（✅ Batch A 修）；**媒體庫詳情移除指向 System>>File 的完整編輯介面連結**（側欄隱藏 File 已由 Batch B Hidden 旗標完成；剩 MediaDetailDialog 內的連結/入口） | 🔶 部分 | **Batch C 或獨立** |
-| 7 | **上傳自動帶入檔名到 Title** | ⬜ 待做 | **Batch C** |
+| 5 | **媒體庫資料夾（純系統整理，與實體儲存解耦）** | ✅ 完成 | **Batch C**：巢狀 `MediaFolder` 核心實體 + `File.FolderId`；Drive 式卡片 + 麵包屑 + 全域搜尋；資料夾 CRUD（非空刪除由框架 `OnDelete.Restrict` 守衛→409）；自引用循環守衛；FilePicker 資料夾過濾 |
+| 6 | 死圖（✅ Batch A 修）；**媒體庫詳情移除指向 System>>File 的完整編輯介面連結** | ✅ 完成 | Batch A（死圖）+ Batch B（側欄 Hidden File）+ **Batch C**（MediaDetailDialog 完整編輯連結移除；改以詳情內資料夾 TreeSelect 移動檔案） |
+| 7 | **上傳自動帶入檔名到 Title** | ✅ 完成 | **Batch C**：上傳交易內種入預設語系 Title（去副檔名，dotfile fallback，clamp 255） |
 | 8 | Language 新增後語系 tab 即時更新 | ✅ 完成 | Batch A |
 | 9 | 翻譯欄位間距 | ✅ 完成 | Batch A |
 | 10 | 媒體 dialog 放大 ~78vw | ✅ 完成 | Batch A |
@@ -39,11 +39,11 @@
 
 - **B.1**（ac8bbe8）：統一離開守衛（雙對話框）、`?roles=` 即時有效權限預覽、建立模式權限矩陣。
 - **B.2**（16bef0a）：PrimeVue `<a href="#">` 預設 hash 導航取消守衛暫停中的導航（麵包屑/登出卡死）→ command 內 preventDefault 先行。
+- **Batch C**（branch `admin-ux-batch-c`）：#5 媒體資料夾 + #7 檔名帶入 Title + #6 連結移除。實作重點：`MediaFolder` 核心實體（Hidden、走通用 items API）、`File.FolderId`、migration `002-media-folders.sql`、metadata 驅動自引用循環守衛、上傳 folderId + Title 種入。**最終全分支複核抓到 Critical C-1**（items API 不投影 M2O FK 到非 deep 回應，前端卻在讀 → 詳情頁 Save 會默默移走檔案 + 資料夾樹平鋪）→ 改用 `deep=parent/folder` 修畢。Live 驗證：後端 API 契約全證、e2e 18/18(含 C-1 回歸)、DB-16 parity 確認。
 
 ## 剩餘工作規劃順序（使用者確認過的分組）
 
-1. **Batch C**：#5 媒體資料夾 + #7 檔名自動帶入 Title（可含 #6 剩餘的連結移除）
-2. **#12 後端**：File 軟刪除（框架 `ISoftDeletable` 掛上 File entity；已獲使用者核可）
+1. **#12 後端**：File 軟刪除（框架 `ISoftDeletable` 掛上 File entity；已獲使用者核可）
 
 ## 已知 deferred minors（非阻塞，順手時處理）
 
