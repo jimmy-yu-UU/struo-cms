@@ -58,7 +58,11 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
 
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  await page.getByText(title, { exact: true }).click()
+  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   // Wait until init() finished loading (Title populated) so the dirty baseline is captured against
   // the fully-loaded model, not a half-initialised one.
@@ -79,7 +83,11 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
 
   await page.getByPlaceholder('Search').fill(name)
   await expect(page.getByText(name, { exact: true })).toBeVisible()
-  await page.getByText(name, { exact: true }).click()
+  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(name, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[0-9a-fA-F-]+$/)
   await expect(fieldByLabel(page, 'Name').locator('input')).toHaveValue(name)
   const id = page.url().match(/\/collections\/category\/([0-9a-fA-F-]+)$/)![1]
