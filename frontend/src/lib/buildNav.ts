@@ -11,7 +11,8 @@ export function buildNav(
   permissions: Record<string, CollectionPermission>,
 ): NavGroup[] {
   const readable = collections.filter(
-    (c) => c.name !== 'file' && (isSuperAdmin || permissions[c.name]?.read === true),
+    // Batch B: visibility is metadata-driven (CmsCollection Hidden flag) — no hardcoded names.
+    (c) => !c.hidden && (isSuperAdmin || permissions[c.name]?.read === true),
   )
 
   const groups = new Map<string, NavItem[]>()
