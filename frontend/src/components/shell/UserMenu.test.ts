@@ -46,13 +46,37 @@ describe('UserMenu', () => {
     auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const logoutSpy = vi.spyOn(auth, 'logout').mockResolvedValue()
     const wrapper = mountMenu()
-    const model = (wrapper.vm as unknown as { menuModel: { label: string; command: () => void }[] }).menuModel
+    const model = (
+      wrapper.vm as unknown as {
+        menuModel: { label: string; command: (event: { originalEvent?: { preventDefault: () => void } }) => void }[]
+      }
+    ).menuModel
     const logout = model.find((m) => m.label === '登出')!
     expect(logout).toBeTruthy()
-    await logout.command()
+    await logout.command({ originalEvent: { preventDefault: () => {} } })
     await new Promise((r) => setTimeout(r, 0))
     expect(logoutSpy).toHaveBeenCalledOnce()
     expect(push).toHaveBeenCalledWith({ name: 'login' })
+  })
+
+  it('prevents the anchor default action on the logout item, so a guard-suspended navigation is not cancelled by hash nav', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const logoutSpy = vi.spyOn(auth, 'logout').mockResolvedValue()
+    const wrapper = mountMenu()
+    const model = (
+      wrapper.vm as unknown as {
+        menuModel: { label: string; command: (event: { originalEvent?: { preventDefault: () => void } }) => void }[]
+      }
+    ).menuModel
+    const logout = model.find((m) => m.label === '登出')!
+
+    const preventDefault = vi.fn()
+    await logout.command({ originalEvent: { preventDefault } })
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(logoutSpy).toHaveBeenCalledOnce()
   })
 
   it('shows the user name (fallback email) next to the avatar', () => {

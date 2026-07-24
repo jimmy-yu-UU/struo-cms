@@ -18,7 +18,14 @@ async function onLogout() {
 }
 
 const menuModel = computed(() => [
-  { label: t('common.logout'), icon: 'pi pi-sign-out', command: onLogout },
+  {
+    label: t('common.logout'),
+    icon: 'pi pi-sign-out',
+    command: ({ originalEvent }: { originalEvent?: Event }) => {
+      originalEvent?.preventDefault() // same <a href="#"> default-action hazard as AppBreadcrumb
+      void onLogout()
+    },
+  },
 ])
 
 const menu = ref<InstanceType<typeof Menu> | null>(null)
