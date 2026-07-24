@@ -18,6 +18,15 @@ public sealed class CmsCollectionAttribute(string label) : Attribute
     public bool AdminOnly { get; set; }
 
     /// <summary>
+    /// When true, the collection is omitted from the admin sidebar/nav. It stays fully reachable
+    /// via REST/GraphQL and direct admin URLs — this is a presentation flag, not an access rule.
+    /// Used for collections whose admin surface lives elsewhere (File → media library) or that are
+    /// implementation details behind a dedicated editor (Permission/UserRole → Role permission
+    /// matrix, User.Roles TagSelect).
+    /// </summary>
+    public bool Hidden { get; set; }
+
+    /// <summary>
     /// When true, the collection keeps a revision history: every successful create/update appends a
     /// complete snapshot of the item's post-write state to the framework `revisions` table, and any past
     /// revision can be re-applied via revert (Phase 9c). Opt-in; snapshots live in a shared table, so —
