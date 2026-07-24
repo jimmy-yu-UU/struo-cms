@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type EffectivePermissions } from '../../api/rbacApi'
 
 // 問題 4: read-only preview of a user's merged grants, fed by the same resolver the backend
-// authorizes with. Parent (ItemFormView) calls reload() after a successful save.
-const props = defineProps<{ userId: string }>()
+// authorizes with. When roleIds is passed, the panel follows the CURRENT (possibly unsaved)
+// TagSelect selection live via the backend's `?roles=` hypothetical query, debounced so rapid
+// toggling doesn't fire a request per click.
+const props = defineProps<{ userId: string; roleIds?: string[] }>()
 
 const { t } = useI18n()
 const schema = useSchemaStore()
@@ -24,7 +26,9 @@ const rows = computed(() => {
 async function reload(): Promise<void> {
   loadFailed.value = false
   try {
-    eff.value = await rbacApi.getEffectivePermissions(props.userId)
+    eff.value = props.roleIds !== undefined
+      ? await rbacApi.getEffectivePermissions(props.userId, props.roleIds)
+      : await rbacApi.getEffectivePermissions(props.userId)
   } catch {
     loadFailed.value = true
     eff.value = null
@@ -33,11 +37,25 @@ async function reload(): Promise<void> {
 
 onMounted(reload)
 defineExpose({ reload })
+
+const roleIdsCsv = computed(() => (props.roleIds ?? []).join(','))
+let debounceHandle: ReturnType<typeof setTimeout> | undefined
+watch(roleIdsCsv, () => {
+  if (debounceHandle !== undefined) clearTimeout(debounceHandle)
+  debounceHandle = setTimeout(() => {
+    debounceHandle = undefined
+    void reload()
+  }, 300)
+})
+onBeforeUnmount(() => {
+  if (debounceHandle !== undefined) clearTimeout(debounceHandle)
+})
 </script>
 
 <template>
   <section class="effective-permissions">
     <h2 class="panel-title">{{ t('rbac.effectiveTitle') }}</h2>
+    <p v-if="props.roleIds !== undefined" class="hint">{{ t('rbac.effectivePreviewHint') }}</p>
 
     <p v-if="loadFailed" class="notice">{{ t('rbac.effectiveLoadFailed') }}</p>
     <p v-else-if="eff?.isSuperAdmin" class="notice">{{ t('rbac.effectiveSuperAdmin') }}</p>
@@ -68,6 +86,7 @@ defineExpose({ reload })
 <style scoped>
 .effective-permissions { display: grid; gap: 12px; margin-top: 24px; }
 .panel-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
+.hint { color: var(--muted); margin: 0; font-size: 0.9rem; }
 .notice { color: var(--muted); margin: 0; }
 .panel-scroll { overflow-x: auto; }
 .panel-table { border-collapse: collapse; min-width: 480px; }

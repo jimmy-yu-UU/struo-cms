@@ -22,9 +22,21 @@ describe('rbacApi', () => {
     expect(apiClient.put).toHaveBeenCalledWith('/roles/r1/permissions', entries)
   })
 
-  it('getEffectivePermissions hits /users/{id}/effective-permissions', async () => {
+  it('getEffectivePermissions hits /users/{id}/effective-permissions when roleIds is omitted', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
     await rbacApi.getEffectivePermissions('u1')
     expect(apiClient.get).toHaveBeenCalledWith('/users/u1/effective-permissions')
+  })
+
+  it('getEffectivePermissions appends ?roles=<csv> when roleIds is provided', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
+    await rbacApi.getEffectivePermissions('u1', ['a', 'b'])
+    expect(apiClient.get).toHaveBeenCalledWith('/users/u1/effective-permissions?roles=a,b')
+  })
+
+  it('getEffectivePermissions appends ?roles= (empty) for an empty roleIds array', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
+    await rbacApi.getEffectivePermissions('u1', [])
+    expect(apiClient.get).toHaveBeenCalledWith('/users/u1/effective-permissions?roles=')
   })
 })
