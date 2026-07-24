@@ -944,4 +944,53 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'role', id: 'new-role-3' } })
     expect(push).not.toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
+
+  // ---- Review fix: matrix baseline must be re-synced after the create-path flush, or the
+  // unified leave guard fires a bogus "Unsaved changes" prompt right after a successful/failed
+  // create-and-flush, which can trap the user on the create form (risking a duplicate role). ----
+
+  it('after a successful create-path grants flush, the leave guard resolves true without confirming', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-4' })
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+    expect(matrixVm.dirty).toBe(true)
+
+    await (w.vm as any).onSubmit()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+    expect(matrixVm.dirty).toBe(false) // re-baselined by markFlushed()
+
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('after a failed create-path grants flush, the leave guard does not block the edit-route push', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-5' })
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+
+    await (w.vm as any).onSubmit()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'role', id: 'new-role-5' } })
+    expect(matrixVm.dirty).toBe(false) // re-baselined by markFlushed() despite the PUT failure
+
+    // The guard must resolve true quietly — it must not block the very navigation the failure
+    // path just performed.
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
 })
