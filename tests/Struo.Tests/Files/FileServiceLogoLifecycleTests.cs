@@ -51,13 +51,15 @@ public class FileServiceLogoLifecycleTests : IDisposable
         _db.CodeFirst.InitTables<File>();
         _db.CodeFirst.InitTables<FileTranslation>();
         _db.CodeFirst.InitTables<SiteSettings>();
+        _db.CodeFirst.InitTables<MediaFolder>();
 
-        var collections = MetadataScanner.ScanTypes([typeof(File)]);
+        var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["file"] = typeof(File),
+            ["mediafolder"] = typeof(MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());

@@ -351,7 +351,8 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]);
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+             typeof(Struo.Infrastructure.Files.MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
         var descriptors = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category), typeof(Tag)]);
         var registry = new EntityRegistry(descriptors);
@@ -361,6 +362,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
             ["category"] = typeof(Category),
             ["tag"]      = typeof(Tag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());

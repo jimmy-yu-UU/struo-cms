@@ -95,7 +95,11 @@ public sealed class PostgresIntegrationTests : IDisposable
         _db.CodeFirst.InitTables<Category>();
         _db.Deleteable<Category>().Where(x => true).ExecuteCommand(); // deterministic start
 
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File) };
+        var types = new[]
+        {
+            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(Struo.Infrastructure.Files.MediaFolder),
+        };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category), typeof(Tag)]));
@@ -103,6 +107,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         {
             ["article"] = typeof(Article), ["category"] = typeof(Category),
             ["tag"] = typeof(Tag), ["file"] = typeof(Struo.Infrastructure.Files.File),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         return new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
