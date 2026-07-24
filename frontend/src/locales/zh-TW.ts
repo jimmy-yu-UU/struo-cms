@@ -157,7 +157,6 @@ export default {
     urlCopied: '已複製 URL',
     copyFailed: '無法複製 URL',
     status: '狀態',
-    openInEditor: '在項目表單開啟完整編輯',
     save: '儲存',
     delete: '刪除檔案',
     saveConflict: '此檔案已被他人變更,請重新開啟以取得最新版本。',
