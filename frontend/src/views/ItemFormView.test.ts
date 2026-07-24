@@ -42,6 +42,10 @@ vi.mock('vue-router', () => ({
 }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+// Task 3: capture toast.add calls so the "grants save failed after create" warning can be
+// asserted directly, same way confirm.require is captured above.
+const toastAdd = vi.fn()
+vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const meta = { name: 'article', label: 'Article', fields: [
   { name: 'status', label: 'Status', interface: 'text', required: true, searchable: false, sortable: false,
@@ -86,6 +90,7 @@ const i18n = createI18n({
       effectiveSuperAdmin: 'This user is a super admin and has full access to everything.',
       effectiveEmpty: 'No permissions',
       effectiveLoadFailed: 'Failed to load effective permissions',
+      grantsSaveFailedAfterCreate: "The role was created, but saving its permissions failed — retry from the role's edit page.",
     },
   } },
 })
@@ -112,6 +117,10 @@ describe('ItemFormView', () => {
     setActivePinia(createPinia())
     push.mockClear()
     confirmRequire.mockClear()
+    toastAdd.mockClear()
+    vi.mocked(rbacApi.getRolePermissions).mockClear()
+    vi.mocked(rbacApi.putRolePermissions).mockClear()
+    vi.mocked(rbacApi.getEffectivePermissions).mockClear()
     vi.restoreAllMocks()
     routeParams = {}
     routeName = 'collection-item'
@@ -753,7 +762,7 @@ describe('ItemFormView', () => {
       readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
   ], relations: [] }
 
-  it('mounts PermissionMatrix only when editing a role as super-admin', async () => {
+  it('mounts PermissionMatrix (edit AND create) only for a role as super-admin', async () => {
     vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
 
     routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
@@ -765,11 +774,15 @@ describe('ItemFormView', () => {
     await flushPromises()
     expect(editing.findComponent(PermissionMatrix).exists()).toBe(true)
 
-    routeParams = { name: 'role' }; routeName = 'collection-create' // create mode: no id yet -> no matrix
+    // Task 3: create mode also mounts the matrix now (createMode buffer, no GET) so the user does
+    // not have to save-then-reopen to grant permissions.
+    routeParams = { name: 'role' }; routeName = 'collection-create'
     const creating = mountView()
     await creating.vm.init()
     await flushPromises()
-    expect(creating.findComponent(PermissionMatrix).exists()).toBe(false)
+    const createdMatrix = creating.findComponent(PermissionMatrix)
+    expect(createdMatrix.exists()).toBe(true)
+    expect(createdMatrix.props('createMode')).toBe(true)
 
     routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
     const { schema: schemaNonAdmin } = setupStores({ superAdmin: false })
@@ -855,5 +868,80 @@ describe('ItemFormView', () => {
     ])
     await (w.vm as any).onSubmit()
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  // ---- Task 3: create-mode matrix, buffered and saved with the form -------
+
+  it('mounts the permission matrix in role create mode as super-admin', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    const matrixComp = w.findComponent(PermissionMatrix)
+    expect(matrixComp.exists()).toBe(true)
+    expect(matrixComp.props('createMode')).toBe(true)
+    expect(rbacApi.getRolePermissions).not.toHaveBeenCalled() // create mode: no GET
+  })
+
+  it('create submit with staged grants PUTs them against the id returned by create', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-1' })
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-1', [
+      { collection: 'article', canRead: true, canWrite: false, canDelete: false },
+    ])
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  it('create submit with an empty matrix buffer never calls putRolePermissions', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-2' })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRolePermissions).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  it('create submit: grants PUT rejection warns and routes to the new role edit page instead of the list, with no unhandled rejection', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-3' })
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+
+    await (w.vm as any).onSubmit() // must not throw / leave an unhandled rejection
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-3', [
+      { collection: 'article', canRead: true, canWrite: false, canDelete: false },
+    ])
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
+      severity: 'warn',
+      summary: "The role was created, but saving its permissions failed — retry from the role's edit page.",
+      life: 6000,
+    }))
+    expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'role', id: 'new-role-3' } })
+    expect(push).not.toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
 })

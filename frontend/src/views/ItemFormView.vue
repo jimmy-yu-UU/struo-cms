@@ -2,6 +2,7 @@
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
@@ -14,6 +15,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
+import { rbacApi } from '../api/rbacApi'
 import { ApiError } from '../api/apiClient'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
@@ -31,6 +33,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 const confirm = useConfirm()
+const toast = useToast()
 const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
@@ -53,8 +56,10 @@ const effPanel = ref<InstanceType<typeof EffectivePermissionsPanel> | null>(null
 // Task 2: the view owns the ONE leave guard for both the generic form and the matrix — see
 // guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
 const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
+// Task 3: also shown in create mode, buffered locally by the matrix (no role id to GET/PUT
+// against yet) — onSubmit's create path flushes the buffer once the role exists.
 const showMatrix = computed(
-  () => !isCreate.value && name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
+  () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
 )
 const showEffective = computed(
   () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
@@ -131,8 +136,10 @@ async function onSubmit(): Promise<void> {
   serverError.value = ''
   try {
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update')
-    if (isCreate.value) await itemsApi.create(name.value, payload)
-    else await itemsApi.update(name.value, id.value!, payload)
+    // Task 3: capture the created item so a role-create can PUT its buffered grants against the
+    // freshly-minted id (created.id) below.
+    const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
+    if (!isCreate.value) await itemsApi.update(name.value, id.value!, payload)
     conflict.value = false
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
@@ -144,6 +151,22 @@ async function onSubmit(): Promise<void> {
     if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
       const ok = await matrix.value.save()
       if (!ok) return
+    }
+    // Task 3: role create — the matrix has no role id to PUT against until now, so it only buffers
+    // toggles locally. Flush that buffer against the id the create just returned. On failure, the
+    // role itself DID get created: warn and route to its edit page (where the matrix can retry)
+    // instead of the normal list navigation, which would otherwise hide the lost grants.
+    if (isCreate.value && name.value === ROLE_COLLECTION && created) {
+      const entries = matrix.value?.currentEntries() ?? []
+      if (entries.length > 0) {
+        try {
+          await rbacApi.putRolePermissions(String(created.id), entries)
+        } catch {
+          toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
+          router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
+          return
+        }
+      }
     }
     // Spec §2b: refresh the preview after a user save (roles may have changed). Today onSubmit
     // navigates to the list right after, unmounting this view — so this is a no-op in practice
@@ -345,6 +368,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         ref="matrix"
         :role-id="idStr"
         :is-super-admin-role="savedRoleIsSuperAdmin"
+        :create-mode="isCreate"
       />
       <EffectivePermissionsPanel v-if="showEffective" ref="effPanel" :user-id="idStr" />
 

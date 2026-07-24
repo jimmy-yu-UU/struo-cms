@@ -16,9 +16,13 @@ vi.mock('../../api/rbacApi', () => ({
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean } = {}) {
+function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean } = {}) {
   return mount(PermissionMatrix, {
-    props: { roleId: props.roleId ?? 'r1', isSuperAdminRole: props.isSuperAdminRole ?? false },
+    props: {
+      roleId: props.roleId ?? 'r1',
+      isSuperAdminRole: props.isSuperAdminRole ?? false,
+      createMode: props.createMode ?? false,
+    },
     global: { plugins: [PrimeVue, ToastService, ConfirmationService, i18n] },
   })
 }
@@ -99,5 +103,29 @@ describe('PermissionMatrix', () => {
     vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new Error('boom'))
     vm.toggle('article', 'delete', true)
     await expect(vm.save()).resolves.toBe(false)
+  })
+
+  // ---- Task 3: create-mode buffer (no GET, no own Save button, currentEntries()) ----
+
+  it('createMode renders the table without a GET and without the save button', async () => {
+    seedSchema()
+    const w = mountMatrix({ createMode: true })
+    await flushPromises()
+    expect(w.find('table').exists()).toBe(true)
+    expect(rbacApi.getRolePermissions).not.toHaveBeenCalled()
+    expect(w.findComponent({ name: 'Button' }).exists()).toBe(false)
+  })
+
+  it('currentEntries() returns only non-all-false rows after toggles, in create mode', async () => {
+    seedSchema()
+    const w = mountMatrix({ createMode: true })
+    await flushPromises()
+    const vm: any = w.vm
+    vm.toggle('article', 'read', true)
+    vm.toggle('article', 'write', true)
+    vm.toggle('user', 'read', false) // stays all-false -> must not be included
+    expect(vm.currentEntries()).toEqual([
+      { collection: 'article', canRead: true, canWrite: true, canDelete: false },
+    ])
   })
 })
