@@ -13,6 +13,14 @@ export function mediaTypeFilter(type: MediaType): FilterSpec | undefined {
   return undefined
 }
 
+// folderId is a declared ManyToOne relation FK, auto-allowed by QueryValidator. `_null` ignores
+// FieldValue server-side; 'true' is a placeholder to satisfy FilterSpec's string shape.
+export function mediaFolderFilter(folderId: string | null): FilterSpec {
+  return folderId
+    ? { folderId: { op: '_eq', value: folderId } }
+    : { folderId: { op: '_null', value: 'true' } }
+}
+
 export function mediaSort(sort: MediaSort): string {
   return sort === 'name' ? 'fileName' : '-createdAt'
 }
