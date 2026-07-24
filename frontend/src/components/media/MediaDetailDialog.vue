@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import SelectButton from 'primevue/selectbutton'
+import TreeSelect from 'primevue/treeselect'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -20,12 +20,15 @@ import { buildItemPayload } from '../../lib/buildItemPayload'
 import { deleteConfirm } from '../../lib/deleteAction'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
+import { buildRelationTree, type TreeNode } from '../../lib/buildRelationTree'
+import { toFolderRows, type FolderRow } from '../../lib/folderTree'
 import type { FormModel } from '../../types/itemForm'
 
 const props = defineProps<{ file: FileRow | null; canWrite: boolean; canDelete: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void; (e: 'deleted'): void }>()
 
-const router = useRouter()
+const UNFILED = '__unfiled'
+
 const confirm = useConfirm()
 const toast = useToast()
 const { t } = useI18n()
@@ -40,6 +43,8 @@ const loading = ref(false)
 const saving = ref(false)
 const conflict = ref(false)
 const error = ref('')
+const folders = ref<FolderRow[]>([])
+const folderId = ref<string | null>(null)
 
 const fileMeta = computed(() => schema.get('file'))
 const locales = computed(() => langStore.languages)
@@ -63,6 +68,17 @@ const uploadedText = computed(() =>
 const statusText = computed(() => (raw.value?.status as string | undefined) ?? '—')
 const fileUrl = computed(() => (props.file ? filesApi.contentUrl(props.file.id) : ''))
 
+const folderNodes = computed<TreeNode[]>(() => [
+  { key: UNFILED, label: t('media.folderUncategorized'), data: UNFILED, children: [] },
+  ...buildRelationTree(folders.value.map((f) => ({ id: f.id, label: f.name, parentId: f.parentId })), 'parentId'),
+])
+// TreeSelect single-selection binds { [key]: true } (same mapping as RelationPicker's tree mode).
+const folderValue = computed(() => ({ [folderId.value ?? UNFILED]: true }))
+function onFolderChange(selection: Record<string, boolean>): void {
+  const key = Object.keys(selection)[0]
+  folderId.value = !key || key === UNFILED ? null : key
+}
+
 const activeValues = computed<Record<string, unknown>>({
   get: () => model.value.translations[activeLocale.value] ?? {},
   set: (v) => { model.value = { ...model.value, translations: { ...model.value.translations, [activeLocale.value]: v } } },
@@ -83,6 +99,15 @@ async function load(): Promise<void> {
     const item = await itemsApi.get('file', props.file.id)
     raw.value = item
     if (fileMeta.value) model.value = parseItemToForm(fileMeta.value, item, locales.value)
+    folderId.value = typeof item.folderId === 'string' ? item.folderId : null
+    try {
+      const res = await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name' })
+      folders.value = toFolderRows(res.data)
+    } catch {
+      // Folder loading is a progressive enhancement: if it fails, degrade to a flat "Uncategorized
+      // only" picker rather than blocking the whole detail dialog.
+      folders.value = []
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
   } finally {
@@ -96,7 +121,7 @@ async function onSave(): Promise<void> {
   conflict.value = false
   error.value = ''
   try {
-    const payload = buildItemPayload(fileMeta.value, model.value, locales.value, 'update')
+    const payload = { ...buildItemPayload(fileMeta.value, model.value, locales.value, 'update'), folderId: folderId.value }
     await itemsApi.update('file', props.file.id, payload)
     emit('saved')
     emit('close')
@@ -156,14 +181,9 @@ async function onCopyUrl(): Promise<void> {
   }
 }
 
-function onOpenEditor(): void {
-  if (!props.file) return
-  router.push({ name: 'collection-item', params: { name: 'file', id: props.file.id } })
-}
-
 watch(() => props.file?.id, (id) => { if (id) void load() }, { immediate: true })
 
-defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField })
+defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, folderId, onFolderChange, error })
 </script>
 
 <template>
@@ -199,6 +219,16 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
           <span>{{ $t('media.fieldAlt') }}</span>
           <InputText :model-value="(activeValues.alt as string) ?? ''" @update:model-value="setField('alt', $event ?? '')" :disabled="!canWrite || loading" />
         </label>
+        <label class="md-field">
+          <span>{{ $t('media.folderField') }}</span>
+          <TreeSelect
+            :model-value="folderValue"
+            :options="folderNodes"
+            selection-mode="single"
+            :disabled="!canWrite || loading"
+            @update:model-value="onFolderChange"
+          />
+        </label>
 
         <div class="md-kv"><span>{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>
         <div class="md-kv"><span>{{ $t('media.colSize') }}</span><b>{{ sizeText }}</b></div>
@@ -229,7 +259,6 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
           @click="onDelete"
         />
         <div class="md-foot__right">
-          <Button :label="$t('media.openInEditor')" icon="pi pi-external-link" text severity="secondary" @click="onOpenEditor" />
           <Button v-if="canWrite" :label="$t('media.save')" :loading="saving" @click="onSave" />
         </div>
       </div>

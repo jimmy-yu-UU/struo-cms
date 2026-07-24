@@ -157,7 +157,6 @@ export default {
     urlCopied: 'URL copied',
     copyFailed: 'Could not copy URL',
     status: 'Status',
-    openInEditor: 'Open in full editor',
     save: 'Save',
     delete: 'Delete file',
     saveConflict: 'This file was changed elsewhere — reopen to get the latest.',
