@@ -2,13 +2,29 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
+import PrimeVue from 'primevue/config'
+import ToastService from 'primevue/toastservice'
+import ConfirmationService from 'primevue/confirmationservice'
 import ItemFormView from './ItemFormView.vue'
+import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
+import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import { itemsApi } from '../api/itemsApi'
 import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { languagesApi } from '../api/languagesApi'
+import { rbacApi } from '../api/rbacApi'
+
+// Batch B Task 8: PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
+// so the reload/existence assertions below exercise the actual components; stub only their API.
+vi.mock('../api/rbacApi', () => ({
+  rbacApi: {
+    getRolePermissions: vi.fn(),
+    putRolePermissions: vi.fn(),
+    getEffectivePermissions: vi.fn(),
+  },
+}))
 
 const push = vi.fn()
 let routeParams: Record<string, string> = {}
@@ -54,10 +70,29 @@ const i18n = createI18n({
       hardDeleteHeader: 'Confirm delete',
       hardDeleteMessage: 'Delete this item? This cannot be undone.',
     },
+    rbac: {
+      matrixTitle: 'Permissions',
+      colCollection: 'Collection',
+      colRead: 'Read',
+      colWrite: 'Write',
+      colDelete: 'Delete',
+      save: 'Save permissions',
+      saved: 'Permissions saved',
+      loadFailed: 'Failed to load permissions',
+      saveFailed: 'Failed to save permissions',
+      superAdminAll: 'This role is a super admin and has full access to everything.',
+      adminOnlyWriteHint: 'Writes to this collection always require a super admin',
+      effectiveTitle: 'Effective permissions',
+      effectiveSuperAdmin: 'This user is a super admin and has full access to everything.',
+      effectiveEmpty: 'No permissions',
+      effectiveLoadFailed: 'Failed to load effective permissions',
+    },
   } },
 })
 function mountView() {
-  return mount(ItemFormView, { global: { plugins: [i18n], stubs } })
+  return mount(ItemFormView, {
+    global: { plugins: [i18n, PrimeVue, ToastService, ConfirmationService], stubs },
+  })
 }
 
 function setupStores(opts: { superAdmin?: boolean } = {}) {
@@ -704,5 +739,69 @@ describe('ItemFormView', () => {
     await confirmRequire.mock.calls[0][0].accept()
     await flushPromises()
     expect(vi.mocked(languagesApi.getEnabled).mock.calls.length).toBeGreaterThan(callsBefore)
+  })
+
+  // ---- Task 8: RBAC editors mounted on the generic form (Role -> matrix, User -> effective) ----
+
+  const roleMeta = { name: 'role', label: 'Role', fields: [
+    { name: 'name', label: 'Name', interface: 'text', required: true, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
+  ], relations: [] }
+
+  const userMeta = { name: 'user', label: 'User', fields: [
+    { name: 'email', label: 'Email', interface: 'text', required: true, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
+  ], relations: [] }
+
+  it('mounts PermissionMatrix only when editing a role as super-admin', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false })
+    const editing = mountView()
+    await editing.vm.init()
+    await flushPromises()
+    expect(editing.findComponent(PermissionMatrix).exists()).toBe(true)
+
+    routeParams = { name: 'role' }; routeName = 'collection-create' // create mode: no id yet -> no matrix
+    const creating = mountView()
+    await creating.vm.init()
+    await flushPromises()
+    expect(creating.findComponent(PermissionMatrix).exists()).toBe(false)
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema: schemaNonAdmin } = setupStores({ superAdmin: false })
+    ;(schemaNonAdmin.get as any).mockReturnValue(roleMeta)
+    useAuthStore().user = {
+      id: 'u2', isSuperAdmin: false, permissions: { role: { read: true, write: false, delete: false } },
+    }
+    const nonAdmin = mountView()
+    await nonAdmin.vm.init()
+    await flushPromises()
+    expect(nonAdmin.findComponent(PermissionMatrix).exists()).toBe(false)
+  })
+
+  it('mounts EffectivePermissionsPanel when editing a user as super-admin, and saving reloads it', async () => {
+    vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
+
+    routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(userMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'u9' })
+
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    const panel = w.findComponent(EffectivePermissionsPanel)
+    expect(panel.exists()).toBe(true)
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9')
+
+    const callsBeforeSubmit = vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length
+    await (w.vm as any).onSubmit()
+    await flushPromises()
+    expect(vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length).toBeGreaterThan(callsBeforeSubmit)
   })
 })

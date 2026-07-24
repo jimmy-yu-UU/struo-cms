@@ -45,6 +45,8 @@ export type CollectionMeta = {
   defaultDisplayField?: string | null
   softDelete?: boolean // Phase 9b: true when the collection's entity implements ISoftDeletable
   revisions?: boolean // Phase 9c: true when the collection is revisioned ([CmsCollection(Revisions=true)])
+  adminOnly?: boolean // writes always require super-admin (matrix disables write/delete for these)
+  hidden?: boolean // Batch B: omit from the sidebar; still reachable via API/direct URL
   fields: FieldMeta[]
   relations: RelationMeta[]
 }

@@ -5,6 +5,7 @@ using Struo.Api.Auth;
 using Struo.Api.Http;
 using ErrorCodes = Struo.Api.Http.ErrorCodes; // disambiguates from the global `HotChocolate.ErrorCodes` using (GraphQl)
 using Struo.Application.Abstractions;
+using Struo.Application.Metadata;
 using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
 
@@ -94,5 +95,38 @@ public sealed class UsersController(
         var updated = await db.Updateable<User>()
             .SetColumns(u => u.AccessToken == null).Where(u => u.Id == id).ExecuteCommandAsync(ct);
         return updated == 0 ? NotFound() : NoContent();
+    }
+
+    /// <summary>
+    /// Read-only preview for the User form (問題 4). Reuses the exact per-request resolution pair
+    /// (IRolePermissionStore + PermissionResolver), so the preview is by construction identical to
+    /// real authorization — including the public-role floor for role-less users and the super-admin
+    /// short-circuit. Projection mirrors AuthController.Me: probe each schema collection.
+    /// </summary>
+    [HttpGet("{id:guid}/effective-permissions")]
+    public async Task<IActionResult> GetEffectivePermissions(
+        Guid id,
+        [FromServices] IRolePermissionStore rolePermissions,
+        [FromServices] SchemaService schema,
+        CancellationToken ct)
+    {
+        if (RequireAdmin() is { } denied) return denied;
+        if (!await db.Queryable<User>().Where(u => u.Id == id).AnyAsync(ct))
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
+
+        var eff = PermissionResolver.Resolve(await rolePermissions.LoadForUserAsync(id, ct));
+        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        if (!eff.IsSuperAdmin)
+        {
+            foreach (var c in schema.GetAll())
+            {
+                var read = eff.CanRead(c.Name);
+                var write = eff.CanWrite(c.Name);
+                var del = eff.CanDelete(c.Name);
+                if (read || write || del)
+                    map[c.Name] = new { read, write, @delete = del };
+            }
+        }
+        return Ok(new { isSuperAdmin = eff.IsSuperAdmin, permissions = map });
     }
 }
