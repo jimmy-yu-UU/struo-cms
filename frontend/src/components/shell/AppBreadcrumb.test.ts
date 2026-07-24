@@ -12,8 +12,11 @@ vi.mock('primevue/breadcrumb', () => ({
   default: {
     name: 'Breadcrumb',
     props: ['model'],
+    // PrimeVue always invokes command with { originalEvent, item } — mirror that contract here
+    // rather than calling command() bare, since the real anchor's native click event is what
+    // the fix under test (originalEvent.preventDefault()) actually operates on.
     template:
-      '<ul class="pv-bc"><li v-for="(m,i) in model" :key="i" class="crumb" @click="m.command && m.command()">{{ m.label }}</li></ul>',
+      '<ul class="pv-bc"><li v-for="(m,i) in model" :key="i" class="crumb" @click="m.command && m.command({ originalEvent: $event, item: m })">{{ m.label }}</li></ul>',
   },
 }))
 
@@ -38,5 +41,22 @@ describe('AppBreadcrumb', () => {
     push.mockClear()
     await wrapper.findAll('.crumb')[3].trigger('click')
     expect(push).not.toHaveBeenCalled()
+  })
+
+  it('prevents the anchor default action before pushing, so a guard-suspended navigation is not cancelled by hash nav', () => {
+    const wrapper = mount(AppBreadcrumb, { global: { plugins: [i18n] } })
+    const model = (
+      wrapper.vm as unknown as {
+        model: { label: string; command?: (event: { originalEvent?: { preventDefault: () => void } }) => void }[]
+      }
+    ).model
+    const dashboardCrumb = model.find((m) => m.label === '儀表板')!
+    expect(dashboardCrumb.command).toBeTypeOf('function')
+
+    const preventDefault = vi.fn()
+    dashboardCrumb.command!({ originalEvent: { preventDefault } })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 })
