@@ -89,6 +89,21 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
         Entries(got.GetProperty("data")).Should().BeEquivalentTo([("article", true, false, false)]);
     }
 
+    // Final-review fix: grants are stored under the canonical collection name regardless of
+    // the caller's casing, so the admin matrix (which keys by canonical name) always sees them.
+    [Fact]
+    public async Task Put_canonicalizes_collection_casing()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var roleId = await CreateRoleAsync(admin);
+        var put = await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions",
+            new[] { new { collection = "ARTICLE", canRead = true, canWrite = false, canDelete = false } });
+        put.IsSuccessStatusCode.Should().BeTrue($"PUT failed: {await put.Content.ReadAsStringAsync()}");
+
+        var got = await admin.GetFromJsonAsync<JsonElement>($"/api/roles/{roleId}/permissions");
+        Entries(got.GetProperty("data")).Should().BeEquivalentTo([("article", true, false, false)]);
+    }
+
     [Fact]
     public async Task Put_with_duplicate_collection_is_400()
     {

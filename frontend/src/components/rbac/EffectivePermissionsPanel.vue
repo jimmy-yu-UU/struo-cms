@@ -55,9 +55,9 @@ defineExpose({ reload })
         <tbody>
           <tr v-for="r in rows" :key="r.name">
             <td class="col-name">{{ r.label }}</td>
-            <td><i v-if="r.read" class="pi pi-check" aria-hidden="true" /><span class="sr-only">{{ r.read }}</span></td>
-            <td><i v-if="r.write" class="pi pi-check" aria-hidden="true" /><span class="sr-only">{{ r.write }}</span></td>
-            <td><i v-if="r.delete" class="pi pi-check" aria-hidden="true" /><span class="sr-only">{{ r.delete }}</span></td>
+            <td><i v-if="r.read" class="pi pi-check" aria-hidden="true" /><span class="sr-only">{{ r.read ? t('rbac.colRead') : '' }}</span></td>
+            <td><i v-if="r.write" class="pi pi-check" aria-hidden="true" /><span class="sr-only">{{ r.write ? t('rbac.colWrite') : '' }}</span></td>
+            <td><i v-if="r.delete" class="pi pi-check" aria-hidden="true" /><span class="sr-only">{{ r.delete ? t('rbac.colDelete') : '' }}</span></td>
           </tr>
         </tbody>
       </table>

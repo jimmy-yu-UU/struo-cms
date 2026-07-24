@@ -72,7 +72,8 @@ public sealed class RolesController(
             .Where(e => e.CanRead || e.CanWrite || e.CanDelete)
             .Select(e => new Permission
             {
-                Id = Guid.CreateVersion7(), RoleId = id, Collection = e.Collection,
+                // Canonicalize casing: the unknown-collection check above guarantees this is non-null.
+                Id = Guid.CreateVersion7(), RoleId = id, Collection = metadata.GetCollection(e.Collection)!.Name,
                 CanRead = e.CanRead, CanWrite = e.CanWrite, CanDelete = e.CanDelete,
             })
             .ToList();

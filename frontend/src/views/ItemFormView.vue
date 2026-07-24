@@ -134,7 +134,11 @@ async function onSubmit(): Promise<void> {
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
-    if (name.value === USER_COLLECTION) void effPanel.value?.reload() // roles may have changed
+    // Spec §2b: refresh the preview after a user save (roles may have changed). Today onSubmit
+    // navigates to the list right after, unmounting this view — so this is a no-op in practice
+    // and only becomes observable if save-in-place ever lands. Kept deliberately; remove the
+    // navigation assumption here if that happens.
+    if (name.value === USER_COLLECTION) void effPanel.value?.reload()
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
