@@ -1,5 +1,7 @@
 // tests/Struo.Tests/Api/SchemaEndpointTests.cs
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
@@ -55,5 +57,18 @@ public class SchemaEndpointTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
         var response = await client.GetAsync("/api/schema/does-not-exist");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Schema_serializes_the_hidden_collection_flag()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var json = await (await client.GetAsync("/api/schema")).Content.ReadFromJsonAsync<JsonElement>();
+        var collections = json.GetProperty("data").EnumerateArray().ToList();
+
+        collections.First(c => c.GetProperty("name").GetString() == "permission")
+            .GetProperty("hidden").GetBoolean().Should().BeTrue();
+        collections.First(c => c.GetProperty("name").GetString() == "role")
+            .GetProperty("hidden").GetBoolean().Should().BeFalse();
     }
 }

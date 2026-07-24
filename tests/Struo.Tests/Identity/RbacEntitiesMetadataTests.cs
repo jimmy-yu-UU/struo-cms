@@ -21,4 +21,21 @@ public class RbacEntitiesMetadataTests
         permission.Fields.Select(f => f.Name)
             .Should().Contain(["roleId", "collection", "canRead", "canWrite", "canDelete"]);
     }
+
+    // Batch B (問題 3/4): Permission and UserRole are implementation details behind the Role
+    // permission matrix / User.Roles TagSelect; File's admin surface is the media library.
+    [Fact]
+    public void Permission_UserRole_and_File_collections_are_hidden_from_nav()
+    {
+        var metas = MetadataScanner.ScanTypes(
+            [typeof(Permission), typeof(UserRole), typeof(Struo.Infrastructure.Files.File)]);
+        metas.Should().OnlyContain(m => m.Hidden);
+    }
+
+    [Fact]
+    public void Role_and_User_collections_stay_visible()
+    {
+        var metas = MetadataScanner.ScanTypes([typeof(Role), typeof(User)]);
+        metas.Should().OnlyContain(m => !m.Hidden);
+    }
 }

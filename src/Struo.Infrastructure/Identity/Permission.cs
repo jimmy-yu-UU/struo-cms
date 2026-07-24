@@ -11,7 +11,7 @@ namespace Struo.Infrastructure.Identity;
 // DB-5: CodeFirst parity with db/migrations/001-core-baseline.sql — RBAC effective-permission
 // resolution scans permissions by roleid per authenticated request.
 [SugarIndex("ix_permissions_roleid", nameof(RoleId), OrderByType.Asc)]
-[CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true)]
+[CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true, Hidden = true)]
 public sealed class Permission : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
