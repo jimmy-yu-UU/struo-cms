@@ -206,6 +206,8 @@ export default {
     effectiveSuperAdmin: '此使用者為超級管理員，擁有所有權限。',
     effectiveEmpty: '沒有任何權限',
     effectiveLoadFailed: '有效權限載入失敗',
+    effectivePreviewHint: '預覽依目前選擇的角色計算，包含尚未儲存的變更。',
+    grantsSaveFailedAfterCreate: '角色已建立，但權限儲存失敗——請在該角色的編輯頁重試。',
   },
   settings: {
     title: '站台設定',

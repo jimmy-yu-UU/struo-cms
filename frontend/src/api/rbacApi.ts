@@ -21,7 +21,11 @@ export const rbacApi = {
   putRolePermissions(roleId: string, entries: RolePermissionEntry[]): Promise<RolePermissionEntry[]> {
     return apiClient.put<RolePermissionEntry[]>(`/roles/${roleId}/permissions`, entries)
   },
-  getEffectivePermissions(userId: string): Promise<EffectivePermissions> {
-    return apiClient.get<EffectivePermissions>(`/users/${userId}/effective-permissions`)
+  // roleIds, when provided (including []), asks the backend to compute permissions for that
+  // hypothetical role set instead of the user's saved roles — this is what lets the preview
+  // follow an unsaved TagSelect edit. Omitted → no query string (unchanged saved-roles behavior).
+  getEffectivePermissions(userId: string, roleIds?: string[]): Promise<EffectivePermissions> {
+    const query = roleIds !== undefined ? `?roles=${roleIds.join(',')}` : ''
+    return apiClient.get<EffectivePermissions>(`/users/${userId}/effective-permissions${query}`)
   },
 }

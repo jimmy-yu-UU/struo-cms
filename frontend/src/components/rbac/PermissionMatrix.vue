@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
-import { unsavedConfirm } from '../../lib/formDirty'
 
 // 問題 3: the Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
-const props = defineProps<{ roleId: string; isSuperAdminRole: boolean }>()
+// Task 3: createMode buffers grants locally (no GET, no own Save button) — ItemFormView's create
+// submit reads currentEntries() and PUTs them itself once the role exists.
+const props = withDefaults(defineProps<{ roleId: string; isSuperAdminRole: boolean; createMode?: boolean }>(), {
+  createMode: false,
+})
 
 const { t } = useI18n()
 const toast = useToast()
-const confirm = useConfirm()
 const schema = useSchemaStore()
 
 type Grant = { read: boolean; write: boolean; delete: boolean }
@@ -64,46 +64,58 @@ async function load(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+// Task 3: shared fold from the live `grants` buffer down to the non-all-false wire entries — used
+// by both save() (edit mode) and currentEntries() (create mode) so they cannot drift apart.
+function foldEntries(): RolePermissionEntry[] {
+  return Object.entries(grants.value)
+    .filter(([, g]) => g.read || g.write || g.delete)
+    .map(([collection, g]) => ({
+      collection, canRead: g.read, canWrite: g.write, canDelete: g.delete,
+    }))
+}
+
+// Task 2: returns whether the save succeeded so the parent form's Save can flush this matrix as
+// part of one submit and stay on the page when the PUT fails (its own error toast still fires).
+async function save(): Promise<boolean> {
   saving.value = true
   try {
-    const entries: RolePermissionEntry[] = Object.entries(grants.value)
-      .filter(([, g]) => g.read || g.write || g.delete)
-      .map(([collection, g]) => ({
-        collection, canRead: g.read, canWrite: g.write, canDelete: g.delete,
-      }))
-    grants.value = fold(await rbacApi.putRolePermissions(props.roleId, entries))
+    grants.value = fold(await rbacApi.putRolePermissions(props.roleId, foldEntries()))
     baseline.value = JSON.stringify(grants.value)
     toast.add({ severity: 'success', summary: t('rbac.saved'), life: 3000 })
+    return true
   } catch {
     toast.add({ severity: 'error', summary: t('rbac.saveFailed'), life: 5000 })
+    return false
   } finally {
     saving.value = false
   }
 }
 
+// Task 3: create-mode buffer read — ItemFormView calls this after the role is created to PUT the
+// grants the user staged before the role existed.
+function currentEntries(): RolePermissionEntry[] {
+  return foldEntries()
+}
+
+// Task 3 review fix: after ItemFormView flushes the create-mode buffer (PUT succeeded, or there
+// was nothing to PUT), the live `grants` must be re-baselined here too — otherwise `dirty` stays
+// true forever (create mode's baseline never moves off '{}') and the unified leave guard in
+// ItemFormView keeps firing "Unsaved changes" even immediately after a successful save.
+function markFlushed(): void {
+  baseline.value = JSON.stringify(grants.value)
+}
+
 onMounted(() => {
+  // Task 3: create mode has no role yet to GET permissions for — stay with the empty buffer.
+  if (props.createMode) { loading.value = false; return }
   if (!props.isSuperAdminRole) void load()
   else loading.value = false
 })
 
-// Route-leave guard for unsaved matrix edits. Uses the parent-provided ConfirmDialog
-// (ItemFormView mounts one) — mounting a second instance here would duplicate dialogs (FE-R7).
-onBeforeRouteLeave(() => {
-  if (!dirty.value) return true
-  const { header, message } = unsavedConfirm(t)
-  return new Promise<boolean>((resolve) => {
-    confirm.require({
-      header,
-      message,
-      accept: () => resolve(true),
-      reject: () => resolve(false),
-      onHide: () => resolve(false), // dismiss = stay (matches ItemFormView.guardLeave)
-    })
-  })
-})
-
-defineExpose({ toggle, save, dirty, load })
+// Task 2: no route-leave guard here — ItemFormView owns ONE unified guard that also checks this
+// matrix's `dirty` (via the exposed computed below). Two guards registered independently used to
+// fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
+defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })
 </script>
 
 <template>
@@ -142,7 +154,7 @@ defineExpose({ toggle, save, dirty, load })
           </tbody>
         </table>
       </div>
-      <div class="matrix-actions">
+      <div v-if="!createMode" class="matrix-actions">
         <Button :label="t('rbac.save')" :disabled="!dirty || saving" :loading="saving" @click="save" />
       </div>
     </template>

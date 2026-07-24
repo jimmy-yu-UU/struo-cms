@@ -42,6 +42,10 @@ vi.mock('vue-router', () => ({
 }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+// Task 3: capture toast.add calls so the "grants save failed after create" warning can be
+// asserted directly, same way confirm.require is captured above.
+const toastAdd = vi.fn()
+vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const meta = { name: 'article', label: 'Article', fields: [
   { name: 'status', label: 'Status', interface: 'text', required: true, searchable: false, sortable: false,
@@ -86,6 +90,7 @@ const i18n = createI18n({
       effectiveSuperAdmin: 'This user is a super admin and has full access to everything.',
       effectiveEmpty: 'No permissions',
       effectiveLoadFailed: 'Failed to load effective permissions',
+      grantsSaveFailedAfterCreate: "The role was created, but saving its permissions failed — retry from the role's edit page.",
     },
   } },
 })
@@ -112,6 +117,10 @@ describe('ItemFormView', () => {
     setActivePinia(createPinia())
     push.mockClear()
     confirmRequire.mockClear()
+    toastAdd.mockClear()
+    vi.mocked(rbacApi.getRolePermissions).mockClear()
+    vi.mocked(rbacApi.putRolePermissions).mockClear()
+    vi.mocked(rbacApi.getEffectivePermissions).mockClear()
     vi.restoreAllMocks()
     routeParams = {}
     routeName = 'collection-item'
@@ -751,9 +760,11 @@ describe('ItemFormView', () => {
   const userMeta = { name: 'user', label: 'User', fields: [
     { name: 'email', label: 'Email', interface: 'text', required: true, searchable: false, sortable: false,
       readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
-  ], relations: [] }
+  ], relations: [
+    { name: 'roles', label: 'Roles', kind: 'manyToMany', targetCollection: 'role', interface: 'tagSelect', foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false },
+  ] }
 
-  it('mounts PermissionMatrix only when editing a role as super-admin', async () => {
+  it('mounts PermissionMatrix (edit AND create) only for a role as super-admin', async () => {
     vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
 
     routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
@@ -765,11 +776,15 @@ describe('ItemFormView', () => {
     await flushPromises()
     expect(editing.findComponent(PermissionMatrix).exists()).toBe(true)
 
-    routeParams = { name: 'role' }; routeName = 'collection-create' // create mode: no id yet -> no matrix
+    // Task 3: create mode also mounts the matrix now (createMode buffer, no GET) so the user does
+    // not have to save-then-reopen to grant permissions.
+    routeParams = { name: 'role' }; routeName = 'collection-create'
     const creating = mountView()
     await creating.vm.init()
     await flushPromises()
-    expect(creating.findComponent(PermissionMatrix).exists()).toBe(false)
+    const createdMatrix = creating.findComponent(PermissionMatrix)
+    expect(createdMatrix.exists()).toBe(true)
+    expect(createdMatrix.props('createMode')).toBe(true)
 
     routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
     const { schema: schemaNonAdmin } = setupStores({ superAdmin: false })
@@ -783,13 +798,16 @@ describe('ItemFormView', () => {
     expect(nonAdmin.findComponent(PermissionMatrix).exists()).toBe(false)
   })
 
-  it('mounts EffectivePermissionsPanel when editing a user as super-admin, and saving reloads it', async () => {
+  it('mounts EffectivePermissionsPanel when editing a user as super-admin, passing the current role selection', async () => {
     vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
 
     routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue(userMeta)
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({
+      id: 'u9', email: 'x@struo.test', translations: {},
+      roles: [{ id: 'r1' }, { id: 'r2' }],
+    })
     vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'u9' })
 
     const w = mountView()
@@ -797,11 +815,231 @@ describe('ItemFormView', () => {
     await flushPromises()
     const panel = w.findComponent(EffectivePermissionsPanel)
     expect(panel.exists()).toBe(true)
-    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9')
+    expect(panel.props('roleIds')).toEqual(['r1', 'r2'])
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', ['r1', 'r2'])
+  })
 
-    const callsBeforeSubmit = vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length
-    await (w.vm as any).onSubmit()
+  // ---- Task 2: unified leave guard + form Save flushes a dirty permission matrix ----
+
+  it('leave guard fires once and covers a dirty matrix (unified guard)', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false })
+    const w = mountView()
+    await w.vm.init()
     await flushPromises()
-    expect(vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length).toBeGreaterThan(callsBeforeSubmit)
+
+    // The generic form itself stays clean; only the matrix is dirtied via its own exposed toggle.
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'write', true)
+    expect(matrixVm.dirty).toBe(true)
+
+    const p = Promise.resolve((w.vm as any).guardLeave())
+    expect(confirmRequire).toHaveBeenCalledTimes(1) // ONE dialog, not two
+    confirmRequire.mock.calls[0][0].accept()
+    await expect(p).resolves.toBe(true)
+  })
+
+  it('form Save flushes a dirty matrix and blocks navigation when matrix save fails', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false })
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1' })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'write', true)
+
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled() // matrix save failed -> stay on the page
+    expect(matrixVm.dirty).toBe(true) // matrix still dirty; its own toast already fired
+
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce([
+      { collection: 'article', canRead: false, canWrite: true, canDelete: false },
+    ])
+    await (w.vm as any).onSubmit()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  // ---- Final-review fix: failed edit-mode matrix flush must not discard the update result --
+  // Before the fix, a failing matrix.save() caused onSubmit to `return` BEFORE captureBaseline()
+  // and before refreshing model.version from the update response — leaving the FORM's own saved
+  // edits marked dirty (bogus unsaved-changes prompt) and a retry echoing the stale version (bogus
+  // 409 VERSION_CONFLICT against the user's own prior save).
+  it('failed edit-mode matrix flush leaves the form clean and retry does not send a stale version', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 1 })
+    const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 8 })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    // Dirty BOTH the generic form and the matrix.
+    ;(w.vm as any).model.shared.name = 'Editor Renamed'
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'write', true)
+
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    await (w.vm as any).onSubmit()
+
+    // onSubmit returned without navigating — the matrix flush failed.
+    expect(push).not.toHaveBeenCalled()
+    expect(matrixVm.dirty).toBe(true) // matrix still dirty; its own toast already fired
+
+    // The update DID succeed and must not be discarded: the version token is refreshed...
+    expect((w.vm as any).model.version).toBe(8)
+    // ...and the FORM itself is re-baselined (clean) even though the matrix is still dirty. Prove
+    // this in isolation from the matrix's own dirty flag by clearing it directly, then checking the
+    // unified leave guard: if the form baseline had NOT been refreshed, it would still prompt here.
+    matrixVm.markFlushed()
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+
+    // A retry (matrix flush now succeeding) must echo the REFRESHED version, not the stale
+    // pre-save one — otherwise the user's own prior save would bounce off a bogus 409.
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce([
+      { collection: 'article', canRead: false, canWrite: true, canDelete: false },
+    ])
+    await (w.vm as any).onSubmit()
+    expect(upd).toHaveBeenLastCalledWith('role', 'r1', expect.objectContaining({ version: 8 }))
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  // ---- Task 3: create-mode matrix, buffered and saved with the form -------
+
+  it('mounts the permission matrix in role create mode as super-admin', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    const matrixComp = w.findComponent(PermissionMatrix)
+    expect(matrixComp.exists()).toBe(true)
+    expect(matrixComp.props('createMode')).toBe(true)
+    expect(rbacApi.getRolePermissions).not.toHaveBeenCalled() // create mode: no GET
+  })
+
+  it('create submit with staged grants PUTs them against the id returned by create', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-1' })
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-1', [
+      { collection: 'article', canRead: true, canWrite: false, canDelete: false },
+    ])
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  it('create submit with an empty matrix buffer never calls putRolePermissions', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-2' })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRolePermissions).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  it('create submit: grants PUT rejection warns and routes to the new role edit page instead of the list, with no unhandled rejection', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-3' })
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+
+    await (w.vm as any).onSubmit() // must not throw / leave an unhandled rejection
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-3', [
+      { collection: 'article', canRead: true, canWrite: false, canDelete: false },
+    ])
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
+      severity: 'warn',
+      summary: "The role was created, but saving its permissions failed — retry from the role's edit page.",
+      life: 6000,
+    }))
+    expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'role', id: 'new-role-3' } })
+    expect(push).not.toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  // ---- Review fix: matrix baseline must be re-synced after the create-path flush, or the
+  // unified leave guard fires a bogus "Unsaved changes" prompt right after a successful/failed
+  // create-and-flush, which can trap the user on the create form (risking a duplicate role). ----
+
+  it('after a successful create-path grants flush, the leave guard resolves true without confirming', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-4' })
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+    expect(matrixVm.dirty).toBe(true)
+
+    await (w.vm as any).onSubmit()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+    expect(matrixVm.dirty).toBe(false) // re-baselined by markFlushed()
+
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('after a failed create-path grants flush, the leave guard does not block the edit-route push', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-5' })
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.name = 'Editor'
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'read', true)
+
+    await (w.vm as any).onSubmit()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'role', id: 'new-role-5' } })
+    expect(matrixVm.dirty).toBe(false) // re-baselined by markFlushed() despite the PUT failure
+
+    // The guard must resolve true quietly — it must not block the very navigation the failure
+    // path just performed.
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
   })
 })

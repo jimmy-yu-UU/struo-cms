@@ -206,6 +206,8 @@ export default {
     effectiveSuperAdmin: 'This user is a super admin and has full access to everything.',
     effectiveEmpty: 'No permissions',
     effectiveLoadFailed: 'Failed to load effective permissions',
+    effectivePreviewHint: 'Preview follows the currently selected roles, including unsaved changes.',
+    grantsSaveFailedAfterCreate: 'The role was created, but saving its permissions failed — retry from the role\'s edit page.',
   },
   settings: {
     title: 'Site Settings',
