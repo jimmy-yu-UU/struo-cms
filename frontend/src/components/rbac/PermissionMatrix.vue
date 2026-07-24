@@ -97,6 +97,14 @@ function currentEntries(): RolePermissionEntry[] {
   return foldEntries()
 }
 
+// Task 3 review fix: after ItemFormView flushes the create-mode buffer (PUT succeeded, or there
+// was nothing to PUT), the live `grants` must be re-baselined here too — otherwise `dirty` stays
+// true forever (create mode's baseline never moves off '{}') and the unified leave guard in
+// ItemFormView keeps firing "Unsaved changes" even immediately after a successful save.
+function markFlushed(): void {
+  baseline.value = JSON.stringify(grants.value)
+}
+
 onMounted(() => {
   // Task 3: create mode has no role yet to GET permissions for — stay with the empty buffer.
   if (props.createMode) { loading.value = false; return }
@@ -107,7 +115,7 @@ onMounted(() => {
 // Task 2: no route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently used to
 // fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
-defineExpose({ toggle, save, dirty, load, currentEntries })
+defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })
 </script>
 
 <template>

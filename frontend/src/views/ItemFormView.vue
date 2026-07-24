@@ -163,10 +163,24 @@ async function onSubmit(): Promise<void> {
           await rbacApi.putRolePermissions(String(created.id), entries)
         } catch {
           toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
+          // Review fix: the role WAS created, only the grants PUT failed. Re-baseline both the
+          // form and the matrix before navigating to its edit page — the create-mode buffer is
+          // discarded on this remount anyway (the edit-mode matrix instance re-GETs grants from
+          // the server), so nothing is lost, and leaving either baseline stale would make the
+          // unified leave guard block the very navigation this failure path performs.
+          matrix.value?.markFlushed()
+          captureBaseline()
           router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
           return
         }
       }
+      // Review fix: grants are now flushed (PUT succeeded above) or there was nothing to flush
+      // (buffer held only all-false rows, e.g. toggled back off) — either way re-baseline the
+      // matrix so `dirty` clears. Without this, create mode's baseline never leaves '{}' and the
+      // unified leave guard fires an "Unsaved changes" prompt on the successful navigation below;
+      // picking "stay" there would leave the user on the create form, risking a duplicate role on
+      // a second Save.
+      matrix.value?.markFlushed()
     }
     // Spec §2b: refresh the preview after a user save (roles may have changed). Today onSubmit
     // navigates to the list right after, unmounting this view — so this is a no-op in practice
