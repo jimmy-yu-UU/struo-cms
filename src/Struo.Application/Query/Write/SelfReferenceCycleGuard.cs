@@ -42,7 +42,10 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
                 if (++depth > MaxDepth)
                     throw new QueryException(
                         $"'{rel.ForeignKey}' ancestor chain exceeds {MaxDepth} levels in '{collection}'.");
-                var parent = await repository.GetByIdAsync(collection, parentId, ct: ct);
+                // DeletedFilter.With: the guard reasons about FK topology, not row visibility — a
+                // trashed (soft-deleted) ancestor's FK still exists and must be walked, or a cycle
+                // passing through it would escape detection (Category is ISoftDeletable).
+                var parent = await repository.GetByIdAsync(collection, parentId, DeletedFilter.With, ct);
                 if (parent is null) break;
                 parentId = fkProp.GetValue(parent)?.ToString();
             }

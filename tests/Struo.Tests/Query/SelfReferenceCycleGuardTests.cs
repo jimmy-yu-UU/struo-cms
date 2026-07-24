@@ -169,4 +169,30 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
             () => _svc.UpdateAsync("category", xId, BodyOf(new { name = "X", parentId = xId })));
         ex.Message.Should().Contain("cycle");
     }
+
+    [Fact]
+    public async Task Cycle_through_a_trashed_intermediate_node_is_still_rejected()
+    {
+        // Category is ISoftDeletable. The guard reasons about FK topology, not row visibility, so a
+        // trashed ancestor must still be walked — repro for the reviewer-found bug where the
+        // ancestor-walk fetch defaulted to DeletedFilter.Exclude and silently treated a trashed
+        // intermediate node as a dangling (non-existent) parent, letting a cycle through it escape
+        // detection.
+        var a = await _svc.CreateAsync("category", BodyOf(new { name = "A" }));
+        var aId = (Guid)a["id"]!;
+        var b = await _svc.CreateAsync("category", BodyOf(new { name = "B", parentId = aId }));
+        var bId = (Guid)b["id"]!;
+        var c = await _svc.CreateAsync("category", BodyOf(new { name = "C", parentId = bId }));
+        var cId = (Guid)c["id"]!;
+
+        // Trash B (soft delete) — B.parentId = A still persists on the trashed row.
+        var trashed = await _svc.DeleteAsync("category", bId.ToString());
+        trashed.Should().BeTrue();
+
+        // A ← B(trashed) ← C. Repointing A's parent at C creates A→C→B→A: the walk must pass THROUGH
+        // the trashed B to detect it, not stop there as if B no longer existed.
+        var ex = await Assert.ThrowsAsync<QueryException>(
+            () => _svc.UpdateAsync("category", aId.ToString(), BodyOf(new { name = "A", parentId = cId })));
+        ex.Message.Should().Contain("cycle");
+    }
 }
