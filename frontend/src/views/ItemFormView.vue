@@ -50,6 +50,9 @@ const canDelete = computed(() => auth.canDelete(name.value))
 // grant on role/user could open the form, but the matrix/preview endpoints would 403.
 const savedRoleIsSuperAdmin = ref(false)
 const effPanel = ref<InstanceType<typeof EffectivePermissionsPanel> | null>(null)
+// Task 2: the view owns the ONE leave guard for both the generic form and the matrix — see
+// guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
+const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
 const showMatrix = computed(
   () => !isCreate.value && name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
 )
@@ -134,6 +137,14 @@ async function onSubmit(): Promise<void> {
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+    // Task 2: one form Save also flushes a dirty permission matrix, so the user only has to click
+    // Save once. Placed BEFORE captureBaseline/navigate: if the matrix's own PUT fails, its own
+    // error toast already fired, and we keep the user on the page (matrix stays dirty) instead of
+    // navigating away and losing the unsaved grants.
+    if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
+      const ok = await matrix.value.save()
+      if (!ok) return
+    }
     // Spec §2b: refresh the preview after a user save (roles may have changed). Today onSubmit
     // navigates to the list right after, unmounting this view — so this is a no-op in practice
     // and only becomes observable if save-in-place ever lands. Kept deliberately; remove the
@@ -247,7 +258,10 @@ function onCancel(): void {
 // synchronously in setup so vue-router picks it up. Returns a Promise the router awaits:
 // resolve(true) allows the navigation, resolve(false) cancels it and keeps the user here.
 function guardLeave(): Promise<boolean> {
-  if (!isDirty(baseline.value, model)) return Promise.resolve(true)
+  // Task 2: unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
+  // grants, so a single confirm covers both instead of two independently-registered guards firing
+  // sequentially on the same navigation.
+  if (!(isDirty(baseline.value, model) || (matrix.value?.dirty ?? false))) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
   return new Promise<boolean>((resolve) => {
     confirm.require({
@@ -277,7 +291,7 @@ onBeforeRouteUpdate(async (to, from) => {
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
 // text is not honoured by modern browsers.
 function onBeforeUnload(e: BeforeUnloadEvent): void {
-  if (isDirty(baseline.value, model)) {
+  if (isDirty(baseline.value, model) || (matrix.value?.dirty ?? false)) {
     e.preventDefault()
     e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
   }
@@ -286,7 +300,7 @@ onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 onMounted(init)
-defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, showHistory, model, errors, serverError, notFound, loading, conflict })
+defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, showHistory, model, errors, serverError, notFound, loading, conflict, guardLeave })
 </script>
 
 <template>
@@ -328,6 +342,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
 
       <PermissionMatrix
         v-if="showMatrix"
+        ref="matrix"
         :role-id="idStr"
         :is-super-admin-role="savedRoleIsSuperAdmin"
       />

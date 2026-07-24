@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
-import { unsavedConfirm } from '../../lib/formDirty'
 
 // 問題 3: the Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
@@ -16,7 +13,6 @@ const props = defineProps<{ roleId: string; isSuperAdminRole: boolean }>()
 
 const { t } = useI18n()
 const toast = useToast()
-const confirm = useConfirm()
 const schema = useSchemaStore()
 
 type Grant = { read: boolean; write: boolean; delete: boolean }
@@ -64,7 +60,9 @@ async function load(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+// Task 2: returns whether the save succeeded so the parent form's Save can flush this matrix as
+// part of one submit and stay on the page when the PUT fails (its own error toast still fires).
+async function save(): Promise<boolean> {
   saving.value = true
   try {
     const entries: RolePermissionEntry[] = Object.entries(grants.value)
@@ -75,8 +73,10 @@ async function save(): Promise<void> {
     grants.value = fold(await rbacApi.putRolePermissions(props.roleId, entries))
     baseline.value = JSON.stringify(grants.value)
     toast.add({ severity: 'success', summary: t('rbac.saved'), life: 3000 })
+    return true
   } catch {
     toast.add({ severity: 'error', summary: t('rbac.saveFailed'), life: 5000 })
+    return false
   } finally {
     saving.value = false
   }
@@ -87,22 +87,9 @@ onMounted(() => {
   else loading.value = false
 })
 
-// Route-leave guard for unsaved matrix edits. Uses the parent-provided ConfirmDialog
-// (ItemFormView mounts one) — mounting a second instance here would duplicate dialogs (FE-R7).
-onBeforeRouteLeave(() => {
-  if (!dirty.value) return true
-  const { header, message } = unsavedConfirm(t)
-  return new Promise<boolean>((resolve) => {
-    confirm.require({
-      header,
-      message,
-      accept: () => resolve(true),
-      reject: () => resolve(false),
-      onHide: () => resolve(false), // dismiss = stay (matches ItemFormView.guardLeave)
-    })
-  })
-})
-
+// Task 2: no route-leave guard here — ItemFormView owns ONE unified guard that also checks this
+// matrix's `dirty` (via the exposed computed below). Two guards registered independently used to
+// fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
 defineExpose({ toggle, save, dirty, load })
 </script>
 
