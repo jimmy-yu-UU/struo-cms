@@ -871,6 +871,54 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
 
+  // ---- Final-review fix: failed edit-mode matrix flush must not discard the update result --
+  // Before the fix, a failing matrix.save() caused onSubmit to `return` BEFORE captureBaseline()
+  // and before refreshing model.version from the update response — leaving the FORM's own saved
+  // edits marked dirty (bogus unsaved-changes prompt) and a retry echoing the stale version (bogus
+  // 409 VERSION_CONFLICT against the user's own prior save).
+  it('failed edit-mode matrix flush leaves the form clean and retry does not send a stale version', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 1 })
+    const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 8 })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    // Dirty BOTH the generic form and the matrix.
+    ;(w.vm as any).model.shared.name = 'Editor Renamed'
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'write', true)
+
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    await (w.vm as any).onSubmit()
+
+    // onSubmit returned without navigating — the matrix flush failed.
+    expect(push).not.toHaveBeenCalled()
+    expect(matrixVm.dirty).toBe(true) // matrix still dirty; its own toast already fired
+
+    // The update DID succeed and must not be discarded: the version token is refreshed...
+    expect((w.vm as any).model.version).toBe(8)
+    // ...and the FORM itself is re-baselined (clean) even though the matrix is still dirty. Prove
+    // this in isolation from the matrix's own dirty flag by clearing it directly, then checking the
+    // unified leave guard: if the form baseline had NOT been refreshed, it would still prompt here.
+    matrixVm.markFlushed()
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+
+    // A retry (matrix flush now succeeding) must echo the REFRESHED version, not the stale
+    // pre-save one — otherwise the user's own prior save would bounce off a bogus 409.
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce([
+      { collection: 'article', canRead: false, canWrite: true, canDelete: false },
+    ])
+    await (w.vm as any).onSubmit()
+    expect(upd).toHaveBeenLastCalledWith('role', 'r1', expect.objectContaining({ version: 8 }))
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
   // ---- Task 3: create-mode matrix, buffered and saved with the form -------
 
   it('mounts the permission matrix in role create mode as super-admin', async () => {

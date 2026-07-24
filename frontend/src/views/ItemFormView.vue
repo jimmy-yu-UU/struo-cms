@@ -141,15 +141,24 @@ async function onSubmit(): Promise<void> {
     // Task 3: capture the created item so a role-create can PUT its buffered grants against the
     // freshly-minted id (created.id) below.
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
-    if (!isCreate.value) await itemsApi.update(name.value, id.value!, payload)
+    const updated = !isCreate.value ? await itemsApi.update(name.value, id.value!, payload) : undefined
     conflict.value = false
+    // Final-review fix: the update DID succeed even if the matrix flush below fails — refresh the
+    // concurrency token from the response and re-baseline the FORM now, before the matrix flush.
+    // Returning early (matrix failure) must never discard a successful update: doing so left the
+    // saved edits reading dirty (bogus unsaved-changes prompt on leave) and a retry echoing the
+    // stale version (bogus 409 VERSION_CONFLICT against the user's own prior save).
+    if (updated && typeof (updated as Record<string, unknown>).version === 'number') {
+      model.version = (updated as Record<string, unknown>).version as number
+    }
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+    captureBaseline() // form saved successfully: clear its own dirty flag before the matrix flush
     // Task 2: one form Save also flushes a dirty permission matrix, so the user only has to click
-    // Save once. Placed BEFORE captureBaseline/navigate: if the matrix's own PUT fails, its own
-    // error toast already fired, and we keep the user on the page (matrix stays dirty) instead of
-    // navigating away and losing the unsaved grants.
+    // Save once. The matrix flush runs AFTER the form is already baselined above: if the matrix's
+    // own PUT fails, its own error toast already fired, and we keep the user on the page (matrix
+    // stays dirty, form does not) instead of navigating away and losing the unsaved grants.
     if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
       const ok = await matrix.value.save()
       if (!ok) return
@@ -165,13 +174,13 @@ async function onSubmit(): Promise<void> {
           await rbacApi.putRolePermissions(String(created.id), entries)
         } catch {
           toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
-          // Review fix: the role WAS created, only the grants PUT failed. Re-baseline both the
-          // form and the matrix before navigating to its edit page — the create-mode buffer is
-          // discarded on this remount anyway (the edit-mode matrix instance re-GETs grants from
-          // the server), so nothing is lost, and leaving either baseline stale would make the
-          // unified leave guard block the very navigation this failure path performs.
+          // Review fix: the role WAS created, only the grants PUT failed. Re-baseline the matrix
+          // before navigating to its edit page (the form itself was already re-baselined above) —
+          // the create-mode buffer is discarded on this remount anyway (the edit-mode matrix
+          // instance re-GETs grants from the server), so nothing is lost, and leaving the matrix
+          // baseline stale would make the unified leave guard block the very navigation this
+          // failure path performs.
           matrix.value?.markFlushed()
-          captureBaseline()
           router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
           return
         }
@@ -184,7 +193,8 @@ async function onSubmit(): Promise<void> {
       // a second Save.
       matrix.value?.markFlushed()
     }
-    captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
+    // Note: the form itself was already re-baselined above (right after the create/update calls),
+    // before either matrix flush — no second captureBaseline() needed here.
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
