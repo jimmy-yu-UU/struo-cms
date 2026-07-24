@@ -80,13 +80,18 @@ public class ItemServicePermissionTests : IDisposable
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
+        db.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
+        db.CodeFirst.InitTables<Struo.Infrastructure.Identity.UserRole>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
+        // User.Roles (M2M TagSelect) navigates through UserRole to Role, so both must be scanned
+        // alongside User or RelationshipGraph construction throws "targets unknown collection".
         var scanTypes = new[]
         {
             typeof(Article), typeof(Category), typeof(Tag),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Identity.User),
+            typeof(Struo.Infrastructure.Identity.Role), typeof(Struo.Infrastructure.Identity.UserRole),
         };
         var collections = MetadataScanner.ScanTypes(scanTypes);
         var provider = new CachedMetadataProvider(collections);
@@ -98,6 +103,8 @@ public class ItemServicePermissionTests : IDisposable
             ["tag"]      = typeof(Tag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
             ["user"]     = typeof(Struo.Infrastructure.Identity.User),
+            ["role"]     = typeof(Struo.Infrastructure.Identity.Role),
+            ["userRole"] = typeof(Struo.Infrastructure.Identity.UserRole),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
