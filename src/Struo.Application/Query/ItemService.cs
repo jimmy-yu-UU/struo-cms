@@ -36,6 +36,7 @@ public sealed class ItemService(
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     private readonly ItemWriteSideSync writeSync = new(repository, m2mSource, languages, new(sanitizer));
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
+    private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
     private readonly TranslationOverlay overlay = new(repository, registry, new(registry, permissions, metadata));
     private readonly DeepExpansionCoordinator deepExpansion =
@@ -187,6 +188,10 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
             pi.SetValue(existing, pi.GetValue(incoming));
         }
+
+        // Self-referencing tree collections: reject a parentId that points at the item itself or
+        // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
+        await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
 
         // Optimistic concurrency (D2): guard the write on the version the client last read. When the
         // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
