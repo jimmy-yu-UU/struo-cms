@@ -18,7 +18,15 @@ const model = computed(() =>
     t,
   ).map((crumb) => ({
     label: crumb.label,
-    command: crumb.to ? () => router.push(crumb.to!) : undefined,
+    command: crumb.to
+      ? ({ originalEvent }: { originalEvent?: Event }) => {
+          // PrimeVue renders command items as <a href="#">; the anchor's default hash navigation
+          // would cancel a router.push suspended on the unsaved-changes leave guard (the user's
+          // "Yes" then targets an already-aborted navigation). Kill the default first.
+          originalEvent?.preventDefault()
+          router.push(crumb.to!)
+        }
+      : undefined,
   })),
 )
 </script>
