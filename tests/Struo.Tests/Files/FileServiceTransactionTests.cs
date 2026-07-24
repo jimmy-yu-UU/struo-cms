@@ -2,7 +2,9 @@ using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
+using Struo.Application.Localization;
 using Struo.Application.Query;
+using Struo.Domain.Localization;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
@@ -36,6 +38,14 @@ public class FileServiceTransactionTests : IDisposable
         public (int Width, int Height)? TryRead(Stream seekable, string contentType) => null;
     }
 
+    private sealed class StubLanguages : ILanguageProvider
+    {
+        public IReadOnlyList<LanguageInfo> Enabled() => [];
+        public string DefaultCode() => "en";
+        public bool IsEnabled(string code) => true;
+        public void Invalidate() { }
+    }
+
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     private readonly SqliteTestDatabase _file = new();
@@ -65,7 +75,7 @@ public class FileServiceTransactionTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
-        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), _repo);
+        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), _repo, new StubLanguages());
     }
 
     public void Dispose() => _file.Dispose();
@@ -146,7 +156,7 @@ public class FileServiceTransactionTests : IDisposable
     public async Task Upload_with_actual_bytes_exactly_at_cap_succeeds()
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 64 };
-        var svc = new FileService(_db, new NoopStorage(), new NoopImages(), opts, _repo);
+        var svc = new FileService(_db, new NoopStorage(), new NoopImages(), opts, _repo, new StubLanguages());
         var actualBytes = new byte[64];
 
         var file = await svc.UploadAsync(
@@ -161,7 +171,7 @@ public class FileServiceTransactionTests : IDisposable
     public async Task Upload_with_actual_bytes_one_over_cap_throws_PayloadTooLarge()
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 64 };
-        var svc = new FileService(_db, new NoopStorage(), new NoopImages(), opts, _repo);
+        var svc = new FileService(_db, new NoopStorage(), new NoopImages(), opts, _repo, new StubLanguages());
         var actualBytes = new byte[65];
 
         var act = async () => await svc.UploadAsync(
