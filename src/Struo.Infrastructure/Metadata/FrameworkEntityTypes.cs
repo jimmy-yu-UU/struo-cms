@@ -12,6 +12,7 @@ public static class FrameworkEntityTypes
         typeof(Struo.Infrastructure.Localization.Language),
         typeof(Struo.Infrastructure.Files.File),
         typeof(Struo.Infrastructure.Files.FileTranslation),
+        typeof(Struo.Infrastructure.Files.MediaFolder),
         typeof(Struo.Infrastructure.Identity.User),
         typeof(Struo.Infrastructure.Identity.Role),
         typeof(Struo.Infrastructure.Identity.Permission),

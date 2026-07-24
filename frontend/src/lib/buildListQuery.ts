@@ -8,6 +8,7 @@ export function buildListQuery(
   filter?: FilterSpec,
   locale?: string,
   deleted?: 'exclude' | 'only' | 'with',
+  deep?: string[],
 ): Record<string, string> {
   const params: Record<string, string> = {
     limit: String(rows),
@@ -22,5 +23,6 @@ export function buildListQuery(
   }
   if (locale) params.locale = locale
   if (deleted && deleted !== 'exclude') params.deleted = deleted
+  if (deep && deep.length) params.deep = deep.join(',')
   return params
 }

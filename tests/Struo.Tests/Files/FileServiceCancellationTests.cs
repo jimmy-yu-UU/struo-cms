@@ -38,7 +38,7 @@ public class FileServiceCancellationTests : IDisposable
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
         _db.CodeFirst.InitTables<File>();
-        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), null!);
+        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), null!, null!);
     }
 
     public void Dispose() => _file.Dispose();

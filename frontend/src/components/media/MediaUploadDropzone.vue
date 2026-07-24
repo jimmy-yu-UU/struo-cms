@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { filesApi, type FileMeta } from '../../api/filesApi'
 
+const props = defineProps<{ folderId?: string | null }>()
 const emit = defineEmits<{ (e: 'uploaded', meta: FileMeta): void; (e: 'done'): void }>()
 
 type Row = { name: string; state: 'uploading' | 'error'; error?: string }
@@ -14,7 +15,7 @@ async function uploadFiles(files: File[]): Promise<void> {
       const row: Row = { name: file.name, state: 'uploading' }
       rows.value = [...rows.value, row]
       try {
-        const meta = await filesApi.upload(file)
+        const meta = await filesApi.upload(file, props.folderId)
         rows.value = rows.value.filter((r) => r !== row)
         emit('uploaded', meta)
       } catch (e) {

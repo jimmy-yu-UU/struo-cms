@@ -234,7 +234,7 @@ internal sealed class TrashRevisionHarness : IDisposable
         var types = new[]
         {
             typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
-            typeof(CascadeNode),
+            typeof(CascadeNode), typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
@@ -246,6 +246,7 @@ internal sealed class TrashRevisionHarness : IDisposable
             ["tag"]         = typeof(Tag),
             ["file"]        = typeof(Struo.Infrastructure.Files.File),
             ["cascadeNode"] = typeof(CascadeNode),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
