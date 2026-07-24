@@ -8,6 +8,8 @@ import Button from 'primevue/button'
 import ItemForm from '../components/ItemForm.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import RevisionHistoryDrawer from '../components/revisions/RevisionHistoryDrawer.vue'
+import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
+import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -20,7 +22,7 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, isDirty, unsavedConfirm } from '../lib/formDirty'
-import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 
 const route = useRoute()
@@ -43,6 +45,17 @@ const editableRelations = computed(() =>
 )
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
+
+// Batch B: RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
+// grant on role/user could open the form, but the matrix/preview endpoints would 403.
+const savedRoleIsSuperAdmin = ref(false)
+const effPanel = ref<InstanceType<typeof EffectivePermissionsPanel> | null>(null)
+const showMatrix = computed(
+  () => !isCreate.value && name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
+)
+const showEffective = computed(
+  () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
+)
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
@@ -96,6 +109,9 @@ async function init(): Promise<void> {
         locale: langStore.defaultCode,
       })
       setModel(parseItemToForm(meta.value, item, langStore.languages))
+      // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
+      if (name.value === ROLE_COLLECTION)
+        savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
     } catch (e) {
       if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
       else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
@@ -117,6 +133,8 @@ async function onSubmit(): Promise<void> {
     conflict.value = false
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
+    if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+    if (name.value === USER_COLLECTION) void effPanel.value?.reload() // roles may have changed
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
@@ -174,6 +192,9 @@ function reloadLatest(): void {
   conflict.value = false
   errors.value = {}
   serverError.value = ''
+  // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
+  if (name.value === ROLE_COLLECTION)
+    savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
 }
 
 async function onReverted(): Promise<void> {
@@ -300,6 +321,13 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :disabled="!canWrite"
         @submit="onSubmit"
       />
+
+      <PermissionMatrix
+        v-if="showMatrix"
+        :role-id="idStr"
+        :is-super-admin-role="savedRoleIsSuperAdmin"
+      />
+      <EffectivePermissionsPanel v-if="showEffective" ref="effPanel" :user-id="idStr" />
 
       <RevisionHistoryDrawer
         v-if="!isCreate && meta.revisions"
