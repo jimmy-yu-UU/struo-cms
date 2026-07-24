@@ -804,4 +804,56 @@ describe('ItemFormView', () => {
     await flushPromises()
     expect(vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length).toBeGreaterThan(callsBeforeSubmit)
   })
+
+  // ---- Task 2: unified leave guard + form Save flushes a dirty permission matrix ----
+
+  it('leave guard fires once and covers a dirty matrix (unified guard)', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    // The generic form itself stays clean; only the matrix is dirtied via its own exposed toggle.
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'write', true)
+    expect(matrixVm.dirty).toBe(true)
+
+    const p = Promise.resolve((w.vm as any).guardLeave())
+    expect(confirmRequire).toHaveBeenCalledTimes(1) // ONE dialog, not two
+    confirmRequire.mock.calls[0][0].accept()
+    await expect(p).resolves.toBe(true)
+  })
+
+  it('form Save flushes a dirty matrix and blocks navigation when matrix save fails', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false })
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1' })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    const matrixVm: any = w.findComponent(PermissionMatrix).vm
+    matrixVm.toggle('article', 'write', true)
+
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled() // matrix save failed -> stay on the page
+    expect(matrixVm.dirty).toBe(true) // matrix still dirty; its own toast already fired
+
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce([
+      { collection: 'article', canRead: false, canWrite: true, canDelete: false },
+    ])
+    await (w.vm as any).onSubmit()
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
 })

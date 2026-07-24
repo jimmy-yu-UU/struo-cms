@@ -13,7 +13,6 @@ import { rbacApi } from '../../api/rbacApi'
 vi.mock('../../api/rbacApi', () => ({
   rbacApi: { getRolePermissions: vi.fn(), putRolePermissions: vi.fn() },
 }))
-vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn() }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
@@ -84,5 +83,21 @@ describe('PermissionMatrix', () => {
       { collection: 'article', canRead: true, canWrite: true, canDelete: false },
     ])
     expect(vm.dirty).toBe(false)
+  })
+
+  // Task 2: PermissionMatrix no longer owns a route-leave guard — ItemFormView owns the ONE guard
+  // and folds in this component's `dirty` state instead. save() must report success/failure so the
+  // parent form's Save can flush the matrix and know whether to keep the user on the page.
+  it('save resolves true on success and false on failure', async () => {
+    seedSchema()
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const w = mountMatrix()
+    await flushPromises()
+    const vm: any = w.vm
+    vm.toggle('article', 'write', true)
+    await expect(vm.save()).resolves.toBe(true)
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new Error('boom'))
+    vm.toggle('article', 'delete', true)
+    await expect(vm.save()).resolves.toBe(false)
   })
 })
