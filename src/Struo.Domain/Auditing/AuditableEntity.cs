@@ -13,9 +13,9 @@ namespace Struo.Domain.Auditing;
 public abstract class AuditableEntity : IAuditable
 {
     public abstract Guid Id { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public virtual DateTime CreatedAt { get; set; }
     public Guid? CreatedBy { get; set; }
-    public DateTime UpdatedAt { get; set; }
+    public virtual DateTime UpdatedAt { get; set; }
     public Guid? UpdatedBy { get; set; }
 
     /// <summary>

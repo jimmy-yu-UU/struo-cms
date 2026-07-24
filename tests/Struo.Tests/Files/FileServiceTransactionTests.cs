@@ -53,13 +53,15 @@ public class FileServiceTransactionTests : IDisposable
         // SEC-10/DB-15: DeleteAsync now also clears site_settings.logofileid when applicable, so the
         // table must exist even though this test's own scenarios never seed a row into it.
         _db.CodeFirst.InitTables<Struo.Infrastructure.Settings.SiteSettings>();
+        _db.CodeFirst.InitTables<MediaFolder>();
 
-        var collections = MetadataScanner.ScanTypes([typeof(File)]);
+        var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["file"] = typeof(File),
+            ["mediafolder"] = typeof(MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
