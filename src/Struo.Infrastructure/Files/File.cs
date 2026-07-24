@@ -12,7 +12,7 @@ namespace Struo.Infrastructure.Files;
 /// and is read-only thereafter. PK is a <see cref="Guid"/>, assigned by the create flow.
 /// </summary>
 [SugarTable("files")]
-[CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName))]
+[CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName), Hidden = true)]
 public sealed class File : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

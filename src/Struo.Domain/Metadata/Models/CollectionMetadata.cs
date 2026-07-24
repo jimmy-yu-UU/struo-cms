@@ -15,6 +15,9 @@ public sealed record CollectionMetadata
     /// </summary>
     public bool AdminOnly { get; init; }
 
+    /// <summary>Omit from the admin sidebar/nav (presentation only). See CmsCollectionAttribute.Hidden.</summary>
+    public bool Hidden { get; init; }
+
     /// <summary>
     /// When true, the collection's entity implements <see cref="Struo.Domain.Auditing.ISoftDeletable"/>:
     /// DELETE marks the row (DeletedAt set) instead of removing it, reads exclude it by default, and a

@@ -13,7 +13,7 @@ namespace Struo.Infrastructure.Identity;
 // the uq_user_roles_user_role composite unique below, whose leading column serves only userid lookups).
 [SugarIndex("ix_user_roles_userid", nameof(UserId), OrderByType.Asc)]
 [SugarIndex("ix_user_roles_roleid", nameof(RoleId), OrderByType.Asc)]
-[CmsCollection("UserRole", Group = "System", DefaultDisplayField = nameof(UserId), AdminOnly = true)]
+[CmsCollection("UserRole", Group = "System", DefaultDisplayField = nameof(UserId), AdminOnly = true, Hidden = true)]
 public sealed class UserRole : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
