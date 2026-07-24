@@ -87,8 +87,10 @@
 - **搜尋為全域**:搜尋字串非空時隱藏資料夾卡片、忽略資料夾過濾,顯示跨資料夾扁平結果(Drive 行為)。
 - 資料夾 CRUD:工具列「新增資料夾」(建立於目前層級,名稱 dialog);卡片動作:改名、刪除
   (confirm → 伺服器拒絕非空 → toast)。以 `mediafolder` 權限閘 UI。
-- 移動檔案:卡片/列動作「移至資料夾」→ TreeSelect dialog(含「未分類」= null;
-  `buildRelationTree` 重用);`MediaDetailDialog` 亦新增「資料夾」TreeSelect 欄位隨表單儲存。
+- 移動檔案:`MediaDetailDialog` 新增「資料夾」TreeSelect 欄位(含「未分類」= null;
+  `buildRelationTree` 重用)隨表單儲存。不做卡片/列上的獨立「移至資料夾」動作——
+  MediaGrid tile 是 `<button>`,巢狀互動元件無效 HTML,且 FilePicker 共用該元件,
+  重構回歸風險不成比例(使用者已確認 2026-07-24)。
 - 上傳:`MediaUploadDialog` 傳入 `currentFolderId`,dropzone 上傳時帶 `folderId`。
 
 ### 2. FilePicker 資料夾過濾
