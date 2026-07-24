@@ -11,10 +11,13 @@ const rows = [{ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 }
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: {
-    noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
-    searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
-  } } },
+  messages: { en: {
+    fields: {
+      noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
+      searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
+    },
+    media: { folderAll: 'All files', folderUncategorized: 'Uncategorized' },
+  } },
 })
 
 const stubs = {
@@ -113,5 +116,87 @@ describe('FilePicker', () => {
     await flushPromises()
     expect(vm.files).toHaveLength(1)
     expect((vm.files[0] as { id: string }).id).toBe('new')
+  })
+
+  describe('folder filter', () => {
+    const folderRows = [{ id: 'a', name: 'Folder A', parentId: null }]
+
+    function mockList(opts: { folders?: unknown[]; folderError?: boolean } = {}) {
+      return vi.spyOn(itemsApi, 'list').mockImplementation(async (collection: string) => {
+        if (collection === 'mediafolder') {
+          if (opts.folderError) throw new Error('folder load failed')
+          const data = opts.folders ?? folderRows
+          return { data: data as never, total: data.length }
+        }
+        return { data: rows, total: rows.length }
+      })
+    }
+
+    type Vm = { openDialog: () => Promise<void>; onFolderChange: (s: Record<string, boolean>) => void; loadOptions: () => Promise<void>; files: unknown[]; folders: unknown[] }
+
+    it('sends no folder filter by default (__all): existing behavior unchanged', async () => {
+      setupStores()
+      const listSpy = mockList()
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await (w.vm as unknown as Vm).openDialog()
+      await flushPromises()
+      const fileCall = listSpy.mock.calls.find(([collection]) => collection === 'file')
+      expect(fileCall?.[1]).toMatchObject({ filter: undefined })
+    })
+
+    it('filters by folderId when a folder is selected', async () => {
+      setupStores()
+      const listSpy = mockList()
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await (w.vm as unknown as Vm).openDialog()
+      await flushPromises()
+      listSpy.mockClear()
+      ;(w.vm as unknown as Vm).onFolderChange({ a: true })
+      await flushPromises()
+      const fileCall = listSpy.mock.calls.find(([collection]) => collection === 'file')
+      expect(fileCall?.[1]?.filter).toEqual({ folderId: { op: '_eq', value: 'a' } })
+    })
+
+    it('filters to uncategorized files when the Uncategorized node is selected', async () => {
+      setupStores()
+      const listSpy = mockList()
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await (w.vm as unknown as Vm).openDialog()
+      await flushPromises()
+      listSpy.mockClear()
+      ;(w.vm as unknown as Vm).onFolderChange({ __unfiled: true })
+      await flushPromises()
+      const fileCall = listSpy.mock.calls.find(([collection]) => collection === 'file')
+      expect(fileCall?.[1]?.filter).toEqual({ folderId: { op: '_null', value: 'true' } })
+    })
+
+    it('still loads files when folder loading fails (folder filter degrades away)', async () => {
+      setupStores()
+      const listSpy = mockList({ folderError: true })
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await (w.vm as unknown as Vm).openDialog()
+      await flushPromises()
+      const vm = w.vm as unknown as Vm
+      expect(vm.files).toHaveLength(rows.length)
+      expect(vm.folders).toHaveLength(0)
+      expect(listSpy.mock.calls.some(([collection]) => collection === 'file')).toBe(true)
+    })
+
+    it('composes search and folder filters into the same request', async () => {
+      setupStores()
+      const listSpy = mockList()
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await (w.vm as unknown as Vm).openDialog()
+      await flushPromises()
+      ;(w.vm as unknown as Vm).onFolderChange({ a: true })
+      await flushPromises()
+      listSpy.mockClear()
+      ;(w.vm as unknown as { search: string }).search = 'x'
+      await (w.vm as unknown as Vm).loadOptions()
+      await flushPromises()
+      const fileCall = listSpy.mock.calls.find(([collection]) => collection === 'file')
+      expect(fileCall?.[1]?.search).toBe('x')
+      expect(fileCall?.[1]?.filter).toEqual({ folderId: { op: '_eq', value: 'a' } })
+    })
   })
 })
