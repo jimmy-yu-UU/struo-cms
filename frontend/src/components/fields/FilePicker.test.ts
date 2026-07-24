@@ -144,6 +144,16 @@ describe('FilePicker', () => {
       expect(fileCall?.[1]).toMatchObject({ filter: undefined })
     })
 
+    it('loads folders with deep:[\'parent\'] so nested folderId is actually populated', async () => {
+      setupStores()
+      const listSpy = mockList()
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await (w.vm as unknown as Vm).openDialog()
+      await flushPromises()
+      const folderCall = listSpy.mock.calls.find(([collection]) => collection === 'mediafolder')
+      expect(folderCall?.[1]).toMatchObject({ deep: ['parent'] })
+    })
+
     it('filters by folderId when a folder is selected', async () => {
       setupStores()
       const listSpy = mockList()

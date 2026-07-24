@@ -54,7 +54,7 @@ function pickerFolderFilter(): ReturnType<typeof mediaFolderFilter> | undefined 
 
 async function loadFolders(): Promise<void> {
   try {
-    folders.value = toFolderRows((await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name' })).data)
+    folders.value = toFolderRows((await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name', deep: ['parent'] })).data)
   } catch {
     // Folder loading is a progressive enhancement: degrade to no folder filter (TreeSelect
     // hidden via v-if) rather than blocking file browsing.

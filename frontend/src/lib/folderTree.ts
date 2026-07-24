@@ -4,7 +4,12 @@ export function toFolderRows(data: Record<string, unknown>[]): FolderRow[] {
   return data.map((r) => ({
     id: String(r.id ?? ''),
     name: typeof r.name === 'string' ? r.name : '',
-    parentId: typeof r.parentId === 'string' ? r.parentId : null,
+    // The items API only projects M2O relation FKs (mediafolder.parentId) under `deep`
+    // expansion, nested as `parent: { id, ... }` under the relation's nav-property name --
+    // it never returns a flat `parentId` column. Prefer the deep-expanded nested shape, but
+    // fall back to a literal parentId for any caller still passing one directly (e.g. tests).
+    parentId: (r.parent as { id?: string } | undefined)?.id
+      ?? (typeof r.parentId === 'string' ? r.parentId : null),
     version: typeof r.version === 'number' ? r.version : undefined,
   }))
 }

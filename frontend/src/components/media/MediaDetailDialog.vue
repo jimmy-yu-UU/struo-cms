@@ -96,12 +96,16 @@ async function load(): Promise<void> {
   try {
     await Promise.all([schema.load(), langStore.load()])
     activeLocale.value = langStore.defaultCode
-    const item = await itemsApi.get('file', props.file.id)
+    // The items API only projects M2O relation FKs under `deep` expansion, nested as
+    // `folder: { id, ... }` under the relation's nav-property name -- it never returns a flat
+    // `folderId` column. Without `deep`, item.folderId is always undefined, so every save from
+    // this dialog would silently send folderId: null and unfile the file.
+    const item = await itemsApi.get('file', props.file.id, { deep: ['folder'] })
     raw.value = item
     if (fileMeta.value) model.value = parseItemToForm(fileMeta.value, item, locales.value)
-    folderId.value = typeof item.folderId === 'string' ? item.folderId : null
+    folderId.value = (item.folder as { id?: string } | undefined)?.id ?? null
     try {
-      const res = await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name' })
+      const res = await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name', deep: ['parent'] })
       folders.value = toFolderRows(res.data)
     } catch {
       // Folder loading is a progressive enhancement: if it fails, degrade to a flat "Uncategorized
