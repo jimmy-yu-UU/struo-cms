@@ -11,6 +11,7 @@ export type ListOptions = {
   filter?: FilterSpec
   locale?: string
   deleted?: DeletedMode
+  deep?: string[]
 }
 export type ListResult = { data: Record<string, unknown>[]; total: number }
 
@@ -27,7 +28,7 @@ export type RevisionDetail = RevisionInfo & { snapshot: unknown }
 export const itemsApi = {
   async list(collection: string, opts: ListOptions): Promise<ListResult> {
     const params = buildListQuery(
-      opts.page, opts.rows, opts.sort, opts.search, opts.filter, opts.locale, opts.deleted,
+      opts.page, opts.rows, opts.sort, opts.search, opts.filter, opts.locale, opts.deleted, opts.deep,
     )
     const qs = new URLSearchParams(params).toString()
     const path = qs ? `/items/${collection}?${qs}` : `/items/${collection}`

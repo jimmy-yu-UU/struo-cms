@@ -143,7 +143,7 @@ function onDeleted(): void { selected.value = null; loadClampingToLastValidPage(
 
 async function loadFolders(): Promise<void> {
   try {
-    const res = await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name' })
+    const res = await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name', deep: ['parent'] })
     folders.value = toFolderRows(res.data)
   } catch {
     // Folder loading is a progressive enhancement on top of the flat file list: if it fails,

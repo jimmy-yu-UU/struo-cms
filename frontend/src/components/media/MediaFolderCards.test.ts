@@ -57,4 +57,26 @@ describe('MediaFolderCards', () => {
     expect(w.emitted('remove')).toEqual([[folders[0]]])
     expect(w.emitted('open')).toBeUndefined()
   })
+
+  it('opens the folder when Enter is pressed on the card itself', async () => {
+    const w = mountCards(false)
+    await w.findAll('.folder-card')[1].trigger('keydown.enter')
+    expect(w.emitted('open')).toEqual([['b']])
+  })
+
+  // Regression guard for the a11y finding: keydown bubbles from the inner rename/delete buttons
+  // up to the card (unlike click, whose handlers use .stop), so plain @keydown.enter on the card
+  // used to race folder navigation against the rename dialog / delete confirm opening. `.self`
+  // restricts the card's handler to events whose target IS the card, not a descendant.
+  it('does NOT emit open when Enter is pressed on an inner rename/delete button', async () => {
+    const w = mountCards(true)
+    const firstCard = w.findAll('.folder-card')[0]
+    const buttons = firstCard.findAllComponents({ name: 'Button' })
+
+    await buttons[0].trigger('keydown.enter')
+    expect(w.emitted('open')).toBeUndefined()
+
+    await buttons[1].trigger('keydown.enter')
+    expect(w.emitted('open')).toBeUndefined()
+  })
 })

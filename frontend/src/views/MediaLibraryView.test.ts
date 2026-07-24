@@ -188,6 +188,9 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
       filter: expect.objectContaining({ folderId: { op: '_null', value: 'true' } }),
     }))
+    // Folders must be loaded with deep:['parent'] -- the API never returns a flat parentId
+    // column, so without this the folder tree/breadcrumbs would never nest correctly.
+    expect(list).toHaveBeenCalledWith('mediafolder', expect.objectContaining({ deep: ['parent'] }))
   })
 
   it('enters a folder: scopes the file filter, shows the breadcrumb, and lists child folders', async () => {

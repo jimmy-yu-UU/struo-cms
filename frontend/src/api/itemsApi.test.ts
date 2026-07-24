@@ -35,6 +35,18 @@ describe('itemsApi.list', () => {
     expect(path).toContain('filter%5BcategoryId%5D%5B_eq%5D=x')
     expect(path).toContain('locale=en')
   })
+
+  it('list forwards deep to the query string, comma-joined like itemsApi.get', async () => {
+    vi.mocked(apiClient.getRaw).mockResolvedValue({ data: [], meta: { total: 0 } })
+    await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name', deep: ['parent'] })
+    expect(apiClient.getRaw).toHaveBeenCalledWith('/items/mediafolder?limit=500&offset=0&sort=name&deep=parent')
+  })
+
+  it('list omits deep entirely when not provided -- byte-identical to pre-existing behavior', async () => {
+    vi.mocked(apiClient.getRaw).mockResolvedValue({ data: [], meta: { total: 0 } })
+    await itemsApi.list('article', { page: 0, rows: 25, sort: '-createdAt' })
+    expect(apiClient.getRaw).toHaveBeenCalledWith('/items/article?limit=25&offset=0&sort=-createdAt')
+  })
 })
 
 describe('itemsApi mutations', () => {

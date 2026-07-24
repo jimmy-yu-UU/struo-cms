@@ -13,7 +13,7 @@ const emit = defineEmits<{
 <template>
   <div v-if="folders.length" class="folder-grid">
     <div v-for="f in folders" :key="f.id" class="folder-card" role="button" tabindex="0"
-         @click="emit('open', f.id)" @keydown.enter="emit('open', f.id)">
+         @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)">
       <i class="pi pi-folder folder-card__icon" aria-hidden="true" />
       <span class="folder-card__name">{{ f.name }}</span>
       <span v-if="canManage" class="folder-card__actions">

@@ -16,6 +16,30 @@ describe('toFolderRows', () => {
         { id: 'b', name: 'B', parentId: 'a', version: 3 },
       ])
   })
+
+  // The items API never returns a flat `parentId` column: [CmsRelation] FKs are omitted by
+  // ItemProjector on normal responses, and only appear once `deep=parent` expands the relation
+  // as a nested `parent: { id, ... }` object under the nav-property name. These cases exercise
+  // that real response shape -- a regression back to reading r.parentId directly must fail them.
+  it('reads parentId from the deep-expanded nested `parent` object (real API shape)', () => {
+    expect(toFolderRows([
+      { id: 'a', name: 'A', parent: null },
+      { id: 'b', name: 'B', parent: { id: 'a', name: 'A', version: 1 } },
+    ])).toEqual([
+      { id: 'a', name: 'A', parentId: null, version: undefined },
+      { id: 'b', name: 'B', parentId: 'a', version: undefined },
+    ])
+  })
+
+  it('prefers the nested parent.id over a stray literal parentId when both are present', () => {
+    expect(toFolderRows([{ id: 'b', name: 'B', parentId: 'stale', parent: { id: 'a' } }]))
+      .toEqual([{ id: 'b', name: 'B', parentId: 'a', version: undefined }])
+  })
+
+  it('falls back to a literal parentId when no nested parent is present (back-compat for other callers)', () => {
+    expect(toFolderRows([{ id: 'b', name: 'B', parentId: 'a' }]))
+      .toEqual([{ id: 'b', name: 'B', parentId: 'a', version: undefined }])
+  })
 })
 
 describe('childFolders', () => {
