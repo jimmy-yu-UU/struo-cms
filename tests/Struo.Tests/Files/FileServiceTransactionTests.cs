@@ -57,7 +57,7 @@ public class FileServiceTransactionTests : IDisposable
 
         var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
-        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File)]));
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File), typeof(MediaFolder)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["file"] = typeof(File),

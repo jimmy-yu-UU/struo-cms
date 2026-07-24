@@ -38,7 +38,8 @@ public class ItemServiceTests : IDisposable
              typeof(Struo.Infrastructure.Files.MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
-            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]));
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+             typeof(Struo.Infrastructure.Files.MediaFolder)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["article"]  = typeof(Article),
