@@ -131,7 +131,11 @@ async function pickFirstTag(page: Page): Promise<void> {
 async function openArticleByTitle(page: Page, title: string): Promise<void> {
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  await page.getByText(title, { exact: true }).click()
+  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
   // Wait until init()'s async GET has populated the form before any field interaction. Without this,
   // clicking a relation combobox can fire before RelationPicker mounted/loaded its options, opening
@@ -192,7 +196,8 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await expect(page).toHaveURL(/\/collections\/category$/)
   await page.getByPlaceholder('Search').fill(categoryName)
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
-  await page.getByText(categoryName, { exact: true }).click()
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(categoryName, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[^/]+$/)
   await expect(fieldByLabel(page, 'Articles').getByText(title)).toBeVisible()
 
@@ -250,7 +255,8 @@ test('NAV-1: dirty form + RelatedList row click prompts unsaved guard, then remo
   await page.goto('/collections/category')
   await page.getByPlaceholder('Search').fill(categoryName)
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
-  await page.getByText(categoryName, { exact: true }).click()
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(categoryName, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[^/]+$/)
   await expect(fieldByLabel(page, 'Articles').getByText(title)).toBeVisible()
 

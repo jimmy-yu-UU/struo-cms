@@ -80,10 +80,15 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
 
-  // Populated dev DB -> isolate the new row by its searchable Title, then open it.
+  // Populated dev DB -> isolate the new row by its searchable Title, then open it via the row's
+  // explicit Edit action (batch A removed row-click navigation from the collection list). The
+  // search is debounced + server-side, so wait for the table to settle to the single matching row
+  // before scoping into it — otherwise the row locator can transiently match the still-unfiltered
+  // page (trash.spec.ts idiom).
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  await page.getByText(title, { exact: true }).click()
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   // Wait until init()'s async GET has populated the form: once Title shows the value, setModel has
   // run and model.version is set. Without this, an immediate Save can race ahead of the load and

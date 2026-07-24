@@ -80,7 +80,11 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
 async function openByTitle(page: Page, title: string): Promise<void> {
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  await page.getByText(title, { exact: true }).click()
+  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
+  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   await expect(titleInput(page)).toHaveValue(title)
 }
