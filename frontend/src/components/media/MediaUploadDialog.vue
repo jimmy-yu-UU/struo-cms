@@ -2,7 +2,7 @@
 import Dialog from 'primevue/dialog'
 import MediaUploadDropzone from './MediaUploadDropzone.vue'
 
-defineProps<{ visible: boolean }>()
+defineProps<{ visible: boolean; folderId?: string | null }>()
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'done'): void
@@ -19,6 +19,6 @@ const emit = defineEmits<{
     :dismissable-mask="true"
     @update:visible="emit('update:visible', $event)"
   >
-    <MediaUploadDropzone @done="emit('done')" />
+    <MediaUploadDropzone :folder-id="folderId" @done="emit('done')" />
   </Dialog>
 </template>

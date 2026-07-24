@@ -38,4 +38,12 @@ describe('MediaUploadDropzone', () => {
     expect(w.emitted('uploaded')).toHaveLength(1)
     expect(w.text()).toContain('too big')
   })
+
+  it('passes the folderId prop through to filesApi.upload', async () => {
+    const upload = vi.spyOn(filesApi, 'upload').mockImplementation((f) => Promise.resolve(meta((f as File).name)))
+    const w = mount(MediaUploadDropzone, { props: { folderId: 'fid' }, global: { plugins: [i18n] } })
+    const file = new File(['a'], 'a', { type: 'image/png' })
+    await (w.vm as unknown as { uploadFiles: (f: File[]) => Promise<void> }).uploadFiles([file])
+    expect(upload).toHaveBeenCalledWith(file, 'fid')
+  })
 })
