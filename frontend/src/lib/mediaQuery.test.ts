@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mediaTypeFilter, mediaSort } from './mediaQuery'
+import { mediaTypeFilter, mediaSort, mediaFolderFilter } from './mediaQuery'
 
 describe('mediaTypeFilter', () => {
   it('returns undefined for all', () => {
@@ -10,6 +10,15 @@ describe('mediaTypeFilter', () => {
   })
   it('maps video to a contentType starts-with video/', () => {
     expect(mediaTypeFilter('video')).toEqual({ contentType: { op: '_starts_with', value: 'video/' } })
+  })
+})
+
+describe('mediaFolderFilter', () => {
+  it('maps an id to a folderId equality filter', () => {
+    expect(mediaFolderFilter('abc')).toEqual({ folderId: { op: '_eq', value: 'abc' } })
+  })
+  it('maps null to a folderId _null filter', () => {
+    expect(mediaFolderFilter(null)).toEqual({ folderId: { op: '_null', value: 'true' } })
   })
 })
 

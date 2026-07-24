@@ -11,7 +11,7 @@ const i18n = createI18n({
   messages: { en: { media: { dropzone: 'Drop files here or click to upload' } } },
 })
 
-const meta = (id: string) => ({ id, fileName: id, contentType: 'image/png', size: 1, width: 1, height: 1, status: 'published' })
+const meta = (id: string) => ({ id, fileName: id, contentType: 'image/png', size: 1, width: 1, height: 1, status: 'published', folderId: null })
 
 describe('MediaUploadDropzone', () => {
   beforeEach(() => vi.restoreAllMocks())
