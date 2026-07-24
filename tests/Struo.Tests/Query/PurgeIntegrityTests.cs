@@ -132,7 +132,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         var types = new[]
         {
             typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
-            typeof(CascadeNode), typeof(RestrictRef),
+            typeof(CascadeNode), typeof(RestrictRef), typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
@@ -145,6 +145,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
             ["file"]        = typeof(Struo.Infrastructure.Files.File),
             ["cascadeNode"] = typeof(CascadeNode),
             ["restrictRef"] = typeof(RestrictRef),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
@@ -218,8 +219,21 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         return created["id"]!.ToString()!;
     }
 
-    public Task RepointCascadeNodeParentAsync(string id, Guid? parentId) =>
-        Service.UpdateAsync("cascadeNode", id, BodyOf(new { parentId }));
+    /// <summary>
+    /// Repoints ParentId directly via the repository, bypassing <see cref="ItemService"/> (and its
+    /// <see cref="SelfReferenceCycleGuard"/>). This simulates a cycle that already exists in the data
+    /// — e.g. from before the guard shipped, or written by another process — which is exactly the
+    /// scenario <c>Purge_cyclic_cascade_terminates_and_deletes_both_nodes</c> exercises: the purge
+    /// pipeline's own termination defense against corrupt/cyclic data, independent of how it arose.
+    /// Going through <see cref="Service"/> here would now be rejected by the guard before a cycle
+    /// could ever be constructed.
+    /// </summary>
+    public async Task RepointCascadeNodeParentAsync(string id, Guid? parentId)
+    {
+        var node = (CascadeNode)(await Repository.GetByIdAsync("cascadeNode", id))!;
+        node.ParentId = parentId;
+        await Repository.UpdateAsync("cascadeNode", id, node);
+    }
 
     // ── raw junction/translation existence checks (via the repository, not the DB directly) ────
 

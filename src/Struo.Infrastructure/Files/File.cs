@@ -12,6 +12,7 @@ namespace Struo.Infrastructure.Files;
 /// and is read-only thereafter. PK is a <see cref="Guid"/>, assigned by the create flow.
 /// </summary>
 [SugarTable("files")]
+[SugarIndex("ix_files_folderid", nameof(FolderId), OrderByType.Asc)]
 [CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName), Hidden = true)]
 public sealed class File : AuditableEntity
 {
@@ -34,6 +35,17 @@ public sealed class File : AuditableEntity
     [CmsField(Label = "Status", Interface = FieldInterface.Select, Sort = 6)]
     [CmsOptions("draft:Draft", "published:Published", "archived:Archived")]
     public string Status { get; set; } = "draft";
+
+    // #5 media folders: nullable organisational FK — NOT ReadOnly (moving a file = items update;
+    // UpdateCoreAsync's M2O-FK overlay handles it). OnDelete.Restrict on the nav relation means a
+    // folder still containing files cannot be deleted (framework guard, 409 CONFLICT).
+    [SugarColumn(IsNullable = true)]
+    public Guid? FolderId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(FolderId))]
+    [CmsRelation(Interface = RelationInterface.TreeSelect, DisplayTemplate = "{Name}", OnDelete = OnDelete.Restrict)]
+    [SugarColumn(IsIgnore = true)]
+    public MediaFolder? Folder { get; set; }
 
     [CmsTranslations(typeof(FileTranslation))]
     [SugarColumn(IsIgnore = true)]

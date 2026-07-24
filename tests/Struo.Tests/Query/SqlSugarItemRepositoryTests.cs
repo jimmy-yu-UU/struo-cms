@@ -28,7 +28,8 @@ public class SqlSugarItemRepositoryTests : IDisposable
             new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<Article>();
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File)]);
+            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+             typeof(Struo.Infrastructure.Files.MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
         var descriptors = MetadataScanner.ScanDescriptors(
             [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Localization.Language)]);
@@ -39,6 +40,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
             ["category"] = typeof(Category),
             ["tag"]      = typeof(Tag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());

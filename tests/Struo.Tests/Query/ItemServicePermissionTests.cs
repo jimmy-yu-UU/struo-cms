@@ -92,6 +92,7 @@ public class ItemServicePermissionTests : IDisposable
             typeof(Article), typeof(Category), typeof(Tag),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Identity.User),
             typeof(Struo.Infrastructure.Identity.Role), typeof(Struo.Infrastructure.Identity.UserRole),
+            typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(scanTypes);
         var provider = new CachedMetadataProvider(collections);
@@ -105,6 +106,7 @@ public class ItemServicePermissionTests : IDisposable
             ["user"]     = typeof(Struo.Infrastructure.Identity.User),
             ["role"]     = typeof(Struo.Infrastructure.Identity.Role),
             ["userRole"] = typeof(Struo.Infrastructure.Identity.UserRole),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());

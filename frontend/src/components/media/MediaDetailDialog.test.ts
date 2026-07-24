@@ -9,8 +9,6 @@ import { ApiError } from '../../api/apiClient'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 
-const push = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
 const toastAdd = vi.fn()
@@ -21,9 +19,9 @@ const i18n = createI18n({
   messages: { en: { media: {
     detailTitle: 'File details', fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
     copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL', status: 'Status',
-    openInEditor: 'Open in full editor',
     save: 'Save', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
+    folderField: 'Folder', folderUncategorized: 'Uncategorized',
   } } },
 })
 
@@ -57,10 +55,23 @@ const item = {
   translations: { en: { title: 'Hello', alt: 'An image' }, 'zh-TW': { title: '', alt: '' } },
 }
 
+// Two-level folder tree: root 'a', child 'b' (parentId 'a').
+const folderRows = [
+  { id: 'a', name: 'Root A', parentId: null },
+  { id: 'b', name: 'Child B', parentId: 'a' },
+]
+
 function mountDialog() {
   return mount(MediaDetailDialog, {
     props: { file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }, canWrite: true, canDelete: true },
-    global: { plugins: [i18n], stubs: { Dialog: DialogStub, InputText: { name: 'InputText', template: '<input />' }, Button: { name: 'Button', template: '<button><slot /></button>', props: ['label'] }, SelectButton: { name: 'SelectButton', template: '<div />' }, ConfirmDialog: { name: 'ConfirmDialog', template: '<div />' } } },
+    global: { plugins: [i18n], stubs: {
+      Dialog: DialogStub,
+      InputText: { name: 'InputText', template: '<input />' },
+      Button: { name: 'Button', template: '<button><slot /></button>', props: ['label'] },
+      SelectButton: { name: 'SelectButton', template: '<div />' },
+      ConfirmDialog: { name: 'ConfirmDialog', template: '<div />' },
+      TreeSelect: { name: 'TreeSelect', template: '<div />', props: ['modelValue', 'options', 'disabled'] },
+    } },
   })
 }
 
@@ -68,8 +79,14 @@ describe('MediaDetailDialog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
-    push.mockClear(); confirmRequire.mockClear(); toastAdd.mockClear()
+    confirmRequire.mockClear(); toastAdd.mockClear()
     seedStores()
+    // Default: no mediafolder rows unless a test overrides. Component load() is only expected
+    // to call itemsApi.list('mediafolder', ...) — never itemsApi.list for anything else.
+    vi.spyOn(itemsApi, 'list').mockImplementation((collection) => {
+      if (collection === 'mediafolder') return Promise.resolve({ data: folderRows, total: folderRows.length })
+      return Promise.resolve({ data: [], total: 0 })
+    })
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
       configurable: true,
@@ -80,7 +97,9 @@ describe('MediaDetailDialog', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    expect(itemsApi.get).toHaveBeenCalledWith('file', 'f1')
+    // Relation FKs like folderId are only projected under `deep` expansion (nested as
+    // `folder: { id }`) -- the load must request it, or folderId always reads back undefined.
+    expect(itemsApi.get).toHaveBeenCalledWith('file', 'f1', { deep: ['folder'] })
     const vm = w.vm as unknown as { model: { translations: Record<string, Record<string, unknown>>; version?: number } }
     expect(vm.model.translations.en.title).toBe('Hello')
     expect(vm.model.version).toBe(3)
@@ -232,5 +251,91 @@ describe('MediaDetailDialog', () => {
     await flushPromises()
     expect(remove).toHaveBeenCalledWith('f1')
     expect(w.emitted('deleted')).toBeTruthy()
+  })
+
+  it('does not render an "open in full editor" link (#6): no such button, no vue-router import', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.text()).not.toContain('Open in full editor')
+    expect(w.findAll('.pi-external-link').length).toBe(0)
+  })
+
+  it('loads mediafolder rows and shows a Folder TreeSelect', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(itemsApi.list).toHaveBeenCalledWith('mediafolder', expect.objectContaining({ page: 0, rows: 500, sort: 'name', deep: ['parent'] }))
+    expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(true)
+  })
+
+  // The items API never returns a flat `folderId` column -- [CmsRelation] FKs only appear once
+  // `deep=folder` expands the relation, nested as `folder: { id, ... }` under the nav-property
+  // name. These cases mock that real response shape; a regression back to reading item.folderId
+  // directly would leave folderId permanently null/undefined and must fail these.
+  it('selects the current folder as the initial TreeSelect value from the deep-expanded item.folder', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { folderId: string | null }
+    expect(vm.folderId).toBe('b')
+  })
+
+  it('selects the Uncategorized node as the initial TreeSelect value when item.folder is absent (unfiled)', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: null } as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { folderId: string | null }
+    expect(vm.folderId).toBeNull()
+  })
+
+  it('sends the selected folder id in the update payload on save', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: null } as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { onFolderChange: (s: Record<string, boolean>) => void; onSave: () => Promise<void> }
+    vm.onFolderChange({ b: true })
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: 'b' }))
+  })
+
+  it('sends folderId null when Uncategorized is selected on save', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { onFolderChange: (s: Record<string, boolean>) => void; onSave: () => Promise<void> }
+    vm.onFolderChange({ __unfiled: true })
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: null }))
+  })
+
+  it('preserves a filed file\'s folder on save (data-loss regression guard): the folder must not be nulled out', async () => {
+    // This is the exact CRITICAL data-loss path: a file that IS filed under folder 'b' is loaded,
+    // the user changes nothing, and hits Save. Before the fix, item.folderId was always undefined
+    // (the API never returns it outside `deep`), so folderId.value silently became null and Save
+    // unfiled the file. With deep:['folder'], the nested item.folder.id must populate folderId,
+    // and an untouched save must send that same folder id back, not null.
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { folderId: string | null; onSave: () => Promise<void> }
+    expect(vm.folderId).toBe('b')
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: 'b' }))
+  })
+
+  it('degrades gracefully (no blocking) when mediafolder loading fails', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    vi.spyOn(itemsApi, 'list').mockRejectedValue(new Error('boom'))
+    const w = mountDialog()
+    await flushPromises()
+    expect((w.vm as unknown as { error: string }).error).toBe('')
+    expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(true)
   })
 })

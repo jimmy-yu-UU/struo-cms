@@ -40,3 +40,16 @@ describe('buildListQuery deleted mode', () => {
     expect(buildListQuery(0, 25, undefined, undefined, undefined, undefined, 'with').deleted).toBe('with')
   })
 })
+
+describe('buildListQuery deep', () => {
+  it('omits deep when not provided or empty (no new key emitted, byte-identical to before)', () => {
+    expect(buildListQuery(0, 25)).toEqual({ limit: '25', offset: '0' })
+    expect(buildListQuery(0, 25, undefined, undefined, undefined, undefined, undefined, [])).toEqual({ limit: '25', offset: '0' })
+  })
+  it('joins multiple deep entries with a comma, mirroring itemsApi.get', () => {
+    const p = buildListQuery(0, 25, undefined, undefined, undefined, undefined, undefined, ['parent'])
+    expect(p.deep).toBe('parent')
+    const p2 = buildListQuery(0, 25, undefined, undefined, undefined, undefined, undefined, ['category', 'tags'])
+    expect(p2.deep).toBe('category,tags')
+  })
+})

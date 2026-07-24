@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import TreeSelect from 'primevue/treeselect'
 import MediaGrid from '../media/MediaGrid.vue'
 import FileThumbnail, { type FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -11,6 +12,9 @@ import { useLanguageStore } from '../../stores/languageStore'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
 import { toFileRows } from '../../lib/toFileRow'
+import { buildRelationTree, type TreeNode } from '../../lib/buildRelationTree'
+import { mediaFolderFilter } from '../../lib/mediaQuery'
+import { toFolderRows, type FolderRow } from '../../lib/folderTree'
 
 defineOptions({ name: 'FilePicker' })
 
@@ -26,6 +30,37 @@ const dialogOpen = ref(false)
 const files = ref<FileRow[]>([])
 const search = ref('')
 const loadError = ref('')
+
+const ALL = '__all'
+const UNFILED = '__unfiled'
+const folders = ref<FolderRow[]>([])
+const folderSel = ref<string>(ALL)
+
+const folderNodes = computed<TreeNode[]>(() => [
+  { key: ALL, label: t('media.folderAll'), data: ALL, children: [] },
+  { key: UNFILED, label: t('media.folderUncategorized'), data: UNFILED, children: [] },
+  ...buildRelationTree(folders.value.map((f) => ({ id: f.id, label: f.name, parentId: f.parentId })), 'parentId'),
+])
+// TreeSelect single-selection binds { [key]: true } (same mapping as RelationPicker/MediaDetailDialog).
+const folderValue = computed(() => ({ [folderSel.value]: true }))
+function onFolderChange(selection: Record<string, boolean>): void {
+  folderSel.value = Object.keys(selection)[0] ?? ALL
+  void loadOptions()
+}
+function pickerFolderFilter(): ReturnType<typeof mediaFolderFilter> | undefined {
+  if (folderSel.value === ALL) return undefined
+  return folderSel.value === UNFILED ? mediaFolderFilter(null) : mediaFolderFilter(folderSel.value)
+}
+
+async function loadFolders(): Promise<void> {
+  try {
+    folders.value = toFolderRows((await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name', deep: ['parent'] })).data)
+  } catch {
+    // Folder loading is a progressive enhancement: degrade to no folder filter (TreeSelect
+    // hidden via v-if) rather than blocking file browsing.
+    folders.value = []
+  }
+}
 
 async function resolveCurrent(): Promise<void> {
   current.value = null
@@ -46,6 +81,7 @@ async function loadOptions(): Promise<void> {
   try {
     const res = await itemsApi.list('file', {
       page: 0, rows: 50, search: search.value || undefined, locale: langStore.defaultCode || undefined,
+      filter: pickerFolderFilter(),
     })
     if (!optionsLoad.isCurrent(token)) return
     files.value = toFileRows(res.data)
@@ -57,7 +93,7 @@ async function loadOptions(): Promise<void> {
 
 async function openDialog(): Promise<void> {
   dialogOpen.value = true
-  await loadOptions()
+  await Promise.all([loadFolders(), loadOptions()])
 }
 
 function onSelect(id: string): void {
@@ -75,7 +111,7 @@ const debouncedLoad = debounce(loadOptions, 300)
 watch(search, debouncedLoad)
 onMounted(resolveCurrent)
 onBeforeUnmount(() => debouncedLoad.cancel())
-defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, search })
+defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, search, folderSel, onFolderChange, folders })
 </script>
 
 <template>
@@ -94,6 +130,14 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 
     <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectAFile')" :style="{ width: 'min(78vw, 1300px)' }" :breakpoints="{ '960px': '95vw' }">
       <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
+      <TreeSelect
+        v-if="folders.length"
+        class="file-picker__folder"
+        :model-value="folderValue"
+        :options="folderNodes"
+        selection-mode="single"
+        @update:model-value="onFolderChange"
+      />
       <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
       <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
     </Dialog>
@@ -129,6 +173,12 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 .file-picker__actions {
   display: flex;
   gap: 8px;
+}
+
+.file-picker__folder {
+  display: block;
+  margin: 8px 0 0;
+  width: 100%;
 }
 
 .file-picker__search {

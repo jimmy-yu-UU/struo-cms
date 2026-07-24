@@ -10,12 +10,14 @@ export type FileMeta = {
   width: number | null
   height: number | null
   status: string
+  folderId: string | null
 }
 
 export const filesApi = {
-  async upload(file: File): Promise<FileMeta> {
+  async upload(file: File, folderId?: string | null): Promise<FileMeta> {
     const form = new FormData()
     form.append('file', file)
+    if (folderId) form.append('folderId', folderId)
     return apiClient.postForm<FileMeta>('/files', form)
   },
   async remove(id: string): Promise<void> {

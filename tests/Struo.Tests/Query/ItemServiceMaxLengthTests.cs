@@ -40,7 +40,11 @@ public class ItemServiceMaxLengthTests : IDisposable
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
 
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File) };
+        var types = new[]
+        {
+            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(Struo.Infrastructure.Files.MediaFolder),
+        };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
@@ -48,6 +52,7 @@ public class ItemServiceMaxLengthTests : IDisposable
         {
             ["article"] = typeof(Article), ["category"] = typeof(Category),
             ["tag"] = typeof(Tag), ["file"] = typeof(Struo.Infrastructure.Files.File),
+            ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
