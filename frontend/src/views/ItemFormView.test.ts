@@ -760,7 +760,9 @@ describe('ItemFormView', () => {
   const userMeta = { name: 'user', label: 'User', fields: [
     { name: 'email', label: 'Email', interface: 'text', required: true, searchable: false, sortable: false,
       readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
-  ], relations: [] }
+  ], relations: [
+    { name: 'roles', label: 'Roles', kind: 'manyToMany', targetCollection: 'role', interface: 'tagSelect', foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false },
+  ] }
 
   it('mounts PermissionMatrix (edit AND create) only for a role as super-admin', async () => {
     vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
@@ -796,13 +798,16 @@ describe('ItemFormView', () => {
     expect(nonAdmin.findComponent(PermissionMatrix).exists()).toBe(false)
   })
 
-  it('mounts EffectivePermissionsPanel when editing a user as super-admin, and saving reloads it', async () => {
+  it('mounts EffectivePermissionsPanel when editing a user as super-admin, passing the current role selection', async () => {
     vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
 
     routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue(userMeta)
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({
+      id: 'u9', email: 'x@struo.test', translations: {},
+      roles: [{ id: 'r1' }, { id: 'r2' }],
+    })
     vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'u9' })
 
     const w = mountView()
@@ -810,12 +815,8 @@ describe('ItemFormView', () => {
     await flushPromises()
     const panel = w.findComponent(EffectivePermissionsPanel)
     expect(panel.exists()).toBe(true)
-    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9')
-
-    const callsBeforeSubmit = vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length
-    await (w.vm as any).onSubmit()
-    await flushPromises()
-    expect(vi.mocked(rbacApi.getEffectivePermissions).mock.calls.length).toBeGreaterThan(callsBeforeSubmit)
+    expect(panel.props('roleIds')).toEqual(['r1', 'r2'])
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', ['r1', 'r2'])
   })
 
   // ---- Task 2: unified leave guard + form Save flushes a dirty permission matrix ----

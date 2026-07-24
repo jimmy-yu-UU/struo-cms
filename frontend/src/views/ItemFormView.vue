@@ -52,7 +52,6 @@ const canDelete = computed(() => auth.canDelete(name.value))
 // Batch B: RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
 // grant on role/user could open the form, but the matrix/preview endpoints would 403.
 const savedRoleIsSuperAdmin = ref(false)
-const effPanel = ref<InstanceType<typeof EffectivePermissionsPanel> | null>(null)
 // Task 2: the view owns the ONE leave guard for both the generic form and the matrix — see
 // guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
 const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
@@ -64,6 +63,9 @@ const showMatrix = computed(
 const showEffective = computed(
   () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
 )
+// Task 4: the effective-permissions preview follows the CURRENT (possibly unsaved) Roles
+// TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
+const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
@@ -182,11 +184,6 @@ async function onSubmit(): Promise<void> {
       // a second Save.
       matrix.value?.markFlushed()
     }
-    // Spec §2b: refresh the preview after a user save (roles may have changed). Today onSubmit
-    // navigates to the list right after, unmounting this view — so this is a no-op in practice
-    // and only becomes observable if save-in-place ever lands. Kept deliberately; remove the
-    // navigation assumption here if that happens.
-    if (name.value === USER_COLLECTION) void effPanel.value?.reload()
     captureBaseline() // saved successfully: clear dirty BEFORE navigating so the leave guard stays quiet
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
@@ -384,7 +381,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :is-super-admin-role="savedRoleIsSuperAdmin"
         :create-mode="isCreate"
       />
-      <EffectivePermissionsPanel v-if="showEffective" ref="effPanel" :user-id="idStr" />
+      <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
 
       <RevisionHistoryDrawer
         v-if="!isCreate && meta.revisions"
