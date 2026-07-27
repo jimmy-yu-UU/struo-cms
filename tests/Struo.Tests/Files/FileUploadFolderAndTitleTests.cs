@@ -70,7 +70,9 @@ public class FileUploadFolderAndTitleTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
-        _svc = new FileService(_db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), repo, _languages);
+        _svc = new FileService(
+            _db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), repo, _languages,
+            new TestCurrentUserAccessor(Tester));
     }
 
     public void Dispose() => _file.Dispose();

@@ -71,10 +71,9 @@ function cellValue(row: Record<string, unknown>, field: FieldMeta): unknown {
 function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
-function tagSeverity(v: unknown): 'success' | 'warn' | 'secondary' {
+function tagSeverity(v: unknown): 'success' | 'secondary' {
   const s = String(v ?? '').toLowerCase()
   if (s === 'published') return 'success'
-  if (s === 'archived') return 'warn'
   return 'secondary'
 }
 function formatDeletedAt(v: unknown): string {

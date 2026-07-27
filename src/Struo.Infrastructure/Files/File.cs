@@ -14,7 +14,7 @@ namespace Struo.Infrastructure.Files;
 [SugarTable("files")]
 [SugarIndex("ix_files_folderid", nameof(FolderId), OrderByType.Asc)]
 [CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName), Hidden = true)]
-public sealed class File : AuditableEntity
+public sealed class File : AuditableEntity, ISoftDeletable
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
@@ -33,7 +33,7 @@ public sealed class File : AuditableEntity
     [CmsField(Label = "Height", Interface = FieldInterface.Number, ReadOnly = true, Sort = 5)]
     public int? Height { get; set; }
     [CmsField(Label = "Status", Interface = FieldInterface.Select, Sort = 6)]
-    [CmsOptions("draft:Draft", "published:Published", "archived:Archived")]
+    [CmsOptions("draft:Draft", "published:Published")]
     public string Status { get; set; } = "draft";
 
     // #5 media folders: nullable organisational FK — NOT ReadOnly (moving a file = items update;
@@ -50,4 +50,9 @@ public sealed class File : AuditableEntity
     [CmsTranslations(typeof(FileTranslation))]
     [SugarColumn(IsIgnore = true)]
     public List<FileTranslation> Translations { get; set; } = [];
+
+    // #12: File soft-delete — package-free ISoftDeletable members (framework query filter +
+    // repository SoftDeleteAsync/RestoreAsync light up automatically once these are present).
+    [SugarColumn(IsNullable = true)] public DateTime? DeletedAt { get; set; }
+    [SugarColumn(IsNullable = true)] public Guid? DeletedBy { get; set; }
 }
