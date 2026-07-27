@@ -33,7 +33,7 @@
 | 9 | 翻譯欄位間距 | ✅ 完成 | Batch A |
 | 10 | 媒體 dialog 放大 ~78vw | ✅ 完成 | Batch A |
 | 11 | 列表排序穩定（createdAt DESC + PK tiebreak） | ✅ 完成 | Batch A |
-| 12 | 回收桶視覺區別（✅ Batch A 修）；**核心設計審視：File 軟刪除（使用者已核可做法），並釐清 soft-delete 與 sample `status=archived` 的語意分工** | 🔶 部分 | **獨立批次（後端）** |
+| 12 | 回收桶視覺區別（✅ Batch A 修）；**核心設計審視：File 軟刪除 + 釐清 soft-delete 與 `status=archived` 語意分工** | ✅ 完成 | **branch `file-soft-delete`**：`File` 實作 `ISoftDeletable`（trash/restore/purge 走專屬 `FileService`/`FilesController`，DELETE 預設 trash、`?purge` 硬刪、`POST /restore`）；**移除 `archived`**（改由回收桶取代，三態 draft/published/trash 互斥、消除冗餘）；migration `003`（加 `deletedat`/`deletedby` + archived→回收桶）；前端媒體庫「使用中/回收桶」toggle + 還原/永久刪除。896 後端 + 665 前端 + live e2e 3/3(PG+MinIO) 綠 |
 
 ## 追加批次（使用中發現，非原始 12 項）
 
