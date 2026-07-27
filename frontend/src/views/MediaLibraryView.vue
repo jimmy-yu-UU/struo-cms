@@ -14,8 +14,9 @@ import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import MediaDetailDialog from '../components/media/MediaDetailDialog.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import MediaFolderNameDialog from '../components/media/MediaFolderNameDialog.vue'
-import type { FileRow } from '../components/media/FileThumbnail.vue'
+import FileThumbnail, { type FileRow } from '../components/media/FileThumbnail.vue'
 import { itemsApi } from '../api/itemsApi'
+import { filesApi } from '../api/filesApi'
 import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { debounce } from '../lib/debounce'
@@ -23,6 +24,7 @@ import { createLatestWins } from '../lib/latestWins'
 import { mediaTypeFilter, mediaFolderFilter, mediaSort, type MediaType, type MediaSort } from '../lib/mediaQuery'
 import { toFileRows } from '../lib/toFileRow'
 import { toFolderRows, childFolders, folderPath, type FolderRow } from '../lib/folderTree'
+import { purgeConfirm } from '../lib/deleteAction'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -46,9 +48,17 @@ const sort = ref<MediaSort>('newest')
 const view = ref<'grid' | 'list'>('grid')
 const selected = ref<FileRow | null>(null)
 const uploadOpen = ref(false)
+const mode = ref<'active' | 'trash'>('active')
 
 const canWrite = computed(() => auth.canWrite('file'))
 const canDelete = computed(() => auth.canDelete('file'))
+// Trash toggle mirrors CollectionListView's Active/Trash SelectButton (9b-fe): only meaningful to
+// a user who can actually restore/purge, so gate it on canDelete rather than always showing it.
+const showTrashSwitch = computed(() => canDelete.value)
+const modeOptions = computed(() => [
+  { label: t('collectionList.active'), value: 'active' as const },
+  { label: t('collectionList.trash'), value: 'trash' as const },
+])
 
 // Folder navigation state (Drive-style).
 const folders = ref<FolderRow[]>([])
@@ -59,8 +69,10 @@ const renameTarget = ref<FolderRow | null>(null)
 const canManageFolders = computed(() => auth.canWrite('mediafolder'))
 const canDeleteFolders = computed(() => auth.canDelete('mediafolder'))
 const searchActive = computed(() => search.value.trim().length > 0)
+// The trash is a flat recycle bin across all folders (mirrors CollectionListView's trash mode
+// which also drops per-collection scoping) -- folder cards/breadcrumbs don't apply there.
 const visibleFolders = computed(() =>
-  searchActive.value ? [] : childFolders(folders.value, currentFolderId.value))
+  searchActive.value || mode.value === 'trash' ? [] : childFolders(folders.value, currentFolderId.value))
 const breadcrumb = computed(() => folderPath(folders.value, currentFolderId.value))
 
 const typeOptions = computed(() => [
@@ -91,8 +103,9 @@ async function load(): Promise<void> {
       sort: mediaSort(sort.value),
       search: search.value || undefined,
       filter: { ...(mediaTypeFilter(type.value) ?? {}),
-                ...(searchActive.value ? {} : mediaFolderFilter(currentFolderId.value)) },
+                ...(searchActive.value || mode.value === 'trash' ? {} : mediaFolderFilter(currentFolderId.value)) },
       locale: langStore.defaultCode || undefined,
+      ...(mode.value === 'trash' ? { deleted: 'only' } : {}),
     })
     if (!mediaLoad.isCurrent(token)) return
     files.value = toFileRows(res.data)
@@ -117,6 +130,7 @@ function onSearchInput(value: string): void {
   search.value = value
   debouncedSearch()
 }
+function setMode(m: 'active' | 'trash'): void { mode.value = m; reload() }
 function onType(value: MediaType): void { type.value = value; reload() }
 function onSort(value: MediaSort): void { sort.value = value; reload() }
 function onPage(e: { page: number; rows: number }): void {
@@ -140,6 +154,21 @@ async function loadClampingToLastValidPage(): Promise<void> {
   }
 }
 function onDeleted(): void { selected.value = null; loadClampingToLastValidPage() }
+
+async function onRestore(id: string): Promise<void> {
+  await filesApi.restore(id)
+  await load()
+}
+
+function onPurge(id: string): void {
+  confirm.require({
+    ...purgeConfirm(t),
+    accept: async () => {
+      await filesApi.remove(id, { purge: true })
+      await load()
+    },
+  })
+}
 
 async function loadFolders(): Promise<void> {
   try {
@@ -206,7 +235,8 @@ onUnmounted(() => debouncedSearch.cancel())
 defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, onDeleted,
   files, total, loading, error, canWrite, canDelete, selected,
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
-  goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget })
+  goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
+  mode, setMode, showTrashSwitch, onRestore, onPurge })
 </script>
 
 <template>
@@ -221,6 +251,8 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
 
     <ListToolbar :search-value="search" :search-placeholder="t('media.searchPlaceholder')" @search="onSearchInput">
       <template #filters>
+        <SelectButton v-if="showTrashSwitch" :model-value="mode" :options="modeOptions" option-label="label"
+                      option-value="value" :allow-empty="false" @update:model-value="setMode($event)" />
         <Select :model-value="type" :options="typeOptions" option-label="label" option-value="value"
                 @update:model-value="onType" />
         <Select :model-value="sort" :options="sortOptions" option-label="label" option-value="value"
@@ -232,7 +264,11 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
       </template>
     </ListToolbar>
 
-    <nav v-if="!searchActive && (breadcrumb.length || folders.length)" class="media-crumb" :aria-label="t('media.title')">
+    <p v-if="mode === 'trash'" class="trash-banner" role="status">
+      <i class="pi pi-trash" aria-hidden="true" /> {{ t('collectionList.trashNotice') }}
+    </p>
+
+    <nav v-if="mode === 'active' && !searchActive && (breadcrumb.length || folders.length)" class="media-crumb" :aria-label="t('media.title')">
       <button type="button" class="media-crumb__link" @click="goToBreadcrumb(null)">{{ t('media.breadcrumbRoot') }}</button>
       <template v-for="c in breadcrumb" :key="c.id">
         <i class="pi pi-angle-right media-crumb__sep" aria-hidden="true" />
@@ -243,12 +279,37 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <MediaFolderCards :folders="visibleFolders" :can-manage="canManageFolders || canDeleteFolders"
+    <MediaFolderCards v-if="mode === 'active'" :folders="visibleFolders" :can-manage="canManageFolders || canDeleteFolders"
                       @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder" />
 
-    <MediaGrid v-if="view === 'grid'" :files="files" @open="openDetail" />
-    <MediaFileList v-else :files="files" @open="openDetail" />
-    <p v-if="!loading && !files.length && !visibleFolders.length" class="empty">{{ t('media.empty') }}</p>
+    <template v-if="mode === 'active'">
+      <MediaGrid v-if="view === 'grid'" :files="files" @open="openDetail" />
+      <MediaFileList v-else :files="files" @open="openDetail" />
+    </template>
+    <table v-else class="media-trash-list">
+      <thead>
+        <tr>
+          <th class="media-trash-list__thumb-col" aria-hidden="true"></th>
+          <th>{{ t('media.colName') }}</th>
+          <th class="media-trash-list__actions-col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="f in files" :key="f.id">
+          <td class="media-trash-list__thumb"><FileThumbnail :file="f" /></td>
+          <td>{{ f.fileName }}</td>
+          <td class="media-trash-list__actions">
+            <Button icon="pi pi-undo" text rounded size="small"
+                    :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+                    @click="onRestore(f.id)" />
+            <Button icon="pi pi-trash" severity="danger" text rounded size="small"
+                    :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+                    @click="onPurge(f.id)" />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p v-if="!loading && !files.length && !visibleFolders.length" class="empty">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
 
     <div v-if="total > perPage" class="media-foot">
       <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
@@ -264,6 +325,7 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
                            :initial-name="renameTarget?.name" @update:visible="(v: boolean) => { if (!v) renameTarget = null }"
                            @submit="onRenameFolder" />
     <ConfirmDialog group="media-folder" />
+    <ConfirmDialog />
   </section>
 </template>
 
@@ -280,4 +342,21 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
 .media-crumb__link:hover { text-decoration: underline; }
 .media-crumb__sep { color: var(--muted); font-size: .75rem; }
 .media-crumb__current { color: var(--fg); font-weight: 600; padding: 2px 4px; }
+.trash-banner {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  padding: 10px 14px; border: 1px solid var(--warn, #d97706);
+  background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
+  border-radius: var(--radius, 8px); color: var(--fg); font-size: .9rem;
+}
+.media-trash-list { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.media-trash-list th {
+  text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.media-trash-list td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--fg); vertical-align: middle; }
+.media-trash-list__thumb-col { width: 64px; }
+.media-trash-list__thumb { width: 56px; }
+.media-trash-list__thumb :deep(.file-thumb) { height: 44px; width: 56px; }
+.media-trash-list__actions-col { width: 6rem; }
+.media-trash-list__actions { display: flex; gap: 4px; justify-content: flex-end; }
 </style>

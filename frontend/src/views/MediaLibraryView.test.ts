@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
 import MediaLibraryView from './MediaLibraryView.vue'
 import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import { itemsApi } from '../api/itemsApi'
+import { filesApi } from '../api/filesApi'
 import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import type { CurrentUser } from '../stores/authStore'
@@ -27,7 +28,10 @@ const i18n = createI18n({
     folderDeleteConfirm: 'Delete folder "{name}"?', folderNotEmpty: 'Folder is not empty',
     folderLoadFailed: 'Failed to load folders', folderSaveFailed: 'Folder operation failed',
     breadcrumbRoot: 'Media Library',
-  }, collectionList: { range: 'Showing {from}–{to} of {total}' } } },
+  }, collectionList: {
+    range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
+    restore: 'Restore', purge: 'Delete permanently', trashNotice: 'You are viewing the trash.',
+  } } },
 })
 
 const rows = [{ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1, width: 10, height: 10, createdAt: '2026-07-01T00:00:00Z' }]
@@ -172,6 +176,73 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     const labels = w.findAllComponents({ name: 'Button' }).map((b) => b.props('label'))
     expect(labels).not.toContain('Upload')
+  })
+
+  it('defaults to the active view: no deleted param on the initial load (#12)', async () => {
+    const list = makeListMock([{ data: rows, total: 1 }])
+    mountView()
+    await flushPromises()
+    const call = list.mock.calls.find((c) => c[0] === 'file')
+    expect((call?.[1] as { deleted?: string }).deleted).toBeUndefined()
+  })
+
+  it('switching to the trash view lists with deleted:"only" (#12)', async () => {
+    seedUser({ delete: true })
+    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ deleted: 'only' }))
+  })
+
+  it('hides the active/trash toggle when the user lacks delete permission (#12)', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const w = mountView()
+    seedUser({ delete: false })
+    await flushPromises()
+    expect((w.vm as unknown as { showTrashSwitch: boolean }).showTrashSwitch).toBe(false)
+  })
+
+  it('shows the active/trash toggle when the user has delete permission (#12)', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const w = mountView()
+    seedUser({ delete: true })
+    await flushPromises()
+    expect((w.vm as unknown as { showTrashSwitch: boolean }).showTrashSwitch).toBe(true)
+  })
+
+  it('restore in trash view calls filesApi.restore then reloads the list (#12)', async () => {
+    seedUser({ delete: true })
+    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
+    const restore = vi.spyOn(filesApi, 'restore').mockResolvedValue()
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
+    await (w.vm as unknown as { onRestore: (id: string) => Promise<void> }).onRestore('f1')
+    await flushPromises()
+    expect(restore).toHaveBeenCalledWith('f1')
+    expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
+  })
+
+  it('delete-permanently in trash view confirms, then calls filesApi.remove(id,{purge:true}) and reloads (#12)', async () => {
+    seedUser({ delete: true })
+    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
+    ;(w.vm as unknown as { onPurge: (id: string) => void }).onPurge('f1')
+    expect(confirmRequire).toHaveBeenCalled()
+    const accept = confirmRequire.mock.calls.at(-1)?.[0].accept as () => Promise<void>
+    await accept()
+    await flushPromises()
+    expect(remove).toHaveBeenCalledWith('f1', { purge: true })
+    expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
   })
 
   it('shows root-level folders on initial load and scopes the file filter to the root', async () => {
