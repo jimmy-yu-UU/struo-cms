@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 5173,
     // Same-origin dev/E2E: browser hits /api on the Vite origin, proxied to the API.
-    proxy: { '/api': { target: 'http://localhost:5080', changeOrigin: true } },
+    proxy: { '/api': { target: 'http://localhost:5221', changeOrigin: true } },
   },
   test: {
     environment: 'jsdom',
