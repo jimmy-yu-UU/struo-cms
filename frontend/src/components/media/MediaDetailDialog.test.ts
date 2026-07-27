@@ -22,6 +22,9 @@ const i18n = createI18n({
     save: 'Save', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     folderField: 'Folder', folderUncategorized: 'Uncategorized',
+  }, confirm: {
+    softDeleteHeader: 'Move to trash', softDeleteMessage: 'Move this item to trash? You can restore it later.',
+    hardDeleteHeader: 'Confirm delete', hardDeleteMessage: 'Delete this item? This cannot be undone.',
   } } },
 })
 
@@ -239,13 +242,19 @@ describe('MediaDetailDialog', () => {
     expect(w.findAllComponents({ name: 'InputText' })[0].attributes('disabled')).toBeFalsy()
   })
 
-  it('deletes via filesApi.remove after confirm accept and emits deleted', async () => {
+  it('confirms with soft-delete copy (#12), deletes via filesApi.remove (trash, no purge) after accept, and emits deleted', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
     const w = mountDialog()
     await flushPromises()
     ;(w.vm as unknown as { onDelete: () => void }).onDelete()
     expect(confirmRequire).toHaveBeenCalledTimes(1)
+    // The dialog's delete action trashes (filesApi.remove defaults to soft-delete), so its confirm
+    // copy must match -- not the hard-delete "cannot be undone" copy.
+    expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({
+      header: 'Move to trash',
+      message: 'Move this item to trash? You can restore it later.',
+    }))
     const accept = confirmRequire.mock.calls[0][0].accept as () => Promise<void>
     await accept()
     await flushPromises()

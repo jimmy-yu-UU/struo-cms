@@ -161,7 +161,7 @@ function onDelete(): void {
   if (!props.file) return
   const id = props.file.id
   confirm.require({
-    ...deleteConfirm(t, 'hard'),
+    ...deleteConfirm(t, 'soft'),
     accept: async () => {
       try {
         await filesApi.remove(id)
