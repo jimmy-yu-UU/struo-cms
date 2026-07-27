@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.WebUtilities;
 using SqlSugar;
+using Struo.Application.Abstractions;
 using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Query;
@@ -10,8 +11,8 @@ namespace Struo.Infrastructure.Files;
 
 /// <summary>
 /// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a published
-/// <see cref="File"/> row) and file lookup/delete. Lives in Infrastructure so it can reference the
-/// framework <see cref="File"/> entity directly.
+/// <see cref="File"/> row) and file lookup/trash/restore/purge. Lives in Infrastructure so it can
+/// reference the framework <see cref="File"/> entity directly.
 /// </summary>
 public sealed class FileService(
     ISqlSugarClient db,
@@ -19,7 +20,8 @@ public sealed class FileService(
     IImageDimensionReader images,
     FileStorageOptions options,
     IItemRepository repository,
-    ILanguageProvider languages)
+    ILanguageProvider languages,
+    ICurrentUserAccessor currentUser)
 {
     public async Task<File> UploadAsync(
         Stream content, string fileName, string contentType, long length, Guid? folderId = null,
@@ -145,9 +147,13 @@ public sealed class FileService(
     public async Task<File?> GetAsync(Guid id, CancellationToken ct = default) =>
         await db.Queryable<File>().In(id).FirstAsync(ct);
 
+    // #12: this is now the media library's PURGE operation (permanent, hard delete) — the default
+    // FilesController DELETE is TrashAsync above; DeleteAsync is invoked via ?purge=true and must
+    // therefore still find an already-trashed row, so the lookup clears the ISoftDeletable filter
+    // (Updateable/Deleteable below already bypass it; only this initial Queryable read needed it).
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var row = await db.Queryable<File>().In(id).FirstAsync(ct);
+        var row = await db.Queryable<File>().ClearFilter<Struo.Domain.Auditing.ISoftDeletable>().In(id).FirstAsync(ct);
         if (row is null) return false;
 
         var fkCol = db.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation));
@@ -183,4 +189,28 @@ public sealed class FileService(
         try { await storage.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
         return true;
     }
+
+    // #12: default "delete" for the media library is now trash, not purge. Reuses the same atomic
+    // repository primitive ItemService uses for every other soft-deletable collection (WHERE
+    // deletedat IS NULL) instead of reimplementing that logic here.
+    public async Task<bool> TrashAsync(Guid id, CancellationToken ct = default)
+    {
+        bool trashed = false;
+        await repository.InTransactionAsync(async () =>
+        {
+            trashed = await repository.SoftDeleteAsync("file", id.ToString(), DateTime.UtcNow, currentUser.GetCurrentUserId(), ct);
+            if (!trashed) return;
+            // A trashed file is filtered out of every read; if it is the current brand logo, clear the
+            // reference now so ConfigController stops resolving it into a dead /content URL (mirrors
+            // the logo-clear step in DeleteAsync/purge above).
+            await db.Updateable<SiteSettings>()
+                .SetColumns(s => new SiteSettings { LogoFileId = null })
+                .Where(s => s.LogoFileId == id)
+                .ExecuteCommandAsync(ct);
+        }, ct);
+        return trashed;   // blob + FileTranslation rows retained for restore
+    }
+
+    public Task<bool> RestoreAsync(Guid id, CancellationToken ct = default) =>
+        repository.RestoreAsync("file", id.ToString(), ct);
 }
