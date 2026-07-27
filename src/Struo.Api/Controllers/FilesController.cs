@@ -93,12 +93,25 @@ public sealed class FilesController(
         return File(stream, row.ContentType, fileDownloadName: row.FileName);
     }
 
+    // #12: default DELETE is now trash (recoverable); ?purge=true is the permanent hard delete
+    // (FileService.DeleteAsync — row + sidecar translations + blob + any site_settings.logofileid
+    // reference, same as before this change).
     [HttpDelete("{id:guid}")]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] bool purge = false, CancellationToken ct = default)
     {
         if (!access.CanDelete())
             throw new PermissionDeniedException("Delete not permitted.");
-        return await files.DeleteAsync(id, ct) ? NoContent() : NotFound();
+        var ok = purge ? await files.DeleteAsync(id, ct) : await files.TrashAsync(id, ct);
+        return ok ? NoContent() : NotFound();
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
+    {
+        if (!access.CanDelete())
+            throw new PermissionDeniedException("Delete not permitted.");
+        return await files.RestoreAsync(id, ct) ? NoContent() : NotFound();
     }
 }

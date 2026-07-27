@@ -20,8 +20,12 @@ export const filesApi = {
     if (folderId) form.append('folderId', folderId)
     return apiClient.postForm<FileMeta>('/files', form)
   },
-  async remove(id: string): Promise<void> {
-    await apiClient.delete<void>(`/files/${id}`)
+  async remove(id: string, opts?: { purge?: boolean }): Promise<void> {
+    const qs = opts?.purge ? '?purge=true' : ''
+    await apiClient.delete<void>(`/files/${id}${qs}`)
+  },
+  async restore(id: string): Promise<void> {
+    await apiClient.post<void>(`/files/${id}/restore`)
   },
   contentUrl(id: string): string {
     return `${API_BASE}/files/${id}/content`
