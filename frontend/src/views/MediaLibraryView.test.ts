@@ -227,7 +227,7 @@ describe('MediaLibraryView', () => {
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
   })
 
-  it('delete-permanently in trash view confirms, then calls filesApi.remove(id,{purge:true}) and reloads (#12)', async () => {
+  it('delete-permanently in trash view confirms on the media-file group, then calls filesApi.remove(id,{purge:true}) and reloads (#12)', async () => {
     seedUser({ delete: true })
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
     const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
@@ -237,12 +237,43 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
     ;(w.vm as unknown as { onPurge: (id: string) => void }).onPurge('f1')
-    expect(confirmRequire).toHaveBeenCalled()
+    // Regression guard: MediaDetailDialog also mounts a bare default-group ConfirmDialog, so the
+    // purge confirm MUST target its own named group -- otherwise both dialogs would stack when a
+    // file is deleted from the (active-view) detail dialog.
+    expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ group: 'media-file' }))
     const accept = confirmRequire.mock.calls.at(-1)?.[0].accept as () => Promise<void>
     await accept()
     await flushPromises()
     expect(remove).toHaveBeenCalledWith('f1', { purge: true })
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
+  })
+
+  it('surfaces a toast when filesApi.restore fails instead of failing silently (#12)', async () => {
+    seedUser({ delete: true })
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    vi.spyOn(filesApi, 'restore').mockRejectedValue(new Error('boom'))
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    await (w.vm as unknown as { onRestore: (id: string) => Promise<void> }).onRestore('f1')
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'boom' }))
+  })
+
+  it('surfaces a toast when filesApi.remove(purge) fails instead of failing silently (#12)', async () => {
+    seedUser({ delete: true })
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    vi.spyOn(filesApi, 'remove').mockRejectedValue(new Error('nope'))
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    ;(w.vm as unknown as { onPurge: (id: string) => void }).onPurge('f1')
+    const accept = confirmRequire.mock.calls.at(-1)?.[0].accept as () => Promise<void>
+    await accept()
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'nope' }))
   })
 
   it('shows root-level folders on initial load and scopes the file filter to the root', async () => {

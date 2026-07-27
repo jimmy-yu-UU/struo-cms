@@ -156,16 +156,25 @@ async function loadClampingToLastValidPage(): Promise<void> {
 function onDeleted(): void { selected.value = null; loadClampingToLastValidPage() }
 
 async function onRestore(id: string): Promise<void> {
-  await filesApi.restore(id)
-  await load()
+  try {
+    await filesApi.restore(id)
+    await loadClampingToLastValidPage()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
+  }
 }
 
 function onPurge(id: string): void {
   confirm.require({
     ...purgeConfirm(t),
+    group: 'media-file',
     accept: async () => {
-      await filesApi.remove(id, { purge: true })
-      await load()
+      try {
+        await filesApi.remove(id, { purge: true })
+        await loadClampingToLastValidPage()
+      } catch (e) {
+        toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
+      }
     },
   })
 }
@@ -325,7 +334,7 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
                            :initial-name="renameTarget?.name" @update:visible="(v: boolean) => { if (!v) renameTarget = null }"
                            @submit="onRenameFolder" />
     <ConfirmDialog group="media-folder" />
-    <ConfirmDialog />
+    <ConfirmDialog group="media-file" />
   </section>
 </template>
 
