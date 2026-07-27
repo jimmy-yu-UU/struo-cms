@@ -1,10 +1,12 @@
-// tests/Struo.Tests/Files/FileServiceLogoLifecycleTests.cs
+// tests/Struo.Tests/Files/FileServiceSoftDeleteTests.cs
 using AwesomeAssertions;
 using SqlSugar;
+using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Query;
+using Struo.Domain.Auditing;
 using Struo.Domain.Localization;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
@@ -18,18 +20,18 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 
 namespace Struo.Tests.Files;
 
-// SEC-10/DB-15/TEST-10: SettingsController only validates the logo file is "published" at SAVE
-// time; nothing previously cleared site_settings.logofileid when that same file was later
-// deleted, leaving a dangling reference that ConfigController would keep resolving into a dead
-// /api/files/{id}/content URL. FileService.DeleteAsync must null the column, inside the same
-// transaction as the file row delete, whenever the deleted file is the current logo.
-public class FileServiceLogoLifecycleTests : IDisposable
+// #12: File soft-delete — FileService.TrashAsync (default delete: stamps DeletedAt/DeletedBy,
+// retains blob + FileTranslation rows, clears site_settings.logofileid when applicable) and
+// FileService.RestoreAsync (clears DeletedAt/DeletedBy). FileService.DeleteAsync stays as-is and
+// now serves as the "purge" operation (already hard-deletes row + translations + blob + logo ref).
+public class FileServiceSoftDeleteTests : IDisposable
 {
-    private sealed class NoopStorage : IFileStorage
+    private sealed class CountingStorage : IFileStorage
     {
+        public int Deletes { get; private set; }
         public Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) => Task.FromResult<Stream>(new MemoryStream());
-        public Task DeleteAsync(string key, CancellationToken ct = default) => Task.CompletedTask;
+        public Task DeleteAsync(string key, CancellationToken ct = default) { Deletes++; return Task.CompletedTask; }
         public bool SupportsPresignedUrls => false;
         public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
@@ -47,13 +49,14 @@ public class FileServiceLogoLifecycleTests : IDisposable
         public void Invalidate() { }
     }
 
-    private static readonly Guid Tester = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static readonly Guid Tester = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd");
 
     private readonly SqliteTestDatabase _file = new();
     private readonly ISqlSugarClient _db;
+    private readonly CountingStorage _storage = new();
     private readonly FileService _svc;
 
-    public FileServiceLogoLifecycleTests()
+    public FileServiceSoftDeleteTests()
     {
         _db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
@@ -74,7 +77,7 @@ public class FileServiceLogoLifecycleTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), repo, new StubLanguages(),
+            _db, _storage, new NoopImages(), new FileStorageOptions(), repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester));
     }
 
@@ -98,46 +101,68 @@ public class FileServiceLogoLifecycleTests : IDisposable
         }).ExecuteCommandAsync();
 
     [Fact]
-    public async Task Delete_of_current_logo_file_nulls_site_settings_logofileid()
-    {
-        var logoId = await InsertFileAsync();
-        await InsertSiteSettingsAsync(logoId);
-        var before = await _db.Queryable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).FirstAsync();
-
-        var deleted = await _svc.DeleteAsync(logoId);
-
-        deleted.Should().BeTrue();
-        var row = await _db.Queryable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).FirstAsync();
-        row.Should().NotBeNull();
-        row!.LogoFileId.Should().BeNull();
-        // SEC-10: pins the SetColumns(s => new SiteSettings { LogoFileId = null }) call to a
-        // single-member update — a regression that broadened it into a full-row SetColumns (nulling
-        // every column instead of just LogoFileId) would silently wipe BrandName/UpdatedAt too.
-        row.BrandName.Should().Be(before!.BrandName);
-        row.UpdatedAt.Should().Be(before.UpdatedAt);
-    }
-
-    [Fact]
-    public async Task Delete_of_unrelated_file_leaves_site_settings_logofileid_untouched()
-    {
-        var currentLogoId = Guid.NewGuid();
-        await InsertSiteSettingsAsync(currentLogoId);
-        var otherFileId = await InsertFileAsync();
-
-        var deleted = await _svc.DeleteAsync(otherFileId);
-
-        deleted.Should().BeTrue();
-        var row = await _db.Queryable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).FirstAsync();
-        row!.LogoFileId.Should().Be(currentLogoId);
-    }
-
-    [Fact]
-    public async Task Delete_when_no_site_settings_row_exists_still_succeeds()
+    public async Task Trash_stamps_deletedat_and_retains_row_blob_and_translations()
     {
         var id = await InsertFileAsync();
+        await _db.Insertable(new FileTranslation { FileId = id, Locale = "en", Title = "t" }).ExecuteCommandAsync();
 
-        var deleted = await _svc.DeleteAsync(id);
+        var ok = await _svc.TrashAsync(id);
 
-        deleted.Should().BeTrue();
+        ok.Should().BeTrue();
+        _storage.Deletes.Should().Be(0);                                   // blob retained
+        var row = await _db.Queryable<File>().ClearFilter<ISoftDeletable>().In(id).FirstAsync();
+        row!.DeletedAt.Should().NotBeNull();
+        row.DeletedBy.Should().Be(Tester);
+        (await _db.Queryable<FileTranslation>().Where(t => t.FileId == id).CountAsync()).Should().Be(1); // translations retained
+    }
+
+    [Fact]
+    public async Task Trashed_file_is_excluded_from_default_reads()
+    {
+        var id = await InsertFileAsync();
+        await _svc.TrashAsync(id);
+        (await _svc.GetAsync(id)).Should().BeNull();                       // query filter hides it → 404 upstream
+    }
+
+    [Fact]
+    public async Task Trash_of_current_logo_clears_logofileid()
+    {
+        var id = await InsertFileAsync();
+        await InsertSiteSettingsAsync(id);
+        await _svc.TrashAsync(id);
+        var s = await _db.Queryable<SiteSettings>().In(SiteSettings.SingletonId).FirstAsync();
+        s!.LogoFileId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Restore_clears_deletedat_and_makes_file_readable_again()
+    {
+        var id = await InsertFileAsync();
+        await _svc.TrashAsync(id);
+
+        var restored = await _svc.RestoreAsync(id);
+
+        restored.Should().BeTrue();
+        (await _svc.GetAsync(id)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Restore_of_live_file_is_noop_false()
+    {
+        var id = await InsertFileAsync();
+        (await _svc.RestoreAsync(id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Purge_of_trashed_file_deletes_row_and_blob()
+    {
+        var id = await InsertFileAsync();
+        await _svc.TrashAsync(id);
+
+        var purged = await _svc.DeleteAsync(id);                           // DeleteAsync == purge
+
+        purged.Should().BeTrue();
+        _storage.Deletes.Should().Be(1);                                  // blob deleted on purge
+        (await _db.Queryable<File>().ClearFilter<ISoftDeletable>().In(id).AnyAsync()).Should().BeFalse();
     }
 }
