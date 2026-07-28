@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="NetVips" />
+    <PackageReference Include="NetVips.Native" />
     <PackageReference Include="SqlSugarCore" />
   </ItemGroup>
 
