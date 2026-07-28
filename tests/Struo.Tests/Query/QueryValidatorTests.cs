@@ -235,8 +235,21 @@ public class QueryValidatorTests
     [Fact]
     public void Self_relation_path_within_max_depth_is_accepted()
     {
-        // 6-level breadcrumb: parent.parent.parent.parent.parent.name
+        // 5-hop breadcrumb: parent.parent.parent.parent.parent.name
         var path = string.Concat(Enumerable.Repeat("parent.", 5)) + "name";
+        var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, CategoryRoot(), new StruoQueryOptions(),
+            new SelfRefGraph(), new CategoryMeta());
+        act.Should().NotThrow();
+    }
+
+    // Pins the exact accept/reject boundary the branch moves: default MaxRelationDepth is 6,
+    // so a 6-hop self-relation path must still be accepted (paired with the 7-hop reject below).
+    [Fact]
+    public void Self_relation_path_at_max_depth_boundary_is_accepted()
+    {
+        // 6-hop breadcrumb: parent.parent.parent.parent.parent.parent.name
+        var path = string.Concat(Enumerable.Repeat("parent.", 6)) + "name";
         var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
         var act = () => QueryValidator.Validate(q, CategoryRoot(), new StruoQueryOptions(),
             new SelfRefGraph(), new CategoryMeta());

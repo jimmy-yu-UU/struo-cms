@@ -21,7 +21,7 @@ This is the **same** endpoint already used to download a file's raw bytes
 | `width` | int | Target width in pixels. | Clamped to `1..MaxWidth` (default max `4096`). |
 | `height` | int | Target height in pixels. | Clamped to `1..MaxHeight` (default max `4096`). |
 | `format` | string | Output format to re-encode to. | Must be one of `AllowedFormats` (default `webp`, `jpeg`, `png`, `avif`); otherwise the request fails with `400 BAD_USER_INPUT`. |
-| `fit` | string | How `width`/`height` interact when both are given. | `inside` (default) and `contain` fit the image within the box without upscaling; `cover` fills the box, cropping as needed. Unrecognized values fall back to `inside`. |
+| `fit` | string | How `width`/`height` interact when both are given. | `inside` (default) and `contain` fit the image within the box without upscaling; `cover` fills the box exactly, centre-cropping as needed (only when both `width` and `height` are given — with only one dimension there is no box to crop to, so it behaves like `inside`). Unrecognized values fall back to `inside`. |
 | `quality` | int | Encoder quality for lossy formats (e.g. JPEG/WebP/AVIF). | Clamped to `1..100`, default `82` (`DefaultQuality`). |
 
 You can pass any subset of these — e.g. `?width=320` alone, or `?format=webp&quality=70`.
@@ -98,5 +98,12 @@ The transform pipeline only ever decodes files that were already accepted and st
 StruoCMS's normal upload validation (`AllowedContentTypes`, size limits) — it does not decode
 arbitrary caller-supplied bytes. Output is restricted to the server-configured `AllowedFormats`
 allowlist, and requested dimensions are always clamped to `MaxWidth`/`MaxHeight` before the image
-library ever runs, bounding both the decode/encode surface and the memory an individual request can
-consume.
+library ever runs, bounding the encoded output size.
+
+Decoding goes through libvips' shrink-on-load thumbnail path (`ThumbnailBuffer`), so for codecs that
+support it (JPEG, WebP, and others) the source is decoded at a reduced resolution close to the
+requested output size rather than at full resolution. This is not a universal guarantee, though:
+formats without shrink-on-load support (e.g. PNG) are still decoded fully by libvips regardless of
+the requested output size, so a very large PNG still costs a full-resolution decode. Combined with
+the existing upload size limits, this bounds the common large-photo (JPEG/WebP) case without
+overstating protection for every format.
