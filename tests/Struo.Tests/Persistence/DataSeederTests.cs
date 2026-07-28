@@ -104,4 +104,28 @@ public class DataSeederTests
 
         (await db.Queryable<User>().CountAsync()).Should().Be(1); // not gated out by environment
     }
+
+    [Fact]
+    public void Warns_when_production_uses_default_password()
+    {
+        var logger = new ListLogger();
+        DataSeeder.WarnIfDefaultAdminPasswordInProduction(isProduction: true, "admin", logger);
+        logger.Entries.Should().ContainSingle(e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning);
+    }
+
+    [Fact]
+    public void No_warning_when_production_password_is_non_default()
+    {
+        var logger = new ListLogger();
+        DataSeeder.WarnIfDefaultAdminPasswordInProduction(isProduction: true, "s3cret-not-default", logger);
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void No_warning_outside_production_even_with_default_password()
+    {
+        var logger = new ListLogger();
+        DataSeeder.WarnIfDefaultAdminPasswordInProduction(isProduction: false, "admin", logger);
+        logger.Entries.Should().BeEmpty();
+    }
 }
