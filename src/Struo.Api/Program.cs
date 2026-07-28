@@ -167,8 +167,13 @@ try
     {
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
 
-        // Development-only: SqlSugar CodeFirst creates any missing tables from the entity classes.
-        // Never runs in production (InitTables can only add tables, not evolve them safely).
+        // Snapshot existing tables BEFORE any schema step, so seeders can fire only for tables
+        // created during THIS startup (table-creation is the sole seeding trigger).
+        var existingBefore = DataSeeder.GetTableNames(db);
+
+        // Development-only: SqlSugar CodeFirst creates missing tables and additively adds missing
+        // columns to existing tables. It performs no destructive schema changes and never runs in
+        // production (structural changes go through reviewed migration scripts).
         if (app.Environment.IsDevelopment())
         {
             var entityTypes = scope.ServiceProvider
@@ -177,10 +182,8 @@ try
             DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, entityTypes.ToArray());
         }
 
-        // Reviewed *.sql schema migrations. Config-driven (Database:MigrationsPath) and allowed in
-        // ALL environments — applying reviewed scripts in production is the whole point of the runner.
-        // It is a hard no-op on any non-PostgreSQL backend. Ordered so that in Development it runs
-        // AFTER InitTables (fresh tables exist) and BEFORE the seeders below.
+        // Reviewed *.sql schema migrations. Config-driven (Database:MigrationsPath), all environments,
+        // hard no-op on non-PostgreSQL. Runs AFTER InitTables and BEFORE seeding.
         var migrationsPath =
             builder.Configuration.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName)["MigrationsPath"];
         if (!string.IsNullOrWhiteSpace(migrationsPath))
@@ -190,26 +193,26 @@ try
             await MigrationRunner.ApplyAsync(db, migrationsPath, migrationLogger);
         }
 
-        // Dev fail-fast (DB-5): after InitTables + the migration runner have had their chance to create
-        // the schema, assert the correctness-critical constraints actually exist (the revisions
-        // composite UNIQUE — DB-4 backstop). Throws on divergence rather than running with a silent gap.
+        // Dev fail-fast (DB-5): assert correctness-critical constraints exist after schema creation.
         if (app.Environment.IsDevelopment())
         {
             await SchemaGuard.AssertCriticalConstraintsAsync(db, default);
         }
 
-        // Development-only seed data (languages, bootstrap admin, RBAC grants).
-        if (app.Environment.IsDevelopment())
-        {
-            await Struo.Infrastructure.Localization.LanguageSeeder.SeedAsync(db);
-            var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
-            await Struo.Infrastructure.Identity.AdminUserSeeder.SeedAsync(db, hasher,
-                builder.Configuration["Auth:BootstrapAdmin:Email"],
-                builder.Configuration["Auth:BootstrapAdmin:Password"]);
-            await Struo.Infrastructure.Identity.RbacSeeder.SeedAsync(db,
-                builder.Configuration["Auth:BootstrapAdmin:Email"],
-                builder.Configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? []);
-        }
+        // Unified initial-data seeding — ALL environments. Each seeder fires only when its trigger
+        // table was created this run (see DataSeeder); pre-existing tables are left untouched.
+        var seedLogger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>().CreateLogger("Struo.DataSeeder");
+        var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
+        await DataSeeder.SeedAsync(
+            db,
+            existingBefore,
+            hasher,
+            builder.Configuration["Auth:BootstrapAdmin:Email"],
+            builder.Configuration["Auth:BootstrapAdmin:Password"],
+            builder.Configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? [],
+            app.Environment.IsProduction(),
+            seedLogger);
     }
 
     app.Run();
