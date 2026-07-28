@@ -15,6 +15,7 @@ public sealed class FileStorageOptions
 
     public LocalOptions Local { get; set; } = new();
     public S3Options S3 { get; set; } = new();
+    public ImageTransformOptions ImageTransform { get; set; } = new();
 
     public sealed class LocalOptions { public string RootPath { get; set; } = "App_Data/uploads"; }
 
@@ -27,6 +28,15 @@ public sealed class FileStorageOptions
         public string Region { get; set; } = "us-east-1";
         public bool ForcePathStyle { get; set; } = true;
         public int PresignTtlSeconds { get; set; } = 300;
+    }
+
+    public sealed class ImageTransformOptions
+    {
+        public bool Enabled { get; set; } = true;
+        public int MaxWidth { get; set; } = 4096;
+        public int MaxHeight { get; set; } = 4096;
+        public string[] AllowedFormats { get; set; } = ["webp", "jpeg", "png", "avif"];
+        public int DefaultQuality { get; set; } = 82;
     }
 
     public void Validate()
