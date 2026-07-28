@@ -1,6 +1,9 @@
 // Copy to appsettings.Development.json (gitignored) and edit.
-// Every key here can also be supplied as an environment variable using the
-// double-underscore path separator, e.g. Database__ConnectionString.
+// Every application-configuration key here can also be supplied as an environment variable
+// using the double-underscore path separator, e.g. Database__ConnectionString. One exception:
+// Testing:PostgresConnection below is read by the test suite through its own ConfigurationBuilder
+// (no environment-variable provider registered), so Testing__PostgresConnection has no effect on
+// it — see that key's comment for the env var that actually works.
 {
   "Database": {
     "DbType": "PostgreSQL",
@@ -16,6 +19,19 @@
     // "ContentAssemblies": [ "Struo.Sample.Blog" ],
     "Files": {
       "Backend": "local"
+
+      // Switch Backend to "s3" and uncomment the block below to use the MinIO container from
+      // docker-compose.yml instead of local disk. Values match that file's dev credentials.
+      // "Backend": "s3",
+      // "S3": {
+      //   "Endpoint": "http://localhost:9000",
+      //   "Bucket": "struo-media",
+      //   "AccessKey": "struoadmin",
+      //   "SecretKey": "struoadmin",
+      //   "Region": "us-east-1",
+      //   "ForcePathStyle": true,
+      //   "PresignTtlSeconds": 300
+      // }
     }
   },
 
@@ -26,6 +42,9 @@
 
   "Testing": {
     // Opt-in live-PostgreSQL test suite. Point at a DISPOSABLE database whose name contains "test".
+    // Read directly by PostgresIntegrationTests's own ConfigurationBuilder (no env-var provider
+    // registered there), so the env var STRUO_TEST_PG_CONNECTION overrides this key — NOT
+    // Testing__PostgresConnection, which the double-underscore convention would otherwise suggest.
     "PostgresConnection": ""
   },
 
