@@ -131,4 +131,93 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         few.Should().Be(many);
         many.Should().Be(2); // 1 for articles + 1 for nested category, regardless of args or row count
     }
+
+    // Builds a `levels`-deep nested DeepSpec of the self-relation `category.parent` (M2O). Each
+    // level wraps the previous as its `Deep`, so the returned spec — when expanded from a leaf
+    // category — walks exactly `levels` hops up the ancestor chain (the innermost/last-built level
+    // has Deep=null, i.e. no further nesting past the requested depth).
+    private static DeepSpec BuildParentChain(int levels)
+    {
+        DeepSpec? deep = null;
+        for (var i = 0; i < levels; i++)
+            deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>
+            {
+                ["parent"] = new DeepRelationSpec(null, null, deep)
+            });
+        return deep!;
+    }
+
+    // Builds a 6-level self-relation ancestor chain: root -> A1 -> A2 -> A3 -> A4 -> A5, then
+    // attaches `leafCount` leaf categories under A5 (so each leaf is exactly 6 `parent` hops away
+    // from root: leaf->A5->A4->A3->A2->A1->root). Expands a 6-deep `parent` DeepSpec starting from
+    // all the leaves at once and returns the batched WhereIn call count plus the raw expansion
+    // result (keyed by leaf id) so callers can also assert correctness.
+    private async Task<(int Calls, Dictionary<object, Dictionary<string, object?>> Result, List<string> LeafIds)>
+        ExpandSixLevelParentChain(int leafCount, string label)
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var rootId = await Post(c, "category", new { name = $"Root-{label}" });
+        var prev = rootId;
+        for (var lvl = 1; lvl <= 5; lvl++)
+            prev = await Post(c, "category", new { name = $"A{lvl}-{label}", parentId = prev });
+
+        var leafIds = new List<string>();
+        for (var i = 0; i < leafCount; i++)
+            leafIds.Add(await Post(c, "category", new { name = $"Leaf-{label}-{i}", parentId = prev }));
+
+        using var scope = _factory.Services.CreateScope();
+        var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
+        var graph = scope.ServiceProvider.GetRequiredService<RelationshipGraph>();
+        var relFilter = scope.ServiceProvider.GetRequiredService<IRelationFilterResolver>();
+        var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
+        var counter = new CountingItemRepository(real);
+        var expander = new RelationExpander(counter, graph, relFilter, opts);
+
+        var parents = await real.QueryWhereInAsync(
+            "category", "id", leafIds.Select(System.Guid.Parse).Cast<object>().ToList());
+
+        var deep = BuildParentChain(6);
+
+        counter.ResetCount();
+        var result = await expander.ExpandAsync(
+            "category", parents, deep,
+            projectTarget: (_, entity, _) => new Dictionary<string, object?>
+            {
+                ["id"] = ReadProp(entity, "id"), ["name"] = ReadProp(entity, "name")
+            },
+            parentId: entity => ReadProp(entity, "id")!,
+            readProp: ReadProp);
+
+        return (counter.WhereInCalls, result, leafIds);
+    }
+
+    [Fact]
+    public async Task SixLevel_selfrelation_parent_chain_is_linear_in_depth_and_resolves_correctly()
+    {
+        var (calls, result, leafIds) = await ExpandSixLevelParentChain(1, "Depth6");
+
+        // Breadth-first batching: exactly 1 WhereIn query per level for a 6-level self-relation
+        // chain (category.parent x 6) — linear in depth (= 6), NOT exponential. A naive per-parent
+        // recursion would issue far more queries as depth grows.
+        calls.Should().Be(6);
+
+        var leafGuid = System.Guid.Parse(leafIds[0]);
+        var node = result[leafGuid];
+        for (var i = 0; i < 6; i++)
+            node = (Dictionary<string, object?>)node["parent"]!;
+        node["name"].Should().Be("Root-Depth6"); // 6 hops up the chain lands exactly on root
+    }
+
+    [Fact]
+    public async Task SixLevel_selfrelation_parent_chain_query_count_is_constant_in_leaf_count()
+    {
+        var (few, _, _) = await ExpandSixLevelParentChain(2, "Few6");
+        var (many, _, _) = await ExpandSixLevelParentChain(8, "Many6");
+
+        // All leaves share the same 6-level ancestor chain; batching per level means the WhereIn
+        // count stays flat regardless of how many leaves start the traversal. An N+1 recursion
+        // (one lookup per leaf per level) would make `many > few`.
+        few.Should().Be(many);
+        many.Should().Be(6);
+    }
 }

@@ -14,7 +14,8 @@ namespace Struo.Api.Controllers;
 [ApiController]
 [Route("api/files")]
 public sealed class FilesController(
-    FileService files, IFileStorage storage, FileStorageOptions options, IFileAccessPolicy access)
+    FileService files, IFileStorage storage, FileStorageOptions options, IFileAccessPolicy access,
+    IImageTransformer transformer, IImageVariantCache variantCache, ILogger<FilesController> logger)
     : ControllerBase
 {
     // The media library is the "file" collection. Mutations go through the dedicated file storage
@@ -71,13 +72,81 @@ public sealed class FilesController(
     }
 
     [HttpGet("{id:guid}/content")]
-    public async Task<IActionResult> Download(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Download(
+        Guid id,
+        [FromQuery] int? width, [FromQuery] int? height,
+        [FromQuery] string? format, [FromQuery] string? fit, [FromQuery] int? quality,
+        CancellationToken ct = default)
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
         // SEC-5 (see Get above): non-published content is gated on CanRead("file"). 404 so existence
         // isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
+
+        // P2.4: on-the-fly image transform. Only when the caller actually asked for one (at least one
+        // of width/height/format present), the content behind this row is an image, and the feature is
+        // enabled. Otherwise fall straight through to the existing passthrough behavior below —
+        // unchanged for every non-image file and for image requests with no transform params.
+        var imageTransform = options.ImageTransform;
+        var wantsTransform = imageTransform.Enabled
+            && (width is not null || height is not null || format is not null)
+            && row.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+        if (wantsTransform)
+        {
+            var normalizedFormat = (format ?? "").ToLowerInvariant();
+            if (format is not null && !imageTransform.AllowedFormats.Contains(normalizedFormat))
+                return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                    $"Unsupported format '{format}'.");
+
+            var req = new ImageTransformRequest(
+                Width: width is null ? null : Math.Clamp(width.Value, 1, imageTransform.MaxWidth),
+                Height: height is null ? null : Math.Clamp(height.Value, 1, imageTransform.MaxHeight),
+                Format: format is null ? null : normalizedFormat,
+                Fit: string.IsNullOrEmpty(fit) ? "inside" : fit,
+                Quality: Math.Clamp(quality ?? imageTransform.DefaultQuality, 1, 100));
+
+            // Version stamp: row.Version (AuditableEntity's optimistic-concurrency counter) rather than
+            // UpdatedAt, because UpdatedAt is a non-nullable DateTime here (no "unset" sentinel to
+            // reason about) and Version is already the codebase's existing monotonic per-row change
+            // counter — it increments on every update, including a future re-upload/replace, so stale
+            // variants naturally miss instead of serving bytes from a since-replaced file.
+            var fileVersion = row.Version.ToString();
+            var key = variantCache.DeriveKey(id, fileVersion, req);
+
+            var cached = await variantCache.TryGetAsync(key, ct);
+            if (cached is not null)
+                return File(cached, ImageContentTypes.ContentTypeFor(req.Format));
+
+            byte[] sourceBytes;
+            await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
+            using (var ms = new MemoryStream())
+            {
+                await src.CopyToAsync(ms, ct);
+                sourceBytes = ms.ToArray();
+            }
+
+            ImageTransformResult result;
+            try
+            {
+                result = transformer.Transform(sourceBytes, req);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Never silently swallow: log with enough context to investigate (corrupt upload,
+                // unsupported source encoding, libvips failure, ...), then fall back to serving the
+                // original bytes so the request still succeeds for the caller — a broken thumbnail is
+                // a worse UX than an un-transformed original, but a swallowed error is worse still.
+                logger.LogWarning(ex,
+                    "Image transform failed for file {FileId}; falling back to original bytes.", id);
+                var fallback = await storage.OpenReadAsync(row.StorageKey, ct);
+                return File(fallback, row.ContentType, fileDownloadName: row.FileName);
+            }
+
+            await variantCache.SetAsync(key, result.Bytes, ct);
+            return File(result.Bytes, result.ContentType);
+        }
 
         // The admin SPA loads thumbnails/previews from this endpoint, so by default the API streams
         // the bytes itself. Redirecting to storage is an explicit deployment opt-in
