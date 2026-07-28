@@ -9,16 +9,15 @@ dist/
 logs/
 *.log
 
-# Environment files — never commit real secrets
+# Environment files - never commit real secrets
 .env
 .env.local
 .env.*.local
 
 # Test and build output
+# Frontend-specific output (coverage, test-results, playwright-report) is owned
+# by frontend/.gitignore so each file covers exactly its own scope.
 TestResults/
-frontend/coverage/
-frontend/test-results/
-frontend/playwright-report/
 
 # SQLite databases (used as the test backend)
 *.db
