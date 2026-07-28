@@ -3,9 +3,11 @@ using SqlSugar;
 
 namespace Struo.Infrastructure.Identity;
 
-/// <summary>Dev-only, idempotent. Seeds the <c>admin</c> (super) and <c>public</c> roles, assigns
-/// the bootstrap admin user to <c>admin</c>, and grants the <c>public</c> role read on each
-/// configured collection. The collection list is config (never a <c>samples/*</c> reference).</summary>
+/// <summary>Idempotent. Invoked by <see cref="Persistence.DataSeeder"/> only when the
+/// <c>roles</c> table is created during startup (all environments). Seeds the <c>admin</c> (super)
+/// and <c>public</c> roles, assigns the bootstrap admin user to <c>admin</c>, and grants the
+/// <c>public</c> role read on each configured collection. The collection list is config (never a
+/// <c>samples/*</c> reference).</summary>
 public static class RbacSeeder
 {
     public static async Task SeedAsync(
