@@ -3,7 +3,9 @@ using Struo.Application.Security;
 
 namespace Struo.Infrastructure.Identity;
 
-/// <summary>Dev-only: seeds an initial admin from config when the user table is empty.</summary>
+/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <c>users</c> table is
+/// created during startup (all environments); seeds an initial admin from config when the table is
+/// empty.</summary>
 public static class AdminUserSeeder
 {
     public static async Task SeedAsync(ISqlSugarClient db, IPasswordHasher hasher, string? email, string? password)
