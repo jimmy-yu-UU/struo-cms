@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+coverage
 
 # Playwright E2E artifacts
 /test-results
