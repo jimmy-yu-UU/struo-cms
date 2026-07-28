@@ -58,4 +58,21 @@ public sealed class ConventionMetadataDiscoveryTests
 
         sp.GetService<IEntityTypeCollector>().Should().NotBeNull();
     }
+
+    [Fact]
+    public void Shipped_appsettings_declares_no_content_assemblies()
+    {
+        // The template ships without sample content wired in: Struo:ContentAssemblies is empty and the
+        // host project has no reference to samples/. Opting the sample in is a documented downstream step.
+        var appsettingsPath = Path.Combine(
+            AppContext.BaseDirectory, "appsettings.json");
+        var json = File.ReadAllText(appsettingsPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+
+        var contentAssemblies = doc.RootElement
+            .GetProperty("Struo").GetProperty("ContentAssemblies")
+            .EnumerateArray().Select(e => e.GetString()).ToArray();
+
+        contentAssemblies.Should().BeEmpty();
+    }
 }
