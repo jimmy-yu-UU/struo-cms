@@ -71,7 +71,12 @@ public sealed class PostgresIntegrationTests : IDisposable
         return null;
     }
 
-    private IItemRepository BuildRepo()
+    private IItemRepository BuildRepo() => BuildRepoWithGraph().Repo;
+
+    // Same wiring as BuildRepo(), but also returns the RelationshipGraph/filter-resolver/options
+    // needed to drive RelationExpander directly (Task P1.2: self-relation N+1 check on real PG).
+    private (IItemRepository Repo, RelationshipGraph Graph, IRelationFilterResolver FilterResolver, StruoQueryOptions Options)
+        BuildRepoWithGraph()
     {
         // Safety guard: these tests DELETE rows. Refuse to run unless the target database name contains
         // "test", so a connection accidentally pointed at the dev/prod DB can never wipe it.
@@ -110,7 +115,10 @@ public sealed class PostgresIntegrationTests : IDisposable
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
-        return new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
+        var options = new StruoQueryOptions();
+        var repo = new SqlSugarItemRepository(_db, registry, graph, provider, options);
+        var filterResolver = new RelationFilterResolver(repo, graph, provider, registry, options);
+        return (repo, graph, filterResolver, options);
     }
 
     public void Dispose() => _db?.Dispose();
@@ -160,5 +168,66 @@ public sealed class PostgresIntegrationTests : IDisposable
         var created = (Category)await repo.CreateAsync("category", new Category { Name = "Findme" });
         var rows = await repo.QueryWhereInAsync("category", "id", [created.Id]);
         rows.Cast<Category>().Select(c => c.Name).Should().Contain("Findme");
+    }
+
+    private static readonly System.Reflection.BindingFlags ReadPropFlags =
+        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance |
+        System.Reflection.BindingFlags.IgnoreCase;
+
+    private static object? ReadProp(object e, string name) => e.GetType().GetProperty(name, ReadPropFlags)?.GetValue(e);
+
+    // Task P1.2 (non-SQLite leg): category.parent (self-relation M2O) 6-level ancestor chain on
+    // REAL Postgres — mirrors DeepNestingBatchingTests' SQLite batching invariant (one WhereIn
+    // query per level, linear in depth) but drives SqlSugarItemRepository against Postgres, where
+    // the Guid FK (uuid column) binding is the PG-specific risk (same concern as
+    // Uuid_id_filter_round_trips_on_postgres above). Also asserts the expansion resolves the
+    // correct ancestor 6 hops up the chain, not just the query count.
+    [Fact]
+    public async Task Six_level_selfrelation_parent_chain_is_linear_and_correct_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, graph, filterResolver, options) = BuildRepoWithGraph();
+
+        // root -> A1 -> A2 -> A3 -> A4 -> A5 -> leaf: exactly 6 `parent` hops from leaf to root.
+        var root = (Category)await repo.CreateAsync("category", new Category { Name = "PgRoot" });
+        var prevId = root.Id;
+        for (var lvl = 1; lvl <= 5; lvl++)
+        {
+            var node = (Category)await repo.CreateAsync(
+                "category", new Category { Name = $"PgA{lvl}", ParentId = prevId });
+            prevId = node.Id;
+        }
+        var leaf = (Category)await repo.CreateAsync(
+            "category", new Category { Name = "PgLeaf", ParentId = prevId });
+
+        var counter = new CountingItemRepository(repo);
+        var expander = new RelationExpander(counter, graph, filterResolver, options);
+        var parents = await repo.QueryWhereInAsync("category", "id", new object[] { leaf.Id });
+
+        DeepSpec? deep = null;
+        for (var i = 0; i < 6; i++)
+            deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>
+            {
+                ["parent"] = new DeepRelationSpec(null, null, deep)
+            });
+
+        counter.ResetCount();
+        var result = await expander.ExpandAsync(
+            "category", parents, deep!,
+            projectTarget: (_, entity, _) => new Dictionary<string, object?>
+            {
+                ["id"] = ReadProp(entity, "id"), ["name"] = ReadProp(entity, "name")
+            },
+            parentId: entity => ReadProp(entity, "id")!,
+            readProp: ReadProp);
+
+        // Linear in depth on real Postgres: exactly 1 WhereIn query per level (6 total), not
+        // exponential and not one-query-per-entity.
+        counter.WhereInCalls.Should().Be(6);
+
+        var ancestor = result[leaf.Id];
+        for (var i = 0; i < 6; i++)
+            ancestor = (Dictionary<string, object?>)ancestor["parent"]!;
+        ancestor["name"].Should().Be("PgRoot"); // 6 hops up the chain lands exactly on root
     }
 }
