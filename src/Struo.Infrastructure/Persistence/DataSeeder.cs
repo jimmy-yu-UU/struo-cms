@@ -53,5 +53,16 @@ public static class DataSeeder
             await RbacSeeder.SeedAsync(db, bootstrapAdminEmail, publicReadCollections, ct);
         else
             logger.LogInformation("DataSeeder: skip RbacSeeder — '{Table}' pre-existed.", RolesTable);
+
+        WarnIfDefaultAdminPasswordInProduction(isProduction, bootstrapAdminPassword, logger);
+    }
+
+    internal static void WarnIfDefaultAdminPasswordInProduction(
+        bool isProduction, string? password, ILogger logger)
+    {
+        if (isProduction && string.Equals(password, DefaultAdminPassword, StringComparison.Ordinal))
+            logger.LogWarning(
+                "Bootstrap admin is using the default password '{Default}'. Change it immediately via Auth__BootstrapAdmin__Password.",
+                DefaultAdminPassword);
     }
 }
