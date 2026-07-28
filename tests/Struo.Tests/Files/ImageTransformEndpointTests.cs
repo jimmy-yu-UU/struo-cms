@@ -40,12 +40,19 @@ public class ImageTransformEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Width_over_max_is_clamped()
     {
+        // Source must be WIDER than MaxWidth (4096): NetVipsImageTransformer uses a "Down" fit
+        // that never upscales, so a source narrower than 4096 would stay at its own width
+        // regardless of whether the width clamp exists — that would make this test pass
+        // even with the clamp removed. 5000 > 4096 lets the assertion distinguish
+        // clamped (999999 -> clamped to 4096 -> Down-fit from 5000 -> 4096) from
+        // unclamped (999999 requested, Down fit never upscales a 5000px source -> stays 5000).
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var id = await UploadPng(c, 200, 100);
+        var id = await UploadPng(c, 5000, 2500);
         var resp = await c.GetAsync($"/api/files/{id}/content?width=999999&format=png");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         using var img = Image.NewFromBuffer(await resp.Content.ReadAsByteArrayAsync());
-        img.Width.Should().BeLessThanOrEqualTo(4096);
+        img.Width.Should().Be(4096);
+        img.Height.Should().Be(2048);
     }
 
     [Fact]
