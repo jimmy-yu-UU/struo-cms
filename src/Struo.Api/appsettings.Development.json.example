@@ -18,11 +18,12 @@
   "Struo": {
     // "ContentAssemblies": [ "Struo.Sample.Blog" ],
     "Files": {
-      "Backend": "local"
+      "Backend": "local",
 
-      // Switch Backend to "s3" and uncomment the block below to use the MinIO container from
-      // docker-compose.yml instead of local disk. Values match that file's dev credentials.
-      // "Backend": "s3",
+      // To use the MinIO container from docker-compose.yml instead of local disk: change Backend
+      // above to "s3", start the container with `docker compose --profile s3 up -d`, and uncomment
+      // the S3 block below. Values match that file's dev credentials.
+      // If you remapped the MinIO host port (STRUO_MINIO_PORT in .env), change Endpoint to match.
       // "S3": {
       //   "Endpoint": "http://localhost:9000",
       //   "Bucket": "struo-media",
