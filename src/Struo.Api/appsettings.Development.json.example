@@ -1,0 +1,38 @@
+// Copy to appsettings.Development.json (gitignored) and edit.
+// Every key here can also be supplied as an environment variable using the
+// double-underscore path separator, e.g. Database__ConnectionString.
+{
+  "Database": {
+    "DbType": "PostgreSQL",
+    // Matches docker-compose.yml. Local development credentials only.
+    "ConnectionString": "Host=localhost;Port=5432;Database=struo;Username=struo;Password=struo",
+    // Empty in development: InitTables builds the schema from the entity classes.
+    "MigrationsPath": ""
+  },
+
+  // Uncomment to enable the Blog sample (see docs/guide/en/16-sample-walkthrough.md).
+  // The Struo.Sample.Blog project reference must be added to Struo.Api.csproj as well.
+  "Struo": {
+    // "ContentAssemblies": [ "Struo.Sample.Blog" ],
+    "Files": {
+      "Backend": "local"
+    }
+  },
+
+  // Redis-backed session ticket store. Empty = in-memory (sessions lost on restart).
+  "Redis": {
+    "ConnectionString": "localhost:6379"
+  },
+
+  "Testing": {
+    // Opt-in live-PostgreSQL test suite. Point at a DISPOSABLE database whose name contains "test".
+    "PostgresConnection": ""
+  },
+
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": { "Microsoft.AspNetCore": "Warning" }
+    }
+  }
+}
