@@ -8,10 +8,22 @@ node_modules/
 dist/
 logs/
 *.log
-.superpowers/
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
+# Environment files — never commit real secrets
+.env
+.env.local
+.env.*.local
+
+# Test and build output
+TestResults/
 frontend/coverage/
-.playwright-mcp/
+frontend/test-results/
+frontend/playwright-report/
+
+# SQLite databases (used as the test backend)
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
