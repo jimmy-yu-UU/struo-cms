@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
@@ -31,6 +32,26 @@ public static class FileStorageServiceCollectionExtensions
         });
 
         services.AddSingleton<IImageDimensionReader, ImageDimensionReader>();
+
+        // P2.4: on-the-fly image transform (endpoint wiring) + its disk-backed variant cache.
+        // NetVipsImageTransformer is stateless (no fields) so a Singleton is safe and avoids a
+        // per-request allocation. DiskImageVariantCache is also stateless beyond its root path.
+        services.AddSingleton<IImageTransformer, NetVipsImageTransformer>();
+        services.AddSingleton<IImageVariantCache>(sp =>
+        {
+            var options = sp.GetRequiredService<FileStorageOptions>();
+            var cachePath = options.ImageTransform.CachePath;
+
+            // Relative CachePath must resolve against the app's content root, never the process CWD
+            // (see FileStorageOptions.ImageTransformOptions.CachePath doc — a recurring prod footgun
+            // in this codebase when a relative path is resolved against the launch directory instead).
+            var env = sp.GetRequiredService<IHostEnvironment>();
+            var root = Path.IsPathRooted(cachePath)
+                ? cachePath
+                : Path.Combine(env.ContentRootPath, cachePath);
+            return new DiskImageVariantCache(root);
+        });
+
         services.AddScoped<FileService>();
         return services;
     }

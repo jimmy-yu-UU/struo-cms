@@ -18,6 +18,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public string FilesRoot { get; } =
         Path.Combine(Path.GetTempPath(), "struo-files-it-" + Guid.NewGuid().ToString("N"));
 
+    // Isolates P2.4's image-variant cache from the repo's src/Struo.Api/App_Data default (same
+    // rationale as FilesRoot above) — otherwise the IT suite would write real variant files under
+    // the checked-out working tree.
+    public string ImageCacheRoot { get; } =
+        Path.Combine(Path.GetTempPath(), "struo-image-cache-it-" + Guid.NewGuid().ToString("N"));
+
     public const string AdminEmail = "it-admin@struo.local";
     public const string AdminPassword = "it-admin-pw-123456";
     public Guid AdminUserId { get; private set; }
@@ -33,6 +39,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Struo:ContentAssemblies:0"] = "Struo.Sample.Blog",
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = FilesRoot,
+                ["Struo:Files:ImageTransform:CachePath"] = ImageCacheRoot,
                 ["Rbac:PublicReadCollections:0"] = "article",
                 ["Rbac:PublicReadCollections:1"] = "category",
                 ["Rbac:PublicReadCollections:2"] = "file",
