@@ -59,6 +59,9 @@ try
 
     builder.Services.AddOpenApi();
     builder.Services.AddStruoInfrastructure();
+    // Reads Struo:ContentAssemblies from builder.Configuration immediately, before Build() below —
+    // any custom configuration provider a fork adds (e.g. Key Vault) must be registered on
+    // builder.Configuration before this line to be seen by the metadata scan.
     builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
     builder.Services.AddStruoData();
     builder.Services.AddStruoGraphQl(builder.Environment);
