@@ -195,4 +195,62 @@ public class QueryValidatorTests
         var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
         act.Should().Throw<QueryException>().WithMessage("*field selection*");
     }
+
+    // Self-referencing relation graph (category.parent -> category) used to exercise
+    // recursive breadcrumb depth boundaries against opts.MaxRelationDepth.
+    private sealed class SelfRefGraph : IRelationshipGraph
+    {
+        public IReadOnlyList<RelationMetadata> Relations(string c) => [];
+        public IReadOnlyList<(string, string)> InboundRestrict(string c) => [];
+        public RelationMetadata? Resolve(string collection, string rel) => (collection, rel) switch
+        {
+            ("category", "parent") => new RelationMetadata { Name = "parent", Label = "Parent",
+                Kind = RelationKind.ManyToOne, TargetCollection = "category",
+                Interface = RelationInterface.Dropdown, ForeignKey = "parentId" },
+            _ => null
+        };
+    }
+
+    private sealed class CategoryMeta : IMetadataProvider
+    {
+        public IReadOnlyList<CollectionMetadata> GetCollections() => [];
+        public CollectionMetadata? GetCollection(string name) => name == "category"
+            ? new CollectionMetadata { Name = "category", Label = "Category", FieldGroups = [],
+                Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] }
+            : null;
+    }
+
+    private static CollectionMetadata CategoryRoot() => new()
+    {
+        Name = "category", Label = "Category", FieldGroups = [],
+        Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }]
+    };
+
+    [Fact]
+    public void Default_max_relation_depth_is_six()
+    {
+        new StruoQueryOptions().MaxRelationDepth.Should().Be(6);
+    }
+
+    [Fact]
+    public void Self_relation_path_within_max_depth_is_accepted()
+    {
+        // 6-level breadcrumb: parent.parent.parent.parent.parent.name
+        var path = string.Concat(Enumerable.Repeat("parent.", 5)) + "name";
+        var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, CategoryRoot(), new StruoQueryOptions(),
+            new SelfRefGraph(), new CategoryMeta());
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Self_relation_path_exceeding_max_depth_throws()
+    {
+        var opts = new StruoQueryOptions { MaxRelationDepth = 6 };
+        var path = string.Concat(Enumerable.Repeat("parent.", 7)) + "name"; // 7 hops > 6
+        var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, CategoryRoot(), opts,
+            new SelfRefGraph(), new CategoryMeta());
+        act.Should().Throw<QueryException>();
+    }
 }

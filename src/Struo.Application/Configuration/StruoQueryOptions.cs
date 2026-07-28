@@ -16,5 +16,5 @@ public sealed class StruoQueryOptions
     public int MaxFilterConditions { get; set; } = 50;
 
     [Range(1, int.MaxValue)]
-    public int MaxRelationDepth { get; set; } = 5;
+    public int MaxRelationDepth { get; set; } = 6;
 }
