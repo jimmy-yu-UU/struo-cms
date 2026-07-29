@@ -249,9 +249,29 @@ server: {
 This is why chapter 2's walkthrough needs no CORS configuration at all: the browser only ever talks to
 `http://localhost:5173`, and Vite forwards `/api/*` server-side to the API on `5221`. To point the dev
 SPA at a different API instance — a different port, a remote dev box, a container — change `target`
-here. There is no separate frontend-side base-URL setting: `frontend/src/api/apiClient.ts` always calls
-relative `/api/...` paths and relies entirely on this proxy (or, in production, on the SPA being served
-from the same origin as the API) to reach the backend.
+here. There is no separate frontend-side base-URL setting for this same-origin mode:
+`frontend/src/api/apiClient.ts` (and `filesApi.ts`/`richTextImages.ts`) always fall back to relative
+`/api/...` paths and rely entirely on this proxy (or, in production, on the SPA being served from the
+same origin as the API) to reach the backend.
+
+### `VITE_API_BASE_URL`: true cross-origin (SPA and API on different origins)
+
+The proxy above only works when the SPA and API are served from the same origin (directly, or via the
+dev proxy standing in for one). For a deployment where the SPA is genuinely served from a different
+origin than the API, set `VITE_API_BASE_URL` to the API's full origin (e.g. `https://api.example.com`)
+in `frontend/.env` (copy the tracked `frontend/.env.example`, which documents the same default/override
+split). `apiClient.ts`, `filesApi.ts` and `richTextImages.ts` each read
+`import.meta.env.VITE_API_BASE_URL`, falling back to `/api` when it's unset — this is a Vite build-time
+variable, so changing it needs a rebuild/restart of the dev server or a new production build, not just a
+page reload.
+
+This mode also requires a matching backend change: configure `Struo:Cors:AllowedOrigins` (e.g.
+`Struo__Cors__AllowedOrigins__0=https://app.example.com`) to allow the SPA's origin
+(`src/Struo.Api/Auth/CorsWiring.cs` reads this key; empty/absent means no origins are allowed).
+Configuring any allowed origin also flips the authentication cookie from `SameSite=Lax` to
+`SameSite=None` **and** forces `Secure` on (`src/Struo.Api/Auth/AuthWiring.cs`) — browsers only honor
+`SameSite=None` over HTTPS, so both the SPA and the API must be served over HTTPS in this mode; it will
+not work over plain HTTP.
 
 ## Next steps
 

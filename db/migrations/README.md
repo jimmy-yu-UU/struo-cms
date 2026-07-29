@@ -54,11 +54,14 @@ NNN-short-kebab-description.sql
   rollback is needed.
 - **Timestamp convention:** any new column or table that stores an instant uses `timestamptz`
   (timestamp *with* time zone), never bare `timestamp`, storing UTC and letting the client localize.
-  The precedent is the runner's own tracking table, described below. Existing `timestamp` columns in
-  the baseline (every `AuditableEntity` `createdat`/`updatedat` column except `site_settings.updatedat`,
-  which is `timestamptz`) are **not** retro-migrated — retro-converting already-stored values re-anchors
-  them against the session time zone, a silent data shift for anything not already written in UTC. The
-  convention binds new schema only.
+  The precedent is the runner's own tracking table, described below. The baseline itself is not
+  uniform: most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, but
+  `media_folders.createdat`/`media_folders.updatedat` and `site_settings.updatedat` (`site_settings` has
+  no `createdat` column at all) are already `timestamptz` — check `001-core-baseline.sql` for the table
+  you are altering rather than assuming either type from this list. None of the baseline's existing
+  bare-`timestamp` columns are retro-migrated to close that gap — retro-converting already-stored values
+  re-anchors them against the session time zone, a silent data shift for anything not already written in
+  UTC. The convention binds new schema only.
 
 ## The runner: tracking table and transaction behavior
 
@@ -70,7 +73,9 @@ at application startup:
 - Enabled by configuration: set `Database:MigrationsPath` to this directory (an **absolute** path in
   Production — chapter 15 covers why a relative path is dangerous there). Empty/absent (the default)
   disables it. It runs in **all** environments when configured, positioned after `InitTables` and
-  before the dev seeders.
+  before `DataSeeder`'s initial-data seeding — that seeding itself runs in every environment, not only
+  dev (`src/Struo.Api/Program.cs`), so on the Production path this file documents, `MigrationRunner`
+  creates `users`/`roles` and then `DataSeeder` seeds the bootstrap admin and RBAC rows against them.
 - Tracks applied filenames in a `schema_migrations (filename text PRIMARY KEY, appliedat timestamptz)`
   table it creates on first run. Tracking is by **filename only** — no checksum or content hash — so an
   already-recorded file is never re-run even if its on-disk content later changes. Never edit a

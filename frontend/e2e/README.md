@@ -37,7 +37,9 @@ Both suites need, at minimum:
 
 ## Running
 
-From `frontend/`, with the API and database already up:
+From `frontend/`, with the API and database already up (see
+[chapter 2](../../docs/guide/en/02-getting-started.md)'s quick start for the standard way to bring
+those up):
 
 ```bash
 pnpm e2e
