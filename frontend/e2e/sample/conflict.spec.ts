@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
-// FE-4 live gate: optimistic-concurrency (version) recovery.
+// Live gate: optimistic-concurrency (version) recovery.
 //
 // The form carries the item's `version` (parseItemToForm -> setModel -> buildItemPayload echo).
 // When the server copy is bumped out-of-band after the form loaded, saving the now-stale version
@@ -11,14 +11,16 @@ import { type Page } from '@playwright/test'
 //                         the server's latest), so saving again overwrites the server copy.
 // Version monotonicity is asserted via the authenticated API at the end.
 //
-// COLLECTION CHOICE: this spec drives `article` — the collection the audit finding FE-4 names.
-// The article edit form carries a required translatable Title plus an optional DateTime
-// "Published At" that is LEFT BLANK on purpose: this doubles as live proof of the batch-3b Task-1
-// fix. Before that fix an empty DateTime serialised to "" and the API rejected the whole save with
-// 400 "Request body could not be parsed." — the request never reached the version CAS. With the fix
-// (empty date/time/dateTime serialises to null) the stale save now reaches the optimistic-lock check
-// and returns 409 as designed. If Task 1 regresses, createAndOpen()'s Save would 400 and never land
-// on the list, failing this spec before the conflict logic is even exercised.
+// COLLECTION CHOICE: this spec drives `article` — the collection used to exercise the
+// optimistic-concurrency recovery above. The article edit form carries a required translatable
+// Title plus an optional DateTime "Published At" that is LEFT BLANK on purpose: this doubles as
+// live proof that an empty DateTime serialises to null (not ""). If that regressed, an empty
+// DateTime would serialise to "" and the API would reject the whole save with 400 "Request body
+// could not be parsed." — the request would never reach the version CAS. With the current
+// behavior (empty date/time/dateTime serialises to null) the stale save reaches the
+// optimistic-lock check and returns 409 as designed. If this regresses, createAndOpen()'s Save
+// would 400 and never land on the list, failing this spec before the conflict logic is even
+// exercised.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'

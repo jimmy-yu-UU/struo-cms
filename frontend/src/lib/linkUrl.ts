@@ -1,4 +1,4 @@
-// Defense-in-depth allowlist for user-supplied link URLs (FE-10).
+// Defense-in-depth allowlist for user-supplied link URLs.
 //
 // The TipTap Link extension is already configured with protocols
 // ['http','https','mailto'] and the server sanitizes stored HTML, so this is a

@@ -1,6 +1,6 @@
 import { test as base, expect } from '@playwright/test'
 
-// E2E-1 (audit 2026-07-21, batch 4): the SPA's UI locale defaults to zh-TW
+// The SPA's UI locale defaults to zh-TW
 // (resolveInitialUiLocale reads ONLY localStorage['struo.uiLocale'], no navigator fallback). A
 // fresh Playwright context starts with empty localStorage, so the app boots in Traditional
 // Chinese and every i18n-string selector across the whole suite (Save, History, Search, Unsaved

@@ -1,6 +1,6 @@
 export type DeleteKind = 'soft' | 'hard'
 
-// Confirm copy for delete/purge actions — i18n via an injected translator (FE-16); callers pass
+// Confirm copy for delete/purge actions — i18n via an injected translator; callers pass
 // their own `t` from useI18n() so the copy renders in the active UI locale.
 type Translate = (key: string) => string
 

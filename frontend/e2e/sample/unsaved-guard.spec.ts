@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
-// FE-5 live gate: dirty-state leave guard.
+// Live gate: dirty-state leave guard.
 //
 // ItemFormView snapshots the model after load; onBeforeRouteLeave compares the current model and,
 // when dirty, prompts a PrimeVue ConfirmDialog ("Unsaved changes"). Reject keeps the user on the
@@ -58,7 +58,7 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
 
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // The collection list has no row-click navigation — open via the row's explicit
   // Edit action instead. Wait for the debounced search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
   await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
@@ -83,7 +83,7 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
 
   await page.getByPlaceholder('Search').fill(name)
   await expect(page.getByText(name, { exact: true })).toBeVisible()
-  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // The collection list has no row-click navigation — open via the row's explicit
   // Edit action instead. Wait for the debounced search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
   await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)

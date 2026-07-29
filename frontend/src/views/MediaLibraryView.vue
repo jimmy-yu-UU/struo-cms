@@ -52,7 +52,7 @@ const mode = ref<'active' | 'trash'>('active')
 
 const canWrite = computed(() => auth.canWrite('file'))
 const canDelete = computed(() => auth.canDelete('file'))
-// Trash toggle mirrors CollectionListView's Active/Trash SelectButton (9b-fe): only meaningful to
+// Trash toggle mirrors CollectionListView's Active/Trash SelectButton: only meaningful to
 // a user who can actually restore/purge, so gate it on canDelete rather than always showing it.
 const showTrashSwitch = computed(() => canDelete.value)
 const modeOptions = computed(() => [
@@ -141,7 +141,7 @@ function onPage(e: { page: number; rows: number }): void {
 function openDetail(id: string): void {
   selected.value = files.value.find((f) => f.id === id) ?? null
 }
-// FE-27: preserve the user's page position on delete instead of always resetting to page 0.
+// Preserve the user's page position on delete instead of always resetting to page 0.
 // Refresh at the current page first; only if the new total no longer covers that page (e.g.
 // the deleted item was the last one on the last page) do we clamp down to the new last valid
 // page and reload -- never below page 0.

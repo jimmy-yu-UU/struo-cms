@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// Audit 2026-07-21 Batch 4 (TEST-6) live gate: Site Settings branding editor (/settings,
-// super-admin only) — save-then-persist, and the FE-5-style unsaved-changes leave guard
+// Live gate: Site Settings branding editor (/settings, super-admin only) — save-then-persist,
+// and the same unsaved-changes leave guard pattern as ItemFormView
 // (SettingsView.vue's guardLeave() reuses ItemFormView's lib/formDirty.ts unsavedConfirm copy).
 //
 // CRITICAL: `site_settings` is a SINGLETON row shared by the whole dev DB — every write here
