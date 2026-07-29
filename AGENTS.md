@@ -1,10 +1,7 @@
 # AGENTS.md
 
 Guidance for any AI coding agent working in this repository. This file is meant to stand on its own —
-read it first, every session. For depth, see `docs/ai/architecture.md` (layer map and extension
-points), `docs/ai/conventions.md` (naming/errors/validation/config/tests/commits), and
-`docs/ai/task-playbooks.md` (long-form playbooks); for conceptual background, the manual under
-`docs/guide/en/`.
+read it first, every session. See "Where to read more" below for the deeper references.
 
 ## What this repository is
 
@@ -27,8 +24,9 @@ tables but not collections. If you're unsure whether something is core, it's cor
 `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is an optional, detachable **demo** — it shows how
 to define collections using the same primitives a fork would use. It is not shipped capability: the
 host has no `ProjectReference` to it, `Struo:ContentAssemblies` ships as `[]`, and framework code never
-references it. Only `tests/Struo.Tests` references it, which is what makes it truly deletable — doing
-so also means deleting the many test files that use it as a fixture.
+references it. It is listed as a solution member in `StruoCMS.slnx`, and only `tests/Struo.Tests`
+carries an actual code reference to it — which is what makes it truly deletable — doing so also means
+removing it from `StruoCMS.slnx` and deleting the many test files that use it as a fixture.
 
 ## Repo map
 
@@ -56,6 +54,11 @@ so also means deleting the many test files that use it as a fixture.
 - `Struo.Domain` stays free of external packages — `Struo.Domain.csproj` declares zero
   `PackageReference`/`ProjectReference` entries; this is a convention checked by reading the file, not
   by an automated test.
+- **Target framework**: .NET 10 (`net10.0`, `Directory.Build.props`). **Database support**: SqlSugar
+  is configured for five backends (`Database:DbType`: `PostgreSQL`/`MySql`/`SqlServer`/`Sqlite`/
+  `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
+  only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental — some
+  ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior specifically.
 
 ## Invariants
 
@@ -69,14 +72,22 @@ so also means deleting the many test files that use it as a fixture.
   per-request reflection (`MetadataScanner.Scan`, called from `AddStruoMetadata`).
 - **Query DSL paths are whitelist-validated** against scanned metadata before any SQL is built
   (`QueryValidator`) — an unknown filter/sort/relation path is rejected, never passed through.
-- **RichText is sanitized server-side** before required-field validation (`ItemDeserializer` calling
-  `IHtmlSanitizer`).
+- **RichText is sanitized server-side** before required-field validation, via `RichTextCleaner`
+  (`src/Struo.Application/Query/Write/RichTextCleaner.cs`), which wraps `IHtmlSanitizer` plus
+  blank-document coercion. Non-translatable RichText fields are sanitized in `ItemDeserializer.cs`;
+  translatable ones are sanitized separately, per locale, in `ItemWriteSideSync.SyncTranslationsAsync`
+  (`ItemWriteSideSync.cs`).
 - **Immutable update patterns**: domain/query model types are `record`s with `init` properties, updated
   via non-destructive `with` expressions, not mutated in place.
 - **`InitTables` is Development-only.** Production schema changes go through reviewed migrations under
   `db/migrations/` applied by `MigrationRunner` (PostgreSQL-only; a hard no-op on any other backend).
-- **Hidden fields are never projected or accepted** — `[CmsField(Hidden = true)]` is excluded from
-  schema, GraphQL, item projections, and query filtering/search/sort.
+- **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
+  GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**:
+  the write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/`ItemService.UpdateCoreAsync`
+  strip only `IsSystem`/`ReadOnly` fields) — a client that already knows a hidden field's name can still
+  set it via a normal create/update. Do not rely on `Hidden` alone as a write guard for a privileged
+  column; pair it with `ReadOnly` (or keep the field off the write path some other way) if it must never
+  be client-writable.
 
 ## Task playbooks (condensed — see `docs/ai/task-playbooks.md` for the full form)
 
@@ -109,9 +120,11 @@ change; run all four before anything touching both stacks.
 `SqlSugarClientFactory` column-mapping change, a query-building change) — SQLite passing is not evidence
 of PostgreSQL correctness. This codebase has a documented, specific divergence: `IsJson` without an
 explicit `text` column type truncates at `varchar(1)` on PostgreSQL but appears to work on SQLite,
-which ignores declared column length. Set `Testing:PostgresConnection` (via the
-`STRUO_TEST_PG_CONNECTION` environment variable) to a disposable database whose name contains `test`,
-or verify directly against a real PostgreSQL instance.
+which ignores declared column length. Configure `Testing:PostgresConnection` to a disposable database
+whose name contains `test` — the test resolves it from the `STRUO_TEST_PG_CONNECTION` environment
+variable first, falling back to the `Testing:PostgresConnection` key in
+`src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
+directly against a real PostgreSQL instance.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the

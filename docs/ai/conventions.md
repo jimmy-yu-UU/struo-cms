@@ -30,9 +30,15 @@ that plainly instead of implying enforcement that does not exist.
 ## File organization
 
 Both `Struo.Application` and `Struo.Infrastructure` are organized **by feature area**, not by technical
-role — `Metadata/`, `Query/` (with `Query/Read/` and `Query/Write/` sub-folders for the read/write split
-plus `Query/Write/Validators/`), `Files/`, `Identity/`, `Revisions/`, `Settings/`, `Security/`,
-`Localization/`, `DependencyInjection/`, `Health/`. `Struo.Api` mirrors this: `Controllers/`, `GraphQl/`,
+role, though the two projects don't carry identical folder sets — each only has the folders its own
+concerns need. `Struo.Application`: `Abstractions/`, `Configuration/`, `Files/`, `Localization/`,
+`Metadata/`, `Query/` (with `Query/Read/` and `Query/Write/` sub-folders for the read/write split, plus
+`Query/Write/Validators/`), `Revisions/`, `Security/`, `Settings/`. `Struo.Infrastructure`:
+`DependencyInjection/`, `Files/`, `Health/`, `Identity/`, `Localization/`, `Metadata/`, `Persistence/`,
+`Query/`, `Revisions/`, `Security/`, `Settings/` — it additionally owns `Identity/` (the concrete user/
+role/permission entities and SqlSugar wiring), `DependencyInjection/` (every `AddStruoXxx` extension
+method), `Health/`, and `Persistence/` (SqlSugar client/migration plumbing), none of which
+`Struo.Application` has any need for. `Struo.Api` mirrors this: `Controllers/`, `GraphQl/`,
 `Http/`, `Auth/`. `tests/Struo.Tests` mirrors the same feature folders (`Metadata/`, `Query/`, `Api/`,
 `Files/`, `Identity/`, ...) so a change to one feature's production code has an obvious, adjacent home
 for its test. New code should follow the same pattern: add to (or create) a feature-named folder rather
@@ -73,8 +79,12 @@ generic message — the real exception is logged server-side, never leaked to th
   `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting, unknown paths, and the depth cap".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
-  not silently trusted), sanitizes `RichText` values via `IHtmlSanitizer` before required-field checks
-  run, and `FieldValidatorRegistry`'s per-`FieldInterface` validators
+  not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a
+  wrapper around `IHtmlSanitizer`, `src/Struo.Application/Query/Write/RichTextCleaner.cs`) before
+  required-field checks run; translatable `RichText` values go through the same `RichTextCleaner`
+  separately, per locale, in `ItemWriteSideSync.SyncTranslationsAsync`
+  (`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`). `FieldValidatorRegistry`'s
+  per-`FieldInterface` validators
   (`src/Struo.Application/Query/Write/Validators/`) enforce structural constraints for `MultiSelect`/
   `CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater` fields, in that fixed phase order.
   `Required` is enforced for non-translatable fields at this layer.
@@ -122,9 +132,11 @@ state where an accidental in-place mutation would be visible to every subsequent
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests build a fresh SQLite
   temp-file database per test (`Support/SqliteTestDatabase.cs`, deleted on dispose). An opt-in
   live-PostgreSQL suite (`PostgresIntegrationTests`) exists specifically to catch "SQLite-green ≠
-  Postgres-correct" bugs; it activates only when `Testing:PostgresConnection` is configured (via the
-  `STRUO_TEST_PG_CONNECTION` environment variable) and is otherwise a no-op pass — it also refuses to
-  run against any database whose name doesn't contain `test`. Integration-style tests for the HTTP
+  Postgres-correct" bugs; it activates only when `Testing:PostgresConnection` is configured — resolved
+  from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
+  `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if
+  the env var is unset — and is otherwise a no-op pass; it also refuses to run against any database
+  whose name doesn't contain `test`. Integration-style tests for the HTTP
   surface live under `tests/Struo.Tests/Api/` using a `WebApplicationFactory`-based fixture
   (`Support/ApiFactory.cs`). `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` is the one suite
   that guards template-shape invariants (no `samples/*` reference from `Struo.Api`, empty shipped
@@ -135,8 +147,8 @@ state where an accidental in-place mutation would be visible to every subsequent
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
-  sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs only `dotnet test` and
-  `pnpm test` + `pnpm build`) — both need a live API and database, not just a build.
+  sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs only `dotnet build` +
+  `dotnet test` and `pnpm test` + `pnpm build`) — both need a live API and database, not just a build.
 
 See `docs/guide/en/15-deployment-operations-testing.md`, "The three test layers", for the full picture.
 
