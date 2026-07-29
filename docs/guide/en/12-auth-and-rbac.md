@@ -106,8 +106,7 @@ login attempt burns full Argon2id CPU regardless of outcome, so an unbounded bru
 a CPU-exhaustion DoS vector — this limiter exists specifically to bound that, applied to the login
 action only (logout/me/the OIDC challenge are deliberately not limited). Chapter 9 shows the live `429`
 response (`Retry-After: 60`, error code `TOO_MANY_REQUESTS`) this produces once the window is exhausted;
-this chapter does not re-trigger it in order to avoid locking this host's own admin session out mid
-walkthrough.
+this chapter does not re-trigger it.
 
 **When to disable it:** set `Enabled` to `false` only in a multi-replica deployment (e.g. Kubernetes)
 where per-IP rate limiting is instead enforced at the ingress/edge/WAF layer — that layer sees the real
@@ -246,11 +245,14 @@ super-admin regardless of any delegated per-collection grant — the four identi
 collections above are the only ones that set it. `ItemService.RequireSuperAdminForAdminOnly`
 (`src/Struo.Application/Query/ItemService.cs:427-431`) throws `PermissionDeniedException` with the
 message `"Writes to '{collection}' require a super-admin."` when it fails — but the **ordinary**
-`CanWrite` check runs *first* in every write path (`CreateAsync`/`UpdateCoreAsync`/`DeleteAsync`/
-`RestoreAsync`, each at the top of the method), so a caller with **no** write grant at all on an
-`AdminOnly` collection sees the generic `"Write not permitted."` message instead — the AdminOnly-specific
-message only surfaces for a caller that *does* hold a per-collection write grant but isn't super-admin.
-Both are live-verified, deliberately isolating each case:
+per-collection permission check runs *first* in every one of these four paths, and it is not the same
+check in all four: `CreateAsync` (`ItemService.cs:107`) and `UpdateCoreAsync` (`:145`) check `CanWrite`
+and fail with `"Write not permitted."`; `DeleteAsync` (`:256`) and `RestoreAsync` (`:319`) check
+`CanDelete` and fail with `"Delete not permitted."` instead — `RequireSuperAdminForAdminOnly` runs second
+in all four (`:257`, `:320`, and the equivalent lines in `CreateAsync`/`UpdateCoreAsync`), so a caller
+with **no** ordinary grant at all on an `AdminOnly` collection sees the generic per-verb message, and the
+AdminOnly-specific message only surfaces for a caller that *does* hold the relevant per-collection grant
+but isn't super-admin. Both are live-verified for the write case, deliberately isolating each check:
 
 ```
 # editor@example.com has NO grant on 'role' at all:
@@ -264,15 +266,42 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 {"success":false,"error":{"code":"FORBIDDEN","message":"Writes to 'role' require a super-admin."}}
 ```
 
-`RolesController`/`UsersController` enforce the same super-admin requirement directly on every one of
-their own actions (`RequireAdmin()`, checked first thing in each action) rather than going through
-`ItemService` at all — live-verified the same rejection shape from a completely different code path:
+`RolesController` enforces the same super-admin requirement directly on every one of its own actions
+(`RequireAdmin()`, checked first thing in each action, `RolesController.cs:31,50`) rather than going
+through `ItemService` at all — live-verified the same rejection shape from a completely different code
+path:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/roles/<id>/permissions -H "X-Struo-CSRF: 1" \
     -b editor-cookies.txt -d '[]'
 {"success":false,"error":{"code":"FORBIDDEN","message":"Admin role required."}}
 ```
+
+**`UsersController` does the same for every action except one deliberate exception:**
+`PUT /api/users/{id}/password` only calls `RequireAdmin()` when the caller is changing **someone else's**
+password (`ChangePassword`, `src/Struo.Api/Controllers/UsersController.cs:58-62`) — a non-admin
+authenticated user may change their **own** password by supplying `currentPassword`, which is verified
+against the stored hash before the write proceeds (`:63-69`). This is the one self-service write path in
+the entire identity/RBAC surface; every other `UsersController`/`RolesController` action (creating a
+user, issuing/revoking an access token, the effective-permissions preview, the role permission matrix)
+requires super-admin unconditionally, with no self-service exception. Live-verified against
+`editor@example.com` (no admin grant of any kind), changing their own password: a wrong `currentPassword`
+is rejected as `401` — proof-of-knowledge, not an admin gate, so it is `UNAUTHORIZED` rather than
+`FORBIDDEN` — and the correct one succeeds:
+
+```
+$ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"wrongpass"}'
+HTTP/1.1 401 Unauthorized
+{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+
+$ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"editorpass1"}'
+HTTP/1.1 204 No Content
+```
+
+A threat model built on "every `UsersController` action requires super-admin" would be wrong on exactly
+this one endpoint — worth stating plainly rather than leaving as an implicit exception.
 
 Reads of `AdminOnly` collections are **not** specially restricted — they go through the same
 per-collection `CanRead` grant as any other collection; only writes carry the super-admin requirement.
@@ -316,7 +345,9 @@ $ docker exec struo-postgres psql -U struo -d struo -t -c "select password from 
 ```
 
 (The hash above is identical before and after the write — the submitted `"IGNORED-VALUE"` never reached
-the database. The only supported way to change a password is `PUT /api/users/{id}/password`, chapter 9.)
+the database. The only supported way to change a password is `PUT /api/users/{id}/password` — either as
+a super-admin changing someone else's, or as the account's own owner supplying a correct
+`currentPassword` (see the self-service exception above); chapter 9 documents the endpoint itself.)
 
 ## Effective-permission preview in the admin
 
