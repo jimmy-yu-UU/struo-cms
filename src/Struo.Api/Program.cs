@@ -197,9 +197,24 @@ try
         }
 
         // Dev fail-fast (DB-5): assert correctness-critical constraints exist after schema creation.
+        // Translation sidecars are derived from metadata (not hardcoded) so a fork's own sidecars are
+        // covered the same way core's file_translations is: table/column names are resolved the same
+        // way SqlSugar does, via EntityMaintenance, so they always match whatever InitTables/the
+        // migrations actually created.
         if (app.Environment.IsDevelopment())
         {
-            await SchemaGuard.AssertCriticalConstraintsAsync(db, default);
+            var metadataProvider = scope.ServiceProvider
+                .GetRequiredService<Struo.Application.Metadata.IMetadataProvider>();
+            var translationSidecars = metadataProvider.GetCollections()
+                .Where(c => c.Translation is not null)
+                .Select(c => c.Translation!)
+                .Select(t => new TranslationSidecarDescriptor(
+                    db.EntityMaintenance.GetTableName(t.TranslationEntityType),
+                    db.EntityMaintenance.GetDbColumnName(t.ForeignKeyProperty, t.TranslationEntityType),
+                    db.EntityMaintenance.GetDbColumnName(t.LocaleProperty, t.TranslationEntityType)))
+                .ToList();
+
+            await SchemaGuard.AssertCriticalConstraintsAsync(db, translationSidecars, default);
         }
 
         // Unified initial-data seeding — ALL environments. Each seeder fires only when its trigger
