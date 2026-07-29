@@ -19,7 +19,14 @@ a HotChocolate `ITypeModule` registered in `GraphQlServiceCollectionExtensions.A
 
 - an object type (e.g. `File`), with `id`/`version` always present, one field per non-`Hidden`,
   non-excluded own field, one field per relation, and a `translations: [Translation!]` field when the
-  collection has a translation sidecar;
+  collection has a translation sidecar. A `File`/`Image`-interface own field additionally gets a
+  companion resolver field alongside its own `ID`/`[ID!]` scalar — `<name-stripped-of-trailing-Id>:
+  File` for a single `File`/`Image` field, `<name>Files: [File!]` for a `Files` field — which batches
+  every id referenced across the whole response into one query via `FileFieldResolvers`' DataLoader (no
+  N+1). None of the seven live framework collections declares an own field with any of these three
+  interfaces, so this companion-field behavior isn't reachable on this host, but a fork adding e.g.
+  `[CmsField(Interface = FieldInterface.Image)] public Guid? Cover { get; set; }` gets a `cover: ID` plus
+  a `coverFile: File` for free;
 - a list wrapper type (`FileList { items: [File!]!, total: Int! }`);
 - a filter input (`FileFilterInput`) with `and`/`or`/`id` plus one operator-input field per filterable
   own field and per relation (cross-relation filtering, below);
@@ -53,6 +60,58 @@ both read from `GraphQlServiceCollectionExtensions`:
 - **Nitro IDE** (HotChocolate's bundled in-browser GraphQL explorer) — `options.Tool.Enable =
   app.Environment.IsDevelopment()`: same rule, browser tool only in Development.
 
+**A third way to read the schema is not gated on either of those, and is reachable in Production.**
+`GET /graphql?sdl` is a HotChocolate built-in route on the same `/graphql` path that serves the
+complete schema as plain SDL text — anonymously, with no session cookie and no `X-Struo-CSRF` header
+(it's a safe `GET`, so `CsrfProtectionMiddleware` never even considers it):
+
+```
+$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5221/graphql?sdl"
+200
+$ curl -s "http://localhost:5221/graphql?sdl" | head -8
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  _service: String @cost(weight: "10")
+  language(id: ID!, locale: String): Language @cost(weight: "10")
+```
+
+`.DisableIntrospection(!env.IsDevelopment())` (`GraphQlServiceCollectionExtensions.cs`) gates
+introspection *queries* (`__schema`/`__type` selections inside a normal GraphQL request) — it says
+nothing about the `?sdl` query-string route, and `MapGraphQL("/graphql")` itself carries no
+environment gate of its own. **This was verified empirically against a real Production-mode instance,
+not inferred from reading the two gates separately** — a second instance of this exact codebase was
+started with `ASPNETCORE_ENVIRONMENT=Production` against a disposable scratch database (left completely
+isolated from the documented `:5221` instance and its `struo` database), and probed:
+
+```
+$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql?sdl"     # Production instance
+200
+$ curl -s "http://localhost:5299/graphql?sdl" | head -3
+schema {
+  query: Query
+  mutation: Mutation
+
+$ curl -s -i -X POST http://localhost:5299/graphql -H "Content-Type: application/json" -d '{"query":"{ __schema { queryType { name } } }"}'
+HTTP/1.1 400 Bad Request
+{"errors":[{"message":"Introspection is not allowed for the current request.","locations":[{"line":1,"column":3}],"extensions":{"code":"HC0046","field":"__schema"}}]}
+
+$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql"          # Nitro IDE (browser tool)
+404
+```
+
+So in Production: a genuine introspection *query* is correctly refused (`HC0046`), and the browser IDE
+is correctly gone (`404`) — but **`?sdl` still serves the entire schema, in full, to an anonymous
+caller**. A reader who stops at "introspection is refused outside Development" would wrongly conclude
+the schema is unreachable in production; it is fully reachable, just through a different route than the
+one that's actually gated. Nothing in this framework's own configuration surface (chapter 3) turns this
+route off — the only mitigation available today is blocking `/graphql?sdl` (or matching on the `sdl`
+query string generally) at the reverse proxy/ingress in front of a production deployment, the same layer
+chapter 3 already points to for concerns HotChocolate itself has no toggle for.
+
 A cookie-authenticated request to `/graphql` needs the **same** `X-Struo-CSRF` header REST writes need
 (chapter 9) — `CsrfProtectionMiddleware` guards every non-safe HTTP method regardless of path, and
 GraphQL-over-HTTP always uses `POST`, so this applies to a read-only *query* exactly as much as a
@@ -60,7 +119,7 @@ mutation:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -b cookies.txt -d '{"query":"query { languages { total } }"}'
-{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required 'X-Struo-CSRF' header."}}
+{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required \u0027X-Struo-CSRF\u0027 header."}}
 
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"query":"query { languages { items { code name isDefault } total } }"}'
 {"data":{"languages":{"items":[{"code":"zh-TW","name":"繁體中文","isDefault":false},{"code":"en","name":"English","isDefault":true}],"total":2}}}
@@ -176,7 +235,7 @@ arguments at all — `CollectionSchemaBuilder` only attaches `filter`/`sort`/`li
 
 Every collection gets `create{X}(input: XCreateInput!, locale: String): X`,
 `update{X}(id: ID!, input: XUpdateInput!, locale: String): X`, `delete{X}(id: ID!, purge: Boolean):
-Boolean!`, and `restore{X}(id: ID!): X` (`MutationResolvers`,
+Boolean`, and `restore{X}(id: ID!): X` (`MutationResolvers`,
 `src/Struo.Api/GraphQl/MutationResolvers.cs`). `create`/`update` convert the typed input back into the
 same `JsonElement` `ItemService.CreateAsync`/`UpdateAsync` already accept
 (`MutationInputMapper.ToJsonElement`), then **re-read** the row after the write so the returned node has
@@ -276,10 +335,12 @@ form there too.
 `StruoErrorFilter` (`src/Struo.Api/GraphQl/StruoErrorFilter.cs`) is the GraphQL-side twin of REST's
 `StruoExceptionHandler`: it maps a **resolver** exception through the same `DomainErrorMap` and stamps
 the result's `extensions.code` with the identical stable code string REST uses (`UNAUTHORIZED`,
-`FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VERSION_CONFLICT`, `BAD_USER_INPUT`, `INTERNAL_SERVER_ERROR`).
-This case — an exception thrown while a resolver is actually running against a syntactically/
-structurally valid request — keeps the transport HTTP status at `200`; the caller is expected to
-inspect `extensions.code` per error rather than the status line:
+`FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VERSION_CONFLICT`, `BAD_USER_INPUT`, `PAYLOAD_TOO_LARGE`,
+`INTERNAL_SERVER_ERROR` — `DomainErrorMap.Map` makes no distinction between REST and GraphQL callers,
+so every mapped exception type, `PayloadTooLargeException` included, stamps the same code regardless of
+which protocol's resolver/action threw it). This case — an exception thrown while a resolver is
+actually running against a syntactically/structurally valid request — keeps the transport HTTP status
+at `200`; the caller is expected to inspect `extensions.code` per error rather than the status line:
 
 ```
 $ curl -s -i -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -d '{"query":"query { users { total } }"}'

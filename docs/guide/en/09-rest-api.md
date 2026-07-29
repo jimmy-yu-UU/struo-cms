@@ -97,7 +97,7 @@ $ curl -s http://localhost:5221/api/languages
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Authentication required."}}
 
 $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: application/json" -b cookies.txt -d '{}'
-{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required 'X-Struo-CSRF' header."}}
+{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required \u0027X-Struo-CSRF\u0027 header."}}
 
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/nope"
 {"success":false,"error":{"code":"NOT_FOUND","message":"Unknown collection 'nope'."}}
@@ -131,7 +131,7 @@ the masked/logged behavior are read directly from `StruoExceptionHandler`/`Domai
 | Status | When |
 |---|---|
 | `200 OK` | A read, or a write whose result is meaningfully returned in the body (create/update/get/list all return `200` — note `Created`'s `201` below is the one exception). |
-| `201 Created` | `POST /api/items/{collection}` and `POST /api/users` and `POST /api/files` — the response body carries the created row and, for items, a `Location` header of `/api/items/{collection}/{id}`. |
+| `201 Created` | `POST /api/items/{collection}`, `POST /api/users`, and `POST /api/files` — the response body carries the created row. **No `Location` header is ever sent**, from any of the three: `ItemsController.Create` and `UsersController.Create` both call `Created(uri, value)` (a `CreatedResult`, which normally writes a `Location` header during its own `ExecuteResultAsync`), but `EnvelopeResultFilter`'s `case ObjectResult obj` branch matches `CreatedResult` too (it is one) and replaces it with a **plain** `ObjectResult` carrying only the wrapped body and status code — the original `CreatedResult`'s Location-writing behavior never runs. `FilesController.Upload` never attempted a `Location` header in the first place (it returns `StatusCode(201, ...)`, not `Created(...)`). Live-verified: neither `POST /api/items/mediaFolder` nor `POST /api/users` sends a `Location` header despite the controller source calling `Created(...)`. |
 | `204 No Content` | Every delete (trash or purge), restore, and logout — no body at all; `EnvelopeResultFilter` explicitly leaves a `NoContentResult` bare rather than wrapping it in an envelope. |
 | `400 Bad Request` | `BAD_USER_INPUT` or `VALIDATION` (see the error-code table). |
 | `401 Unauthorized` | `UNAUTHORIZED`. |
@@ -265,7 +265,7 @@ and default-off.
 
 ```
 $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: application/json" -b cookies.txt -d '{}'
-{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required 'X-Struo-CSRF' header."}}
+{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required \u0027X-Struo-CSRF\u0027 header."}}
 ```
 
 The middleware guards **every** non-safe request path, not just `/api/*` — `POST /graphql` is a
@@ -304,6 +304,25 @@ $ curl -s -i -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: 
 {"success":false,"error":{"code":"FORBIDDEN","message":"Writes to 'role' require a super-admin."}}
 ```
 
+**Route constraints fail before any of this runs.** `ItemsController`'s generic `{id}` segment is a
+plain, unconstrained route parameter (a collection's id column isn't always a `Guid`), but every
+`FilesController`/`UsersController`/`RolesController` id route is declared `{id:guid}`, and
+`ItemsController`'s two revision routes are `{id}/revisions/{revisionNumber:long}` — a value that fails
+the constraint never reaches the action at all: ASP.NET Core's routing simply doesn't match, so the
+response is a **bare, empty-body `404`** (no envelope, `Content-Length: 0`) rather than the domain
+`{"success":false,"error":{"code":"NOT_FOUND",...}}` shape a genuinely unknown-but-well-formed id
+produces:
+
+```
+$ curl -s -i -b cookies.txt "http://localhost:5221/api/files/not-a-guid"
+HTTP/1.1 404 Not Found
+Content-Length: 0
+
+$ curl -s -i -b cookies.txt "http://localhost:5221/api/items/file/<id>/revisions/not-a-number"
+HTTP/1.1 404 Not Found
+Content-Length: 0
+```
+
 ### Items (`ItemsController`, `api/items/{collection}`)
 
 The generic CRUD surface over every `[CmsCollection]` — `language`, `permission`, `role`, `user`,
@@ -314,14 +333,23 @@ The generic CRUD surface over every `[CmsCollection]` — `language`, `permissio
 |---|---|---|---|---|---|
 | `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted` | — | `200`, list + `meta` | none (`[Authorize]`-absent; ambient cookie only — see above) | `CanRead` |
 | `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8) | `200`, list + `meta` | none (same caveat) | `CanRead` |
-| `GET /api/items/{collection}/{id}` | `deep`, `locale` | — | `200` item, or `404` | none (same caveat) | `CanRead` |
-| `POST /api/items/{collection}` | — | JSON object of writable fields | `201` created item, `Location` header | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
+| `GET /api/items/{collection}/{id}` | `deep`, `locale`, `deleted` | — | `200` item, or `404` | none (same caveat) | `CanRead` (`deleted=only\|with` additionally needs `CanDelete`) |
+| `POST /api/items/{collection}` | — | JSON object of writable fields | `201` created item (no `Location` header — see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` restored item, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `GET /api/items/{collection}/{id}/revisions` | — | — | `200`, array of `{ revisionNumber, operation, createdAt, createdBy }` (`[]` when the collection has no `Revisions=true`) | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}/revisions/{n}` | — | — | `200`, the entry above plus `snapshot` (hidden fields redacted), or `404` | none (same caveat) | `CanRead` |
 | `POST /api/items/{collection}/{id}/revisions/{n}/revert` | — | — | `200` reverted item (re-applies the snapshot as an update, recorded as a new `"revert"` revision), or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
+
+`GET /api/items/{collection}/{id}` parses `?deleted=` through the identical `DeletedMode`/
+`DeletedAccessGuard` path the list/query actions use (chapter 8) — an invalid value is rejected the
+same way regardless of which of the three actions it reaches:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/file/e2269ae7-094d-448d-bcb9-b484418de9b2?deleted=bogus"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Query parameter 'deleted' must be exclude|only|with."}}
+```
 
 None of the seven live framework collections declares `[CmsCollection(Revisions = true)]`, so on this
 host every revisions/revert action above is live-reachable but always resolves to the "no revisions"
