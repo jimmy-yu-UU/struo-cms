@@ -48,10 +48,20 @@ A field becomes per-locale by setting `[CmsField(Translatable = true)]` on a pro
 **translation sidecar** entity (below) — never on the parent entity itself. `Translatable` fields
 are skipped by the parent-row `Required` check (`ItemDeserializer.Deserialize` filters
 `!f.Translatable` before validating `Required`) and are instead validated per-locale inside the
-sidecar sync (next section). They are also excluded from the query DSL's own-collection allowlist
-in the ordinary sense — filtering/sorting on a translatable field is resolved specially (see
-chapter 8's `RelationFilterResolver` coverage), scoped to the effective query locale rather than
-the parent row.
+sidecar sync (next section). `MetadataScanner.ScanTranslations` folds each sidecar field into the
+parent `CollectionMetadata.Fields` list too (marked `Translatable = true`), so a translatable field
+*is* filterable/sortable through the ordinary query DSL allowlist like any other own-field
+(`QueryValidator.cs:25` builds that allowlist from all non-`Hidden` `meta.Fields`, with no
+`Translatable` exclusion) — it just resolves against the sidecar table instead of the parent row,
+at the effective query locale, via `RelationFilterResolver.IsTranslatableField`/
+`ResolveTranslatableIdsAsync` (`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`, chapter 7).
+Live-verified: filtering `file` by its translatable `title` succeeds with no `?locale=` supplied at
+all (the effective locale then defaults to `DefaultCode()`, `ItemService.cs:55-57`):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Btitle%5D%5B_eq%5D=alpha-report"
+{"success":true,"data":[{"id":"...","fileName":"alpha-report.txt", ...}],"meta":{"total":1,"limit":25,"offset":0}}
+```
 
 ## The translation sidecar entity (complete example)
 
@@ -90,8 +100,8 @@ public sealed class FileTranslation
 from this pair: `ForeignKeyProperty` (the scanner's convention is `{ParentTypeName}Id`, so `FileId`
 for `File`), `LocaleProperty` (`Locale`), and `Fields` (the camelCase names of the sidecar's own
 `[CmsField]`s — here, `title` and `alt`). The composite `UniqueGroupNameList` on `FileId`+`Locale`
-is what guarantees at most one translation row per parent per locale — the same mechanism chapter 5
-described for `Revision`.
+is what guarantees at most one translation row per parent per locale — the same mechanism
+`Revision` (`src/Struo.Infrastructure/Revisions/Revision.cs`) uses for its own composite unique key.
 
 A field's `MaxLength` behavior on a translation sidecar follows chapter 5's rules exactly, applied
 per-locale by `FieldValueRules.CheckMaxLengthTranslation`; the only difference from a parent-row
@@ -239,10 +249,13 @@ from those — chapter 10 covers GraphQL mutations in full.
 
 ## Admin locale tabs and completeness indicators
 
-The admin SPA's `ItemForm.vue` renders one tab per row returned by `GET /api/languages` (via the
-`languageStore` Pinia store), and only when a collection actually has translatable fields *and*
-more than one language is enabled (`showDots`/tab visibility both gate on this). Each tab carries a
-small "dot" whose fill state comes from `hasLocaleContent` (`frontend/src/lib/localeCompleteness.ts`):
+The admin SPA's `ItemForm.vue` renders the tab strip at all only when the collection has
+translatable fields (`v-if="fields.translatable.length"`, `ItemForm.vue:54`) — one tab per row
+returned by `GET /api/languages` (via the `languageStore` Pinia store), even when only a single
+language is enabled. The small per-tab "dot," however, is gated more narrowly: it only renders when
+there is more than one enabled language *and* the collection has translatable fields
+(`showDots`, `ItemForm.vue:32`) — a single-language install with translatable fields still shows one
+(dot-less) tab. Each dot's fill state comes from `hasLocaleContent` (`frontend/src/lib/localeCompleteness.ts`):
 
 ```ts
 export function hasLocaleContent(fields: FieldMeta[], values: Record<string, unknown>): boolean {
