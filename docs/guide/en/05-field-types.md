@@ -182,9 +182,13 @@ an `Interface` picked from the property's CLR type — `DateTime` for `CreatedAt
 `DateTime`), `Text` for `CreatedBy`/`UpdatedBy` (both `Guid?`, which falls through
 `BuildSystemField`'s `DateTime`/`DateTime?` check to the `Text` default). Unlike a plain `ReadOnly`
 field, these four are fully protected on create too, regardless of `CreatedAt`/`UpdatedAt` being a
-non-nullable `DateTime`: `AuditAop.Register`'s `DataExecuting` hook unconditionally overwrites all four
-immediately before every insert/update, independent of `ItemDeserializer`'s nullability-gated strip.
-They're returned on read like any other field (`ItemProjector` does not skip `IsSystem`), and excluded
+non-nullable `DateTime` — but by two different mechanisms depending on the operation:
+`AuditAop.Register`'s `DataExecuting` hook unconditionally overwrites all four on insert, independent of
+`ItemDeserializer`'s nullability-gated strip; on update, that same hook only re-stamps `UpdatedAt`/
+`UpdatedBy` (its `UpdateByObject` branch has no case for `CreatedAt`/`CreatedBy`), so those two are
+instead protected the same way every other `ReadOnly`/`IsSystem` field is on update — by
+`ItemService.UpdateCoreAsync`'s field-overlay skip, which never copies them from the incoming body at
+all. They're returned on read like any other field (`ItemProjector` does not skip `IsSystem`), and excluded
 from both the admin item form and the collection-list columns (`frontend/src/lib/splitFields.ts` and
 `frontend/src/lib/selectListColumns.ts` both filter `isSystem` out) — so, unlike `Hidden` fields, they
 remain fully visible over the API; the shipped admin SPA simply never renders them.
