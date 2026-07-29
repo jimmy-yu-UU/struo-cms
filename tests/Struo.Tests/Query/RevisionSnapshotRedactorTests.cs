@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Unit tests for <see cref="RevisionSnapshotRedactor"/> (SEC-2): the snapshot
+/// Unit tests for <see cref="RevisionSnapshotRedactor"/>: the snapshot
 /// <see cref="RevisionSnapshotBuilder"/> produces deliberately includes every field, including ones
 /// marked <see cref="FieldMetadata.Hidden"/> (a revert must be able to restore them). This class
 /// verifies the redaction rewrite applied before a snapshot is handed to an external caller.

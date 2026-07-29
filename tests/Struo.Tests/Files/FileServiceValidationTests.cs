@@ -40,7 +40,7 @@ public class FileServiceValidationTests
         await act.Should().ThrowAsync<QueryException>();
     }
 
-    // SEC-15: a client that lies about Content-Length (declares small, streams large) must not be
+    // A client that lies about Content-Length (declares small, streams large) must not be
     // able to spool unbounded bytes past MaxUploadBytes to a temp file. The declared-length guard
     // above only sees `length`; the actual stream here is far bigger than the cap.
     [Fact]

@@ -17,7 +17,7 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 
 namespace Struo.Tests.Files;
 
-// CS-8: FileService.DeleteAsync must delete the row + its translation sidecars through the
+// FileService.DeleteAsync must delete the row + its translation sidecars through the
 // nesting-safe IItemRepository.InTransactionAsync helper (join-if-active), not raw
 // BeginTran/CommitTran/RollbackTran. When invoked inside an outer transaction, the delete must
 // join it — an outer rollback then undoes the delete. The old raw-transaction code opened (and
@@ -60,7 +60,7 @@ public class FileServiceTransactionTests : IDisposable
             new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<File>();
         _db.CodeFirst.InitTables<FileTranslation>();
-        // SEC-10/DB-15: DeleteAsync now also clears site_settings.logofileid when applicable, so the
+        // DeleteAsync now also clears site_settings.logofileid when applicable, so the
         // table must exist even though this test's own scenarios never seed a row into it.
         _db.CodeFirst.InitTables<Struo.Infrastructure.Settings.SiteSettings>();
         _db.CodeFirst.InitTables<MediaFolder>();
@@ -124,7 +124,7 @@ public class FileServiceTransactionTests : IDisposable
         (await _db.Queryable<File>().In(id).AnyAsync()).Should().BeFalse();
     }
 
-    // SEC-15 sanity: bounding FileBufferingReadStream to MaxUploadBytes must not break a normal
+    // Sanity check: bounding FileBufferingReadStream to MaxUploadBytes must not break a normal
     // upload whose declared length and actual bytes agree and sit under the cap.
     [Fact]
     public async Task Upload_within_cap_still_succeeds_end_to_end()
@@ -137,7 +137,7 @@ public class FileServiceTransactionTests : IDisposable
         (await _db.Queryable<File>().In(file.Id).AnyAsync()).Should().BeTrue();
     }
 
-    // SEC-15: the stored File.Size must reflect the ACTUAL uploaded byte count, not the
+    // The stored File.Size must reflect the ACTUAL uploaded byte count, not the
     // client-declared Content-Length — a client understating its length (both figures under the
     // cap) must not cause a wrong Size to be persisted.
     [Fact]
@@ -152,7 +152,7 @@ public class FileServiceTransactionTests : IDisposable
         stored!.Size.Should().Be(200);
     }
 
-    // SEC-15 exact-boundary: actual bytes exactly at MaxUploadBytes must succeed and record that
+    // Exact-boundary: actual bytes exactly at MaxUploadBytes must succeed and record that
     // exact size.
     [Fact]
     public async Task Upload_with_actual_bytes_exactly_at_cap_succeeds()
@@ -169,7 +169,7 @@ public class FileServiceTransactionTests : IDisposable
         file.Size.Should().Be(64);
     }
 
-    // SEC-15 exact-boundary: one byte over MaxUploadBytes must throw PayloadTooLargeException,
+    // Exact-boundary: one byte over MaxUploadBytes must throw PayloadTooLargeException,
     // even though the declared length is well under the cap.
     [Fact]
     public async Task Upload_with_actual_bytes_one_over_cap_throws_PayloadTooLarge()

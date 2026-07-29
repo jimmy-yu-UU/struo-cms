@@ -31,7 +31,7 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
         [FromServices] FileService files,
         CancellationToken ct)
     {
-        // SEC-7: this endpoint is anonymous and was hitting the DB on every request. 30s staleness
+        // This endpoint is anonymous and was hitting the DB on every request. 30s staleness
         // is acceptable for branding/oidc bootstrap data; UpdateBranding evicts this key on save so
         // a deliberate change is reflected immediately rather than after the TTL.
         if (cache.TryGetValue(CacheKey, out object? cached))
@@ -42,7 +42,7 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
             ? saved.BrandName
             : branding.Value.Name;
 
-        // SEC-10/TOCTOU: SettingsController only checks the file is published at SAVE time. If it
+        // SettingsController only checks the file is published at SAVE time. If it
         // was later unpublished or deleted, keep serving the appsettings default instead of a dead
         // /api/files/{id}/content URL on the anonymous login page.
         var logoUrl = branding.Value.LogoUrl;

@@ -6,7 +6,7 @@ namespace Struo.Application.Query;
 
 /// <summary>
 /// Process-wide cache of <c>(declaring type, property name) -&gt; PropertyInfo</c> for the projection
-/// and revision-snapshot read paths (CS-4/ARC-2). It replaces per-row <c>Type.GetProperty</c>
+/// and revision-snapshot read paths. It replaces per-row <c>Type.GetProperty</c>
 /// reflection on values that do not have an <see cref="Metadata.EntityDescriptor"/> in hand —
 /// relation targets, repeater child POCOs, M2M junction rows and translation rows.
 /// <para>

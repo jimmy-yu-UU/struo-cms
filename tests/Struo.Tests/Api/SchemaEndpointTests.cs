@@ -16,7 +16,7 @@ public class SchemaEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Schema_lists_all_collections()
     {
-        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
+        var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
         var response = await client.GetAsync("/api/schema");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -28,7 +28,7 @@ public class SchemaEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Schema_for_collection_includes_interfaces_options_and_seo()
     {
-        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
+        var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
         var response = await client.GetAsync("/api/schema/article");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -39,7 +39,7 @@ public class SchemaEndpointTests(ApiFactory factory)
         body.Should().Contain("\"name\":\"seoTitle\"");        // SEO from SeoTranslation sidecar (translatable)
         body.Should().Contain("\"isSystem\":true");            // audit fields
 
-        // Phase 5.6 deliberately changed seoOgImageId interface from Hidden -> Image; guard against reversion.
+        // A prior change deliberately changed seoOgImageId interface from Hidden -> Image; guard against reversion.
         // Parse as JsonDocument so we assert the "image" interface belongs specifically to the seoOgImageId field
         // (a global string scan would pass even if some other field carried the image interface).
         using var doc = System.Text.Json.JsonDocument.Parse(body);
@@ -54,7 +54,7 @@ public class SchemaEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Schema_for_unknown_collection_returns_404()
     {
-        var client = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
+        var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
         var response = await client.GetAsync("/api/schema/does-not-exist");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

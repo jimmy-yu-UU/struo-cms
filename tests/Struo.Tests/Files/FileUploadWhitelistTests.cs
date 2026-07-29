@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// SEC-6(a): the shipped default upload content-type whitelist (appsettings.json
+// The shipped default upload content-type whitelist (appsettings.json
 // Struo:Files:AllowedContentTypes) must reject an unexpected type. Previously the default was empty
 // (allow-all). A whitelisted type still uploads.
 [Collection("ApiIntegration")]

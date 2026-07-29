@@ -39,7 +39,7 @@ public sealed class BearerTokenAuthenticationHandler(
         return AuthenticateResult.Success(ticket);
     }
 
-    // AUTH-1: [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)] challenges/forbids
+    // [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)] challenges/forbids
     // BOTH schemes in listed order (Cookies, then Bearer). Cookie's handler (AuthWiring's
     // OnRedirectToLogin/OnRedirectToAccessDenied) now writes an error-envelope body, which starts
     // the response — the base AuthenticationHandler<TOptions> default for this handler (no override

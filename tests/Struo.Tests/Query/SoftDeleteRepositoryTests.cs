@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// Phase 9b, Task 4: the global query filter registered in SqlSugarClientFactory must exclude
+// The global query filter registered in SqlSugarClientFactory must exclude
 // soft-deleted rows (non-null DeletedAt) from every default Queryable over an ISoftDeletable
 // entity, with no per-path code in the repository.
 public class SoftDeleteRepositoryTests
@@ -121,9 +121,9 @@ public class SoftDeleteRepositoryTests
         Assert.Null(await h.Service.RestoreAsync("article", Guid.NewGuid().ToString(), default));
     }
 
-    // ── DB-19: restore idempotency (no double Version bump / duplicate revision) ───────────────
+    // ── Restore idempotency (no double Version bump / duplicate revision) ───────────────
 
-    /// <summary>DB-19: restoring a row that is ALREADY live (a second RestoreAsync call after the
+    /// <summary>Restoring a row that is ALREADY live (a second RestoreAsync call after the
     /// first already succeeded) must be a true no-op — no Version bump, no extra "restore" revision.
     /// The decision now comes from repository.RestoreAsync's own atomic "WHERE deletedat IS NOT NULL"
     /// UPDATE (affected-rows), not from a separate pre-read snapshot in ItemService, so this also
@@ -157,7 +157,7 @@ public class SoftDeleteRepositoryTests
         Assert.Equal(revisionsAfterFirst.Count, revisionsAfterSecond.Count);
     }
 
-    /// <summary>DB-19, repository layer: RestoreAsync against a row that was NEVER soft-deleted (no
+    /// <summary>Repository layer: RestoreAsync against a row that was NEVER soft-deleted (no
     /// ItemService pre-read involved at all) must report false (no row matched the atomic
     /// "deletedat IS NOT NULL" guard) and must not touch Version.</summary>
     [Fact]
@@ -176,16 +176,16 @@ public class SoftDeleteRepositoryTests
         Assert.Equal(before.Version, after.Version);
     }
 
-    // ── DB-22: soft-delete (trash) idempotency, mirroring DB-19's restore fix ──────────────────
+    // ── Soft-delete (trash) idempotency, mirroring the restore fix above ──────────────────
 
-    /// <summary>DB-22, repository layer: SoftDeleteAsync called a SECOND time directly against a row
+    /// <summary>Repository layer: SoftDeleteAsync called a SECOND time directly against a row
     /// that is ALREADY trashed (no ItemService pre-read guard involved — called straight on the
     /// repository) must report false: no row matches the atomic "deletedat IS NULL" guard, so neither
     /// DeletedAt nor Version is touched again. Before the fix, SoftDeleteGenericAsync's UPDATE located
     /// the row by id alone (Updateable&lt;T&gt; ignores the soft-delete query filter) and re-stamped/
     /// re-versioned unconditionally, which is exactly the race two concurrent DELETEs of the same live
     /// row could exploit to double-record a "delete" revision. Mirrors
-    /// RestoreAsync_on_a_never_trashed_row_returns_false_and_does_not_bump_version (DB-19).</summary>
+    /// RestoreAsync_on_a_never_trashed_row_returns_false_and_does_not_bump_version above.</summary>
     [Fact]
     public async Task SoftDeleteAsync_on_an_already_trashed_row_returns_false_and_does_not_bump_version()
     {
@@ -312,7 +312,7 @@ public class SoftDeleteRepositoryTests
 
 /// <summary>
 /// Mirrors the client/repository construction in <see cref="SqlSugarItemRepositoryTests"/>, but
-/// builds the client via <see cref="SqlSugarClientFactory.Create"/> so the Phase 9b global
+/// builds the client via <see cref="SqlSugarClientFactory.Create"/> so the global
 /// soft-delete filter is actually registered on the scoped client under test.
 /// </summary>
 internal sealed class SoftDeleteRepositoryHarness : IDisposable

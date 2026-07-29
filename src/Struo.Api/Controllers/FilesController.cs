@@ -22,7 +22,7 @@ public sealed class FilesController(
     // pipeline rather than the generic ItemService, so RBAC must be enforced here too — otherwise any
     // authenticated caller (incl. a role-less SSO user) could upload or delete any file, bypassing the
     // per-collection grants that govern every other collection. That RBAC policy lives in
-    // IFileAccessPolicy (BL-1) so it isn't duplicated with PermissionResolutionMiddleware.
+    // IFileAccessPolicy so it isn't duplicated with PermissionResolutionMiddleware.
     [HttpPost]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Upload(CancellationToken ct)
@@ -59,7 +59,7 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // SEC-5: a non-published file requires a genuine per-collection read grant, not merely a
+        // A non-published file requires a genuine per-collection read grant, not merely a
         // logged-in session (a role-less JIT/SSO user could otherwise fetch any draft). 404 (not 403)
         // so existence isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
@@ -80,7 +80,7 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // SEC-5 (see Get above): non-published content is gated on CanRead("file"). 404 so existence
+        // (See Get above): non-published content is gated on CanRead("file"). 404 so existence
         // isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
 

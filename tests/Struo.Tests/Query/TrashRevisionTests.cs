@@ -20,7 +20,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// DB-8: trashing (soft-delete) and restoring an item must (a) increment the optimistic-lock
+/// Trashing (soft-delete) and restoring an item must (a) increment the optimistic-lock
 /// <see cref="AuditableEntity.Version"/> in the SAME UPDATE — so a stale client 409s after a
 /// restore — and (b) capture a revision (operation "delete"/"restore") when the collection has
 /// <c>Revisions=true</c>, all inside one rollback-safe transaction. Real SQLite-backed

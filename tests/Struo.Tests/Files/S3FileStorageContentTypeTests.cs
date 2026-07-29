@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// SEC-6(b)(c): the S3 backend must record the validated content type as object metadata (so a
+// The S3 backend must record the validated content type as object metadata (so a
 // direct/presigned GET serves the correct Content-Type instead of application/octet-stream) and must
 // force a download disposition on presigned GETs (defence in depth for types the API path can't wrap,
 // e.g. SVG). Asserts request assembly against a captured IAmazonS3 — no live S3/MinIO needed.

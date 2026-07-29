@@ -8,7 +8,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 // NOTE: Tests that exercised Author (Restrict delete), Tag M2M, and ArticleFile gallery
-// were deleted in Phase 5.5 when those entities were removed from the sample domain.
+// were deleted when those entities were removed from the sample domain.
 // Remaining: category SetNull relation (still present on Article.CategoryId).
 
 [Collection("ApiIntegration")]

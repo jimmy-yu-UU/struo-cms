@@ -8,7 +8,7 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// ARC-3: REST and GraphQL must agree on the error code for an <b>unauthenticated</b>
+/// REST and GraphQL must agree on the error code for an <b>unauthenticated</b>
 /// <c>PermissionDeniedException</c>. Both drive the same scenario — an anonymous caller requesting
 /// soft-deleted rows (<c>deleted=with</c> / <c>deleted: WITH</c>) on the public-read <c>article</c>
 /// collection, which trips the viewing-deleted delete-permission gate. REST semantics govern:

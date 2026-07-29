@@ -7,8 +7,8 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Filter_m2m_tags_name_exists was deleted in Phase 5.5 (Tag entity removed) and
-// restored below as Filter_m2m_articles_by_tag_name in Phase 8c.2 (Task 3 de-risk).
+// NOTE: Filter_m2m_tags_name_exists was deleted (Tag entity removed) and
+// restored below as Filter_m2m_articles_by_tag_name (de-risk).
 
 [Collection("ApiIntegration")]
 public class CrossRelationFilterTests(ApiFactory factory)

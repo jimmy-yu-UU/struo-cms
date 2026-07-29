@@ -16,7 +16,7 @@ public class FileTranslationTests(ApiFactory factory)
     private async Task<string> Upload(System.Net.Http.HttpClient c)
     {
         var content = new ByteArrayContent([1, 2, 3]);
-        content.Headers.ContentType = new MediaTypeHeaderValue("text/plain"); // whitelisted (SEC-6)
+        content.Headers.ContentType = new MediaTypeHeaderValue("text/plain"); // whitelisted
         var mp = new MultipartFormDataContent { { content, "file", "a.txt" } };
         var resp = await c.PostAsync("/api/files", mp);
         return Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;

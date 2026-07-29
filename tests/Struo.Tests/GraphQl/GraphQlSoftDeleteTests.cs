@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Task 8: GraphQL read/write parity for soft delete (Phase 9b) — proves the same round trip
+/// GraphQL read/write parity for soft delete — proves the same round trip
 /// <see cref="Struo.Tests.Api.SoftDeleteEndpointTests"/> drives over REST also works over
 /// <c>/graphql</c> through the real host pipeline (ApiFactory): the <c>deleted</c> list-query
 /// argument, <c>deleteX(purge)</c>, and <c>restoreX</c>. Drives via "category" (no translation

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Deep_expands_m2o_author was deleted in Phase 5.5 (Author entity removed).
+// NOTE: Deep_expands_m2o_author was deleted (Author entity removed).
 // Deep_m2o_honors_field_whitelist_via_envelope now tests category (M2O) instead of author.
 
 [Collection("ApiIntegration")]

@@ -6,7 +6,7 @@ namespace Struo.Api.Auth;
 /// through the dedicated file storage pipeline rather than the generic ItemService, so
 /// FilesController must enforce these checks itself instead of getting them "for free" the way every
 /// other collection does — otherwise any authenticated caller (incl. a role-less SSO user) could
-/// upload or delete any file. BL-1: this also absorbs the permission-related dependencies that used
+/// upload or delete any file. This also absorbs the permission-related dependencies that used
 /// to sit directly on FilesController's constructor, and is the single owner of the bearer-adopt
 /// resolution sequence that <see cref="FileAccessPolicy"/> shares with
 /// <see cref="PermissionResolutionMiddleware"/>.
@@ -18,7 +18,7 @@ public interface IFileAccessPolicy
     bool CanDelete();
 
     /// <summary>
-    /// SEC-5: may the current caller read a NON-published file? Requires both (a) an authenticated
+    /// May the current caller read a NON-published file? Requires both (a) an authenticated
     /// identity and (b) a genuine <c>CanRead("file")</c> grant for that identity. See
     /// <see cref="FileAccessPolicy.CanReadUnpublishedAsync"/> for the full rationale — this is a
     /// verbatim move of the logic that used to live as a private method on FilesController.

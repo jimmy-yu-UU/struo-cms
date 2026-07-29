@@ -67,7 +67,7 @@ public static class SchemaTypeMapper
     };
 
     /// <summary>
-    /// SDL for a writable own-field in a create/update input (Phase 8b.2a). Covers writable scalars,
+    /// SDL for a writable own-field in a create/update input. Covers writable scalars,
     /// File/Image (→ ID), Files (→ [ID!]), MultiSelect/CheckboxGroup (→ [String!]), and Json/KeyValue
     /// (→ Any). Returns <c>null</c> for Tags/Repeater (named input types the builder emits separately)
     /// and for excluded interfaces (Hidden/Divider/Password). M2M relations and translatable own-fields

@@ -507,7 +507,7 @@ public class GraphQlExecutionTests
     // — the sub-field names in the GraphQL query ("question"/"answer") are camelCase.
     private sealed record FaqRow(string Question, string Answer);
 
-    // ARC-3: this in-process executor has NO HttpContext, so the shared DomainErrorMap treats the
+    // This in-process executor has NO HttpContext, so the shared DomainErrorMap treats the
     // caller as unauthenticated and PermissionDenied surfaces as UNAUTHORIZED (REST-parity), not the
     // old unconditional FORBIDDEN. AddHttpContextAccessor is required so the filter can be activated.
     [Fact]

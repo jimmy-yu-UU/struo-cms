@@ -11,8 +11,8 @@ namespace Struo.Infrastructure.Query;
 /// <summary>
 /// Builds SQL ORDER BY expressions for item queries: plain columns, locale-scoped translatable
 /// fields (correlated subquery), and to-one relation paths (correlated subquery with one JOIN per
-/// hop). Extracted from <see cref="SqlSugarItemRepository"/> (ARC-4); now also injects a stable
-/// default order and a PK tiebreak (問題 11) — no client sort would otherwise leave PostgreSQL's
+/// hop). Extracted from <see cref="SqlSugarItemRepository"/>; now also injects a stable
+/// default order and a PK tiebreak — no client sort would otherwise leave PostgreSQL's
 /// heap order in effect, so an UPDATE (which rewrites the tuple elsewhere in the heap) makes the
 /// edited row visibly jump position in the admin list.
 /// </summary>

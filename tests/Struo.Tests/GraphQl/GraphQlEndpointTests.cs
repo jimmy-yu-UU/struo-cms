@@ -76,7 +76,7 @@ public class GraphQlEndpointTests(ApiFactory factory)
     }
 
     /// <summary>
-    /// Task 6 (Phase 8b.1): every mutation-execution test in this suite builds its own in-process
+    /// Every mutation-execution test in this suite builds its own in-process
     /// executor with an ".AddMutationType(...)" anchor, so none of them prove that the REAL
     /// production wiring — AddStruoGraphQl in GraphQlServiceCollectionExtensions, which registers
     /// the production AddMutationType anchor plus the mutation type extension — actually exposes

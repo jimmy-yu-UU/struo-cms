@@ -7,8 +7,8 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// The referential-integrity pipeline for permanent deletes (DB-1/DB-2), extracted verbatim from
-/// <see cref="ItemService"/> (ARC-1). Runs inside the caller's delete transaction. The Restrict guard
+/// The referential-integrity pipeline for permanent deletes, extracted verbatim from
+/// <see cref="ItemService"/>. Runs inside the caller's delete transaction. The Restrict guard
 /// is shared by the soft-delete (trash) branch and, recursively, by every level of the purge core.
 /// </summary>
 public sealed class ItemPurgePipeline(
@@ -43,7 +43,7 @@ public sealed class ItemPurgePipeline(
     }
 
     /// <summary>
-    /// The recursive purge core (DB-1/DB-2, Task 5). Runs, in order: (1) the Restrict guard — same
+    /// The recursive purge core. Runs, in order: (1) the Restrict guard — same
     /// as <see cref="CheckRestrictAsync"/>; (2) SetNull every inbound FK; (3) recursively purge every
     /// inbound Cascade row through this SAME method (<paramref name="visited"/> is a cross-recursion
     /// cycle guard: a (collection, id) pair already being purged is skipped rather than looping

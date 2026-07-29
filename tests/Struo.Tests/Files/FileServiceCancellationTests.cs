@@ -10,7 +10,7 @@ using File = Struo.Infrastructure.Files.File;
 
 namespace Struo.Tests.Files;
 
-// CS-3: FileService by-id read must forward the CancellationToken to the ORM query so an
+// FileService by-id read must forward the CancellationToken to the ORM query so an
 // already-cancelled request stops at the DB call instead of running to completion.
 public class FileServiceCancellationTests : IDisposable
 {

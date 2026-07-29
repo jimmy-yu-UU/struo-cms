@@ -17,7 +17,7 @@ namespace Struo.Tests.Persistence;
 /// are discovered by reflecting [SugarIndex] off FrameworkEntityTypes.All rather than hardcoded, so a new
 /// core entity's index is covered automatically. Sample (Blog) index parity is the sample's own concern
 /// and is not asserted here.
-/// (DB-16: FileTranslation's redundant plain btree was dropped — its (fileid, locale) lookup is served by
+/// (FileTranslation's redundant plain btree was dropped — its (fileid, locale) lookup is served by
 /// the composite UNIQUE index — so FileTranslation no longer contributes a mapped plain btree here.)
 /// </summary>
 public sealed class IndexParityTests

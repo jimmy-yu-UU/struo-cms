@@ -41,7 +41,7 @@ public class TranslationQueryTests(ApiFactory factory)
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit).And.HaveCount(1);
     }
 
-    /// <summary>DB-17: the translatable-field filter path now projects only the FK column at the SQL
+    /// <summary>The translatable-field filter path now projects only the FK column at the SQL
     /// level instead of materializing whole translation rows. Assert it still returns EVERY matching
     /// parent — not just the first — proving the projected result set is a full, correctly-deduped
     /// list of ids rather than e.g. a single scalar.</summary>

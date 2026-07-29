@@ -65,7 +65,7 @@ public class GanssHtmlSanitizerTests
         clean.Should().Contain("rel=").And.Contain("noopener");
     }
 
-    // DEP-1 (AngleSharp 0.17 -> 1.5): PostProcessNode must strip a client-supplied `target` from
+    // PostProcessNode must strip a client-supplied `target` from
     // every surviving anchor, not just add rel=noopener — a lingering target="_blank" combined
     // with a stripped rel is the classic reverse-tabnabbing gap.
     [Fact]
@@ -76,7 +76,7 @@ public class GanssHtmlSanitizerTests
         clean.Should().Contain("rel=").And.Contain("noopener");
     }
 
-    // DEP-1: obfuscated/dangerous URL schemes in an anchor's href must not survive sanitization,
+    // Obfuscated/dangerous URL schemes in an anchor's href must not survive sanitization,
     // regardless of case, embedded control characters, or use of data: URIs — while a normal
     // https link is preserved. Exercises the parser's URL/scheme handling, a common regression
     // surface across an AngleSharp major-version bump.
@@ -100,7 +100,7 @@ public class GanssHtmlSanitizerTests
         clean.Should().NotContain("javascript:");
     }
 
-    // DEP-1: mXSS via foreign-content (svg/math) parsing quirks — a common regression class when
+    // mXSS via foreign-content (svg/math) parsing quirks — a common regression class when
     // a parser is upgraded, since these payloads rely on the HTML parser's foreign-content
     // insertion-mode handling (e.g. re-parsing <style>/<title> contents as HTML once serialized).
     [Theory]

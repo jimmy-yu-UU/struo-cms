@@ -8,7 +8,7 @@ namespace Struo.Api.Auth;
 
 public static class AuthWiring
 {
-    // AUTH-1: [Authorize]-attribute-level challenges run inside the cookie handler, before MVC
+    // [Authorize]-attribute-level challenges run inside the cookie handler, before MVC
     // gets a chance to run — so EnvelopeResultFilter never sees these responses and they used to
     // go out with an empty body, unlike in-action PermissionDeniedException 401/403s (mapped by
     // DomainErrorMap) which DO carry an envelope. OnRedirectToLogin/OnRedirectToAccessDenied below
@@ -44,7 +44,7 @@ public static class AuthWiring
                 options.SlidingExpiration = true;
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 // API, not MVC views: return 401/403 with an error envelope instead of redirecting.
-                // AUTH-1: body added alongside the pre-existing status-code-only behavior (which is
+                // Body added alongside the pre-existing status-code-only behavior (which is
                 // preserved verbatim) so attribute-level challenges match the in-action error shape.
                 options.Events.OnRedirectToLogin = ctx =>
                 {
@@ -80,7 +80,7 @@ public static class AuthWiring
 
         services.AddAuthorization();
 
-        // BL-1: FilesController's file-collection RBAC decisions, extracted off its constructor.
+        // FilesController's file-collection RBAC decisions, extracted off its constructor.
         // Scoped so it shares the per-request ICurrentPermissions/IPermissionService instances.
         services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
 

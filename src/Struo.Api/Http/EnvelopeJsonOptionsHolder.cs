@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Struo.Api.Http;
 
 /// <summary>
-/// AUTH-1/AUTH-2: the camelCase <see cref="JsonSerializerOptions"/> used whenever an error envelope
+/// The camelCase <see cref="JsonSerializerOptions"/> used whenever an error envelope
 /// is written directly via <c>HttpResponse.WriteAsJsonAsync</c> outside the MVC pipeline (so
 /// <c>EnvelopeResultFilter</c>/the MVC <c>JsonOptions</c> never get a chance to apply). Without this,
 /// <c>WriteAsJsonAsync</c> falls back to <c>Microsoft.AspNetCore.Http.Json.JsonOptions</c> — a

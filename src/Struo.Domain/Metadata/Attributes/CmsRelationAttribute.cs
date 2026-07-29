@@ -2,7 +2,7 @@ using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Domain.Metadata.Attributes;
 
-// Defined for the full §4 surface; NOT read by the Phase 1 scanner (relations = Phase 3).
+// Defined for the full §4 surface; read by MetadataScanner to build relation metadata.
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class CmsRelationAttribute : Attribute
 {

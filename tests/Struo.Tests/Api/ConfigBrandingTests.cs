@@ -24,7 +24,7 @@ public class ConfigBrandingTests(ApiFactory factory)
         using var scope = _factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<ISiteSettingsStore>();
         await store.UpsertAsync(name, logo, null, default);
-        // SEC-7: this bypasses SettingsController.UpdateBranding (the only production write path,
+        // This bypasses SettingsController.UpdateBranding (the only production write path,
         // which evicts the cache itself) — evict here too so the shared ApiFactory's /api/config
         // cache doesn't serve a stale pre-seed value to this or a later test in the collection.
         scope.ServiceProvider.GetRequiredService<IMemoryCache>().Remove(ConfigController.CacheKey);
@@ -63,7 +63,7 @@ public class ConfigBrandingTests(ApiFactory factory)
     [Fact]
     public async Task Config_reflects_saved_brand_name_and_logo_file()
     {
-        // SEC-10: ConfigController re-verifies the file still exists AND is published before
+        // ConfigController re-verifies the file still exists AND is published before
         // emitting its URL, so this must seed a real published File row (not just a bare Guid).
         var logo = await SeedFileAsync("published");
         await SeedAsync("Saved Brand", logo);

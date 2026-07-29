@@ -6,9 +6,9 @@ namespace Struo.Infrastructure.Security;
 /// <summary>
 /// Ganss.Xss-backed <see cref="IHtmlSanitizer"/>. The allowlist is configured once in the
 /// constructor (tags/attributes/schemes) and never mutated afterward, so a single instance is
-/// safe to share across requests. The allowlist mirrors the TipTap editor output (Phase 7f):
-/// basic formatting + anchors (http/https/mailto) + relative-src images carrying data-file-id.
-/// Phase 7g adds basic tables, text-align/colour styles, and sub/superscript.
+/// safe to share across requests. The allowlist mirrors the TipTap editor output:
+/// basic formatting + anchors (http/https/mailto) + relative-src images carrying data-file-id,
+/// plus basic tables, text-align/colour styles, and sub/superscript.
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {

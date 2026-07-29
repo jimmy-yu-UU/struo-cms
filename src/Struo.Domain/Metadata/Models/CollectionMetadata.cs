@@ -21,13 +21,13 @@ public sealed record CollectionMetadata
     /// <summary>
     /// When true, the collection's entity implements <see cref="Struo.Domain.Auditing.ISoftDeletable"/>:
     /// DELETE marks the row (DeletedAt set) instead of removing it, reads exclude it by default, and a
-    /// restore/purge surface applies (Phase 9b). Derived by the scanner from the interface — no attribute.
+    /// restore/purge surface applies. Derived by the scanner from the interface — no attribute.
     /// </summary>
     public bool SoftDelete { get; init; }
 
     /// <summary>
     /// When true, the collection is revisioned: create/update append a snapshot to the `revisions` table
-    /// and a revert surface applies (Phase 9c). Derived by the scanner from `[CmsCollection(Revisions=true)]`.
+    /// and a revert surface applies. Derived by the scanner from `[CmsCollection(Revisions=true)]`.
     /// </summary>
     public bool Revisions { get; init; }
     public required IReadOnlyList<FieldGroupMetadata> FieldGroups { get; init; }

@@ -133,7 +133,7 @@ public static class MigrationRunner
         return justApplied;
     }
 
-    // timestamptz — DB-7 timestamp convention; every new framework table follows it.
+    // timestamptz — the timestamp convention that every new framework table follows.
     private static Task EnsureTrackingTableAsync(ISqlSugarClient db) =>
         db.Ado.ExecuteCommandAsync(
             $"""

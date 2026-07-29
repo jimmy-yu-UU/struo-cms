@@ -4,7 +4,7 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Single implementation of the viewing-deleted permission gate (ARC-3). Requesting soft-deleted
+/// Single implementation of the viewing-deleted permission gate. Requesting soft-deleted
 /// rows (<see cref="DeletedFilter.Only"/>/<see cref="DeletedFilter.With"/>) exposes data that a
 /// plain read grant does not, so it additionally requires delete permission on the collection.
 /// Both the REST <c>ItemsController</c> and the GraphQL <c>CollectionResolvers</c> call this so the
