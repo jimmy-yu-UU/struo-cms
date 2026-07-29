@@ -7,9 +7,11 @@ each is the linked manual chapter — read it before making the change if anythi
 Gate vocabulary used below: the **four standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
 (from `frontend/`), `pnpm build` (from `frontend/`) — the same four commands `.github/workflows/ci.yml`
 runs on every push/PR. **Live-PostgreSQL verification** is a separate, additional step required for any
-change to DB behavior — set `Testing:PostgresConnection` (only the `STRUO_TEST_PG_CONNECTION`
-environment variable actually reads it) to a disposable database whose name contains `test`, or run the
-application against a real PostgreSQL instance directly. SQLite passing is not evidence of PostgreSQL
+change to DB behavior — set `Testing:PostgresConnection` to a disposable database whose name contains
+`test`. It resolves in this order: the `STRUO_TEST_PG_CONNECTION` environment variable first, else the
+`Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`;
+either route works. Or run the application against a real PostgreSQL instance directly. SQLite passing
+is not evidence of PostgreSQL
 correctness: this codebase has a documented, specific SQLite/PostgreSQL divergence — `IsJson` without
 an explicit `text` column type truncates on PostgreSQL at `varchar(1)`, but "works" on SQLite because
 SQLite ignores declared column length. **E2E** (`pnpm e2e` for the `core` Playwright project,
@@ -39,14 +41,27 @@ Adding a collection is purely additive to a fork's own content project — it ne
    `[CmsCollection("Your Label", Icon = "...", Group = "...", DefaultDisplayField = nameof(SomeField))]`.
 3. **Add `[CmsField]`** to every property the API/admin form should expose (`Interface =
    FieldInterface.Xxx`, plus `Required`/`Searchable`/`Sortable`/`Sort`/`ReadOnly`/`Hidden`/
-   `Translatable`/`MaxLength` as needed — see `docs/guide/en/05-field-types.md` for the full 33-value
-   reference), and `[CmsOptions(...)]` on any `Select`/`Radio`/`MultiSelect`/`CheckboxGroup` field.
+   `Translatable`/`MaxLength` as needed — see `docs/guide/en/05-field-types.md` for the full
+   `FieldInterface` reference), and `[CmsOptions(...)]` on any `Select`/`Radio`/`MultiSelect`/
+   `CheckboxGroup` field. `Hidden` is a read-side exclusion only (see `AGENTS.md`'s invariants) — pair
+   it with `ReadOnly` if the field must also be unwritable.
 4. **Opt into soft delete and/or revisions** if needed: implement `ISoftDeletable` on the class, and/or
    set `Revisions = true` on `[CmsCollection]`.
 5. **Add relations** with `[CmsRelation]` + SqlSugar's `[Navigate]` if the collection references
    another one.
 6. **Wire the content project in**: add a `ProjectReference` from `src/Struo.Api/Struo.Api.csproj` to
-   your content project, and add its assembly name to `Struo:ContentAssemblies` in configuration.
+   your content project, and add its assembly name to `Struo:ContentAssemblies`. Put that setting in
+   `src/Struo.Api/appsettings.Development.json` (gitignored, dev-only) or supply it via the
+   `Struo__ContentAssemblies__0` environment variable — **not** in the shipped
+   `src/Struo.Api/appsettings.json`. That file is the one
+   `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
+   `Shipped_appsettings_declares_no_content_assemblies` test asserts has an empty
+   `Struo:ContentAssemblies`; editing it to wire in permanent content fails that test immediately, and
+   is a collision with the invariant `AGENTS.md`'s "Hard constraints" documents as enforced. If a fork
+   deliberately wants its content assembly wired into the shipped `appsettings.json` itself (e.g. it
+   is replacing the template's "ships with zero collections" posture permanently), update or remove
+   that test deliberately as part of the same change — don't leave it contradicting the new
+   configuration.
 7. **Restart the API.** In Development, `InitTables` creates the table automatically from the entity
    class (additive column changes too, never destructive) — confirm the admin SPA's sidebar shows the
    new collection under its configured `Group`.
@@ -92,11 +107,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
 **2b. Add a genuinely new `FieldInterface` value** — touches all three layers `docs/guide/en/
 05-field-types.md` describes:
 
-1. Add the new member to `src/Struo.Domain/Metadata/Enums/FieldInterface.cs` (the enum currently
-   declares 33 values in a fixed declaration order; add yours at the end unless you have a specific
-   reason to group it near related interfaces — reordering existing members is a breaking change for
-   any stored numeric-enum data, so append rather than insert unless you are certain nothing persists
-   the numeric value).
+1. Add the new member to `src/Struo.Domain/Metadata/Enums/FieldInterface.cs` (a fixed declaration
+   order; add yours at the end unless you have a specific reason to group it near related interfaces —
+   reordering existing members is a breaking change for any stored numeric-enum data, so append rather
+   than insert unless you are certain nothing persists the numeric value).
 2. Teach `MetadataScanner.BuildField` (`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) about
    any interface-specific validation the new value needs (e.g. requiring `[CmsOptions]`, restricting
    allowed CLR property types, `MaxLength` defaulting rules).
@@ -184,9 +198,19 @@ README.md`.
    guarded `ALTER`, `DO $$ ... $$` existence checks) and **forward-only** — no automatic down-migration;
    a rollback is a new compensating script, not an edit to this one.
 4. Use `timestamptz` (not bare `timestamp`) for any new column or table storing an instant, and store
-   UTC. Do not retroactively convert an existing bare-`timestamp` column while you're at it unless that
-   specific column is the subject of this migration — re-anchoring already-stored values against a
-   session time zone is a silent data shift.
+   UTC — this is the convention, not a uniform fact about the existing baseline: check
+   `001-core-baseline.sql` for the specific table you are altering rather than assuming either type,
+   and do not retroactively convert an existing bare-`timestamp` column while you're at it unless that
+   specific column is the subject of this migration (re-anchoring already-stored values against a
+   session time zone is a silent data shift). This matters most for a migration backing a new
+   `AuditableEntity`-derived collection (Playbook 1): `AuditableEntity.CreatedAt`/`UpdatedAt`
+   (`src/Struo.Domain/Auditing/AuditableEntity.cs`) are plain `DateTime` properties with no
+   `[SugarColumn]` override, so SqlSugar's CodeFirst default for `DateTime` is what dev `InitTables`
+   actually produces for those two columns — bare `timestamp without time zone`, confirmed throughout
+   `001-core-baseline.sql`'s existing `AuditableEntity`-backed tables — not `timestamptz`. Hand-writing
+   `timestamptz` for a new collection's `createdat`/`updatedat` in its migration, without also giving
+   the entity an explicit column-type override, diverges from what `InitTables` produces for the same
+   entity — exactly the parity Playbook 1 step 11 asks you to confirm.
 5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
    tracks applied migrations by filename only (`schema_migrations (filename text PRIMARY KEY, appliedat
    timestamptz)`), with no checksum, so an edited file with an already-applied filename is silently
@@ -209,7 +233,7 @@ Before touching `frontend/src` at all: confirm the requirement is not already sa
 metadata (Playbooks 1/2). Adding a `[CmsCollection]`/`[CmsField]` alone produces a full sidebar entry,
 schema-driven list, and generated create/edit form with zero Vue code — the admin SPA never hardcodes a
 collection's fields, columns, or labels; everything comes from `GET /api/schema`. Reach into
-`frontend/src` only for: a field editor experience none of the 33 shipped interfaces provide (Playbook
+`frontend/src` only for: a field editor experience none of the shipped interfaces provide (Playbook
 2a), branding/theming beyond a name and logo, admin-UI language (i18n), or a workflow that doesn't fit
 the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 

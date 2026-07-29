@@ -68,9 +68,9 @@ cached in a singleton — nothing about it re-runs per request. See
 ## Extension points
 
 For each interface below: what it does, where it lives, its real implementation(s), and how it is
-registered. All eight names the task asked about (`IMetadataProvider`, `IEntityRegistry`,
-`IEntityTypeCollector`, `IRelationshipGraph`, `IItemUseCases`, `IItemRepository`, `IRelationExpander`,
-`IRelationFilterResolver`) exist under those exact names in `Struo.Application`.
+registered. `IMetadataProvider`, `IEntityRegistry`, `IEntityTypeCollector`, `IRelationshipGraph`,
+`IItemUseCases`, `IItemRepository`, `IRelationExpander`, and `IRelationFilterResolver` all exist under
+those exact names in `Struo.Application`.
 
 ### `IMetadataProvider`
 
@@ -87,8 +87,9 @@ reimplementing the interface.
 
 ### `IEntityRegistry`
 
-Same file, alongside the `EntityDescriptor` record (CLR type, field→property map, id property name,
-lazily-built property-accessor cache). `Get(collection)` resolves case-insensitively. Implementation:
+`src/Struo.Application/Metadata/IEntityRegistry.cs`, alongside the `EntityDescriptor` record (CLR
+type, field→property map, id property name, lazily-built property-accessor cache) it operates over.
+`Get(collection)` resolves case-insensitively. Implementation:
 `EntityRegistry` (`src/Struo.Infrastructure/Metadata/EntityRegistry.cs`), built from
 `MetadataScanner.ScanDescriptors`. Registered as a singleton, same construction pattern:
 `services.AddSingleton<IEntityRegistry>(new EntityRegistry(descriptors))`
@@ -186,9 +187,9 @@ query-layer seams jointly implement.
 
 ### File storage backends (`IFileStorage`)
 
-`src/Struo.Application/Files/IFileStorage.cs` — not named `IFileStorage` in the task's list verbatim,
-but it is the real extension point for "file storage backends": `SaveAsync`, `OpenReadAsync`,
-`DeleteAsync`, `SupportsPresignedUrls`, `GetPresignedUrlAsync`. Its doc comment states "Exactly one
+The extension point for file storage backends is `IFileStorage`
+(`src/Struo.Application/Files/IFileStorage.cs`): `SaveAsync`, `OpenReadAsync`, `DeleteAsync`,
+`SupportsPresignedUrls`, `GetPresignedUrlAsync`. Its doc comment states "Exactly one
 implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
@@ -200,10 +201,9 @@ implementing `IFileStorage` and extending that lambda's branch (or switch) to se
 
 ### The GraphQL type module
 
-There is no interface literally named "GraphQL type module" in this codebase — the real extension
-point is HotChocolate's own `ITypeModule`, implemented once by `StruoTypeModule`
-(`src/Struo.Api/GraphQl/StruoTypeModule.cs`). It takes `IMetadataProvider` and `IEntityRegistry` as
-constructor dependencies and, in `CreateTypesAsync`, emits one object type + list wrapper + filter
+The GraphQL schema's extension point is HotChocolate's own `ITypeModule`, implemented once by
+`StruoTypeModule` (`src/Struo.Api/GraphQl/StruoTypeModule.cs`). It takes `IMetadataProvider` and
+`IEntityRegistry` as constructor dependencies and, in `CreateTypesAsync`, emits one object type + list wrapper + filter
 input + two root query fields (and, per-collection, mutation fields) for every scanned collection, plus
 shared value types (`TagItem`, `Translation`, the `DeletedFilter` enum, revision types, shared filter
 inputs). Registered in `GraphQlServiceCollectionExtensions`
@@ -248,8 +248,9 @@ rewrite), `IItemRepository` (the actual SqlSugar query), and `IRelationExpander`
 batching) before `ItemProjector` (`src/Struo.Application/Query/Projection/ItemProjector.cs`) turns the
 result into the camelCase dictionary the envelope serializes. A write (`CreateAsync`/`UpdateAsync`)
 goes through `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`, which also
-sanitizes `RichText` fields via `IHtmlSanitizer` before required-field validation) and the
-`FieldValidatorRegistry`-driven per-`FieldInterface` validators
+sanitizes non-translatable `RichText` fields via `RichTextCleaner` — a wrapper around `IHtmlSanitizer` —
+before required-field validation; translatable `RichText` fields are sanitized separately, per locale,
+in `ItemWriteSideSync.SyncTranslationsAsync`) and the `FieldValidatorRegistry`-driven per-`FieldInterface` validators
 (`src/Struo.Application/Query/Write/FieldValidatorRegistry.cs`) before `IItemRepository` commits inside
 a transaction (`InTransactionAsync`). Every response — success or error — passes through
 `EnvelopeResultFilter`/`StruoExceptionHandler` (`src/Struo.Api/Http/`) so the wire shape is uniform. See
