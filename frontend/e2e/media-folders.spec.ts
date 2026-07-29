@@ -177,7 +177,7 @@ test.afterEach(async ({ page }) => {
   }
 })
 
-test('media folders: create, upload with title autofill, folder survives a save (C-1), move to Uncategorized, no full-editor escape hatch, and the non-empty delete guard', async ({ page }) => {
+test('media folders: create, upload with title autofill, folder survives a save, move to Uncategorized, no full-editor escape hatch, and the non-empty delete guard', async ({ page }) => {
   await login(page)
   await page.goto('/media')
   await expect(page).toHaveURL(/\/media$/)

@@ -242,7 +242,7 @@ describe('MediaDetailDialog', () => {
     expect(w.findAllComponents({ name: 'InputText' })[0].attributes('disabled')).toBeFalsy()
   })
 
-  it('confirms with soft-delete copy (#12), deletes via filesApi.remove (trash, no purge) after accept, and emits deleted', async () => {
+  it('confirms with soft-delete copy, deletes via filesApi.remove (trash, no purge) after accept, and emits deleted', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
     const w = mountDialog()
@@ -262,7 +262,7 @@ describe('MediaDetailDialog', () => {
     expect(w.emitted('deleted')).toBeTruthy()
   })
 
-  it('does not render an "open in full editor" link (#6): no such button, no vue-router import', async () => {
+  it('does not render an "open in full editor" link: no such button, no vue-router import', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
