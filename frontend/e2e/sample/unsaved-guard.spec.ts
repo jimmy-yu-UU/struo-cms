@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures'
+import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
 // FE-5 live gate: dirty-state leave guard.

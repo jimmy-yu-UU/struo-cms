@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures'
+import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
 // Audit 2026-07-21 Batch 4 (TEST-6) live gate: revision history + revert (FE-R7 / 9c-fe).

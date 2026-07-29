@@ -9,7 +9,7 @@
 // See frontend/e2e/README.md for the full live-gate prerequisites (API on :5080, seeded admin, etc).
 // This spec is authored + collection-validated only (`playwright test --list`); the live run against
 // real PG+Redis is a separate user-driven gate (Phase 7d Task 18), not executed here.
-import { test, expect } from './fixtures'
+import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'

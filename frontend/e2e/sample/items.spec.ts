@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures'
+import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
