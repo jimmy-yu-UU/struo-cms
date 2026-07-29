@@ -36,7 +36,7 @@ the same order.
 | 1 | [簡介與架構](guide/zh-TW/01-introduction-and-architecture.md) |
 | 2 | [快速入門](guide/zh-TW/02-getting-started.md) |
 | 3 | [設定參考](guide/zh-TW/03-configuration-reference.md) |
-| 4 | [定義一個 Collection](guide/zh-TW/04-defining-a-collection.md) |
+| 4 | [定義一個集合](guide/zh-TW/04-defining-a-collection.md) |
 | 5 | [欄位型別與介面](guide/zh-TW/05-field-types.md) |
 | 6 | [國際化](guide/zh-TW/06-internationalization.md) |
 | 7 | [關聯](guide/zh-TW/07-relations.md) |
