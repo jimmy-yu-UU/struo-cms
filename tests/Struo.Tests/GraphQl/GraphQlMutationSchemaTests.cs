@@ -47,7 +47,7 @@ public class GraphQlMutationSchemaTests
         var sdl = await BuildSdlAsync();
         var block = InputBlock(sdl, "ArticleCreateInput");
 
-        // scalars + M2O FK (unchanged from the original mutation input)
+        // plain scalars + M2O FK — the baseline fields every mutation input exposes
         block.Should().Contain("status: String");
         block.Should().Contain("publishedAt: DateTime");
         block.Should().Contain("categoryId: ID");

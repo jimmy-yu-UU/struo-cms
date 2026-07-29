@@ -59,7 +59,8 @@ public static class SqlSugarClientFactory
                     // unset, and on Postgres that becomes `varchar(1)` (default length 1), so any
                     // serialized JSON longer than one char fails to insert (Npgsql 22001). SQLite
                     // ignores declared length (dynamic typing), which is why this only surfaces on
-                    // Postgres — confirmed by running this against a live Postgres database. `text` is unbounded on both.
+                    // Postgres — confirmed by running this against a live Postgres database. `text`
+                    // is unbounded on both.
                     var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
                     if (mvField is not null && JsonColumnInterfaces.Contains(mvField.Interface))
                     {
@@ -97,9 +98,10 @@ public static class SqlSugarClientFactory
                         // structures routinely exceed SqlSugar's default varchar(255) CodeFirst mapping.
                         // A realistic RichText body (a table, a couple of styled paragraphs) trivially
                         // blows past 255 chars and fails on Postgres with 22001 "value too long for
-                        // type character varying(255)" — as verified against a live Postgres database. Widen just these
-                        // interfaces to `text`. An explicit [SugarColumn(ColumnDataType = ...)] on the
-                        // property always wins over this convention. Plain Text fields keep SqlSugar's
+                        // type character varying(255)" — as verified against a live Postgres
+                        // database. Widen just these interfaces to `text`. An explicit
+                        // [SugarColumn(ColumnDataType = ...)] on the property always wins over this
+                        // convention. Plain Text fields keep SqlSugar's
                         // default varchar(255) for now, pending the dedicated MaxLength feature.
                         var explicitDataType = property.GetCustomAttribute<SugarColumn>()?.ColumnDataType;
                         if (string.IsNullOrEmpty(explicitDataType))

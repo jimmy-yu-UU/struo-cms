@@ -8,17 +8,19 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// GraphQL to-many relation fields (e.g. <c>category { articles(...) }</c>)
-/// declared <c>filter</c>/<c>sort</c>/<c>limit</c>/<c>offset</c> arguments in the schema,
-/// but <see cref="Struo.Api.GraphQl.CollectionResolvers"/>'s selection-walk (<c>BuildDeep</c>) never
-/// read them into the <see cref="Struo.Domain.Query.DeepRelationSpec"/> the query engine consumes —
-/// so the arguments were schema-only decoration with no effect. These two tests drive the real
-/// /graphql HTTP endpoint (through <see cref="ApiFactory"/>, i.e. real ItemService +
-/// RelationExpander behind the resolver, not a fake data source) and prove the nested
+/// GraphQL to-many relation fields (e.g. <c>category { articles(...) }</c>) accept
+/// <c>filter</c>/<c>sort</c>/<c>limit</c>/<c>offset</c> arguments, and
+/// <see cref="Struo.Api.GraphQl.CollectionResolvers"/>'s selection-walk (<c>BuildDeep</c>) reads
+/// them into the <see cref="Struo.Domain.Query.DeepRelationSpec"/> the query engine consumes. These
+/// two tests drive the real /graphql HTTP endpoint (through <see cref="ApiFactory"/>, i.e. real
+/// ItemService + RelationExpander behind the resolver, not a fake data source) and prove the nested
 /// <c>articles</c> selection's <c>filter</c>+<c>limit</c> actually prune the rows the engine
 /// returns, for both argument-passing shapes HotChocolate supports: an inline literal, and a
 /// <c>$variable</c> — the latter is the shape that risks landing as an uncoerced/null
 /// <c>ArgumentValue.Value</c> on the compiled child selection (see the BuildDeep comment for why).
+/// Historically these arguments were declared in the schema but never read by the resolver, making
+/// them schema-only decoration with no effect on the returned rows; these tests guard against that
+/// regression.
 /// </summary>
 [Collection("ApiIntegration")]
 public class NestedListArgsExecutionTests(ApiFactory factory)
