@@ -51,8 +51,7 @@
 `Struo__ContentAssemblies__0=Struo.Sample.Blog` 覆寫它。)
 
 這兩項編輯必須一起完成：這個組件必須是*可被解析的*(`ProjectReference`)，也必須是*被命名的*
-(`ContentAssemblies`)——原因見第 4 章。`Struo:ContentAssemblies` 只會在 host(承載應用程式的
-`Struo.Api`)建置之前被讀取一次
+(`ContentAssemblies`)——原因見第 4 章。`Struo:ContentAssemblies` 只會在 host 建置之前被讀取一次
 (第 3 章)，因此這項變更只會在**下一次**重新啟動時生效；一個正在執行的執行個體必須被停止並重新啟動，
 而不只是在它底下把設定檔編輯掉。
 
