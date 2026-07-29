@@ -11,11 +11,12 @@ this chapter.
 ## What the sample is for
 
 `samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj` is a plain class library referencing
-`Struo.Domain` (for the `[Cms*]` attributes) and SqlSugar, exactly the shape chapter 4 describes for a
-downstream content project. It declares three real collections — `Article`, `Tag`, `Category` — plus
-`ArticleTranslation` (`Article`'s translation sidecar, not a collection of its own), a pure `ArticleTag`
-many-to-many junction (not `[CmsCollection]`-attributed either), and `FaqItem`, a plain POCO used as a
-Repeater sub-field type.
+`Struo.Domain` (for the `[Cms*]` attributes) and `Struo.Infrastructure` (for SqlSugar, transitively) —
+the second of the two variants chapter 4's checklist allows for a content project's SqlSugar
+dependency, the other being a direct `SqlSugarCore` package reference. It declares three real
+collections — `Article`, `Tag`, `Category` — plus `ArticleTranslation` (`Article`'s translation sidecar,
+not a collection of its own), a pure `ArticleTag` many-to-many junction (not `[CmsCollection]`-attributed
+either), and `FaqItem`, a plain POCO used as a Repeater sub-field type.
 
 Nothing under `src/Struo.*` references it. The shipped `src/Struo.Api/Struo.Api.csproj` has no
 `ProjectReference` to it, and the shipped `Struo:ContentAssemblies` is `[]` — confirmed in chapter 2's
@@ -23,7 +24,7 @@ Nothing under `src/Struo.*` references it. The shipped `src/Struo.Api/Struo.Api.
 `tests/Struo.Tests`, whose backend test suite uses these same collections as concrete fixtures for
 exercising generic framework behavior (RBAC, revisions, soft delete, relations, i18n, the query DSL).
 That coupling is why removing the sample is more involved than deleting one directory — the "Removing
-the sample completely" section below covers it in full, verified end-to-end on a disposable branch.
+the sample completely" section below covers it in full, verified end-to-end against this checkout.
 
 ## Opting it in
 
@@ -64,9 +65,16 @@ other content collection's tables. Verified live against this checkout: after ma
 restarting, `GET /api/schema` (as the bootstrap admin) lists `article`, `category` and `tag` alongside
 the seven framework collections (chapter 4), where a moment before it listed only the framework ones.
 
+While the sample is opted in this way, one shipped backend test intentionally goes red:
+`tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
+`Host_project_has_no_project_reference_into_samples` reads `Struo.Api.csproj` directly and asserts no
+`ProjectReference` line mentions `samples` — that is precisely what step 1 above just added, so
+`dotnet test` will report this one failure until the revert in "Removing the sample completely" step 1
+puts the csproj back.
+
 ## Guided tour
 
-Each file below is real, current source — read directly, not summarized from memory.
+Each file below was read directly against the cited source.
 
 ### `Article.cs` — a full collection
 
@@ -86,8 +94,9 @@ use `Group = "Content"`; the `SEO` group is used by fields inherited through its
 (see below). Beyond `Status` (a required `Select` with `draft`/`published` options, and the collection's
 `DefaultDisplayField`), it walks nearly every field interface in one place: `PublishedAt` (`DateTime`),
 `HeroImageId` (`Image`), `Regions` (`MultiSelect`, with one option — `"amer"` — left unlabeled so it
-falls back to the raw value), `Audiences` (`CheckboxGroup`), `Keywords` (`Tags`, deliberately left
-without a fixed `[CmsOptions]` list), `Attributes` (`Json`), `Meta` (`KeyValue`), `Gallery` (a multi-file
+falls back to the raw value), `Audiences` (`CheckboxGroup`), `Keywords` (`Tags`, left without a fixed
+`[CmsOptions]` list — chapter 4 notes this is the usual pattern for a genuinely free-form `Tags` field),
+`Attributes` (`Json`), `Meta` (`KeyValue`), `Gallery` (a multi-file
 `Files` field), `Faqs` (`Repeater`, of `FaqItem` — see below), and `InternalNote`, a `Hidden` text field
 excluded from schema, GraphQL and item projections. It also declares two relations: `Category` (a
 many-to-one `Dropdown`, `OnDelete = SetNull`) and `Tags` (a many-to-many `TagSelect` through the
@@ -139,8 +148,10 @@ public sealed class FaqItem
 {
     [CmsField(Label = "Question", Interface = FieldInterface.Text, Required = true)]
     public string Question { get; set; } = "";
+
     [CmsField(Label = "Answer", Interface = FieldInterface.Textarea)]
     public string Answer { get; set; } = "";
+
     [CmsField(Label = "Category", Interface = FieldInterface.Select)]
     [CmsOptions("general:General", "billing:Billing")]
     public string? Category { get; set; }
@@ -182,13 +193,17 @@ core project (chapter 15) together in one invocation.
 Deleting `samples/Struo.Sample.Blog/` is not, by itself, enough to leave a clean build: this
 repository's own backend test suite uses the sample's collections as fixtures far beyond the demo
 directory itself, both by importing the sample's types directly and by exercising `article`/`category`/
-`tag` over REST/GraphQL without importing anything. The full checklist below was executed end-to-end on
-a disposable branch against this checkout; every step here was necessary to reach a green build and a
-green test run — none is optional.
+`tag` over REST/GraphQL without importing anything. The full checklist below was executed end-to-end
+against this checkout; every step here was necessary to reach a green build and a green test run — none
+is optional.
 
 1. **Revert the two opt-in edits**, if made: remove the `<ProjectReference>` to
    `Struo.Sample.Blog.csproj` from `src/Struo.Api/Struo.Api.csproj`, and remove (or re-comment) the
-   `"Struo.Sample.Blog"` entry from `Struo:ContentAssemblies`.
+   `"Struo.Sample.Blog"` entry from `Struo:ContentAssemblies` in your own `appsettings.Development.json`.
+   Also remove the matching, still-commented block from the tracked
+   `src/Struo.Api/appsettings.Development.json.example` (the `// Uncomment to enable the Blog sample …`
+   comment and the commented `"ContentAssemblies": [ "Struo.Sample.Blog" ]` line) — otherwise the
+   shipped example keeps pointing every future reader at a sample that no longer exists.
 2. **Delete `samples/Struo.Sample.Blog/`** entirely.
 3. **Remove its entry from `StruoCMS.slnx`** — the whole `<Folder Name="/samples/">` block.
 4. **Remove the `<ProjectReference>`** to `Struo.Sample.Blog.csproj` from
@@ -218,15 +233,22 @@ green test run — none is optional.
 8. **Delete every test file that exercises the `article`/`category`/`tag` collections over REST or
    GraphQL without ever importing the sample's namespace.** These rely entirely on step 5's module
    initializer, so nothing catches them at compile time — `dotnet test` is what finds them, one
-   `HTTP 404`/`KeyNotFoundException` failure per collection-shaped test. At the time of writing this is
-   39 files: 17 under `Api/`, 10 under `Query/`, 6 under `GraphQl/`, 5 under `Localization/`, 1 under
-   `Identity/`. Because nothing marks these files as sample-coupled ahead of time, the reliable way to
-   find the current set is the loop this checklist was actually verified with: run `dotnet test` after
-   steps 1–7, delete whichever file each failure is in, and repeat until it's green.
+   `HTTP 404`/`KeyNotFoundException` failure per collection-shaped test, spread across `Api/`, `Query/`,
+   `GraphQl/`, `Localization/` and `Identity/`. Nothing marks these files as sample-coupled ahead of
+   time and the set will drift as the suite grows, so there is no static command to point at instead of
+   running it: run `dotnet test` after steps 1–7, delete whichever file each failure is in, and repeat
+   until it's green — that loop, not a fixed list, is what this checklist was actually verified with.
+   While you're in these files, also tidy the handful of comments left pointing at what you just
+   deleted — `tests/Struo.Tests/Support/ApiFactory.cs` and `tests/Struo.Tests/Api/CorsAndCookieTests.cs`
+   each have a comment citing the now-gone `ContentAssemblyEnvBootstrap.cs`, and
+   `tests/Struo.Tests/GraphQl/FakeMetadataFixtures.cs` and `GraphQl/GraphQlExecutionTests.cs` each cite a
+   `samples/Struo.Sample.Blog/` path in a comment. None of these break the build, but they'll be stale.
 9. **On the frontend:** delete `frontend/e2e/sample/` (8 spec files); remove the `"sample"` project
    entry from `frontend/playwright.config.ts` (and its `core` project's now-unnecessary
    `testIgnore: '**/e2e/sample/**'`, since there's nothing left to ignore); remove the `"e2e:sample"`
-   and `"e2e:all"` scripts from `frontend/package.json`, leaving `"e2e"` as the only end-to-end script.
+   and `"e2e:all"` scripts from `frontend/package.json`, leaving `"e2e"` as the only end-to-end script;
+   and prune the sample-suite sections from `frontend/e2e/README.md` (its "Suites" list, prerequisites,
+   and the two per-spec write-ups that describe `sample/collections.spec.ts` and `sample/items.spec.ts`).
 10. **Drop the sample's tables** from any database that has run it — dev `InitTables` created them, and
     nothing drops them automatically: `articles`, `article_translations`, `tags`, `article_tags`,
     `categories`. They were never part of `db/migrations/001-core-baseline.sql` or any other tracked
@@ -242,12 +264,11 @@ dotnet test
 cd frontend && pnpm test && pnpm build && pnpm e2e
 ```
 
-Confirmed on a disposable branch against this checkout, after every step above: `dotnet build` succeeds
-with no warnings; `dotnet test` passes all 616 remaining backend tests; `pnpm test` passes all 665
-remaining frontend tests across 108 files; `pnpm build` (`vue-tsc -b && vite build`) completes
-successfully.
-`pnpm e2e` needs a running API and database exactly as chapter 15 describes — that requirement, and the
-core suite's behavior, are unaffected by removing the sample.
+Confirmed against this checkout, after every step above: `dotnet build` succeeds with no warnings, and
+`dotnet test`, `pnpm test`, and `pnpm build` (`vue-tsc -b && vite build`) all pass completely — every
+remaining test in both suites, with none of the failures the deleted files used to cause. `pnpm e2e`
+needs a running API and database exactly as chapter 15 describes — that requirement, and the core
+suite's behavior, are unaffected by removing the sample.
 
 ## Next steps
 
