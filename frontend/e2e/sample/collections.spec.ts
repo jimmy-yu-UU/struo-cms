@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 
 test('browse a collection list', async ({ page }) => {
   await page.goto('/')

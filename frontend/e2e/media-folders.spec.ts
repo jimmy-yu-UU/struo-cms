@@ -11,10 +11,10 @@ import { type Page } from '@playwright/test'
 //
 // See media.spec.ts for the shared upload/login/mdField conventions this spec reuses verbatim.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG -- see media.spec.ts for why this is sufficient for
 // ImageDimensionReader.TryRead's PNG() header check.

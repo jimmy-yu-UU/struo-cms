@@ -8,11 +8,11 @@ import { type Page } from '@playwright/test'
 // form; accept lets the navigation proceed. An untouched form (incl. a loaded RichText/TipTap body)
 // must NOT prompt, and a successful Save must navigate without prompting.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 const GUARD_HEADER = 'Unsaved changes'
 

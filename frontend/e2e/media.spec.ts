@@ -10,11 +10,11 @@ import { type Page } from '@playwright/test'
 // failure (returns null), so a minimal-but-signature-valid PNG is accepted unconditionally by
 // FilesController.Upload — there is no server-side image validation that could reject it.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG (signature + IHDR + minimal IDAT/IEND) — enough for
 // ImageDimensionReader.TryRead's PNG() header check (8-byte signature + IHDR at offset 16/20).
