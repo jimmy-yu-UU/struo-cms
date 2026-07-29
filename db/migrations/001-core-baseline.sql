@@ -1,5 +1,6 @@
 -- db/migrations/001-core-baseline.sql
--- Date: 2026-07-29
+-- Regenerated: 2026-07-29 (this is the date the file's CONTENT was last regenerated from InitTables, not
+-- an authorship/creation date — it moves every time this file is regenerated; see git log for history).
 --
 -- CORE BOOTSTRAP BASELINE. Creates the complete core-framework schema — the 10 FrameworkEntityTypes
 -- tables (languages / files / file_translations / media_folders / users / roles / permissions /
@@ -15,33 +16,50 @@
 -- This is the PRODUCTION bootstrap path: a downstream deploy applies it to an EMPTY database via
 -- MigrationRunner (Database:MigrationsPath) with NO dependency on the Development-only InitTables.
 -- In dev, InitTables has already created these tables and Database:MigrationsPath stays empty, so this
--- file is not run there; it is fully idempotent regardless, so a manual re-run is a safe no-op.
+-- file is not run there; it is fully idempotent regardless, so a manual re-run against an already-current
+-- database is a safe no-op.
 --
--- FOLDED HISTORY — this baseline supersedes and subsumes two prior scripts (media_folders table +
--- files.folderid; files.deletedat/deletedby soft-delete columns), which are now reproduced here inline
--- because InitTables generates them directly from the current entity classes. Tracking is by filename
--- in schema_migrations: a database that already applied the old filenames simply skips this new one and
--- keeps its rows (harmless); a fresh database gets the whole core schema from this file alone.
+-- SCOPE — CORE ONLY. Business/sample schema (the Blog demo) is deliberately NOT here. See
+-- db/migrations/README.md ("Scope is core only" / "Downstream forks") for the full rationale and the
+-- fork workflow. Never add business-table DDL to this core baseline.
 --
--- SCOPE — CORE ONLY. Sample/business schema (the Blog demo: articles / tags / categories / article_tags /
--- article_translations) is intentionally NOT here. StruoCMS is a reusable CMS *template* (CLAUDE.md §0):
--- the sample is a demo built by InitTables in dev; a downstream fork deletes the sample and adds its own
--- NNN-… migrations for its own collections. Never add business-table DDL to this core baseline.
+-- For the timestamp-type convention (DB-7) and the identifier-naming convention (lowercase, unquoted,
+-- SqlSugar-emitted index names kept verbatim so dev InitTables and this file agree) this DDL follows,
+-- see db/migrations/README.md — duplicating those conventions here has previously gone stale; the README
+-- is the single source of truth for them.
 --
--- TIMESTAMP TYPES — faithful to InitTables. AuditableEntity's createdat/updatedat map to
--- `timestamp without time zone` (SqlSugar CodeFirst default; no [SugarColumn] type on the base class);
--- `site_settings.updatedat` and both `media_folders` temporal columns are `timestamptz` (those entities
--- declare ColumnDataType explicitly). This baseline reproduces exactly what InitTables produces so dev
--- (InitTables) and prod (this file) never drift. Standardising AuditableEntity on timestamptz is a
--- separate entity-level change, deliberately out of scope here — doing it only in this file would
--- reintroduce a dev/prod parity gap. See db/migrations/README.md for the full convention.
+-- FOLDED HISTORY — this baseline supersedes and subsumes two prior scripts: 002-media-folders.sql (the
+-- media_folders table + files.folderid) and 003-file-soft-delete.sql (files.deletedat/deletedby +
+-- retiring the 'archived' status), reproduced here inline because InitTables generates them directly
+-- from the current entity classes. 003 also carried a one-off data normalisation this file does NOT
+-- reproduce: `UPDATE files SET deletedat = COALESCE(deletedat, now()), status = 'draft' WHERE status =
+-- 'archived'`. That statement is a no-op on a fresh/empty database (the only case this file is ever
+-- applied against — see FILENAME-KEYED TRACKING below), which is why its omission is safe here.
 --
--- IDENTIFIER NAMING — lowercase, unquoted; SqlSugar-emitted index names (index_*_unique / ix_*) are kept
--- verbatim so a dev InitTables schema and a prod baseline schema carry IDENTICAL index names.
+-- MEDIA_FOLDERS COLUMN ORDER — this file's `media_folders` physical column order follows entity
+-- declaration order (InitTables/pg_dump), which differs from the order 002-media-folders.sql produced.
+-- Functionally irrelevant (SqlSugar binds by column name, never ordinal position), but it means a
+-- `pg_dump` of a database that received media_folders via the old 002 script is not textually comparable
+-- to a fresh database built from this file.
 --
--- PRE-EXISTING DATABASES — a database that had applied older numbered filenames keeps those rows AND
--- additionally runs+records this file once; that run is a harmless idempotent no-op. Fresh/empty
--- databases just get this.
+-- FILENAME-KEYED TRACKING — READ BEFORE ASSUMING AN UPGRADE OF AN EXISTING DATABASE IS SAFE.
+-- MigrationRunner (src/Struo.Infrastructure/Persistence/MigrationRunner.cs) tracks applied migrations by
+-- FILENAME ONLY — no checksum, no content hash (see SelectPending and the `applied` set built from
+-- `SELECT filename FROM schema_migrations`). This regeneration kept the pre-existing filename
+-- `001-core-baseline.sql`, so:
+--   - A FRESH/EMPTY database gets the complete current core schema (all 10 tables, including
+--     media_folders and files.folderid/deletedat/deletedby) from this file alone. This is the only case
+--     this template ships or supports.
+--   - A database that had already recorded `001-core-baseline.sql` BEFORE this fold will NOT receive the
+--     folded content when this file is redeployed over it: MigrationRunner sees the filename already
+--     applied and skips the file entirely, permanently. Such a database is left without media_folders,
+--     files.folderid, files.deletedat, and files.deletedby — redeploying this file does NOT fix that; the
+--     database must be rebuilt from empty or caught up by hand.
+--   - The forward rule: a change that must reach already-deployed databases belongs in a NEW `NNN-…`
+--     file. Never edit the content of a filename that may already be recorded as applied anywhere —
+--     MigrationRunner will never re-run it.
+-- This repo is pre-release and private — no database predating this fold exists, so no catch-up script
+-- ships with the template; a fork starting fresh gets the complete schema from `001` alone.
 
 -- ----------------------------------------------------------------------------------------------------
 -- Sequences (bigint identity PKs: languages, file_translations)
