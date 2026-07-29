@@ -10,10 +10,10 @@ the API — and where in `frontend/src` each of those lives.
 Most of what looks like "admin UI work" is not. Chapter 4 shows that adding a `[CmsCollection]` with
 `[CmsField]`s is enough on its own to make a full collection — sidebar entry, paginated list with
 schema-driven columns, and a create/edit form — appear with zero Vue code touched. Chapter 2's "no
-`Content` navigation group at all" with zero collections, and chapter 4's "the SPA's sidebar now shows a
-`Content` navigation group with your collection in it" once one exists, describe the same schema-driven
-rendering, before and after adding one. The admin SPA never hardcodes a collection's fields, columns or
-labels; the schema endpoint is the only place that information comes from.
+`Content` navigation group at all" with zero collections, and chapter 4's "confirm the admin SPA's
+sidebar now shows a `Content` navigation group with your collection in it" once one exists, describe the
+same schema-driven rendering, before and after adding one. The admin SPA never hardcodes a collection's
+fields, columns or labels; the schema endpoint is the only place that information comes from.
 
 Reach into `frontend/src` only when the requirement is not expressible as metadata:
 
