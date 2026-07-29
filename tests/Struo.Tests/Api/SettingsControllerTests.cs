@@ -57,13 +57,13 @@ public class SettingsControllerTests(ApiFactory factory)
         var (client, _) = await _factory.CreateRolelessClientAsync();
         var resp = await client.PutAsJsonAsync("/api/settings/branding", new { brandName = "X", logoFileId = (string?)null });
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        // TEST-7: pin the actual code SettingsController.UpdateBranding returns for this branch
+        // Pin the actual code SettingsController.UpdateBranding returns for this branch
         // (ErrorCodes.Forbidden), not just the status code.
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("FORBIDDEN");
     }
 
-    /// <summary>TEST-3: anonymous callers get 401, not 403 CSRF. Deliberately sent
+    /// <summary>Anonymous callers get 401, not 403 CSRF. Deliberately sent
     /// WITHOUT the X-Struo-CSRF header, matching a real anonymous SPA caller. CSRF is not in play for
     /// two independent reasons: (1) UseAuthorization runs BEFORE CsrfProtectionMiddleware in the
     /// pipeline (Program.cs), so an unauthorized request 401s before the CSRF gate is even reached;
@@ -94,7 +94,7 @@ public class SettingsControllerTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var resp = await client.PutAsJsonAsync("/api/settings/branding", new { brandName = "   ", logoFileId = (string?)null });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        // TEST-7: SettingsController.UpdateBranding maps this branch to ErrorCodes.BadUserInput.
+        // SettingsController.UpdateBranding maps this branch to ErrorCodes.BadUserInput.
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
     }
@@ -142,7 +142,7 @@ public class SettingsControllerTests(ApiFactory factory)
         finally { await ClearAsync(); }
     }
 
-    // TEST-9: pins the ACTUAL behavior read off SettingsController.UpdateBranding —
+    // Pins the ACTUAL behavior read off SettingsController.UpdateBranding —
     // `body.BrandName?.Trim()` — so surrounding whitespace is stripped before it is persisted and
     // echoed back, rather than being preserved verbatim.
     [Fact]

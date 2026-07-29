@@ -46,7 +46,7 @@ public interface IItemRepository
     /// <summary>
     /// Like <see cref="QueryWhereInAsync"/> but ANDs an additional own-collection filter
     /// (already relation-rewritten to own columns) into the batched WHERE. Used by nested-list
-    /// expansion (8c.3b) to push a to-many list's filter into the single batched fetch.
+    /// expansion to push a to-many list's filter into the single batched fetch.
     /// </summary>
     Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,

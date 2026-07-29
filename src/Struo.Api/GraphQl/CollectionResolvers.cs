@@ -130,7 +130,7 @@ internal static class CollectionResolvers
             var targetType = (ObjectType)sel.Field.Type.NamedType();
             var nested = BuildDeep(ctx, rel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
 
-            // To-many list fields may carry filter/sort/limit/offset arguments (8c.3b). M2O has no
+            // To-many list fields may carry filter/sort/limit/offset arguments. M2O has no
             // args declared on its field (CollectionSchemaBuilder), so this only ever fires for
             // OneToMany/ManyToMany relations.
             FilterNode? filter = null;
@@ -178,8 +178,8 @@ internal static class CollectionResolvers
     /// hands back syntax, never a pre-coerced runtime object). Either way the resulting literal is
     /// then parsed into a runtime value via <see cref="HotChocolate.Types.InputParser.ParseLiteral"/>
     /// against the argument's own declared <see cref="ArgumentValue.Type"/> — exactly how
-    /// HotChocolate parses any other literal argument. Isolated here (8b.1's <c>SentFieldsOnly</c>
-    /// precedent) so <see cref="BuildDeep"/> stays free of HC-internals detail.
+    /// HotChocolate parses any other literal argument. Isolated here, following the same precedent
+    /// as <c>SentFieldsOnly</c>, so <see cref="BuildDeep"/> stays free of HC-internals detail.
     /// </summary>
     private static IReadOnlyDictionary<string, object?> ReadSelectionArgs(IResolverContext ctx, Selection sel)
     {

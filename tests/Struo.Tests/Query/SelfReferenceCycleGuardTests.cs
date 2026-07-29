@@ -21,7 +21,7 @@ using MediaFolder = Struo.Infrastructure.Files.MediaFolder;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// #2 self-reference cycle guard: <see cref="SelfReferenceCycleGuard"/> rejects an
+/// Self-reference cycle guard: <see cref="SelfReferenceCycleGuard"/> rejects an
 /// UpdateAsync that would set a self-referencing ManyToOne FK (parentId) to the item itself or one of
 /// its descendants. Metadata-driven via <c>RelationMetadata.SelfReferencing</c> — covers both the core
 /// MediaFolder tree and the sample Category tree, proving the guard is not special-cased to

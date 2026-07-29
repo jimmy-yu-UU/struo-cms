@@ -116,7 +116,7 @@ public class MetadataScannerTests
         public System.DateTime CreatedAt { get; set; }   // NOT IAuditable -> must be ignored
     }
 
-    // 7g.5: [CmsField(MaxLength)] resolution matrix.
+    // [CmsField(MaxLength)] resolution matrix.
     [CmsCollection("maxLenSample")]
     private sealed class MaxLenSample : AuditableEntity
     {
@@ -255,7 +255,7 @@ public class MetadataScannerTests
         act.Should().NotThrow();
     }
 
-    // 7g+ slice 4: Repeater nested sub-field schema.
+    // Repeater nested sub-field schema.
     public sealed class FaqRow
     {
         [CmsField(Label = "Question", Interface = FieldInterface.Text, Required = true)]

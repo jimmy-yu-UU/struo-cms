@@ -19,8 +19,8 @@ public static class SqlSugarClientFactory
 
     // [CmsField] interfaces whose value is a structured aggregate stored as JSON — map them to a JSON
     // column so SqlSugar (de)serializes the List<>/Dictionary<> automatically (jsonb-in-text). This is
-    // the multi-value selects (slice 1) plus KeyValue (slice 2) plus Files (slice 3, List<Guid>) plus
-    // Repeater (slice 4, List<TChild> of [CmsField] sub-props). Json is NOT here — it is a string
+    // the multi-value selects, plus KeyValue, plus Files (List<Guid>), plus
+    // Repeater (List<TChild> of [CmsField] sub-props). Json is NOT here — it is a string
     // holding raw JSON text and is widened to `text` by the content-bearing convention below.
     private static readonly HashSet<FieldInterface> JsonColumnInterfaces =
     [
@@ -59,7 +59,7 @@ public static class SqlSugarClientFactory
                     // unset, and on Postgres that becomes `varchar(1)` (default length 1), so any
                     // serialized JSON longer than one char fails to insert (Npgsql 22001). SQLite
                     // ignores declared length (dynamic typing), which is why this only surfaces on
-                    // Postgres — the phase 7g+ live-gate finding. `text` is unbounded on both.
+                    // Postgres — confirmed by running this against a live Postgres database. `text` is unbounded on both.
                     var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
                     if (mvField is not null && JsonColumnInterfaces.Contains(mvField.Interface))
                     {
@@ -97,10 +97,10 @@ public static class SqlSugarClientFactory
                         // structures routinely exceed SqlSugar's default varchar(255) CodeFirst mapping.
                         // A realistic RichText body (a table, a couple of styled paragraphs) trivially
                         // blows past 255 chars and fails on Postgres with 22001 "value too long for
-                        // type character varying(255)" (phase7g live gate, Check 1). Widen just these
+                        // type character varying(255)" — as verified against a live Postgres database. Widen just these
                         // interfaces to `text`. An explicit [SugarColumn(ColumnDataType = ...)] on the
                         // property always wins over this convention. Plain Text fields keep SqlSugar's
-                        // default varchar(255) for now, pending the dedicated MaxLength feature (7g.5).
+                        // default varchar(255) for now, pending the dedicated MaxLength feature.
                         var explicitDataType = property.GetCustomAttribute<SugarColumn>()?.ColumnDataType;
                         if (string.IsNullOrEmpty(explicitDataType))
                         {

@@ -47,12 +47,12 @@ public class GraphQlMutationSchemaTests
         var sdl = await BuildSdlAsync();
         var block = InputBlock(sdl, "ArticleCreateInput");
 
-        // scalars + M2O FK (unchanged from 8b.1)
+        // scalars + M2O FK (unchanged from the original mutation input)
         block.Should().Contain("status: String");
         block.Should().Contain("publishedAt: DateTime");
         block.Should().Contain("categoryId: ID");
 
-        // deferred kinds now typed (8b.2a)
+        // deferred kinds now typed
         block.Should().Contain("heroImageId: ID");          // Image scalar own-field
         block.Should().Contain("regions: [String!]");        // MultiSelect
         block.Should().Contain("keywords: [TagItemInput!]"); // Tags

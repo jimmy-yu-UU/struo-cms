@@ -22,7 +22,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// Validates the multi-value (MultiSelect/CheckboxGroup/Tags) branch in <c>ItemService.Deserialize</c>
-/// (7g+ slice 1, task 4): option membership, tag non-blank values, Required-as-non-empty-list,
+/// Option membership, tag non-blank values, Required-as-non-empty-list,
 /// de-duplication, and blank-tag-label coercion to null. Uses a dedicated <c>MvThing</c> collection
 /// (not the sample Article) so a Required multi-value field can be exercised without affecting other
 /// tests. Harness mirrors <see cref="ItemServiceMaxLengthTests"/>.

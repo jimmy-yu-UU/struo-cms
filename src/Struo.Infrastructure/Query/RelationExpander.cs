@@ -173,7 +173,7 @@ public sealed class RelationExpander(
     /// Applies the nested-list <c>sort</c> (own-field, multi-key, asc/desc) then <c>offset</c>/<c>limit</c>
     /// to a single parent's group of target entities, in memory. When <c>Sort</c> is null the caller's
     /// existing order is preserved (O2M: fetch order; M2M: junction order). An omitted <c>Limit</c>
-    /// returns all rows (8c.3a back-compat); an explicit <c>Limit</c> is clamped to
+    /// returns all rows for backward compatibility; an explicit <c>Limit</c> is clamped to
     /// <c>options.MaxLimit</c>. This is the per-parent windowing that keeps the batched fetch N+1-safe.
     /// Instance method: reads <c>options.MaxLimit</c> off the injected <see cref="StruoQueryOptions"/>.
     /// </summary>
