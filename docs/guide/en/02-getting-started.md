@@ -97,10 +97,14 @@ Confirmed output:
 
 ```
 VITE v8.1.2  ready in 180 ms
-➜  Local:   http://localhost:5173/
+➜  Local:   http://127.0.0.1:5173/
 ```
 
-Vite's dev server listens on `http://localhost:5173` and proxies `/api` requests to
+Vite's dev server binds the IPv4 loopback explicitly (`frontend/vite.config.ts`'s `server.host`) so the
+startup banner prints `127.0.0.1` rather than `localhost` — this sidesteps a Windows-specific pitfall
+where "localhost" can resolve to the IPv6 loopback first and leave the IPv4 address unreachable for a
+Chromium-based client. The SPA is equally reachable at `http://localhost:5173` in a browser; only the
+printed banner differs. Vite's dev server proxies `/api` requests to
 `http://localhost:5221` (`frontend/vite.config.ts`), so the SPA and API can be used together without
 any cross-origin configuration. Open `http://localhost:5173` in a browser.
 
