@@ -44,10 +44,14 @@ shared development database or the running development API.
   automatic down-migration — a rollback is a new compensating script). The shipped baseline is
   `001-core-baseline.sql`; a fork's first schema change is `002-…` (`db/migrations/README.md`).
 - **Timestamp convention:** any new temporal column uses `timestamptz`, never bare `timestamp`, storing
-  UTC — the convention the tracking table's own `appliedat` column follows. Existing baseline
-  `timestamp` columns (every `AuditableEntity` `createdat`/`updatedat` except `site_settings.updatedat`)
-  are deliberately **not** retro-migrated, since re-anchoring already-stored values against a session
-  time zone is a silent data shift (`db/migrations/README.md`).
+  UTC — the convention the tracking table's own `appliedat` column follows. The baseline itself is not
+  uniform: most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, but
+  `media_folders.createdat`/`media_folders.updatedat` and `site_settings.updatedat` (`site_settings` has
+  no `createdat` column at all) are already `timestamptz` (`db/migrations/001-core-baseline.sql`,
+  `src/Struo.Infrastructure/Files/MediaFolder.cs`) — check the baseline directly for the table being
+  altered rather than assuming either type. None of the baseline's existing bare-`timestamp` columns are
+  deliberately retro-migrated to close that gap, since re-anchoring already-stored values against a
+  session time zone is a silent data shift (`db/migrations/README.md`).
 
 Verified live: applying `001-core-baseline.sql` via `MigrationRunner` to an empty scratch database
 (`Database:MigrationsPath` set to its absolute path, `ASPNETCORE_ENVIRONMENT=Production`) produced

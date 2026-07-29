@@ -49,9 +49,12 @@ pnpm dev
 ```
 
 Open `http://localhost:5173` and log in with the seeded bootstrap admin: `admin@admin.com` / `admin`
-(seeded only on the first boot against an empty database — change it via
-`Auth:BootstrapAdmin:Email`/`Auth:BootstrapAdmin:Password` before that first boot). Full detail,
-including MinIO's optional `s3` Compose profile and port-override variables, is in chapter 2 below.
+(seeded only the first time the `users` table is created — not re-created or reset on later boots, even
+against an emptied table; override it via `Auth:BootstrapAdmin:Email`/`Auth:BootstrapAdmin:Password`
+before that first boot). A production start still using the default password logs a startup warning but
+does not refuse to start — change it before going to production. Full detail, including MinIO's optional
+`s3` Compose profile and port-override variables, is in
+[chapter 2](docs/guide/en/02-getting-started.md).
 
 ## Architecture
 

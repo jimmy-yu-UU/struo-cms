@@ -247,8 +247,9 @@ is optional.
    entry from `frontend/playwright.config.ts` (and its `core` project's now-unnecessary
    `testIgnore: '**/e2e/sample/**'`, since there's nothing left to ignore); remove the `"e2e:sample"`
    and `"e2e:all"` scripts from `frontend/package.json`, leaving `"e2e"` as the only end-to-end script;
-   and prune the sample-suite sections from `frontend/e2e/README.md` (its "Suites" list, prerequisites,
-   and the two per-spec write-ups that describe `sample/collections.spec.ts` and `sample/items.spec.ts`).
+   and prune the sample-suite material from `frontend/e2e/README.md` — the `sample` bullet in its
+   opening suite list, the `pnpm e2e:sample` prerequisite bullet (Blog sample opt-in and `E2E_STAMP`),
+   and the chapter-16 pointer in its "Further reading" section.
 10. **Drop the sample's tables** from any database that has run it — dev `InitTables` created them, and
     nothing drops them automatically: `articles`, `article_translations`, `tags`, `article_tags`,
     `categories`. They were never part of `db/migrations/001-core-baseline.sql` or any other tracked
