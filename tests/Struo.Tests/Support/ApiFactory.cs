@@ -52,7 +52,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // a suite that behaves differently from CI, since that key can't be overridden here (see
                 // ContentAssemblyEnvBootstrap.cs).
                 ["Oidc:Enabled"] = "false",
-                // SEC-7: the whole suite shares this ApiFactory instance (and its client-IP partition,
+                // The whole suite shares this ApiFactory instance (and its client-IP partition,
                 // since TestServer has a fixed connection IP) across ~55 test classes that each log in
                 // one or more test users via CreateAuthenticatedClientAsync/CreateEditorClientAsync/
                 // CreateRolelessClientAsync. A production-sized PermitLimit (5/60s) would make the

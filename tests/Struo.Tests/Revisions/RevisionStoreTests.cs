@@ -53,7 +53,7 @@ public sealed class RevisionStoreTests
         Assert.Equal(1L, b[0].RevisionNumber);                               // per-item sequence, not global
     }
 
-    /// <summary>DB-18: ListAsync now projects the SQL SELECT to only the metadata columns
+    /// <summary>ListAsync now projects the SQL SELECT to only the metadata columns
     /// (RevisionNumber/Operation/CreatedAt/CreatedBy) instead of materializing the full row incl.
     /// Snapshot. Assert every metadata field the projection selects — including CreatedAt/CreatedBy,
     /// which the other list test above does not check — still round-trips correctly.</summary>
@@ -91,7 +91,7 @@ public sealed class RevisionStoreTests
         Assert.Null(await h.Store.GetAsync("article", "nope", 99, default));
     }
 
-    // DB-4 (=CS-6): the composite UNIQUE index (collectionname, itemid, revisionnumber) is a backstop.
+    // The composite UNIQUE index (collectionname, itemid, revisionnumber) is a backstop.
     // CaptureAsync's max()+1 already assigns distinct numbers under the ItemService write transaction;
     // the index guarantees a concurrent duplicate can never physically land. A direct duplicate insert
     // (simulating that race) must be rejected by the store below the ORM.

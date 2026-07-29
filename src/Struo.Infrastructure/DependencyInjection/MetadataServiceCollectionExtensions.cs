@@ -19,7 +19,7 @@ public static class MetadataServiceCollectionExtensions
             .Distinct().ToArray();
 
         // Eager scan at registration -> immutable singleton. No per-request reflection.
-        // SafeGetTypes tolerates an assembly with an unresolvable type (audit A4).
+        // SafeGetTypes tolerates an assembly with an unresolvable type.
         var allTypes = allAssemblies.SelectMany(MetadataScanner.SafeGetTypes).ToList();
 
         var collections = MetadataScanner.Scan(allAssemblies);

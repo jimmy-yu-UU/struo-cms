@@ -2,7 +2,7 @@ namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
 /// Identifies one translation sidecar table's UNIQUE (foreign key, locale) index for
-/// <see cref="SchemaGuard"/> to verify (DB-10). Built by the caller — Program.cs derives one of these
+/// <see cref="SchemaGuard"/> to verify. Built by the caller — Program.cs derives one of these
 /// per collection from <c>IMetadataProvider.GetCollections()</c>'s <c>Translation</c> metadata, resolving
 /// the CLR type/property names to physical table/column names the same way SqlSugar does
 /// (<c>ISqlSugarClient.EntityMaintenance.GetTableName</c>/<c>GetDbColumnName</c>) — so <see cref="SchemaGuard"/>

@@ -19,7 +19,7 @@ public sealed class PermissionResolutionMiddleware(RequestDelegate next)
     }
 
     /// <summary>
-    /// BL-1: the load+resolve+set sequence shared with <see cref="FileAccessPolicy"/>'s bearer-adopt
+    /// The load+resolve+set sequence shared with <see cref="FileAccessPolicy"/>'s bearer-adopt
     /// path — both need to (re)compute an effective-permissions snapshot for a given user id and
     /// publish it into the scoped <see cref="ICurrentPermissions"/> holder. Kept here, alongside the
     /// middleware that owns the per-request cookie-path resolution, so the sequence is defined in

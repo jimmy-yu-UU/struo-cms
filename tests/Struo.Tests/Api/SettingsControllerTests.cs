@@ -22,7 +22,7 @@ public class SettingsControllerTests(ApiFactory factory)
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         await db.Deleteable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).ExecuteCommandAsync();
-        // SEC-7: the successful PUT already evicted /api/config's cache, but this raw cleanup
+        // The successful PUT already evicted /api/config's cache, but this raw cleanup
         // delete does not — evict again so a later test in the shared collection never observes a
         // stale cached branding value from this test's teardown.
         scope.ServiceProvider.GetRequiredService<IMemoryCache>().Remove(ConfigController.CacheKey);
@@ -71,7 +71,7 @@ public class SettingsControllerTests(ApiFactory factory)
     /// request carries the session cookie (<see cref="Struo.Api.Auth.CsrfProtectionMiddleware"/>), which
     /// an anonymous request lacks. Either way the request falls through to the [Authorize] challenge.
     ///
-    /// FIXED (AUTH-1, audit batch 4 follow-up): the challenge is 401 as expected, and now carries
+    /// The challenge is 401 as expected, and now carries
     /// an error envelope. Cookie auth's <c>OnRedirectToLogin</c> event (AuthWiring.cs) still sets
     /// <c>Response.StatusCode</c> directly and short-circuits before MVC's
     /// <see cref="Struo.Api.Http.EnvelopeResultFilter"/> ever runs — but it now also writes the same

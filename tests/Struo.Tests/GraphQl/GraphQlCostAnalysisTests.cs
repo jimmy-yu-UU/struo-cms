@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Struo.Tests.GraphQl;
 
-// SEC-4: a single operation must not be able to amplify DB load by repeating an expensive list
+// A single operation must not be able to amplify DB load by repeating an expensive list
 // field under many aliases (there is no rate limiting in front of /graphql). The cost analyzer
 // (AddCostAnalyzer in GraphQlServiceCollectionExtensions) accrues field cost per alias and rejects
 // the operation before any resolver runs. HotChocolate 16.4.0 has no dedicated alias-count rule —

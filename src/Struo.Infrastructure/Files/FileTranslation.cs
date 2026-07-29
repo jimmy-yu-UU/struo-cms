@@ -12,8 +12,8 @@ namespace Struo.Infrastructure.Files;
 public sealed class FileTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-    // DB-10: composite UNIQUE (fileid, locale) — one translation row per parent per locale (deterministic
-    // overlay read). Same mechanism as Revision.cs. DB-16: this unique index also serves the (fileid, locale)
+    // Composite UNIQUE (fileid, locale) — one translation row per parent per locale (deterministic
+    // overlay read). Same mechanism as Revision.cs. This unique index also serves the (fileid, locale)
     // lookup, so the previously-declared redundant plain btree ([SugarIndex] ix_file_translations_fk_locale)
     // was dropped — it was pure write amplification. Live-PostgreSQL DDL: db/migrations/001-core-baseline.sql
     // (dev InitTables and the prod baseline emit identical index names).

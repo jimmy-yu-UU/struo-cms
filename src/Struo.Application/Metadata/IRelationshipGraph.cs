@@ -10,7 +10,7 @@ public interface IRelationshipGraph
 
     /// <summary>
     /// Inbound many-to-one relations targeting <paramref name="targetCollection"/> whose
-    /// <c>OnDelete</c> is <see cref="Struo.Domain.Metadata.Enums.OnDelete.SetNull"/> (DB-1/DB-2, Task 5).
+    /// <c>OnDelete</c> is <see cref="Struo.Domain.Metadata.Enums.OnDelete.SetNull"/>.
     /// Default empty for any implementer that predates this addition (e.g. test fakes) — purge simply
     /// performs no SetNull work for them.
     /// </summary>
@@ -18,7 +18,7 @@ public interface IRelationshipGraph
 
     /// <summary>
     /// Inbound many-to-one relations targeting <paramref name="targetCollection"/> whose
-    /// <c>OnDelete</c> is <see cref="Struo.Domain.Metadata.Enums.OnDelete.Cascade"/> (DB-1/DB-2, Task 5).
+    /// <c>OnDelete</c> is <see cref="Struo.Domain.Metadata.Enums.OnDelete.Cascade"/>.
     /// Default empty — see <see cref="InboundSetNull"/>.
     /// </summary>
     IReadOnlyList<(string SourceCollection, string ForeignKey)> InboundCascade(string targetCollection) => [];

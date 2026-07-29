@@ -15,7 +15,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Opt-in PostgreSQL integration tests (audit D4). These run against a REAL Postgres only when a
+/// Opt-in PostgreSQL integration tests. These run against a REAL Postgres only when a
 /// connection is configured — via the <c>STRUO_TEST_PG_CONNECTION</c> env var, or the Struo.Api
 /// <c>Testing:PostgresConnection</c> appsettings key (Development overrides base); otherwise every
 /// test is a no-op pass. The point is to catch the "SQLite-green ≠ Postgres-correct" class of bug

@@ -9,12 +9,12 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// API-1: an optimistic-lock miss (a stale-version update) must surface over the REST pipeline as
+/// An optimistic-lock miss (a stale-version update) must surface over the REST pipeline as
 /// HTTP 409 with the SPLIT code <c>VERSION_CONFLICT</c> — not the generic <c>CONFLICT</c> that a
 /// relation-restrict delete or a duplicate-key inline failure carries. This is the full-pipeline
 /// counterpart to the in-process GraphQL proof in
 /// <c>GraphQlMutationExecutionTests.Update_version_conflict_maps_to_VERSION_CONFLICT</c>; together
-/// they pin the code on BOTH protocols (ARC-3 parity spirit).
+/// they pin the code on BOTH protocols (REST/GraphQL parity).
 ///
 /// Stale-version recipe: create (version 0) → update echoing version 0 (server bumps to 1) →
 /// update again still echoing the OLD version 0 → CAS matches zero rows → 409 VERSION_CONFLICT.

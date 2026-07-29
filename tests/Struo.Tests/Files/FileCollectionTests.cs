@@ -17,7 +17,7 @@ public class FileCollectionTests(ApiFactory factory)
     [Fact]
     public async Task File_schema_lists_metadata_and_translatable_fields()
     {
-        var c = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
+        var c = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
         var resp = await c.GetAsync("/api/schema/file");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields");

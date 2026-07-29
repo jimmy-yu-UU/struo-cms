@@ -22,7 +22,7 @@ public sealed class FileAccessPolicy(
     public bool CanDelete() => permissions.CanDelete(FileCollection);
 
     /// <summary>
-    /// SEC-5: may the current caller read a NON-published file? Requires both (a) an authenticated
+    /// May the current caller read a NON-published file? Requires both (a) an authenticated
     /// identity and (b) a genuine <c>CanRead("file")</c> grant for that identity.
     /// </summary>
     /// <remarks>
@@ -53,16 +53,16 @@ public sealed class FileAccessPolicy(
         // Bearer-only caller: probe the bearer scheme explicitly (no [Authorize] means it was never
         // run), adopt its principal, and resolve THAT user's real per-collection grants. The
         // load+resolve+set sequence itself lives in PermissionResolutionMiddleware so it isn't
-        // duplicated between the middleware's cookie path and this bearer-adopt path (BL-1).
+        // duplicated between the middleware's cookie path and this bearer-adopt path.
         var bearer = await httpContext.AuthenticateAsync(AuthSchemes.Bearer);
         if (!bearer.Succeeded || bearer.Principal is null) return false; // anonymous: deny unpublished
-        // BL-1 invariant: caller MUST pass the request's ambient HttpContext. The line below only
+        // Invariant: caller MUST pass the request's ambient HttpContext. The line below only
         // WRITES the adopted principal onto this parameter; the user id is READ back afterward via
         // `currentUser` (IHttpContextAccessor), not from this parameter, so a non-ambient HttpContext
         // here would resolve the wrong (anonymous) user instead of the bearer identity just adopted.
         httpContext.User = bearer.Principal;
         var bearerUserId = currentUser.GetCurrentUserId();
-        // BL-2: a bearer principal that authenticated but carries no resolvable NameIdentifier must
+        // A bearer principal that authenticated but carries no resolvable NameIdentifier must
         // never fall through to the (still anonymous) public-floor snapshot — deny outright rather
         // than resolving grants for a null user id.
         if (bearerUserId is null) return false;

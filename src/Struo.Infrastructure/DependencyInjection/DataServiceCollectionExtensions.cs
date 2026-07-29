@@ -15,7 +15,7 @@ public static class DataServiceCollectionExtensions
 {
     public static IServiceCollection AddStruoData(this IServiceCollection services)
     {
-        // ARC-5: fail fast on out-of-range limits ([Range(1, int.MaxValue)]) at boot via
+        // Fail fast on out-of-range limits ([Range(1, int.MaxValue)]) at boot via
         // ValidateOnStart, enforced by the BCL DataAnnotations validator. The unwrapped singleton
         // below (StruoQueryOptions, injected directly into repositories/resolvers) is preserved.
         services.AddOptions<StruoQueryOptions>()
@@ -36,7 +36,7 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<Struo.Application.Settings.ISiteSettingsStore, Struo.Infrastructure.Settings.SqlSugarSiteSettingsStore>();
         services.AddScoped<Struo.Application.Query.RevisionSnapshotBuilder>();
         services.AddScoped<ItemService>();
-        // ARC-6: expose the use-case seam controllers depend on, forwarding to the SAME scoped
+        // Expose the use-case seam controllers depend on, forwarding to the SAME scoped
         // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.
         services.AddScoped<IItemUseCases>(sp => sp.GetRequiredService<ItemService>());
         return services;

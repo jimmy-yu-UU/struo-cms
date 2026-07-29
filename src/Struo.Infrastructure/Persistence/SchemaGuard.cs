@@ -3,14 +3,14 @@ using SqlSugar;
 namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
-/// Dev-startup fail-fast (DB-5). Asserts that the small set of database constraints the application
+/// Dev-startup fail-fast. Asserts that the small set of database constraints the application
 /// relies on for CORRECTNESS — not merely performance — physically exist in the connected database, and
 /// throws with an actionable message if one is missing, rather than letting the app run with a silent
 /// gap.
 ///
 /// The critical constraints today are (a) the <c>revisions</c> composite UNIQUE index over
-/// (collectionname, itemid, revisionnumber): the DB-4 (=CS-6) backstop that makes a lost-update race on
-/// per-item revision numbers fail closed; and (b) a DB-10 UNIQUE (fk, locale) index on each translation
+/// (collectionname, itemid, revisionnumber): the backstop that makes a lost-update race on
+/// per-item revision numbers fail closed; and (b) a UNIQUE (fk, locale) index on each translation
 /// sidecar the running configuration actually has, keeping per-locale overlay reads deterministic.
 /// Sidecars are supplied by the CALLER as <see cref="TranslationSidecarDescriptor"/> values — Program.cs
 /// derives one per collection from <c>IMetadataProvider.GetCollections()</c>'s <c>Translation</c>
@@ -43,7 +43,7 @@ public static class SchemaGuard
         // it stays out of the way rather than block startup on a backend whose catalog it does not read.
         if (dbType is not (DbType.PostgreSQL or DbType.Sqlite)) return;
 
-        // DB-4 backstop — the `revisions` composite UNIQUE (always present in the app schema; on a DB
+        // Backstop — the `revisions` composite UNIQUE (always present in the app schema; on a DB
         // that somehow lacks the table the index query returns empty and this fails, which is correct).
         await AssertUniqueCoverAsync(db, dbType, "revisions",
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
@@ -53,7 +53,7 @@ public static class SchemaGuard
             "PostgreSQL), or recreate the dev schema so InitTables re-emits it from Revision's " +
             "UniqueGroupNameList.", ct);
 
-        // DB-10 backstop — each caller-supplied translation sidecar's UNIQUE (fk, locale). Skipped when
+        // Backstop — each caller-supplied translation sidecar's UNIQUE (fk, locale). Skipped when
         // the table is not present in this database (a fork may not use a given sidecar), rather than
         // demanding an index on a table that does not exist.
         foreach (var sidecar in translationSidecars)

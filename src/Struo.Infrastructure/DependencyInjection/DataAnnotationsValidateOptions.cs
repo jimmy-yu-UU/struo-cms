@@ -11,7 +11,7 @@ namespace Struo.Infrastructure.DependencyInjection;
 /// re-implemented on the BCL (<c>System.ComponentModel.DataAnnotations</c>, part of the runtime) so
 /// it works inside the Struo.Infrastructure class library WITHOUT adding the
 /// <c>Microsoft.Extensions.Options.DataAnnotations</c> package (that assembly ships only in the
-/// ASP.NET shared framework, which this non-Web SDK library does not reference — ARC-5, zero new
+/// ASP.NET shared framework, which this non-Web SDK library does not reference — zero new
 /// packages). Register once per options type alongside <c>.ValidateOnStart()</c>.
 /// </summary>
 internal sealed class DataAnnotationsValidateOptions<TOptions> : IValidateOptions<TOptions>

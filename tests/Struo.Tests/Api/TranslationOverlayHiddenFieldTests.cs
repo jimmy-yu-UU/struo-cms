@@ -9,13 +9,13 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// SEC-13: <see cref="Struo.Application.Query.TranslationOverlay"/> builds its
+/// <see cref="Struo.Application.Query.TranslationOverlay"/> builds its
 /// <c>translations.{locale}</c> map from ALL of a translation sidecar's fields, with no Hidden check —
 /// unlike <see cref="Struo.Application.Query.Projection.ItemProjector"/> (guards top-level fields) and
 /// <see cref="Struo.Application.Query.RevisionSnapshotRedactor"/> (guards revision snapshots). This is
 /// the third and last leak in the "Hidden field never reaches an external caller" guarantee family.
 /// Article's <c>internalSlug</c> (Hidden + Translatable, on <c>ArticleTranslation</c>) is the existing
-/// SEC-2 fixture, reused here for the plain REST item-read path (GET /api/items/article/{id}), which
+/// existing fixture, reused here for the plain REST item-read path (GET /api/items/article/{id}), which
 /// goes through <c>ItemService.GetAsync</c> -> <c>ItemProjector.Project</c> -> <c>TranslationOverlay.ApplyAsync</c>.
 /// </summary>
 [Collection("ApiIntegration")]

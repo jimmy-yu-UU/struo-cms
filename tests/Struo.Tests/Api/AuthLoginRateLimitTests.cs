@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-// SEC-7: POST /api/auth/login is brute-forceable and every anonymous attempt burns full
+// POST /api/auth/login is brute-forceable and every anonymous attempt burns full
 // Argon2id CPU. Verifies the app-layer, login-only, fixed-window-per-client-IP limiter added in
 // Program.cs (Microsoft.AspNetCore.RateLimiting). Each test spins up its OWN derived host via
 // WithWebHostBuilder (isolated TestServer + in-memory limiter state) with a small configured
@@ -89,7 +89,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
         var meResp = await f.CreateClient().GetAsync("/api/auth/me");
         meResp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        // SEC-7: this test's namesake claim — /api/auth/logout is also unaffected by the exhausted
+        // This test's namesake claim — /api/auth/logout is also unaffected by the exhausted
         // "login" policy partition. No session exists here either, but the point is the SAME:
         // repeated calls must never surface 429 (the login limiter is scoped to the Login action).
         var logoutClient = f.CreateClient();

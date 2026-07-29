@@ -3,7 +3,7 @@ using SqlSugar;
 namespace Struo.Infrastructure.Revisions;
 
 /// <summary>
-/// One immutable snapshot of a revisioned item's post-write state (Phase 9c). An internal framework
+/// One immutable snapshot of a revisioned item's post-write state. An internal framework
 /// table — NOT a <c>[CmsCollection]</c>, so it is never browsable/CRUD-able through the generic item
 /// API. Append-only: rows are inserted on create/update/revert and never updated. Not
 /// <see cref="Struo.Domain.Auditing.IAuditable"/> (no update path → no UpdatedAt/By); CreatedAt/By are
@@ -15,7 +15,7 @@ public sealed class Revision
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
 
-    // DB-4 (=CS-6): composite UNIQUE (collectionname, itemid, revisionnumber). CaptureAsync assigns the
+    // Composite UNIQUE (collectionname, itemid, revisionnumber). CaptureAsync assigns the
     // per-item number as max()+1 inside ItemService's write transaction; this index is the backstop that
     // makes a concurrent lost-update race fail closed (unique violation -> the capture's transaction
     // rolls back with the item write) instead of silently duplicating a revision number. The three

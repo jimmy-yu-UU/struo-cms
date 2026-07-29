@@ -115,7 +115,7 @@ public static class SqlSugarClientFactory
             }
         };
 
-        // CS-1: GraphQL pins query/mutation roots to DependencyInjectionScope.Request
+        // GraphQL pins query/mutation roots to DependencyInjectionScope.Request
         // (GraphQlServiceCollectionExtensions), so HotChocolate can run sibling root-field
         // resolvers on separate threads that all share this one request-scoped ISqlSugarClient. A
         // bare SqlSugarClient is not thread-safe for that — concurrent ADO operations on the shared
@@ -125,7 +125,7 @@ public static class SqlSugarClientFactory
         // ISqlSugarClient, so this is a drop-in fix at the factory boundary — DI registration
         // (AddScoped<ISqlSugarClient>) and every call site are unchanged.
         //
-        // The soft-delete query filter and audit AOP must be attached via the ctor's configure
+        // The soft-delete query filter and the AuditAop stamping must be attached via the ctor's configure
         // action, NOT via `client.QueryFilter.AddTableFilter(...)` / `AuditAop.Register(client, ...)`
         // called on the SqlSugarScope instance after construction. Post-construction attachment on
         // SqlSugarScope only reaches whichever single inner context is current at that moment; every
@@ -137,7 +137,7 @@ public static class SqlSugarClientFactory
         // audit-field, revisions-transaction tests) staying green with this shape.
         var client = new SqlSugarScope(config, db =>
         {
-            // Phase 9b: soft-delete floor. Every Queryable over an ISoftDeletable entity excludes
+            // Soft-delete floor. Every Queryable over an ISoftDeletable entity excludes
             // rows whose DeletedAt is set. Applies to list/get/deep-expansion/cross-relation
             // id-resolution/M2M existence/inbound-Restrict with no per-path code. Reads that need
             // trashed rows (?deleted=only|with, restore, purge) clear this filter per-query (see the

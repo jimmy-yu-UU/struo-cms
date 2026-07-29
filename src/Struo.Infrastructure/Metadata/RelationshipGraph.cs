@@ -63,7 +63,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                 descriptors.Add(BuildDescriptor(entityType, r));
 
                 // Build the inbound OnDelete indexes (Restrict/SetNull/Cascade) for delete-guard /
-                // purge (DB-1/DB-2, Task 5). Only M2O relations carry a real FK on the source side.
+                // purge. Only M2O relations carry a real FK on the source side.
                 if (r.Kind == RelationKind.ManyToOne)
                 {
                     var bucket = r.OnDelete switch
@@ -143,7 +143,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
     /// Walks every known collection's own M2M descriptors and keeps the ones whose
     /// <see cref="M2MDescriptor.TargetCollection"/> matches <paramref name="targetCollection"/> —
     /// i.e. the junction rows purging <paramref name="targetCollection"/> must also clean up, even
-    /// though the relation is declared on a DIFFERENT ("owning") collection (DB-1/DB-2, Task 5).
+    /// though the relation is declared on a DIFFERENT ("owning") collection.
     /// </summary>
     public IReadOnlyList<InboundM2MDescriptor> InboundM2MDescriptors(string targetCollection) =>
         _byCollection

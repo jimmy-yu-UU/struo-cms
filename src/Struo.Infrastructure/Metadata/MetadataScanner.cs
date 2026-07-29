@@ -62,7 +62,7 @@ public static class MetadataScanner
     /// <summary>
     /// <see cref="Assembly.GetTypes"/> that tolerates an assembly with an unresolvable type: instead of
     /// throwing <see cref="ReflectionTypeLoadException"/> (which aborts the whole scan), it returns the
-    /// types that did load. Guards convention-based discovery against a single bad dependency (audit A4).
+    /// types that did load. Guards convention-based discovery against a single bad dependency.
     /// </summary>
     public static IEnumerable<Type> SafeGetTypes(Assembly assembly)
     {

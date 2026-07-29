@@ -5,7 +5,7 @@ namespace Struo.Tests.Support;
 /// <summary>
 /// Test-only permission policy that permits everything (and reports super-admin). Lives in the test
 /// project so the shippable Infrastructure assembly carries no auth-bypass type that a stray
-/// <c>services.Replace</c> could accidentally re-enable (audit A3). Production uses
+/// <c>services.Replace</c> could accidentally re-enable. Production uses
 /// <c>RbacPermissionService</c>.
 /// </summary>
 public sealed class AllowAllPermissionService : IPermissionService

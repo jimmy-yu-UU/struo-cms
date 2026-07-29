@@ -4,9 +4,9 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// NOTE: Gallery_m2m_with_guid_file_ids_round_trips was deleted in Phase 5.5
+// NOTE: Gallery_m2m_with_guid_file_ids_round_trips was deleted
 // (ArticleFile junction entity removed from the sample domain).
-// NOTE: Single_image_relation_expands was deleted in Phase 5.6
+// NOTE: Single_image_relation_expands was deleted
 // (parent Article.SeoOgImage relation removed; SEO moved to SeoTranslation sidecar).
 
 [Collection("ApiIntegration")]
@@ -20,7 +20,7 @@ public class FileReferenceTests(ApiFactory factory)
         // Smoke-test that the files subsystem is wired up in the integration host.
         var c = await _factory.CreateAuthenticatedClientAsync();
         var content = new ByteArrayContent([1, 2, 3]);
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain"); // whitelisted (SEC-6)
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain"); // whitelisted
         var mp = new MultipartFormDataContent { { content, "file", "smoke.txt" } };
         var resp = await c.PostAsync("/api/files", mp);
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);

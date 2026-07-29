@@ -21,9 +21,9 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// ── Test-local entities (DB-9) ─────────────────────────────────────────────
+// ── Test-local entities ─────────────────────────────────────────────
 //
-// The sample Blog M2M target (Tag) is NOT ISoftDeletable, so it cannot be trashed — and the DB-9
+// The sample Blog M2M target (Tag) is NOT ISoftDeletable, so it cannot be trashed — and the
 // "revert tolerates a trashed M2M target" case requires exactly that. Following the precedent set by
 // PurgeIntegrityTests (which declares its own [CmsCollection] fixtures for scenarios the sample domain
 // can't express), this file declares a revisioned parent (Doc) with an M2M relation to a
@@ -147,7 +147,7 @@ internal sealed class M2MRevertHarness : IDisposable
 }
 
 /// <summary>
-/// DB-9: (1) M2M target-id arrays are de-duplicated before validation and junction sync
+/// (1) M2M target-id arrays are de-duplicated before validation and junction sync
 /// (<c>labels:[l1,l1]</c> == <c>labels:[l1]</c>); (2) a REVERT tolerates a snapshot that references a
 /// now-trashed target (it was legal when captured), while a NORMAL write still rejects a trashed target
 /// (asymmetry preserved). Real SQLite-backed <see cref="ItemService"/>, no stubs.

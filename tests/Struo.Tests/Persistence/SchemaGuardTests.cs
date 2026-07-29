@@ -10,11 +10,11 @@ using Xunit;
 namespace Struo.Tests.Persistence;
 
 /// <summary>
-/// DB-5: SchemaGuard is a dev-startup fail-fast that asserts the critical constraints the app depends on
+/// SchemaGuard is a dev-startup fail-fast that asserts the critical constraints the app depends on
 /// for correctness actually exist in the connected database. Two kinds are covered: (a) the revisions
-/// composite UNIQUE index (DB-4 backstop against the lost-update race) — always asserted, never
+/// composite UNIQUE index (backstop against the lost-update race) — always asserted, never
 /// caller-supplied; and (b) a UNIQUE (fk, locale) index on each translation sidecar the CALLER passes in
-/// as a <see cref="TranslationSidecarDescriptor"/> (DB-10) — SchemaGuard itself carries no table names, so
+/// as a <see cref="TranslationSidecarDescriptor"/> — SchemaGuard itself carries no table names, so
 /// a fork's own sidecars are protected the same way core's file_translations is (Program.cs derives the
 /// descriptor list from metadata). The index NAME differs by backend/creation-path (PG migration =
 /// ux_revisions_item_no; SQLite CodeFirst = Index_revisions_..._Unique), so the guard detects it by
@@ -62,7 +62,7 @@ public sealed class SchemaGuardTests
         }
     }
 
-    // ── DB-10: caller-supplied translation sidecar descriptors ──
+    // ── Caller-supplied translation sidecar descriptors ──
 
     [Fact]
     public async Task Passes_when_a_sidecar_unique_index_is_present()

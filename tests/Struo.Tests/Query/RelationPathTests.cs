@@ -90,7 +90,7 @@ public class RelationPathTests
         act.Should().Throw<QueryException>().WithMessage("*nope*");
     }
 
-    // SEC-1: a Hidden field on the terminal collection of a relation path must be rejected as
+    // A Hidden field on the terminal collection of a relation path must be rejected as
     // a leaf, just like the own-field whitelist in QueryValidator already does — otherwise
     // meta.total becomes a blind-extraction oracle for hidden fields reachable across any
     // M2O relation (e.g. a "user" relation pointing at User.Password).

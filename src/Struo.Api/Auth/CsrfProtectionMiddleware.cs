@@ -29,7 +29,7 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
         if (RequiresCsrfHeader(context.Request))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            // AUTH-2: this middleware runs before MVC, so EnvelopeResultFilter never sees this
+            // This middleware runs before MVC, so EnvelopeResultFilter never sees this
             // response; the camelCase envelope must be written by hand via the shared options
             // (see EnvelopeJsonOptionsHolder) rather than relying on WriteAsJsonAsync's default
             // (non-camelCase) HttpResponseJsonOptions.

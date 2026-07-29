@@ -33,7 +33,7 @@ public class MetadataScannerTests
         article.Name.Should().Be("article");
         article.Label.Should().Be("Article");
         article.Group.Should().Be("Content");
-        // Title moved to the translation sidecar (Phase 4); display field is now Status.
+        // Title moved to the translation sidecar; display field is now Status.
         article.DefaultDisplayField.Should().Be("status");
     }
 
@@ -367,7 +367,7 @@ public class MetadataScannerTests
         [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
     }
 
-    // CS-4/ARC-2: EntityDescriptor.Properties caches CLR-property -> PropertyInfo (built once from
+    // EntityDescriptor.Properties caches CLR-property -> PropertyInfo (built once from
     // EntityType) so projection/snapshot hot paths resolve accessors via a dictionary lookup instead
     // of per-row Type.GetProperty reflection.
     [Fact]
