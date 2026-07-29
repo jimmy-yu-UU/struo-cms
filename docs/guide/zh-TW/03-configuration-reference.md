@@ -18,19 +18,19 @@
 
 ## `Database`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Database:DbType` | enum: `PostgreSQL`\|`MySql`\|`SqlServer`\|`Sqlite`\|`Oracle` | `PostgreSQL` | Selects the SqlSugar backend. Only `PostgreSQL` is the verified runtime target; `Sqlite` is test-only; `MySql`/`SqlServer`/`Oracle` are type-mapped but experimental. |
-| `Database:ConnectionString` | string, required | none — ships as a `REPLACE_ME` placeholder | ADO.NET connection string for the selected engine. A missing or empty value fails startup (`[Required]` + `ValidateOnStart`), rather than surfacing as a confusing failure on first query. |
-| `Database:MigrationsPath` | string?, optional | empty/absent (disabled) | Directory of reviewed `*.sql` migration scripts applied at startup by the migration runner. Only honored when `DbType` is `PostgreSQL` — a hard no-op on every other backend. Development normally leaves this empty and lets `InitTables` build the schema from the entity classes instead; Production points it at the deployed migrations directory so `001-core-baseline.sql` bootstraps an empty database. |
+| `Database:DbType` | enum: `PostgreSQL`\|`MySql`\|`SqlServer`\|`Sqlite`\|`Oracle` | `PostgreSQL` | 選擇 SqlSugar 後端。只有 `PostgreSQL` 是經驗證的執行期目標;`Sqlite` 僅用於測試;`MySql`/`SqlServer`/`Oracle` 雖有型別對應但屬實驗性質。 |
+| `Database:ConnectionString` | string，必填 | 無——出貨時為 `REPLACE_ME` 預留值 | 所選引擎的 ADO.NET 連線字串。缺少或空值會導致啟動失敗 (`[Required]` + `ValidateOnStart`)，而不是在第一次查詢時才浮現令人困惑的失敗。 |
+| `Database:MigrationsPath` | string?，選填 | 空白/未設定 (停用) | 已審查的 `*.sql` migration 腳本所在目錄，由 migration runner 在啟動時套用。只有當 `DbType` 為 `PostgreSQL` 時才會生效——在其他每一種後端上都是完全的無作用 (no-op)。開發環境通常讓這個值保持空白，改由 `InitTables` 依 entity 類別建構 schema;正式環境則指向已部署的 migrations 目錄，讓 `001-core-baseline.sql` 為一個空資料庫執行 bootstrap。 |
 
 以上三項都需要重新啟動才會生效。
 
 ## `Struo:ContentAssemblies`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Struo:ContentAssemblies` | string[] | `[]` (empty) | Assembly names scanned at startup for `[CmsCollection]` content types. |
+| `Struo:ContentAssemblies` | string[] | `[]` (空) | 啟動時掃描的組件 (assembly) 名稱，用來尋找 `[CmsCollection]` 內容型別。 |
 
 這是整個設定介面中，讀取時機真正特殊的唯一一項設定:**它是在 `Program.cs` 中、於 `builder.Build()`
 被呼叫*之前*，直接從 `builder.Configuration` 讀取的**，而不是透過其他地方一律採用的
@@ -51,53 +51,53 @@
 
 ## `Struo:Files`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Struo:Files:Backend` | string: `"local"`\|`"s3"` | `"local"` | Selects the storage backend. Validated at startup — an unrecognized value fails immediately. |
-| `Struo:Files:MaxUploadBytes` | long | `26214400` (25 MB) | Maximum accepted upload size. |
-| `Struo:Files:AllowedContentTypes` | string[] | the MIME-type list shown in `appsettings.json` (images, PDF, plain text, MP4, MP3, the Office formats, ZIP) | Allow-list of accepted content types for uploads. An empty array allows all content types. |
-| `Struo:Files:PresignedRedirect` | bool | `false` | When `true`, `GET /api/files/{id}/content` responds with a 302 redirect to a storage-presigned URL instead of the API streaming the bytes itself. |
+| `Struo:Files:Backend` | string: `"local"`\|`"s3"` | `"local"` | 選擇儲存後端。啟動時會驗證——無法辨識的值會立即導致失敗。 |
+| `Struo:Files:MaxUploadBytes` | long | `26214400` (25 MB) | 允許上傳的最大檔案大小。 |
+| `Struo:Files:AllowedContentTypes` | string[] | `appsettings.json` 中列出的 MIME 類型清單 (images、PDF、plain text、MP4、MP3、Office 格式、ZIP) | 允許上傳的內容類型允許清單 (allow-list)。空陣列代表允許所有內容類型。 |
+| `Struo:Files:PresignedRedirect` | bool | `false` | 為 `true` 時，`GET /api/files/{id}/content` 會回應一個 302 redirect 導向儲存端 presigned URL，而不是由 API 自己串流位元組資料。 |
 
 以上全部都在啟動時被驗證 (`ValidateOnStart`)，且需要重新啟動。
 
 ### `Struo:Files:Local`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Struo:Files:Local:RootPath` | string | `"App_Data/uploads"` | Filesystem root for uploaded files when `Backend` is `local`. Required (validated) when that backend is selected. |
+| `Struo:Files:Local:RootPath` | string | `"App_Data/uploads"` | 當 `Backend` 為 `local` 時，上傳檔案的檔案系統根目錄。選用該後端時為必填 (會被驗證)。 |
 
 ### `Struo:Files:S3`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Struo:Files:S3:Endpoint` | string? | `REPLACE_ME` placeholder | S3-compatible endpoint URL. Required (validated) when `Backend` is `s3`. |
-| `Struo:Files:S3:Bucket` | string? | `REPLACE_ME` placeholder | Target bucket name. Required when `Backend` is `s3`. |
-| `Struo:Files:S3:AccessKey` | string? | `REPLACE_ME` placeholder | Access key. Required when `Backend` is `s3`. |
-| `Struo:Files:S3:SecretKey` | string? | `REPLACE_ME` placeholder | Secret key. Required when `Backend` is `s3`. |
-| `Struo:Files:S3:Region` | string | `"us-east-1"` | Region passed to the AWS S3 SDK client. |
-| `Struo:Files:S3:ForcePathStyle` | bool | `true` | Path-style addressing — needed by MinIO and most self-hosted S3-compatible servers. |
-| `Struo:Files:S3:PresignTtlSeconds` | int | `300` | Lifetime of generated presigned URLs, in seconds. |
+| `Struo:Files:S3:Endpoint` | string? | `REPLACE_ME` 預留值 | S3 相容的 endpoint URL。當 `Backend` 為 `s3` 時為必填 (會被驗證)。 |
+| `Struo:Files:S3:Bucket` | string? | `REPLACE_ME` 預留值 | 目標 bucket 名稱。當 `Backend` 為 `s3` 時為必填。 |
+| `Struo:Files:S3:AccessKey` | string? | `REPLACE_ME` 預留值 | Access key。當 `Backend` 為 `s3` 時為必填。 |
+| `Struo:Files:S3:SecretKey` | string? | `REPLACE_ME` 預留值 | Secret key。當 `Backend` 為 `s3` 時為必填。 |
+| `Struo:Files:S3:Region` | string | `"us-east-1"` | 傳遞給 AWS S3 SDK client 的 region。 |
+| `Struo:Files:S3:ForcePathStyle` | bool | `true` | Path-style 定址方式——MinIO 及大多數自架的 S3 相容伺服器都需要它。 |
+| `Struo:Files:S3:PresignTtlSeconds` | int | `300` | 產生的 presigned URL 存活時間，單位為秒。 |
 
 若要使用內建的 MinIO 容器做為此後端，需要執行 `docker compose --profile s3 up -d` (它也會執行那個
 一次性的 bucket 建立步驟)——見第 2 章。
 
 ### `Struo:Files:ImageTransform`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Struo:Files:ImageTransform:Enabled` | bool | `true` | Turns the on-the-fly image-transform endpoint on or off. |
-| `Struo:Files:ImageTransform:MaxWidth` | int | `4096` | Upper bound on requested transform width. |
-| `Struo:Files:ImageTransform:MaxHeight` | int | `4096` | Upper bound on requested transform height. |
-| `Struo:Files:ImageTransform:AllowedFormats` | string[] | `["webp", "jpeg", "png", "avif"]` | Output formats the transform endpoint will produce. |
-| `Struo:Files:ImageTransform:DefaultQuality` | int | `82` | Default encode quality when a request does not specify one. |
-| `Struo:Files:ImageTransform:CachePath` | string | `"App_Data/image-cache"` | Root directory for cached transformed-image variants. A relative path is resolved against the application's content root, **not** the process's current working directory — this matters if you ever launch the process from a different working directory than the project folder (e.g. a systemd unit). |
+| `Struo:Files:ImageTransform:Enabled` | bool | `true` | 開啟或關閉即時圖片轉換端點。 |
+| `Struo:Files:ImageTransform:MaxWidth` | int | `4096` | 請求轉換寬度的上限。 |
+| `Struo:Files:ImageTransform:MaxHeight` | int | `4096` | 請求轉換高度的上限。 |
+| `Struo:Files:ImageTransform:AllowedFormats` | string[] | `["webp", "jpeg", "png", "avif"]` | 轉換端點會輸出的格式。 |
+| `Struo:Files:ImageTransform:DefaultQuality` | int | `82` | 當請求未指定時使用的預設編碼品質。 |
+| `Struo:Files:ImageTransform:CachePath` | string | `"App_Data/image-cache"` | 快取轉換後圖片變體的根目錄。相對路徑會相對於應用程式的 content root 解析，**不是**程序的目前工作目錄——如果你曾經在不同於專案資料夾的工作目錄下啟動程序 (例如一個 systemd unit)，這一點就很重要。 |
 
 ## `Auth:BootstrapAdmin`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Auth:BootstrapAdmin:Email` | string | `"admin@admin.com"` | Bootstrap administrator email. |
-| `Auth:BootstrapAdmin:Password` | string | `"admin"` | Bootstrap administrator password. |
+| `Auth:BootstrapAdmin:Email` | string | `"admin@admin.com"` | Bootstrap 管理員電子郵件。 |
+| `Auth:BootstrapAdmin:Password` | string | `"admin"` | Bootstrap 管理員密碼。 |
 
 **這一組值只會被參照一次:`users` 資料表第一次被建立的時候。** 一旦該資料表存在，之後任何一次啟動都
 不會重新讀取或重新套用這些值，即使針對一個被清空的 `users` 資料表也一樣——這個帳號 (以及它的密碼)
@@ -110,9 +110,9 @@
 
 ## `Rbac:PublicReadCollections`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Rbac:PublicReadCollections` | string[] | `[]` (empty) | Names of collections granted anonymous ("public" role) read access. |
+| `Rbac:PublicReadCollections` | string[] | `[]` (空) | 被授予匿名 (`"public"` 角色) 讀取權限的 collection 名稱。 |
 
 如同 `Auth:BootstrapAdmin`，這份清單也只有第一次啟動時才會生效，但觸發時機不同:它只在 `roles`
 資料表第一次被建立時才會被參照——就在那個時刻，種子邏輯 (seeder) 也會建立 `admin` (超級管理員) 與
@@ -123,11 +123,11 @@
 
 ## `RateLimiting:Login`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `RateLimiting:Login:Enabled` | bool | `true` | Turns the in-app login rate limiter on or off. |
-| `RateLimiting:Login:PermitLimit` | int | `5` | Attempts allowed per client IP within the window. |
-| `RateLimiting:Login:WindowSeconds` | int | `60` | Fixed-window length, in seconds. |
+| `RateLimiting:Login:Enabled` | bool | `true` | 開啟或關閉應用程式內的登入速率限制器。 |
+| `RateLimiting:Login:PermitLimit` | int | `5` | 在視窗期間內，每個 client IP 允許的嘗試次數。 |
+| `RateLimiting:Login:WindowSeconds` | int | `60` | 固定視窗的長度，單位為秒。 |
 
 此限流器只套用在 `POST /api/auth/login` 上 (固定視窗，依 client IP 分區)；它不是通用的 API 速率
 限制器。對於直接部署或單一實例部署而言，`Enabled = true` 屬於安全的預設值。只有在多 pod 部署
@@ -137,10 +137,10 @@
 
 ## `Branding`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Branding:Name` | string | `"StruoCMS"` | Product name shown on the login page, the admin topbar and the browser tab title. |
-| `Branding:LogoUrl` | string? | `null` | Logo URL shown in the same places. |
+| `Branding:Name` | string | `"StruoCMS"` | 顯示在登入頁、管理後台頂欄與瀏覽器分頁標題上的產品名稱。 |
+| `Branding:LogoUrl` | string? | `null` | 顯示在相同位置的 logo URL。 |
 
 這些是**部署期預設值**，並非唯一的真實來源:超級管理員可以在應用程式內編輯品牌名稱與 logo (設定 →
 站台設定)，這會被儲存到單例的 `site_settings` 資料庫資料列中。在請求當下
@@ -151,9 +151,9 @@
 
 ## `Redis`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Redis:ConnectionString` | string | `""` (empty) | StackExchange.Redis connection string backing the cookie-authentication session ticket store. |
+| `Redis:ConnectionString` | string | `""` (空) | 支撐 cookie 認證 session ticket store 的 StackExchange.Redis 連線字串。 |
 
 留空 (預設值) 會退回到記憶體內的分散式快取——這樣一來，每次程序重新啟動都會遺失 session，這對於單次
 快速的本機執行沒問題，但不適合任何存活較久或多實例的情境。將此值設為一個真實的 Redis 實例 (慣例上
@@ -162,18 +162,18 @@
 
 ## `Oidc`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Oidc:Enabled` | bool | `false` | Turns external OpenID Connect login on or off. |
-| `Oidc:Authority` | string? | placeholder URL | OIDC authority/issuer. Required when `Enabled` is `true`. |
-| `Oidc:ClientId` | string? | `REPLACE_ME` placeholder | OAuth client ID. Required when `Enabled` is `true`. |
-| `Oidc:ClientSecret` | string? | none — never in `appsettings.json` | OAuth client secret. Required when `Enabled` is `true`; supply via user secrets, environment variables, or a secret manager — never commit it. |
-| `Oidc:CallbackPath` | string | `"/signin-oidc"` | Local callback path registered with the identity provider. |
-| `Oidc:Scopes` | string[] | `["openid", "email", "profile"]` | OIDC scopes requested. |
-| `Oidc:ReturnUrlDefault` | string | `"/"` | Default post-login redirect. |
-| `Oidc:RequireEmailVerified` | bool | `false` | Whether the identity provider's `email_verified` claim is required for JIT account linking. |
-| `Oidc:AllowedTenantId` | string? | placeholder | Restricts JIT linking to a single tenant, where the provider supports one. |
-| `Oidc:AllowedEmailDomains` | string[] | `[]` (empty — unrestricted) | Restricts JIT linking to specific email domains. |
+| `Oidc:Enabled` | bool | `false` | 開啟或關閉外部 OpenID Connect 登入。 |
+| `Oidc:Authority` | string? | 預留 URL | OIDC authority/issuer。當 `Enabled` 為 `true` 時為必填。 |
+| `Oidc:ClientId` | string? | `REPLACE_ME` 預留值 | OAuth client ID。當 `Enabled` 為 `true` 時為必填。 |
+| `Oidc:ClientSecret` | string? | 無——絕不會出現在 `appsettings.json` 中 | OAuth client secret。當 `Enabled` 為 `true` 時為必填;請透過 user secrets、環境變數或 secret manager 提供——絕不要提交它。 |
+| `Oidc:CallbackPath` | string | `"/signin-oidc"` | 向身分提供者註冊的本機回呼路徑。 |
+| `Oidc:Scopes` | string[] | `["openid", "email", "profile"]` | 請求的 OIDC scope。 |
+| `Oidc:ReturnUrlDefault` | string | `"/"` | 登入後預設的重新導向位置。 |
+| `Oidc:RequireEmailVerified` | bool | `false` | JIT 帳號連結是否要求身分提供者的 `email_verified` claim。 |
+| `Oidc:AllowedTenantId` | string? | 預留值 | 在提供者支援 tenant 的情況下，將 JIT 連結限制在單一 tenant。 |
+| `Oidc:AllowedEmailDomains` | string[] | `[]` (空——不限制) | 將 JIT 連結限制在特定的電子郵件網域。 |
 
 若 `Enabled` 為 `true`，啟動驗證會要求 `Authority`、`ClientId` 與 `ClientSecret` 全部非空。JIT
 (即時) 佈建會在通過 tenant/驗證/網域檢查後，**依電子郵件相等**將外部身分連結到一個既有的本機帳號。
@@ -185,11 +185,11 @@
 
 ## `Serilog`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Serilog:MinimumLevel:Default` | string | `"Information"` | Default minimum log level. |
-| `Serilog:MinimumLevel:Override` | object (namespace → level) | `{ "Microsoft.AspNetCore": "Warning" }` | Per-namespace level overrides. |
-| `Serilog:WriteTo` | array | Console sink, plus a File sink writing `logs/struo-.log` with daily rolling and shared-file access | Configured log sinks. |
+| `Serilog:MinimumLevel:Default` | string | `"Information"` | 預設的最低日誌等級。 |
+| `Serilog:MinimumLevel:Override` | object (namespace → 等級) | `{ "Microsoft.AspNetCore": "Warning" }` | 逐 namespace 的等級覆寫。 |
+| `Serilog:WriteTo` | array | Console sink，外加一個 File sink，寫入 `logs/struo-.log`，具備每日輪替 (daily rolling) 與共享檔案存取 | 已設定的日誌 sink。 |
 
 和本章其他每一個區段不同，`Serilog` 並未被綁定到一個自訂的 C# options 類別——它是在 host 啟動期間，
 直接由 Serilog 自己的設定讀取器 (`ReadFrom.Configuration`) 消費的，所以它的形狀依循 Serilog 自身
@@ -198,9 +198,9 @@
 
 ## `Testing`
 
-| Key | Type | Default | Effect |
+| 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Testing:PostgresConnection` | string | `""` (empty — suite skips) | Opt-in connection string for the live-PostgreSQL integration test suite. Point it at a **disposable** database whose name contains `test`. |
+| `Testing:PostgresConnection` | string | `""` (空——測試套件會跳過) | live-PostgreSQL 整合測試套件的選用連線字串。請指向一個名稱包含 `test` 的**可拋棄**資料庫。 |
 
 這個區段完全不會被執行中的 API 讀取——只有測試專案會讀取它，且是透過它自己的
 `ConfigurationBuilder`，該建構器並未註冊環境變數提供者。這就是為什麼在整個設定介面中，這是唯一

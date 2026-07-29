@@ -41,7 +41,7 @@ PostgreSQL/SQLite 的行為所寫的。
 **Core (核心)** 是指 `src/Struo.*` 下的一切 (下方四個後端專案)，加上框架自身持久化的 entity 型別，
 統一收錄於單一清單——`FrameworkEntityTypes.All`。這份清單目前有 10 個項目，各自對應一張資料庫資料表:
 
-| Entity type | Table |
+| Entity 型別 | 資料表 |
 |---|---|
 | `Language` | `languages` |
 | `File` | `files` |
@@ -81,9 +81,9 @@ struo-cms/
 
 四個後端專案形成一條嚴格、單向的依賴鏈 (可由各專案自身的 `.csproj` 讀出):
 
-| Project | References |
+| Project | 參照 |
 |---|---|
-| `Struo.Domain` | — (no project or package references at all) |
+| `Struo.Domain` | — (完全沒有任何 project 或 package 參照) |
 | `Struo.Application` | → `Struo.Domain` |
 | `Struo.Infrastructure` | → `Struo.Application`, `Struo.Domain` |
 | `Struo.Api` | → `Struo.Application`, `Struo.Infrastructure` |
@@ -105,59 +105,59 @@ entity 上，而非 domain 型別上。
 
 後端:
 
-| Component | Version | Source |
+| 元件 | 版本 | 來源 |
 |---|---|---|
 | .NET SDK | 10.0.0, `rollForward: latestMinor` | `global.json` |
-| Target framework | `net10.0` | `Directory.Build.props` |
-| C# language version | `latest` | `Directory.Build.props` |
-| Nullable reference types | enabled | `Directory.Build.props` |
+| 目標 Framework | `net10.0` | `Directory.Build.props` |
+| C# 語言版本 | `latest` | `Directory.Build.props` |
+| Nullable 參考型別 | 啟用 | `Directory.Build.props` |
 | ORM | SqlSugarCore 5.1.4.215 | `Directory.Packages.props` |
-| Runtime database | PostgreSQL (`postgres:17-alpine` in `docker-compose.yml`) | `docker-compose.yml` |
-| Test-only database | SQLite (`Microsoft.Data.Sqlite` 10.0.9) | `Directory.Packages.props` |
+| 執行期資料庫 | PostgreSQL (`docker-compose.yml` 中的 `postgres:17-alpine`) | `docker-compose.yml` |
+| 僅測試用資料庫 | SQLite (`Microsoft.Data.Sqlite` 10.0.9) | `Directory.Packages.props` |
 | GraphQL | HotChocolate.AspNetCore 16.4.0 | `Directory.Packages.props` |
-| API explorer | Scalar.AspNetCore 2.16.5 (Mars theme, Axios client) | `Directory.Packages.props`, `Program.cs` |
-| Logging | Serilog.AspNetCore 10.0.0 + Serilog.Sinks.File 7.0.0 | `Directory.Packages.props` |
-| Password hashing | Isopoh.Cryptography.Argon2 2.0.0 (Argon2id) | `Directory.Packages.props` |
-| Object storage (S3 backend) | AWSSDK.S3 4.0.25.3 | `Directory.Packages.props` |
-| Image transforms | NetVips 3.2.0 / NetVips.Native 8.18.4 | `Directory.Packages.props` |
-| Rich-text sanitization | HtmlSanitizer 9.1.968-beta | `Directory.Packages.props` |
-| Session store | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis 10.0.9 | `Directory.Packages.props` |
+| API 瀏覽工具 | Scalar.AspNetCore 2.16.5 (Mars 佈景主題、Axios client) | `Directory.Packages.props`, `Program.cs` |
+| 日誌 | Serilog.AspNetCore 10.0.0 + Serilog.Sinks.File 7.0.0 | `Directory.Packages.props` |
+| 密碼雜湊 | Isopoh.Cryptography.Argon2 2.0.0 (Argon2id) | `Directory.Packages.props` |
+| 物件儲存 (S3 後端) | AWSSDK.S3 4.0.25.3 | `Directory.Packages.props` |
+| 圖片轉換 | NetVips 3.2.0 / NetVips.Native 8.18.4 | `Directory.Packages.props` |
+| 富文本清理 | HtmlSanitizer 9.1.968-beta | `Directory.Packages.props` |
+| Session 存放 | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis 10.0.9 | `Directory.Packages.props` |
 | SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.9 | `Directory.Packages.props` |
-| Test runner | xUnit 2.9.3 | `Directory.Packages.props` |
+| 測試執行器 | xUnit 2.9.3 | `Directory.Packages.props` |
 
 前端 (版本以 `frontend/package.json` 所宣告者為準;caret 範圍依提交的 lockfile 解析):
 
-| Component | Version | Source |
+| 元件 | 版本 | 來源 |
 |---|---|---|
 | Vue | ^3.5.39 | `frontend/package.json` |
-| UI library | PrimeVue ^4.5.5 (+ `@primeuix/themes` ^2.0.3) | `frontend/package.json` |
-| Rich text editor | TipTap ^3.27.1 (starter-kit + extensions) | `frontend/package.json` |
-| State management | Pinia ^3.0.4 | `frontend/package.json` |
-| Router | vue-router ^5.1.0 | `frontend/package.json` |
-| Internationalization | vue-i18n ^11.4.6 | `frontend/package.json` |
-| Build tool | Vite ^8.1.1 | `frontend/package.json` |
-| Language | TypeScript ~6.0.2 | `frontend/package.json` |
-| E2E testing | Playwright ^1.61.1 | `frontend/package.json` |
+| UI 元件庫 | PrimeVue ^4.5.5 (+ `@primeuix/themes` ^2.0.3) | `frontend/package.json` |
+| 富文本編輯器 | TipTap ^3.27.1 (starter-kit + extensions) | `frontend/package.json` |
+| 狀態管理 | Pinia ^3.0.4 | `frontend/package.json` |
+| 路由 | vue-router ^5.1.0 | `frontend/package.json` |
+| 國際化 | vue-i18n ^11.4.6 | `frontend/package.json` |
+| 建置工具 | Vite ^8.1.1 | `frontend/package.json` |
+| 程式語言 | TypeScript ~6.0.2 | `frontend/package.json` |
+| E2E 測試 | Playwright ^1.61.1 | `frontend/package.json` |
 
 CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、Node.js `24`、pnpm `10`。
 
 ## 能力總覽
 
-| Capability | Status | Notes |
+| 能力 | 狀態 | 備註 |
 |---|---|---|
-| Metadata-driven collections | Core | `[CmsCollection]` attribute, scanned from assemblies listed in `Struo:ContentAssemblies` |
-| Identity & RBAC | Core | Argon2id hashing; cookie + bearer auth; per-collection read/write/delete grants |
-| SSO (OpenID Connect) | Core, off by default | `Oidc:Enabled = false` |
-| Files & media | Core | local-disk or S3-compatible backend; on-the-fly image transforms |
-| Revisions | Core, opt-in per collection | `[CmsCollection(Revisions = true)]` |
-| Soft delete | Core, opt-in per collection | `ISoftDeletable` |
-| Internationalization | Core | per-locale translation sidecar tables |
-| Site settings / branding | Core | singleton `site_settings` row, editable in-app by a super-admin |
-| Query DSL | Core | filter/sort/pagination with whitelist-validated field and relation paths |
-| REST API | Core | ASP.NET Core Controllers, unified response envelope |
-| GraphQL API | Core | HotChocolate, schema generated from the same collection metadata |
-| Admin SPA | Core | Vue 3 + PrimeVue + TipTap |
-| Blog sample | Demo, not shipped by default | `samples/Struo.Sample.Blog`; opt-in, deletable |
+| 中介資料驅動的集合 | Core | `[CmsCollection]` attribute，從 `Struo:ContentAssemblies` 中列出的組件掃描而來 |
+| 身分與 RBAC | Core | Argon2id 雜湊;cookie + bearer 認證;逐 collection 讀取/寫入/刪除授權 |
+| SSO (OpenID Connect) | Core，預設關閉 | `Oidc:Enabled = false` |
+| 檔案與媒體 | Core | 本機磁碟或 S3 相容後端;即時圖片轉換 |
+| 版本紀錄 | Core，逐 collection 選用 | `[CmsCollection(Revisions = true)]` |
+| 軟刪除 | Core，逐 collection 選用 | `ISoftDeletable` |
+| 國際化 | Core | 逐 locale 的翻譯附屬資料表 |
+| 站台設定 / 品牌 | Core | 單例 `site_settings` 資料列，可由超級管理員在應用程式內編輯 |
+| 查詢 DSL | Core | filter/sort/分頁，欄位與關聯路徑皆採白名單驗證 |
+| REST API | Core | ASP.NET Core Controllers，統一回應信封 (envelope) |
+| GraphQL API | Core | HotChocolate，schema 由相同的 collection 中介資料產生 |
+| 管理後台 SPA | Core | Vue 3 + PrimeVue + TipTap |
+| Blog 範例 | Demo，預設不出貨 | `samples/Struo.Sample.Blog`;選用啟用、可刪除 |
 
 ## 接下來該去哪
 
