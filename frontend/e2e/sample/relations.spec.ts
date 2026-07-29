@@ -6,14 +6,14 @@
 //   POST /api/items/category   { "name": "E2E Category" }
 //   POST /api/items/tag        { "name": "E2E Tag" }
 //
-// See frontend/e2e/README.md for the full live-gate prerequisites (API on :5080, seeded admin, etc).
+// See frontend/e2e/README.md for the full live-gate prerequisites (API on :5221, seeded admin, etc).
 // This spec is authored + collection-validated only (`playwright test --list`); the live run against
 // real PG+Redis is a separate user-driven gate (Phase 7d Task 18), not executed here.
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 // Caller passes a unique value per run so create-then-delete is self-cleaning
 // even if two runs overlap (e.g. CI + a local run against the same DB).
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
@@ -218,7 +218,7 @@ test('create, edit relations, verify RelatedList, then delete an article', async
 })
 
 // See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 // Rows this test creates; purged in afterEach. The seeded category is NOT purged (it pre-exists).
 let navCreated: { collection: string; id: string }[] = []
 test.afterEach(async ({ page }) => {

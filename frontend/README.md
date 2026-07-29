@@ -28,9 +28,9 @@ pnpm dev
 ```
 
 Starts Vite on `http://localhost:5173`. By default the SPA talks to the API
-through Vite's dev proxy (`/api` → `http://localhost:5080`, configured in
+through Vite's dev proxy (`/api` → `http://localhost:5221`, configured in
 `vite.config.ts`), so the browser sees the API as same-origin and no CORS
-setup is required. Start the API separately on port 5080 (see "Running the
+setup is required. Start the API separately on port 5221 (see "Running the
 API" below).
 
 ## Unit / component tests
@@ -67,15 +67,15 @@ yourself first. See `e2e/README.md` for full detail — summary:
 
    ```bash
    ASPNETCORE_ENVIRONMENT=Development \
-   ASPNETCORE_URLS=http://localhost:5080 \
+   ASPNETCORE_URLS=http://localhost:5221 \
    Database__DbType=Sqlite \
    "Database__ConnectionString=Data Source=/path/to/e2e-test.db" \
-   Auth__BootstrapAdmin__Email=admin@struo.local \
-   Auth__BootstrapAdmin__Password=change-me-please \
+   Auth__BootstrapAdmin__Email=admin@admin.com \
+   Auth__BootstrapAdmin__Password=admin \
    dotnet run --project src/Struo.Api --no-launch-profile
    ```
 
-   Wait for `http://localhost:5080/health/ready` to return 200.
+   Wait for `http://localhost:5221/health/ready` to return 200.
 
 2. From `frontend/`, run `pnpm e2e`. Override credentials with `E2E_EMAIL` /
    `E2E_PASSWORD` env vars if your seeded admin differs from the defaults
@@ -91,7 +91,7 @@ override it. There are two supported modes:
 
 Leave `VITE_API_BASE_URL` unset. The browser always talks to the Vite origin
 (`http://localhost:5173`); Vite proxies `/api/*` to the API on
-`http://localhost:5080`. The session cookie is `SameSite=Lax` and works
+`http://localhost:5221`. The session cookie is `SameSite=Lax` and works
 without any backend CORS configuration. This is what `pnpm dev` and `pnpm e2e`
 use out of the box.
 

@@ -1,8 +1,8 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 // Caller passes a unique value per run so create-then-delete is self-cleaning
 // even if two runs overlap (e.g. CI + a local run against the same DB).
 const STAMP = process.env.E2E_STAMP ?? 'e2e'

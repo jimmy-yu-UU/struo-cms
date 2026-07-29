@@ -5,8 +5,8 @@ import { test, expect } from '../fixtures'
 // This drives ItemFormView's "Item not found." state end-to-end against the
 // live 9a envelope.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 
 test('a non-existent item id renders the not-found view (driven by error code)', async ({ page }) => {
   await page.goto('/')

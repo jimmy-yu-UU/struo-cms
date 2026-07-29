@@ -20,13 +20,13 @@ import { type Page } from '@playwright/test'
 // and returns 409 as designed. If Task 1 regresses, createAndOpen()'s Save would 400 and never land
 // on the list, failing this spec before the conflict logic is even exercised.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // Backend origin for out-of-band writes. MUST share the auth cookie's host with the app: the SPA
 // (baseURL localhost:5173) receives a host-only cookie for `localhost`, which page.request replays
-// to localhost:5080 (cookies ignore port). Using 127.0.0.1 here would NOT carry the cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+// to localhost:5221 (cookies ignore port). Using 127.0.0.1 here would NOT carry the cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 const CONFLICT_TEXT =
   'This item was changed by someone else. Review your edits and save again to overwrite, or reload the latest version.'

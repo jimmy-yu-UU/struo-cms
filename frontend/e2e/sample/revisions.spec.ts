@@ -14,12 +14,12 @@ import { type Page } from '@playwright/test'
 // FORM's Title field — not just a toast — shows the pre-edit value after revert, plus an independent
 // API confirmation.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // Backend origin for out-of-band API calls. See conflict.spec.ts: localhost (not 127.0.0.1) so
 // page.request carries the app's auth cookie (host-only, ignores port).
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 let createdId: string | undefined
 
