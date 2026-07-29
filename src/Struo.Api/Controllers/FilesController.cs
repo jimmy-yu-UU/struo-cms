@@ -80,8 +80,8 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // (See Get above): non-published content is gated on CanRead("file"). 404 so existence
-        // isn't leaked.
+        // Same gate as Get above: a non-published file requires a genuine per-collection read grant,
+        // not merely a logged-in session. 404 (not 403) so existence isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
 
         // On-the-fly image transform. Only when the caller actually asked for one (at least one

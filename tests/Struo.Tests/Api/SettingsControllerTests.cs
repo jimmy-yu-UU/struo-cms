@@ -71,10 +71,10 @@ public class SettingsControllerTests(ApiFactory factory)
     /// request carries the session cookie (<see cref="Struo.Api.Auth.CsrfProtectionMiddleware"/>), which
     /// an anonymous request lacks. Either way the request falls through to the [Authorize] challenge.
     ///
-    /// The challenge is 401 as expected, and now carries
+    /// The challenge is 401 as expected, and carries
     /// an error envelope. Cookie auth's <c>OnRedirectToLogin</c> event (AuthWiring.cs) still sets
     /// <c>Response.StatusCode</c> directly and short-circuits before MVC's
-    /// <see cref="Struo.Api.Http.EnvelopeResultFilter"/> ever runs — but it now also writes the same
+    /// <see cref="Struo.Api.Http.EnvelopeResultFilter"/> ever runs — but it also writes the same
     /// envelope shape the filter would have produced, so [Authorize]-attribute-level 401s and
     /// in-action-exception 401s (covered by UnauthorizedDriftTests, thrown PermissionDeniedException
     /// mapped by DomainErrorMap) agree on <c>error.code</c>.</summary>
