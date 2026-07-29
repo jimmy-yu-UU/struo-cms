@@ -157,7 +157,7 @@ test('an untouched edit form (incl. loaded RichText body) navigates without a gu
   // No guard dialog must appear; navigation must proceed. If the dialog shows, the untouched form
   // (RichText load) is falsely dirty — a REAL finding, captured with a screenshot.
   if (await guardDialog(page).isVisible().catch(() => false)) {
-    await page.screenshot({ path: 'test-results/fe5-false-dirty-untouched.png', fullPage: true })
+    await page.screenshot({ path: 'test-results/unsaved-guard-false-dirty-untouched.png', fullPage: true })
     throw new Error('FINDING: untouched edit form triggered the Unsaved-changes guard (false-dirty)')
   }
   await expect(page).toHaveURL(/\/collections\/category$/)

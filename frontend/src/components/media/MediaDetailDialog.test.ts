@@ -208,7 +208,7 @@ describe('MediaDetailDialog', () => {
     expect(w.emitted('saved')).toBeTruthy()
   })
 
-  it('copies the file URL and shows a success toast (SEC-12)', async () => {
+  it('copies the file URL and shows a success toast', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
@@ -217,7 +217,7 @@ describe('MediaDetailDialog', () => {
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: 'URL copied' }))
   })
 
-  it('shows a failure toast when the clipboard write rejects, instead of failing silently (SEC-12)', async () => {
+  it('shows a failure toast when the clipboard write rejects, instead of failing silently', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
     const w = mountDialog()
@@ -226,7 +226,7 @@ describe('MediaDetailDialog', () => {
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'Could not copy URL' }))
   })
 
-  it('disables the Title/Alt inputs while loading, not just when read-only (FE-30)', async () => {
+  it('disables the Title/Alt inputs while loading, not just when read-only', async () => {
     let resolveGet!: (v: unknown) => void
     vi.spyOn(itemsApi, 'get').mockReturnValue(new Promise((r) => (resolveGet = r)) as never)
     const w = mountDialog()
