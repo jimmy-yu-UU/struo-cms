@@ -48,7 +48,7 @@ public static class SchemaGuard
         await AssertUniqueCoverAsync(db, dbType, "revisions",
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
             "the `revisions` table has no composite UNIQUE index over " +
-            "(collectionname, itemid, revisionnumber). This is the DB-4 backstop that makes a concurrent " +
+            "(collectionname, itemid, revisionnumber). This index is the backstop that makes a concurrent " +
             "revision-number race fail closed. Apply db/migrations/001-core-baseline.sql (live " +
             "PostgreSQL), or recreate the dev schema so InitTables re-emits it from Revision's " +
             "UniqueGroupNameList.", ct);
@@ -61,7 +61,7 @@ public static class SchemaGuard
             await AssertUniqueCoverAsync(db, dbType, sidecar.TableName,
                 [sidecar.ForeignKeyColumn, sidecar.LocaleColumn], requireTableExists: false,
                 $"the `{sidecar.TableName}` table has no UNIQUE index over " +
-                $"({sidecar.ForeignKeyColumn}, {sidecar.LocaleColumn}). This is the DB-10 backstop that " +
+                $"({sidecar.ForeignKeyColumn}, {sidecar.LocaleColumn}). This index is the backstop that " +
                 "keeps per-locale overlay reads deterministic. Apply the migration that creates this " +
                 "sidecar's composite UNIQUE index (db/migrations/001-core-baseline.sql for a core " +
                 "sidecar, or the fork's own NNN-… migration for its own sidecar), or recreate the dev " +
