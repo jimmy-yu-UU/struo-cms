@@ -10,10 +10,10 @@ the API — and where in `frontend/src` each of those lives.
 Most of what looks like "admin UI work" is not. Chapter 4 shows that adding a `[CmsCollection]` with
 `[CmsField]`s is enough on its own to make a full collection — sidebar entry, paginated list with
 schema-driven columns, and a create/edit form — appear with zero Vue code touched. Chapter 2's "no
-Content group with zero collections" and chapter 4's "the sidebar now shows a Content group" describe
-the same schema-driven rendering, before and after adding one. The admin SPA never hardcodes a
-collection's fields, columns or labels; the schema endpoint is the only place that information comes
-from.
+`Content` navigation group at all" with zero collections, and chapter 4's "the SPA's sidebar now shows a
+`Content` navigation group with your collection in it" once one exists, describe the same schema-driven
+rendering, before and after adding one. The admin SPA never hardcodes a collection's fields, columns or
+labels; the schema endpoint is the only place that information comes from.
 
 Reach into `frontend/src` only when the requirement is not expressible as metadata:
 
@@ -34,7 +34,7 @@ territory and needs no change under `frontend/src`.
 |---|---|
 | `api/` | One thin module per REST resource — `apiClient.ts` is the shared envelope-aware fetch wrapper; `itemsApi.ts`, `schemaApi.ts`, `filesApi.ts`, `languagesApi.ts`, `rbacApi.ts`, `settingsApi.ts`, `appConfigApi.ts` — typed calls, no business logic. |
 | `assets/` | `theme.css` — the OKLch design-token custom properties and the shell/layout CSS built on them. |
-| `components/` | `fields/` (one editor component per field interface, chapter 5), `common/` (`PageHeader`, `ListToolbar`, `TableFooter` — shared across every list/form view), `shell/` (topbar, sidebar nav item, theme toggle, UI language switcher, brand mark), `dashboard/`, `media/`, `revisions/`, `rbac/`. |
+| `components/` | `ItemForm.vue` (the generated item form) directly under `components/`, plus `fields/` (one editor component per field interface, chapter 5), `common/` (`PageHeader`, `ListToolbar`, `TableFooter` — shared across every list/form view), `shell/` (topbar, sidebar nav item, theme toggle, UI language switcher, brand mark), `dashboard/`, `media/`, `revisions/`, `rbac/`. |
 | `composables/` | Cross-cutting reactive logic, e.g. `useDashboardData.ts`. |
 | `i18n/` | `index.ts` — the `vue-i18n` instance (`legacy: false`), wired to `locales/`. |
 | `layouts/` | `AppShell.vue` — the topbar + sidebar + content grid every authenticated route renders inside. |
@@ -50,11 +50,12 @@ territory and needs no change under `frontend/src`.
 
 Two layers cooperate, and both must change together for a re-theme to stay consistent:
 
-1. **`frontend/src/assets/theme.css`** — plain CSS custom properties in OKLch (`--bg`, `--surface`,
-   `--fg`, `--muted`, `--border`, `--accent`, plus `--success`/`--warn`/`--danger`, radii, shadows,
-   `--sidebar-w`), declared once on `:root` for light and re-declared on `.app-dark` for dark. All of
-   the shell/layout CSS in the same file (`.shell`, `.topbar`, `.sidebar`, `.nav-item`, …) reads these
-   variables — it never hardcodes a color.
+1. **`frontend/src/assets/theme.css`** — plain CSS custom properties, the core palette (`--bg`,
+   `--surface`, `--fg`, `--muted`, `--border`, `--accent`) in OKLch, plus `--success`/`--warn`/`--danger`
+   as plain hex (`#16a34a`/`#d97706`/`#dc2626` light, `#4ade80`/`#fbbf24`/`#f87171` dark — not OKLch),
+   radii, shadows, `--sidebar-w`, declared once on `:root` for light and re-declared on `.app-dark` for
+   dark. All of the shell/layout CSS in the same file (`.shell`, `.topbar`, `.sidebar`, `.nav-item`, …)
+   reads these variables — it never hardcodes a color.
 2. **`frontend/src/theme/preset.ts`** — a PrimeVue `definePreset(Aura, …)` (`StruoPreset`) that maps
    PrimeVue's own semantic tokens (`primary`, `surface`, and per-color-scheme `color`/`hoverColor`/
    `activeColor`) onto the **same** palette (`sky` for primary, `slate` for surface), so PrimeVue's own

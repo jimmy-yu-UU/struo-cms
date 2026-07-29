@@ -188,9 +188,11 @@ configuration during service registration, not through `IOptions<T>` — restart
 
 If `Enabled` is `true`, startup validation requires `Authority`, `ClientId` and `ClientSecret` to all
 be non-empty. JIT provisioning links an external identity to an existing local account **by email
-equality**, and `RequireEmailVerified`/`AllowedTenantId`/`AllowedEmailDomains` all default to
-permissive — a production deployment enabling OIDC should pin trust explicitly (single-tenant
-`Authority` plus `AllowedTenantId` and/or `AllowedEmailDomains`, and `RequireEmailVerified = true`)
+equality**, once the tenant/verification/domain checks pass. `RequireEmailVerified` and
+`AllowedEmailDomains` default to permissive; `AllowedTenantId` does not — it ships as the non-matching
+placeholder `REPLACE_TENANT_ID`, which fails closed and rejects every external tenant until it is
+replaced with the real one. A production deployment enabling OIDC should still pin all three explicitly
+(a real single-tenant `AllowedTenantId` and/or `AllowedEmailDomains`, and `RequireEmailVerified = true`)
 rather than rely on the zero-config defaults. Restart required for all keys in this section.
 
 ## `Serilog`
