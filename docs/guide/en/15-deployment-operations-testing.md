@@ -125,8 +125,8 @@ $ ls -la src/Struo.Api/logs
 -rw-r--r-- 1 AzureAD+YuJimmy 4096 185558 Jul 29 17:52 struo-20260729.log
 ```
 
-(24 files total in this checkout, `struo-20260625.log` through `struo-20260729.log`; the middle 20 are
-elided above.)
+(one file per calendar day; oldest and newest shown above, the files in between elided — the directory
+grows by one entry per day on any running install, so an exact count would go stale immediately.)
 
 Like every other option in chapter 3, the Serilog configuration is built once at startup (both the
 bootstrap logger and the full logger); changing `Serilog:*` needs a process restart, the file watcher
