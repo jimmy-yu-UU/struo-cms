@@ -303,7 +303,7 @@ public static class MetadataScanner
     /// <c>List&lt;TChild&gt;</c> property. Each sub-property carrying <c>[CmsField]</c> is scanned with
     /// the same <see cref="BuildField"/> logic; the sub-field interface must be in
     /// <see cref="RepeaterAllowedInterfaces"/> and must not be translatable. Fails fast on any
-    /// violation (Task 2 covers the guards).
+    /// violation of these guards.
     /// </summary>
     private static IReadOnlyList<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
     {

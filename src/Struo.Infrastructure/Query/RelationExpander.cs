@@ -44,9 +44,9 @@ public sealed class RelationExpander(
         Func<object, object> parentId, Func<object, string, object?> readProp,
         string? locale = null, CancellationToken ct = default)
     {
-        // filterResolver is consumed for nested-filter push-down (Task 6, O2M/M2M target-side
-        // rewrite) and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing
-        // (Task 7, ApplyListArgs). Guarded here too so a null DI registration fails fast.
+        // filterResolver is consumed for nested-filter push-down (O2M/M2M target-side rewrite)
+        // and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
+        // ApplyListArgs below). Guarded here too so a null DI registration fails fast.
         ArgumentNullException.ThrowIfNull(filterResolver);
         ArgumentNullException.ThrowIfNull(options);
 

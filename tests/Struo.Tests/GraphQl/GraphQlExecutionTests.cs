@@ -190,7 +190,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task 9 N+1 regression lock: two article rows share the same heroImageId — the File
+    /// N+1 regression lock: two article rows share the same heroImageId — the File
     /// resolver must batch every requested id across all sibling rows into exactly ONE
     /// "file" QueryAsync call (not one per row) via <see cref="FileFieldResolvers"/>'s
     /// BatchDataLoader, and the returned File node's fields must be resolvable.
@@ -290,7 +290,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task 10: selecting a relation sub-field (<c>category { name }</c>) on the list element must
+    /// Selecting a relation sub-field (<c>category { name }</c>) on the list element must
     /// build a <see cref="DeepSpec"/> containing exactly that relation name and pass it into the
     /// captured <see cref="QueryModel"/> — the fake data source then returns an already-nested
     /// "category" dict on the article row (mirroring ItemService's deep-expansion shape), which the
@@ -449,7 +449,7 @@ public class GraphQlExecutionTests
         item.GetProperty("b").GetProperty("name").GetString().Should().Be("News");
     }
 
-    /// <summary>Task 10: no relation sub-field selected -> Deep stays null (no over-fetching).</summary>
+    /// <summary>No relation sub-field selected -> Deep stays null (no over-fetching).</summary>
     [Fact]
     public async Task Relation_not_selected_leaves_Deep_null()
     {

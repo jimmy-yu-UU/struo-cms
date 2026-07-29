@@ -75,7 +75,7 @@ public class SoftDeleteRepositoryTests
         Assert.NotNull(await h.Repository.GetByIdAsync("article", id.ToString(), DeletedFilter.With, default));
     }
 
-    // ── Task 6: ItemService soft-delete/purge/restore end-to-end ───────────────
+    // ── ItemService soft-delete/purge/restore end-to-end ───────────────
 
     private static readonly Guid KnownUser = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 

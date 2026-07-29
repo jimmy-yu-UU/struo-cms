@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Task 6 (ship the host without the Blog sample wired in) removed the literal
+/// Shipping the host without the Blog sample wired in removed the literal
 /// <c>"Struo.Sample.Blog"</c> entry from <c>src/Struo.Api/appsettings.json</c>, so
 /// <c>Struo:ContentAssemblies</c> is now empty by default. Every <c>WebApplicationFactory&lt;Program&gt;</c>
 /// in this suite (<see cref="ApiFactory"/> and <c>CorsAndCookieTests.CorsApiFactory</c>) already layers a

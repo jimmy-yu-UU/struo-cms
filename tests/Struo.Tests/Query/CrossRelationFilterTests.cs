@@ -101,7 +101,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     public async Task Filter_o2m_category_by_article_id()
     {
         // NOTE: filtering an o2m relation by the child's translatable `title` is locale-aware
-        // relation querying (Task 5). Here we filter the o2m relation by the child's
+        // relation querying. Here we filter the o2m relation by the child's
         // non-translatable own-collection field (id) to exercise the same two-phase resolution.
         var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "category", new { name = "O2MFilterCat" });

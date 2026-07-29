@@ -8,8 +8,8 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Task 10 (8c.3b): GraphQL to-many relation fields (e.g. <c>category { articles(...) }</c>)
-/// declared <c>filter</c>/<c>sort</c>/<c>limit</c>/<c>offset</c> arguments in the schema at Task 9,
+/// (8c.3b): GraphQL to-many relation fields (e.g. <c>category { articles(...) }</c>)
+/// declared <c>filter</c>/<c>sort</c>/<c>limit</c>/<c>offset</c> arguments in the schema,
 /// but <see cref="Struo.Api.GraphQl.CollectionResolvers"/>'s selection-walk (<c>BuildDeep</c>) never
 /// read them into the <see cref="Struo.Domain.Query.DeepRelationSpec"/> the query engine consumes —
 /// so the arguments were schema-only decoration with no effect. These two tests drive the real
