@@ -12,8 +12,8 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Builds the full dynamic schema (StruoTypeModule) against the FakeMetadataFixtures fixtures (no DB)
-/// and asserts on the printed SDL — the schema-shape gate (object/list/filter types + root
+/// Builds the full dynamic schema (StruoTypeModule) against FakeMetadataFixtures (no DB) and
+/// asserts on the printed SDL — the schema-shape gate (object/list/filter types + root
 /// query fields per collection, incl. relations/files/repeater/translations, hidden/password excluded).
 /// </summary>
 public class GraphQlSchemaTests

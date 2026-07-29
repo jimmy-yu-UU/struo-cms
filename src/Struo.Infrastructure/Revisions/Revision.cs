@@ -31,7 +31,9 @@ public sealed class Revision
     public string Operation { get; set; } = "";
 
     // MUST be `text`: SqlSugar's default varchar(255) overflows on Postgres for a realistic snapshot
-    // (a recurring bug class elsewhere in the codebase). Explicit here rather than via a convention.
+    // (the same content-column-widening problem SqlSugarClientFactory's EntityService hook solves
+    // for [CmsField] content interfaces). Explicit here rather than via a convention, because
+    // Snapshot is a plain framework column with no [CmsField] interface to key off of.
     [SugarColumn(ColumnDataType = "text")] public string Snapshot { get; set; } = "";
 
     public DateTime CreatedAt { get; set; }

@@ -232,11 +232,13 @@ test.afterEach(async ({ page }) => {
 
 // Live gate: a RelatedList row click is a same-route-record, params-only navigation
 // (`collections/category/<id>` -> `collections/article/<id>`, both the `collection-item` route).
-// Without the route-update dirty guard, AppShell's keyed <router-view> would still reuse the
-// ItemFormView instance: init() would never re-run (form showing stale category data) and
-// onBeforeRouteLeave would never fire (dirty edits silently discarded). With the guard, it
-// prompts, and the keyed <router-view> remounts + reloads the target record on accept.
-// Category.Articles is the sample's RelatedList (see the assertion above).
+// Vue Router treats this as an update of the existing component, not a leave, so
+// onBeforeRouteLeave never fires — ItemFormView's own onBeforeRouteUpdate guard is what prompts
+// for the dirty form here; without it, the edits would be silently discarded. Separately,
+// AppShell's <router-view> is keyed on route.path, which is what makes accepting the prompt
+// actually remount ItemFormView (init() re-runs, loading the target record) instead of Vue
+// reusing the existing instance in place. Category.Articles is the sample's RelatedList (see the
+// assertion above).
 test('dirty form + RelatedList row click prompts unsaved guard, then remounts to the target record', async ({ page }) => {
   await login(page)
 

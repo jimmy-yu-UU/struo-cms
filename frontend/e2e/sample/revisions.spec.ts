@@ -109,8 +109,8 @@ function revertButton(page: Page) {
   return page.getByRole('button', { name: 'Revert to this revision' })
 }
 // RevisionHistoryDrawer's ConfirmDialog uses `group="revisions"` specifically so it never doubles up
-// with ItemFormView's own unscoped <ConfirmDialog> (the FE-R7 live-smoke duplicate-dialog bug — see
-// MEMORY fe-r7-revisions-ui-done.md) — only the matching-group dialog ever renders visible content.
+// with ItemFormView's own unscoped <ConfirmDialog> — both mount on the same page, and without the
+// group scoping both would render visible content for the same confirm() call.
 function revertConfirmDialog(page: Page) {
   return page.getByRole('alertdialog').filter({ hasText: 'Confirm revert' })
 }
