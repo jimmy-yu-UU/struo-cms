@@ -12,8 +12,10 @@ this chapter.
 
 `samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj` is a plain class library referencing
 `Struo.Domain` (for the `[Cms*]` attributes) and `Struo.Infrastructure` (for SqlSugar, transitively) —
-the second of the two variants chapter 4's checklist allows for a content project's SqlSugar
-dependency, the other being a direct `SqlSugarCore` package reference. It declares three real
+one of the two variants chapter 4's checklist allows for a content project's SqlSugar dependency. The
+sample's `.csproj` actually carries **both** variants at once: that transitive path through
+`Struo.Infrastructure`, plus its own direct `SqlSugarCore` `PackageReference` — the second variant the
+checklist allows. It declares three real
 collections — `Article`, `Tag`, `Category` — plus `ArticleTranslation` (`Article`'s translation sidecar,
 not a collection of its own), a pure `ArticleTag` many-to-many junction (not `[CmsCollection]`-attributed
 either), and `FaqItem`, a plain POCO used as a Repeater sub-field type.

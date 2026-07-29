@@ -193,7 +193,7 @@ The extension point for file storage backends is `IFileStorage`
 implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
-(`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs:26-30`) by a
+(`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs:26-32`) by a
 factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, anything else —
 including the default — selects `LocalFileStorage`), registered singleton. Adding a third backend means
 implementing `IFileStorage` and extending that lambda's branch (or switch) to select it. See

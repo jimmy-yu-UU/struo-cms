@@ -82,12 +82,15 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 - **`InitTables` is Development-only.** Production schema changes go through reviewed migrations under
   `db/migrations/` applied by `MigrationRunner` (PostgreSQL-only; a hard no-op on any other backend).
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
-  GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**:
-  the write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/`ItemService.UpdateCoreAsync`
-  strip only `IsSystem`/`ReadOnly` fields) — a client that already knows a hidden field's name can still
-  set it via a normal create/update. Do not rely on `Hidden` alone as a write guard for a privileged
-  column; pair it with `ReadOnly` (or keep the field off the write path some other way) if it must never
-  be client-writable.
+  GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
+  on REST: the REST write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/
+  `ItemService.UpdateCoreAsync` strip only `IsSystem`/`ReadOnly` fields) — a client that already knows a
+  hidden field's name can still set it via a normal REST create/update. GraphQL is stricter here:
+  `CollectionSchemaBuilder` (`src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs:156,176,273`) excludes
+  `Hidden`/`ReadOnly`/`IsSystem` fields from every create/update input type, so a hidden field never
+  appears as a GraphQL mutation argument in the first place. Do not rely on `Hidden` alone as a write
+  guard for a privileged column; pair it with `ReadOnly` (or keep the field off the write path some
+  other way) if it must never be client-writable.
 
 ## Task playbooks (condensed — see `docs/ai/task-playbooks.md` for the full form)
 

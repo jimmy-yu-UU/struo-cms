@@ -10,7 +10,9 @@
 
 `samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj` 是一個單純的類別庫，參照了 `Struo.Domain`
 (取得 `[Cms*]` attribute)與 `Struo.Infrastructure`(間接取得 SqlSugar)——這是第 4 章檢查清單針對
-內容專案的 SqlSugar 相依性所允許的兩種變體中的第二種，另一種則是直接參照 `SqlSugarCore` 套件。它宣告
+內容專案的 SqlSugar 相依性所允許的兩種變體之一。這個範例的 `.csproj` 實際上同時帶有**兩種**變體：
+除了透過 `Struo.Infrastructure` 的間接路徑之外，它自己還有一個直接的 `SqlSugarCore`
+`PackageReference`——也就是檢查清單允許的第二種變體。它宣告
 了三個真正的集合——`Article`、`Tag`、`Category`——外加 `ArticleTranslation`(`Article` 的翻譯附屬
 資料表，本身並非一個集合)、一個純粹的 `ArticleTag` 多對多 junction(同樣沒有標示
 `[CmsCollection]`)，以及 `FaqItem`，一個被用作 Repeater 子欄位型別的單純 POCO。

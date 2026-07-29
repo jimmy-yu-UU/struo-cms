@@ -149,12 +149,13 @@ how the user authenticated.
 **case-insensitively at the store layer** against existing local users. If no local user matches, one is
 created on the spot (`store.CreateExternalUserAsync`) — this is what "JIT" (just-in-time) means here: no
 separate admin-driven provisioning step is required for a first-time external sign-in to work. Three
-guards, all **permissive by default** and each independently checked before the email match runs
-(`ExternalLoginService.ResolveOrProvisionAsync:13-30`):
+guards are each independently checked before the email match runs
+(`ExternalLoginService.ResolveOrProvisionAsync:13-30`); only two of them are permissive by default —
+tenant pinning ships **fail-closed**:
 
 | Guard | Config key | Default | Effect when set |
 |---|---|---|---|
-| Tenant pinning | `Oidc:AllowedTenantId` | unset (unrestricted) | Rejects (`TenantNotAllowed`) unless the token's `tid` claim matches exactly. |
+| Tenant pinning | `Oidc:AllowedTenantId` | ships as the non-matching placeholder `REPLACE_TENANT_ID` (`appsettings.json`) — fails closed, rejecting every real tenant until replaced | Rejects (`TenantNotAllowed`) unless the token's `tid` claim matches exactly. |
 | Verified email | `Oidc:RequireEmailVerified` | `false` | Rejects (`EmailNotVerified`) unless the token's `email_verified` claim is `true`. |
 | Domain allow-list | `Oidc:AllowedEmailDomains` | `[]` (unrestricted) | Rejects (`DomainNotAllowed`) unless the email's domain is in the list. |
 

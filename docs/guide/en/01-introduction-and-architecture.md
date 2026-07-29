@@ -103,9 +103,11 @@ Note that `Struo.Api` does not reference `Struo.Domain` directly — only transi
 persistence attributes live on entities in `Struo.Infrastructure`, not on domain types.
 
 **Framework code never references `samples/*`.** None of the four `src/Struo.*` projects has a
-`ProjectReference` into `samples/`; only `tests/Struo.Tests.csproj` (which intentionally exercises the
-sample) does. This is what makes the sample truly optional and deletable — removing
-`samples/Struo.Sample.Blog` cannot break the core.
+`ProjectReference` into `samples/`; only `tests/Struo.Tests/Struo.Tests.csproj` (which intentionally
+exercises the sample) does. This is what makes the sample truly optional and deletable at the
+`src/Struo.*` level — removing `samples/Struo.Sample.Blog` cannot break the core. A naive `rm -rf
+samples/` still breaks a solution-level `dotnet build` (`StruoCMS.slnx` and the test project reference
+above), though — see chapter 16's removal checklist for the full, safe procedure.
 
 ## Technology stack
 

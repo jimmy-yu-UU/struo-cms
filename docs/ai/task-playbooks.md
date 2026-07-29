@@ -206,11 +206,14 @@ README.md`.
    `AuditableEntity`-derived collection (Playbook 1): `AuditableEntity.CreatedAt`/`UpdatedAt`
    (`src/Struo.Domain/Auditing/AuditableEntity.cs`) are plain `DateTime` properties with no
    `[SugarColumn]` override, so SqlSugar's CodeFirst default for `DateTime` is what dev `InitTables`
-   actually produces for those two columns — bare `timestamp without time zone`, confirmed throughout
-   `001-core-baseline.sql`'s existing `AuditableEntity`-backed tables — not `timestamptz`. Hand-writing
-   `timestamptz` for a new collection's `createdat`/`updatedat` in its migration, without also giving
-   the entity an explicit column-type override, diverges from what `InitTables` produces for the same
-   entity — exactly the parity Playbook 1 step 11 asks you to confirm.
+   actually produces for those two columns when the entity doesn't override them — bare
+   `timestamp without time zone`. That's not uniform across the baseline, though: `MediaFolder`
+   (`src/Struo.Infrastructure/Files/MediaFolder.cs`) is `AuditableEntity`-backed but overrides both
+   columns to `timestamptz`, and `001-core-baseline.sql`'s `media_folders` table reflects it — so check
+   the specific table you are altering rather than assuming either type. Hand-writing `timestamptz` for
+   a new collection's `createdat`/`updatedat` in its migration, without also giving the entity an
+   explicit column-type override, diverges from what `InitTables` produces for the same entity —
+   exactly the parity Playbook 1 step 11 asks you to confirm.
 5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
    tracks applied migrations by filename only (`schema_migrations (filename text PRIMARY KEY, appliedat
    timestamptz)`), with no checksum, so an edited file with an already-applied filename is silently

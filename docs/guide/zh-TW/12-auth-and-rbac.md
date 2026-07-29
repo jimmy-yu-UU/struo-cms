@@ -137,12 +137,13 @@ Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OnT
 **以電子郵件為基礎的 JIT 佈建：** 解析程序以外部身分的電子郵件為錨點，在儲存層**以不分大小寫**的方式與
 現有本機使用者比對。若沒有任何本機使用者相符，就會當場建立一個(`store.CreateExternalUserAsync`)——
 這正是「JIT」(just-in-time，即時)在此處的意義：第一次以外部身分登入時，不需要另一個由管理員主導的
-佈建步驟。有三道防護，**預設皆為寬鬆**，且各自獨立地在電子郵件比對執行之前被檢查
-(`ExternalLoginService.ResolveOrProvisionAsync:13-30`)：
+佈建步驟。有三道防護，各自獨立地在電子郵件比對執行之前被檢查
+(`ExternalLoginService.ResolveOrProvisionAsync:13-30`)；但只有其中兩道**預設為寬鬆**——租戶鎖定出貨時
+是**失敗封閉 (fail closed)**的：
 
 | 防護 | 設定鍵 | 預設值 | 設定後的效果 |
 |---|---|---|---|
-| 租戶鎖定 | `Oidc:AllowedTenantId` | 未設定(不受限) | 除非 token 的 `tid` claim 完全相符，否則拒絕(`TenantNotAllowed`)。 |
+| 租戶鎖定 | `Oidc:AllowedTenantId` | 出貨時為不會匹配任何東西的預留值 `REPLACE_TENANT_ID`(`appsettings.json`)——失敗封閉，拒絕每一個真實 tenant 直到被換掉為止 | 除非 token 的 `tid` claim 完全相符，否則拒絕(`TenantNotAllowed`)。 |
 | 電子郵件已驗證 | `Oidc:RequireEmailVerified` | `false` | 除非 token 的 `email_verified` claim 為 `true`，否則拒絕(`EmailNotVerified`)。 |
 | 網域允許清單 | `Oidc:AllowedEmailDomains` | `[]`(不受限) | 除非電子郵件的網域在清單之中，否則拒絕(`DomainNotAllowed`)。 |
 
