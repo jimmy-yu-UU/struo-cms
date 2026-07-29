@@ -364,6 +364,5 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-
   完整內容，包括它們「只在第一次啟動時生效」的但書。
 - 第 11 章 [檔案、媒體與圖片轉換](11-files-and-media.md)，涵蓋 `IFileAccessPolicy`——RBAC 在一般
   `ItemService` 路徑之外被強制執行的唯一場合。
-- 第 13 章 [版本紀錄與軟刪除](13-revisions-and-soft-delete.md)，涵蓋 `DeletedAccessGuard`——本章這些
-  防護所建立於其上的 `CanRead`/`CanWrite`/`CanDelete` 授權之中，唯一比普通 `CanRead` 更嚴格的讀取端
-  權限檢查。
+- 第 13 章 [版本紀錄與軟刪除](13-revisions-and-soft-delete.md)，涵蓋 `DeletedAccessGuard`——唯一比
+  普通 `CanRead` 更嚴格的讀取端權限檢查。
