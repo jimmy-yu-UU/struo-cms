@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Revisions;
 using Struo.Tests.Support;
@@ -10,11 +11,14 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// DB-5: SchemaGuard is a dev-startup fail-fast that asserts the critical constraints the app depends on
-/// for correctness actually exist in the connected database — the one that matters is the revisions
-/// composite UNIQUE index (DB-4 backstop against the lost-update race). If it is missing, the guard
-/// throws instead of letting the app run with a silent correctness gap. The index NAME differs by
-/// backend/creation-path (PG migration = ux_revisions_item_no; SQLite CodeFirst =
-/// Index_revisions_..._Unique), so the guard detects it by uniqueness + column coverage, not by name.
+/// for correctness actually exist in the connected database. Two kinds are covered: (a) the revisions
+/// composite UNIQUE index (DB-4 backstop against the lost-update race) — always asserted, never
+/// caller-supplied; and (b) a UNIQUE (fk, locale) index on each translation sidecar the CALLER passes in
+/// as a <see cref="TranslationSidecarDescriptor"/> (DB-10) — SchemaGuard itself carries no table names, so
+/// a fork's own sidecars are protected the same way core's file_translations is (Program.cs derives the
+/// descriptor list from metadata). The index NAME differs by backend/creation-path (PG migration =
+/// ux_revisions_item_no; SQLite CodeFirst = Index_revisions_..._Unique), so the guard detects it by
+/// uniqueness + column coverage, not by name.
 /// </summary>
 public sealed class SchemaGuardTests
 {
@@ -35,7 +39,7 @@ public sealed class SchemaGuardTests
         {
             client.CodeFirst.InitTables(typeof(Revision)); // UniqueGroupNameList -> composite unique index
 
-            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [], default);
             await act.Should().NotThrowAsync();
         }
     }
@@ -52,61 +56,85 @@ public sealed class SchemaGuardTests
                 "CREATE TABLE revisions (id text primary key, collectionname text, " +
                 "itemid text, revisionnumber integer, operation text, snapshot text, createdat text)");
 
-            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [], default);
             (await act.Should().ThrowAsync<InvalidOperationException>())
                 .Which.Message.Should().Contain("revisions");
         }
     }
 
-    // ── DB-10: the guard also asserts a UNIQUE (fk, locale) on each translation sidecar that EXISTS ──
+    // ── DB-10: caller-supplied translation sidecar descriptors ──
 
     [Fact]
-    public async Task Passes_when_translation_unique_indexes_present()
+    public async Task Passes_when_a_sidecar_unique_index_is_present()
     {
         var (db, client) = NewClient();
         using (db)
         {
             client.CodeFirst.InitTables(typeof(Revision));
-            client.CodeFirst.InitTables(typeof(Struo.Sample.Blog.ArticleTranslation)); // UniqueGroupNameList
-            client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Files.FileTranslation));
+            client.Ado.ExecuteCommand(
+                "CREATE TABLE widget_translations (id integer primary key, widgetid text, locale text)");
+            client.Ado.ExecuteCommand(
+                "CREATE UNIQUE INDEX ux_widget_translations_fk_locale ON widget_translations (widgetid, locale)");
 
-            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            var sidecars = new[] { new TranslationSidecarDescriptor("widget_translations", "widgetid", "locale") };
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, sidecars, default);
             await act.Should().NotThrowAsync();
         }
     }
 
     [Fact]
-    public async Task Throws_when_article_translations_lacks_the_fk_locale_unique_index()
+    public async Task Throws_when_a_sidecar_lacks_the_fk_locale_unique_index()
     {
         var (db, client) = NewClient();
         using (db)
         {
             client.CodeFirst.InitTables(typeof(Revision)); // valid revisions unique (checked first)
-            // article_translations WITH the lookup key but WITHOUT the unique over (articleid, locale) —
-            // simulating a DB where 011 never ran.
+            // widget_translations WITH the lookup key but WITHOUT the unique over (widgetid, locale).
             client.Ado.ExecuteCommand(
-                "CREATE TABLE article_translations (id integer primary key, articleid text, " +
-                "locale text, title text)");
+                "CREATE TABLE widget_translations (id integer primary key, widgetid text, locale text)");
             client.Ado.ExecuteCommand(
-                "CREATE INDEX ix_article_translations_fk_locale ON article_translations (articleid, locale)");
+                "CREATE INDEX ix_widget_translations_fk_locale ON widget_translations (widgetid, locale)");
 
-            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            var sidecars = new[] { new TranslationSidecarDescriptor("widget_translations", "widgetid", "locale") };
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, sidecars, default);
             (await act.Should().ThrowAsync<InvalidOperationException>())
-                .Which.Message.Should().Contain("article_translations");
+                .Which.Message.Should().Contain("widget_translations");
         }
     }
 
     [Fact]
-    public async Task Skips_a_translation_table_that_does_not_exist()
+    public async Task Skips_a_sidecar_table_that_does_not_exist()
     {
         var (db, client) = NewClient();
         using (db)
         {
-            // Only revisions exists; neither translation sidecar is present -> guard must not require
-            // a unique index on a table the database does not have.
+            // Only revisions exists; the sidecar table is not present -> guard must not require a
+            // unique index on a table this database does not have (a fork may not use every sidecar).
             client.CodeFirst.InitTables(typeof(Revision));
 
-            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, default);
+            var sidecars = new[] { new TranslationSidecarDescriptor("widget_translations", "widgetid", "locale") };
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, sidecars, default);
+            await act.Should().NotThrowAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Passes_for_file_translations_descriptor_resolved_the_way_Program_cs_resolves_it()
+    {
+        var (db, client) = NewClient();
+        using (db)
+        {
+            client.CodeFirst.InitTables(typeof(Revision));
+            client.CodeFirst.InitTables(typeof(FileTranslation)); // UniqueGroupNameList -> composite unique
+
+            // Same resolution Program.cs performs at the call site: CLR type/property names ->
+            // physical table/column names via EntityMaintenance, never a hardcoded literal.
+            var sidecar = new TranslationSidecarDescriptor(
+                client.EntityMaintenance.GetTableName(typeof(FileTranslation)),
+                client.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation)),
+                client.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.Locale), typeof(FileTranslation)));
+
+            var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [sidecar], default);
             await act.Should().NotThrowAsync();
         }
     }
