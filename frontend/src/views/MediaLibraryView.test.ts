@@ -59,7 +59,7 @@ function mountView() {
 
 /** Routes itemsApi.list by collection: 'mediafolder' always resolves to `folders`; 'file' calls
  *  pop sequentially from `fileResults` (repeating the last entry once exhausted), matching the
- *  hand-authored `.mockResolvedValueOnce` chains the FE-27 tests relied on before folders existed. */
+ *  hand-authored `.mockResolvedValueOnce` chains the tests below relied on before folders existed. */
 function makeListMock(fileResults: Array<{ data: unknown; total: number }>, folders: FolderRow[] = []) {
   let i = 0
   return vi.spyOn(itemsApi, 'list').mockImplementation((collection: string) => {
@@ -141,7 +141,7 @@ describe('MediaLibraryView', () => {
     // total (100) still covers page 1 (24 rows/page -> 5 pages, indices 0-4), so the delete
     // refresh must not reset the user back to page 0.
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
-    // FE-27: exactly one reload for the delete -- mount (1) + onPage (2) + onDeleted's single
+    // Exactly one reload for the delete -- mount (1) + onPage (2) + onDeleted's single
     // refresh (3) file-scoped calls. (A separate 'mediafolder' call also fires at mount.)
     expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(3)
   })

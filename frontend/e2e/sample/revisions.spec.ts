@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
-// Audit 2026-07-21 Batch 4 (TEST-6) live gate: revision history + revert (FE-R7 / 9c-fe).
+// Live gate: revision history + revert.
 //
 // `article` is the sample's only [CmsCollection(Revisions = true)] collection, so every save
 // captures a new revision INSIDE the write transaction (Struo.Application.Query.ItemService):
@@ -9,10 +9,9 @@ import { type Page } from '@playwright/test'
 // first update. RevisionHistoryDrawer lists newest-first; selecting a row loads its full snapshot
 // (RevisionSnapshotView) and, when the caller can write, offers "Revert to this revision".
 // ItemFormView.onReverted() deliberately re-fetches the full item after a revert rather than
-// trusting the POST /revert response (which omits translations/relations — a real bug FE-R7's live
-// smoke caught; see MEMORY fe-r7-revisions-ui-done.md), so this spec's core assertion is that the
-// FORM's Title field — not just a toast — shows the pre-edit value after revert, plus an independent
-// API confirmation.
+// trusting the POST /revert response (which omits translations/relations), so this spec's core
+// assertion is that the FORM's Title field — not just a toast — shows the pre-edit value after
+// revert, plus an independent API confirmation.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
@@ -80,7 +79,7 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
 async function openByTitle(page: Page, title: string): Promise<void> {
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // The collection list has no row-click navigation — open via the row's explicit
   // Edit action instead. Wait for the debounced search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
   await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)

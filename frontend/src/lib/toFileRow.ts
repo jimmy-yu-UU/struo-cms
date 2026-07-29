@@ -17,7 +17,7 @@ function optStr(v: unknown): string | undefined {
 
 /**
  * Converts an untyped `/items/file` API row into a `FileRow`, replacing the unsafe
- * `as unknown as FileRow` double cast previously used at each call site (FE-22). Coerces each
+ * `as unknown as FileRow` double cast previously used at each call site. Coerces each
  * field defensively so a malformed/missing value degrades to a safe default rather than
  * propagating `unknown` through the UI unchecked.
  */

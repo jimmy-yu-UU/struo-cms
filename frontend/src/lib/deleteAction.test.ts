@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from './deleteAction'
 
 // Identity stub translator: asserts the helper resolves to the right i18n *key*
-// (FE-16) without needing a real vue-i18n instance.
+// without needing a real vue-i18n instance.
 const t = (key: string): string => key
 
 describe('deleteKindFor', () => {

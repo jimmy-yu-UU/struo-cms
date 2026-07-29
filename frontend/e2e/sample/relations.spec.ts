@@ -8,7 +8,7 @@
 //
 // See frontend/e2e/README.md for the full live-gate prerequisites (API on :5221, seeded admin, etc).
 // This spec is authored + collection-validated only (`playwright test --list`); the live run against
-// real PG+Redis is a separate user-driven gate (Phase 7d Task 18), not executed here.
+// real PG+Redis is a separate user-driven gate, not executed here.
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 
@@ -131,7 +131,7 @@ async function pickFirstTag(page: Page): Promise<void> {
 async function openArticleByTitle(page: Page, title: string): Promise<void> {
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // The collection list has no row-click navigation — open via the row's explicit
   // Edit action instead. Wait for the debounced search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
   await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
@@ -230,12 +230,13 @@ test.afterEach(async ({ page }) => {
   navCreated = []
 })
 
-// NAV-1 live gate: a RelatedList row click is a same-route-record, params-only navigation
-// (`collections/category/<id>` -> `collections/article/<id>`, both the `collection-item` route). Pre-
-// fix, AppShell's unkeyed <router-view> reused the ItemFormView instance: init() never re-ran (form
-// showed stale category data) and onBeforeRouteLeave never fired (dirty edits silently discarded).
-// Post-fix, the route-update dirty guard prompts, and the keyed <router-view> remounts + reloads the
-// target record on accept. Category.Articles is the sample's RelatedList (see the assertion above).
+// Live gate: a RelatedList row click is a same-route-record, params-only navigation
+// (`collections/category/<id>` -> `collections/article/<id>`, both the `collection-item` route).
+// Without the route-update dirty guard, AppShell's keyed <router-view> would still reuse the
+// ItemFormView instance: init() would never re-run (form showing stale category data) and
+// onBeforeRouteLeave would never fire (dirty edits silently discarded). With the guard, it
+// prompts, and the keyed <router-view> remounts + reloads the target record on accept.
+// Category.Articles is the sample's RelatedList (see the assertion above).
 test('NAV-1: dirty form + RelatedList row click prompts unsaved guard, then remounts to the target record', async ({ page }) => {
   await login(page)
 

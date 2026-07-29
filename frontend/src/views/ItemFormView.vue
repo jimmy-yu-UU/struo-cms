@@ -49,13 +49,13 @@ const editableRelations = computed(() =>
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
 
-// Batch B: RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
+// RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
 // grant on role/user could open the form, but the matrix/preview endpoints would 403.
 const savedRoleIsSuperAdmin = ref(false)
-// Task 2: the view owns the ONE leave guard for both the generic form and the matrix — see
+// The view owns the ONE leave guard for both the generic form and the matrix — see
 // guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
 const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
-// Task 3: also shown in create mode, buffered locally by the matrix (no role id to GET/PUT
+// Also shown in create mode, buffered locally by the matrix (no role id to GET/PUT
 // against yet) — onSubmit's create path flushes the buffer once the role exists.
 const showMatrix = computed(
   () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
@@ -63,7 +63,7 @@ const showMatrix = computed(
 const showEffective = computed(
   () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
 )
-// Task 4: the effective-permissions preview follows the CURRENT (possibly unsaved) Roles
+// The effective-permissions preview follows the CURRENT (possibly unsaved) Roles
 // TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
 const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
 
@@ -77,8 +77,8 @@ const conflict = ref(false)
 const showHistory = ref(false)
 // Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
 let latestFromServer: FormModel | null = null
-// Last committed snapshot of the user-editable model; the leave/unload guards compare against it
-// (FE-5). Seeded with the empty model so navigating away before load never falsely prompts.
+// Last committed snapshot of the user-editable model; the leave/unload guards compare against it.
+// Seeded with the empty model so navigating away before load never falsely prompts.
 const baseline = ref(snapshotModel(model))
 
 function captureBaseline(): void {
@@ -89,7 +89,7 @@ function setModel(next: FormModel): void {
   model.shared = next.shared
   model.translations = next.translations
   model.relations = next.relations
-  // Carry the optimistic-concurrency token so update payloads echo it (D2 / FE-4). Without this
+  // Carry the optimistic-concurrency token so update payloads echo it. Without this
   // the version chain breaks at the view layer and the optimistic lock silently degrades to
   // last-write-wins. On create, next.version is undefined and stays undefined.
   model.version = next.version
@@ -138,12 +138,12 @@ async function onSubmit(): Promise<void> {
   serverError.value = ''
   try {
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update')
-    // Task 3: capture the created item so a role-create can PUT its buffered grants against the
+    // Capture the created item so a role-create can PUT its buffered grants against the
     // freshly-minted id (created.id) below.
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
     const updated = !isCreate.value ? await itemsApi.update(name.value, id.value!, payload) : undefined
     conflict.value = false
-    // Final-review fix: the update DID succeed even if the matrix flush below fails — refresh the
+    // The update DID succeed even if the matrix flush below fails — refresh the
     // concurrency token from the response and re-baseline the FORM now, before the matrix flush.
     // Returning early (matrix failure) must never discard a successful update: doing so left the
     // saved edits reading dirty (bogus unsaved-changes prompt on leave) and a retry echoing the
@@ -155,7 +155,7 @@ async function onSubmit(): Promise<void> {
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
     captureBaseline() // form saved successfully: clear its own dirty flag before the matrix flush
-    // Task 2: one form Save also flushes a dirty permission matrix, so the user only has to click
+    // One form Save also flushes a dirty permission matrix, so the user only has to click
     // Save once. The matrix flush runs AFTER the form is already baselined above: if the matrix's
     // own PUT fails, its own error toast already fired, and we keep the user on the page (matrix
     // stays dirty, form does not) instead of navigating away and losing the unsaved grants.
@@ -163,7 +163,7 @@ async function onSubmit(): Promise<void> {
       const ok = await matrix.value.save()
       if (!ok) return
     }
-    // Task 3: role create — the matrix has no role id to PUT against until now, so it only buffers
+    // Role create — the matrix has no role id to PUT against until now, so it only buffers
     // toggles locally. Flush that buffer against the id the create just returned. On failure, the
     // role itself DID get created: warn and route to its edit page (where the matrix can retry)
     // instead of the normal list navigation, which would otherwise hide the lost grants.
@@ -174,7 +174,7 @@ async function onSubmit(): Promise<void> {
           await rbacApi.putRolePermissions(String(created.id), entries)
         } catch {
           toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
-          // Review fix: the role WAS created, only the grants PUT failed. Re-baseline the matrix
+          // The role WAS created, only the grants PUT failed. Re-baseline the matrix
           // before navigating to its edit page (the form itself was already re-baselined above) —
           // the create-mode buffer is discarded on this remount anyway (the edit-mode matrix
           // instance re-GETs grants from the server), so nothing is lost, and leaving the matrix
@@ -185,7 +185,7 @@ async function onSubmit(): Promise<void> {
           return
         }
       }
-      // Review fix: grants are now flushed (PUT succeeded above) or there was nothing to flush
+      // Grants are now flushed (PUT succeeded above) or there was nothing to flush
       // (buffer held only all-false rows, e.g. toggled back off) — either way re-baseline the
       // matrix so `dirty` clears. Without this, create mode's baseline never leaves '{}' and the
       // unified leave guard fires an "Unsaved changes" prompt on the successful navigation below;
@@ -198,13 +198,13 @@ async function onSubmit(): Promise<void> {
     router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
-      // Optimistic-lock clash (D2 / API-1): only this specific code means "someone else changed the
+      // Optimistic-lock clash: only this specific code means "someone else changed the
       // item since we loaded it". Recover by refreshing the concurrency token WITHOUT touching the
       // user's in-progress edits, then let them either save again (overwrite) or reload the server
       // copy. Other 409s (delete-restrict, duplicate email) keep the generic CONFLICT code and must
       // NOT arm this recovery banner — they fall through to the serverError banner below. No
       // fallback to 'CONFLICT' here is deliberate. VERSION_CONFLICT carries no details, so it never
-      // overlaps the FE-3 details-mapping branch below.
+      // overlaps the details-mapping branch below.
       await recoverFromConflict()
     } else if (e instanceof ApiError && e.details?.length) {
       // Server-side (ASP.NET model-binding) validation: map details back to
@@ -298,11 +298,11 @@ function onCancel(): void {
   router.push({ name: 'collection-list', params: { name: name.value } })
 }
 
-// FE-5: warn before navigating away (SPA route change) with unsaved edits. Registered
+// Warn before navigating away (SPA route change) with unsaved edits. Registered
 // synchronously in setup so vue-router picks it up. Returns a Promise the router awaits:
 // resolve(true) allows the navigation, resolve(false) cancels it and keeps the user here.
 function guardLeave(): Promise<boolean> {
-  // Task 2: unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
+  // Unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
   // grants, so a single confirm covers both instead of two independently-registered guards firing
   // sequentially on the same navigation.
   if (!(isDirty(baseline.value, model) || (matrix.value?.dirty ?? false))) return Promise.resolve(true)
@@ -313,7 +313,7 @@ function guardLeave(): Promise<boolean> {
       message,
       accept: () => resolve(true),
       reject: () => resolve(false),
-      // fold-in (c): Esc / backdrop / X dismiss fires NEITHER accept nor reject, which would leave
+      // Esc / backdrop / X dismiss fires NEITHER accept nor reject, which would leave
       // this promise (and the router navigation awaiting it) pending forever. onHide always fires on
       // dismissal, so resolve(false) — treat a dismiss as "cancel navigation, stay here". If accept/
       // reject already resolved, this second resolve is a harmless no-op (a Promise settles once).
@@ -322,7 +322,7 @@ function guardLeave(): Promise<boolean> {
   })
 }
 onBeforeRouteLeave(() => guardLeave())
-// NAV-1: a same-route-record, params-only navigation (RelatedList row click, create -> edit) does
+// A same-route-record, params-only navigation (RelatedList row click, create -> edit) does
 // NOT trigger onBeforeRouteLeave — the router treats it as an update of the reused component. Run the
 // same dirty guard here so unsaved edits are not silently discarded. Only guard an actual record
 // switch (id or collection changed); a query-only change keeps the user on the same item, so allow it.
@@ -331,7 +331,7 @@ onBeforeRouteUpdate(async (to, from) => {
   return true
 })
 
-// FE-5: warn before a full browser unload (tab close / reload / hard navigation) with unsaved
+// Warn before a full browser unload (tab close / reload / hard navigation) with unsaved
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
 // text is not honoured by modern browsers.
 function onBeforeUnload(e: BeforeUnloadEvent): void {

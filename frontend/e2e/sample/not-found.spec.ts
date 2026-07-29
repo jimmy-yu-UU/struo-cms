@@ -1,9 +1,9 @@
 import { test, expect } from '../fixtures'
 
-// Phase 9a-fe: the SPA detects a 404 by the response envelope's error code
+// The SPA detects a 404 by the response envelope's error code
 // (`error.code === 'NOT_FOUND'`), not by matching the error message text.
 // This drives ItemFormView's "Item not found." state end-to-end against the
-// live 9a envelope.
+// live envelope.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
