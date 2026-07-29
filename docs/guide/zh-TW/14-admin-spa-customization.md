@@ -231,6 +231,7 @@ color: def({ component: ColorSwatchField, listColumn: asString }),
 ```ts
 server: {
   port: 5173,
+  host: '127.0.0.1',
   proxy: { '/api': { target: 'http://localhost:5221', changeOrigin: true } },
 }
 ```

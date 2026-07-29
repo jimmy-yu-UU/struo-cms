@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
+    // Pinned to the IPv4 loopback: on some Windows setups "localhost" resolves to the IPv6
+    // loopback first, Vite then binds only [::1], and a Chromium client (real browser or
+    // Playwright) navigating to http://localhost:5173 cannot connect. Binding 127.0.0.1
+    // explicitly is unambiguous and works everywhere loopback access is needed.
+    host: '127.0.0.1',
     // Same-origin dev/E2E: browser hits /api on the Vite origin, proxied to the API.
     proxy: { '/api': { target: 'http://localhost:5221', changeOrigin: true } },
   },

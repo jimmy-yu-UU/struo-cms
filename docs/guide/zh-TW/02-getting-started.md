@@ -92,10 +92,13 @@ pnpm dev
 
 ```
 VITE v8.1.2  ready in 180 ms
-➜  Local:   http://localhost:5173/
+➜  Local:   http://127.0.0.1:5173/
 ```
 
-Vite 的開發伺服器監聽 `http://localhost:5173`，並將 `/api` 請求代理 (proxy) 到
+Vite 的開發伺服器明確綁定 IPv4 loopback (`frontend/vite.config.ts` 的 `server.host`)，因此啟動橫幅印出
+的是 `127.0.0.1` 而非 `localhost`——這繞開了一個 Windows 特有的陷阱: "localhost" 有時會優先解析為
+IPv6 loopback，導致 Chromium 系瀏覽器連不到 IPv4 位址。在瀏覽器中開啟 `http://localhost:5173` 仍然
+可以正常存取 SPA，差別只在啟動時印出的橫幅。Vite 的開發伺服器將 `/api` 請求代理 (proxy) 到
 `http://localhost:5221` (`frontend/vite.config.ts`)，因此 SPA 與 API 可以直接搭配使用，不需要任何
 跨來源 (cross-origin) 設定。在瀏覽器中開啟 `http://localhost:5173`。
 
