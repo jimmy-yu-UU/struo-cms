@@ -235,7 +235,7 @@ public class SoftDeleteRepositoryTests
         Assert.Null(row["category"]);                  // trashed parent is not expanded
     }
 
-    // The soft-delete design's "M2M existence check excludes a trashed target" claim is exercised end-to-end via
+    // The M2M existence check excluding a trashed target is exercised end-to-end via
     // Service.UpdateAsync's SyncM2MAsync, which validates target ids through
     // IItemRepository.QueryWhereInAsync(targetCollection, "id", ids). The sample domain's only M2M
     // relation is Article.Tags -> Tag, and Tag does NOT implement ISoftDeletable (see Tag.cs) — so a
@@ -256,7 +256,7 @@ public class SoftDeleteRepositoryTests
         Assert.Empty(found);
     }
 
-    // The soft-delete design's "Inbound-Restrict counts live references only" claim is NOT exercisable with the
+    // The claim that inbound-Restrict counts live references only is NOT exercisable with the
     // current sample entities: Article.CategoryId is OnDelete.SetNull and Category.ParentId
     // (self-reference) is also OnDelete.SetNull (see Article.cs/Category.cs) — no relation in the
     // sample domain uses OnDelete.Restrict, so graph.InboundRestrict() is empty for every

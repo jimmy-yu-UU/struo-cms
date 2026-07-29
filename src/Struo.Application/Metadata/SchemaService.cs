@@ -22,12 +22,11 @@ public sealed class SchemaService(IMetadataProvider provider)
     /// generic CRUD path; removing them from the schema prevents UI/clients from discovering them.
     ///
     /// <see cref="CollectionMetadata.Translation"/>.Fields is a second, separate raw list of
-    /// translatable field NAMES (values are already redacted by ItemProjector's own
-    /// <c>field.Hidden</c> skip, but the names themselves leaked here) — it must be filtered the
-    /// same way, or a
-    /// Hidden+Translatable field
-    /// (e.g. the sample's Article.InternalSlug) still surfaces its name under "translation.fields"
-    /// even once removed from "fields" above.
+    /// translatable field NAMES (the values themselves are redacted at read time by
+    /// <c>TranslationOverlay</c>'s own hidden-translatable filter, not by this class) — the names
+    /// still need filtering here too, or a Hidden+Translatable field (e.g. the sample's
+    /// Article.InternalSlug) still surfaces its name under "translation.fields" even once removed
+    /// from "fields" above.
     /// </summary>
     private static CollectionMetadata WithoutHiddenFields(CollectionMetadata meta)
     {

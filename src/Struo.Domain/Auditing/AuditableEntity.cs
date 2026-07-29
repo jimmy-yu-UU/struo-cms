@@ -7,8 +7,9 @@ namespace Struo.Domain.Auditing;
 /// on the override — the abstract member makes a forgotten PK a compile error rather than a runtime
 /// surprise, while keeping the SqlSugar attribute out of Domain (SqlSugar requires an attributed PK;
 /// an unattributed inherited "Id" is not recognised). The framework assigns the id at create time
-/// (<c>Guid.CreateVersion7()</c>). Audit actors are user UUIDs, null until a real user
-/// system exists.
+/// (<c>Guid.CreateVersion7()</c>). Audit actors are user UUIDs (the <c>User</c> collection lives in
+/// <c>Struo.Infrastructure.Identity</c>, wired up by <c>AuthWiring</c>), null whenever a write isn't
+/// attributable to an authenticated user (e.g. system/seed writes).
 /// </summary>
 public abstract class AuditableEntity : IAuditable
 {

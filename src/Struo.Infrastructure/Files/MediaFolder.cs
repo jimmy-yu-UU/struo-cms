@@ -22,7 +22,7 @@ public sealed class MediaFolder : AuditableEntity
 
     // New framework table → timestamptz (the baseline AuditableEntity tables predate the
     // rule and stay `timestamp`; convention binds new schema only). Same literal-type mechanism
-    // as SiteSettings.UpdatedAt, so InitTables emits the identical column type (parity).
+    // as SiteSettings.UpdatedAt, so InitTables emits the identical column type for both.
     [SugarColumn(ColumnDataType = "timestamptz")] public override DateTime CreatedAt { get; set; }
     [SugarColumn(ColumnDataType = "timestamptz")] public override DateTime UpdatedAt { get; set; }
 

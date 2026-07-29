@@ -27,8 +27,8 @@ public interface IRevisionStore
     /// permanently-deleted item does not leave orphaned, un-RBAC'd snapshot history behind. The
     /// default THROWS rather than silently no-ops: an implementation that forgot to override would
     /// otherwise leave orphaned snapshot history on purge with no failure signal — the exact defect
-    /// class this exists to eliminate. (It still keeps pre-existing test doubles compiling; a
-    /// double whose collection is actually purged must override it explicitly.)
+    /// class this default exists to eliminate. It still keeps pre-existing test doubles compiling; a
+    /// double whose collection is actually purged must override it explicitly.
     /// </summary>
     Task DeleteForItemAsync(string collection, string itemId, CancellationToken ct = default) =>
         throw new NotSupportedException(

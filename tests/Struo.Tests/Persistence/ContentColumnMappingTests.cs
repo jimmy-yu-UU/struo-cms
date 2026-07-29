@@ -13,7 +13,7 @@ namespace Struo.Tests.Persistence;
 /// Covers the SqlSugarClientFactory EntityService convention that widens content-bearing
 /// [CmsField] interfaces (RichText/Textarea/Markdown/Code/Json) to a `text` column, so a
 /// realistic body (tables, styled spans, multiple paragraphs) never hits Postgres's default
-/// varchar(255) CodeFirst mapping (phase7g live gate: Npgsql 22001 "value too long").
+/// varchar(255) CodeFirst mapping (live-PostgreSQL gate: Npgsql 22001 "value too long").
 /// </summary>
 public class ContentColumnMappingTests
 {
