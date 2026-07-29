@@ -14,7 +14,7 @@ import { type Page } from '@playwright/test'
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+// See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
 const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG — see media.spec.ts for why this is sufficient for

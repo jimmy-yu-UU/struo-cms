@@ -13,7 +13,7 @@ import { type Page } from '@playwright/test'
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+// See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
 const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG (signature + IHDR + minimal IDAT/IEND) — enough for
@@ -69,7 +69,7 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
 }
 
 // Isolates the uploaded row by its unique stamped filename (server-side debounced search, same
-// idiom as items.spec.ts / conflict.spec.ts) and opens its detail dialog.
+// idiom as sample/items.spec.ts / sample/conflict.spec.ts) and opens its detail dialog.
 async function openDetailByName(page: Page, fileName: string): Promise<void> {
   await page.getByPlaceholder('Search files…').fill(fileName)
   // Each grid tile is a <button class="media-tile">; the filename lives only in its
