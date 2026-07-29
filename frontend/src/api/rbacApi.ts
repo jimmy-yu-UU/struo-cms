@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient'
 
-// Wire shapes of the Batch B RBAC endpoints (RolesController / UsersController).
+// Wire shapes of the RBAC endpoints (RolesController / UsersController).
 export type RolePermissionEntry = {
   collection: string
   canRead: boolean

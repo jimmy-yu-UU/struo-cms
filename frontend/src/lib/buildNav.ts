@@ -11,7 +11,7 @@ export function buildNav(
   permissions: Record<string, CollectionPermission>,
 ): NavGroup[] {
   const readable = collections.filter(
-    // Batch B: visibility is metadata-driven (CmsCollection Hidden flag) — no hardcoded names.
+    // Visibility is metadata-driven (CmsCollection Hidden flag) — no hardcoded names.
     (c) => !c.hidden && (isSuperAdmin || permissions[c.name]?.read === true),
   )
 

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// Batch C (media-library folders) live gate. Covers the 12-item admin-UX backlog's #5 (folder
+// Media-library folders live gate. Covers the 12-item admin-UX backlog's #5 (folder
 // browsing) + #7 (filename -> Title autofill, already implemented server-side by
 // Struo.Infrastructure.Files.FileService.UploadAsync) + #6 (no "open in full editor" escape hatch
 // on the file detail dialog) + the C-1 data-loss regression: MediaDetailDialog.load() must fetch

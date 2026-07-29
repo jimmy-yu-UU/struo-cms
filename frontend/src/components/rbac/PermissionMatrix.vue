@@ -9,7 +9,7 @@ import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 
 // 問題 3: the Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
-// Task 3: createMode buffers grants locally (no GET, no own Save button) — ItemFormView's create
+// createMode buffers grants locally (no GET, no own Save button) — ItemFormView's create
 // submit reads currentEntries() and PUTs them itself once the role exists.
 const props = withDefaults(defineProps<{ roleId: string; isSuperAdminRole: boolean; createMode?: boolean }>(), {
   createMode: false,
@@ -64,7 +64,7 @@ async function load(): Promise<void> {
   }
 }
 
-// Task 3: shared fold from the live `grants` buffer down to the non-all-false wire entries — used
+// Shared fold from the live `grants` buffer down to the non-all-false wire entries — used
 // by both save() (edit mode) and currentEntries() (create mode) so they cannot drift apart.
 function foldEntries(): RolePermissionEntry[] {
   return Object.entries(grants.value)
@@ -74,7 +74,7 @@ function foldEntries(): RolePermissionEntry[] {
     }))
 }
 
-// Task 2: returns whether the save succeeded so the parent form's Save can flush this matrix as
+// Returns whether the save succeeded so the parent form's Save can flush this matrix as
 // part of one submit and stay on the page when the PUT fails (its own error toast still fires).
 async function save(): Promise<boolean> {
   saving.value = true
@@ -91,13 +91,13 @@ async function save(): Promise<boolean> {
   }
 }
 
-// Task 3: create-mode buffer read — ItemFormView calls this after the role is created to PUT the
+// Create-mode buffer read — ItemFormView calls this after the role is created to PUT the
 // grants the user staged before the role existed.
 function currentEntries(): RolePermissionEntry[] {
   return foldEntries()
 }
 
-// Task 3 review fix: after ItemFormView flushes the create-mode buffer (PUT succeeded, or there
+// After ItemFormView flushes the create-mode buffer (PUT succeeded, or there
 // was nothing to PUT), the live `grants` must be re-baselined here too — otherwise `dirty` stays
 // true forever (create mode's baseline never moves off '{}') and the unified leave guard in
 // ItemFormView keeps firing "Unsaved changes" even immediately after a successful save.
@@ -106,13 +106,13 @@ function markFlushed(): void {
 }
 
 onMounted(() => {
-  // Task 3: create mode has no role yet to GET permissions for — stay with the empty buffer.
+  // Create mode has no role yet to GET permissions for — stay with the empty buffer.
   if (props.createMode) { loading.value = false; return }
   if (!props.isSuperAdminRole) void load()
   else loading.value = false
 })
 
-// Task 2: no route-leave guard here — ItemFormView owns ONE unified guard that also checks this
+// No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently used to
 // fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
 defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })

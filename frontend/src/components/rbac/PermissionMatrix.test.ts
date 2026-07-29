@@ -89,7 +89,7 @@ describe('PermissionMatrix', () => {
     expect(vm.dirty).toBe(false)
   })
 
-  // Task 2: PermissionMatrix no longer owns a route-leave guard — ItemFormView owns the ONE guard
+  // PermissionMatrix no longer owns a route-leave guard — ItemFormView owns the ONE guard
   // and folds in this component's `dirty` state instead. save() must report success/failure so the
   // parent form's Save can flush the matrix and know whether to keep the user on the page.
   it('save resolves true on success and false on failure', async () => {
@@ -105,7 +105,7 @@ describe('PermissionMatrix', () => {
     await expect(vm.save()).resolves.toBe(false)
   })
 
-  // ---- Task 3: create-mode buffer (no GET, no own Save button, currentEntries()) ----
+  // ---- create-mode buffer (no GET, no own Save button, currentEntries()) ----
 
   it('createMode renders the table without a GET and without the save button', async () => {
     seedSchema()

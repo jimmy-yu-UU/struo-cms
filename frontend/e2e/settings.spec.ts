@@ -62,7 +62,7 @@ async function apiGetBranding(page: Page): Promise<{ brandName: string; brandLog
   // Unwrap the API envelope: EnvelopeResultFilter wraps every response as { success, data:{...} }.
   // Reading res.json() directly yielded { brandName: undefined }, which corrupted captureOriginal()
   // and made afterEach's restore PUT a blank name (400, swallowed) — leaking the stamped brand name
-  // into the shared singleton row. (Review finding, batch 4.)
+  // into the shared singleton row.
   const body = await res.json()
   return body.data
 }
