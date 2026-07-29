@@ -63,7 +63,7 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 async function openByTitle(page: Page, title: string): Promise<void> {
   await page.getByPlaceholder('Search').fill(title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  // Batch A removed row-click navigation from the collection list — open via the row's explicit
+  // Row-click navigation was removed from the collection list — open via the row's explicit
   // Edit action instead. Wait for the debounced search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
   await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
