@@ -7,10 +7,14 @@ export default defineConfig({
   // dev-server process past a normal navigation timeout. Serializing is a small cost for a suite
   // this size and removes the flakiness entirely.
   workers: 1,
+  // baseURL deliberately stays on localhost (not 127.0.0.1): the specs need cookie-host parity
+  // with E2E_API, which also targets localhost — changing just one side would break auth cookies.
   use: { baseURL: 'http://localhost:5173', trace: 'on-first-retry' },
   webServer: {
     command: 'pnpm dev',
-    url: 'http://localhost:5173',
+    // Vite itself is pinned to the IPv4 loopback (see vite.config.ts); poll that same address
+    // rather than localhost so this readiness check can't resolve to a different interface.
+    url: 'http://127.0.0.1:5173',
     reuseExistingServer: true,
     timeout: 60_000,
   },
