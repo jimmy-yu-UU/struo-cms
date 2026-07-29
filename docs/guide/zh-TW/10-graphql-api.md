@@ -36,7 +36,7 @@ schema、它所產生的 query/filter/mutation 介面，以及它的錯誤形狀
   deleted)`) 與四個根 `Mutation` 欄位 (`createFile`、`updateFile`、`deleteFile`、`restoreFile`)
   ——再加上 `fileRevisions`/`fileRevision` 這兩個 query 欄位，以及一個 `revertFile` mutation，但
   **只有**在該集合宣告 `Revisions = true` 時才會出現 (七個框架集合沒有任何一個如此——見下方的
-  「修訂紀錄」)。
+  「版本紀錄」)。
 
 `SchemaTypeMapper` (`src/Struo.Api/GraphQl/SchemaTypeMapper.cs`) 是 `FieldInterface` → SDL 型別
 對應的唯一來源 (例如 `RichText`/`Markdown`/`Text` → `String`，`Number` → `Int`/`Long`/`Float`
@@ -152,7 +152,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 `permission`/`permissions`、`role`/`roles`、`user`/`users`、`userRole`/`userRoles`、
 `file`/`files`、`mediaFolder`/`mediaFolders`——而 `Mutation` 帶有 28 個 (再加上它自己的
 `_service` 錨點):同樣這七個集合各自的 `create`/`update`/`delete`/`restore`。任何地方都沒有出現
-`revert*` mutation，也沒有 `*Revisions`/`*Revision` 這種 query 欄位 (見下方的「修訂紀錄」)。
+`revert*` mutation，也沒有 `*Revisions`/`*Revision` 這種 query 欄位 (見下方的「版本紀錄」)。
 
 ## Query:單筆項目、清單、引數
 
@@ -314,7 +314,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 {"data":{"updateFile":{"id":"...","fileName":"gamma-draft.txt","translations":[{"locale":"en","fields":{"title":"Gamma Draft (GraphQL)","alt":"edited via GraphQL"}}]}}}
 ```
 
-## 透過 GraphQL 使用修訂紀錄
+## 透過 GraphQL 使用版本紀錄
 
 當一個集合宣告 `Revisions = true` 時，`StruoTypeModule` 會加入兩個 query 欄位
 (`{collection}Revisions(id: ID!): [Revision!]!`、
@@ -326,8 +326,8 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 的 schema 中完全不存在這些欄位——直接對照上方 introspection 出來的 `Query`/`Mutation` 欄位清單
 即可確認 (沒有 `*Revisions`、沒有 `*Revision`、沒有 `revert*`)。一個把某個集合選用啟用
 `[CmsCollection(Revisions = true)]` 的 fork，可以免費取得這整套介面，完全不需要寫任何
-GraphQL 層的程式碼;REST 相同的修訂紀錄端點 (第 9 章) 是目前唯一可以即時演練這個行為的地方，而
-且在那裡同樣也只能演練它「沒有設定修訂紀錄」的空/`404` 形式。
+GraphQL 層的程式碼;REST 相同的版本紀錄端點 (第 9 章) 是目前唯一可以即時演練這個行為的地方，而
+且在那裡同樣也只能演練它「沒有設定版本紀錄」的空/`404` 形式。
 
 ## 錯誤形狀 (`StruoErrorFilter`)
 
