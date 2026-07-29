@@ -20,7 +20,7 @@ namespace Struo.Tests.Revisions;
 /// <summary>
 /// Wires a real <see cref="ItemService"/> + <see cref="SqlSugarRevisionStore"/> +
 /// <see cref="RevisionSnapshotBuilder"/> over the sample Blog types, mirroring
-/// <c>SnapshotBuilderHarness</c>'s construction (Task 4). Article is revisioned
+/// <c>SnapshotBuilderHarness</c>'s construction. Article is revisioned
 /// (<c>Revisions = true</c>); Category is not, so it exercises the <c>meta.Revisions</c> gate.
 /// <para>
 /// When <paramref name="FailCapture"/>-equivalent (<see cref="Create"/>'s <c>failCapture</c> flag)

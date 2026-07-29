@@ -63,7 +63,7 @@ public class SettingsControllerTests(ApiFactory factory)
         doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("FORBIDDEN");
     }
 
-    /// <summary>TEST-3 (audit batch 4): anonymous callers get 401, not 403 CSRF. Deliberately sent
+    /// <summary>TEST-3: anonymous callers get 401, not 403 CSRF. Deliberately sent
     /// WITHOUT the X-Struo-CSRF header, matching a real anonymous SPA caller. CSRF is not in play for
     /// two independent reasons: (1) UseAuthorization runs BEFORE CsrfProtectionMiddleware in the
     /// pipeline (Program.cs), so an unauthorized request 401s before the CSRF gate is even reached;

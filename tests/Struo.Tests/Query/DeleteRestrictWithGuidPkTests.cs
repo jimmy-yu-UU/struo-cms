@@ -18,7 +18,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// Focused unit test verifying that DeleteAsync enforces OnDelete.Restrict for a Guid-PK
-/// collection without throwing a spurious 400 (the Convert.ChangeType bug fixed in Task 3).
+/// collection without throwing a spurious 400 (the Convert.ChangeType bug).
 /// Uses minimal stubs — no DB, no SqlSugar — so the only real code under test is
 /// ItemService.DeleteAsync + IdParsing.ParseTo.
 /// </summary>

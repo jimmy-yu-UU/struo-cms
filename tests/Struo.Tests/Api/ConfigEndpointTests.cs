@@ -81,7 +81,7 @@ public class ConfigEndpointTests(ApiFactory factory)
         doc.RootElement.GetProperty("data").GetProperty("oidcEnabled").GetBoolean().Should().BeTrue();
     }
 
-    /// <summary>TEST-2 (audit batch 4): <see cref="ISiteSettingsStore"/> itself does not validate
+    /// <summary>TEST-2: <see cref="ISiteSettingsStore"/> itself does not validate
     /// blankness — a future writer/seeding path could persist a blank BrandName — so
     /// <see cref="ConfigController"/> must fall back to the appsettings default rather than surface
     /// the blank value.</summary>

@@ -47,7 +47,7 @@ public class ItemsEndpointTests(ApiFactory factory)
             await client.PostAsJsonAsync("/api/items/article",
                 new { status = i % 2 == 0 ? "published" : "draft", translations = new { en = new { title = $"Post{i}" } } });
 
-        // NOTE: sort/filter/fields by the translatable `title` is locale-aware querying (Task 5).
+        // NOTE: sort/filter/fields by the translatable `title` is locale-aware querying.
         // Here we filter+sort+select by non-translatable own-collection fields (status, id).
         var resp = await client.GetAsync("/api/items/article?filter[status][_eq]=published&sort=-id&limit=1&offset=0&fields=id,status");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);

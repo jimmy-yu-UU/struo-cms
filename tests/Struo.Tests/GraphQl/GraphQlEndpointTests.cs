@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Task 11: proves /graphql is reachable through the REAL host pipeline (auth/CSRF/permission
+/// Proves /graphql is reachable through the REAL host pipeline (auth/CSRF/permission
 /// middleware in front of MapGraphQL, exactly as Program.cs wires it — see
 /// GraphQlServiceCollectionExtensions.MapStruoGraphQl) rather than only through the in-process
 /// IRequestExecutor used by GraphQlExecutionTests. Also proves the
