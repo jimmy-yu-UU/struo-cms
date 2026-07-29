@@ -90,7 +90,7 @@ public sealed class ItemWriteSideSync(
                 FieldValueRules.RequireTranslation(rf, locale, has, v);
             }
 
-            // Max length — CMS-layer limit (7g.5), measured after RichText sanitization.
+            // Max length — a CMS-layer limit, measured after RichText sanitization.
             foreach (var (name, value) in fieldValues)
             {
                 if (value is string sv && maxLengths.TryGetValue(name, out var max))

@@ -36,7 +36,7 @@ public sealed class File : AuditableEntity, ISoftDeletable
     [CmsOptions("draft:Draft", "published:Published")]
     public string Status { get; set; } = "draft";
 
-    // #5 media folders: nullable organisational FK — NOT ReadOnly (moving a file = items update;
+    // Media folders: nullable organisational FK — NOT ReadOnly (moving a file = items update;
     // UpdateCoreAsync's M2O-FK overlay handles it). OnDelete.Restrict on the nav relation means a
     // folder still containing files cannot be deleted (framework guard, 409 CONFLICT).
     [SugarColumn(IsNullable = true)]

@@ -31,7 +31,7 @@ public sealed class Revision
     public string Operation { get; set; } = "";
 
     // MUST be `text`: SqlSugar's default varchar(255) overflows on Postgres for a realistic snapshot
-    // (the recurring 7g/7g+ bug class). Explicit here rather than via a convention.
+    // (a recurring bug class elsewhere in the codebase). Explicit here rather than via a convention.
     [SugarColumn(ColumnDataType = "text")] public string Snapshot { get; set; } = "";
 
     public DateTime CreatedAt { get; set; }

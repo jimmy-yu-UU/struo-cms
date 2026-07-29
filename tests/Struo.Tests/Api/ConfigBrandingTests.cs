@@ -98,7 +98,7 @@ public class ConfigBrandingTests(ApiFactory factory)
         finally { await ClearAsync(); }
     }
 
-    /// <summary>TEST-10: the logo file referenced by site_settings was deleted after being saved
+    /// <summary>The logo file referenced by site_settings was deleted after being saved
     /// (the classic TOCTOU) — ConfigController must fall back to the appsettings default instead
     /// of emitting a URL for a file that no longer exists.</summary>
     [Fact]
@@ -124,7 +124,7 @@ public class ConfigBrandingTests(ApiFactory factory)
         finally { await ClearAsync(); }
     }
 
-    /// <summary>TEST-10: the logo file referenced by site_settings was unpublished after being
+    /// <summary>The logo file referenced by site_settings was unpublished after being
     /// saved — ConfigController must fall back rather than serve an inaccessible/unpublished
     /// file's URL to the anonymous login page.</summary>
     [Fact]

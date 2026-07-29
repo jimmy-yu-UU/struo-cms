@@ -18,7 +18,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// Enforces <see cref="Struo.Domain.Metadata.Models.FieldMetadata.MaxLength"/> on both ItemService
-/// write paths (7g.5): the non-translatable field loop in <c>Deserialize</c> and the per-locale
+/// write paths: the non-translatable field loop in <c>Deserialize</c> and the per-locale
 /// loop in <c>SyncTranslationsAsync</c>. Harness mirrors <see cref="ItemServiceRichTextSanitizationTests"/>.
 /// </summary>
 public class ItemServiceMaxLengthTests : IDisposable

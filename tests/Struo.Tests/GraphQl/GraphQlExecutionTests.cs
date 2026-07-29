@@ -326,10 +326,10 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// 8c.3a: selecting a relation sub-field OF a relation (<c>category { name parent { name } }</c>,
+    /// Selecting a relation sub-field OF a relation (<c>category { name parent { name } }</c>,
     /// depth 2) must build a NESTED <see cref="DeepSpec"/> — <c>category</c>'s own
     /// <see cref="DeepRelationSpec.Deep"/> must itself contain a <c>parent</c> entry — not a flat
-    /// depth-1 tree (pre-8c.3a, <c>SelectionRelations</c> only ever looked at the element type's
+    /// depth-1 tree (previously, <c>SelectionRelations</c> only ever looked at the element type's
     /// direct children, so <c>parent</c> was silently dropped and would have resolved to null).
     /// The fake data source mirrors ItemService's deep-expansion shape by pre-nesting "parent" inside
     /// "category" on the row; the schema's relation field is a plain pass-through pure resolver (see
@@ -374,7 +374,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// 8c.3a negative: <see cref="StruoQueryOptions.MaxRelationDepth"/> (5) is enforced by
+    /// Negative case: <see cref="StruoQueryOptions.MaxRelationDepth"/> (5) is enforced by
     /// ItemService, which this suite's <see cref="FakeGraphQlDataSource"/> bypasses entirely (no real
     /// ItemService sits in the call path), so a client selection nested deep enough to matter here
     /// must instead be caught by HotChocolate's own <c>AddMaxExecutionDepthRule(12)</c> — added to
@@ -382,7 +382,7 @@ public class GraphQlExecutionTests
     /// (<see cref="Struo.Api.GraphQl.GraphQlServiceCollectionExtensions.AddStruoGraphQl"/>) — which
     /// runs at document-validation time, before any resolver (including the now-recursive
     /// <see cref="CollectionResolvers.SelectionDeepSpec"/>) ever executes. This proves the recursive
-    /// selection-walk introduced by 8c.3a has no runaway/unbounded behaviour reachable from a client: an
+    /// recursive selection-walk has no runaway/unbounded behaviour reachable from a client: an
     /// over-deep query is rejected up front, with no partial data alongside the error.
     /// </summary>
     [Fact]

@@ -28,7 +28,7 @@ public class ContentColumnMappingTests
         public string? Body { get; set; }
 
         // Plain Text interface (the CmsFieldAttribute default) must NOT be widened — MaxLength
-        // support for Text fields is a separate feature (phase 7g.5).
+        // support for Text fields is a separate feature.
         [SugarColumn(IsNullable = true)]
         [CmsField(Label = "PlainText", Interface = FieldInterface.Text)]
         public string? PlainText { get; set; }

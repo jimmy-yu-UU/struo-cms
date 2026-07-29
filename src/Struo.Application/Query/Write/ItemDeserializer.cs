@@ -114,7 +114,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             FieldValueRules.RequireParent(field.Name, value);
         }
 
-        // Max length — CMS-layer limit (7g.5); the DB column width is SqlSugar's separate concern.
+        // Max length — a CMS-layer limit; the DB column width is SqlSugar's separate concern.
         // Runs after RichText sanitization so the stored value is what gets measured.
         foreach (var field in meta.Fields.Where(f => f.MaxLength is > 0 && !f.Translatable))
         {

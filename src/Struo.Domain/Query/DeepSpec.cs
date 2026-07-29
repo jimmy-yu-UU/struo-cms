@@ -7,7 +7,7 @@ namespace Struo.Domain.Query;
 /// collection), own-field <see cref="Sort"/>, per-parent <see cref="Limit"/>/<see cref="Offset"/>,
 /// and an optional nested <see cref="DeepSpec"/> for multi-level (depth &gt; 1) expansion.
 /// Filter/Sort/Limit/Offset apply to to-many (O2M/M2M) list relations only; they are null for M2O.
-/// The positional parameters are unchanged from 8c.3a; Filter/Sort/Offset are additive init-only
+/// The positional parameters are unchanged from the original constructor; Filter/Sort/Offset are additive init-only
 /// properties so every existing construction site compiles unchanged.
 /// </summary>
 public sealed record DeepRelationSpec(

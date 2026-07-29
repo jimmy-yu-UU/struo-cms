@@ -15,7 +15,7 @@ namespace Struo.Tests.Persistence;
 /// (MultiSelect/CheckboxGroup/Tags) to an `IsJson` + `text` column so a List&lt;string&gt; /
 /// List&lt;TagItem&gt; round-trips. Verified cross-db via an actual insert+read. The column type
 /// MUST be widened to `text`: `IsJson` alone leaves the length unset and Postgres defaults it to
-/// `varchar(1)`, truncating any real JSON payload (phase 7g+ live-gate finding). SQLite ignores
+/// `varchar(1)`, truncating any real JSON payload — confirmed against a live Postgres database. SQLite ignores
 /// declared length, so the type assertion is what pins this on the SQLite-only test run.
 /// </summary>
 public class MultiValueColumnMappingTests
