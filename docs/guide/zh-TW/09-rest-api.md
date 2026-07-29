@@ -296,7 +296,7 @@ $ curl -s -i -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: 
 
 **路由限制會在這一切之前就先失敗。** `ItemsController` 的通用 `{id}` 區段是一個單純、不受限制的
 路由參數 (一個集合的 id 欄位不見得永遠是 `Guid`)，但每一個 `FilesController`/`UsersController`/
-`RolesController` 的 id 路由都宣告為 `{id:guid}`，而 `ItemsController` 的兩個修訂紀錄路由則是
+`RolesController` 的 id 路由都宣告為 `{id:guid}`，而 `ItemsController` 的兩個版本紀錄路由則是
 `{id}/revisions/{revisionNumber:long}`——一個無法通過該限制的值，根本不會抵達 action:ASP.NET Core
 的路由機制根本不會比對成功，所以回應是一個**裸、空本文的 `404`** (沒有信封，`Content-Length: 0`)，
 而不是一個格式正確但確實未知的 id 所產生的網域 `{"success":false,"error":{"code":"NOT_FOUND",...}}`
@@ -330,7 +330,7 @@ Content-Length: 0
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` 已還原的項目，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
 | `GET /api/items/{collection}/{id}/revisions` | — | — | `200`，`{ revisionNumber, operation, createdAt, createdBy }` 的陣列 (若該集合沒有 `Revisions=true`則為 `[]`) | 無 (同上) | `CanRead` |
 | `GET /api/items/{collection}/{id}/revisions/{n}` | — | — | `200`，上方那筆條目再加上 `snapshot` (隱藏欄位已遮蔽)，或 `404` | 無 (同上) | `CanRead` |
-| `POST /api/items/{collection}/{id}/revisions/{n}/revert` | — | — | `200` 還原後的項目 (以更新的形式重新套用該快照，並記錄成一筆新的 `"revert"` 修訂紀錄)，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
+| `POST /api/items/{collection}/{id}/revisions/{n}/revert` | — | — | `200` 還原後的項目 (以更新的形式重新套用該快照，並記錄成一筆新的 `"revert"` 版本紀錄)，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 
 `GET /api/items/{collection}/{id}` 會透過與清單/查詢 action 完全相同的 `DeletedMode`/
 `DeletedAccessGuard` 路徑解析 `?deleted=` (第 8 章)——無論抵達的是這三個 action 中的哪一個，一個
@@ -342,7 +342,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file/e2269ae7-094d-448
 ```
 
 七個即時上線的框架集合，沒有任何一個宣告了 `[CmsCollection(Revisions = true)]`，所以在這個 host
-上，上面每一個修訂紀錄/還原 action 雖然都可以即時觸及，但一律會落入「沒有修訂紀錄」這個分支:
+上，上面每一個版本紀錄/還原 action 雖然都可以即時觸及，但一律會落入「沒有版本紀錄」這個分支:
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file/<id>/revisions"
