@@ -70,8 +70,11 @@ A few things this example relies on, all real, checkable rules:
   specifically so a forgotten primary key is a **compile error**, not a runtime surprise — the override
   is mandatory, and the `[SugarColumn(IsPrimaryKey = true)]` on that override is what SqlSugar
   recognizes as the table's key. `AuditableEntity` also supplies `CreatedAt`/`CreatedBy`/`UpdatedAt`/
-  `UpdatedBy` (stamped automatically) and an optimistic-concurrency `Version` column — none of these
-  need a `[CmsField]`; the scanner adds them as read-only "system" fields automatically (see chapter 5).
+  `UpdatedBy` (stamped automatically); none of these four need a `[CmsField]` — the scanner adds them
+  as read-only "system" fields automatically (see chapter 5). `AuditableEntity` separately supplies an
+  optimistic-concurrency `Version` column, which is not a system field at all — the scanner ignores any
+  property with neither `[CmsField]` nor one of the four audit names, so `Version` reaches API
+  responses only because `ItemProjector` emits it directly, outside the field loop, alongside `id`.
 - `[SugarTable("announcements")]` names the table explicitly, matching the convention every framework
   and sample entity uses (`src/Struo.Infrastructure/Files/MediaFolder.cs`,
   `samples/Struo.Sample.Blog/Article.cs`, etc.) — a lower-case, plural, snake_case table name.
@@ -115,7 +118,7 @@ property and declares:
 | `Searchable` | `bool` | Included in the collection's free-text search whitelist (chapter 8). |
 | `Sortable` | `bool` | Allowed as a query-DSL sort key. |
 | `Sort` | `int` | Field ordering in the admin form and (indirectly) the collection list columns. |
-| `ReadOnly` | `bool` | Value is returned on read but stripped from every write, server-side — see chapter 5. |
+| `ReadOnly` | `bool` | Value is returned on read; updates can never move a client-supplied value onto it, and creates strip it back out — with one CLR-type caveat — see chapter 5. |
 | `Hidden` | `bool` | Removes the field from schema, GraphQL, item projections, and query filtering/search/sort — see chapter 5. |
 | `HelpText` | `string?` | Help text shown under the admin form input. |
 | `Translatable` | `bool` | Field lives on the per-locale translation sidecar instead of the parent row (chapter 6). |
@@ -137,9 +140,11 @@ effect today; don't rely on it.
 
 Groups are captured in metadata and returned to API/GraphQL callers (`CollectionMetadata.FieldGroups`,
 `FieldMetadata.Group`) — but as shipped, the admin SPA's item form (`frontend/src/components/ItemForm.vue`)
-does not section the form by group at all: it renders every non-system field as one flat list, ordered
-by `Sort` (see `frontend/src/lib/splitFields.ts`). Declaring groups today mainly documents structure for
-API consumers rather than visually partitioning the admin form.
+does not section the form by group at all: `splitFields.ts` buckets non-system fields only into
+`shared` versus `translatable` (each bucket separately `Sort`-ordered), and `ItemForm.vue` renders the
+`translatable` bucket inside per-locale tabs, then the `shared` bucket below as a flat list — `Group`
+plays no part in either. Declaring groups today mainly documents structure for API consumers rather
+than visually partitioning the admin form.
 
 ## Options lists (`[CmsOptions]`)
 
@@ -160,9 +165,11 @@ which do use it.
 `AddStruoMetadata` (`src/Struo.Infrastructure/DependencyInjection/MetadataServiceCollectionExtensions.cs`)
 scans exactly three sources of assemblies:
 
-1. **The framework's own assembly** (`Struo.Infrastructure`) — always appended, so the built-in
-   collections (`Language`, `File`, `FileTranslation`, `MediaFolder`, `User`, `Role`, `Permission`,
-   `UserRole`, `Revision`, `SiteSettings` — chapter 1) are always discovered.
+1. **The framework's own assembly** (`Struo.Infrastructure`) — always appended, so the framework's
+   own `[CmsCollection]`-attributed types (`Language`, `File`, `MediaFolder`, `User`, `Role`,
+   `Permission`, `UserRole` — seven of the ten framework entity types listed in chapter 1;
+   `FileTranslation`, `Revision` and `SiteSettings` are framework tables but not collections) are
+   always discovered.
 2. **The host assembly** — `Struo.Api` itself (`typeof(Program).Assembly`, passed explicitly from
    `Program.cs`).
 3. **Every assembly named in `Struo:ContentAssemblies`** — read from `builder.Configuration` *before*

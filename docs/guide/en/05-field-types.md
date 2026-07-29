@@ -90,8 +90,10 @@ client) resolves as:
 1. The explicit `MaxLength`, if set (`> 0`).
 2. Otherwise, `255`, if the property is a `string` **and** the interface is one of the twelve
    "short-string" interfaces: `Text`, `Slug`, `Email`, `Url`, `Password`, `Color`, `Phone`, `Select`,
-   `MultiSelect`, `Radio`, `CheckboxGroup`, `Tags`. (The last three only matter here if you unusually
-   give them a plain `string` property instead of the `List<string>`/`List<TagItem>` they normally use.)
+   `MultiSelect`, `Radio`, `CheckboxGroup`, `Tags`. (`MultiSelect`, `CheckboxGroup` and `Tags` only
+   matter here if you unusually give them a plain `string` property instead of the
+   `List<string>`/`List<TagItem>` they normally use; `Radio`, like `Select`, normally *is* a plain
+   `string` already — see the table above.)
 3. Otherwise, `null` (unlimited) — every content-bearing interface (`Textarea`, `RichText`, `Markdown`,
    `Code`, `Json`) and every non-`string` field.
 
@@ -139,11 +141,16 @@ reach), you must set both.
 
 ## Read-only, hidden and system fields
 
-**`ReadOnly` (`[CmsField(ReadOnly = true)]`)** — the value is returned normally on read. On write, it is
-unconditionally stripped: `ItemDeserializer.Deserialize` nulls it on the bound entity right after
-deserializing the request body, for both create and update, regardless of what the client sent. The
-admin SPA's `FieldInput.vue` also disables the rendered input (`props.disabled === true ||
-props.field.readOnly`) — client and server enforce this independently.
+**`ReadOnly` (`[CmsField(ReadOnly = true)]`)** — the value is returned normally on read. On update it is
+fully protected: `ItemService.UpdateCoreAsync`'s field overlay skips every `ReadOnly`/`IsSystem` field
+outright, so an update body can never move a `ReadOnly` field's value onto the existing entity, whatever
+its CLR type. On create, `ItemDeserializer.Deserialize` nulls a bound `ReadOnly`/`IsSystem` property
+right after deserializing the request body — but, per its own comment, "only nullable props can be
+nulled" (`canBeNull = !pi.PropertyType.IsValueType || Nullable.GetUnderlyingType(...) is not null`): a
+`ReadOnly` field backed by a non-nullable value type (e.g. `[CmsField(ReadOnly = true)] public int
+Views`) is left holding whatever the client supplied on create, since there is nothing to null it back
+to. The admin SPA's `FieldInput.vue` also disables the rendered input
+(`props.disabled === true || props.field.readOnly`) independently of both server-side mechanisms.
 
 **`Hidden` (`[CmsField(Hidden = true)]`)** — independent of which `FieldInterface` the field uses (the
 sample's `Article.InternalNote` is a `Text` field with `Hidden = true`). Effects, all in
@@ -171,9 +178,14 @@ declares.
 **System fields** — `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy` from `IAuditable`/
 `AuditableEntity` need no `[CmsField]` at all: `MetadataScanner.BuildSystemField` adds them
 automatically, with `IsSystem = true`, `ReadOnly = true`, `Sort = 1000` (after every declared field), and
-`Interface = DateTime`. They're returned on read like any other field (`ItemProjector` does not skip
-`IsSystem`), stripped from every write exactly like `ReadOnly` fields, and excluded from both the admin
-item form and the collection-list columns (`frontend/src/lib/splitFields.ts` and
+an `Interface` picked from the property's CLR type — `DateTime` for `CreatedAt`/`UpdatedAt` (both
+`DateTime`), `Text` for `CreatedBy`/`UpdatedBy` (both `Guid?`, which falls through
+`BuildSystemField`'s `DateTime`/`DateTime?` check to the `Text` default). Unlike a plain `ReadOnly`
+field, these four are fully protected on create too, regardless of `CreatedAt`/`UpdatedAt` being a
+non-nullable `DateTime`: `AuditAop.Register`'s `DataExecuting` hook unconditionally overwrites all four
+immediately before every insert/update, independent of `ItemDeserializer`'s nullability-gated strip.
+They're returned on read like any other field (`ItemProjector` does not skip `IsSystem`), and excluded
+from both the admin item form and the collection-list columns (`frontend/src/lib/splitFields.ts` and
 `frontend/src/lib/selectListColumns.ts` both filter `isSystem` out) — so, unlike `Hidden` fields, they
 remain fully visible over the API; the shipped admin SPA simply never renders them.
 
