@@ -5,12 +5,12 @@
 
 ## 先決條件
 
-| Requirement | Version | Notes |
+| 需求 | 版本 | 備註 |
 |---|---|---|
-| .NET SDK | 10.0.x (see `global.json`, `rollForward: latestMinor`) | `dotnet --version` |
-| Node.js | 24.x | `node --version`; matches the version CI pins |
-| pnpm | 10.x | `pnpm --version`; matches the version CI pins |
-| Docker (with Compose) | any recent version | runs PostgreSQL and Redis for local development |
+| .NET SDK | 10.0.x (見 `global.json`，`rollForward: latestMinor`) | `dotnet --version` |
+| Node.js | 24.x | `node --version`;與 CI 固定使用的版本相符 |
+| pnpm | 10.x | `pnpm --version`;與 CI 固定使用的版本相符 |
+| Docker (with Compose) | 任何近期版本 | 在本機開發環境執行 PostgreSQL 與 Redis |
 
 ## 1. 啟動相依服務
 
@@ -129,14 +129,14 @@ SPA 的側欄**完全沒有「Content」導覽群組**。已直接針對此份 c
 
 ## 健康檢查端點與 Scalar
 
-| URL | Purpose |
+| URL | 用途 |
 |---|---|
-| `GET /health/live` | Liveness — always 200 once the process is up |
-| `GET /health/ready` | Readiness — 200 only once the database and cache checks pass |
-| `GET /api/ping` | Lightweight envelope response, useful for smoke-testing the REST pipeline |
-| `/scalar` | Interactive API explorer (Mars theme) — **non-Production only** |
-| `/openapi/v1.json` | Generated OpenAPI document — **non-Production only** |
-| `/graphql` | GraphQL endpoint (Banana Cake Pop / any GraphQL client) |
+| `GET /health/live` | Liveness——程序啟動後一律回傳 200 |
+| `GET /health/ready` | Readiness——只有在資料庫與快取檢查都通過後才回傳 200 |
+| `GET /api/ping` | 輕量的信封 (envelope) 回應，適合用來對 REST pipeline 做 smoke test |
+| `/scalar` | 互動式 API 瀏覽工具 (Mars 佈景主題)——**僅限非 Production 環境** |
+| `/openapi/v1.json` | 產生的 OpenAPI 文件——**僅限非 Production 環境** |
+| `/graphql` | GraphQL 端點 (Banana Cake Pop / 任何 GraphQL client) |
 
 已針對此份 checkout 確認過:
 
@@ -150,7 +150,7 @@ $ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 HTTP_STATUS:200
 ```
 
-Scalar explorer 與原始 OpenAPI 文件，只有在環境不是 `Production` 時才會被掛載——在 Production 環境
+Scalar 瀏覽工具與原始 OpenAPI 文件，只有在環境不是 `Production` 時才會被掛載——在 Production 環境
 下，這兩條路由都會回傳 404。如果你需要在 Production 環境使用它們，請自行在前面架設驗證機制。
 
 ## 接下來的步驟
