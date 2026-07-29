@@ -237,7 +237,7 @@ test.afterEach(async ({ page }) => {
 // onBeforeRouteLeave would never fire (dirty edits silently discarded). With the guard, it
 // prompts, and the keyed <router-view> remounts + reloads the target record on accept.
 // Category.Articles is the sample's RelatedList (see the assertion above).
-test('NAV-1: dirty form + RelatedList row click prompts unsaved guard, then remounts to the target record', async ({ page }) => {
+test('dirty form + RelatedList row click prompts unsaved guard, then remounts to the target record', async ({ page }) => {
   await login(page)
 
   // Create an article assigned to a category so that category's Articles RelatedList has a row.

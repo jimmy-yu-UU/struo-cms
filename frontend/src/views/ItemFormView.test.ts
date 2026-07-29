@@ -267,7 +267,7 @@ describe('ItemFormView', () => {
     expect((w.vm as any).serverError).toBe('Boom')
   })
 
-  it('carries the loaded version through to the update payload (FE-4 chain fix)', async () => {
+  it('carries the loaded version through to the update payload (version-chain fix)', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 3 })
@@ -303,7 +303,7 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
   })
 
-  it('generic 409 CONFLICT (e.g. duplicate email) shows the banner and does NOT trigger conflict recovery (API-1)', async () => {
+  it('generic 409 CONFLICT (e.g. duplicate email) shows the banner and does NOT trigger conflict recovery', async () => {
     // Only optimistic-lock clashes carry code VERSION_CONFLICT. Other 409s (delete-restrict,
     // duplicate email) keep the generic CONFLICT code and must NOT arm the "changed by someone else"
     // recovery banner — they fall through to the plain serverError banner with no version refetch.

@@ -125,7 +125,7 @@ describe('MediaLibraryView', () => {
     expect(fileCalls()).toBe(2)
   })
 
-  it('stays on the current page after a delete when it is still in range (FE-27)', async () => {
+  it('stays on the current page after a delete when it is still in range', async () => {
     const list = makeListMock([
       { data: rows, total: 100 }, // mount (page 0)
       { data: rows, total: 100 }, // onPage(1)
@@ -146,7 +146,7 @@ describe('MediaLibraryView', () => {
     expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(3)
   })
 
-  it('clamps to the last valid page after a delete strands the current page out of range (FE-27)', async () => {
+  it('clamps to the last valid page after a delete strands the current page out of range', async () => {
     const list = makeListMock([
       { data: rows, total: 1 },  // mount (page 0)
       { data: rows, total: 73 }, // onPage(2) -- page 2 valid (3 pages)
