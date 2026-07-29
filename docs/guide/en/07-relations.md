@@ -73,7 +73,7 @@ fork's collections:
 ```csharp
 // samples/Struo.Sample.Blog/Category.cs (excerpt)
 [Navigate(NavigateType.OneToMany, nameof(ParentId))]
-[CmsRelation(Interface = RelationInterface.TreeSelect, DisplayTemplate = "{Name}", OnDelete = OnDelete.SetNull)]
+[CmsRelation(Interface = RelationInterface.RelatedList, DisplayTemplate = "{Name}")]
 [SugarColumn(IsIgnore = true)]
 public List<Category> Children { get; set; } = [];
 
@@ -128,17 +128,17 @@ diff/patch): an unknown id is rejected as `"One or more ids in '{relation}' do n
 | `SortField` | `string?` | For many-to-many only: the junction column used to order the target rows (`RelationExpander.JunctionSortKey`); falls back to insertion order if unset or non-numeric. |
 | `OnDelete` | `OnDelete` | Cascade behavior when the *target* of a many-to-one is deleted (below); defaults to `Restrict`. |
 | `Editable` | `bool` | Whether the admin item form's picker for this relation accepts input; defaults to `true`. |
-| `DisplayColumns` | `string?` | Declared on the attribute but never read into `RelationMetadata` or anywhere else in `src/` — has no observable effect today (the same kind of unused-property caveat chapter 5 raised for `[CmsField(Display = ...)]`; don't rely on it). |
+| `DisplayColumns` | `string?` | Declared on the attribute but never read into `RelationMetadata` or anywhere else in `src/` — has no observable effect today (the same kind of unused-property caveat chapter 4 raised for `[CmsField(Display = ...)]`; don't rely on it). |
 | `MaxDepth` | `int` (default `1`) | Also declared but never read into `RelationMetadata` — has no observable effect today. Do not confuse it with the query DSL's separate, actually-enforced relation-path depth cap of 6 covered later in this chapter. |
 
 ## Junction entities for many-to-many
 
-A junction is a plain SqlSugar entity — not a `[CmsCollection]` in `User.Roles`'s case — with two FK
-columns (one per side) and, optionally, a sort column. The framework's `UserRole`
-(`src/Struo.Infrastructure/Identity/UserRole.cs`) is one, and it happens to *also* be its own
-`[CmsCollection]` (`Hidden = true`, so it never shows in the sidebar, but is fully reachable over
-the API like any collection) purely so it has its own admin-visible audit trail; a junction entity
-does not need to be a collection at all — the sample's `ArticleTag`
+A junction is a plain SqlSugar entity — not necessarily a `[CmsCollection]` at all. The framework's
+`UserRole` (`src/Struo.Infrastructure/Identity/UserRole.cs`) happens to *also* be its own
+`[CmsCollection]` (`Hidden = true`, so it never shows in the sidebar; `AdminOnly = true`, so generic
+writes to it need a super-admin regardless of any per-collection grant); its own doc comment states
+only that it "model[s] the user↔role many-to-many," with no further stated rationale for also being
+a collection. A junction entity does not need to be a collection at all: the sample's `ArticleTag`
 (`samples/Struo.Sample.Blog/ArticleTag.cs`) is a bare junction with no `[CmsCollection]` attribute.
 Either way, `[Navigate(typeof(JunctionType), parentFkName, targetFkName)]` on the *owning*
 collection's list property is what the scanner needs to resolve the junction's shape — the junction
@@ -258,7 +258,7 @@ display (`frontend/src/lib/relationInputKind.ts`):
 | `TagSelect` | `RelationPicker` (PrimeVue `MultiSelect`) | Multi-value picker for many-to-many relations, same search behavior. |
 | `TreeSelect` | `RelationPicker` (PrimeVue `TreeSelect`) | Single-value picker over a tree built from a self-referencing many-to-one's target rows. |
 | `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | Read-only, paginated, lazy-loaded list of the target collection filtered by the relation's reverse FK; clicking a row navigates to that row's own item-edit page. Shows only after the parent has been saved (a brand-new, unsaved parent has no id to filter by yet). |
-| `FilePicker` / `ImagePicker` / `FilesPicker` | *(none — falls back to a plain read-only label)* | These three enum values exist and are captured in metadata, but `relationInputKind.ts`'s interface-to-component map has no entry for them, so the admin item form renders the relation as a disabled, non-interactive field regardless of `Editable`. |
+| `FilePicker` / `ImagePicker` / `FilesPicker` | *(none — falls back to a plain label)* | These three enum values exist and are captured in metadata, but `relationInputKind.ts`'s interface-to-component map has no entry for them, so `RelationInput.vue` falls through to its final, unconditional branch: a bare `<span class="readonly-relation">{{ relation.label }} (read-only)</span>` — not an input element at all, so `Editable` has nothing to apply to. |
 
 Every picker resolves a target row's display label from `[CmsRelation(DisplayTemplate = ...)]` via
 `resolveDisplayLabel` — a plain `{FieldName}` substitution against the target's own projected

@@ -21,13 +21,17 @@ The same query model is reachable two ways:
 
 Both are read-only and go through the same RBAC read check as any other read (`ItemsController` has
 no `[Authorize]` on either action, and `ItemService` only ever checks `CanRead` for a query) — `POST
-/query` needs no *write* grant despite the verb. But — like every `POST`/`PUT`/`DELETE` in this API,
-read or write — it does require the `X-Struo-CSRF` header to be present, or the request is rejected
-before it reaches the controller at all (chapter 9 covers the full header/auth picture):
+/query` needs no *write* grant despite the verb. But `CsrfProtectionMiddleware`
+(`src/Struo.Api/Auth/CsrfProtectionMiddleware.cs`) guards every non-safe HTTP method (`POST`/`PUT`/
+`DELETE`/…, `GET`/`HEAD`/`OPTIONS`/`TRACE` are exempt) the same way regardless of read or write —
+**but only when the request rides on the session cookie**: a `Bearer`-authenticated request is
+exempt (no ambient browser credential to forge), and so is a request that carries no session cookie
+at all (nothing yet to attack). A cookie-authenticated `POST /query` with no `X-Struo-CSRF` header is
+rejected before it reaches the controller:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: application/json" -b cookies.txt -d '{}'
-{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required 'X-Struo-CSRF' header."}}
+{"success":false,"error":{"code":"FORBIDDEN","message":"Missing required \u0027X-Struo-CSRF\u0027 header."}}
 ```
 
 ## Anatomy of a query
@@ -39,7 +43,7 @@ $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: a
 | Pagination | `limit=`, `offset=` | `"limit"`, `"offset"` | No `page` parameter exists — pagination is purely offset-based (see below). |
 | Fields | `fields=a,b,c` | `"fields": ["a","b","c"]` | Restricts which *own* fields are projected (relations and `translations` are unaffected — see below). |
 | Deep | `deep=rel1,rel2` | `"deep": { "rel1": {...} }` | Relation expansion; chapter 7 covers this in full. |
-| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4); not part of the brief's required list but part of the same `QueryModel`. |
+| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4). |
 | Soft-delete | `deleted=exclude\|only\|with` | *(query-string only — `GET`/`POST query` both read it from the URL)* | See below. |
 | Locale | `locale=code` | *(query-string only, same as above)* | Effective query locale for translatable-field filter/sort/read (chapter 6). |
 
@@ -91,10 +95,13 @@ as `uuid = uuid`, not `uuid = text` (which PostgreSQL rejects outright).
 
 ## Logical composition (`_and`/`_or`)
 
-Two or more conditions on the *same* field, or any conditions you want OR-ed instead of AND-ed,
-need the JSON envelope's `_and`/`_or`. Only **one level** of nesting is supported — a `LogicalFilter`
-appearing as a child of another `LogicalFilter` is rejected outright, so `_or` containing `_and` (or
-vice versa) does not work, even one level deep:
+Distinct query-string `filter[...]` keys already AND together implicitly — including two conditions
+on the *same* field under *different* operators (`filter[size][_gt]=20&filter[size][_lt]=35`, shown
+below). What the query-string form cannot express at all is OR, or two conditions on the same field
+under the *same* operator (`filter[size][_gt]` can only appear once as a dictionary key) — either of
+those needs the JSON envelope's `_and`/`_or`. Only **one level** of nesting is supported there — a
+`LogicalFilter` appearing as a child of another `LogicalFilter` is rejected outright, so `_or`
+containing `_and` (or vice versa) does not work, even one level deep:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: application/json" \
@@ -130,7 +137,7 @@ the given order (multi-key sort):
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=-size,fileName"
-{"success":true,"data":[{"fileName":"gamma-draft.txt","size":35, ...},{"fileName":"beta-notes.txt","size":23, ...},{"fileName":"alpha-report.txt","size":20, ...}], ...}
+{"success":true,"data":[{"id":"...","fileName":"gamma-draft.txt","size":35, ...},{"id":"...","fileName":"beta-notes.txt","size":23, ...},{"id":"...","fileName":"alpha-report.txt","size":20, ...}],"meta":{"total":3,"limit":25,"offset":0}}
 ```
 
 A sort key may also be a dotted relation path, but only when every hop is many-to-one — chapter 7
@@ -159,9 +166,9 @@ separate stages, after `ItemProjector`'s own-field selection runs):
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?fields=id,fileName&sort=fileName"
 {"success":true,"data":[
-  {"id":"...","fileName":"alpha-report.txt","translations":{"en":{"title":"alpha-report","alt":null},"zh-TW":{"title":"alpha 報告","alt":"Alpha 報告圖示"}}},
-  {"id":"...","fileName":"beta-notes.txt","translations":{"en":{"title":"beta-notes","alt":null}}},
-  {"id":"...","fileName":"gamma-draft.txt","translations":{"en":{"title":"gamma-draft","alt":null}}}
+  {"id":"...","version":1,"fileName":"alpha-report.txt","translations":{"en":{"title":"alpha-report","alt":null},"zh-TW":{"title":"alpha 報告","alt":"Alpha 報告圖示"}}},
+  {"id":"...","version":2,"fileName":"beta-notes.txt","translations":{"en":{"title":"beta-notes","alt":null}}},
+  {"id":"...","version":0,"fileName":"gamma-draft.txt","translations":{"en":{"title":"gamma-draft","alt":null}}}
 ],"meta":{"total":3,"limit":25,"offset":0}}
 ```
 
@@ -234,8 +241,8 @@ and field projection, all in one `GET`:
 $ curl -s -b cookies.txt \
     "http://localhost:5221/api/items/file?filter%5Bsize%5D%5B_gte%5D=20&sort=-size&limit=2&offset=0&fields=id,fileName,size"
 {"success":true,"data":[
-  {"id":"...","fileName":"gamma-draft.txt","size":35,"translations":{"en":{"title":"gamma-draft","alt":null}}},
-  {"id":"...","fileName":"beta-notes.txt","size":23,"translations":{"en":{"title":"beta-notes","alt":null}}}
+  {"id":"...","version":0,"fileName":"gamma-draft.txt","size":35,"translations":{"en":{"title":"gamma-draft","alt":null}}},
+  {"id":"...","version":2,"fileName":"beta-notes.txt","size":23,"translations":{"en":{"title":"beta-notes","alt":null}}}
 ],"meta":{"total":3,"limit":2,"offset":0}}
 ```
 
