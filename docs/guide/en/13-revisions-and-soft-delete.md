@@ -23,7 +23,8 @@ occurrence of `Revisions = true` anywhere under `src/`). The sample Blog's `Arti
 16) does: `[CmsCollection("Article", ..., Revisions = true)]`, and it additionally implements
 `ISoftDeletable` — the walkthrough below uses it to show the full create/update/list/view/revert cycle
 against a real, running collection, exactly as it would work for any collection a fork opts in the same
-way.
+way. The sample ships **disabled** by default (empty `Struo:ContentAssemblies`, no project reference from
+`Struo.Api` to it) — chapter 16 covers enabling it, which this walkthrough assumes has already been done.
 
 ## What a snapshot contains, and when it is captured
 
@@ -287,7 +288,7 @@ via `?purge=true`, confirmed absent even from `?deleted=with`).
 `GET` list/query actions and the single-item `GET`. Requesting anything other than `Exclude` requires
 **delete** permission on the collection, not merely read — `DeletedAccessGuard.EnsureCanViewDeleted`
 (`src/Struo.Application/Query/DeletedAccessGuard.cs`), enforced by `ItemsController` itself (and the
-GraphQL resolvers, chapter 8) rather than inside `ItemService.QueryAsync`/`GetAsync`, which only ever
+GraphQL resolvers, chapter 10) rather than inside `ItemService.QueryAsync`/`GetAsync`, which only ever
 check `CanRead`. This is a deliberate stricter gate: seeing which rows are trashed is treated as more
 sensitive than seeing the live set, since the identity of a deleted row can itself be information a plain
 reader shouldn't have. Chapter 8 shows the live PostgreSQL 3-way split (`exclude`/`only`/`with`) against

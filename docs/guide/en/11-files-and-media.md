@@ -162,9 +162,8 @@ the tracked compose file — `STRUO_MINIO_PORT` / `STRUO_MINIO_CONSOLE_PORT` env
 ```
 
 **This chapter verifies the `local` backend live and documents `s3` from `S3FileStorage`/
-`FileStorageOptions.S3Options` and `docker-compose.yml` directly** — it does not reconfigure the running
-host (which is `local`) to also exercise `s3` live; doing so would need a separate instance pointed at a
-MinIO/S3 endpoint, not a change to a shared one.
+`FileStorageOptions.S3Options` and `docker-compose.yml` directly** — the `s3` backend itself is not
+exercised live here.
 
 ## Serving files: authenticated vs. anonymous, presigned redirects
 
@@ -173,7 +172,12 @@ allowed through so a **published** file's metadata/bytes can be embedded in publ
 session. A **non-published** (`status != "published"`) file additionally requires
 `IFileAccessPolicy.CanReadUnpublishedAsync` — a genuine `file`-collection `CanRead` grant, not merely
 being logged in (so a role-less SSO/JIT user, chapter 12, can't fetch drafts just by having a session) —
-and returns a plain `404` rather than `403` when that check fails, so a draft's existence isn't leaked
+**unless `file` itself is a public-read collection** (chapter 12 demonstrates granting this live): the
+check's own fast path is simply `permissions.CanRead("file")` for any authenticated identity
+(`FileAccessPolicy.cs:46-51`), and that grant is exactly as true for a role-less authenticated user as it
+is for an anonymous one once `file` carries a public read grant, by the same public-floor mechanism
+chapter 12 documents (`FileAccessPolicy.cs:41-44`'s own doc comment states this explicitly). This check
+returns a plain `404` rather than `403` when it fails, so a draft's existence isn't leaked
 to a caller without the grant (`FilesController.Get`/`Download`,
 `src/Struo.Api/Controllers/FilesController.cs:57-72`, `74-163`). This also means a **trashed** file
 (soft-deleted — see below) 404s from both actions too, since `FileService.GetAsync` reads through the
@@ -361,9 +365,12 @@ HTTP/1.1 204 No Content
 $ curl -s -i -X DELETE "http://localhost:5221/api/files/a1f1112e-e8c7-4bfa-8aff-460303d8546d?purge=true" -H "X-Struo-CSRF: 1" -b cookies.txt
 HTTP/1.1 204 No Content
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/file?deleted=with"
-{"success":true,"data":[...three original files, purge-test.txt no longer present...]}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/file?deleted=with&sort=fileName"
+{"success":true,"data":[{"fileName":"alpha-report.txt", ...},{"fileName":"beta-notes.txt", ...},{"fileName":"doc-sample.png", ...},{"fileName":"gamma-draft.txt", ...}],"meta":{"total":4,"limit":25,"offset":0}}
 ```
+
+(`purge-test.txt` is absent even here — `?deleted=with` includes trashed rows, but a purge removes the
+row entirely, so there is nothing left for any `deleted=` mode to find.)
 
 The purged file's blob was confirmed removed from `App_Data/uploads` on disk (no orphaned file under
 its storage key remained).
