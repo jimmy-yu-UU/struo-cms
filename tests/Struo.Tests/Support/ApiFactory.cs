@@ -18,7 +18,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public string FilesRoot { get; } =
         Path.Combine(Path.GetTempPath(), "struo-files-it-" + Guid.NewGuid().ToString("N"));
 
-    // Isolates P2.4's image-variant cache from the repo's src/Struo.Api/App_Data default (same
+    // Isolates the image-variant cache from the repo's src/Struo.Api/App_Data default (same
     // rationale as FilesRoot above) — otherwise the IT suite would write real variant files under
     // the checked-out working tree.
     public string ImageCacheRoot { get; } =
@@ -106,7 +106,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email = AdminEmail, password = AdminPassword });
         resp.EnsureSuccessStatusCode();
@@ -149,7 +149,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         }
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();
@@ -179,7 +179,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         }
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();

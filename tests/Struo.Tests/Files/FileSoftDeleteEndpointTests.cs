@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// #12: DELETE /api/files/{id} now defaults to trash (not a hard delete); ?purge=true still hard
+// DELETE /api/files/{id} defaults to trash (not a hard delete); ?purge=true still hard
 // deletes; POST /api/files/{id}/restore reverses a trash. Mirrors the WAF harness already used by
 // Struo.Tests.Api.SoftDeleteEndpointTests (generic /items path) and Struo.Tests.Files.FileRbacTests
 // (multipart upload + RBAC pattern for the dedicated files pipeline).

@@ -124,7 +124,7 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
-    // Per-dispatcher open-instance delegate caches (§17.6), keyed by closed entity type.
+    // Per-dispatcher open-instance delegate caches, keyed by closed entity type.
     // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
     // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
     // replaced by a direct delegate call. The *Def MethodInfo fields above seed CreateDelegate; each
@@ -236,7 +236,7 @@ public sealed class SqlSugarItemRepository(
                         FieldName = idColumn,
                         ConditionalType = SqlSugar.ConditionalType.In,
                         FieldValue = string.Join(",", allParentIds),
-                        CSharpTypeName = TypeNameOfProperty(d.EntityType, d.IdProperty)  // D6: PK is Guid -> uuid on PG
+                        CSharpTypeName = TypeNameOfProperty(d.EntityType, d.IdProperty)  // PK is Guid -> uuid on PG
                     };
 
                     if (nonTranslatableSearchable.Count > 0)
@@ -365,7 +365,7 @@ public sealed class SqlSugarItemRepository(
         }
     }
 
-    // D6: resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
+    // Resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
     // their real CLR type (Guid -> uuid, long -> bigint) on Postgres instead of as text (42883 on PG).
     // Mirrors what ConditionalModelTranslator already does for the parsed query DSL; returns null for
     // string/unknown so those keep untyped behavior.
@@ -431,7 +431,7 @@ public sealed class SqlSugarItemRepository(
 
     private async Task UpdateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
     {
-        // Optimistic concurrency (D2): for auditable collection entities, bump the version and update
+        // Optimistic concurrency: for auditable collection entities, bump the version and update
         // WHERE id = ? AND version = expected. If a concurrent writer already advanced the version, zero
         // rows match and we surface a 409 instead of silently overwriting their change. The id + version
         // are bound as typed parameters (real Guid / long), so PG's uuid column matches correctly.
@@ -538,7 +538,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.Equal,
                 FieldValue = value.ToString(),
-                CSharpTypeName = TypeNameOf(value)  // D6
+                CSharpTypeName = TypeNameOf(value)
             }
         };
         await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
@@ -567,7 +567,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         var q = db.Queryable<T>();
@@ -664,7 +664,7 @@ public sealed class SqlSugarItemRepository(
     private async Task<bool> RestoreGenericAsync<T>(string idColumn, object id, CancellationToken ct)
         where T : class, ISoftDeletable, new()
     {
-        // PG 42804 fix (9b live-gate): `.SetColumns(deletedAtColumn, (object?)null)` binds a null
+        // PG 42804 fix: `.SetColumns(deletedAtColumn, (object?)null)` binds a null
         // parameter with NO CLR type, so Npgsql infers `text` and PG rejects
         // `SET deletedat = @p(text)` against the `timestamp` column. The entity-typed object
         // initializer below goes through SqlSugar's expression resolver instead of the raw
@@ -721,7 +721,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
@@ -744,7 +744,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
@@ -817,7 +817,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = parentColumn,
                 ConditionalType = ConditionalType.In,
                 FieldValue = parentId.ToString(),
-                CSharpTypeName = TypeNameOf(parentId)  // D6
+                CSharpTypeName = TypeNameOf(parentId)
             }
         };
 
@@ -880,7 +880,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = fkColumn,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", parentIds.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // D6: parent FK is Guid
+                CSharpTypeName = TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // parent FK is Guid
             }
         };
         if (locale is not null)
@@ -1053,7 +1053,7 @@ public sealed class SqlSugarItemRepository(
                     FieldName = fkColumn,
                     ConditionalType = ConditionalType.In,
                     FieldValue = parentId.ToString(),
-                    CSharpTypeName = TypeNameOf(parentId)  // D6: parent FK is Guid
+                    CSharpTypeName = TypeNameOf(parentId)  // parent FK is Guid
                 },
                 new ConditionalModel
                 {

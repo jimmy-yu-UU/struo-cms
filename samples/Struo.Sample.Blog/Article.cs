@@ -7,7 +7,9 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Sample.Blog;
 
 [SugarTable("articles")]
-// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql (ix_articles_categoryid — M2O FK).
+// CodeFirst-declared secondary index on the M2O FK column (ix_articles_categoryid), created by
+// InitTables in dev; a downstream fork that keeps this entity should add the equivalent index to
+// its own migrations, since sample schema isn't part of the core baseline.
 [SugarIndex("ix_articles_categoryid", nameof(CategoryId), OrderByType.Asc)]
 [CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status), Revisions = true)]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
@@ -19,7 +21,7 @@ public sealed class Article : AuditableEntity, ISoftDeletable
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
 
-    // Title/Body moved to the ArticleTranslation sidecar (Phase 4 i18n).
+    // Title/Body moved to the ArticleTranslation sidecar for per-locale content.
     [CmsTranslations(typeof(ArticleTranslation))]
     [SugarColumn(IsIgnore = true)]
     public List<ArticleTranslation> Translations { get; set; } = [];
@@ -59,7 +61,7 @@ public sealed class Article : AuditableEntity, ISoftDeletable
     [CmsField(Label = "FAQs", Interface = FieldInterface.Repeater, Sort = 12, Group = "Content")]
     public List<FaqItem> Faqs { get; set; } = [];
 
-    // Hidden credential-shaped own-field (SEC-2 fixture): captured in full by RevisionSnapshotBuilder
+    // Hidden credential-shaped own-field (a redaction-test fixture): captured in full by RevisionSnapshotBuilder
     // (revert must restore it) but must be redacted from any snapshot returned to an external caller.
     [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Internal Note", Interface = FieldInterface.Text, Hidden = true, Sort = 13, Group = "Content")]

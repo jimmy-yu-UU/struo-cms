@@ -159,8 +159,8 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
-  // editor whose editable surface is a `.ProseMirror` contenteditable, NOT a <textarea> (Phase
-  // 7f/7g). contenteditable can't be `.fill()`ed — click to focus, then type via the keyboard
+  // editor whose editable surface is a `.ProseMirror` contenteditable, NOT a <textarea>.
+  // contenteditable can't be `.fill()`ed — click to focus, then type via the keyboard
   // (same idiom as conflict.spec.ts / unsaved-guard.spec.ts).
   const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
   await body.click()
@@ -173,8 +173,8 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await page.getByRole('button', { name: 'Save' }).click()
 
   // Back on the list; the new row is present BY ITS TRANSLATED TITLE — Title is a translatable
-  // scalar field so selectListColumns() includes it as a column, and (post-Phase-7d list-title fix)
-  // the row renders the resolved translation instead of "—". Open it, change the category and
+  // scalar field so selectListColumns() includes it as a column, and the row renders the resolved
+  // translation instead of "—". Open it, change the category and
   // toggle the tag selection, save.
   await expect(page).toHaveURL(/\/collections\/article$/)
   await openArticleByTitle(page, title)

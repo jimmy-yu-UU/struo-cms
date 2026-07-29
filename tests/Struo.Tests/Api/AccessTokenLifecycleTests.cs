@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-// M2: the bearer token stays permanent, but issuance and last-use are now recorded so a leaked or
+// The bearer token stays permanent, but issuance and last-use are recorded so a leaked or
 // stale token can be spotted. GenerateToken stamps CreatedAt (and clears LastUsedAt); a bearer
 // request stamps LastUsedAt.
 [Collection("ApiIntegration")]

@@ -98,7 +98,7 @@ public sealed class UsersController(
     }
 
     /// <summary>
-    /// Read-only preview for the User form (問題 4). Reuses the exact per-request resolution pair
+    /// Read-only preview for the User form. Reuses the exact per-request resolution pair
     /// (IRolePermissionStore + PermissionResolver), so the preview is by construction identical to
     /// real authorization — including the public-role floor for role-less users and the super-admin
     /// short-circuit. Projection mirrors AuthController.Me: probe each schema collection.
@@ -127,7 +127,7 @@ public sealed class UsersController(
         else
         {
             var roles = rolesValues.ToString();
-            // B.1 #2: hypothetical preview of an unsaved role selection. Empty -> public floor.
+            // Hypothetical preview of an unsaved role selection. Empty -> public floor.
             var parts = roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var ids = new List<Guid>(parts.Length);
             foreach (var p in parts)

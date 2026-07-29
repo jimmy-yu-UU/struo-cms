@@ -641,7 +641,7 @@ describe('ItemFormView', () => {
     expect(w.get('.conflict-banner').text()).toContain('changed by someone else')
   })
 
-  // ---- FE-R7: revision history drawer --------------------------------------
+  // ---- Revision history drawer --------------------------------------
 
   it('renders the history drawer only for revisioned collections in edit mode', async () => {
     routeParams = { name: 'article', id: '5' }

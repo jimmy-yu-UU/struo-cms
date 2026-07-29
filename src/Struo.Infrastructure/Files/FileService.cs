@@ -120,7 +120,7 @@ public sealed class FileService(
             FolderId = folderId,
         };
 
-        // #7: seed the default-locale Title from the filename (extension stripped) so an upload is
+        // Seed the default-locale Title from the filename (extension stripped) so an upload is
         // immediately human-readable everywhere. Dotfiles ("." prefix strips to empty) fall back to
         // the full name; clamp to the column width (varchar 255). Same transaction as the file row —
         // a seed failure must not leave a title-less file (repository join-if-active).
@@ -147,7 +147,7 @@ public sealed class FileService(
     public async Task<File?> GetAsync(Guid id, CancellationToken ct = default) =>
         await db.Queryable<File>().In(id).FirstAsync(ct);
 
-    // #12: this is now the media library's PURGE operation (permanent, hard delete) — the default
+    // This is the media library's PURGE operation (permanent, hard delete) — the default
     // FilesController DELETE is TrashAsync above; DeleteAsync is invoked via ?purge=true and must
     // therefore still find an already-trashed row, so the lookup clears the ISoftDeletable filter
     // (Updateable/Deleteable below already bypass it; only this initial Queryable read needed it).
@@ -190,7 +190,7 @@ public sealed class FileService(
         return true;
     }
 
-    // #12: default "delete" for the media library is now trash, not purge. Reuses the same atomic
+    // Default "delete" for the media library is trash, not purge. Reuses the same atomic
     // repository primitive ItemService uses for every other soft-deletable collection (WHERE
     // deletedat IS NULL) instead of reimplementing that logic here.
     public async Task<bool> TrashAsync(Guid id, CancellationToken ct = default)

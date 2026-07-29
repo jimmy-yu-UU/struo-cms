@@ -27,7 +27,7 @@ public class FileCollectionTests(ApiFactory factory)
             f.GetProperty("name").GetString() == "title" && f.GetProperty("translatable").GetBoolean());
     }
 
-    // #12: File soft-delete + retire `archived`.
+    // File soft-delete + retire `archived`.
     [Fact]
     public void File_is_soft_deletable()
     {

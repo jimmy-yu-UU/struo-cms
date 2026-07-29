@@ -95,7 +95,7 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
   return id
 }
 
-// Click a collection link in the sidebar. FE-R1: the sidebar is the <aside class="sidebar">
+// Click a collection link in the sidebar. The sidebar is the <aside class="sidebar">
 // (the <nav> element now belongs to the breadcrumb), and collection links render as plain
 // buttons (SidebarNavItem) rather than a PrimeVue PanelMenu. Groups mount expanded by default
 // (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh mount.

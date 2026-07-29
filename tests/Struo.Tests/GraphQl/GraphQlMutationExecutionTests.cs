@@ -302,7 +302,7 @@ public class GraphQlMutationExecutionTests
         node.GetProperty("status").GetString().Should().Be("archived");
     }
 
-    // API-1: optimistic-lock CAS miss surfaces over the GraphQL pipeline as extensions.code ==
+    // Optimistic-lock CAS miss surfaces over the GraphQL pipeline as extensions.code ==
     // VERSION_CONFLICT (not the generic CONFLICT). Asserted on the parsed extensions.code exactly —
     // a substring Contains("CONFLICT") would falsely pass since VERSION_CONFLICT contains it.
     [Fact]

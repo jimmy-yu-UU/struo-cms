@@ -11,7 +11,7 @@ using Struo.Infrastructure.Identity;
 
 namespace Struo.Api.Controllers;
 
-/// <summary>Wire DTO for one grant row of the Role permission matrix (問題 3).</summary>
+/// <summary>Wire DTO for one grant row of the Role permission matrix.</summary>
 public sealed record RolePermissionEntry(string Collection, bool CanRead, bool CanWrite, bool CanDelete);
 
 [ApiController]

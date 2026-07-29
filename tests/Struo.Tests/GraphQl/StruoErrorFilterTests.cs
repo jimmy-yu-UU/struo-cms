@@ -68,7 +68,7 @@ public class StruoErrorFilterTests
     public void Conflict_maps_to_CONFLICT()
         => _filter.OnError(Wrap(new RelationConflictException("c"))).Code.Should().Be("CONFLICT");
 
-    // API-1: optimistic-lock CAS miss splits to VERSION_CONFLICT over GraphQL too (shared DomainErrorMap).
+    // Optimistic-lock CAS miss splits to VERSION_CONFLICT over GraphQL too (shared DomainErrorMap).
     [Fact]
     public void ConcurrencyConflict_maps_to_VERSION_CONFLICT()
         => _filter.OnError(Wrap(new ConcurrencyConflictException("c"))).Code.Should().Be("VERSION_CONFLICT");

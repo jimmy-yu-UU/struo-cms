@@ -33,7 +33,7 @@ public sealed class ItemProjector(IEntityRegistry registry, IPermissionService p
         dict[idKey] = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entity);
 
         // Always expose the concurrency token (like id, independent of field selection) so the client
-        // can echo it back on update for optimistic-locking (D2).
+        // can echo it back on update for optimistic-locking.
         if (entity is Struo.Domain.Auditing.AuditableEntity versioned)
             dict["version"] = versioned.Version;
 

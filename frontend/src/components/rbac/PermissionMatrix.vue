@@ -7,7 +7,7 @@ import Checkbox from 'primevue/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 
-// 問題 3: the Role form's permission matrix — one row per collection, read/write/delete grants,
+// The Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
 // createMode buffers grants locally (no GET, no own Save button) — ItemFormView's create
 // submit reads currentEntries() and PUTs them itself once the role exists.

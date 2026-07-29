@@ -5,10 +5,10 @@ using Xunit;
 namespace Struo.Tests.Template;
 
 /// <summary>
-/// Guards the template-level invariants from CLAUDE.md §2 ("Framework code never references
-/// samples/*") and §0 (the shipped template ships with no business content wired in). These are
-/// repo-shape checks — they inspect files on disk rather than exercising <c>AddStruoMetadata</c> —
-/// so they live here rather than alongside the metadata-scanning tests.
+/// Guards two template-level invariants: the dependency rule ("framework code never references
+/// samples/*") and the core/sample boundary (the shipped template ships with no business content
+/// wired in). These are repo-shape checks — they inspect files on disk rather than exercising
+/// <c>AddStruoMetadata</c> — so they live here rather than alongside the metadata-scanning tests.
 /// </summary>
 public sealed class TemplateInvariantsTests
 {
@@ -32,7 +32,7 @@ public sealed class TemplateInvariantsTests
     [Fact]
     public void Host_project_has_no_project_reference_into_samples()
     {
-        // Dependency rule (CLAUDE.md §2): "Framework code never references samples/*". The
+        // Dependency rule: framework code never references samples/*. The
         // appsettings check above only proves the sample isn't *opted in* via config - it says
         // nothing about the project file. Re-adding a <ProjectReference> to samples/ would restore
         // the dependency-rule violation the whole sample-decoupling task exists to remove, while

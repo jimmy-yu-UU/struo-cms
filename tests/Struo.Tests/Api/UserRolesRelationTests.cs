@@ -25,7 +25,7 @@ public class UserRolesRelationTests(ApiFactory factory)
         return json.GetProperty("data").GetProperty("id").GetGuid();
     }
 
-    // 問題 4: roles are assigned on the User form via TagSelect, not by hand-crafting userRole rows.
+    // Roles are assigned on the User form via TagSelect, not by hand-crafting userRole rows.
     [Fact]
     public async Task Admin_sets_user_roles_through_the_generic_item_path_and_reads_names_back()
     {
@@ -35,7 +35,7 @@ public class UserRolesRelationTests(ApiFactory factory)
 
         // The item write path validates Required own-fields on every PUT (no partial-patch
         // semantics), so `email` must be echoed back alongside the new `roles` value. Also echo
-        // the optimistic-concurrency token if the item carries one (D2 convention).
+        // the optimistic-concurrency token if the item carries one.
         var item = (await admin.GetFromJsonAsync<JsonElement>($"/api/items/user/{userId}")).GetProperty("data");
         var email = item.GetProperty("email").GetString();
         var body = item.TryGetProperty("version", out var v)
