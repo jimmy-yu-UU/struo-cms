@@ -111,26 +111,60 @@ against the root with a trailing-separator-safe prefix comparison before any I/O
 would resolve outside the root throws `InvalidOperationException` rather than escaping it. This backend
 never supports presigned URLs (`SupportsPresignedUrls => false`) and ignores the passed content type on
 save — bytes are always streamed back through the API itself, with the persisted `File.ContentType` as
-the `Content-Type` header (`FilesController.Download`), never a type recorded at the storage layer.
+the `Content-Type` header (`FilesController.Download`), never a type recorded at the storage layer. **This
+is the backend live-verified throughout this chapter** — the running host used for every example above
+is configured with `Struo:Files:Backend = "local"`.
 
 **`s3`** (`S3FileStorage`, `src/Struo.Infrastructure/Files/S3FileStorage.cs`) is an S3-compatible client
-(`AmazonS3Client`) configured from `Struo:Files:S3` — `Endpoint`, `Bucket`, `AccessKey`, `SecretKey`
-(all required when this backend is selected), `Region` (default `us-east-1`), `ForcePathStyle` (default
-`true` — path-style addressing, which MinIO and most self-hosted S3-compatible servers need instead of
-virtual-hosted-style), and `PresignTtlSeconds` (default `300`). It records the validated content type as
-S3 object metadata on save (so a direct/presigned `GET` serves the right `Content-Type` even without the
-API in the loop) and does support presigned URLs — `GetPresignedUrlAsync` mints a time-limited `GET` URL
-with `ResponseHeaderOverrides.ContentDisposition = "attachment"` forced on, so a browser following the
-redirect downloads rather than renders — defence in depth for a type (e.g. SVG) the API's own
-`Content-Disposition` handling wouldn't otherwise cover on that path. `AmazonS3Config.UseHttp` is derived
-from whether `Endpoint` starts with `http://`, because the SDK's presigned-URL default scheme is
-`https`, which an http-only MinIO endpoint would then refuse after the redirect.
+(`AmazonS3Client`) configured from `Struo:Files:S3`:
 
-The bundled MinIO container (bucket `struo-media`, credentials from `docker-compose.yml`) starts via
-`docker compose --profile s3 up -d` (chapter 2) and is the local-development stand-in for this backend;
-this chapter does not re-verify the `s3` backend live against the running host used for this manual's
-other examples, which is configured for `local` — evaluating `s3` end-to-end needs its own instance
-pointed at a MinIO/S3 endpoint, not a reconfiguration of a shared one.
+| Key | Default | Notes |
+|---|---|---|
+| `Endpoint` | `REPLACE_ME` (required) | S3-compatible endpoint URL, e.g. `http://localhost:9000` for local MinIO. |
+| `Bucket` | `REPLACE_ME` (required) | Target bucket name. |
+| `AccessKey` / `SecretKey` | `REPLACE_ME` (required) | Credentials for the endpoint above. |
+| `Region` | `"us-east-1"` | Passed to the AWS S3 SDK client. |
+| `ForcePathStyle` | `true` | Path-style addressing — needed by MinIO and most self-hosted S3-compatible servers, which don't support virtual-hosted-style bucket URLs. |
+| `PresignTtlSeconds` | `300` | Lifetime of a generated presigned URL, in seconds. |
+
+`Endpoint`/`Bucket`/`AccessKey`/`SecretKey` are all required (startup-validated) once `Backend` is `s3`
+(chapter 3). The backend records the validated content type as S3 object metadata on save (so a
+direct/presigned `GET` serves the right `Content-Type` even without the API in the loop) and does support
+presigned URLs — `GetPresignedUrlAsync` mints a time-limited `GET` URL with
+`ResponseHeaderOverrides.ContentDisposition = "attachment"` forced on, so a browser following the redirect
+downloads rather than renders — defence in depth for a type (e.g. SVG) the API's own `Content-Disposition`
+handling wouldn't otherwise cover on that path. `AmazonS3Config.UseHttp` is derived from whether
+`Endpoint` starts with `http://`, because the SDK's presigned-URL default scheme is `https`, which an
+http-only MinIO endpoint would then refuse after the redirect.
+
+**MinIO for local development:** `docker-compose.yml`'s `minio` service sits behind the `s3` Compose
+profile (not started by a plain `docker compose up -d`, chapter 2) — `docker compose --profile s3 up -d`
+starts it plus a one-shot `createbuckets` container that creates the bucket and exits 0. Its shipped
+defaults: API port **9000**, console port **9001**, credentials `struoadmin`/`struoadmin` (development
+only — never reused anywhere else), bucket **`struo-media`**. Every port is overridable without editing
+the tracked compose file — `STRUO_MINIO_PORT` / `STRUO_MINIO_CONSOLE_PORT` env vars (or the gitignored
+`.env`, copied from `.env.example`), the same convention chapter 2 documents for `STRUO_PG_PORT`/
+`STRUO_REDIS_PORT`. A `Struo:Files:S3` block pointed at that container's defaults:
+
+```json
+"Struo": {
+  "Files": {
+    "Backend": "s3",
+    "S3": {
+      "Endpoint": "http://localhost:9000",
+      "Bucket": "struo-media",
+      "AccessKey": "struoadmin",
+      "SecretKey": "struoadmin",
+      "ForcePathStyle": true
+    }
+  }
+}
+```
+
+**This chapter verifies the `local` backend live and documents `s3` from `S3FileStorage`/
+`FileStorageOptions.S3Options` and `docker-compose.yml` directly** — it does not reconfigure the running
+host (which is `local`) to also exercise `s3` live; doing so would need a separate instance pointed at a
+MinIO/S3 endpoint, not a change to a shared one.
 
 ## Serving files: authenticated vs. anonymous, presigned redirects
 
