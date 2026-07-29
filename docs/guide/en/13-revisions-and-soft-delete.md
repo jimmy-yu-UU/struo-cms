@@ -17,33 +17,13 @@ the framework `revisions` table, and any past revision can later be re-applied v
 nothing extra to declare — no interface to implement, no extra column on the entity — since revision rows
 live in one shared table keyed by `(collectionName, itemId, revisionNumber)`, not on the entity itself.
 
-**None of the framework's seven live collections (`language`, `permission`, `role`, `user`, `userRole`,
+**None of the seven core framework collections (`language`, `permission`, `role`, `user`, `userRole`,
 `file`, `mediaFolder`) declares `Revisions = true`** — confirmed directly against the source (no
-occurrence of `Revisions = true` anywhere under `src/`) and live against this host:
-
-```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6/revisions"
-{"success":true,"data":[]}
-
-$ curl -s -i -b cookies.txt "http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6/revisions/1"
-HTTP/1.1 404 Not Found
-{"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
-
-$ curl -s -i -X POST "http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6/revisions/1/revert" \
-    -H "X-Struo-CSRF: 1" -b cookies.txt
-HTTP/1.1 404 Not Found
-{"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
-```
-
-This means a full create → list → view → revert cycle cannot be demonstrated live on the shipped
-framework as it stands, on this or any other host that has not opted a collection in — chapters 9 and 10
-already state the identical fact for the REST and GraphQL surfaces respectively. Opting a collection in
-to produce a live demonstration would mean either adding `Revisions = true` to a framework entity or
-enabling the sample `Struo.Sample.Blog` collections, both of which are code changes outside what this
-chapter's own scope allows (only the three chapter files may change) — so the mechanism below is
-described from the source that implements it (`ItemService`, `RevisionSnapshotBuilder`,
-`RevisionSnapshotRedactor`, `SqlSugarRevisionStore`), each cited at file:line, rather than claimed as a
-live-verified round trip.
+occurrence of `Revisions = true` anywhere under `src/`). The sample Blog's `Article` collection (chapter
+16) does: `[CmsCollection("Article", ..., Revisions = true)]`, and it additionally implements
+`ISoftDeletable` — the walkthrough below uses it to show the full create/update/list/view/revert cycle
+against a real, running collection, exactly as it would work for any collection a fork opts in the same
+way.
 
 ## What a snapshot contains, and when it is captured
 
@@ -67,7 +47,26 @@ viewing a revision later. It assembles a single JSON object containing:
 
 This is exactly the shape `ItemService.UpdateAsync` consumes as a request body — which is precisely the
 point: a snapshot round-trips through the *normal write path* on revert, rather than needing a
-special-cased restore routine.
+special-cased restore routine. Creating an `article` and inspecting its first revision shows the shape
+live — `categoryId` (an M2O foreign key, absent from `[CmsField]`s) and `tags` (an M2M id array) are
+present even though this particular item set neither, and `translations.en` carries the full sidecar row:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/article -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt -d '{
+      "status": "draft",
+      "internalNote": "secret-note-v1",
+      "translations": { "en": { "title": "Original Title", "body": "Original body text.", "internalSlug": "original-slug-v1" } }
+    }'
+{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":0,"status":"draft", ...}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1"
+{"success":true,"data":{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b","snapshot":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Original Title","body":"Original body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
+```
+
+(Notice `internalNote` — set on the create request above — does not appear anywhere in this snapshot
+response, and `translations.en` has no `internalSlug` key either. Both fields are `Hidden`; see Redaction
+below for why, and for proof the value was still captured.)
 
 **Capture happens inside the same database transaction as the write it describes**
 (`ItemService.CreateAsync`/`UpdateCoreAsync`, `src/Struo.Application/Query/ItemService.cs`):
@@ -106,10 +105,33 @@ numbers, booleans, nulls) copied through unchanged. This redaction is applied **
 single-revision read path (`ItemService.GetRevisionAsync`, REST's `GET
 .../revisions/{n}` and GraphQL's `{collection}Revision`) — `RevertAsync` deliberately reads the **raw,
 unredacted** snapshot straight from the store, because a revert has to be able to restore a `Hidden`
-field's value too (e.g. reverting a hypothetical revisioned collection with a hidden credential-shaped
-field must actually restore that credential, not null it out). A hidden value therefore only ever leaves
-the process through the revert path's effect (rewriting the live row), never through a snapshot response
+field's value too (e.g. a revisioned collection with a hidden credential-shaped field must have that
+credential actually restored by a revert, not nulled out). A hidden value therefore only ever leaves the
+process through the revert path's effect (rewriting the live row), never through a snapshot response
 body.
+
+`Article.InternalNote` (top-level) and `ArticleTranslation.InternalSlug` (per-locale) are both `Hidden`.
+Updating the article above to different `internalNote`/`internalSlug` values, then reading back revision
+1's snapshot again, still shows neither key — redaction applies uniformly to every past revision, not
+just the newest:
+
+```
+$ curl -s -X PUT http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27 \
+    -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{
+      "status": "published",
+      "internalNote": "secret-note-v2-CHANGED",
+      "translations": { "en": { "title": "Updated Title", "body": "Updated body text.", "internalSlug": "updated-slug-v2-CHANGED" } }
+    }'
+{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":1,"status":"published", ...}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/2"
+{"success":true,"data":{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b","snapshot":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":1,"status":"published","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Updated Title","body":"Updated body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
+```
+
+Neither redacted snapshot shows `internalNote` or `translations.en.internalSlug` — but the values were
+genuinely captured, not dropped: reverting to revision 1 (next section) restores `internalNote` to
+`"secret-note-v1"` and `internalSlug` to `"original-slug-v1"`, confirmed directly against the
+database, even though neither value is ever visible through any API response.
 
 ## Listing, viewing and reverting revisions
 
@@ -117,15 +139,30 @@ body.
 newest-first metadata only: `revisionNumber`, `operation`, `createdAt`, `createdBy`), `GET
 .../revisions/{n}` (one revision plus its redacted `snapshot`), `POST .../revisions/{n}/revert` (applies
 it). All three require the collection's ordinary `CanRead`/`CanWrite` grant respectively — there is no
-extra permission tier specific to revisions.
+extra permission tier specific to revisions. Listing `article`'s two revisions so far (newest first):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions"
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b"},{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b"}]}
+```
 
 **GraphQL** (chapter 10, `RevisionResolvers.cs`) — when a collection declares `Revisions = true`,
 `StruoTypeModule` adds `{collection}Revisions(id: ID!): [Revision!]!`, `{collection}Revision(id: ID!,
 revisionNumber: Int!): Revision`, and a `revert{X}(id: ID!, revisionNumber: Int!): X` mutation, all
 generated with no collection-specific GraphQL code required — the shared `Revision` type is `{
-revisionNumber, operation, createdAt, createdBy, snapshot }`. As chapter 10 states, none of these fields
-exist in this host's introspected schema at all right now, for the same reason the REST examples above
-come back empty/`404` — no collection here has opted in.
+revisionNumber, operation, createdAt, createdBy, snapshot }`. Confirmed by introspecting `article`'s own
+generated schema — `articleRevisions`/`articleRevision` on `Query`, `revertArticle` on `Mutation`,
+alongside the ordinary generated `article`/`articles`/`createArticle`/`updateArticle`/`deleteArticle`/
+`restoreArticle` — and by actually calling the generated query field:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"{ articleRevisions(id: \"019fad0e-8904-7ac7-a20e-796f1c50ea27\") { revisionNumber operation createdAt } }"}'
+{"data":{"articleRevisions":[{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141Z"},{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677Z"}]}}
+```
+
+No collection-specific resolver code exists for any of this — it is generated purely from
+`Revisions = true` on the entity's `[CmsCollection]` attribute, identically to the REST endpoints above.
 
 **Admin drawer** — the admin SPA's `RevisionHistoryDrawer.vue` component
 (`frontend/src/components/revisions/RevisionHistoryDrawer.vue`) talks to the REST endpoints above (not
@@ -140,8 +177,45 @@ same three REST endpoints documented above; it has no server-side behavior of it
 `RevertAsync` (`ItemService.cs:366-388`) reads the target revision's raw snapshot, strips its `version`
 key (so the revert doesn't echo a now-stale optimistic-concurrency token and spuriously `409` against the
 current row), and re-applies the result through the **exact same** `UpdateCoreAsync` path an ordinary
-`PUT` uses, tagged with `operation = "revert"` instead of `"update"`. Consequences that follow directly
-from reusing the normal update path:
+`PUT` uses, tagged with `operation = "revert"` instead of `"update"`. Reverting `article` above to
+revision 1 (its original `create` snapshot) after the `update` above changed `status` to `"published"`
+and every field to its `"…-CHANGED"` value:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1/revert \
+    -H "X-Struo-CSRF: 1" -b cookies.txt
+{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":2,"status":"draft", ...}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27"
+{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":2,"status":"draft", ...,"translations":{"en":{"title":"Original Title","body":"Original body text.", ...}}}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions"
+{"success":true,"data":[{"revisionNumber":3,"operation":"revert","createdAt":"2026-07-29T08:47:59.288629", ...},{"revisionNumber":2,"operation":"update", ...},{"revisionNumber":1,"operation":"create", ...}]}
+```
+
+`status` and `translations.en.title`/`body` are back to their revision-1 values, `version` moved forward
+(1 → 2, not back to 0), and the revision list grew to three entries with the newest being `"revert"` —
+history 1/2/3 all still present. And, read directly from the database (never through any API, since both
+are `Hidden`) — proof that a `Hidden` field's value really is restored by revert, not merely left alone
+or nulled:
+
+```
+$ docker exec struo-postgres psql -U struo -d struo -c \
+    "select status, internalnote from articles where id='019fad0e-8904-7ac7-a20e-796f1c50ea27';"
+ status | internalnote
+--------+----------------
+ draft  | secret-note-v1
+
+$ docker exec struo-postgres psql -U struo -d struo -c \
+    "select title, internalslug from article_translations where articleid='019fad0e-8904-7ac7-a20e-796f1c50ea27' and locale='en';"
+      title      |   internalslug
+------------------+-------------------
+ Original Title   | original-slug-v1
+```
+
+Both hidden values are back to their revision-1 (`"secret-note-v1"` / `"original-slug-v1"`) contents —
+not the `"…-CHANGED"` values the intervening update set, and not null either. Consequences that follow
+directly from reusing the normal update path:
 
 - A revert **appends** a new `"revert"` revision rather than deleting or rewinding history — the
   timeline is append-only forward; there is no way to "undo a revert" other than reverting again to an
@@ -222,10 +296,12 @@ created for this chapter.
 
 ## Interaction between trash and revisions
 
-Both features are independent opt-ins, and **no framework collection currently combines them** — `file`
-is soft-deletable but not revisioned; no framework collection is revisioned at all (see above). The
-interaction is therefore described from source rather than demonstrated live on this host, same caveat as
-the revisions mechanism generally:
+Both features are independent opt-ins, and **no core framework collection combines them** — `file` is
+soft-deletable but not revisioned; no framework collection declares `Revisions = true` at all (see
+above). The sample Blog's `article` collection (chapter 16) does combine both — it implements
+`ISoftDeletable` and declares `Revisions = true` — but the specific trash/restore/revision interaction
+below is described from source rather than exercised live in this chapter, since it fell outside the
+create/update/list/view/revert cycle demonstrated above:
 
 - `ItemService.DeleteAsync`/`RestoreAsync` call `CaptureRevisionAsync` (`ItemService.cs:297`, `:341`)
   precisely when **both** `meta.SoftDelete` and `meta.Revisions` are true for the collection being
