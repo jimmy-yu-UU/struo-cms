@@ -193,7 +193,7 @@ public sealed class ItemService(
         // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
         await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
 
-        // Optimistic concurrency (D2): guard the write on the version the client last read. When the
+        // Optimistic concurrency: guard the write on the version the client last read. When the
         // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
         // writer already moved the row on. Absent a client version we fall back to the freshly-loaded
         // value (no protection, but backward compatible for callers that don't track versions).

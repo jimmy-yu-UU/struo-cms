@@ -2,7 +2,7 @@ namespace Struo.Application.Security;
 
 /// <summary>
 /// Resolves an external identity to a local user id, JIT-provisioning if none exists. Pure orchestration
-/// (no HttpContext). Trust is anchored on the issuer/tenant (see spec §6); <c>email_verified</c> is an
+/// (no HttpContext). Trust is anchored on the issuer/tenant; <c>email_verified</c> is an
 /// opt-in hardening. Email matching is case-insensitive at the store layer.
 /// </summary>
 public sealed class ExternalLoginService(IExternalUserStore store) : IExternalLoginService

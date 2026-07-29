@@ -29,7 +29,7 @@ public class GraphQlExecutionTests
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
             .AddScoped<IGraphQlDataSource>(_ => ds)
-            // FileByIdDataLoader's ctor takes StruoQueryOptions (Task-9 review fix: chunk the
+            // FileByIdDataLoader's ctor takes StruoQueryOptions (it chunks the
             // batch fetch to MaxLimit-sized slices) — HotChocolate's ctx.DataLoader<T>() resolves
             // it via ActivatorUtilities against request services, so it must be registered here too.
             .AddSingleton(new StruoQueryOptions())
@@ -241,7 +241,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task-9 review fix regression (Minor): the scalar path (<c>heroImage</c>) already covers
+    /// Regression coverage: the scalar path (<c>heroImage</c>) already covers
     /// null-on-missing, but the list-shaped field (<c>galleryFiles</c>) — <see
     /// cref="FileFieldResolvers.ResolveList"/> — had no direct execution-level test of its two
     /// defining behaviours: it must resolve ids in the REQUESTED order (not whatever order the
@@ -409,7 +409,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Final-review fix regression: HotChocolate merges non-aliased duplicate selections, but
+    /// Regression coverage: HotChocolate merges non-aliased duplicate selections, but
     /// ALIASED selections of the SAME relation (<c>a: category</c> / <c>b: category</c>) stay
     /// distinct child selections that both report <c>Field.Name == "category"</c>. Before the fix,
     /// <see cref="CollectionResolvers"/>'s selection-to-relation-name projection returned

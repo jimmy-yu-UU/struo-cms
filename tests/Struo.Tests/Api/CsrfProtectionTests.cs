@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-// M1: cookie-authenticated mutations must carry the CSRF header; bearer and login are exempt.
+// Cookie-authenticated mutations must carry the CSRF header; bearer and login are exempt.
 [Collection("ApiIntegration")]
 public class CsrfProtectionTests(ApiFactory factory)
 {

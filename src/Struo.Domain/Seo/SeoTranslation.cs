@@ -5,9 +5,10 @@ namespace Struo.Domain.Seo;
 
 /// <summary>
 /// Base for translation sidecars that carry SEO. SEO is declared ONLY on the sidecar (per-locale);
-/// the parent-side ISeoMeta convention is retired (§2). Translation entities are POCOs
-/// with no other base, so this base is usable there. Carries [CmsField] (a Domain attribute — §2 ok)
-/// but NO [SugarColumn] (Domain stays package-free).
+/// the parent-side ISeoMeta convention is retired. Translation entities are POCOs
+/// with no other base, so this base is usable there. Carries [CmsField] (a Domain attribute with no
+/// external dependency, so it stays within the dependency rule) but NO [SugarColumn] (Domain stays
+/// package-free).
 /// </summary>
 public abstract class SeoTranslation
 {

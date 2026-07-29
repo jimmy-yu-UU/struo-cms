@@ -48,7 +48,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    // D5: a non-page-aligned offset returns the exact window (offset is absolute, not a page index).
+    // A non-page-aligned offset returns the exact window (offset is absolute, not a page index).
     [Fact]
     public async Task Query_offset_returns_exact_window()
     {
@@ -64,7 +64,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         result.Rows.Select(r => ((Category)r).Name).Should().Equal("C1", "C2");
     }
 
-    // D1: aggregate-write atomicity.
+    // Aggregate-write atomicity.
     [Fact]
     public async Task InTransaction_rolls_back_on_throw()
     {
@@ -87,7 +87,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         (await _db.Queryable<Category>().CountAsync()).Should().Be(1);
     }
 
-    // D1: nesting-safety — an inner InTransactionAsync must join the outer one, not commit
+    // Nesting-safety — an inner InTransactionAsync must join the outer one, not commit
     // independently, so an outer rollback also undoes the inner write.
     [Fact]
     public async Task Nested_InTransaction_rolls_back_with_outer()

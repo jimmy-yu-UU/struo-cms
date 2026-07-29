@@ -6,7 +6,7 @@ using Struo.Domain.Metadata.Enums;
 namespace Struo.Infrastructure.Files;
 
 /// <summary>
-/// Framework-owned media-library folder (#5): pure in-system organisation, decoupled from
+/// Framework-owned media-library folder: pure in-system organisation, decoupled from
 /// physical storage keys. Self-referencing tree via <see cref="ParentId"/>. Hidden — the media
 /// library is its only UI; CRUD goes through the generic items API (route <c>mediafolder</c>).
 /// Deleting a folder that still contains files or subfolders is rejected by the framework's

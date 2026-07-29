@@ -53,7 +53,7 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
             .Should().Be(HttpStatusCode.NotFound);
     }
 
-    // 問題 4: the User-form preview must OR-merge grants across roles exactly like real authz.
+    // The User-form preview must OR-merge grants across roles exactly like real authz.
     [Fact]
     public async Task Multi_role_grants_are_or_merged()
     {
@@ -98,7 +98,7 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
         data.GetProperty("permissions").EnumerateObject().Should().BeEmpty();
     }
 
-    // B.1 #2: the User form previews the CURRENT TagSelect selection before saving.
+    // The User form previews the CURRENT TagSelect selection before saving.
     [Fact]
     public async Task Roles_query_overrides_the_stored_role_set()
     {

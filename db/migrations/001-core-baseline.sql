@@ -23,7 +23,7 @@
 -- db/migrations/README.md ("Scope is core only" / "Downstream forks") for the full rationale and the
 -- fork workflow. Never add business-table DDL to this core baseline.
 --
--- For the timestamp-type convention (DB-7) and the identifier-naming convention (lowercase, unquoted,
+-- For the timestamp-type convention and the identifier-naming convention (lowercase, unquoted,
 -- SqlSugar-emitted index names kept verbatim so dev InitTables and this file agree) this DDL follows,
 -- see db/migrations/README.md — duplicating those conventions here has previously gone stale; the README
 -- is the single source of truth for them.

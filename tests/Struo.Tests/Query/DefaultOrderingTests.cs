@@ -56,7 +56,7 @@ public class DefaultOrderingTests : IDisposable
             .ExecuteCommandAsync();
     }
 
-    // 問題 11: no client sort must still produce a deterministic, stable order (createdAt DESC, id ASC).
+    // No client sort must still produce a deterministic, stable order (createdAt DESC, id ASC).
     [Fact]
     public async Task Query_without_sort_orders_by_createdAt_desc()
     {

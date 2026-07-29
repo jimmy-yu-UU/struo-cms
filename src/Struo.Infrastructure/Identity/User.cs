@@ -36,14 +36,14 @@ public sealed class User : AuditableEntity
     [CmsField(Label = "Access Token", Interface = FieldInterface.Text, Hidden = true, ReadOnly = true, Sort = 5)]
     public string? AccessToken { get; set; }
 
-    // 問題 4: roles are edited on the User form as a TagSelect (readable names), not by
+    // Roles are edited on the User form as a TagSelect (readable names), not by
     // hand-crafting userRole junction rows. Same M2M pattern as the sample's Article.Tags.
     [Navigate(typeof(UserRole), nameof(UserRole.UserId), nameof(UserRole.RoleId))]
     [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
     [SugarColumn(IsIgnore = true)]
     public List<Role> Roles { get; set; } = [];
 
-    // Token lifecycle metadata (M2). Internal columns — no [CmsField], so they never enter the generic
+    // Token lifecycle metadata. Internal columns — no [CmsField], so they never enter the generic
     // CRUD/read surface. The token stays permanent/non-expiring; these just record issuance and last
     // use so a leaked/stale token can be spotted and rotated.
     [SugarColumn(IsNullable = true)] public DateTime? AccessTokenCreatedAt { get; set; }

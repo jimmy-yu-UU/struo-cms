@@ -212,7 +212,7 @@ public class SoftDeleteRepositoryTests
         Assert.Equal(deletedAtAfterFirst, ((ISoftDeletable)afterSecond).DeletedAt);
     }
 
-    // ── Final-review fix (Important #1): engine-level exclusion regressions ────
+    // ── Engine-level exclusion regressions ────
 
     [Fact]
     public async Task Deep_expansion_excludes_a_trashed_m2o_parent()
@@ -235,7 +235,7 @@ public class SoftDeleteRepositoryTests
         Assert.Null(row["category"]);                  // trashed parent is not expanded
     }
 
-    // Spec §9's "M2M existence check excludes a trashed target" claim is exercised end-to-end via
+    // The soft-delete design's "M2M existence check excludes a trashed target" claim is exercised end-to-end via
     // Service.UpdateAsync's SyncM2MAsync, which validates target ids through
     // IItemRepository.QueryWhereInAsync(targetCollection, "id", ids). The sample domain's only M2M
     // relation is Article.Tags -> Tag, and Tag does NOT implement ISoftDeletable (see Tag.cs) — so a
@@ -256,7 +256,7 @@ public class SoftDeleteRepositoryTests
         Assert.Empty(found);
     }
 
-    // Spec §9's "Inbound-Restrict counts live references only" claim is NOT exercisable with the
+    // The soft-delete design's "Inbound-Restrict counts live references only" claim is NOT exercisable with the
     // current sample entities: Article.CategoryId is OnDelete.SetNull and Category.ParentId
     // (self-reference) is also OnDelete.SetNull (see Article.cs/Category.cs) — no relation in the
     // sample domain uses OnDelete.Restrict, so graph.InboundRestrict() is empty for every
@@ -264,7 +264,7 @@ public class SoftDeleteRepositoryTests
     // them. Deferred to the live gate / a future sample entity with a Restrict relation; no test added
     // here to avoid a fabricated pass that doesn't actually exercise Restrict.
 
-    // ── Final-review fix (Important #1): floor-locking negative tests ──────────
+    // ── Floor-locking negative tests ──────────
 
     [Fact]
     public async Task Non_soft_deletable_collection_ignores_the_deleted_filter_entirely()

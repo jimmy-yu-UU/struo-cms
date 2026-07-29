@@ -25,8 +25,8 @@ public sealed class ItemWriteSideSync(
     /// fields), and required fields, then delegates to
     /// <see cref="IItemRepository.SyncTranslationsAsync"/>.
     /// <para>
-    /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory
-    /// (Spec §10): an absent <c>translations</c> key, a non-object value, an empty object, or an
+    /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory:
+    /// an absent <c>translations</c> key, a non-object value, an empty object, or an
     /// object lacking the default locale all throw <see cref="QueryException"/> (→ 400). On update
     /// an absent/non-object <c>translations</c> payload is a no-op (partial updates supported) and
     /// the default locale is NOT forced.
@@ -43,7 +43,7 @@ public sealed class ItemWriteSideSync(
 
         // On create the default-locale translation is required. Reject an absent/non-object
         // `translations` payload HERE, before returning early — otherwise a body with no
-        // `translations` key would silently create a row with zero translation rows (Spec §10).
+        // `translations` key would silently create a row with zero translation rows.
         if (!hasTranslations)
         {
             if (isCreate)

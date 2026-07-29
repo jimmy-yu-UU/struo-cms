@@ -49,7 +49,7 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* ---- FE-R1 shell layout ---- */
+/* ---- Shell layout ---- */
 .shell {
   display: grid;
   grid-template-columns: var(--sidebar-w, 260px) 1fr;
@@ -131,7 +131,7 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
   .topbar .lang-switcher { display: none; }
 }
 
-/* ---- FE-R1 shell: icon button, nav icon, caption, nav error ---- */
+/* ---- Shell: icon button, nav icon, caption, nav error ---- */
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; padding: 0; border: none;

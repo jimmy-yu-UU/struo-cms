@@ -91,8 +91,8 @@ test('create, edit, then delete an article', async ({ page }) => {
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
-  // editor whose editable surface is a `.ProseMirror` contenteditable, NOT a <textarea> (Phase
-  // 7f/7g). contenteditable can't be `.fill()`ed — click to focus, then type via the keyboard
+  // editor whose editable surface is a `.ProseMirror` contenteditable, NOT a <textarea>.
+  // contenteditable can't be `.fill()`ed — click to focus, then type via the keyboard
   // (same idiom as conflict.spec.ts / unsaved-guard.spec.ts).
   const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
   await body.click()

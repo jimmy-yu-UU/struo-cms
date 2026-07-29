@@ -51,7 +51,7 @@ public sealed class File : AuditableEntity, ISoftDeletable
     [SugarColumn(IsIgnore = true)]
     public List<FileTranslation> Translations { get; set; } = [];
 
-    // #12: File soft-delete — package-free ISoftDeletable members (framework query filter +
+    // File soft-delete — package-free ISoftDeletable members (framework query filter +
     // repository SoftDeleteAsync/RestoreAsync light up automatically once these are present).
     [SugarColumn(IsNullable = true)] public DateTime? DeletedAt { get; set; }
     [SugarColumn(IsNullable = true)] public Guid? DeletedBy { get; set; }

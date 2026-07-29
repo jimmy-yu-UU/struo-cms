@@ -22,7 +22,7 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         foreach (var tag in new[]
                  { "p", "h2", "h3", "strong", "em", "s", "ul", "ol", "li",
                    "blockquote", "pre", "code", "hr", "br", "a", "img",
-                   // 7g: basic tables + sub/superscript + the colour carrier tag.
+                   // Basic tables + sub/superscript + the colour carrier tag.
                    "table", "thead", "tbody", "tr", "th", "td", "sub", "sup", "span" })
             _sanitizer.AllowedTags.Add(tag);
 
@@ -37,7 +37,7 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         foreach (var scheme in new[] { "http", "https", "mailto" })
             _sanitizer.AllowedSchemes.Add(scheme);
 
-        // 7g: style survives but carries exactly two CSS properties (colour + alignment);
+        // The style attribute survives but carries exactly two CSS properties (colour + alignment);
         // Ganss strips every other property and dangerous values (url()/expression()) per-property.
         _sanitizer.AllowedCssProperties.Clear();
         _sanitizer.AllowedCssProperties.Add("color");

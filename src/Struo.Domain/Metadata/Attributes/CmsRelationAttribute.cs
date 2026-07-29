@@ -2,7 +2,8 @@ using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Domain.Metadata.Attributes;
 
-// Defined for the full §4 surface; read by MetadataScanner to build relation metadata.
+// Declares the complete relation-configuration surface (interface, display, picker query, sort
+// field, cascade behavior, depth); read by MetadataScanner to build relation metadata.
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class CmsRelationAttribute : Attribute
 {

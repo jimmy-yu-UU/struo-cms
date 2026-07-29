@@ -39,7 +39,8 @@ public static class SchemaGuard
         ct.ThrowIfCancellationRequested();
 
         var dbType = db.CurrentConnectionConfig.DbType;
-        // Other backends are experimental/unverified (CLAUDE.md §1); the guard cannot assert on them, so
+        // Other backends (MySQL, SqlServer, Oracle) are type-mapped but unverified/experimental; the
+        // guard cannot assert on them, so
         // it stays out of the way rather than block startup on a backend whose catalog it does not read.
         if (dbType is not (DbType.PostgreSQL or DbType.Sqlite)) return;
 

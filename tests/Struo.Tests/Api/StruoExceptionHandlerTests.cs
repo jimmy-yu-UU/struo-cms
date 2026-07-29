@@ -40,7 +40,7 @@ public class StruoExceptionHandlerTests
         body.Code.Should().Be("CONFLICT");
     }
 
-    // API-1: optimistic-lock CAS miss splits to VERSION_CONFLICT (still 409) over REST.
+    // Optimistic-lock CAS miss splits to VERSION_CONFLICT (still 409) over REST.
     [Fact]
     public void ConcurrencyConflict_is_409_VERSION_CONFLICT()
     {

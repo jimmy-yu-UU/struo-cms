@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// #12 File soft-delete live gate. Covers the critical path this feature adds to the media
+// File soft-delete live gate. Covers the critical path this feature adds to the media
 // library: trashing a file from its DETAIL DIALOG (the active-view path — this is the one where a
 // duplicate-ConfirmDialog bug was previously fixed by scoping MediaDetailDialog's ConfirmDialog to
 // its own unnamed group, separate from MediaLibraryView's `media-folder`/`media-file` groups), then

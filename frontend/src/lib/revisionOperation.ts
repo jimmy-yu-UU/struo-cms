@@ -1,4 +1,4 @@
-// Maps a raw revision `operation` (a free-form string from the 9c API; known values are
+// Maps a raw revision `operation` (a free-form string from the revisions API; known values are
 // create/update/revert) to a vue-i18n key. Unknown values fall back to a generic label so a
 // future backend operation never renders a raw token.
 const KEYS: Record<string, string> = {

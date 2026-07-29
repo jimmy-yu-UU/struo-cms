@@ -18,7 +18,7 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 
 namespace Struo.Tests.Files;
 
-// #7: upload seeds a default-locale Title from the filename (extension stripped); #5: upload
+// Upload seeds a default-locale Title from the filename (extension stripped); upload
 // accepts an optional folderId, validated against MediaFolder existence.
 public class FileUploadFolderAndTitleTests : IDisposable
 {

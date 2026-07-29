@@ -33,7 +33,7 @@ public static class FileStorageServiceCollectionExtensions
 
         services.AddSingleton<IImageDimensionReader, ImageDimensionReader>();
 
-        // P2.4: on-the-fly image transform (endpoint wiring) + its disk-backed variant cache.
+        // On-the-fly image transform (endpoint wiring) + its disk-backed variant cache.
         // NetVipsImageTransformer is stateless (no fields) so a Singleton is safe and avoids a
         // per-request allocation. DiskImageVariantCache is also stateless beyond its root path.
         services.AddSingleton<IImageTransformer, NetVipsImageTransformer>();

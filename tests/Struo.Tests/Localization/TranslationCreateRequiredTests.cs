@@ -8,7 +8,7 @@ using Xunit;
 namespace Struo.Tests.Localization;
 
 /// <summary>
-/// Regression coverage for Spec §10: creating a row on a translatable collection without the
+/// Regression coverage: creating a row on a translatable collection without the
 /// default-locale translation must fail with 400. Update keeps partial-update semantics (an absent
 /// <c>translations</c> payload is a no-op and existing translations are preserved).
 /// </summary>

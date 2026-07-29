@@ -84,7 +84,7 @@ public sealed class FilesController(
         // isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
 
-        // P2.4: on-the-fly image transform. Only when the caller actually asked for one (at least one
+        // On-the-fly image transform. Only when the caller actually asked for one (at least one
         // of width/height/format present), the content behind this row is an image, and the feature is
         // enabled. Otherwise fall straight through to the existing passthrough behavior below —
         // unchanged for every non-image file and for image requests with no transform params.
@@ -162,7 +162,7 @@ public sealed class FilesController(
         return File(stream, row.ContentType, fileDownloadName: row.FileName);
     }
 
-    // #12: default DELETE is now trash (recoverable); ?purge=true is the permanent hard delete
+    // Default DELETE is trash (recoverable); ?purge=true is the permanent hard delete
     // (FileService.DeleteAsync — row + sidecar translations + blob + any site_settings.logofileid
     // reference, same as before this change).
     [HttpDelete("{id:guid}")]

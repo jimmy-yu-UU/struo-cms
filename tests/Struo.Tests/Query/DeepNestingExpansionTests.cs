@@ -54,7 +54,7 @@ public class DeepNestingExpansionTests(ApiFactory factory)
 
         // category -> articles (O2M) -> category (M2O back to the same category): mixed-kind depth-2.
         // NOTE: nested `deep` is only supported via the POST /query JSON envelope — the GET query-string
-        // `deep=` form is deliberately kept flat/depth-1 (design doc §9; ParseDeepQueryString unchanged),
+        // `deep=` form is deliberately kept flat/depth-1 (ParseDeepQueryString unchanged),
         // so this scenario is driven through the envelope rather than the GET route the original brief
         // sketch used.
         var envelope = JsonSerializer.SerializeToElement(new

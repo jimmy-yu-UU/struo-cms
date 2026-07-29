@@ -25,7 +25,7 @@ public class FileUploadTests(ApiFactory factory)
     public async Task Upload_returns_201_with_metadata_and_published_status()
     {
         // Uploads default to "published": dimensions are extracted synchronously in the same
-        // call, so there is no pending async step that "draft" was gating (7e live-gate finding).
+        // call, so there is no pending async step that "draft" would be gating.
         var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsync("/api/files", Multipart(Encoding.UTF8.GetBytes("hello world"), "note.txt", "text/plain"));
         resp.StatusCode.Should().Be(HttpStatusCode.Created);

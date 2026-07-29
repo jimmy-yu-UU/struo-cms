@@ -47,7 +47,7 @@ public class DomainErrorMapTests
         message.Should().Be("rel");
     }
 
-    // API-1: optimistic-lock (CAS miss) is split out from generic CONFLICT so the frontend's
+    // Optimistic-lock (CAS miss) is split out from generic CONFLICT so the frontend's
     // "changed by someone else" recovery banner keys on VERSION_CONFLICT alone and is not tripped
     // by any other 409 (e.g. duplicate email). RelationConflict above stays CONFLICT.
     [Theory]
@@ -106,7 +106,7 @@ public class DomainErrorMapTests
     public void StatusFor_maps_each_code_to_its_http_status(string code, int expected)
         => DomainErrorMap.StatusFor(code).Should().Be(expected);
 
-    // API-1: the status→code reverse map (used by inline ApiResults.Fail, e.g. UsersController
+    // The status→code reverse map (used by inline ApiResults.Fail, e.g. UsersController
     // duplicate-email, which does NOT flow through DomainErrorMap) must keep answering the generic
     // Conflict for 409 — the VERSION_CONFLICT split is exception-driven only.
     [Fact]
