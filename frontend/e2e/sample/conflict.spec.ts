@@ -68,7 +68,7 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 }
 
 // Create an article via the UI (known-good path), then open it so the edit form is loaded with a
-// version token. Published At is deliberately left blank (see file header — Task-1 proof). Returns
+// version token. Published At is deliberately left blank (see the file header for why). Returns
 // the item id (from the edit URL) and leaves the page on the form.
 async function createAndOpen(page: Page, title: string): Promise<string> {
   await page.goto('/collections/article/new')
@@ -78,7 +78,7 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
   const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
   await body.click()
   await page.keyboard.type('E2E conflict body content.')
-  // Published At left blank on purpose (Task-1 proof): this Save must reach the list (200), not 400.
+  // Published At left blank on purpose: this Save must reach the list (200), not 400.
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
 
