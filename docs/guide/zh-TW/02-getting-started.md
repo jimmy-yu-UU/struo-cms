@@ -1,6 +1,6 @@
 # 2. 快速入門
 
-本章從頭到尾啟動這個樣板——完全依出貨狀態、零個內容 collection:相依服務、設定、API、管理後台 SPA，
+本章從頭到尾啟動這個樣板——完全依出貨狀態、零個內容集合 (collection):相依服務、設定、API、管理後台 SPA，
 以及第一次登入。以下每一道指令都已在撰寫本章時，於此份 checkout 上成功執行過。
 
 ## 先決條件
@@ -114,18 +114,18 @@ Vite 的開發伺服器監聽 `http://localhost:5173`，並將 `/api` 請求代�
 如果一個正式環境啟動 (`ASPNETCORE_ENVIRONMENT=Production`) 仍在使用預設密碼 `admin`，API 會在啟動
 時記錄一則**警告**，提示你變更它——但它並不會拒絕啟動，所以不要指望這則被忽略的紀錄能當作安全網。
 
-## 尚無 collection 時你會看到什麼
+## 尚無集合時你會看到什麼
 
 這是必須先建立的重要預期心理:在出貨預設狀態下——`Struo:ContentAssemblies` 沒有任何項目——管理後台
 SPA 的側欄**完全沒有「Content」導覽群組**。已直接針對此份 checkout 驗證過:資料庫中恰好只有十張框架
 資料表 (`languages`、`files`、`file_translations`、`media_folders`、`users`、`roles`、
 `permissions`、`user_roles`、`revisions`、`site_settings`)，別無其他;側欄只顯示 Dashboard
 (儀表板)、Media Library (媒體庫)、Settings (設定) 與 System (Language/Role/User)——因為現在確實
-還沒有任何內容 collection 可列出。
+還沒有任何內容集合可列出。
 
-**這是正確的，不是 bug。** 一個空白的 Content 區塊，正是一個零業務 collection 的樣板該有的樣子。
-第 4 章會示範如何新增你的第一個 collection，讓這個群組出現;第 16 章則示範同樣的事，若你想在設計自己
-的 collection 之前，先看看用預先建好的 Blog 範例運作起來的樣子。
+**這是正確的，不是 bug。** 一個空白的 Content 區塊，正是一個零業務集合的樣板該有的樣子。
+第 4 章會示範如何新增你的第一個集合，讓這個群組出現;第 16 章則示範同樣的事，若你想在設計自己
+的集合之前，先看看用預先建好的 Blog 範例運作起來的樣子。
 
 ## 健康檢查端點與 Scalar
 
@@ -156,6 +156,6 @@ Scalar 瀏覽工具與原始 OpenAPI 文件，只有在環境不是 `Production`
 ## 接下來的步驟
 
 - 第 3 章 [設定參考](03-configuration-reference.md)，記載上面用到的每一項設定 (以及所有沒用到的)。
-- 第 4 章 [定義一個 Collection](04-defining-a-collection.md)，用你的第一個真實 collection 讓
+- 第 4 章 [定義一個集合](04-defining-a-collection.md)，用你的第一個真實集合讓
   Content 導覽群組出現。
 - 第 16 章 [範例走查](16-sample-walkthrough.md)，改為選用啟用 Blog 示範專案 (以及乾淨地退出它)。

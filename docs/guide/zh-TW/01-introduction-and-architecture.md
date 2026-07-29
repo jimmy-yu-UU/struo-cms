@@ -4,29 +4,29 @@
 
 StruoCMS 是一個可重複使用的無頭 (headless) CMS **樣板 (template)**，建構於 .NET 10、SqlSugar 與
 PostgreSQL 之上，並搭配 Vue 3 打造的管理後台單頁應用程式 (SPA)。這裡的「樣板」二字是精確的說法：本
-repository 只出貨核心的框架/系統能力，下游團隊 fork 之後，才依自己的實際專案定義自己的內容 collection
-與 migration。
+repository 只出貨核心的框架/系統能力，下游團隊 fork 之後，才依自己的實際專案定義自己的內容集合
+(collection) 與 migration。
 
 核心出貨內容包括:
 
-- 一套中介資料驅動 (metadata-driven) 的 collection 引擎——你只需宣告一個帶有 attribute 的一般 C#
+- 一套中介資料驅動 (metadata-driven) 的集合引擎——你只需宣告一個帶有 attribute 的一般 C#
   entity，StruoCMS 便會由這單一宣告推導出其資料庫資料表、REST 端點、GraphQL schema、查詢 DSL 介面，
   以及管理後台 UI 表單。
-- 身分與角色型存取控制 (RBAC)，具備逐 collection 的讀取/寫入/刪除權限、Argon2id 密碼雜湊、cookie 與
+- 身分與角色型存取控制 (RBAC)，具備逐集合的讀取/寫入/刪除權限、Argon2id 密碼雜湊、cookie 與
   bearer-token 認證，以及選用的 OpenID Connect SSO。
 - 檔案與媒體 (media)，支援本機磁碟或 S3 相容的儲存後端，並提供即時圖片轉換。
-- 版本紀錄 (revisions) 與軟刪除 (soft delete)，兩者皆為逐 collection 選用 (opt-in)。
+- 版本紀錄 (revisions) 與軟刪除 (soft delete)，兩者皆為逐集合選用 (opt-in)。
 - 國際化 (per-locale 內容)、站台設定/品牌、查詢 DSL、REST API、GraphQL API，以及驅動以上一切的管理
   後台 SPA 外殼。
 
 ## StruoCMS 不是什麼
 
 StruoCMS 不是一個成品，且**不含任何業務內容模型**。你可能會從一般 CMS 展示範例中認得的那些
-collection——文章、標籤、分類——並不屬於出貨的核心；它們只存在於 `samples/Struo.Sample.Blog` 這個示範
-專案中，用來示範*如何*用你自己的 fork 也會用到的相同基礎元件來定義 collection。該範例預設不會被 API
+集合——文章、標籤、分類——並不屬於出貨的核心；它們只存在於 `samples/Struo.Sample.Blog` 這個示範
+專案中，用來示範*如何*用你自己的 fork 也會用到的相同基礎元件來定義集合。該範例預設不會被 API
 host 參照，其用意是讓你學會這些模式之後就把它刪掉 (第 16 章涵蓋選用啟用方式與刪除清單)。
 
-具體而言，已在此份 checkout 上驗證過:一個預設安裝**零個內容 collection**。資料庫中只有十張框架資料表
+具體而言，已在此份 checkout 上驗證過:一個預設安裝**零個內容集合**。資料庫中只有十張框架資料表
 (見下文);管理後台 SPA 的側欄完全沒有「Content」導覽群組，因為根本沒有東西可顯示。這正是一份全新樣板
 checkout 該有的正確、預期樣貌——不是 bug，也不是安裝不完整。
 
@@ -146,16 +146,16 @@ CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、
 | 能力 | 狀態 | 備註 |
 |---|---|---|
 | 中介資料驅動的集合 | Core | `[CmsCollection]` attribute，從 `Struo:ContentAssemblies` 中列出的組件掃描而來 |
-| 身分與 RBAC | Core | Argon2id 雜湊;cookie + bearer 認證;逐 collection 讀取/寫入/刪除授權 |
+| 身分與 RBAC | Core | Argon2id 雜湊;cookie + bearer 認證;逐集合讀取/寫入/刪除授權 |
 | SSO (OpenID Connect) | Core，預設關閉 | `Oidc:Enabled = false` |
 | 檔案與媒體 | Core | 本機磁碟或 S3 相容後端;即時圖片轉換 |
-| 版本紀錄 | Core，逐 collection 選用 | `[CmsCollection(Revisions = true)]` |
-| 軟刪除 | Core，逐 collection 選用 | `ISoftDeletable` |
+| 版本紀錄 | Core，逐集合選用 | `[CmsCollection(Revisions = true)]` |
+| 軟刪除 | Core，逐集合選用 | `ISoftDeletable` |
 | 國際化 | Core | 逐 locale 的翻譯附屬資料表 |
 | 站台設定 / 品牌 | Core | 單例 `site_settings` 資料列，可由超級管理員在應用程式內編輯 |
 | 查詢 DSL | Core | filter/sort/分頁，欄位與關聯路徑皆採白名單驗證 |
 | REST API | Core | ASP.NET Core Controllers，統一回應信封 (envelope) |
-| GraphQL API | Core | HotChocolate，schema 由相同的 collection 中介資料產生 |
+| GraphQL API | Core | HotChocolate，schema 由相同的集合中介資料產生 |
 | 管理後台 SPA | Core | Vue 3 + PrimeVue + TipTap |
 | Blog 範例 | Demo，預設不出貨 | `samples/Struo.Sample.Blog`;選用啟用、可刪除 |
 
@@ -163,6 +163,6 @@ CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、
 
 - 第 2 章 [快速入門](02-getting-started.md)，啟動整套系統並登入。
 - 第 3 章 [設定參考](03-configuration-reference.md)，涵蓋每一個 `appsettings.json` 鍵。
-- 第 4 章 [定義一個 Collection](04-defining-a-collection.md)，當你準備好要新增自己的內容型別時。
-- 第 16 章 [範例走查](16-sample-walkthrough.md)，在你動手打造自己的 collection 之前，先看看用這些
-  基礎元件建構出來的完整 collection 長什麼樣子。
+- 第 4 章 [定義一個集合](04-defining-a-collection.md)，當你準備好要新增自己的內容型別時。
+- 第 16 章 [範例走查](16-sample-walkthrough.md)，在你動手打造自己的集合之前，先看看用這些
+  基礎元件建構出來的完整集合長什麼樣子。

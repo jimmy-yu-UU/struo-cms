@@ -112,7 +112,7 @@
 
 | 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `Rbac:PublicReadCollections` | string[] | `[]` (空) | 被授予匿名 (`"public"` 角色) 讀取權限的 collection 名稱。 |
+| `Rbac:PublicReadCollections` | string[] | `[]` (空) | 被授予匿名 (`"public"` 角色) 讀取權限的集合 (collection) 名稱。 |
 
 如同 `Auth:BootstrapAdmin`，這份清單也只有第一次啟動時才會生效，但觸發時機不同:它只在 `roles`
 資料表第一次被建立時才會被參照——就在那個時刻，種子邏輯 (seeder) 也會建立 `admin` (超級管理員) 與
