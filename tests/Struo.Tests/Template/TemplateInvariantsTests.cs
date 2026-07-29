@@ -50,7 +50,7 @@ public sealed class TemplateInvariantsTests
                 .Any(line => line.Contains("samples", StringComparison.OrdinalIgnoreCase));
 
         referencesSamples.Should().BeFalse(
-            "Struo.Api must not reference samples/* (CLAUDE.md §2 dependency rule: framework code " +
+            "Struo.Api must not reference samples/* (the dependency rule: framework code " +
             "never references samples/*; the sample is a demo, deleted on fork, and pulling it back " +
             "in via a ProjectReference would re-couple the shipped framework to business content).");
     }

@@ -169,7 +169,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     [Fact]
     public async Task Filter_m2m_articles_by_tag_name()
     {
-        // Restores the Phase-5.5-deleted M2M cross-relation filter coverage now that Tag exists again.
+        // M2M cross-relation filter coverage, restored now that Tag exists again.
         // Proves RelationFilterResolver's M2M hop (junction targetFk -> parentFk) end-to-end on SQLite:
         // "articles that have AT LEAST ONE tag named X" (ANY/EXISTS).
         var c = await _factory.CreateAuthenticatedClientAsync();

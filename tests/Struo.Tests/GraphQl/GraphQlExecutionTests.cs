@@ -17,7 +17,7 @@ namespace Struo.Tests.GraphQl;
 
 /// <summary>
 /// Executes real GraphQL queries through the dynamic schema (StruoTypeModule) against a
-/// <see cref="FakeGraphQlDataSource"/> — the Task-7 root-resolver behaviour gate: list shape
+/// <see cref="FakeGraphQlDataSource"/> — the root-resolver behaviour gate: list shape
 /// (items/total), filter/sort/pagination/search flowing into the captured <see cref="QueryModel"/>,
 /// single-by-id, single-missing -> null data, locale-argument forwarding, and the translations map
 /// projection (regression guard for the ItemService-shape bug described below).

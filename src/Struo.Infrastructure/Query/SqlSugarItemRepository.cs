@@ -287,8 +287,8 @@ public sealed class SqlSugarItemRepository(
     {
         // Only/With lift the global soft-delete floor (registered in
         // SqlSugarClientFactory) for this query; Only additionally restricts to trashed rows via
-        // an extra DeletedAt-IS-NOT-NULL conditional (kept as a ConditionalModel — see the Task-5
-        // report for why the cast-based Where predicate on ISoftDeletable was avoided).
+        // an extra DeletedAt-IS-NOT-NULL conditional. It stays a ConditionalModel rather than a
+        // cast-based Where predicate on ISoftDeletable, which SqlSugar cannot translate reliably.
         var isSoftDeletable = typeof(ISoftDeletable).IsAssignableFrom(typeof(T));
         var effectiveConditionals = conditionals;
         if (deleted == DeletedFilter.Only && isSoftDeletable)
@@ -713,7 +713,7 @@ public sealed class SqlSugarItemRepository(
         // Use a ConditionalModel (ConditionalType.In) rather than the typed .In(string, ...)
         // overload: SqlSugar's In(string, FieldType[]) is value-typed/array-bound and brittle
         // across heterogeneous CLR id types. The comma-joined value form matches how the
-        // Phase-2 ConditionalModelTranslator emits IN clauses.
+        // ConditionalModelTranslator emits IN clauses.
         var conditionals = new List<IConditionalModel>
         {
             new ConditionalModel

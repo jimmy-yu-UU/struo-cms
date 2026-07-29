@@ -55,8 +55,8 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 }
 
 // Create an article via the UI, then open it so the edit form (and its version token) is loaded.
-// Published At is left blank on purpose — an empty DateTime must serialise to null, not "" (batch-3b
-// Task-1 fix); a regression here would 400 the Save before the revision logic is ever exercised.
+// Published At is left blank on purpose — an empty DateTime must serialise to null, not "";
+// a regression here would 400 the Save before the revision logic is ever exercised.
 async function createAndOpen(page: Page, title: string): Promise<string> {
   await page.goto('/collections/article/new')
   await chooseStatus(page, 'Draft')
