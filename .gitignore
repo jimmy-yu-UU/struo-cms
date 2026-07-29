@@ -14,6 +14,11 @@ logs/
 .env.local
 .env.*.local
 
+# Runtime data written by the app: the local file-storage root
+# (Struo:Files:Local:RootPath) and the image-transform cache
+# (Struo:Files:ImageTransform:CachePath), both under App_Data by default.
+App_Data/
+
 # Test and build output
 # Frontend-specific output (coverage, test-results, playwright-report) is owned
 # by frontend/.gitignore so each file covers exactly its own scope.
