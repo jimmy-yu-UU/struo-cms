@@ -158,7 +158,7 @@ JsonDocument.Parse(raw)` 解析 `Json` 欄位的原始儲存文字，然後在�
 - 排除在投影出的項目回應之外 (`ItemProjector` 會跳過 `field.Hidden`)——
   `GET /api/items/{collection}/{id}` 永遠不會回傳它的值。
 - 排除在查詢 DSL 的已知欄位、可搜尋欄位與可排序欄位白名單之外 (`QueryValidator`)——無法對它做
-  filter、搜尋或排序。
+  篩選、搜尋或排序。
 - 在任何對外回傳的版本快照中會被遮蔽 (`RevisionSnapshotRedactor`)，即使原始的版本紀錄資料列仍然
   完整保留該值，以便還原時能夠恢復它。
 - **不會**被排除在 `ItemService.UpdateCoreAsync` 的寫入覆蓋邏輯之外——一個已經知道欄位名稱的
@@ -198,7 +198,7 @@ JsonDocument.Parse(raw)` 解析 `Json` 欄位的原始儲存文字，然後在�
 - 第 4 章 [定義一個集合](04-defining-a-collection.md)，涵蓋 `[CmsField]` 的其他選項，以及一個集合
   如何把自己的欄位串連在一起。
 - 第 6 章 [國際化](06-internationalization.md)，涵蓋 `Translatable` 欄位。
-- 第 8 章 [查詢 DSL](08-query-dsl.md)，涵蓋 `Searchable`/`Sortable`/`Hidden` 如何形塑 filter 與
-  排序白名單。
+- 第 8 章 [查詢 DSL](08-query-dsl.md)，涵蓋 `Searchable`/`Sortable`/`Hidden` 如何形塑 `filter` 與
+  `sort` 白名單。
 - 第 10 章 [GraphQL API](10-graphql-api.md)，涵蓋介面對應到 SDL 型別的完整對照。
 - 第 14 章 [管理後台 SPA 客製化](14-admin-spa-customization.md)，用來新增一個新的欄位編輯器。
