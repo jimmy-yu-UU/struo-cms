@@ -156,7 +156,7 @@ See `docs/guide/en/15-deployment-operations-testing.md`, "The three test layers"
 
 Conventional commits, observed consistently in this repository's own history: `<type>(<scope>):
 <description>`, scope optional. Types actually used: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`,
-`ci`. No attribution trailer is used in this repository's commits.
+`ci`, `style`, `perf`, `build`, `revert`. No attribution trailer is used in this repository's commits.
 
 ## Next steps
 

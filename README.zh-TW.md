@@ -51,7 +51,7 @@ pnpm dev
 也不會重新建立或重設它；若要覆寫，請在第一次啟動之前設定
 `Auth:BootstrapAdmin:Email`/`Auth:BootstrapAdmin:Password`）。正式環境啟動時若仍在使用預設密碼，
 會記錄一則啟動警告，但並不會拒絕啟動——請在上線之前先變更它。完整細節，包括 MinIO 選用的 `s3`
-Compose profile 與 port 覆寫變數，請見[第 2 章](docs/guide/en/02-getting-started.md)。
+Compose profile 與 port 覆寫變數，請見[第 2 章](docs/guide/zh-TW/02-getting-started.md)。
 
 ## 架構
 

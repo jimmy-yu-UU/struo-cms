@@ -25,10 +25,12 @@ below.
 
 ## How the environments use it
 
-- **Dev:** `InitTables` builds both core and sample tables straight from the entity classes on every
-  startup. `Database:MigrationsPath` stays **empty** in dev, so the runner never runs and the baseline
-  file is not applied here at all. It doesn't need to be — if it were ever pointed at a dev database it
-  would just no-op (`IF NOT EXISTS` against tables `InitTables` already created).
+- **Dev:** `InitTables` builds the **core** tables straight from the entity classes on every startup. On
+  a default checkout the sample Blog project isn't referenced and `Struo:ContentAssemblies` is empty, so
+  no sample tables are created; they only appear once the sample is opted in (chapter 16 of the guide).
+  `Database:MigrationsPath` stays **empty** in dev, so the runner never runs and the baseline file is not
+  applied here at all. It doesn't need to be — if it were ever pointed at a dev database it would just
+  no-op (`IF NOT EXISTS` against tables `InitTables` already created).
 - **Production:** there is no `InitTables` in Production. Set `Database:MigrationsPath` to this
   directory and let `MigrationRunner` apply `001-core-baseline.sql` to an **empty** database at
   startup. That single file is enough to bootstrap the entire core schema — no dependency on the
@@ -88,8 +90,8 @@ at application startup:
 1. Create the empty PostgreSQL database and set `Database:ConnectionString`.
 2. Choose how the baseline schema is created:
    - **Dev / disposable:** run the app once in `Development` with `Database:MigrationsPath` empty (the
-     default) — `InitTables` creates core + sample tables from the entity classes. The runner does not
-     run.
+     default) — `InitTables` creates the core tables from the entity classes (sample tables only appear
+     once the Blog sample is opted in, per chapter 16). The runner does not run.
    - **Production:** do **not** rely on `InitTables`. Set `Database:MigrationsPath` to this directory
      (absolute path) and let `MigrationRunner` apply `001-core-baseline.sql` to the empty database at
      startup — that is the entire core schema, no manual step required beyond configuration.

@@ -139,7 +139,7 @@ SPA 的側欄**完全沒有「Content」導覽群組**。已直接針對此份 c
 | `GET /api/ping` | 輕量的信封 (envelope) 回應，適合用來對 REST pipeline 做 smoke test |
 | `/scalar` | 互動式 API 瀏覽工具 (Mars 佈景主題)——**僅限非 Production 環境** |
 | `/openapi/v1.json` | 產生的 OpenAPI 文件——**僅限非 Production 環境** |
-| `/graphql` | GraphQL 端點 (Banana Cake Pop / 任何 GraphQL client) |
+| `/graphql` | GraphQL 端點——在每一個環境都可連上;只有內建的 Nitro IDE 與 introspection 是**僅限 Development**(`GraphQlServiceCollectionExtensions.cs:69,88`)——比上面的「非正式環境」限制更嚴格。它的 `?sdl` schema 路由**並未**採用相同方式限制——請見第 10 章。 |
 
 已針對此份 checkout 確認過:
 

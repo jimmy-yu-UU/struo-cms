@@ -324,7 +324,8 @@ libvips 本身是 **LGPL-2.1-or-later**，而 StruoCMS 是 MIT。依照 `THIRD-P
 連結一個修改過的 libvips 的能力，以及 (c) 讓 libvips 自身的原始碼可取得 (上游已經如此)
 ——StruoCMS 沒有對 libvips 施加任何額外限制，也沒有內嵌任何 libvips 原始碼，所以
 **StruoCMS 自身的 MIT 授權不受影響**。內建的原生版本是 libvips **8.18.4** (透過
-`NetVips.Native.win-x64` 套件，釘選於 `Directory.Packages.props`);NetVips 本身則是
+`NetVips.Native` 套件——並非以 RID 命名的變體，它為每一個受支援的執行期都內建了原生組件——
+釘選於 `Directory.Packages.props`);NetVips 本身則是
 **3.2.0**。`NetVips.Native.*` 套件另外還內建了 libvips 自身的幾個選用相依套件 (mozjpeg、
 libpng、libwebp、cairo、pango、librsvg 等)，各自採用混合的 MIT/BSD/LGPLv3 授權，記載於各自
 套件的 `THIRD-PARTY-NOTICES.md` 中。

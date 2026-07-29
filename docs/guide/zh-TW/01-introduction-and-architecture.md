@@ -98,8 +98,10 @@ Struo.Domain  <──  Struo.Application  <──  Struo.Infrastructure  <──
 entity 上，而非 domain 型別上。
 
 **框架程式碼永遠不會參照 `samples/*`。** 四個 `src/Struo.*` 專案沒有任何一個對 `samples/` 有
-`ProjectReference`;只有 `tests/Struo.Tests.csproj` (刻意用來測試該範例) 有。這正是讓該範例真正
-「選用且可刪除」的原因——移除 `samples/Struo.Sample.Blog` 不會破壞 core。
+`ProjectReference`;只有 `tests/Struo.Tests/Struo.Tests.csproj` (刻意用來測試該範例) 有。這正是讓該
+範例在 `src/Struo.*` 這個層級上真正「選用且可刪除」的原因——移除 `samples/Struo.Sample.Blog` 不會破壞
+core。不過，單純執行 `rm -rf samples/` 仍會破壞 solution 層級的 `dotnet build`(`StruoCMS.slnx` 與上述
+測試專案參照)——完整、安全的移除程序請見第 16 章的移除檢查清單。
 
 ## 技術堆疊
 

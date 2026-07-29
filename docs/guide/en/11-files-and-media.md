@@ -330,8 +330,9 @@ StruoCMS to (a) reproduce the license notice, (b) not restrict a user's ability 
 modified libvips, and (c) make libvips's own source available (it already is, upstream) — StruoCMS
 imposes no additional restriction on libvips and embeds no libvips source, so **StruoCMS's own MIT
 license is unaffected**. The bundled native version is libvips **8.18.4** (via the
-`NetVips.Native.win-x64` package, pinned in `Directory.Packages.props`); NetVips itself is **3.2.0**. The
-`NetVips.Native.*` packages additionally bundle several of libvips's own optional dependencies (mozjpeg,
+`NetVips.Native` package — not RID-suffixed; it carries native assets for every supported runtime —
+pinned in `Directory.Packages.props`); NetVips itself is **3.2.0**. The `NetVips.Native.*` packages
+additionally bundle several of libvips's own optional dependencies (mozjpeg,
 libpng, libwebp, cairo, pango, librsvg, …) under their own mixed MIT/BSD/LGPLv3 licenses, documented in
 each package's own `THIRD-PARTY-NOTICES.md`.
 
