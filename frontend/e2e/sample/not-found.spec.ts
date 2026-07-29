@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures'
+import { test, expect } from '../fixtures'
 
 // Phase 9a-fe: the SPA detects a 404 by the response envelope's error code
 // (`error.code === 'NOT_FOUND'`), not by matching the error message text.

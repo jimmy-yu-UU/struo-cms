@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures'
+import { test, expect } from '../fixtures'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
