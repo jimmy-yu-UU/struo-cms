@@ -83,7 +83,7 @@ public sealed class Announcement : AuditableEntity
 ## `[CmsCollection]` 選項
 
 `CmsCollectionAttribute` (`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`) 恰好
-宣告了以下這些屬性——這是完整的集合，不是精選列表:
+宣告了以下這些屬性——這是完整清單，不是精選列表:
 
 | 屬性 | 型別 | 說明 |
 |---|---|---|
@@ -115,7 +115,7 @@ public sealed class Announcement : AuditableEntity
 | `Sortable` | `bool` | 允許做為查詢 DSL 的排序鍵。 |
 | `Sort` | `int` | 決定欄位在管理後台表單中的順序，並間接影響集合清單的欄位順序。 |
 | `ReadOnly` | `bool` | 讀取時會回傳其值;更新永遠無法把 client 提供的值搬移到它上面，新增時也會把它剔除——但有一個 CLR 型別上的但書——見第 5 章。 |
-| `Hidden` | `bool` | 把欄位從 schema、GraphQL、項目投影 (projection) 以及查詢的 filter/search/sort 中移除——見第 5 章。 |
+| `Hidden` | `bool` | 把欄位從 schema、GraphQL、項目投影 (projection) 以及查詢的篩選/搜尋/排序中移除——見第 5 章。 |
 | `HelpText` | `string?` | 顯示在管理後台表單輸入欄位下方的說明文字。 |
 | `Translatable` | `bool` | 欄位存放於逐 locale 的翻譯附屬資料表，而非父資料列上 (第 6 章)。 |
 | `Group` | `string?` | 此欄位所屬的 `[CmsFieldGroup]` 名稱 (見下文)。 |
@@ -143,7 +143,7 @@ public sealed class Announcement : AuditableEntity
 
 `CmsOptionsAttribute` 接受一個 `params string[]` 的選項清單，每一個項目要嘛是 `"value:label"`，
 要嘛是單純的 `"value"` (標籤預設等同於值——範例的 `Article.Regions` 欄位除了帶標籤的項目之外，還有一個
-單純的項目 `"amer"`)。如果某個項目的 value 那一半是空白，`MetadataScanner.ParseOptions` 會擲出
+單純的項目 `"amer"`)。如果某個項目的值那一半是空白，`MetadataScanner.ParseOptions` 會擲出
 `MetadataException`。
 
 `[CmsOptions]` 只在選項型的介面上有效——`Select`、`MultiSelect`、`Radio`、`CheckboxGroup` 或
@@ -161,7 +161,8 @@ UI 可用)，而 `Tags` 通常不會設定，讓使用者能真正自由輸入�
    attribute 的型別 (`Language`、`File`、`MediaFolder`、`User`、`Role`、`Permission`、
    `UserRole`——第 1 章列出的十個框架 entity 型別中的七個;`FileTranslation`、`Revision` 與
    `SiteSettings` 是框架資料表，但不是集合) 一律會被發現。
-2. **Host 組件**——也就是 `Struo.Api` 本身 (`typeof(Program).Assembly`，由 `Program.cs` 明確傳入)。
+2. **host 組件**（承載應用程式的 `Struo.Api`）——也就是 `Struo.Api` 本身
+   (`typeof(Program).Assembly`，由 `Program.cs` 明確傳入)。
 3. **`Struo:ContentAssemblies` 中列出的每一個組件**——在 `builder.Build()` 執行*之前*，就從
    `builder.Configuration` 讀取 (第 3 章完整涵蓋這種時機所帶來的影響)。每一個名稱都透過
    `Assembly.Load(new AssemblyName(name))` 解析;**任何無法載入的項目都會讓啟動失敗**，並擲出一個

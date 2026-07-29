@@ -153,7 +153,7 @@ CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、
 | 軟刪除 | Core，逐集合選用 | `ISoftDeletable` |
 | 國際化 | Core | 逐 locale 的翻譯附屬資料表 |
 | 站台設定 / 品牌 | Core | 單例 `site_settings` 資料列，可由超級管理員在應用程式內編輯 |
-| 查詢 DSL | Core | filter/sort/分頁，欄位與關聯路徑皆採白名單驗證 |
+| 查詢 DSL | Core | `filter`/`sort`/分頁，欄位與關聯路徑皆採白名單驗證 |
 | REST API | Core | ASP.NET Core Controllers，統一回應信封 (envelope) |
 | GraphQL API | Core | HotChocolate，schema 由相同的集合中介資料產生 |
 | 管理後台 SPA | Core | Vue 3 + PrimeVue + TipTap |
