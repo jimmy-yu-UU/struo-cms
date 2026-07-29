@@ -60,7 +60,7 @@ public static class QueryValidator
                 case LogicalFilter l:
                     if (logicalDepth >= 2)
                         throw new QueryException(
-                            "Nested logical groups are not supported in Phase 2; " +
+                            "Nested logical groups are not supported; " +
                             "use a single level of _and/_or over field conditions.");
                     foreach (var child in l.Children) Walk(child, logicalDepth + 1);
                     break;
