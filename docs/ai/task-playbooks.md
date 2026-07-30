@@ -114,23 +114,31 @@ picker instead of a plain text input) — frontend-only, no backend change:
 2. Teach `MetadataScanner.BuildField` (`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) about
    any interface-specific validation the new value needs (e.g. requiring `[CmsOptions]`, restricting
    allowed CLR property types, `MaxLength` defaulting rules).
-3. If the value's CLR-side value is a structured aggregate (a `List<>`/`Dictionary<>`) that needs a
+3. Add the new member to `src/Struo.Api/GraphQl/SchemaTypeMapper.cs`'s `ScalarSdl` (and
+   `WritableInputSdl` if the interface should be writable) switch expressions, choosing the GraphQL SDL
+   type it maps to. **This step is easy to miss and fails loudly but unhelpfully if skipped**: both
+   switches compile fine with the new member unhandled (there's a discard arm), but `ScalarSdl`'s
+   discard arm throws at GraphQL schema-build time, which happens during host startup — so the failure
+   surfaces as a misleading `ObjectDisposedException` on `IServiceProvider` (from
+   `WebApplicationFactory` tearing down a host that never finished starting), not as an error naming
+   `SchemaTypeMapper` or the new enum member at all.
+4. If the value's CLR-side value is a structured aggregate (a `List<>`/`Dictionary<>`) that needs a
    JSON column, add it to `SqlSugarClientFactory`'s `JsonColumnInterfaces` set
    (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) so SqlSugar (de)serializes it and
    the column gets `IsJson = true` + `text` together (either one alone is a documented pitfall —
    `IsJson` without an explicit `text` type defaults to `varchar(1)` and truncates on PostgreSQL, a
    failure that does not reproduce on SQLite). If instead it's a plain long string that needs widening,
    add it to `ContentBearingInterfaces` in the same file.
-4. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
+5. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
    `KeyValue`/`Files`/`Repeater` already have), add an `IFieldValidator` implementation under
    `src/Struo.Application/Query/Write/Validators/` and register it in `FieldValidatorRegistry.Phases`
    (`src/Struo.Application/Query/Write/FieldValidatorRegistry.cs`) — note the phase order is observable
    (it determines exception precedence when a body violates several fields at once), so add a new phase
    rather than silently reordering existing ones unless changing precedence is the actual intent.
-5. Mirror the new value in `frontend/src/lib/fieldTypes/types.ts` (`FieldInterface` union AND
+6. Mirror the new value in `frontend/src/lib/fieldTypes/types.ts` (`FieldInterface` union AND
    `ALL_FIELD_INTERFACES`) and add its entry to `frontend/src/lib/fieldTypes/registry.ts` (component +
    `defaultValue`/`parse`/`serialize`/`listColumn`), following Playbook 2a for the component itself.
-6. If this new interface is used by (or an existing field's `Interface`/other `[CmsField]`/
+7. If this new interface is used by (or an existing field's `Interface`/other `[CmsField]`/
    `[CmsCollection]` attribute is changed to use) one of the seven core `[CmsCollection]` types, the
    committed `schema/core-collections.json` snapshot is now stale. Regenerate it, then commit the
    result:
@@ -139,11 +147,11 @@ picker instead of a plain text input) — frontend-only, no backend change:
    ```
    Skipping this fails the `backend` CI job's `CoreSchemaSnapshotTests` with a diff against the stale
    snapshot (`schema/README.md` has the full contract).
-7. **Tests to add**: a backend test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs`
+8. **Tests to add**: a backend test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs`
    covering the new interface's scan-time validation, a persistence-level test if you touched
    `SqlSugarClientFactory` (follow the pattern of existing column-widening tests in
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
-8. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
+9. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
    change spans both stacks. **Live-PostgreSQL verification is required** if you touched
    `SqlSugarClientFactory`'s column mapping, since the `IsJson`/`text` truncation failure mode above
    does not reproduce on SQLite at all.

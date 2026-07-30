@@ -1,8 +1,9 @@
 // @vitest-environment node
-// Vitest's jsdom environment uses Vite's *web* transform mode, in which import.meta.url is a
-// dev-server http://…/@fs/… URL, not file://, so fileURLToPath below rejects it. This test needs
-// no DOM, so the node environment (ssr transform mode, file:// module URLs) is the correct
-// scope-local fix, without touching the shared vite.config.ts.
+// Under the jsdom environment Vitest transforms this file in Vite's client mode, where
+// `new URL(<literal>, import.meta.url)` is rewritten twice — Vite swaps the literal for a
+// dev-server path (/@fs/…) and Vitest's normalize-url plugin swaps the base for self.location —
+// so the result is http://localhost:3000/@fs/… and fileURLToPath rejects it. Neither rewrite
+// happens in the node environment (ssr transform), which needs no DOM anyway.
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
