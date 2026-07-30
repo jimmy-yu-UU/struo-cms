@@ -34,7 +34,13 @@ public static class AuthWiring
             ? CookieSecurePolicy.Always
             : CookieSecurePolicy.SameAsRequest;
 
-        services.AddAuthentication(AuthSchemes.Cookie)
+        services.AddAuthentication(AuthSchemes.Adaptive)
+            .AddPolicyScheme(AuthSchemes.Adaptive, AuthSchemes.Adaptive, options =>
+                options.ForwardDefaultSelector = context =>
+                    context.Request.Headers.Authorization.ToString()
+                        .StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                        ? AuthSchemes.Bearer
+                        : AuthSchemes.Cookie)
             .AddCookie(AuthSchemes.Cookie, options =>
             {
                 options.Cookie.Name = AuthSchemes.SessionCookieName;
