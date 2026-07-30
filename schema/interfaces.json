@@ -1,0 +1,43 @@
+{
+  "fieldInterfaces": [
+    "text",
+    "textarea",
+    "richText",
+    "markdown",
+    "code",
+    "slug",
+    "email",
+    "url",
+    "password",
+    "color",
+    "phone",
+    "number",
+    "slider",
+    "rating",
+    "boolean",
+    "checkbox",
+    "date",
+    "time",
+    "dateTime",
+    "select",
+    "multiSelect",
+    "radio",
+    "checkboxGroup",
+    "tags",
+    "json",
+    "keyValue",
+    "repeater",
+    "file",
+    "image",
+    "files",
+    "hidden",
+    "divider",
+    "uuid"
+  ],
+  "relationInterfaces": [
+    "dropdown",
+    "tagSelect",
+    "treeSelect",
+    "relatedList"
+  ]
+}

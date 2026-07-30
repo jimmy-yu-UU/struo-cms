@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
+using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Metadata;
 using Struo.Tests.Support;
 using Xunit;
@@ -10,13 +11,17 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// Pins the core collection metadata the admin SPA actually receives. The frontend mirrors this
-/// shape by hand (frontend/src/types/schema.ts, frontend/src/lib/fieldTypes/types.ts) and silently
-/// degrades when the mirror drifts: an unknown FieldInterface falls back to a read-only renderer
-/// (registry.ts:222) and a field with no list-column formatter is dropped from the list view
-/// altogether (selectListColumns.ts:10). Neither shows up in dotnet build, vue-tsc, or the unit
-/// suites. This test makes any change to the core content model visible in the diff, and
-/// frontend/tests/schemaContract.test.ts then proves the SPA can still render it.
+/// Pins the two things the admin SPA mirrors by hand — the core collection metadata it receives, and
+/// the interface enums it re-declares (frontend/src/types/schema.ts,
+/// frontend/src/lib/fieldTypes/types.ts, frontend/src/lib/relationInputKind.ts). Both mirrors degrade
+/// silently when they drift: an unknown FieldInterface falls back to a read-only renderer in
+/// registry.ts's getFieldType, a field with no list-column formatter is dropped from the list view
+/// altogether by selectListColumns, and an unmapped RelationInterface falls back to 'readonly' in
+/// relationInputKind. None of that shows up in dotnet build, vue-tsc, or the unit suites.
+///
+/// The collection snapshot makes any change to the core content model visible in the diff. The
+/// interface-enum snapshot covers what the collection snapshot cannot: a new enum member no core
+/// collection happens to use. frontend/tests/schemaContract.test.ts consumes both.
 /// </summary>
 [Collection("ApiIntegration")]
 public sealed class CoreSchemaSnapshotTests
@@ -38,8 +43,28 @@ public sealed class CoreSchemaSnapshotTests
         kept.Should().HaveCount(core.Count,
             "every core collection should appear in the GET /api/schema response");
 
-        var actual = Serialize(kept);
-        var path = RepoRoot.SchemaSnapshotPath();
+        CompareOrWrite(Serialize(kept), RepoRoot.SchemaSnapshotPath(),
+            "the core collection metadata served by GET /api/schema");
+    }
+
+    /// <summary>
+    /// Pins every declared FieldInterface/RelationInterface member, independently of whether any
+    /// collection uses it. Without this, the frontend contract test only ever sees interfaces a core
+    /// collection happens to use — and new field types are typically introduced for content
+    /// collections, not for the seven framework tables, so the common case went ungated.
+    /// </summary>
+    [Fact]
+    public void InterfaceEnums_MatchCommittedSnapshot() =>
+        CompareOrWrite(SerializeInterfaceEnums(), RepoRoot.InterfacesSnapshotPath(),
+            "the declared FieldInterface/RelationInterface members");
+
+    /// <summary>
+    /// Compares <paramref name="actual"/> against the committed file, or rewrites that file when
+    /// UPDATE_SCHEMA_SNAPSHOT=1. <paramref name="whatDrifted"/> names the subject in the failure
+    /// message, so a red build is actionable without reading this source.
+    /// </summary>
+    private static void CompareOrWrite(string actual, string path, string whatDrifted)
+    {
         var relative = Path.GetRelativePath(RepoRoot.Find(), path).Replace('\\', '/');
 
         if (Environment.GetEnvironmentVariable(UpdateEnvVar) == "1")
@@ -51,14 +76,38 @@ public sealed class CoreSchemaSnapshotTests
 
         File.Exists(path).Should().BeTrue(
             $"{relative} is missing. Regenerate it with " +
-            $"`{UpdateEnvVar}=1 dotnet test --filter CoreSchemaSnapshot` and commit the result.");
+            $"`{UpdateEnvVar}=1 dotnet test --filter CoreSchemaSnapshot` and commit the result " +
+            "(PowerShell form: see schema/README.md).");
 
         Normalize(actual).Should().Be(Normalize(File.ReadAllText(path)),
-            $"the core collection metadata served by GET /api/schema no longer matches {relative}. " +
-            $"If the change is intended, regenerate the snapshot with " +
+            $"{whatDrifted} no longer matches {relative}. If the change is intended, regenerate with " +
             $"`{UpdateEnvVar}=1 dotnet test --filter CoreSchemaSnapshot` and commit it — " +
-            "frontend/tests/schemaContract.test.ts then verifies the admin SPA can still render it.");
+            "frontend/tests/schemaContract.test.ts then verifies the admin SPA can still handle it.");
     }
+
+    /// <summary>
+    /// Enum member names in the same camelCase form the wire uses. The names go through
+    /// JsonNamingPolicy.CamelCase — the very policy Program.cs hands to JsonStringEnumConverter —
+    /// rather than a local re-implementation, so this file cannot drift from how the API actually
+    /// serializes an enum. Declaration order is preserved: it groups related interfaces and keeps the
+    /// committed file readable, and nothing consumes it as an ordered list.
+    /// </summary>
+    private static string SerializeInterfaceEnums()
+    {
+        var doc = new JsonObject
+        {
+            ["fieldInterfaces"] = CamelCaseNames<FieldInterface>(),
+            ["relationInterfaces"] = CamelCaseNames<RelationInterface>(),
+        };
+
+        return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true })
+            .Replace("\r\n", "\n").TrimEnd('\n') + "\n";
+    }
+
+    private static JsonArray CamelCaseNames<T>() where T : struct, Enum =>
+        new(Enum.GetNames<T>()
+            .Select(n => (JsonNode)JsonValue.Create(JsonNamingPolicy.CamelCase.ConvertName(n))!)
+            .ToArray());
 
     /// <summary>
     /// Core = the FrameworkEntityTypes that actually carry [CmsCollection] (7 of the 10). Derived by

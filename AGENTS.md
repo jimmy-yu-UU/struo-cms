@@ -21,7 +21,8 @@ carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `Media
 tables but not collections. If you're unsure whether something is core, it's core only if it lives in
 `src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` and
 `db/migrations/` among them. `schema/` is core too, despite living outside that path: it holds the
-committed snapshot of these seven collections' wire metadata (`schema/README.md`), and a fork keeps
+committed snapshots of these seven collections' wire metadata and of the declared interface enums
+(`schema/README.md`), and a fork keeps
 it alongside `src/Struo.*`.
 
 `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is an optional, detachable **demo** — it shows how
@@ -42,7 +43,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `frontend/` | The Vue 3 + PrimeVue admin SPA, a separate pnpm workspace. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `db/migrations/` | Core-only, reviewed SQL migration scripts (`001-core-baseline.sql` is the prod bootstrap). |
-| `schema/` | Committed core-collection wire-shape snapshot (`core-collections.json`) the schema contract gate checks both stacks against — `schema/README.md`. |
+| `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`) and this `ai/` reference set. |
 | `tests/Struo.Tests` | The backend xUnit suite (unit, integration, and the template-invariant guard). |
 
@@ -109,9 +110,11 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    `IServiceProvider` during host startup rather than a clear error — see `docs/ai/task-playbooks.md`
    Playbook 2b), possibly `SqlSugarClientFactory`'s column-widening hook, and — both required —
    `frontend/src/lib/fieldTypes/types.ts`'s type union/`ALL_FIELD_INTERFACES` and its `registry.ts`
-   component. If the new value touches a core collection, regenerate `schema/core-collections.json`
-   (`schema/README.md`). Gate: all four standing gates; live-PostgreSQL check if you touched column
-   mapping.
+   component. Then regenerate `schema/interfaces.json` — required for *every* new member, whether or not
+   a collection uses it yet — and `schema/core-collections.json` too if the value is used by a core
+   collection (`schema/README.md`; one command does both). A new `RelationInterface` member likewise
+   needs an entry in `frontend/src/lib/relationInputKind.ts`, or the relation silently renders
+   read-only. Gate: all four standing gates; live-PostgreSQL check if you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
@@ -129,8 +132,10 @@ The **four standing gates** — the same ones CI runs on every push/PR — are `
 change; run all four before anything touching both stacks.
 
 `dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
-not been mirrored into `schema/core-collections.json`; `pnpm test` includes
-`frontend/tests/schemaContract.test.ts`, which fails when the admin SPA cannot render the snapshot.
+not been mirrored into `schema/core-collections.json`, or an enum change into `schema/interfaces.json`;
+`pnpm test` includes `frontend/tests/schemaContract.test.ts`, which fails when the admin SPA cannot
+handle what those snapshots describe — including a `FieldInterface` or `RelationInterface` member the
+frontend has no mirror for, whether or not any collection uses it.
 Regenerate with `UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot` (bash) and commit the
 result — see `schema/README.md` for the full contract, including the PowerShell form of that command.
 
