@@ -67,8 +67,13 @@ What it enforces, via `frontend/tests/schemaContract.test.ts`:
 - every declared `FieldInterface` member has its own entry in `registry`;
 - `ALL_FIELD_INTERFACES` lists nothing the backend no longer declares (catches a stale frontend entry
   left behind after a backend member is removed);
-- every declared `RelationInterface` member resolves through `relationInputKind()` to something other
-  than the `'readonly'` fallback.
+- every declared `RelationInterface` member has an entry in `relationInputKind`'s map
+  (`MAPPED_RELATION_INTERFACES`), and that map lists nothing the backend no longer declares.
+
+Both enums are therefore checked in both directions. The relation check tests map-key presence rather
+than calling `relationInputKind()` and looking for `'readonly'`, for the same reason the field check
+tests `registry` key presence rather than object identity: `'readonly'` is a legal `RelationInputKind`,
+so a member deliberately mapped to it would be indistinguishable from one that fell through.
 
 Note which of these the compiler already covers and which it does not. `registry` is declared
 `Record<FieldInterface, FieldTypeDef>`, so `vue-tsc` (via `pnpm build`) independently fails the moment

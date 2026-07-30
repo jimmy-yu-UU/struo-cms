@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import { registry } from '../src/lib/fieldTypes/registry'
 import { ALL_FIELD_INTERFACES } from '../src/lib/fieldTypes/types'
-import { relationInputKind } from '../src/lib/relationInputKind'
+import { MAPPED_RELATION_INTERFACES } from '../src/lib/relationInputKind'
 import { selectListColumns } from '../src/lib/selectListColumns'
 import type { CollectionMeta, FieldMeta } from '../src/types/schema'
 
@@ -94,10 +94,12 @@ describe('schema contract: core collections vs the field-type registry', () => {
   })
 })
 
-// A6/A7/A8. The assertions in the block above are conditional: they only see an interface that some
-// core collection actually uses, and new field types are typically introduced for content
-// collections rather than for the seven framework tables. These three close that gap by checking the
-// backend enums directly, so a new member is caught the moment it is declared.
+// The assertions in the block above are conditional: they only see an interface that some core
+// collection actually uses, and new field types are typically introduced for content collections
+// rather than for the seven framework tables. The block below closes that gap by checking the backend
+// enums directly, so a new member is caught the moment it is declared. Both enums are checked in both
+// directions — a backend member the frontend has not mirrored, and a frontend entry left behind after
+// a backend member was removed.
 describe('schema contract: the frontend covers every declared backend interface', () => {
   it('reads non-empty interface lists', () => {
     expect(interfaces.fieldInterfaces.length).toBeGreaterThan(0)
@@ -121,7 +123,7 @@ describe('schema contract: the frontend covers every declared backend interface'
 
     expect(
       missing,
-      'backend FieldInterface members with no dedicated registry component (these render silently read-only)',
+      'backend FieldInterface members with no registry key (these fall through to the read-only renderer)',
     ).toEqual([])
   })
 
@@ -133,17 +135,24 @@ describe('schema contract: the frontend covers every declared backend interface'
     expect(stale, 'frontend ALL_FIELD_INTERFACES entries the backend enum no longer declares').toEqual([])
   })
 
-  it('resolves every backend RelationInterface member to a real relation input', () => {
-    // relationInputKind() returns 'readonly' for anything absent from its MAP, and no mapped member
-    // resolves to 'readonly', so that value is an unambiguous signal of a silent fallback — unlike
-    // the field registry, where the shared readonlyDef makes identity checks useless.
-    const unmapped = interfaces.relationInterfaces
-      .filter((i) => relationInputKind(i) === 'readonly')
+  it('maps every backend RelationInterface member to a real relation input', () => {
+    // Key presence, for the same reason as the registry check: relationInputKind() returns the legal
+    // value 'readonly' for anything absent from its map, so a member deliberately mapped to
+    // 'readonly' would be indistinguishable from one that fell through.
+    const mapped = new Set(MAPPED_RELATION_INTERFACES)
+    const unmapped = interfaces.relationInterfaces.filter((i) => !mapped.has(i))
 
     expect(
       unmapped,
-      'backend RelationInterface members with no relationInputKind mapping (these render silently read-only)',
+      'backend RelationInterface members absent from relationInputKind\'s map (these render silently read-only)',
     ).toEqual([])
+  })
+
+  it('maps no relation interface the backend no longer declares', () => {
+    const declared = new Set(interfaces.relationInterfaces)
+    const stale = MAPPED_RELATION_INTERFACES.filter((i) => !declared.has(i))
+
+    expect(stale, 'relationInputKind map entries the backend enum no longer declares').toEqual([])
   })
 })
 
