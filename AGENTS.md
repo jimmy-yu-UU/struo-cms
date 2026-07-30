@@ -19,7 +19,10 @@ actual project.
 carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`, `User`,
 `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, and `SiteSettings` are framework
 tables but not collections. If you're unsure whether something is core, it's core only if it lives in
-`src/Struo.*`.
+`src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` and
+`db/migrations/` among them. `schema/` is core too, despite living outside that path: it holds the
+committed snapshot of these seven collections' wire metadata (`schema/README.md`), and a fork keeps
+it alongside `src/Struo.*`.
 
 `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is an optional, detachable **demo** — it shows how
 to define collections using the same primitives a fork would use. It is not shipped capability: the
@@ -39,6 +42,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `frontend/` | The Vue 3 + PrimeVue admin SPA, a separate pnpm workspace. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `db/migrations/` | Core-only, reviewed SQL migration scripts (`001-core-baseline.sql` is the prod bootstrap). |
+| `schema/` | Committed core-collection wire-shape snapshot (`core-collections.json`) the schema contract gate checks both stacks against — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`) and this `ai/` reference set. |
 | `tests/Struo.Tests` | The backend xUnit suite (unit, integration, and the template-invariant guard). |
 
@@ -100,9 +104,14 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    dotnet test`.
 2. **Add a field type** — swapping an editor for an existing `FieldInterface` is frontend-only
    (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches the
-   backend enum, `MetadataScanner`, possibly `SqlSugarClientFactory`'s column-widening hook, and the
-   frontend registry + type union together. Gate: all four standing gates; live-PostgreSQL check if you
-   touched column mapping.
+   backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped member
+   fails GraphQL schema build, which surfaces as a misleading `ObjectDisposedException` on
+   `IServiceProvider` during host startup rather than a clear error — see `docs/ai/task-playbooks.md`
+   Playbook 2b), possibly `SqlSugarClientFactory`'s column-widening hook, and — both required —
+   `frontend/src/lib/fieldTypes/types.ts`'s type union/`ALL_FIELD_INTERFACES` and its `registry.ts`
+   component. If the new value touches a core collection, regenerate `schema/core-collections.json`
+   (`schema/README.md`). Gate: all four standing gates; live-PostgreSQL check if you touched column
+   mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
@@ -118,6 +127,12 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 The **four standing gates** — the same ones CI runs on every push/PR — are `dotnet build`,
 `dotnet test`, `pnpm test`, `pnpm build` (the latter two from `frontend/`). Run whichever apply to your
 change; run all four before anything touching both stacks.
+
+`dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
+not been mirrored into `schema/core-collections.json`; `pnpm test` includes
+`frontend/tests/schemaContract.test.ts`, which fails when the admin SPA cannot render the snapshot.
+Regenerate with `UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot` (bash) and commit the
+result — see `schema/README.md` for the full contract, including the PowerShell form of that command.
 
 **Live-PostgreSQL verification is required for any change to DB behavior** (a migration, a
 `SqlSugarClientFactory` column-mapping change, a query-building change) — SQLite passing is not evidence
