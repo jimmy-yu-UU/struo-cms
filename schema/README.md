@@ -75,13 +75,16 @@ renaming a field; changing a field's `Interface`, `Label`, `Required`, `Sortable
 
 Adding a new member to `FieldInterface` also requires adding it to
 `frontend/src/lib/fieldTypes/types.ts` and giving it a component in
-`frontend/src/lib/fieldTypes/registry.ts`. Only the first half is what this gate enforces, and only
-when a core collection actually uses the new interface — `frontend/tests/schemaContract.test.ts` fails
-if a core-used interface is missing from `ALL_FIELD_INTERFACES`, but says nothing about an interface a
-fork's own collection (or the sample) adopts instead. The `registry.ts` half is enforced separately and
-unconditionally, by the compiler: `registry.ts`'s `registry: Record<FieldInterface, FieldTypeDef>`
-requires an entry for every member of the `FieldInterface` type, so `vue-tsc` (run via `pnpm build`) —
-not this test — is what fails if it's missing.
+`frontend/src/lib/fieldTypes/registry.ts`. Both halves are enforced, but by different mechanisms with
+different scope. `registry.ts`'s `registry: Record<FieldInterface, FieldTypeDef>` requires an entry for
+every member of the `FieldInterface` type, so `vue-tsc` (run via `pnpm build`) fails the moment the union
+gains a member with no registry entry — regardless of whether any collection, core or fork, uses it.
+`frontend/tests/schemaContract.test.ts` checks the same two spots at runtime (`vitest run`, no
+type-checking involved) but only for interfaces a core collection actually uses: one `it()` fails if
+such an interface is missing from `ALL_FIELD_INTERFACES`, another fails if it has no dedicated registry
+entry. So for a core-used interface, both the missing-from-the-list and missing-from-the-registry
+mistakes are caught twice, by independent means; for an interface only a fork's own collection (or the
+sample) adopts, only the compiler's registry check still applies.
 
 ### Ordering
 
