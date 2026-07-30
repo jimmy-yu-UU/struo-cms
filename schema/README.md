@@ -20,22 +20,44 @@ The admin SPA mirrors these backend DTOs by hand
 - a field whose interface has no list-column formatter is filtered out of the list view entirely
   (`frontend/src/lib/selectListColumns.ts`), so the column silently disappears.
 
-Neither is caught by `dotnet build`, `vue-tsc`, or either unit suite. Committing the snapshot turns
-any change to the core content model into a reviewable diff, and splits enforcement across the two
-CI jobs with no gap and no overlap:
+For a field interface that one of the seven core collections actually uses, neither failure mode above
+is caught by `dotnet build`, `vue-tsc`, or either unit suite on its own — closing that gap is the whole
+reason this snapshot exists. Committing it turns any such change to the core content model into a
+reviewable diff, split across the two CI jobs:
 
 | What went wrong | Which job fails |
 |---|---|
 | Core schema changed, snapshot not regenerated | `backend` — `CoreSchemaSnapshotTests` |
 | Snapshot regenerated, but the SPA cannot render it | `frontend` — `frontend/tests/schemaContract.test.ts` |
 
+This gate is narrower than "the schema contract" might suggest, and it leaves real gaps: a
+`FieldInterface` that no core collection uses (one added only for a fork's own collection, or for the
+sample) is invisible to both jobs; relation shapes (`CmsRelation`/the `relations` array) are unguarded
+entirely — nothing here asserts the admin SPA can render a particular relation kind, only that the
+`relations` key is present; and a fork's own collections, once added, sit outside this snapshot by
+definition. Treat it as covering exactly the seven core collections' field metadata, not the schema
+surface as a whole.
+
 ### Regenerating
 
-From the repository root:
+From the repository root (bash):
 
 ```bash
 UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot
 ```
+
+PowerShell:
+
+```powershell
+$env:UPDATE_SCHEMA_SNAPSHOT = 1
+dotnet test --filter CoreSchemaSnapshot
+Remove-Item Env:UPDATE_SCHEMA_SNAPSHOT
+```
+
+`$env:UPDATE_SCHEMA_SNAPSHOT = 1` persists for the rest of the PowerShell session unless you unset it —
+leave it set and a later, unrelated `dotnet test` silently **regenerates** the snapshot instead of
+asserting against it, turning this gate off without any error or warning. Always pair the assignment
+with the `Remove-Item` above.
 
 Commit the result. Then run the frontend contract test, which is the half that decides whether the
 admin SPA actually copes with the new shape:
@@ -52,8 +74,14 @@ renaming a field; changing a field's `Interface`, `Label`, `Required`, `Sortable
 `Group`, `DefaultDisplayField`, `AdminOnly`, `Hidden`, soft-delete, or revisions status.
 
 Adding a new member to `FieldInterface` also requires adding it to
-`frontend/src/lib/fieldTypes/types.ts` **and** giving it a component in
-`frontend/src/lib/fieldTypes/registry.ts` — the frontend contract test enforces both.
+`frontend/src/lib/fieldTypes/types.ts` and giving it a component in
+`frontend/src/lib/fieldTypes/registry.ts`. Only the first half is what this gate enforces, and only
+when a core collection actually uses the new interface — `frontend/tests/schemaContract.test.ts` fails
+if a core-used interface is missing from `ALL_FIELD_INTERFACES`, but says nothing about an interface a
+fork's own collection (or the sample) adopts instead. The `registry.ts` half is enforced separately and
+unconditionally, by the compiler: `registry.ts`'s `registry: Record<FieldInterface, FieldTypeDef>`
+requires an entry for every member of the `FieldInterface` type, so `vue-tsc` (run via `pnpm build`) —
+not this test — is what fails if it's missing.
 
 ### Ordering
 

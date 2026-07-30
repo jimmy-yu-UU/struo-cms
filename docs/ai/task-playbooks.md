@@ -141,7 +141,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
 7. If this new interface is used by (or an existing field's `Interface`/other `[CmsField]`/
    `[CmsCollection]` attribute is changed to use) one of the seven core `[CmsCollection]` types, the
    committed `schema/core-collections.json` snapshot is now stale. Regenerate it, then commit the
-   result:
+   result (bash shown; see `schema/README.md` for the PowerShell form, which needs an explicit unset
+   afterward):
    ```bash
    UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot
    ```
