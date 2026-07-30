@@ -60,15 +60,18 @@ Ticket 存放——也就是 cookie 那組不透明金鑰背後真正的 session
 token 來輪替，這會覆寫既有的雜湊值)。每一個以 bearer 驗證的請求都會更新 `AccessTokenLastUsedAt`，並
 節流為每個 token 每分鐘最多一次，這樣一個繁忙的整合端就不會把每一次呼叫都變成一次寫入。
 
-**Bearer 並非預設機制**，因此 ASP.NET Core 只會在某個 action 明確指名它時才執行 bearer handler——
-`ItemsController`/`FilesController`/`UsersController`/`RolesController` 等控制器的每一個寫入 action
-都標示為 `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`，所以在這些地方 bearer
-token 與 cookie 的作用完全相同。`ItemsController` 的**讀取** action 則完全沒有標示 `[Authorize]`，
-因此一個純 bearer 呼叫端打到一般的 `GET /api/items/{collection}` 時，會被當成匿名者處理，而不是以該
-token 的身分處理——這是第 9 章已經記載過的不對稱現象，並非本章特有，但這裡值得重申一個真實、已出貨的
-RBAC 後果：一個純 bearer 的 API 客戶端可以寫入任何它握有授權的集合 (collection)，卻無法透過
-`ItemsController` 讀取任何一個集合，除非它同時也持有一個 session cookie。已即時驗證：一個 bearer 請求
-不需要 `X-Struo-CSRF` 標頭就能成功(見下方)，而對同一個端點發出的 cookie 請求若沒有這個標頭則會被拒絕：
+**預設沒有任何 `[Authorize]` attribute 指名 Bearer**——`ItemsController`/`FilesController`/
+`UsersController`/`RolesController` 等控制器的每一個寫入 action，都明確標示了
+`[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`，所以在這些地方，bearer token
+向來與 cookie 的作用完全相同。過去缺少的是那些完全沒有指名任何機制的 action:`ItemsController` 的
+讀取 action，以及 `/graphql` (第 10 章)，都不帶任何 `[Authorize]` attribute，而在
+`AuthSchemes.Adaptive` 成為預設驗證機制之前，ASP.NET Core 對這些 action 永遠只會自動執行 Cookie
+handler——一個純 bearer 的呼叫端命中其中之一時，會被解析為匿名者。`Adaptive`
+(`src/Struo.Api/Auth/AuthWiring.cs`) 補上了這個缺口:只要請求帶有 `Authorization: Bearer …`，
+它就會轉發給 `Bearer`，無論該端點**是否**帶有 attribute——因此一個純 bearer 的呼叫端，現在讀取
+`ItemsController` (與 `/graphql`) 時，會被解析為它自己，連同它自己角色的授權與下方的 `public`
+底線聯集，與一個 cookie session 完全相同。已即時驗證：一個 bearer 請求不需要 `X-Struo-CSRF`
+標頭就能成功(見下方)，而對同一個端點發出的 cookie 請求若沒有這個標頭則會被拒絕：
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6 \
@@ -154,13 +157,17 @@ Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OnT
 `AllowedEmailDomains`，並將 `RequireEmailVerified` 設為 `true`——而不是仰賴那組讓本機開發保持零摩擦
 的零設定預設值。
 
-**無角色使用者落在公開底線上：** 一個剛以 JIT 方式佈建的使用者(或任何完全沒有 `UserRole` 資料列的使用
-者)，並不會是一個硬性錯誤——`SqlSugarRolePermissionStore.LoadForUserAsync`
-(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs:23-27`)會在一個已通過驗證的使用者
-的角色集合回傳為空時，回退到 `public` 角色本身的授權——這正好與一個匿名呼叫端所看到的授權集合完全相同。
-換句話說：透過 OIDC 登入(或身為一個從未被指派任何角色的使用者)，永遠不會取得比匿名者**更少**的授權，
-也永遠不會取得比 `public` 角色被明確授予的**更多**授權——在 `public` 之下，並不存在另一個「已驗證但未
-授權」的層級。
+**`public` 對每一個呼叫端而言都是一道底線：**`SqlSugarRolePermissionStore.LoadForUserAsync`
+(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs:14-26`)會把 `public` 角色本身的
+授權，聯集進**每一個**呼叫端的有效權限之中——匿名者、無角色者，以及持有角色者皆然——而不僅僅是在一個
+使用者的角色集合回傳為空時才當作備援。一個呼叫端自己的角色只能*增加* `public` 本已授予的東西，永遠
+不能減少：這個模型沒有拒絕語意——`PermissionResolver.Resolve` 只會用 `OR` 把每一個角色的
+讀取/寫入/刪除授權摺疊在一起，沒有其他運算——所以即使在這次聯集出現之前，一個角色也永遠不可能有意義地
+縮小這道底線。這一點之所以重要，是因為在這次聯集出現之前，一個已登入使用者的授權*只*來自他們自己被指派
+的角色：因此一個持有角色的使用者，只要 `public` 持有一項他們的角色恰好沒有重複的授權，就可能讀到*比*
+一個匿名訪客*更少*的內容——已經登入，反而更糟。把 `public` 聯集進每一個結果之中，修正了這個不對稱：
+一個剛以 JIT 方式佈建的使用者、一個完全沒有 `UserRole` 資料列的使用者，以及一個持有完整角色集合的
+使用者，全部都至少能看到 `public` 所授予的內容，絕不會更少。
 
 ## 使用者、角色、權限：資料模型
 
@@ -327,15 +334,20 @@ $ docker exec struo-postgres psql -U struo -d struo -t -c "select password from 
 `GET /api/users/{id}/effective-permissions`(僅限 super-admin，第 9 章)的存在，正是為了讓管理後台的
 使用者編輯表單能夠在尚未儲存之前，先顯示某個角色選擇「會」授予什麼。它重複使用了一個真正的請求所經過的
 完全相同一組解析元件(`IRolePermissionStore` + `PermissionResolver`)，因此這個預覽本質上就與實際會被
-強制執行的內容完全一致——而不是另外維護的一份近似值。以下三種不同的請求形狀，全都針對一個無角色的
-`editor@example.com` 進行了即時驗證：
+強制執行的內容完全一致——而不是另外維護的一份近似值。這也包括上方的 `public` 底線:`LoadForRolesAsync`
+會把同一份 `public` 授權，聯集進一個假設性的角色集合之中，就像 `LoadForUserAsync` 把它聯集進一個真正
+呼叫端所儲存的角色一樣，所以這個預覽絕不可能與請求管線實際會解析出的結果不一致——預覽一個空的或尚未
+儲存的角色選擇，仍然至少會顯示那道底線，絕不會是一個人為造成的空結果。以下三種不同的請求形狀，全都針對
+一個無角色的 `editor@example.com` 進行了即時驗證：
 
 ```
-# absent `roles=` -> the user's actually-STORED roles (editor has none -> public floor, currently empty)
+# absent `roles=` -> the user's actually-STORED roles, unioned with the public floor (editor holds
+# none, so this is just the floor itself, currently empty)
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-permissions"
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}
 
-# `roles=` present but EMPTY -> hypothetical preview of "no roles selected" (same public floor)
+# `roles=` present but EMPTY -> hypothetical preview of an empty role set, unioned with the same
+# public floor
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-permissions?roles="
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}
 
@@ -359,7 +371,8 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-
 ## 接下來該去哪
 
 - 第 8 章 [查詢 DSL](08-query-dsl.md) 與第 9 章 [REST API](09-rest-api.md)，涵蓋 `X-Struo-CSRF`
-  機制本身、完整的 cookie/bearer 端點表，以及本章只是重申的讀取端 bearer 不對稱現象。
+  機制本身、完整的 cookie/bearer 端點表，以及預設的 `Adaptive` 驗證機制如何在每一個端點上——包括
+  讀取——都以相同方式解析一個純 bearer 的呼叫端。
 - 第 3 章 [設定參考](03-configuration-reference.md)，涵蓋本章提及的每一個設定鍵——
   `Auth:BootstrapAdmin`、`Rbac:PublicReadCollections`、`RateLimiting:Login`、`Redis`、`Oidc`——的
   完整內容，包括它們「只在第一次啟動時生效」的但書。

@@ -51,10 +51,11 @@ Content-Type: multipart/form-data
 
 Requires Cookie or Bearer plus `IFileAccessPolicy.CanWrite()` — the `file`-collection RBAC grant,
 enforced here instead of inside `ItemService` because uploads bypass it entirely
-(`src/Struo.Api/Auth/FileAccessPolicy.cs`). A successful upload is `201` with the row's public shape (no
-`Location` header — chapter 9's `EnvelopeResultFilter`/`CreatedResult` note applies here too, and
-`FilesController.Upload` never even calls `Created(...)` in the first place, only `StatusCode(201, ...)`
-directly):
+(`src/Struo.Api/Auth/FileAccessPolicy.cs`). A successful upload is `201` with the row's public shape and
+a `Location: /api/files/{id}` header — chapter 9's `EnvelopeResultFilter`/`CreatedResult` note applies
+here too: `FilesController.Upload` calls `Created($"/api/files/{id}", ...)`, and the filter rebuilds
+that `CreatedResult` (rather than flattening it to a plain `ObjectResult`) so the header survives
+enveloping:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/files -H "X-Struo-CSRF: 1" -b cookies.txt \
@@ -170,15 +171,14 @@ exercised live here.
 `GET /api/files/{id}` and `GET /api/files/{id}/content` carry no `[Authorize]` — anonymous requests are
 allowed through so a **published** file's metadata/bytes can be embedded in public pages without a
 session. A **non-published** (`status != "published"`) file additionally requires
-`IFileAccessPolicy.CanReadUnpublishedAsync` — a genuine `file`-collection `CanRead` grant, not merely
-being logged in (so a role-less SSO/JIT user, chapter 12, can't fetch drafts just by having a session) —
-**unless `file` itself is a public-read collection** (chapter 12 demonstrates granting this live): the
-check's own fast path is simply `permissions.CanRead("file")` for any authenticated identity
-(`FileAccessPolicy.cs:46-51`), and that grant is exactly as true for a role-less authenticated user as it
-is for an anonymous one once `file` carries a public read grant, by the same public-floor mechanism
-chapter 12 documents (`FileAccessPolicy.cs:41-44`'s own doc comment states this explicitly). This check
-returns a plain `404` rather than `403` when it fails, so a draft's existence isn't leaked
-to a caller without the grant (`FilesController.Get`/`Download`,
+`IFileAccessPolicy.CanReadUnpublished` — an **authenticated identity** and a `file`-collection **`CanWrite`**
+grant (`FileAccessPolicy.cs:36-37`), not a `CanRead` grant and not merely being logged in. The gate is
+write, deliberately: `public` is a permission floor for every caller (chapter 12), so once `file` carries
+a public *read* grant — the documented setup for serving images anonymously — `CanRead("file")` is true
+for anonymous and authenticated callers alike and would gate nothing at all; a draft is an editorial
+state, so the caller who may *edit* files is the caller who may see them, and no public role is ever
+given write. This check returns a plain `404` rather than `403` when it fails, so a draft's existence
+isn't leaked to a caller without the grant (`FilesController.Get`/`Download`,
 `src/Struo.Api/Controllers/FilesController.cs:57-72`, `74-163`). This also means a **trashed** file
 (soft-deleted — see below) 404s from both actions too, since `FileService.GetAsync` reads through the
 same `ISoftDeletable` query filter every other read does — live-verified:
@@ -385,6 +385,6 @@ its storage key remained).
 - Chapter 8, [Query DSL](08-query-dsl.md), and chapter 9, [REST API](09-rest-api.md), for the ordinary
   `filter`/`sort`/`deleted=` surface over the `file`/`mediaFolder` collections' own metadata.
 - Chapter 12, [Authentication, SSO & RBAC](12-auth-and-rbac.md), for the `file`-collection RBAC grant
-  behind `IFileAccessPolicy` and `CanReadUnpublishedAsync`.
+  behind `IFileAccessPolicy` and `CanReadUnpublished`.
 - Chapter 13, [Revisions & Soft Delete](13-revisions-and-soft-delete.md), for the general
   `ISoftDeletable`/global-query-filter/`deleted=` mechanism `File` is the one live example of.

@@ -2,7 +2,7 @@
 
 第 3 章記載了每一個設定鍵的語意。本章談的是若一次正式環境部署把其中某個設定弄錯了會發生什麼事，以及
 圍繞在設定之外的維運層面：schema 管理、啟動與失敗行為、記錄、健康檢查探針、備份，以及這個儲存庫出貨
-的三個測試層。
+的四個測試層。
 
 ## 正式環境檢查清單
 
@@ -159,7 +159,7 @@ liveness/readiness 探針使用：
   受版控或部署管線管理的產物——用與部署其餘部分相同的方式備份它們，而不是把它當成一個資料庫層面的
   問題。
 
-## 三個測試層
+## 四個測試層
 
 - **後端單元/整合測試**——`tests/Struo.Tests`(xUnit)，以 `dotnet test` 執行。預設使用 SQLite：
   大多數測試都會為每個測試建立一個獨立的暫存檔資料庫(`Support/SqliteTestDatabase.cs`，於 dispose
@@ -176,6 +176,14 @@ liveness/readiness 探針使用：
   `pnpm e2e:all` 會同時執行這兩個專案。Playwright 自己的 `webServer` 區塊只會啟動**前端**開發伺服器
   (`pnpm dev`，若已有一個在執行則重複使用)——這兩個專案仍然都需要一個在設定的代理目標上可連線的、
   正在執行的 API 與資料庫；Playwright 設定中沒有任何東西會啟動這兩者中的任何一個。
+- **Schema 契約**——一對受版控的檔案，`schema/core-collections.json`(七個核心集合在
+  `GET /api/schema` 連線形狀下的樣子)與 `schema/interfaces.json`(每一個已宣告的 `FieldInterface`
+  與 `RelationInterface` 成員)，從兩側各自斷言:後端的快照測試
+  `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs`，以及前端的契約測試
+  `frontend/tests/schemaContract.test.ts`——後者會把同一組檔案，餵進真正的 `selectListColumns`
+  與欄位型別 `registry`。這是第四種*類型*的測試，不是第四道指令:兩邊都搭乘在上方已有的
+  `dotnet test` 與 `pnpm test` 之中。`schema/README.md` 是權威來源，包括
+  `UPDATE_SCHEMA_SNAPSHOT=1` 這個重新產生快照的步驟。
 
 ## CI 會執行什麼——以及它刻意不執行什麼
 
@@ -194,6 +202,10 @@ CI 刻意**兩者皆不執行**——既不執行 `pnpm e2e`，也不執行 `pnp
 `ci.yml` 中沒有任何一個步驟會啟動資料庫、啟動 API，或呼叫 `playwright test`。端到端涵蓋率需要一個
 正在執行的 API 與資料庫，與前端開發伺服器一起運作——這比這裡任何一個 job 所架設的環境都要重——因此在
 這個儲存庫中，執行它是一項本機、合併前的自律行為，而不是一道自動化關卡。
+
+Schema 契約關卡完全不需要變更 `ci.yml`:`CoreSchemaSnapshotTests` 只是 `backend` job 既有的
+`dotnet test` 步驟中的另一個測試，而 `schemaContract.test.ts` 也只是 `frontend` job 既有的
+`pnpm test` 步驟中的另一個測試——兩邊都搭乘在上方已經涵蓋過的同兩道指令之中。
 
 ## 接下來該去哪
 

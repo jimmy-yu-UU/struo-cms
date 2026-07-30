@@ -103,13 +103,16 @@ public sealed class FileTranslation
 語言:`"Field '{name}' exceeds maximum length {n} for locale '{locale}'."`
 
 有一個結果值得明講:`File` 資料列只會透過專屬的上傳管線建立 (`FileService.UploadAsync`，第 11
-章)，它會自動從上傳的檔名種入預設語言的 `Title`。`File` 的父層欄位 (`fileName`、`contentType`、
-`size`……) 全部都是 `ReadOnly`，而一個由可為 null 的 CLR 型別支撐的 `ReadOnly` 欄位——依第 5 章，
-每一個 `string` 屬性都符合這個條件——在任何一般 (generic) 新增時，都會被 `ItemDeserializer` 設為
-null;所以一個一般的 `POST /api/items/file` 一定會在資料庫的 `filename` `NOT NULL` 條件約束上失敗，
-根本輪不到翻譯驗證。一個透過一般 items API *就能*建立的、帶有翻譯附屬資料表的集合 (任何你自己用
-`[CmsTranslations]` 定義的集合)，並沒有這項限制——只有 `File` 因為它自訂的上傳管線，才對建立方式
-做了這個特例。
+章)——資料列的建立權屬於這條管線，而不屬於一般的 items API。`ItemService.CreateAsync` 會直接以
+`400 BAD_USER_INPUT` 拒絕一個一般的 `POST /api/items/file`(訊息為「Files cannot be created
+through the generic items API. Upload one with `POST /api/files` instead.」)，在抵達翻譯驗證、
+`ReadOnly` 欄位剝除，或任何其他一般新增機制之前就先擋下——因為兩種協定共用同一個
+`ItemService.CreateAsync`，GraphQL 的 `createFile` mutation 也會被完全相同地拒絕。這與 `File`
+的 `fileName`/`contentType`/`size` 欄位是否為 `ReadOnly` 無關:即使一個請求本文提供了每一個必填
+欄位，仍然會被拒絕，因為是*整個集合*被排除在一般新增之外，而不僅僅是它的欄位。一個透過一般 items
+API *就能*建立的、帶有翻譯附屬資料表的集合 (任何你自己用 `[CmsTranslations]` 定義的集合)，並沒有
+這項限制——只有 `File` 因為它專屬的上傳管線，才對建立方式做了這個特例;它逐語言的 `title`/`alt`，
+之後仍然照常透過 `PUT /api/items/file/{id}` 這條一般的更新路徑編輯。
 
 ## 預設語言規則
 

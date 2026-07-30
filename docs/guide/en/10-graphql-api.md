@@ -125,18 +125,20 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 {"data":{"languages":{"items":[{"code":"zh-TW","name":"繁體中文","isDefault":false},{"code":"en","name":"English","isDefault":true}],"total":2}}}
 ```
 
-**A bearer token does not authenticate `/graphql` at all.** `MapGraphQL` carries no `[Authorize]`
-attribute forcing a specific scheme, and the default authentication scheme is Cookie (chapter 9) — so a
-`Bearer` header is simply never inspected on this endpoint, live-verified:
+**A bearer token does authenticate `/graphql`.** `MapGraphQL` carries no `[Authorize]` attribute of its
+own, but authentication itself no longer depends on one being present: the default authenticate scheme
+is `AuthSchemes.Adaptive` (`src/Struo.Api/Auth/AuthWiring.cs`), a forwarding policy scheme that resolves
+to the `Bearer` handler whenever the request's `Authorization` header starts with `Bearer `, and to
+`Cookie` otherwise — on every endpoint, `/graphql` included. A bearer-only client is therefore resolved
+as **itself**, with its own roles' grants (unioned with the `public` floor, chapter 12), exactly as a
+cookie session would be. Because a `Bearer`-authenticated request carries no session cookie,
+`CsrfProtectionMiddleware` exempts it from the `X-Struo-CSRF` requirement above (chapter 9's CSRF
+section) — a bearer-driven `/graphql` call needs neither a cookie nor the CSRF header.
 
-```
-$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '{"query":"query { languages { items { code } } } "}'
-{"errors":[{"message":"Read not permitted.","path":["languages"],"extensions":{"code":"UNAUTHORIZED"}}],"data":null}
-```
-
-This means every GraphQL example in this chapter runs against a cookie session with the CSRF header —
-there is currently no way to drive `/graphql` from a bearer-token-only client at all (a stronger version
-of the same asymmetry chapter 9 notes for `ItemsController`'s read actions).
+Every GraphQL example in this chapter still runs against a cookie session with the CSRF header, because
+that's the natural shape of a browser-based GraphQL client (Nitro IDE, a SPA) — not because a
+bearer-only client is unable to drive `/graphql`. It can, on equal footing with a cookie session,
+including every mutation below.
 
 ### Reading the live schema
 

@@ -131,7 +131,7 @@ the masked/logged behavior are read directly from `StruoExceptionHandler`/`Domai
 | Status | When |
 |---|---|
 | `200 OK` | A read, or a write whose result is meaningfully returned in the body (create/update/get/list all return `200` — note `Created`'s `201` below is the one exception). |
-| `201 Created` | `POST /api/items/{collection}`, `POST /api/users`, and `POST /api/files` — the response body carries the created row. **No `Location` header is ever sent**, from any of the three: `ItemsController.Create` and `UsersController.Create` both call `Created(uri, value)` (a `CreatedResult`, which normally writes a `Location` header during its own `ExecuteResultAsync`), but `EnvelopeResultFilter`'s `case ObjectResult obj` branch matches `CreatedResult` too (it is one) and replaces it with a **plain** `ObjectResult` carrying only the wrapped body and status code — the original `CreatedResult`'s Location-writing behavior never runs. `FilesController.Upload` never attempted a `Location` header in the first place (it returns `StatusCode(201, ...)`, not `Created(...)`). Live-verified: neither `POST /api/items/mediaFolder` nor `POST /api/users` sends a `Location` header despite the controller source calling `Created(...)`. |
+| `201 Created` | `POST /api/items/{collection}`, `POST /api/users`, and `POST /api/files` — the response body carries the created row, and all three send a relative `Location` header pointing at the created row's canonical `GET` route: `/api/items/{collection}/{id}`, `/api/items/user/{id}` (the generic items route, not a dedicated users one — that's where the row actually reads back), and `/api/files/{id}` respectively. `ItemsController.Create`, `UsersController.Create`, and `FilesController.Upload` all call `Created(uri, value)` (a `CreatedResult`, which normally writes `Location` during its own `ExecuteResultAsync`). `EnvelopeResultFilter` special-cases `CreatedResult` ahead of its generic `ObjectResult` branch and rebuilds it as a **new** `CreatedResult` carrying the enveloped body, so the `Location`-writing behavior still runs when ASP.NET Core formats the response — unlike the generic branch, which would otherwise flatten it to a plain `ObjectResult` and lose the header. `CreatedAtActionResult`/`CreatedAtRouteResult` are deliberately **not** covered by this rebuild: their `Location` is computed from `IUrlHelper` at formatting time, after the filter has already run, so it can't be reconstructed here. Nothing in this template uses either of those two result types; a fork that wants one should return `Created(uri, value)` instead. |
 | `204 No Content` | Every delete (trash or purge), restore, and logout — no body at all; `EnvelopeResultFilter` explicitly leaves a `NoContentResult` bare rather than wrapping it in an envelope. |
 | `400 Bad Request` | `BAD_USER_INPUT` or `VALIDATION` (see the error-code table). |
 | `401 Unauthorized` | `UNAUTHORIZED`. |
@@ -193,18 +193,23 @@ Two schemes are accepted, both registered in `AuthWiring.AddStruoAuth` (`src/Str
 
 - **Cookie** (`AuthSchemes.Cookie`, the session cookie named `struo.session`) — set by
   `POST /api/auth/login`, an 8-hour sliding-expiration ticket backed by Redis (or an in-memory
-  fallback; chapter 3). This is the **default authentication scheme**
-  (`AddAuthentication(AuthSchemes.Cookie)`), so it is the one ASP.NET Core authenticates
-  **automatically on every request**, whether or not the action carries an `[Authorize]` attribute.
+  fallback; chapter 3).
 - **Bearer** (`AuthSchemes.Bearer`, a per-user access token from `POST /api/users/{id}/access-token`,
   sent as `Authorization: Bearer <token>`) — verified by `BearerTokenAuthenticationHandler`
   (`src/Struo.Api/Auth/BearerTokenAuthenticationHandler.cs`) against the hashed token store.
 
+Neither of those two is itself ASP.NET Core's *default* authenticate scheme — a third, forwarding
+scheme is: `AuthSchemes.Adaptive` (`"Adaptive"`, registered via `AddAuthentication(AuthSchemes.Adaptive)`
+plus `AddPolicyScheme` in `AuthWiring.AddStruoAuth`) forwards to `Bearer` whenever the request's
+`Authorization` header starts with `Bearer `, and to `Cookie` otherwise. Because `Adaptive` is the
+default, ASP.NET Core authenticates **every request** this way — with or without an `[Authorize]`
+attribute on the action — as whichever of the two real schemes actually matches the request.
+
 Actions that carry `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` (a comma-joined
 scheme list: `"Cookies,Bearer"`) — every write on `ItemsController`/`FilesController`, and every action
 on `UsersController`/`RolesController`/`LanguagesController`/`SettingsController`/`SchemaController`,
-plus `AuthController`'s `logout`/`me` — explicitly probe **both** schemes, so a bearer token works
-identically to a cookie there:
+plus `AuthController`'s `logout`/`me` — additionally name **both** schemes for `[Authorize]`'s own
+challenge/forbid logic, so a bearer token has always worked identically to a cookie there:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/<id> -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"status":"published"}'
@@ -213,38 +218,21 @@ HTTP/1.1 200 OK
 ```
 
 **`ItemsController`'s read actions (`GET`/`POST query` on `/api/items/{collection}` and
-`/api/items/{collection}/{id}`, plus the `.../revisions` actions) carry no `[Authorize]` attribute at
-all** — deliberately, since a read only needs the ordinary per-collection `CanRead` RBAC check, not a
-blanket authentication requirement (chapter 8). Because Bearer is not the default scheme, ASP.NET Core
-never runs the Bearer handler for these specific actions unless something else on the request forces
-it — ordinary browser navigation only ever authenticates the default (Cookie) scheme automatically. A
-bearer-only caller hitting one of these actions is therefore treated as **anonymous**, not as the
-token's user, and gets whatever the anonymous/public-role grants allow (none, by default):
-
-```
-$ curl -s -i -H "Authorization: Bearer <token>" "http://localhost:5221/api/items/file?sort=fileName"
-HTTP/1.1 401 Unauthorized
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
-
-$ curl -s -i -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName"
-HTTP/1.1 200 OK
-{"success":true,"data":[...],"meta":{"total":3,"limit":25,"offset":0}}
-```
-
-The same bearer token works normally against any `[Authorize]`-attributed endpoint, including a
-sibling read action on a different controller:
+`/api/items/{collection}/{id}`, plus the `.../revisions` actions) still carry no `[Authorize]` attribute
+at all** — deliberately, since a read only needs the ordinary per-collection `CanRead` RBAC check, not a
+blanket authentication requirement (chapter 8), and `Adaptive` doesn't change that. What it does change
+is which identity resolves for a bearer-only caller hitting one of these actions: `Adaptive` still
+authenticates a `Bearer` header even on an action that names no scheme at all, so the caller is
+resolved as **itself** — with its own roles' grants unioned with the `public` floor (chapter 12) — the
+same as a cookie-authenticated caller would be, not as anonymous. An anonymous request (no credential
+at all) still gets whatever `public`'s own grants allow, unchanged. The same bearer token therefore now
+works identically whether it hits a plain read on `ItemsController` or a sibling `[Authorize]`-attributed
+endpoint on a different controller:
 
 ```
 $ curl -s -H "Authorization: Bearer <token>" "http://localhost:5221/api/languages"
 {"success":true,"data":[{"code":"en","name":"English","isDefault":true}, ...]}
 ```
-
-**Practical consequence:** a purely bearer-token-driven API client can write to every collection (every
-write action is `[Authorize]`-attributed) but cannot read a collection's items via `GET`/`POST query`
-without also holding a session cookie — reads on `ItemsController` only ever see the ambient cookie
-identity. This is a genuine, verified asymmetry in the shipped controllers, not a documentation
-simplification: a fork relying on bearer-only API clients for reads will need its own `[Authorize]`
-attribute (or an equivalent authentication-scheme selector) on those actions.
 
 `LanguagesController` and `SchemaController` are notable for requiring only *authentication*, not a
 collection-specific `CanRead` grant — any signed-in user (cookie or bearer) can read the full language
@@ -331,10 +319,10 @@ The generic CRUD surface over every `[CmsCollection]` — `language`, `permissio
 
 | Method & path | Query params | Body | Response | Auth | Permission |
 |---|---|---|---|---|---|
-| `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted` | — | `200`, list + `meta` | none (`[Authorize]`-absent; ambient cookie only — see above) | `CanRead` |
+| `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted` | — | `200`, list + `meta` | none (`[Authorize]`-absent; `Adaptive` still authenticates a cookie or bearer credential if present — see above) | `CanRead` |
 | `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8) | `200`, list + `meta` | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`, `locale`, `deleted` | — | `200` item, or `404` | none (same caveat) | `CanRead` (`deleted=only\|with` additionally needs `CanDelete`) |
-| `POST /api/items/{collection}` | — | JSON object of writable fields | `201` created item (no `Location` header — see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
+| `POST /api/items/{collection}` | — | JSON object of writable fields | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` restored item, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
