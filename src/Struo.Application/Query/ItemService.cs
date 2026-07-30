@@ -106,7 +106,7 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
-        // CS-9: a non-object top-level body (array/scalar) reaches ValidateLanguageCodeIfNeeded /
+        // A non-object top-level body (array/scalar) reaches ValidateLanguageCodeIfNeeded /
         // Deserialize below, both of which assume an object and throw an unhandled
         // InvalidOperationException (-> 500) otherwise. Reject it here as the established
         // client-error (-> 400) path instead.
@@ -144,7 +144,7 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
-        // CS-9: same non-object-body guard as CreateAsync — placed identically, right after the
+        // Same non-object-body guard as CreateAsync — placed identically, right after the
         // permission checks and before ValidateLanguageCodeIfNeeded/Deserialize.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
@@ -193,7 +193,7 @@ public sealed class ItemService(
         // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
         await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
 
-        // Optimistic concurrency (D2): guard the write on the version the client last read. When the
+        // Optimistic concurrency: guard the write on the version the client last read. When the
         // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
         // writer already moved the row on. Absent a client version we fall back to the freshly-loaded
         // value (no protection, but backward compatible for callers that don't track versions).
@@ -207,7 +207,7 @@ public sealed class ItemService(
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
             var updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
-            // DB-9: a revert re-applies a past snapshot, which may reference an M2M target trashed since
+            // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
@@ -247,7 +247,7 @@ public sealed class ItemService(
     /// <summary>
     /// Deletes an item. For a soft-deletable collection with <paramref name="purge"/> false this
     /// stamps <c>DeletedAt</c> (trash). Otherwise (explicit purge, or no soft-delete tier) it is a
-    /// permanent removal via <see cref="ItemPurgePipeline.PurgeCoreAsync"/> (DB-1/DB-2 referential
+    /// permanent removal via <see cref="ItemPurgePipeline.PurgeCoreAsync"/> (referential
     /// integrity) inside ONE transaction so a mid-pipeline failure leaves nothing half-deleted.
     /// </summary>
     public async Task<bool> DeleteAsync(string collection, string id, bool purge = false, CancellationToken ct = default)
@@ -261,7 +261,7 @@ public sealed class ItemService(
             // Pre-read resolves ONLY unknown-id -> 404 (mirrors RestoreAsync's pre-read below). Whether
             // the row is ACTUALLY (still) live and gets trashed BY THIS CALL is decided inside the
             // transaction by repository.SoftDeleteAsync's own atomic "WHERE deletedat IS NULL" UPDATE
-            // (affected-rows > 0) — not by inspecting this pre-read snapshot. DB-22: a decision made here,
+            // (affected-rows > 0) — not by inspecting this pre-read snapshot. A decision made here,
             // outside the transaction, would leave a TOCTOU window where two concurrent DELETEs of the
             // same live row could each pass the check and both re-stamp/re-version and double-record a
             // "delete" revision. An already-trashed row (or one trashed by a concurrent request first) is
@@ -273,20 +273,20 @@ public sealed class ItemService(
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
             // recursively-cascaded row is ALSO Restrict-guarded, not just the top-level target.
-            // DB-19/DB-22: the check runs INSIDE the same transaction as the trash write (mirroring the
+            // The check runs INSIDE the same transaction as the trash write (mirroring the
             // purge branch's boundary below and RestoreAsync's boundary), narrowing the check-to-write
             // window to purge-parity. Under PG READ COMMITTED a plain SELECT takes no row lock, so a
             // referencing row committed by another txn between the check and the commit is still possible
-            // — full closure would need FK/locking (DB-14 accepted app-only), so this narrows rather than
+            // — full closure would need FK/locking (accepted app-only stance), so this narrows rather than
             // eliminates the race. Note this now runs even when the row turns out to already be trashed
             // (affected = 0 below) — harmless (a pure read-only guard), and simpler/more consistent than
             // the previous pre-read short-circuit that skipped it entirely for a repeat DELETE.
             var actor = currentUser.GetCurrentUserId();
 
-            // DB-8: trash bumps the item's Version (repository, AuditableEntity only) AND — for a
+            // Trash bumps the item's Version (repository, AuditableEntity only) AND — for a
             // revisioned collection — records a "delete" revision. Both must commit together with the
             // trash stamp, so a capture failure rolls the whole trash back (no half-trashed row, no
-            // orphan revision). DB-22: revision capture is gated on the atomic UPDATE actually having
+            // orphan revision). Revision capture is gated on the atomic UPDATE actually having
             // affected the row, so a losing concurrent DELETE (or a repeat DELETE of an already-trashed
             // row) records nothing.
             await repository.InTransactionAsync(async () =>
@@ -321,13 +321,13 @@ public sealed class ItemService(
 
         // Find the row ignoring the soft-delete floor (it is, by definition, trashed). This pre-read
         // only resolves unknown-id -> 404 and confirms the collection is soft-deletable; it is NOT
-        // relied on to decide whether a restore actually happens (see DB-19 note below).
+        // relied on to decide whether a restore actually happens (see the note below).
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return null;                       // unknown id -> 404
 
-        // DB-8: the restore clears DeletedAt, bumps Version and — for a revisioned collection — records
+        // The restore clears DeletedAt, bumps Version and — for a revisioned collection — records
         // a "restore" revision, all in ONE txn (capture rolls back with it).
-        // DB-19: whether a row is ACTUALLY restored is decided by repository.RestoreAsync's atomic
+        // Whether a row is ACTUALLY restored is decided by repository.RestoreAsync's atomic
         // "WHERE deletedat IS NOT NULL" UPDATE (affected-rows > 0), not by inspecting this pre-read
         // snapshot — a pre-read check here would leave a TOCTOU window where two concurrent restores of
         // the same row could each pass the check and double-record a "restore" revision. An already-live
@@ -347,7 +347,7 @@ public sealed class ItemService(
     }
 
     /// <summary>
-    /// DB-8: for a revisioned collection, re-reads the just-trashed/just-restored row (ignoring the
+    /// For a revisioned collection, re-reads the just-trashed/just-restored row (ignoring the
     /// soft-delete floor) and captures a revision under <paramref name="operation"/> ("delete" /
     /// "restore"). No-op when the collection keeps no revisions or the row vanished. Must run inside
     /// the trash/restore transaction so the snapshot commits atomically with the state change.
@@ -401,7 +401,7 @@ public sealed class ItemService(
     /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
     /// unknown revision or a non-revisioned collection (→ 404).
     /// <para>
-    /// (SEC-2) The captured snapshot is FULL item state incl. <c>Hidden</c> fields (a revert needs
+    /// The captured snapshot is FULL item state incl. <c>Hidden</c> fields (a revert needs
     /// them all); that full-fidelity form is internal to <see cref="RevertAsync"/> only. The snapshot
     /// returned HERE to external callers (REST/GraphQL <c>xRevision</c>) has hidden fields redacted via
     /// <see cref="RevisionSnapshotRedactor.RedactHidden"/> first. Otherwise gated only by collection-level

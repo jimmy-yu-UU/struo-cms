@@ -76,7 +76,7 @@ public static class ConditionalModelTranslator
     /// <summary>
     /// Converts a child node to a <see cref="ConditionalModel"/>.
     /// Nested <see cref="LogicalFilter"/> inside a <see cref="LogicalFilter"/> is not supported
-    /// in Phase 2 (SqlSugar's ConditionalCollections cannot be nested).
+    /// (SqlSugar's ConditionalCollections cannot be nested).
     /// </summary>
     private static ConditionalModel ToLeafModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
     {

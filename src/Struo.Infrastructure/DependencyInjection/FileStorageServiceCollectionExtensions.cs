@@ -14,7 +14,7 @@ public static class FileStorageServiceCollectionExtensions
         // configuration is used — config sources added after this call (e.g. an integration-test
         // in-memory override) still take effect, and the backend is chosen from the resolved options.
         //
-        // ARC-5: enforcement of FileStorageOptions.Validate() moves from "first resolve" to startup
+        // Enforcement of FileStorageOptions.Validate() moves from "first resolve" to startup
         // (ValidateOnStart). The custom validator below wraps the existing Validate() so its precise
         // messages (RootPath / S3 credential / unknown-backend) are preserved.
         services.AddOptions<FileStorageOptions>()
@@ -33,7 +33,7 @@ public static class FileStorageServiceCollectionExtensions
 
         services.AddSingleton<IImageDimensionReader, ImageDimensionReader>();
 
-        // P2.4: on-the-fly image transform (endpoint wiring) + its disk-backed variant cache.
+        // On-the-fly image transform (endpoint wiring) + its disk-backed variant cache.
         // NetVipsImageTransformer is stateless (no fields) so a Singleton is safe and avoids a
         // per-request allocation. DiskImageVariantCache is also stateless beyond its root path.
         services.AddSingleton<IImageTransformer, NetVipsImageTransformer>();
@@ -59,7 +59,7 @@ public static class FileStorageServiceCollectionExtensions
 
 /// <summary>Adapts <see cref="FileStorageOptions.Validate"/> to the options-validation pipeline so
 /// its enforcement runs at startup (via <c>ValidateOnStart</c>) while preserving its precise failure
-/// messages (ARC-5).</summary>
+/// messages.</summary>
 internal sealed class FileStorageOptionsValidator : IValidateOptions<FileStorageOptions>
 {
     public ValidateOptionsResult Validate(string? name, FileStorageOptions options)

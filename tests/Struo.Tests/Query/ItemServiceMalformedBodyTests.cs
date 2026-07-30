@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// CS-9 (audit 2026-07-21): a handful of malformed write-path request bodies fell through to an
+// A handful of malformed write-path request bodies fell through to an
 // unhandled InvalidOperationException/FormatException (-> 500) instead of the established
 // QueryException (-> 400) client-error path. This harness mirrors ItemServiceTests' sample-domain
 // wiring (Article/Category/Tag, M2M via "tags") and additionally scans Language so the "language"
@@ -97,7 +97,7 @@ internal sealed class MalformedBodyHarness : IDisposable
 }
 
 /// <summary>
-/// CS-9: non-object top-level request bodies (array / scalar) must 400 (<see cref="QueryException"/>),
+/// Non-object top-level request bodies (array / scalar) must 400 (<see cref="QueryException"/>),
 /// not 500, on both Create and Update, including for the "language" collection whose code-format guard
 /// previously touched the malformed body first. Real SQLite-backed <see cref="ItemService"/>, no stubs.
 /// </summary>

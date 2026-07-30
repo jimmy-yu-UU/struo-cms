@@ -17,7 +17,7 @@ public class MetadataScannerTests
         MetadataScanner.ScanTypes([typeof(Article), typeof(Category)])
             .Single(c => c.Name == "article");
 
-    // A4: SafeGetTypes returns the loadable types of a normal assembly without throwing (the
+    // SafeGetTypes returns the loadable types of a normal assembly without throwing (the
     // ReflectionTypeLoadException path only triggers on an assembly with an unresolvable type).
     [Fact]
     public void SafeGetTypes_returns_loadable_types()
@@ -33,7 +33,7 @@ public class MetadataScannerTests
         article.Name.Should().Be("article");
         article.Label.Should().Be("Article");
         article.Group.Should().Be("Content");
-        // Title moved to the translation sidecar (Phase 4); display field is now Status.
+        // Title moved to the translation sidecar; display field is now Status.
         article.DefaultDisplayField.Should().Be("status");
     }
 
@@ -116,7 +116,7 @@ public class MetadataScannerTests
         public System.DateTime CreatedAt { get; set; }   // NOT IAuditable -> must be ignored
     }
 
-    // 7g.5: [CmsField(MaxLength)] resolution matrix.
+    // [CmsField(MaxLength)] resolution matrix.
     [CmsCollection("maxLenSample")]
     private sealed class MaxLenSample : AuditableEntity
     {
@@ -255,7 +255,7 @@ public class MetadataScannerTests
         act.Should().NotThrow();
     }
 
-    // 7g+ slice 4: Repeater nested sub-field schema.
+    // Repeater nested sub-field schema.
     public sealed class FaqRow
     {
         [CmsField(Label = "Question", Interface = FieldInterface.Text, Required = true)]
@@ -367,7 +367,7 @@ public class MetadataScannerTests
         [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
     }
 
-    // CS-4/ARC-2: EntityDescriptor.Properties caches CLR-property -> PropertyInfo (built once from
+    // EntityDescriptor.Properties caches CLR-property -> PropertyInfo (built once from
     // EntityType) so projection/snapshot hot paths resolve accessors via a dictionary lookup instead
     // of per-row Type.GetProperty reflection.
     [Fact]

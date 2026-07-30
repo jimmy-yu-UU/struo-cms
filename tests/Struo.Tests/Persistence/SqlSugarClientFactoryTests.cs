@@ -9,7 +9,7 @@ namespace Struo.Tests.Persistence;
 
 public class SqlSugarClientFactoryTests
 {
-    // CS-1: GraphQL pins query/mutation roots to DependencyInjectionScope.Request, so HotChocolate
+    // GraphQL pins query/mutation roots to DependencyInjectionScope.Request, so HotChocolate
     // can run sibling root-field resolvers on separate threads that all share one scoped
     // ISqlSugarClient. Plain SqlSugarClient is not thread-safe (interleaved ADO calls on shared
     // connection state -> intermittent "connection already open" / 500s under concurrency).

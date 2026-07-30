@@ -59,7 +59,7 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
         error.GetProperty("message").GetString().Should().Be("Resource not found."); // clean DefaultMessage(404), NOT a type name
     }
 
-    // CS-2: a malformed id on a by-id route must be a mapped 400 (QueryException), not a masked
+    // A malformed id on a by-id route must be a mapped 400 (QueryException), not a masked
     // 500 from a raw FormatException/ArgumentException escaping ConvertId.
     [Fact]
     public async Task Malformed_id_is_bad_user_input_envelope_not_masked_500()
@@ -76,9 +76,9 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
         message.Should().NotContain("Exception");
     }
 
-    // AUTH-2: CsrfProtectionMiddleware used to write a bespoke `{ error: { message } }` body on
-    // rejection instead of the standard envelope every other error path uses (see AUTH-1's
-    // OnRedirectToAccessDenied for the pattern this must match).
+    // CsrfProtectionMiddleware used to write a bespoke `{ error: { message } }` body on
+    // rejection instead of the standard envelope every other error path uses (see
+    // AuthWiring's OnRedirectToAccessDenied for the pattern this must match).
     [Fact]
     public async Task Csrf_rejected_write_is_forbidden_envelope()
     {

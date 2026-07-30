@@ -48,7 +48,7 @@ describe('snapshotModel / isDirty', () => {
 })
 
 describe('unsavedConfirm', () => {
-  it('resolves the header and message via the injected translator (FE-16)', () => {
+  it('resolves the header and message via the injected translator', () => {
     const t = (key: string): string => key
     const c = unsavedConfirm(t)
     expect(c.header).toBe('confirm.unsavedHeader')

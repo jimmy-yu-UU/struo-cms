@@ -1,0 +1,58 @@
+// Copy to appsettings.Development.json (gitignored) and edit.
+// Every application-configuration key here can also be supplied as an environment variable
+// using the double-underscore path separator, e.g. Database__ConnectionString. One exception:
+// Testing:PostgresConnection below is read by the test suite through its own ConfigurationBuilder
+// (no environment-variable provider registered), so Testing__PostgresConnection has no effect on
+// it — see that key's comment for the env var that actually works.
+{
+  "Database": {
+    "DbType": "PostgreSQL",
+    // Matches docker-compose.yml. Local development credentials only.
+    "ConnectionString": "Host=localhost;Port=5432;Database=struo;Username=struo;Password=struo",
+    // Empty in development: InitTables builds the schema from the entity classes.
+    "MigrationsPath": ""
+  },
+
+  // Uncomment to enable the Blog sample (see docs/guide/en/16-sample-walkthrough.md).
+  // The Struo.Sample.Blog project reference must be added to Struo.Api.csproj as well.
+  "Struo": {
+    // "ContentAssemblies": [ "Struo.Sample.Blog" ],
+    "Files": {
+      "Backend": "local",
+
+      // To use the MinIO container from docker-compose.yml instead of local disk: change Backend
+      // above to "s3", start the container with `docker compose --profile s3 up -d`, and uncomment
+      // the S3 block below. Values match that file's dev credentials.
+      // If you remapped the MinIO host port (STRUO_MINIO_PORT in .env), change Endpoint to match.
+      // "S3": {
+      //   "Endpoint": "http://localhost:9000",
+      //   "Bucket": "struo-media",
+      //   "AccessKey": "struoadmin",
+      //   "SecretKey": "struoadmin",
+      //   "Region": "us-east-1",
+      //   "ForcePathStyle": true,
+      //   "PresignTtlSeconds": 300
+      // }
+    }
+  },
+
+  // Redis-backed session ticket store. Empty = in-memory (sessions lost on restart).
+  "Redis": {
+    "ConnectionString": "localhost:6379"
+  },
+
+  "Testing": {
+    // Opt-in live-PostgreSQL test suite. Point at a DISPOSABLE database whose name contains "test".
+    // Read directly by PostgresIntegrationTests's own ConfigurationBuilder (no env-var provider
+    // registered there), so the env var STRUO_TEST_PG_CONNECTION overrides this key — NOT
+    // Testing__PostgresConnection, which the double-underscore convention would otherwise suggest.
+    "PostgresConnection": ""
+  },
+
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": { "Microsoft.AspNetCore": "Warning" }
+    }
+  }
+}

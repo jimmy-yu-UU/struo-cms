@@ -33,7 +33,7 @@ const showDots = computed(() => fields.value.translatable.length > 0 && props.lo
 function localeFilled(code: string): boolean {
   return hasLocaleContent(fields.value.translatable, props.model.translations[code] ?? {})
 }
-// FE-29: the dot is the only signal of per-locale completeness; give it an accessible label
+// The dot is the only signal of per-locale completeness; give it an accessible label
 // instead of aria-hiding it outright so screen reader users get the same information.
 function dotLabel(code: string): string {
   return t(localeFilled(code) ? 'itemForm.localeComplete' : 'itemForm.localeIncomplete')

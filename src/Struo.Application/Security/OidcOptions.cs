@@ -13,13 +13,13 @@ public sealed class OidcOptions
     public string CallbackPath { get; set; } = "/signin-oidc";
     public string[] Scopes { get; set; } = ["openid", "email", "profile"];
     public string ReturnUrlDefault { get; set; } = "/";
-    // ACCEPTED RISK (audit M3, 2026-07-06): JIT provisioning links an external identity to an existing
+    // ACCEPTED RISK: JIT provisioning links an external identity to an existing
     // local account by email equality, and these guards default to OFF. That means a deployment MUST
     // pin trust via configuration — set a single-tenant Authority + AllowedTenantId (and/or
     // AllowedEmailDomains), and prefer RequireEmailVerified=true — otherwise a password account could be
     // taken over by any IdP identity presenting a matching email. Left open by decision to keep the
     // zero-config dev experience; production is expected to constrain it. See
-    // docs/architecture-audit-2026-07-06.md (M3).
+    // docs/guide/en/12-auth-and-rbac.md.
     public bool RequireEmailVerified { get; set; }
     public string? AllowedTenantId { get; set; }
     public string[] AllowedEmailDomains { get; set; } = [];

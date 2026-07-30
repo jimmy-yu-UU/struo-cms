@@ -1,0 +1,276 @@
+# Task Playbooks (for AI agents)
+
+Long-form, step-by-step versions of the five recipes summarized in `AGENTS.md`. Each names the exact
+files to touch, the shape of the code, the tests to add, and the gate to run. Background reading for
+each is the linked manual chapter — read it before making the change if anything here is unclear.
+
+Gate vocabulary used below: the **four standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
+(from `frontend/`), `pnpm build` (from `frontend/`) — the same four commands `.github/workflows/ci.yml`
+runs on every push/PR. **Live-PostgreSQL verification** is a separate, additional step required for any
+change to DB behavior — set `Testing:PostgresConnection` to a disposable database whose name contains
+`test`. It resolves in this order: the `STRUO_TEST_PG_CONNECTION` environment variable first, else the
+`Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`;
+either route works. Or run the application against a real PostgreSQL instance directly. SQLite passing
+is not evidence of PostgreSQL
+correctness: this codebase has a documented, specific SQLite/PostgreSQL divergence — `IsJson` without
+an explicit `text` column type truncates on PostgreSQL at `varchar(1)`, but "works" on SQLite because
+SQLite ignores declared column length. **E2E** (`pnpm e2e` for the `core` Playwright project,
+`pnpm e2e:sample` for the sample) is a further, separate check for changes that touch user-facing flows
+end-to-end; it needs a live API and database reachable at the dev proxy target and is not part of the
+four standing gates or of CI.
+
+## Playbook 1: Add a collection
+
+Background: `docs/guide/en/04-defining-a-collection.md` (full checklist and rationale),
+`docs/guide/en/06-internationalization.md` (translatable fields), `docs/guide/en/07-relations.md`
+(relations), `docs/guide/en/13-revisions-and-soft-delete.md` (soft delete / revisions),
+`docs/guide/en/12-auth-and-rbac.md` (RBAC grants).
+
+Adding a collection is purely additive to a fork's own content project — it never touches
+`src/Struo.*`.
+
+1. **Create or reuse a content class library** outside `src/Struo.*` (the shipped
+   `samples/Struo.Sample.Blog` is the worked example — do not add new collections there or in
+   `src/Struo.*`; those are core/demo, not your fork's content). Reference `Struo.Domain` for the
+   metadata attributes/enums, plus enough of SqlSugar (directly, or transitively via
+   `Struo.Infrastructure`) for `[SugarTable]`/`[SugarColumn]`.
+2. **Write the entity**: inherit `Struo.Domain.Auditing.AuditableEntity`; override `Id` with
+   `[SugarColumn(IsPrimaryKey = true)]` (the base class declares `Id` `abstract` specifically so a
+   forgotten override is a compile error, not a runtime surprise); add
+   `[SugarTable("your_table_name")]` (lower-case, plural, snake_case) and
+   `[CmsCollection("Your Label", Icon = "...", Group = "...", DefaultDisplayField = nameof(SomeField))]`.
+3. **Add `[CmsField]`** to every property the API/admin form should expose (`Interface =
+   FieldInterface.Xxx`, plus `Required`/`Searchable`/`Sortable`/`Sort`/`ReadOnly`/`Hidden`/
+   `Translatable`/`MaxLength` as needed — see `docs/guide/en/05-field-types.md` for the full
+   `FieldInterface` reference), and `[CmsOptions(...)]` on any `Select`/`Radio`/`MultiSelect`/
+   `CheckboxGroup` field. `Hidden` is a read-side exclusion only (see `AGENTS.md`'s invariants) — pair
+   it with `ReadOnly` if the field must also be unwritable.
+4. **Opt into soft delete and/or revisions** if needed: implement `ISoftDeletable` on the class, and/or
+   set `Revisions = true` on `[CmsCollection]`.
+5. **Add relations** with `[CmsRelation]` + SqlSugar's `[Navigate]` if the collection references
+   another one.
+6. **Wire the content project in**: add a `ProjectReference` from `src/Struo.Api/Struo.Api.csproj` to
+   your content project, and add its assembly name to `Struo:ContentAssemblies`. Put that setting in
+   `src/Struo.Api/appsettings.Development.json` (gitignored, dev-only) or supply it via the
+   `Struo__ContentAssemblies__0` environment variable — **not** in the shipped
+   `src/Struo.Api/appsettings.json`. That file is the one
+   `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
+   `Shipped_appsettings_declares_no_content_assemblies` test asserts has an empty
+   `Struo:ContentAssemblies`; editing it to wire in permanent content fails that test immediately, and
+   is a collision with the invariant `AGENTS.md`'s "Hard constraints" documents as enforced. If a fork
+   deliberately wants its content assembly wired into the shipped `appsettings.json` itself (e.g. it
+   is replacing the template's "ships with zero collections" posture permanently), update or remove
+   that test deliberately as part of the same change — don't leave it contradicting the new
+   configuration.
+7. **Restart the API.** In Development, `InitTables` creates the table automatically from the entity
+   class (additive column changes too, never destructive) — confirm the admin SPA's sidebar shows the
+   new collection under its configured `Group`.
+8. **Grant RBAC** read/write/delete permissions for the collection to whichever roles need them — a
+   brand-new collection has zero grants, so only a super-admin can use it until you add some.
+9. **Write a production migration** before deploying: a new `NNN-short-kebab-description.sql` under
+   `db/migrations/` for the new table (see Playbook 4).
+10. **Tests to add**: if the collection has any non-trivial behavior worth locking down (a relation, a
+    computed default, an interaction with soft delete/revisions), add a test in your content project's
+    own test suite, or, for framework-level behavior you are exercising rather than declaring, follow
+    the pattern of `tests/Struo.Tests/Metadata/MetadataScannerTests.cs` /
+    `tests/Struo.Tests/Api/ItemsEndpointTests.cs` for how the shipped suite verifies scanned metadata
+    and generic CRUD behavior. Do not add your business collection's tests under `tests/Struo.Tests` —
+    that project is the framework's own test suite.
+11. **Gate**: `dotnet build && dotnet test` (the four standing gates' backend half). Add
+    live-PostgreSQL verification before a production deploy — confirm the migration script actually
+    produces the same table `InitTables` would have (compare columns/indexes).
+
+## Playbook 2: Add a field type
+
+Background: `docs/guide/en/05-field-types.md` (the full `FieldInterface` reference and the three things
+one enum value drives), `docs/guide/en/14-admin-spa-customization.md`, "Adding a custom field editor"
+(the frontend-only variant of this playbook).
+
+There are two distinct versions of "add a field type." Pick the one that matches what's actually needed:
+
+**2a. Swap or add an editor for an EXISTING `FieldInterface` value** (e.g. give `Color` a real swatch
+picker instead of a plain text input) — frontend-only, no backend change:
+
+1. Write the new Vue component under `frontend/src/components/fields/` following the standard
+   three-prop, one-event contract every field editor uses:
+   ```ts
+   defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
+   defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+   ```
+2. In `frontend/src/lib/fieldTypes/registry.ts`, point that interface's entry at the new component
+   (keep its existing `defaultValue`/`parse`/`serialize`/`listColumn` unless the value shape itself is
+   changing too).
+3. **Tests to add**: a `*.test.ts` next to the new component if it has non-trivial logic, and update
+   any existing test that asserts the old component was rendered for that interface.
+4. **Gate**: `pnpm test && pnpm build` (the four standing gates' frontend half).
+
+**2b. Add a genuinely new `FieldInterface` value** — touches all three layers `docs/guide/en/
+05-field-types.md` describes:
+
+1. Add the new member to `src/Struo.Domain/Metadata/Enums/FieldInterface.cs` (a fixed declaration
+   order; add yours at the end unless you have a specific reason to group it near related interfaces —
+   reordering existing members is a breaking change for any stored numeric-enum data, so append rather
+   than insert unless you are certain nothing persists the numeric value).
+2. Teach `MetadataScanner.BuildField` (`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) about
+   any interface-specific validation the new value needs (e.g. requiring `[CmsOptions]`, restricting
+   allowed CLR property types, `MaxLength` defaulting rules).
+3. If the value's CLR-side value is a structured aggregate (a `List<>`/`Dictionary<>`) that needs a
+   JSON column, add it to `SqlSugarClientFactory`'s `JsonColumnInterfaces` set
+   (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) so SqlSugar (de)serializes it and
+   the column gets `IsJson = true` + `text` together (either one alone is a documented pitfall —
+   `IsJson` without an explicit `text` type defaults to `varchar(1)` and truncates on PostgreSQL, a
+   failure that does not reproduce on SQLite). If instead it's a plain long string that needs widening,
+   add it to `ContentBearingInterfaces` in the same file.
+4. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
+   `KeyValue`/`Files`/`Repeater` already have), add an `IFieldValidator` implementation under
+   `src/Struo.Application/Query/Write/Validators/` and register it in `FieldValidatorRegistry.Phases`
+   (`src/Struo.Application/Query/Write/FieldValidatorRegistry.cs`) — note the phase order is observable
+   (it determines exception precedence when a body violates several fields at once), so add a new phase
+   rather than silently reordering existing ones unless changing precedence is the actual intent.
+5. Mirror the new value in `frontend/src/lib/fieldTypes/types.ts` (`FieldInterface` union AND
+   `ALL_FIELD_INTERFACES`) and add its entry to `frontend/src/lib/fieldTypes/registry.ts` (component +
+   `defaultValue`/`parse`/`serialize`/`listColumn`), following Playbook 2a for the component itself.
+6. **Tests to add**: a backend test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs`
+   covering the new interface's scan-time validation, a persistence-level test if you touched
+   `SqlSugarClientFactory` (follow the pattern of existing column-widening tests in
+   `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
+7. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
+   change spans both stacks. **Live-PostgreSQL verification is required** if you touched
+   `SqlSugarClientFactory`'s column mapping, since the `IsJson`/`text` truncation failure mode above
+   does not reproduce on SQLite at all.
+
+## Playbook 3: Add an endpoint
+
+Background: `docs/guide/en/09-rest-api.md` (envelope, error codes, CSRF, status conventions),
+`docs/guide/en/12-auth-and-rbac.md` (authentication schemes and permission checks).
+
+1. **Add a controller** under `src/Struo.Api/Controllers/`, following the shipped pattern (e.g.
+   `src/Struo.Api/Controllers/PingController.cs` for the minimal shape,
+   `src/Struo.Api/Controllers/ItemsController.cs` for one with authentication and permission checks):
+   ```csharp
+   [ApiController]
+   [Route("api/[controller]")]
+   public sealed class YourController(/* constructor-injected dependencies */) : ControllerBase
+   {
+       [HttpGet]
+       public async Task<IActionResult> Get(CancellationToken ct) => Ok(/* plain object or DTO */);
+   }
+   ```
+   Return values via plain `Ok(...)`/`NotFound()`/`StatusCode(...)` for the common path —
+   `EnvelopeResultFilter` wraps them into the standard envelope automatically. Only reach for
+   `Struo.Api.Http.ApiResults.Fail(status, code, message)` when you need a specific error `code` the
+   filter's default per-status message wouldn't produce.
+2. **Authentication**: add `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`
+   (`src/Struo.Api/Auth/AuthSchemes.cs`) to any action that must not be reachable anonymously. Note
+   the established asymmetry in this codebase: `ItemsController`'s read actions (`List`/`Query`/`Get`)
+   carry **no** `[Authorize]` attribute at all — permission is enforced inside `ItemService` via
+   `IPermissionService`/`ICurrentPermissions` regardless of authentication scheme — while its write
+   actions (`Create`/`Update`/`Delete`/`Restore`/`Revert`) do carry
+   `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`. Bearer tokens do not authenticate
+   `ItemsController` reads or `/graphql` at all in this codebase; decide deliberately, per new endpoint,
+   whether it needs the same treatment or a plain `[Authorize]` (cookie scheme only).
+3. **CSRF**: cookie-authenticated mutations need the caller to send the `X-Struo-CSRF` header
+   (presence-only check, enforced by `CsrfProtectionMiddleware`, `src/Struo.Api/Auth/
+   CsrfProtectionMiddleware.cs`) — this applies automatically to any action reached over the cookie
+   scheme; bearer-authenticated requests are exempt (CSRF is a cookie-specific attack). Add no code for
+   this — it is pipeline middleware — but document the header requirement for the endpoint's callers.
+4. **Error mapping**: if the endpoint throws a new domain exception type that should surface a specific
+   client-safe message/status, add it to `DomainErrorMap.Map` (and `StatusFor` if it needs a REST status
+   other than the 500 fallback) in `src/Struo.Api/Http/DomainErrorMap.cs` — this is shared verbatim with
+   GraphQL's error filter, so both protocols pick up the new mapping together.
+5. **Tests to add**: an integration test under `tests/Struo.Tests/Api/` using the `WebApplicationFactory`
+   -based fixture in `tests/Struo.Tests/Support/ApiFactory.cs` (see `EndpointSmokeTests.cs` for the
+   minimal shape of standing up the factory and asserting a 200 + envelope shape, or
+   `RbacEnforcementTests.cs` for asserting a permission-gated action rejects the right way).
+6. **Gate**: `dotnet build && dotnet test`.
+
+## Playbook 4: Add a migration
+
+Background: `docs/guide/en/15-deployment-operations-testing.md`, "Schema management"; `db/migrations/
+README.md`.
+
+1. Determine the next number: the current highest `NNN-*.sql` filename in `db/migrations/` **+ 1**,
+   zero-padded (the shipped baseline is `001-core-baseline.sql`; a fresh fork's first migration is
+   `002-...`).
+2. Create `db/migrations/NNN-short-kebab-description.sql` with a header comment (date, author, one-line
+   intent — follow `001-core-baseline.sql`'s own header for the pattern). One logical change per file.
+3. Write the SQL **idempotently** (`CREATE TABLE IF NOT EXISTS`, `CREATE [UNIQUE] INDEX IF NOT EXISTS`,
+   guarded `ALTER`, `DO $$ ... $$` existence checks) and **forward-only** — no automatic down-migration;
+   a rollback is a new compensating script, not an edit to this one.
+4. Use `timestamptz` (not bare `timestamp`) for any new column or table storing an instant, and store
+   UTC — this is the convention, not a uniform fact about the existing baseline: check
+   `001-core-baseline.sql` for the specific table you are altering rather than assuming either type,
+   and do not retroactively convert an existing bare-`timestamp` column while you're at it unless that
+   specific column is the subject of this migration (re-anchoring already-stored values against a
+   session time zone is a silent data shift). This matters most for a migration backing a new
+   `AuditableEntity`-derived collection (Playbook 1): `AuditableEntity.CreatedAt`/`UpdatedAt`
+   (`src/Struo.Domain/Auditing/AuditableEntity.cs`) are plain `DateTime` properties with no
+   `[SugarColumn]` override, so SqlSugar's CodeFirst default for `DateTime` is what dev `InitTables`
+   actually produces for those two columns when the entity doesn't override them — bare
+   `timestamp without time zone`. That's not uniform across the baseline, though: `MediaFolder`
+   (`src/Struo.Infrastructure/Files/MediaFolder.cs`) is `AuditableEntity`-backed but overrides both
+   columns to `timestamptz`, and `001-core-baseline.sql`'s `media_folders` table reflects it — so check
+   the specific table you are altering rather than assuming either type. Hand-writing `timestamptz` for
+   a new collection's `createdat`/`updatedat` in its migration, without also giving the entity an
+   explicit column-type override, diverges from what `InitTables` produces for the same entity —
+   exactly the parity Playbook 1 step 11 asks you to confirm.
+5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
+   tracks applied migrations by filename only (`schema_migrations (filename text PRIMARY KEY, appliedat
+   timestamptz)`), with no checksum, so an edited file with an already-applied filename is silently
+   never re-run. Ship a new file instead.
+6. **Tests to add**: this is SQL, not C# — there is no unit test for a migration script itself. Verify
+   it directly (see the live-PostgreSQL step below). If the migration backs a new collection, that
+   collection's own tests (Playbook 1) are the regression coverage.
+7. **Gate**: `dotnet build && dotnet test` first (the migration runner is a hard no-op on SQLite, so
+   this only confirms nothing else broke). **Live-PostgreSQL verification is required** for the
+   migration itself: point `Database:MigrationsPath` at `db/migrations/` (an absolute path) against a
+   disposable PostgreSQL database and confirm the script applies cleanly and is recorded in
+   `schema_migrations` — SQLite passing proves nothing about whether the SQL is even valid PostgreSQL.
+
+## Playbook 5: Change the admin SPA
+
+Background: `docs/guide/en/14-admin-spa-customization.md` (the full "when to customize vs. when
+metadata is enough" decision and the directory map).
+
+Before touching `frontend/src` at all: confirm the requirement is not already satisfiable by declaring
+metadata (Playbooks 1/2). Adding a `[CmsCollection]`/`[CmsField]` alone produces a full sidebar entry,
+schema-driven list, and generated create/edit form with zero Vue code — the admin SPA never hardcodes a
+collection's fields, columns, or labels; everything comes from `GET /api/schema`. Reach into
+`frontend/src` only for: a field editor experience none of the shipped interfaces provide (Playbook
+2a), branding/theming beyond a name and logo, admin-UI language (i18n), or a workflow that doesn't fit
+the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
+
+1. **Locate the right directory** using the map in chapter 14: `api/` (thin REST wrappers), `components/`
+   (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `dashboard/`, `media/`, `revisions/`, `rbac/`),
+   `composables/`, `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including
+   `fieldTypes/`), `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
+2. **Theming**: change both `frontend/src/assets/theme.css` (the OKLch custom-property palette the
+   hand-styled shell reads) and `frontend/src/theme/preset.ts` (the PrimeVue `definePreset(Aura, ...)`
+   mapping onto the same palette) together — they must stay in sync or PrimeVue's own components drift
+   from the hand-styled shell. When overriding a PrimeVue component's built-in style, use a compound
+   selector (`.topbar .lang-switcher`) or a `:deep()` paired with a real ancestor class inside
+   `<style scoped>` — a bare PrimeVue class selector in `theme.css` ties on specificity against
+   PrimeVue's own runtime-injected stylesheet and the winner then depends on injection order, not
+   intent. Avoid `!important`.
+3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
+   under the right namespace (`common`, `nav`, `dashboard`, `collectionList`, `itemForm`, `media`,
+   `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only
+   from `zh-TW` degrades gracefully but a key missing from `en` does not.
+4. **A new view/component**: follow the existing `views/` pattern (one component per route, registered
+   in `frontend/src/router/index.ts`, gated by `frontend/src/router/guard.ts` if it needs
+   authentication/permission checks).
+5. **Tests to add**: a `*.test.ts` next to any new `lib/` helper or non-trivial component logic
+   (Vitest). If the change affects a user-facing flow end-to-end, add or update a Playwright spec under
+   `frontend/e2e/` (`core` project — never `e2e/sample/**` unless the change is specific to the Blog
+   sample).
+6. **Gate**: `pnpm test && pnpm build` (the four standing gates' frontend half; `pnpm build` runs
+   `vue-tsc -b`, which is CI's only enforcement of the SPA's TypeScript types). Run `pnpm e2e` as a
+   further check for any change touching a critical flow — it needs a live API and database and is not
+   part of the four standing gates or of CI.
+
+## Next steps
+
+- `AGENTS.md` for the condensed version of these five playbooks and the invariants they must respect.
+- `docs/ai/architecture.md` for the extension points these playbooks put to use.
+- `docs/ai/conventions.md` for the naming/error-handling/validation/test conventions each playbook
+  should follow.

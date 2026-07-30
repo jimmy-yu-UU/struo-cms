@@ -8,12 +8,12 @@ namespace Struo.Application.Query;
 /// observable (exception precedence when a body violates several fields) and reproduces the historical
 /// <c>ItemService.Deserialize</c> sequence exactly:
 /// <list type="number">
-///   <item>Phase 1 — multi-value fields (MultiSelect / CheckboxGroup / Tags) in ONE pass over
+///   <item>First — multi-value fields (MultiSelect / CheckboxGroup / Tags) in ONE pass over
 ///     <c>meta.Fields</c> in declaration order (Tags → <see cref="TagsFieldValidator"/>, the option-bound
 ///     two → <see cref="OptionMultiValueFieldValidator"/>).</item>
-///   <item>Phase 2 — KeyValue.</item>
-///   <item>Phase 3 — Files.</item>
-///   <item>Phase 4 — Repeater.</item>
+///   <item>Then — KeyValue.</item>
+///   <item>Then — Files.</item>
+///   <item>Then — Repeater.</item>
 /// </list>
 /// </summary>
 public sealed class FieldValidatorRegistry

@@ -3,21 +3,26 @@ using SqlSugar;
 namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
-/// Dev-startup fail-fast (DB-5). Asserts that the small set of database constraints the application
+/// Dev-startup fail-fast. Asserts that the small set of database constraints the application
 /// relies on for CORRECTNESS — not merely performance — physically exist in the connected database, and
 /// throws with an actionable message if one is missing, rather than letting the app run with a silent
 /// gap.
 ///
 /// The critical constraints today are (a) the <c>revisions</c> composite UNIQUE index over
-/// (collectionname, itemid, revisionnumber): the DB-4 (=CS-6) backstop that makes a lost-update race on
-/// per-item revision numbers fail closed; and (b) the DB-10 UNIQUE (fk, locale) on each translation
-/// sidecar (<c>article_translations</c> / <c>file_translations</c>) that keeps per-locale overlay reads
-/// deterministic. On live PostgreSQL they are created by
-/// <c>db/migrations/001-core-baseline.sql</c>; on a CodeFirst dev/test database they are
-/// created by <c>InitTables</c> from each entity's <c>UniqueGroupNameList</c>. Because the index NAME
+/// (collectionname, itemid, revisionnumber): the backstop that makes a lost-update race on
+/// per-item revision numbers fail closed; and (b) a UNIQUE (fk, locale) index on each translation
+/// sidecar the running configuration actually has, keeping per-locale overlay reads deterministic.
+/// Sidecars are supplied by the CALLER as <see cref="TranslationSidecarDescriptor"/> values — Program.cs
+/// derives one per collection from <c>IMetadataProvider.GetCollections()</c>'s <c>Translation</c>
+/// metadata, resolving table/column names via <c>ISqlSugarClient.EntityMaintenance</c> (the same
+/// resolution SqlSugar itself uses) — so this guard never hardcodes a collection or table name and a
+/// fork's own sidecars are protected automatically, the same way core's <c>file_translations</c> is. On
+/// live PostgreSQL the indexes are created by <c>db/migrations/001-core-baseline.sql</c> (core sidecars)
+/// or a fork's own <c>NNN-…</c> migrations (downstream sidecars); on a CodeFirst dev/test database they
+/// are created by <c>InitTables</c> from each entity's <c>UniqueGroupNameList</c>. Because the index NAME
 /// differs by backend and by creation path, the guard detects each index by uniqueness + column
-/// coverage, never by a fixed name. A translation table absent from the connected database is skipped
-/// rather than demanded.
+/// coverage, never by a fixed name. A sidecar table absent from the connected database is skipped rather
+/// than demanded (a fork may not use every sidecar).
 ///
 /// Deliberately NOT a general schema-diff engine (YAGNI): only correctness-critical constraints belong
 /// here. The hot-path performance indexes (<c>[SugarIndex]</c>) are intentionally out of scope —
@@ -26,40 +31,43 @@ namespace Struo.Infrastructure.Persistence;
 /// </summary>
 public static class SchemaGuard
 {
-    public static async Task AssertCriticalConstraintsAsync(ISqlSugarClient db, CancellationToken ct)
+    public static async Task AssertCriticalConstraintsAsync(
+        ISqlSugarClient db,
+        IReadOnlyList<TranslationSidecarDescriptor> translationSidecars,
+        CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
         var dbType = db.CurrentConnectionConfig.DbType;
-        // Other backends are experimental/unverified (CLAUDE.md §1); the guard cannot assert on them, so
+        // Other backends (MySQL, SqlServer, Oracle) are type-mapped but unverified/experimental; the
+        // guard cannot assert on them, so
         // it stays out of the way rather than block startup on a backend whose catalog it does not read.
         if (dbType is not (DbType.PostgreSQL or DbType.Sqlite)) return;
 
-        // DB-4 backstop — the `revisions` composite UNIQUE (always present in the app schema; on a DB
+        // Backstop — the `revisions` composite UNIQUE (always present in the app schema; on a DB
         // that somehow lacks the table the index query returns empty and this fails, which is correct).
         await AssertUniqueCoverAsync(db, dbType, "revisions",
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
             "the `revisions` table has no composite UNIQUE index over " +
-            "(collectionname, itemid, revisionnumber). This is the DB-4 backstop that makes a concurrent " +
+            "(collectionname, itemid, revisionnumber). This index is the backstop that makes a concurrent " +
             "revision-number race fail closed. Apply db/migrations/001-core-baseline.sql (live " +
             "PostgreSQL), or recreate the dev schema so InitTables re-emits it from Revision's " +
             "UniqueGroupNameList.", ct);
 
-        // DB-10 backstop — each translation sidecar's UNIQUE (fk, locale). Skipped when the table is not
-        // present in this database (a host may not use a given sidecar), rather than demanding an index
-        // on a table that does not exist.
-        await AssertUniqueCoverAsync(db, dbType, "article_translations",
-            ["articleid", "locale"], requireTableExists: false,
-            "the `article_translations` table has no UNIQUE index over (articleid, locale). This is the " +
-            "DB-10 backstop that keeps per-locale overlay reads deterministic. Apply " +
-            "db/migrations/001-core-baseline.sql (live PostgreSQL), or recreate the dev " +
-            "schema so InitTables re-emits it from ArticleTranslation's UniqueGroupNameList.", ct);
-        await AssertUniqueCoverAsync(db, dbType, "file_translations",
-            ["fileid", "locale"], requireTableExists: false,
-            "the `file_translations` table has no UNIQUE index over (fileid, locale). This is the DB-10 " +
-            "backstop that keeps per-locale overlay reads deterministic. Apply " +
-            "db/migrations/001-core-baseline.sql (live PostgreSQL), or recreate the dev " +
-            "schema so InitTables re-emits it from FileTranslation's UniqueGroupNameList.", ct);
+        // Backstop — each caller-supplied translation sidecar's UNIQUE (fk, locale). Skipped when
+        // the table is not present in this database (a fork may not use a given sidecar), rather than
+        // demanding an index on a table that does not exist.
+        foreach (var sidecar in translationSidecars)
+        {
+            await AssertUniqueCoverAsync(db, dbType, sidecar.TableName,
+                [sidecar.ForeignKeyColumn, sidecar.LocaleColumn], requireTableExists: false,
+                $"the `{sidecar.TableName}` table has no UNIQUE index over " +
+                $"({sidecar.ForeignKeyColumn}, {sidecar.LocaleColumn}). This index is the backstop that " +
+                "keeps per-locale overlay reads deterministic. Apply the migration that creates this " +
+                "sidecar's composite UNIQUE index (db/migrations/001-core-baseline.sql for a core " +
+                "sidecar, or the fork's own NNN-… migration for its own sidecar), or recreate the dev " +
+                "schema so InitTables re-emits it from the translation entity's UniqueGroupNameList.", ct);
+        }
     }
 
     private static async Task AssertUniqueCoverAsync(
@@ -102,6 +110,10 @@ public static class SchemaGuard
     {
         if (string.IsNullOrEmpty(indexDef)) return false;
         var d = indexDef.ToLowerInvariant();
-        return d.Contains("unique") && requiredColumns.All(d.Contains);
+        // Required columns are compared case-insensitively: Postgres folds unquoted identifiers to
+        // lowercase in the catalog, but a column name resolved via EntityMaintenance.GetDbColumnName
+        // reflects the CLR property's declared case (e.g. "FileId"), which SQLite's sqlite_master.sql
+        // preserves verbatim. Lowercasing both sides keeps the comparison correct on both backends.
+        return d.Contains("unique") && requiredColumns.All(c => d.Contains(c.ToLowerInvariant()));
     }
 }

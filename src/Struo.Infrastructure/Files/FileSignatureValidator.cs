@@ -3,7 +3,7 @@ using System.Text;
 namespace Struo.Infrastructure.Files;
 
 /// <summary>
-/// Conservative content sniffing (audit L2). The upload path trusts the client-declared content type;
+/// Conservative content sniffing. The upload path trusts the client-declared content type;
 /// this checks the file's leading "magic bytes" against that declared type for the formats we know a
 /// signature for (images + PDF). If the client claims one of those types but the bytes don't match, the
 /// upload is rejected — this stops a script/HTML payload from being stored as <c>image/png</c> and later

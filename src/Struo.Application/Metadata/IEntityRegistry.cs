@@ -11,7 +11,7 @@ public sealed record EntityDescriptor(
     /// CLR property name -> <see cref="PropertyInfo"/> for every public instance property of
     /// <see cref="EntityType"/>, keyed <see cref="StringComparer.OrdinalIgnoreCase"/> and built
     /// once at construction. Lets projection/snapshot hot paths resolve a property accessor via a
-    /// cached dictionary lookup instead of per-row <c>Type.GetProperty</c> reflection (CS-4/ARC-2).
+    /// cached dictionary lookup instead of per-row <c>Type.GetProperty</c> reflection.
     /// Derived from <see cref="EntityType"/> in the record body so every construction site (scanner,
     /// translation descriptor, test fixtures) gets a consistent map with no extra argument.
     /// </summary>

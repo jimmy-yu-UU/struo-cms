@@ -9,10 +9,10 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// CS-1 regression guard: GraphQlServiceCollectionExtensions pins both root scopes to
+/// Regression guard: GraphQlServiceCollectionExtensions pins both root scopes to
 /// DependencyInjectionScope.Request, so a single query selecting multiple root fields
 /// (articles/categories/tags) can have HotChocolate execute those sibling resolvers in parallel
-/// against the SAME request-scoped ISqlSugarClient. Before the CS-1 fix, the factory returned a
+/// against the SAME request-scoped ISqlSugarClient. Before this fix, the factory returned a
 /// bare `new SqlSugarClient(config)`, which is not thread-safe — concurrent ADO operations on the
 /// shared connection intermittently threw ("connection already open") or otherwise failed.
 ///
@@ -21,7 +21,7 @@ namespace Struo.Tests.GraphQl;
 /// the RED evidence: SQLite (file-per-test, IsAutoCloseConnection) does not reliably reproduce the
 /// interleaved-connection race the way a real concurrent Postgres connection pool does, so this
 /// test may not reliably FAIL pre-fix on this provider — the live Postgres gate is the authoritative
-/// RED/GREEN evidence for CS-1. Kept here as a permanent regression guard for the fixed factory.
+/// RED/GREEN evidence. Kept here as a permanent regression guard for the fixed factory.
 /// </summary>
 [Collection("ApiIntegration")]
 public class GraphQlConcurrencySmokeTests(ApiFactory factory)

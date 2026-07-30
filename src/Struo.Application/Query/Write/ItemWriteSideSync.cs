@@ -8,8 +8,8 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Write-side relation/translation synchronization, extracted verbatim from <see cref="ItemService"/>
-/// (ARC-1). Both methods run INSIDE the caller's write transaction (see
+/// Write-side relation/translation synchronization, extracted verbatim from <see cref="ItemService"/>.
+/// Both methods run INSIDE the caller's write transaction (see
 /// <see cref="ItemService.CreateAsync"/> / <c>UpdateCoreAsync</c>), so a failure here rolls the whole
 /// write back. Validation phase order and exception message strings are observable and preserved exactly.
 /// </summary>
@@ -25,8 +25,8 @@ public sealed class ItemWriteSideSync(
     /// fields), and required fields, then delegates to
     /// <see cref="IItemRepository.SyncTranslationsAsync"/>.
     /// <para>
-    /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory
-    /// (Spec §10): an absent <c>translations</c> key, a non-object value, an empty object, or an
+    /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory:
+    /// an absent <c>translations</c> key, a non-object value, an empty object, or an
     /// object lacking the default locale all throw <see cref="QueryException"/> (→ 400). On update
     /// an absent/non-object <c>translations</c> payload is a no-op (partial updates supported) and
     /// the default locale is NOT forced.
@@ -43,7 +43,7 @@ public sealed class ItemWriteSideSync(
 
         // On create the default-locale translation is required. Reject an absent/non-object
         // `translations` payload HERE, before returning early — otherwise a body with no
-        // `translations` key would silently create a row with zero translation rows (Spec §10).
+        // `translations` key would silently create a row with zero translation rows.
         if (!hasTranslations)
         {
             if (isCreate)
@@ -90,7 +90,7 @@ public sealed class ItemWriteSideSync(
                 FieldValueRules.RequireTranslation(rf, locale, has, v);
             }
 
-            // Max length — CMS-layer limit (7g.5), measured after RichText sanitization.
+            // Max length — a CMS-layer limit, measured after RichText sanitization.
             foreach (var (name, value) in fieldValues)
             {
                 if (value is string sv && maxLengths.TryGetValue(name, out var max))
@@ -138,13 +138,13 @@ public sealed class ItemWriteSideSync(
             if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
             if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
 
-            // DB-9: de-duplicate the incoming ids up front — `tags:[t1,t1]` is semantically `tags:[t1]`
+            // De-duplicate the incoming ids up front — `tags:[t1,t1]` is semantically `tags:[t1]`
             // (a junction is a set). Distinct() returns a NEW list (no in-place mutation) and the typed
             // boxed values (long / string) compare correctly under the default equality comparer. Without
             // this, a repeated id inflated targetIds.Count so the count-based existence check below
             // spuriously failed ("do not exist"), and the junction sync would attempt duplicate rows.
             //
-            // CS-9: each element must be coerced safely. `e.GetInt64()` throws FormatException on a
+            // Each element must be coerced safely. `e.GetInt64()` throws FormatException on a
             // non-integer number (e.g. 1.5). A JSON `null` element was already handled pre-fix —
             // `e.GetString()` returns null (not a throw) for Null, which coerced to "" and was rejected
             // by the "do not exist" existence check below (already a 400); only bool/object/array
@@ -165,7 +165,7 @@ public sealed class ItemWriteSideSync(
                 .Distinct()
                 .ToList();
 
-            // Validate all target ids exist. DB-9: a REVERT (includeDeleted) may legitimately reference a
+            // Validate all target ids exist. A REVERT (includeDeleted) may legitimately reference a
             // target that has since been trashed — the snapshot was captured while it was still live — so
             // it validates against the soft-delete-bypassing query; a normal write keeps the strict
             // filtered check (a trashed target is not a valid new assignment).

@@ -1,0 +1,17 @@
+# Normalize all text files to LF in the repository; let Git auto-detect text vs binary.
+* text=auto eol=lf
+
+# Explicit binary types (kept out of any text/eol normalization even if auto-detection guesses wrong).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary

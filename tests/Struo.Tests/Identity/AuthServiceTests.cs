@@ -61,7 +61,7 @@ public class AuthServiceTests
 
         result.Succeeded.Should().BeFalse();
         result.Failure.Should().Be(AuthFailure.InvalidCredentials);
-        // L1: timing is equalized by verifying against a dummy hash, but the empty STORED hash must
+        // Timing is equalized by verifying against a dummy hash, but the empty STORED hash must
         // never itself reach Verify — some hashers would treat "" as a trivially-matching value.
         hasher.VerifiedEncodedValues.Should().NotContain("");
     }

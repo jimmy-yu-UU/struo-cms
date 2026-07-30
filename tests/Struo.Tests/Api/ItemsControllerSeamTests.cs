@@ -13,7 +13,7 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// ARC-6: proves <see cref="ItemsController"/> depends on the <see cref="IItemUseCases"/> seam
+/// Proves <see cref="ItemsController"/> depends on the <see cref="IItemUseCases"/> seam
 /// rather than the concrete <see cref="ItemService"/> — the controller is constructible with a
 /// hand-rolled fake use-case layer (no DI, no WebApplicationFactory), and its list action delegates
 /// to that seam and returns the fixed page in a 200 envelope.

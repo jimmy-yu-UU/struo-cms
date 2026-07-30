@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// Audit 2026-07-21 Batch 4 (TEST-6) live gate: Media Library upload + per-locale Title/Alt save
-// (FE-R6). Upload goes through a real <input type="file"> via Playwright's setInputFiles() with an
+// Live gate: Media Library upload + per-locale Title/Alt save. Upload goes through a real
+// <input type="file"> via Playwright's setInputFiles() with an
 // in-memory buffer (no fixture file on disk needed, and no drag-and-drop simulation — a hidden file
 // input accepts setInputFiles() regardless of its `display:none` dropzone styling, so this is not the
 // kind of flaky UI gesture the task brief warned about). ImageDimensionReader
@@ -10,11 +10,11 @@ import { type Page } from '@playwright/test'
 // failure (returns null), so a minimal-but-signature-valid PNG is accepted unconditionally by
 // FilesController.Upload — there is no server-side image validation that could reject it.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+// See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG (signature + IHDR + minimal IDAT/IEND) — enough for
 // ImageDimensionReader.TryRead's PNG() header check (8-byte signature + IHDR at offset 16/20).
@@ -69,7 +69,7 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
 }
 
 // Isolates the uploaded row by its unique stamped filename (server-side debounced search, same
-// idiom as items.spec.ts / conflict.spec.ts) and opens its detail dialog.
+// idiom as sample/items.spec.ts / sample/conflict.spec.ts) and opens its detail dialog.
 async function openDetailByName(page: Page, fileName: string): Promise<void> {
   await page.getByPlaceholder('Search files…').fill(fileName)
   // Each grid tile is a <button class="media-tile">; the filename lives only in its

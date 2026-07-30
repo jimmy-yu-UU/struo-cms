@@ -18,7 +18,7 @@ public static class MetadataScanner
         FieldInterface.CheckboxGroup, FieldInterface.Tags
     ];
 
-    // 7g.5: interfaces whose undeclared MaxLength defaults to 255 (SqlSugar's default varchar width).
+    // Interfaces whose undeclared MaxLength defaults to 255 (SqlSugar's default varchar width).
     // Content-bearing interfaces (RichText/Textarea/Markdown/Code/Json) default to unlimited.
     private static readonly HashSet<FieldInterface> ShortStringInterfaces =
     [
@@ -28,17 +28,17 @@ public static class MetadataScanner
         FieldInterface.CheckboxGroup, FieldInterface.Tags
     ];
 
-    // 7g+ slice 3: JSON-column interfaces that live on the parent entity and cannot be translatable
+    // JSON-column interfaces that live on the parent entity and cannot be translatable
     // (translating a structured aggregate is out of scope). A [CmsField(Translatable=true)] on any of
-    // these fail-fasts at scan. Json is intentionally excluded (a string that could be translatable
-    // in a later slice; non-translatable by convention here, but not fail-fasted).
+    // these fail-fasts at scan. Json is intentionally excluded (a string that could be made translatable
+    // in future; non-translatable by convention here, but not fail-fasted).
     private static readonly HashSet<FieldInterface> NonTranslatableJsonInterfaces =
     [
         FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
         FieldInterface.KeyValue, FieldInterface.Files, FieldInterface.Repeater
     ];
 
-    // 7g+ slice 4: sub-field interfaces allowed inside a Repeater child object (the lean scalar set).
+    // Sub-field interfaces allowed inside a Repeater child object (the lean scalar set).
     // Everything else — RichText, File/Image/Files, multi-value, Json/KeyValue, nested Repeater,
     // Password/Hidden/Uuid/Divider — fail-fasts at scan.
     private static readonly HashSet<FieldInterface> RepeaterAllowedInterfaces =
@@ -62,7 +62,7 @@ public static class MetadataScanner
     /// <summary>
     /// <see cref="Assembly.GetTypes"/> that tolerates an assembly with an unresolvable type: instead of
     /// throwing <see cref="ReflectionTypeLoadException"/> (which aborts the whole scan), it returns the
-    /// types that did load. Guards convention-based discovery against a single bad dependency (audit A4).
+    /// types that did load. Guards convention-based discovery against a single bad dependency.
     /// </summary>
     public static IEnumerable<Type> SafeGetTypes(Assembly assembly)
     {
@@ -303,7 +303,7 @@ public static class MetadataScanner
     /// <c>List&lt;TChild&gt;</c> property. Each sub-property carrying <c>[CmsField]</c> is scanned with
     /// the same <see cref="BuildField"/> logic; the sub-field interface must be in
     /// <see cref="RepeaterAllowedInterfaces"/> and must not be translatable. Fails fast on any
-    /// violation (Task 2 covers the guards).
+    /// violation of these guards.
     /// </summary>
     private static IReadOnlyList<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
     {

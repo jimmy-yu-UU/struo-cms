@@ -46,7 +46,7 @@ public class StruoErrorFilterTests
     public void CollectionNotFound_maps_to_NOT_FOUND()
         => _filter.OnError(Wrap(new CollectionNotFoundException("x"))).Code.Should().Be("NOT_FOUND");
 
-    // ARC-3 drift fix: with no HttpContext (unauthenticated), PermissionDenied is UNAUTHORIZED,
+    // Drift fix: with no HttpContext (unauthenticated), PermissionDenied is UNAUTHORIZED,
     // matching REST semantics — not the old unconditional FORBIDDEN.
     [Fact]
     public void PermissionDenied_when_unauthenticated_maps_to_UNAUTHORIZED()
@@ -68,7 +68,7 @@ public class StruoErrorFilterTests
     public void Conflict_maps_to_CONFLICT()
         => _filter.OnError(Wrap(new RelationConflictException("c"))).Code.Should().Be("CONFLICT");
 
-    // API-1: optimistic-lock CAS miss splits to VERSION_CONFLICT over GraphQL too (shared DomainErrorMap).
+    // Optimistic-lock CAS miss splits to VERSION_CONFLICT over GraphQL too (shared DomainErrorMap).
     [Fact]
     public void ConcurrencyConflict_maps_to_VERSION_CONFLICT()
         => _filter.OnError(Wrap(new ConcurrencyConflictException("c"))).Code.Should().Be("VERSION_CONFLICT");

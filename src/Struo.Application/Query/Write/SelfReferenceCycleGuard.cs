@@ -12,7 +12,7 @@ namespace Struo.Application.Query;
 /// sample Category) is covered — previously only the SPA's excludeId pruning guarded this, which
 /// a direct API caller bypasses. Create is exempt: a fresh server-generated id cannot appear in
 /// any existing ancestor chain. Walks the incoming parent's ancestor chain; a dangling parent id
-/// ends the walk (FK existence is not this guard's concern — DB-14 app-only stance). MaxDepth is
+/// ends the walk (FK existence is not this guard's concern — accepted app-only stance). MaxDepth is
 /// a defensive stop against pre-existing corrupt data looping forever.
 /// </summary>
 public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityRegistry registry)

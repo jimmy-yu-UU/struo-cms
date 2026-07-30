@@ -6,7 +6,7 @@ namespace Struo.Infrastructure.Localization;
 
 public sealed class LanguageProvider(ISqlSugarClient db) : ILanguageProvider
 {
-    // CS-7: Lazy (ExecutionAndPublication) makes the per-scope load atomic — concurrent GraphQL
+    // Lazy (ExecutionAndPublication) makes the per-scope load atomic — concurrent GraphQL
     // resolvers sharing this scoped instance run the query at most once instead of racing on `??=`.
     private Lazy<IReadOnlyList<LanguageInfo>> _cache = CreateCache(db);
 

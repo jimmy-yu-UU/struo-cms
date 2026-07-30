@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// #12 File soft-delete live gate. Covers the critical path this feature adds to the media
+// File soft-delete live gate. Covers the critical path this feature adds to the media
 // library: trashing a file from its DETAIL DIALOG (the active-view path — this is the one where a
 // duplicate-ConfirmDialog bug was previously fixed by scoping MediaDetailDialog's ConfirmDialog to
 // its own unnamed group, separate from MediaLibraryView's `media-folder`/`media-file` groups), then
@@ -11,11 +11,11 @@ import { type Page } from '@playwright/test'
 //
 // See media.spec.ts for the shared upload/login/PNG-fixture conventions this spec reuses verbatim.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+// See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG — see media.spec.ts for why this is sufficient for
 // ImageDimensionReader.TryRead's PNG() header check.

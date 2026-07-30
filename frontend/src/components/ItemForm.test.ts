@@ -81,7 +81,7 @@ describe('ItemForm', () => {
     expect(dots[0].classes()).not.toContain('off') // en has content
     expect(dots[1].classes()).toContain('off')     // zh-TW empty
   })
-  it('gives each completeness dot an accessible label instead of hiding it (FE-29)', () => {
+  it('gives each completeness dot an accessible label instead of hiding it', () => {
     const withContent: FormModel = { shared: { status: 'draft' },
       translations: { en: { title: 'Hi' }, 'zh-TW': { title: '' } }, relations: {} }
     const w = mountForm({ meta, model: withContent, locales, errors: {} })

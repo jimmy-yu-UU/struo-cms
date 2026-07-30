@@ -20,7 +20,7 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 namespace Struo.Tests.Files;
 
 /// <summary>
-/// #5 media folders (Batch C, Task 1): MediaFolder core entity — self-referencing tree, Hidden
+/// Media folders: MediaFolder core entity — self-referencing tree, Hidden
 /// collection routed as <c>mediafolder</c>; File.FolderId nullable organisational FK. Fixture wiring
 /// mirrors <c>ItemServiceTests</c>'s hand-wired-services pattern (SQLite in-memory + InitTables).
 /// </summary>

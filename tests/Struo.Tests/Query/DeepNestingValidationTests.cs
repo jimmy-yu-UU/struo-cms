@@ -26,7 +26,7 @@ public class DeepNestingValidationTests(ApiFactory factory)
         // ExpandDeepAsync only validates when there's at least one parent row to expand
         // (the entities.Count==0 guard is existing, unchanged behaviour) — seed one category.
         await c.PostAsJsonAsync("/api/items/category", new { name = "DepthSeed" });
-        // MaxRelationDepth = 6 (P1.1) => a 7-level nested chain must be rejected before any query runs.
+        // MaxRelationDepth = 6 => a 7-level nested chain must be rejected before any query runs.
         var envelope = JsonSerializer.SerializeToElement(new { deep = NestParent(7) });
         var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);

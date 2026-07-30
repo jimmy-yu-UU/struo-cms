@@ -25,7 +25,7 @@ public interface IItemRepository
     Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default);
     /// <summary>Clears DeletedAt/DeletedBy (restore) via an atomic <c>WHERE deletedat IS NOT NULL</c> UPDATE.
     /// Returns false if the id is unknown OR the row is already live (nothing to restore); callers use the
-    /// affected-rows result to decide whether to record a "restore" revision (DB-19). Filter-cleared.</summary>
+    /// affected-rows result to decide whether to record a "restore" revision. Filter-cleared.</summary>
     Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default);
 
     /// <summary>
@@ -46,7 +46,7 @@ public interface IItemRepository
     /// <summary>
     /// Like <see cref="QueryWhereInAsync"/> but ANDs an additional own-collection filter
     /// (already relation-rewritten to own columns) into the batched WHERE. Used by nested-list
-    /// expansion (8c.3b) to push a to-many list's filter into the single batched fetch.
+    /// expansion to push a to-many list's filter into the single batched fetch.
     /// </summary>
     Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
@@ -128,10 +128,10 @@ public interface IItemRepository
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
         CancellationToken ct = default);
 
-    // ── Purge referential-integrity primitives (DB-1/DB-2, Task 5) ─────────────
+    // ── Purge referential-integrity primitives ─────────────
     // Default implementations THROW rather than silently no-op: a second implementation that forgot
     // to override one of these would otherwise silently orphan referential rows on purge — the exact
-    // defect class DB-1/DB-2 exist to eliminate. The defaults still keep pre-existing test doubles
+    // defect class these primitives exist to eliminate. The defaults still keep pre-existing test doubles
     // compiling; a double that actually exercises purge must override them explicitly.
 
     /// <summary>

@@ -46,11 +46,11 @@ public static class GraphQlServiceCollectionExtensions
             .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
             .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
             .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
-            // SEC-4: static cost analysis is the alias-amplification defense — HotChocolate 16.4.0 has
+            // Static cost analysis is the alias-amplification defense — HotChocolate 16.4.0 has
             // no dedicated alias/operation-count rule, but every aliased selection accrues its own
             // field cost, so a request that repeats an expensive list field under N aliases costs ~N×
             // and is rejected before any resolver (and thus any DB call) runs. This complements the
-            // max-execution-depth rule and the accepted-absent rate limiting (audit H1/SEC-4).
+            // max-execution-depth rule and the accepted-absent rate limiting.
             .AddCostAnalyzer()
             .ModifyCostOptions(o =>
             {

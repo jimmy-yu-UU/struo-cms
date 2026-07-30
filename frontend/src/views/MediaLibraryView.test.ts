@@ -59,7 +59,7 @@ function mountView() {
 
 /** Routes itemsApi.list by collection: 'mediafolder' always resolves to `folders`; 'file' calls
  *  pop sequentially from `fileResults` (repeating the last entry once exhausted), matching the
- *  hand-authored `.mockResolvedValueOnce` chains the FE-27 tests relied on before folders existed. */
+ *  hand-authored `.mockResolvedValueOnce` chains the tests below relied on before folders existed. */
 function makeListMock(fileResults: Array<{ data: unknown; total: number }>, folders: FolderRow[] = []) {
   let i = 0
   return vi.spyOn(itemsApi, 'list').mockImplementation((collection: string) => {
@@ -125,7 +125,7 @@ describe('MediaLibraryView', () => {
     expect(fileCalls()).toBe(2)
   })
 
-  it('stays on the current page after a delete when it is still in range (FE-27)', async () => {
+  it('stays on the current page after a delete when it is still in range', async () => {
     const list = makeListMock([
       { data: rows, total: 100 }, // mount (page 0)
       { data: rows, total: 100 }, // onPage(1)
@@ -141,12 +141,12 @@ describe('MediaLibraryView', () => {
     // total (100) still covers page 1 (24 rows/page -> 5 pages, indices 0-4), so the delete
     // refresh must not reset the user back to page 0.
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
-    // FE-27: exactly one reload for the delete -- mount (1) + onPage (2) + onDeleted's single
+    // Exactly one reload for the delete -- mount (1) + onPage (2) + onDeleted's single
     // refresh (3) file-scoped calls. (A separate 'mediafolder' call also fires at mount.)
     expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(3)
   })
 
-  it('clamps to the last valid page after a delete strands the current page out of range (FE-27)', async () => {
+  it('clamps to the last valid page after a delete strands the current page out of range', async () => {
     const list = makeListMock([
       { data: rows, total: 1 },  // mount (page 0)
       { data: rows, total: 73 }, // onPage(2) -- page 2 valid (3 pages)
@@ -178,7 +178,7 @@ describe('MediaLibraryView', () => {
     expect(labels).not.toContain('Upload')
   })
 
-  it('defaults to the active view: no deleted param on the initial load (#12)', async () => {
+  it('defaults to the active view: no deleted param on the initial load', async () => {
     const list = makeListMock([{ data: rows, total: 1 }])
     mountView()
     await flushPromises()
@@ -186,7 +186,7 @@ describe('MediaLibraryView', () => {
     expect((call?.[1] as { deleted?: string }).deleted).toBeUndefined()
   })
 
-  it('switching to the trash view lists with deleted:"only" (#12)', async () => {
+  it('switching to the trash view lists with deleted:"only"', async () => {
     seedUser({ delete: true })
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
@@ -196,7 +196,7 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ deleted: 'only' }))
   })
 
-  it('hides the active/trash toggle when the user lacks delete permission (#12)', async () => {
+  it('hides the active/trash toggle when the user lacks delete permission', async () => {
     makeListMock([{ data: rows, total: 1 }])
     const w = mountView()
     seedUser({ delete: false })
@@ -204,7 +204,7 @@ describe('MediaLibraryView', () => {
     expect((w.vm as unknown as { showTrashSwitch: boolean }).showTrashSwitch).toBe(false)
   })
 
-  it('shows the active/trash toggle when the user has delete permission (#12)', async () => {
+  it('shows the active/trash toggle when the user has delete permission', async () => {
     makeListMock([{ data: rows, total: 1 }])
     const w = mountView()
     seedUser({ delete: true })
@@ -212,7 +212,7 @@ describe('MediaLibraryView', () => {
     expect((w.vm as unknown as { showTrashSwitch: boolean }).showTrashSwitch).toBe(true)
   })
 
-  it('restore in trash view calls filesApi.restore then reloads the list (#12)', async () => {
+  it('restore in trash view calls filesApi.restore then reloads the list', async () => {
     seedUser({ delete: true })
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
     const restore = vi.spyOn(filesApi, 'restore').mockResolvedValue()
@@ -227,7 +227,7 @@ describe('MediaLibraryView', () => {
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
   })
 
-  it('delete-permanently in trash view confirms on the media-file group, then calls filesApi.remove(id,{purge:true}) and reloads (#12)', async () => {
+  it('delete-permanently in trash view confirms on the media-file group, then calls filesApi.remove(id,{purge:true}) and reloads', async () => {
     seedUser({ delete: true })
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
     const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
@@ -248,7 +248,7 @@ describe('MediaLibraryView', () => {
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
   })
 
-  it('surfaces a toast when filesApi.restore fails instead of failing silently (#12)', async () => {
+  it('surfaces a toast when filesApi.restore fails instead of failing silently', async () => {
     seedUser({ delete: true })
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     vi.spyOn(filesApi, 'restore').mockRejectedValue(new Error('boom'))
@@ -261,7 +261,7 @@ describe('MediaLibraryView', () => {
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'boom' }))
   })
 
-  it('surfaces a toast when filesApi.remove(purge) fails instead of failing silently (#12)', async () => {
+  it('surfaces a toast when filesApi.remove(purge) fails instead of failing silently', async () => {
     seedUser({ delete: true })
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     vi.spyOn(filesApi, 'remove').mockRejectedValue(new Error('nope'))

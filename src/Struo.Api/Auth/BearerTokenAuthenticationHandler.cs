@@ -27,7 +27,7 @@ public sealed class BearerTokenAuthenticationHandler(
         if (cred is null || !cred.IsActive)
             return AuthenticateResult.Fail("Invalid token.");
 
-        // Record last-used for leak/staleness visibility (M2). Throttled to at most once a minute so a
+        // Record last-used for leak/staleness visibility. Throttled to at most once a minute so a
         // busy integration doesn't incur a DB write per request; the token itself stays permanent.
         var now = DateTime.UtcNow;
         if (cred.AccessTokenLastUsedAt is null || now - cred.AccessTokenLastUsedAt.Value > TimeSpan.FromMinutes(1))
@@ -39,7 +39,7 @@ public sealed class BearerTokenAuthenticationHandler(
         return AuthenticateResult.Success(ticket);
     }
 
-    // AUTH-1: [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)] challenges/forbids
+    // [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)] challenges/forbids
     // BOTH schemes in listed order (Cookies, then Bearer). Cookie's handler (AuthWiring's
     // OnRedirectToLogin/OnRedirectToAccessDenied) now writes an error-envelope body, which starts
     // the response — the base AuthenticationHandler<TOptions> default for this handler (no override

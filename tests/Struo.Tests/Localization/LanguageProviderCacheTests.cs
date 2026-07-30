@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Struo.Tests.Localization;
 
-// CS-7: LanguageProvider's per-scope cache must load at most once even under concurrent GraphQL
+// LanguageProvider's per-scope cache must load at most once even under concurrent GraphQL
 // resolvers. The old `_cache ??=` is a non-atomic read-then-write, so racing callers could each run
 // the underlying query (benign but wasteful) and observe different list instances. The fix stores a
 // Lazy<IReadOnlyList<LanguageInfo>> (ExecutionAndPublication), and Invalidate() swaps in a fresh Lazy

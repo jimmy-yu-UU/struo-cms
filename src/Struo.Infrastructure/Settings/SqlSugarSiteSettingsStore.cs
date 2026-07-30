@@ -14,7 +14,7 @@ public sealed class SqlSugarSiteSettingsStore(ISqlSugarClient db) : ISiteSetting
     }
 
     /// <summary>
-    /// DB-11 fix: the previous implementation did a check-then-branch (<c>AnyAsync</c> then
+    /// The previous implementation did a check-then-branch (<c>AnyAsync</c> then
     /// Insertable-or-Updateable) with no atomicity between the check and the act — two concurrent
     /// first-saves could both observe "no row" and both attempt an insert, and the loser crashed with
     /// an unmapped Postgres 23505 (unique_violation) → an opaque 500.

@@ -34,14 +34,14 @@ public sealed class FileService(
             !options.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             throw new QueryException($"Content type '{contentType}' is not allowed.");
 
-        // SEC-9: spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
+        // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
         // small uploads (<= 64KB) stay in memory exactly as before, but anything larger spills to a
         // temp file, so N concurrent large uploads no longer amplify memory by up to MaxUploadBytes
         // each. Access below mixes sequential forward reads (which pull more from `content` on demand)
         // and backward seeks to already-read offsets; the header sniff + image probe seek freely, then
         // the stream is fully drained once (line ~55) before the save read so Length is the true total.
         //
-        // SEC-15: `length` above is the client-DECLARED size (from Content-Length) — a client that
+        // `length` above is the client-DECLARED size (from Content-Length) — a client that
         // lies (declares small, streams large) would otherwise sail past that guard and spool
         // unbounded bytes to a temp file. `bufferLimit` caps what FileBufferingReadStream will ever
         // buffer/spill to MaxUploadBytes regardless of what the client claimed; once actual bytes
@@ -60,7 +60,7 @@ public sealed class FileService(
 
         try
         {
-            // Conservative content sniff (L2): if the client claims a type we have a signature for,
+            // Conservative content sniff: if the client claims a type we have a signature for,
             // the leading bytes must match it — blocks e.g. a script stored as image/png. Unknown
             // types pass.
             var header = new byte[12];
@@ -94,7 +94,7 @@ public sealed class FileService(
     {
         if (folderId is { } fid)
         {
-            // App-only existence check (DB-14 accepted stance: no DB FK). A folder deleted between
+            // App-only existence check (accepted stance: no DB FK). A folder deleted between
             // this check and the insert is the same narrow race every FK-less write here has.
             var folder = await db.Queryable<MediaFolder>().In(fid).FirstAsync(ct);
             if (folder is null) throw new QueryException($"Folder '{fid}' does not exist.");
@@ -109,7 +109,7 @@ public sealed class FileService(
             StorageKey = key,
             FileName = fileName,
             ContentType = contentType,
-            // SEC-15: `length` is the client-declared Content-Length, which a lying client can
+            // `length` is the client-declared Content-Length, which a lying client can
             // understate; `buffer` has already been fully drained (see UploadAsync) so its Length
             // is the true byte count actually stored, and overflow past MaxUploadBytes has already
             // thrown by this point.
@@ -120,10 +120,10 @@ public sealed class FileService(
             FolderId = folderId,
         };
 
-        // #7: seed the default-locale Title from the filename (extension stripped) so an upload is
+        // Seed the default-locale Title from the filename (extension stripped) so an upload is
         // immediately human-readable everywhere. Dotfiles ("." prefix strips to empty) fall back to
         // the full name; clamp to the column width (varchar 255). Same transaction as the file row —
-        // a seed failure must not leave a title-less file (repository join-if-active, CS-8).
+        // a seed failure must not leave a title-less file (repository join-if-active).
         var title = Path.GetFileNameWithoutExtension(fileName);
         if (string.IsNullOrWhiteSpace(title)) title = fileName;
         if (title.Length > 255) title = title[..255];
@@ -147,7 +147,7 @@ public sealed class FileService(
     public async Task<File?> GetAsync(Guid id, CancellationToken ct = default) =>
         await db.Queryable<File>().In(id).FirstAsync(ct);
 
-    // #12: this is now the media library's PURGE operation (permanent, hard delete) — the default
+    // This is the media library's PURGE operation (permanent, hard delete) — the default
     // FilesController DELETE is TrashAsync above; DeleteAsync is invoked via ?purge=true and must
     // therefore still find an already-trashed row, so the lookup clears the ISoftDeletable filter
     // (Updateable/Deleteable below already bypass it; only this initial Queryable read needed it).
@@ -157,7 +157,7 @@ public sealed class FileService(
         if (row is null) return false;
 
         var fkCol = db.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation));
-        // CS-8: delete the sidecar translations + the file row through the nesting-safe repository
+        // Delete the sidecar translations + the file row through the nesting-safe repository
         // helper (join-if-active), so composing this inside a larger unit-of-work joins that outer
         // transaction instead of opening — and prematurely committing — its own inner one.
         await repository.InTransactionAsync(async () =>
@@ -172,7 +172,7 @@ public sealed class FileService(
                 }).ExecuteCommandAsync(ct);
             await db.Deleteable<File>().In(id).ExecuteCommandAsync(ct);
 
-            // SEC-10/DB-15: SettingsController only validates the logo file is published at SAVE
+            // SettingsController only validates the logo file is published at SAVE
             // time (TOCTOU) — if this deleted file was the current brand logo, clear the reference
             // now rather than leaving site_settings.logofileid dangling. Entity-typed SetColumns
             // (see SqlSugarSiteSettingsStore.UpdateRowAsync) so the nullable column gets a typed
@@ -190,7 +190,7 @@ public sealed class FileService(
         return true;
     }
 
-    // #12: default "delete" for the media library is now trash, not purge. Reuses the same atomic
+    // Default "delete" for the media library is trash, not purge. Reuses the same atomic
     // repository primitive ItemService uses for every other soft-deletable collection (WHERE
     // deletedat IS NULL) instead of reimplementing that logic here.
     public async Task<bool> TrashAsync(Guid id, CancellationToken ct = default)

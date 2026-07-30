@@ -11,7 +11,7 @@ using Xunit;
 namespace Struo.Tests.DependencyInjection;
 
 /// <summary>
-/// ARC-5: the four config-bound options (Database / Query / Oidc / Files) must fail fast at host
+/// The four config-bound options (Database / Query / Oidc / Files) must fail fast at host
 /// start (via <c>ValidateOnStart</c> + DataAnnotations/predicate validation) instead of surfacing a
 /// confusing first-request 500.
 ///

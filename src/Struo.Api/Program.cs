@@ -59,6 +59,9 @@ try
 
     builder.Services.AddOpenApi();
     builder.Services.AddStruoInfrastructure();
+    // Reads Struo:ContentAssemblies from builder.Configuration immediately, before Build() below —
+    // any custom configuration provider a fork adds (e.g. Key Vault) must be registered on
+    // builder.Configuration before this line to be seen by the metadata scan.
     builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
     builder.Services.AddStruoData();
     builder.Services.AddStruoGraphQl(builder.Environment);
@@ -68,20 +71,20 @@ try
     builder.Services.AddStruoOidc(builder.Configuration);
     builder.Services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
         .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
-    // SEC-7: config-bound tuning for the login rate limiter below (defaults: 5 attempts / 60s).
+    // Config-bound tuning for the login rate limiter below (defaults: 5 attempts / 60s).
     builder.Services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
-    // SEC-7: /api/config is anonymous and previously hit the DB on every request; cached with a
+    // /api/config is anonymous and previously hit the DB on every request; cached with a
     // short TTL (ConfigController) and evicted immediately on a branding save (SettingsController).
     builder.Services.AddMemoryCache();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"])
         .AddCheck<Struo.Infrastructure.Health.CacheReadinessCheck>("cache", tags: ["ready"]);
 
-    // SEC-7: app-layer login rate limiter — fixed-window, partitioned by client IP, applied ONLY to
+    // App-layer login rate limiter — fixed-window, partitioned by client IP, applied ONLY to
     // POST /api/auth/login via [EnableRateLimiting("login")] on the action. Deliberately NOT a
     // global limiter: every anonymous login attempt burns full Argon2id CPU (timing-equalized by
     // design), making it a DoS amplifier if left unbounded, whereas the rest of the API is not.
@@ -149,9 +152,9 @@ try
     app.MapControllers();
     app.MapStruoGraphQl();
 
-    // API schema + interactive explorer are exposed in non-production only.
-    // Production exposure would publish the full API surface unauthenticated;
-    // revisit once authn/authz lands (Phase 6) if prod docs are desired.
+    // The OpenAPI document and Scalar explorer are mapped outside Production only: they publish the
+    // full API surface without authentication. Set them up behind your own auth if you need them in
+    // production.
     if (!app.Environment.IsProduction())
     {
         app.MapOpenApi();
@@ -193,10 +196,25 @@ try
             await MigrationRunner.ApplyAsync(db, migrationsPath, migrationLogger);
         }
 
-        // Dev fail-fast (DB-5): assert correctness-critical constraints exist after schema creation.
+        // Dev fail-fast: assert correctness-critical constraints exist after schema creation.
+        // Translation sidecars are derived from metadata (not hardcoded) so a fork's own sidecars are
+        // covered the same way core's file_translations is: table/column names are resolved the same
+        // way SqlSugar does, via EntityMaintenance, so they always match whatever InitTables/the
+        // migrations actually created.
         if (app.Environment.IsDevelopment())
         {
-            await SchemaGuard.AssertCriticalConstraintsAsync(db, default);
+            var metadataProvider = scope.ServiceProvider
+                .GetRequiredService<Struo.Application.Metadata.IMetadataProvider>();
+            var translationSidecars = metadataProvider.GetCollections()
+                .Where(c => c.Translation is not null)
+                .Select(c => c.Translation!)
+                .Select(t => new TranslationSidecarDescriptor(
+                    db.EntityMaintenance.GetTableName(t.TranslationEntityType),
+                    db.EntityMaintenance.GetDbColumnName(t.ForeignKeyProperty, t.TranslationEntityType),
+                    db.EntityMaintenance.GetDbColumnName(t.LocaleProperty, t.TranslationEntityType)))
+                .ToList();
+
+            await SchemaGuard.AssertCriticalConstraintsAsync(db, translationSidecars, default);
         }
 
         // Unified initial-data seeding — ALL environments. Each seeder fires only when its trigger
@@ -220,7 +238,7 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "StruoCMS host terminated unexpectedly");
-    // BL-3: without this, a startup exception (e.g. ValidateOnStart's OptionsValidationException) is
+    // Without this, a startup exception (e.g. ValidateOnStart's OptionsValidationException) is
     // logged but swallowed here — the process still exits 0, so an orchestrator/supervisor sees a
     // "successful" exit and never restarts or alerts. Force a non-zero exit code so process-exit-code
     // monitoring reflects the actual failure.

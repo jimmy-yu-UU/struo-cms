@@ -468,7 +468,7 @@ describe('CollectionListView', () => {
     expect((w.vm as any).error).toContain('Restore failed.')
   })
 
-  // FE-7 + fold-ins: search debounce hygiene (unmount/switch cancel) + bail clears orphaned spinner.
+  // Search debounce hygiene (unmount/switch cancel) + bail clears orphaned spinner.
   // Fake only setTimeout/clearTimeout so flushPromises (setImmediate-based) still resolves promises.
   it('coalesces rapid search input into a single load after 300ms (debounce merge)', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -555,7 +555,7 @@ describe('CollectionListView', () => {
     vm.loadItems() // A: token bumped, canRead true -> loading = true, awaits pA
     await flushPromises()
     expect(vm.loading).toBe(true)
-    // Load B bumps the token then bails (no longer readable). Without the fold-in fix,
+    // Load B bumps the token then bails (no longer readable). Without the fix,
     // B returns without clearing loading, and A (now stale) skips its finally -> spinner stuck.
     auth.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
     vm.loadItems() // B: bails at the early return
@@ -593,7 +593,7 @@ describe('CollectionListView', () => {
     expect(w.text()).toContain('2026')
   })
 
-  // Carried over from Task 3 review: the columns/isSelectField helpers are still live
+  // The columns/isSelectField helpers are still live
   // (they drive the Tag branch) even though linkField/row-link coverage was removed.
   it('orders the default display field first and detects select-type columns', async () => {
     seedSchema(); seedLanguage() // seedSchema's article has defaultDisplayField: 'status' (interface: select)

@@ -14,7 +14,7 @@ import { useAuthStore } from '../stores/authStore'
 const toastAdd = vi.fn()
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
-// Capture the guard registered via onBeforeRouteLeave (FE-5 pattern, same mocking approach as
+// Capture the guard registered via onBeforeRouteLeave (same mocking approach as
 // ItemFormView.test.ts) so tests can invoke it directly without a real router.
 let leaveGuard: (() => Promise<boolean> | boolean) | null = null
 vi.mock('vue-router', () => ({
@@ -86,7 +86,7 @@ describe('SettingsView', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
-  // ---- unsaved-changes leave guard (spec §4.3/§5, mirrors ItemFormView's FE-5 guard) -----------
+  // ---- unsaved-changes leave guard (mirrors ItemFormView's guard) -----------
 
   it('registers a route-leave guard synchronously on setup', () => {
     const auth = useAuthStore(); auth.user = { id: '1', isSuperAdmin: true, permissions: {} } as never
@@ -139,7 +139,7 @@ describe('SettingsView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
-  // ---- logo flow (TEST-4: mount-time restore / upload / save failure / name-too-long) ----------
+  // ---- logo flow (mount-time restore / upload / save failure / name-too-long) ----------
 
   it('recovers logoFileId from cfg.brandLogoUrl on mount and includes it in the save payload', async () => {
     const auth = useAuthStore(); auth.user = { id: '1', isSuperAdmin: true, permissions: {} } as never

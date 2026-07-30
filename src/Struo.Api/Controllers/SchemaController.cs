@@ -7,7 +7,7 @@ using Struo.Domain.Metadata.Models;
 
 namespace Struo.Api.Controllers;
 
-// SEC-8: the full content model (every collection/field, including ones only reachable by super-admins)
+// The full content model (every collection/field, including ones only reachable by super-admins)
 // was anonymously readable — a reconnaissance target, and inconsistent with production disabling
 // GraphQL introspection (GraphQlServiceCollectionExtensions: DisableIntrospection). The frontend only
 // ever calls GET /api/schema from post-login-only code paths (AppShell.onMounted, CollectionListView,

@@ -10,7 +10,7 @@ export const useLanguageStore = defineStore('language', {
     loadError: '',
     // In-flight fetch, shared by concurrent load() callers (e.g. the dashboard's fan-out of
     // itemsApi calls all calling load() before any has resolved) so a race never triggers two
-    // languagesApi.getEnabled() requests (FE-24, mirrors schemaStore's loadPromise pattern).
+    // languagesApi.getEnabled() requests (mirrors schemaStore's loadPromise pattern).
     loadPromise: null as Promise<void> | null,
   }),
   getters: {

@@ -15,7 +15,7 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
 {
     public sealed record LoginRequest(string Email, string Password);
 
-    // SEC-7: login-only app-layer rate limiter (fixed-window per client IP; see Program.cs). Every
+    // Login-only app-layer rate limiter (fixed-window per client IP; see Program.cs). Every
     // anonymous attempt burns full Argon2id CPU, making unbounded brute-forcing a DoS amplifier.
     // Applied to this action only — logout/me/oidc below are intentionally NOT limited.
     [AllowAnonymous]

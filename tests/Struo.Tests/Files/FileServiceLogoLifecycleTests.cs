@@ -18,7 +18,7 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 
 namespace Struo.Tests.Files;
 
-// SEC-10/DB-15/TEST-10: SettingsController only validates the logo file is "published" at SAVE
+// SettingsController only validates the logo file is "published" at SAVE
 // time; nothing previously cleared site_settings.logofileid when that same file was later
 // deleted, leaving a dangling reference that ConfigController would keep resolving into a dead
 // /api/files/{id}/content URL. FileService.DeleteAsync must null the column, inside the same
@@ -110,7 +110,7 @@ public class FileServiceLogoLifecycleTests : IDisposable
         var row = await _db.Queryable<SiteSettings>().Where(s => s.Id == SiteSettings.SingletonId).FirstAsync();
         row.Should().NotBeNull();
         row!.LogoFileId.Should().BeNull();
-        // SEC-10: pins the SetColumns(s => new SiteSettings { LogoFileId = null }) call to a
+        // Pins the SetColumns(s => new SiteSettings { LogoFileId = null }) call to a
         // single-member update — a regression that broadened it into a full-row SetColumns (nulling
         // every column instead of just LogoFileId) would silently wipe BrandName/UpdatedAt too.
         row.BrandName.Should().Be(before!.BrandName);

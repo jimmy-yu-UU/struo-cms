@@ -130,7 +130,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
 
         // 1. Upload a file, capture its id
         var content = new System.Net.Http.ByteArrayContent(new byte[] { 1, 2, 3 });
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain"); // whitelisted (SEC-6)
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain"); // whitelisted
         var mp = new System.Net.Http.MultipartFormDataContent { { content, "file", "og.txt" } };
         var fileResp = await c.PostAsync("/api/files", mp);
         var fileId = Root(await fileResp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;

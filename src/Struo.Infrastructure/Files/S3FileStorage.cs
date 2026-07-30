@@ -44,7 +44,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     }
 
     public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
-        // SEC-6: record the validated content type as S3 object metadata so a presigned/direct GET
+        // Record the validated content type as S3 object metadata so a presigned/direct GET
         // serves the correct Content-Type instead of a generic application/octet-stream.
         await _client.PutObjectAsync(new PutObjectRequest
         {
@@ -67,7 +67,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         Task.FromResult<string?>(_client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = _bucket, Key = key, Verb = HttpVerb.GET, Expires = DateTime.UtcNow.Add(ttl),
-            // SEC-6: force a download disposition on the direct-from-storage GET so a browser follows
+            // Force a download disposition on the direct-from-storage GET so a browser follows
             // the 302 into a download rather than rendering the bytes inline (defence in depth for
             // types the API path can't wrap in Content-Disposition: attachment, e.g. SVG).
             ResponseHeaderOverrides = new ResponseHeaderOverrides { ContentDisposition = "attachment" }

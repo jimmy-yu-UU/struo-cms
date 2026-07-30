@@ -11,7 +11,7 @@ using Struo.Domain.Query;
 namespace Struo.Api.GraphQl;
 
 /// <summary>
-/// Resolves the synthetic <c>heroImage: File</c> / <c>galleryFiles: [File!]</c> fields (Task 7)
+/// Resolves the synthetic <c>heroImage: File</c> / <c>galleryFiles: [File!]</c> fields
 /// added next to a scalar Image/File id column or a Files id-list column. Every file id requested
 /// across ALL sibling nodes in one GraphQL request is batched into a SINGLE
 /// <see cref="IGraphQlDataSource.QueryAsync"/>("file", id _in keys) call via <see cref="FileByIdDataLoader"/>
