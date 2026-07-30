@@ -10,6 +10,10 @@ namespace Struo.Infrastructure.Identity;
 /// <c>samples/*</c> reference).</summary>
 public static class RbacSeeder
 {
+    /// <summary>Name of the role that acts as the permission FLOOR for every caller (anonymous and
+    /// authenticated alike). Seeded here, consumed by <see cref="SqlSugarRolePermissionStore"/>.</summary>
+    public const string PublicRoleName = "public";
+
     public static async Task SeedAsync(
         ISqlSugarClient db, string? bootstrapAdminEmail,
         IEnumerable<string> publicReadCollections, CancellationToken ct = default)
@@ -21,10 +25,10 @@ public static class RbacSeeder
             await db.Insertable(admin).ExecuteCommandAsync(ct);
         }
 
-        var pub = await db.Queryable<Role>().Where(r => r.Name == "public").FirstAsync(ct);
+        var pub = await db.Queryable<Role>().Where(r => r.Name == PublicRoleName).FirstAsync(ct);
         if (pub is null)
         {
-            pub = new Role { Id = Guid.CreateVersion7(), Name = "public", IsSuperAdmin = false, Description = "Anonymous callers" };
+            pub = new Role { Id = Guid.CreateVersion7(), Name = PublicRoleName, IsSuperAdmin = false, Description = "Anonymous callers" };
             await db.Insertable(pub).ExecuteCommandAsync(ct);
         }
 

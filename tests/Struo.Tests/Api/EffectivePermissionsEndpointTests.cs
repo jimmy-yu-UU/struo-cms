@@ -103,7 +103,9 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
     public async Task Roles_query_overrides_the_stored_role_set()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var storedRole = await CreateRoleWithGrantAsync(admin, "article", read: true, write: false);
+        // 'article' is public-read, so its WRITE grant here is what distinguishes "stored role still
+        // applied" (write would leak true) from "stored role ignored" (write must come back false).
+        var storedRole = await CreateRoleWithGrantAsync(admin, "article", read: true, write: true);
         var hypoRole = await CreateRoleWithGrantAsync(admin, "tag", read: true, write: true);
         var userId = await CreateUserWithRolesAsync(admin, [storedRole]);
 
@@ -111,7 +113,9 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
                 $"/api/users/{userId}/effective-permissions?roles={hypoRole}"))
             .GetProperty("data");
         var perms = data.GetProperty("permissions");
-        perms.TryGetProperty("article", out _).Should().BeFalse("stored roles must be ignored");
+        // 'article' still appears via the public floor (read-only) even though the stored role — which
+        // also granted write — has been overridden by the roles= query.
+        perms.GetProperty("article").GetProperty("write").GetBoolean().Should().BeFalse("stored roles must be ignored");
         perms.GetProperty("tag").GetProperty("write").GetBoolean().Should().BeTrue();
     }
 
