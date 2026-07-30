@@ -21,7 +21,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// ── Test-local entities (DB-1/DB-2, Task 5) ────────────────────────────────
+// ── Test-local entities ────────────────────────────────
 //
 // The sample Blog domain has no OnDelete.Restrict or OnDelete.Cascade relation (Article.Category
 // and Category.Parent are both SetNull — see SoftDeleteRepositoryTests's note on this), so the
@@ -267,7 +267,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 }
 
 /// <summary>
-/// DB-1/DB-2 (Task 5): purging an item must not orphan its junction/translation/revision rows, and
+/// Purging an item must not orphan its junction/translation/revision rows, and
 /// must honour OnDelete.SetNull/Cascade (previously silently no-op — only Restrict was implemented),
 /// all inside one rollback-safe transaction. Real SQLite-backed <see cref="ItemService"/>, no stubs.
 /// </summary>

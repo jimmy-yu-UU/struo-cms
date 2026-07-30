@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// BL-1: FileAccessPolicy is the extracted RBAC decision-owner for the "file" collection, absorbing
+// FileAccessPolicy is the extracted RBAC decision-owner for the "file" collection, absorbing
 // the permission-related dependencies FilesController used to hold directly. These unit tests cover
 // the parts reachable without a full authentication host (CanWrite/CanDelete delegation, and the
 // cookie/"already authenticated" fast path of CanReadUnpublishedAsync); the bearer-adopt path is
@@ -87,7 +87,7 @@ public class FileAccessPolicyTests
         result.Should().BeFalse();
     }
 
-    // BL-2: a defensive floor. In practice BearerTokenAuthenticationHandler always stamps a
+    // A defensive floor. In practice BearerTokenAuthenticationHandler always stamps a
     // NameIdentifier claim (see HttpContextCurrentUserAccessor), but if a bearer principal is ever
     // adopted WITHOUT one, GetCurrentUserId() resolves to null — which must never be treated as "no
     // permission snapshot yet resolved, fall through to the public floor". It must be denied outright,

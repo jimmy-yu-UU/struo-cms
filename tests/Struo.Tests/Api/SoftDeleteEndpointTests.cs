@@ -84,7 +84,7 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // ── Final-review fix (Important #1): REST permission-denial regressions ───
+    // ── REST permission-denial regressions ───
 
     [Fact]
     public async Task Query_only_via_POST_requires_delete_permission()

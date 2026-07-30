@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Task 11: proves /graphql is reachable through the REAL host pipeline (auth/CSRF/permission
+/// Proves /graphql is reachable through the REAL host pipeline (auth/CSRF/permission
 /// middleware in front of MapGraphQL, exactly as Program.cs wires it — see
 /// GraphQlServiceCollectionExtensions.MapStruoGraphQl) rather than only through the in-process
 /// IRequestExecutor used by GraphQlExecutionTests. Also proves the
@@ -76,7 +76,7 @@ public class GraphQlEndpointTests(ApiFactory factory)
     }
 
     /// <summary>
-    /// Task 6 (Phase 8b.1): every mutation-execution test in this suite builds its own in-process
+    /// Every mutation-execution test in this suite builds its own in-process
     /// executor with an ".AddMutationType(...)" anchor, so none of them prove that the REAL
     /// production wiring — AddStruoGraphQl in GraphQlServiceCollectionExtensions, which registers
     /// the production AddMutationType anchor plus the mutation type extension — actually exposes

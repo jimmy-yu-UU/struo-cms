@@ -20,11 +20,11 @@ public sealed class SqlSugarItemRepository(
     IMetadataProvider metadata,
     StruoQueryOptions options) : IItemRepository
 {
-    // ARC-4: ORDER BY SQL construction (plain / translatable / relation-path) is extracted verbatim
+    // ORDER BY SQL construction (plain / translatable / relation-path) is extracted verbatim
     // into OrderByExpressionBuilder. Built from this repository's own deps rather than injected: the
     // existing test suite constructs SqlSugarItemRepository directly with this exact 5-arg signature,
     // and the pure-refactor acceptance gate forbids changing any test line. The builder is also
-    // registered as a scoped DI service for future direct consumers (Batch 5 read/write seam).
+    // registered as a scoped DI service for future direct consumers.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
     // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
@@ -94,7 +94,7 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(string), typeof(string), typeof(string), typeof(List<IConditionalModel>), typeof(CancellationToken)])!;
 
-    // DB-17: second-level dispatcher (T fixed by the call above, TFk resolved at runtime from the FK
+    // Second-level dispatcher (T fixed by the call above, TFk resolved at runtime from the FK
     // property's actual CLR type) so the FK-only SQL projection below can be expressed as a genuinely
     // typed `Expression<Func<T, TFk>>` — SqlSugar's Select() does not translate a boxed
     // `Convert(member, object)` lambda into a single-column projection.
@@ -124,7 +124,7 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
-    // ARC-4 tail (§17.6): per-dispatcher open-instance delegate caches, keyed by closed entity type.
+    // Per-dispatcher open-instance delegate caches, keyed by closed entity type.
     // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
     // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
     // replaced by a direct delegate call. The *Def MethodInfo fields above seed CreateDelegate; each
@@ -181,7 +181,7 @@ public sealed class SqlSugarItemRepository(
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationParentIdsInvokers = new();
 
-    // DB-17: keyed by (translation entity type, FK CLR type) — two independent type parameters, so a
+    // Keyed by (translation entity type, FK CLR type) — two independent type parameters, so a
     // single-Type ConcurrentDictionary (the pattern every other Invokers cache above uses) doesn't fit.
     private static readonly ConcurrentDictionary<(Type EntityType, Type FkType),
         Func<SqlSugarItemRepository, List<IConditionalModel>, LambdaExpression, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationFkSelectInvokers = new();
@@ -236,7 +236,7 @@ public sealed class SqlSugarItemRepository(
                         FieldName = idColumn,
                         ConditionalType = SqlSugar.ConditionalType.In,
                         FieldValue = string.Join(",", allParentIds),
-                        CSharpTypeName = TypeNameOfProperty(d.EntityType, d.IdProperty)  // D6: PK is Guid -> uuid on PG
+                        CSharpTypeName = TypeNameOfProperty(d.EntityType, d.IdProperty)  // PK is Guid -> uuid on PG
                     };
 
                     if (nonTranslatableSearchable.Count > 0)
@@ -285,10 +285,10 @@ public sealed class SqlSugarItemRepository(
         DeletedFilter deleted, CancellationToken ct)
         where T : class, new()
     {
-        // Phase 9b: Only/With lift the global soft-delete floor (registered in
+        // Only/With lift the global soft-delete floor (registered in
         // SqlSugarClientFactory) for this query; Only additionally restricts to trashed rows via
-        // an extra DeletedAt-IS-NOT-NULL conditional (kept as a ConditionalModel — see the Task-5
-        // report for why the cast-based Where predicate on ISoftDeletable was avoided).
+        // an extra DeletedAt-IS-NOT-NULL conditional. It stays a ConditionalModel rather than a
+        // cast-based Where predicate on ISoftDeletable, which SqlSugar cannot translate reliably.
         var isSoftDeletable = typeof(ISoftDeletable).IsAssignableFrom(typeof(T));
         var effectiveConditionals = conditionals;
         if (deleted == DeletedFilter.Only && isSoftDeletable)
@@ -365,7 +365,7 @@ public sealed class SqlSugarItemRepository(
         }
     }
 
-    // D6: resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
+    // Resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
     // their real CLR type (Guid -> uuid, long -> bigint) on Postgres instead of as text (42883 on PG).
     // Mirrors what ConditionalModelTranslator already does for the parsed query DSL; returns null for
     // string/unknown so those keep untyped behavior.
@@ -431,7 +431,7 @@ public sealed class SqlSugarItemRepository(
 
     private async Task UpdateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
     {
-        // Optimistic concurrency (D2): for auditable collection entities, bump the version and update
+        // Optimistic concurrency: for auditable collection entities, bump the version and update
         // WHERE id = ? AND version = expected. If a concurrent writer already advanced the version, zero
         // rows match and we surface a 409 instead of silently overwriting their change. The id + version
         // are bound as typed parameters (real Guid / long), so PG's uuid column matches correctly.
@@ -472,7 +472,7 @@ public sealed class SqlSugarItemRepository(
     private async Task DeleteGenericAsync<T>(object id, CancellationToken ct) where T : class, new() =>
         await db.Deleteable<T>().In(id).ExecuteCommandAsync(ct);
 
-    // ── Purge referential-integrity primitives (DB-1/DB-2, Task 5) ─────────────
+    // ── Purge referential-integrity primitives ─────────────
 
     public async Task SetForeignKeyNullAsync(
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default)
@@ -538,7 +538,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.Equal,
                 FieldValue = value.ToString(),
-                CSharpTypeName = TypeNameOf(value)  // D6
+                CSharpTypeName = TypeNameOf(value)
             }
         };
         await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
@@ -567,7 +567,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         var q = db.Queryable<T>();
@@ -597,12 +597,12 @@ public sealed class SqlSugarItemRepository(
         where T : class, ISoftDeletable, new()
     {
         // Updateable<T> is not subject to the ISoftDeletable query filter, so without an explicit
-        // guard the row would be located by id alone regardless of its current DeletedAt. DB-22: the
+        // guard the row would be located by id alone regardless of its current DeletedAt. The
         // WHERE below adds "deletedat IS NULL" so trashing an already-trashed row is an atomic no-op
         // AT THE SQL LEVEL (affected = 0) — not merely a pre-read check in ItemService, which would
         // leave a TOCTOU window where two concurrent DELETEs of the same live row could each pass the
         // check and both re-stamp/re-version and double-record a "delete" revision. Mirrors
-        // RestoreGenericAsync's identical "deletedat IS NOT NULL" guard (DB-19) on the opposite side.
+        // RestoreGenericAsync's identical "deletedat IS NOT NULL" guard on the opposite side.
         // Parameter named "__sdId" (not "@id"): SqlSugar auto-binds an internal "@id" placeholder of
         // its own on Updateable<T>() for an entity whose PK property is named "Id" — colliding with a
         // plain "@id" here silently rebinds to that internal (unset/default) parameter instead of ours.
@@ -614,7 +614,7 @@ public sealed class SqlSugarItemRepository(
         // CLR type (Guid), instead of boxing a bare `(object?)null` with no type info at all. An
         // untyped null parameter is sent to Npgsql as `text`, which PG rejects (42804) against a
         // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
-        // DB-8: for AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
+        // For AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
         // the trash stamp so the history timeline advances and a stale client 409s after a restore.
         var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
         var affected = await ApplyVersionBump(db.Updateable<T>()
@@ -624,7 +624,7 @@ public sealed class SqlSugarItemRepository(
         return affected > 0;
     }
 
-    // DB-8: chains a `Version = Version + 1` set onto the trash/restore UPDATE when T is an
+    // Chains a `Version = Version + 1` set onto the trash/restore UPDATE when T is an
     // AuditableEntity subclass. Built as a dynamic member-init expression
     // `it => new T { Version = it.Version + 1 }` (T is statically only ISoftDeletable, so Version can
     // only be reached via reflection); SqlSugar's expression resolver turns `it.Version + 1` into the
@@ -664,15 +664,15 @@ public sealed class SqlSugarItemRepository(
     private async Task<bool> RestoreGenericAsync<T>(string idColumn, object id, CancellationToken ct)
         where T : class, ISoftDeletable, new()
     {
-        // PG 42804 fix (9b live-gate): `.SetColumns(deletedAtColumn, (object?)null)` binds a null
+        // PG 42804 fix: `.SetColumns(deletedAtColumn, (object?)null)` binds a null
         // parameter with NO CLR type, so Npgsql infers `text` and PG rejects
         // `SET deletedat = @p(text)` against the `timestamp` column. The entity-typed object
         // initializer below goes through SqlSugar's expression resolver instead of the raw
         // string-fieldName overload: it recognizes DeletedAt/DeletedBy as Nullable<DateTime>/
         // Nullable<Guid> and assigns the null parameter's DbType from the underlying type
         // (DateTime / Guid), which PG accepts against the timestamp/uuid columns.
-        // DB-8: bump Version in the SAME UPDATE (AuditableEntity subclasses only) — see ApplyVersionBump.
-        // DB-19: guard the UPDATE itself with "deletedat IS NOT NULL" so restoring an already-live row
+        // Bump Version in the SAME UPDATE (AuditableEntity subclasses only) — see ApplyVersionBump.
+        // Guard the UPDATE itself with "deletedat IS NOT NULL" so restoring an already-live row
         // is an atomic no-op at the SQL level (affected = 0) — not merely a pre-read check in
         // ItemService, which would leave a TOCTOU window between the check and this UPDATE where two
         // concurrent restores of the same row could each re-stamp/re-version and double-record a
@@ -713,7 +713,7 @@ public sealed class SqlSugarItemRepository(
         // Use a ConditionalModel (ConditionalType.In) rather than the typed .In(string, ...)
         // overload: SqlSugar's In(string, FieldType[]) is value-typed/array-bound and brittle
         // across heterogeneous CLR id types. The comma-joined value form matches how the
-        // Phase-2 ConditionalModelTranslator emits IN clauses.
+        // ConditionalModelTranslator emits IN clauses.
         var conditionals = new List<IConditionalModel>
         {
             new ConditionalModel
@@ -721,7 +721,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
@@ -744,7 +744,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))  // D6
+                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
@@ -817,7 +817,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = parentColumn,
                 ConditionalType = ConditionalType.In,
                 FieldValue = parentId.ToString(),
-                CSharpTypeName = TypeNameOf(parentId)  // D6
+                CSharpTypeName = TypeNameOf(parentId)
             }
         };
 
@@ -880,7 +880,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = fkColumn,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", parentIds.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // D6: parent FK is Guid
+                CSharpTypeName = TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // parent FK is Guid
             }
         };
         if (locale is not null)
@@ -940,7 +940,7 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         if (fkProp is null) return [];
 
-        // DB-17: project ONLY the FK column at the SQL level instead of materializing whole
+        // Project ONLY the FK column at the SQL level instead of materializing whole
         // translation rows (which carry potentially-large body/text columns) just to read one value
         // out of each. The lambda's return type must be the FK's REAL CLR type (Guid/string/...) —
         // SqlSugar's Select() does not turn a boxed `Convert(member, object)` body into a one-column
@@ -1053,7 +1053,7 @@ public sealed class SqlSugarItemRepository(
                     FieldName = fkColumn,
                     ConditionalType = ConditionalType.In,
                     FieldValue = parentId.ToString(),
-                    CSharpTypeName = TypeNameOf(parentId)  // D6: parent FK is Guid
+                    CSharpTypeName = TypeNameOf(parentId)  // parent FK is Guid
                 },
                 new ConditionalModel
                 {
@@ -1093,7 +1093,7 @@ public sealed class SqlSugarItemRepository(
     /// Converts a string ID to the PK property type. Handles Guid and all IConvertible types.
     /// Delegates entirely to the Application-layer twin so any unparseable id surfaces as a
     /// mappable <see cref="QueryException"/> (-&gt; HTTP 400) instead of a raw FormatException/
-    /// ArgumentException that <c>StruoExceptionHandler.Map</c> cannot map and masks as a 500 (CS-2).
+    /// ArgumentException that <c>StruoExceptionHandler.Map</c> cannot map and masks as a 500.
     /// </summary>
     private static object ConvertId(string id, EntityDescriptor d)
     {

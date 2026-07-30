@@ -2,7 +2,7 @@ namespace Struo.Application.Security;
 
 public sealed class AuthService(IUserCredentialStore store, IPasswordHasher hasher) : IAuthService
 {
-    // A throwaway hash used to equalize response time when the account doesn't exist (L1). Verifying
+    // A throwaway hash used to equalize response time when the account doesn't exist. Verifying
     // against it makes a missing user cost roughly the same Argon2 work as a wrong password, so an
     // attacker can't tell from timing whether an email is registered. Computed once, lazily.
     private static string? _dummyHash;

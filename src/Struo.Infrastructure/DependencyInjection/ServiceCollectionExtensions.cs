@@ -12,7 +12,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddStruoInfrastructure(this IServiceCollection services)
     {
-        // ARC-5: fail fast. BindConfiguration + ValidateOnStart makes a missing/empty connection
+        // Fail fast. BindConfiguration + ValidateOnStart makes a missing/empty connection
         // string kill the host at boot (or at the first options materialization — e.g. when the
         // ISqlSugarClient factory below reads IOptions<DatabaseOptions>.Value) instead of surfacing
         // as a confusing 500 on the first DB access. DataAnnotations ([Required]) are enforced via

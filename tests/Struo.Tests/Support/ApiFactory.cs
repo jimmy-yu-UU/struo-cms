@@ -18,7 +18,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public string FilesRoot { get; } =
         Path.Combine(Path.GetTempPath(), "struo-files-it-" + Guid.NewGuid().ToString("N"));
 
-    // Isolates P2.4's image-variant cache from the repo's src/Struo.Api/App_Data default (same
+    // Isolates the image-variant cache from the repo's src/Struo.Api/App_Data default (same
     // rationale as FilesRoot above) — otherwise the IT suite would write real variant files under
     // the checked-out working tree.
     public string ImageCacheRoot { get; } =
@@ -36,7 +36,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = _db.ConnectionString,
-                ["Struo:ContentAssemblies:0"] = "Struo.Sample.Blog",
+                // Struo:ContentAssemblies cannot be set here - it is read before Build(). See Support/ContentAssemblyEnvBootstrap.cs.
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = FilesRoot,
                 ["Struo:Files:ImageTransform:CachePath"] = ImageCacheRoot,
@@ -47,8 +47,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // Pin OIDC off by default so the IT suite is deterministic regardless of a developer's
                 // local, gitignored appsettings.Development.json (which may carry real tenant config for
                 // manual OIDC testing). Tests that need it on layer an override via WithWebHostBuilder.
+                // The same content-root file is also a live input to Struo:ContentAssemblies (now empty
+                // in the shipped appsettings.json): a developer who uncomments a sample entry there gets
+                // a suite that behaves differently from CI, since that key can't be overridden here (see
+                // ContentAssemblyEnvBootstrap.cs).
                 ["Oidc:Enabled"] = "false",
-                // SEC-7: the whole suite shares this ApiFactory instance (and its client-IP partition,
+                // The whole suite shares this ApiFactory instance (and its client-IP partition,
                 // since TestServer has a fixed connection IP) across ~55 test classes that each log in
                 // one or more test users via CreateAuthenticatedClientAsync/CreateEditorClientAsync/
                 // CreateRolelessClientAsync. A production-sized PermitLimit (5/60s) would make the
@@ -102,7 +106,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email = AdminEmail, password = AdminPassword });
         resp.EnsureSuccessStatusCode();
@@ -145,7 +149,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         }
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();
@@ -175,7 +179,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         }
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware. (M1)
+        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();

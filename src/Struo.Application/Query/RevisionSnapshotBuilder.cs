@@ -8,7 +8,7 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Assembles a canonical, revert-capable JSON snapshot of an item's post-write state (Phase 9c). Unlike
+/// Assembles a canonical, revert-capable JSON snapshot of an item's post-write state. Unlike
 /// the read projection (<c>ItemService.Project</c>), it (a) applies NO RBAC field filtering — a snapshot
 /// must capture the whole item regardless of the writer's field grants — and (b) includes M2O foreign-key
 /// ids and M2M relation id arrays, so the result is exactly the shape <c>ItemService.UpdateAsync</c>
@@ -16,7 +16,7 @@ namespace Struo.Application.Query;
 /// <para>
 /// The omission of RBAC/hidden-field filtering here is deliberate: a revert must be able to restore
 /// every field, so <see cref="ItemService.RevertAsync"/> reads this full-fidelity snapshot straight
-/// from the revision store. (SEC-2) That full snapshot is internal-to-revert only — any snapshot
+/// from the revision store. That full snapshot is internal-to-revert only — any snapshot
 /// returned to an external caller instead goes through <see cref="ItemService.GetRevisionAsync"/>,
 /// which redacts hidden fields via <see cref="RevisionSnapshotRedactor.RedactHidden"/> before handing
 /// it back, so a snapshot never leaks a hidden field via REST/GraphQL.

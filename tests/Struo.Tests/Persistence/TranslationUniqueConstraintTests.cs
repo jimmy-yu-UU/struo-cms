@@ -10,7 +10,7 @@ using Xunit;
 namespace Struo.Tests.Persistence;
 
 /// <summary>
-/// DB-10: a translation sidecar must not hold two rows for the same (foreign key, locale) — that would
+/// A translation sidecar must not hold two rows for the same (foreign key, locale) — that would
 /// make overlay reads non-deterministic. The entities declare a composite UNIQUE via
 /// <c>[SugarColumn(UniqueGroupNameList = [...])]</c> on the FK + Locale columns, which CodeFirst
 /// <c>InitTables</c> materialises as a unique index (the same mechanism the revisions backstop uses).

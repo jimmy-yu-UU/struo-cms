@@ -16,7 +16,7 @@ import { useLanguageStore } from '../stores/languageStore'
 import { languagesApi } from '../api/languagesApi'
 import { rbacApi } from '../api/rbacApi'
 
-// Batch B Task 8: PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
+// PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
 // so the reload/existence assertions below exercise the actual components; stub only their API.
 vi.mock('../api/rbacApi', () => ({
   rbacApi: {
@@ -42,7 +42,7 @@ vi.mock('vue-router', () => ({
 }))
 const confirmRequire = vi.fn()
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
-// Task 3: capture toast.add calls so the "grants save failed after create" warning can be
+// Capture toast.add calls so the "grants save failed after create" warning can be
 // asserted directly, same way confirm.require is captured above.
 const toastAdd = vi.fn()
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
@@ -267,7 +267,7 @@ describe('ItemFormView', () => {
     expect((w.vm as any).serverError).toBe('Boom')
   })
 
-  it('carries the loaded version through to the update payload (FE-4 chain fix)', async () => {
+  it('carries the loaded version through to the update payload (version-chain fix)', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {}, version: 3 })
@@ -303,8 +303,8 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
   })
 
-  it('generic 409 CONFLICT (e.g. duplicate email) shows the banner and does NOT trigger conflict recovery (API-1)', async () => {
-    // API-1: only optimistic-lock clashes carry code VERSION_CONFLICT. Other 409s (delete-restrict,
+  it('generic 409 CONFLICT (e.g. duplicate email) shows the banner and does NOT trigger conflict recovery', async () => {
+    // Only optimistic-lock clashes carry code VERSION_CONFLICT. Other 409s (delete-restrict,
     // duplicate email) keep the generic CONFLICT code and must NOT arm the "changed by someone else"
     // recovery banner — they fall through to the plain serverError banner with no version refetch.
     routeParams = { name: 'article', id: '5' }
@@ -422,7 +422,7 @@ describe('ItemFormView', () => {
     expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
   })
 
-  // ---- FE-5: dirty-state leave guard --------------------------------------
+  // ---- dirty-state leave guard --------------------------------------
 
   it('registers a route-leave guard synchronously on setup', async () => {
     routeParams = { name: 'article', id: '5' }
@@ -510,7 +510,7 @@ describe('ItemFormView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
-  // ---- fold-in (c): Esc/X dismiss must settle the leave-guard promise ------
+  // ---- Esc/X dismiss must settle the leave-guard promise ------
 
   it('leave guard: dismiss via onHide (Esc/backdrop/X) resolves the promise false', async () => {
     routeParams = { name: 'article', id: '5' }
@@ -534,7 +534,7 @@ describe('ItemFormView', () => {
     expect(settled).toBe(false)
   })
 
-  // ---- NAV-1: same-record (params-only) navigation dirty guard -------------
+  // ---- same-record (params-only) navigation dirty guard -------------
 
   it('registers a route-update guard synchronously on setup', async () => {
     routeParams = { name: 'article', id: '5' }
@@ -641,7 +641,7 @@ describe('ItemFormView', () => {
     expect(w.get('.conflict-banner').text()).toContain('changed by someone else')
   })
 
-  // ---- FE-R7: revision history drawer --------------------------------------
+  // ---- Revision history drawer --------------------------------------
 
   it('renders the history drawer only for revisioned collections in edit mode', async () => {
     routeParams = { name: 'article', id: '5' }
@@ -688,7 +688,7 @@ describe('ItemFormView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
-  // ---- Task 5: language list refresh after editing the Language collection -------
+  // ---- language list refresh after editing the Language collection -------
 
   const languageMeta = { name: 'language', label: 'Language', fields: [
     { name: 'code', label: 'Code', interface: 'text', required: true, searchable: false, sortable: false,
@@ -750,7 +750,7 @@ describe('ItemFormView', () => {
     expect(vi.mocked(languagesApi.getEnabled).mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
-  // ---- Task 8: RBAC editors mounted on the generic form (Role -> matrix, User -> effective) ----
+  // ---- RBAC editors mounted on the generic form (Role -> matrix, User -> effective) ----
 
   const roleMeta = { name: 'role', label: 'Role', fields: [
     { name: 'name', label: 'Name', interface: 'text', required: true, searchable: false, sortable: false,
@@ -776,7 +776,7 @@ describe('ItemFormView', () => {
     await flushPromises()
     expect(editing.findComponent(PermissionMatrix).exists()).toBe(true)
 
-    // Task 3: create mode also mounts the matrix now (createMode buffer, no GET) so the user does
+    // Create mode also mounts the matrix now (createMode buffer, no GET) so the user does
     // not have to save-then-reopen to grant permissions.
     routeParams = { name: 'role' }; routeName = 'collection-create'
     const creating = mountView()
@@ -819,7 +819,7 @@ describe('ItemFormView', () => {
     expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', ['r1', 'r2'])
   })
 
-  // ---- Task 2: unified leave guard + form Save flushes a dirty permission matrix ----
+  // ---- unified leave guard + form Save flushes a dirty permission matrix ----
 
   it('leave guard fires once and covers a dirty matrix (unified guard)', async () => {
     vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
@@ -871,7 +871,7 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
 
-  // ---- Final-review fix: failed edit-mode matrix flush must not discard the update result --
+  // ---- failed edit-mode matrix flush must not discard the update result --
   // Before the fix, a failing matrix.save() caused onSubmit to `return` BEFORE captureBaseline()
   // and before refreshing model.version from the update response — leaving the FORM's own saved
   // edits marked dirty (bogus unsaved-changes prompt) and a retry echoing the stale version (bogus
@@ -919,7 +919,7 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
 
-  // ---- Task 3: create-mode matrix, buffered and saved with the form -------
+  // ---- create-mode matrix, buffered and saved with the form -------
 
   it('mounts the permission matrix in role create mode as super-admin', async () => {
     routeParams = { name: 'role' }; routeName = 'collection-create'
@@ -994,7 +994,7 @@ describe('ItemFormView', () => {
     expect(push).not.toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
 
-  // ---- Review fix: matrix baseline must be re-synced after the create-path flush, or the
+  // ---- Matrix baseline must be re-synced after the create-path flush, or the
   // unified leave guard fires a bogus "Unsaved changes" prompt right after a successful/failed
   // create-and-flush, which can trap the user on the create form (risking a duplicate role). ----
 

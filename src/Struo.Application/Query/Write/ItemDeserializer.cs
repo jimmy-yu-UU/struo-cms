@@ -10,7 +10,7 @@ namespace Struo.Application.Query;
 /// <summary>
 /// Binds a request body into a parent entity and runs the full write-side field validation /
 /// normalization pipeline (RichText sanitize, Required, MaxLength, and the per-interface validator
-/// phases). Extracted verbatim from <see cref="ItemService"/> (ARC-1); the phase ORDER is observable
+/// phases). Extracted verbatim from <see cref="ItemService"/>; the phase ORDER is observable
 /// (exception precedence) and preserved exactly.
 /// </summary>
 public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSource m2mSource, RichTextCleaner richText)
@@ -84,7 +84,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             }
         }
 
-        // strip system/read-only fields (audit AOP / identity own them); only nullable props can be nulled
+        // strip system/read-only fields (audit columns and identity are owned by AOP); only nullable props can be nulled
         foreach (var field in meta.Fields.Where(f => f.IsSystem || f.ReadOnly))
         {
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
@@ -114,7 +114,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             FieldValueRules.RequireParent(field.Name, value);
         }
 
-        // Max length — CMS-layer limit (7g.5); the DB column width is SqlSugar's separate concern.
+        // Max length — a CMS-layer limit; the DB column width is SqlSugar's separate concern.
         // Runs after RichText sanitization so the stored value is what gets measured.
         foreach (var field in meta.Fields.Where(f => f.MaxLength is > 0 && !f.Translatable))
         {

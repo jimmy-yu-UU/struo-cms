@@ -6,7 +6,7 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// The item read/write use-case surface the HTTP layer depends on (ARC-6). Extracted verbatim from
+/// The item read/write use-case surface the HTTP layer depends on. Extracted verbatim from
 /// <see cref="ItemService"/> so controllers bind to this seam rather than the concrete service,
 /// keeping the Api layer testable in isolation and free of Infrastructure wiring. The sole
 /// implementation is <see cref="ItemService"/>; GraphQL keeps its own <c>IGraphQlDataSource</c> seam.

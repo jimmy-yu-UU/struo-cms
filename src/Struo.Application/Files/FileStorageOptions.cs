@@ -38,7 +38,7 @@ public sealed class FileStorageOptions
         public string[] AllowedFormats { get; set; } = ["webp", "jpeg", "png", "avif"];
         public int DefaultQuality { get; set; } = 82;
 
-        // Root directory for cached transformed-image variants (P2.3's IImageVariantCache). Relative
+        // Root directory for cached transformed-image variants (IImageVariantCache). Relative
         // paths are resolved against the app's content root (IHostEnvironment.ContentRootPath) at DI
         // registration time, never the process CWD — a relative path resolved against CWD is a known
         // footgun for this codebase once the process is launched from a different working directory

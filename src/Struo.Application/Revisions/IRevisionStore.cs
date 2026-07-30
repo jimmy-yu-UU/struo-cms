@@ -7,7 +7,7 @@ public sealed record RevisionInfo(long RevisionNumber, string Operation, DateTim
 public sealed record RevisionRecord(long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy, string Snapshot);
 
 /// <summary>
-/// Storage for per-item revision snapshots (Phase 9c). Backed by the framework `revisions` table.
+/// Storage for per-item revision snapshots. Backed by the framework `revisions` table.
 /// Implementations run on the request-scoped SqlSugar client, so <see cref="CaptureAsync"/> called
 /// inside <c>ItemService</c>'s write transaction commits atomically with the write it describes.
 /// </summary>
@@ -23,12 +23,12 @@ public interface IRevisionStore
     Task<RevisionRecord?> GetAsync(string collection, string itemId, long revisionNumber, CancellationToken ct = default);
 
     /// <summary>
-    /// Deletes every revision row for (collection, itemId) — called by purge (DB-1/DB-2, Task 5) so a
+    /// Deletes every revision row for (collection, itemId) — called by purge so a
     /// permanently-deleted item does not leave orphaned, un-RBAC'd snapshot history behind. The
     /// default THROWS rather than silently no-ops: an implementation that forgot to override would
     /// otherwise leave orphaned snapshot history on purge with no failure signal — the exact defect
-    /// class DB-1/DB-2 exist to eliminate. (It still keeps pre-existing test doubles compiling; a
-    /// double whose collection is actually purged must override it explicitly.)
+    /// class this default exists to eliminate. It still keeps pre-existing test doubles compiling; a
+    /// double whose collection is actually purged must override it explicitly.
     /// </summary>
     Task DeleteForItemAsync(string collection, string itemId, CancellationToken ct = default) =>
         throw new NotSupportedException(

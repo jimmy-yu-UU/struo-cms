@@ -106,7 +106,7 @@ describe('buildItemPayload relations', () => {
     expect(payload.tags).toEqual(['t1', 't2'])
     expect(payload).not.toHaveProperty('comments')
   })
-  it('echoes version on update but not on create (D2)', () => {
+  it('echoes version on update but not on create', () => {
     const model: FormModel = { shared: { status: 'draft' }, translations: {}, relations: {}, version: 3 }
     const upd = buildItemPayload(meta, model, locales, 'update')
     expect(upd.version).toBe(3)

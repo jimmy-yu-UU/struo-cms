@@ -6,7 +6,7 @@ export type MediaSort = 'newest' | 'name'
 // image/ and video/ each map to a single contentType starts-with condition (backend
 // QueryOperator.StartsWith, REST token `_starts_with`; contentType is a non-hidden [CmsField]
 // so QueryValidator allows it). "Documents" is intentionally omitted — application/* + text/*
-// has no clean single-condition mapping and there is no NotStartsWith operator (see spec §0).
+// has no clean single-condition mapping and the query DSL has no NotStartsWith operator.
 export function mediaTypeFilter(type: MediaType): FilterSpec | undefined {
   if (type === 'image') return { contentType: { op: '_starts_with', value: 'image/' } }
   if (type === 'video') return { contentType: { op: '_starts_with', value: 'video/' } }

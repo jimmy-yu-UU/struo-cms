@@ -3,8 +3,9 @@ using SqlSugar;
 namespace Struo.Sample.Blog;
 
 [SugarTable("article_tags")]
-// DB-5: CodeFirst parity with db/migrations/009-hot-path-indexes.sql — M2M junction FKs, both
-// directions (RelationExpander expansion + sync-on-write).
+// CodeFirst-declared secondary indexes on both M2M junction FKs, both directions (RelationExpander
+// expansion + sync-on-write), created by InitTables in dev; a downstream fork that keeps this
+// entity should add the equivalent indexes to its own migrations.
 [SugarIndex("ix_article_tags_articleid", nameof(ArticleId), OrderByType.Asc)]
 [SugarIndex("ix_article_tags_tagid", nameof(TagId), OrderByType.Asc)]
 public sealed class ArticleTag

@@ -30,7 +30,7 @@ public class ConfigEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Config_is_anonymous_and_returns_defaults()
     {
-        // TEST-8: self-contained — don't rely on another test's teardown to leave a clean singleton
+        // Self-contained — don't rely on another test's teardown to leave a clean singleton
         // row (and evicted cache) behind; clear it here too.
         await ClearAsync();
         var client = _factory.CreateClient(); // no auth
@@ -81,7 +81,7 @@ public class ConfigEndpointTests(ApiFactory factory)
         doc.RootElement.GetProperty("data").GetProperty("oidcEnabled").GetBoolean().Should().BeTrue();
     }
 
-    /// <summary>TEST-2 (audit batch 4): <see cref="ISiteSettingsStore"/> itself does not validate
+    /// <summary><see cref="ISiteSettingsStore"/> itself does not validate
     /// blankness — a future writer/seeding path could persist a blank BrandName — so
     /// <see cref="ConfigController"/> must fall back to the appsettings default rather than surface
     /// the blank value.</summary>

@@ -28,7 +28,7 @@ const logoFileId = ref<string | null>(null)
 const saving = ref(false)
 
 // Baseline snapshot of the editable fields, captured on load and re-captured on every successful
-// save; the leave guard below compares against it (spec §4.3/§5, mirrors ItemFormView's FE-5
+// save; the leave guard below compares against it (mirrors ItemFormView's
 // dirty guard). A plain JSON.stringify is enough here — the settings model is a flat pair of
 // primitives, not the nested FormModel that lib/formDirty.ts's snapshotModel/isDirty target.
 function snapshot(): string {
@@ -69,7 +69,7 @@ async function save(): Promise<void> {
   }
 }
 
-// Mirrors ItemFormView's FE-5 guardLeave: warn before navigating away (SPA route change) with
+// Mirrors ItemFormView's guardLeave: warn before navigating away (SPA route change) with
 // unsaved edits, only while an admin (the only role that can actually edit these fields). Reuses
 // the same unsavedConfirm() copy as the item form rather than duplicating an i18n key.
 function guardLeave(): Promise<boolean> {
@@ -82,14 +82,14 @@ function guardLeave(): Promise<boolean> {
       accept: () => resolve(true),
       reject: () => resolve(false),
       // Esc / backdrop / X dismiss fires neither accept nor reject; onHide always fires on
-      // dismissal, so treat it as "cancel navigation, stay here" (see ItemFormView fold-in c).
+      // dismissal, so treat it as "cancel navigation, stay here" (see ItemFormView's guardLeave).
       onHide: () => resolve(false),
     })
   })
 }
 onBeforeRouteLeave(() => guardLeave())
 
-// Mirrors ItemFormView's FE-5 onBeforeUnload guard: warn before a full browser unload (tab close /
+// Mirrors ItemFormView's onBeforeUnload guard: warn before a full browser unload (tab close /
 // reload / hard navigation) with unsaved edits — guardLeave above only catches SPA route changes.
 // The browser shows its own native dialog; preventDefault is all that is needed.
 function onBeforeUnload(e: BeforeUnloadEvent): void {

@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// SEC-8: <c>/api/schema</c> exposed the full content model (every collection, every field) to
+/// <c>/api/schema</c> exposed the full content model (every collection, every field) to
 /// anonymous callers — a reconnaissance target, and inconsistent with production disabling GraphQL
 /// introspection. The frontend only ever calls this endpoint from post-login-only code paths
 /// (AppShell.onMounted, CollectionListView, ItemFormView, MediaDetailDialog, RelationPicker/RelatedList),
@@ -66,8 +66,8 @@ public sealed class SchemaControllerTests
         using var doc = JsonDocument.Parse(body);
         var data = doc.RootElement.GetProperty("data");
         data.GetProperty("name").GetString().Should().Be("article");
-        // SchemaService.WithoutHiddenFields still applies for authenticated callers -- SEC-8 only
-        // changes anonymous access, it doesn't relax the pre-existing Hidden-field guarantee: the
+        // SchemaService.WithoutHiddenFields still applies for authenticated callers -- gating schema
+        // access only changes anonymous access, it doesn't relax the pre-existing Hidden-field guarantee: the
         // Hidden top-level field (internalNote) and the Hidden+Translatable field (internalSlug) must
         // still be absent from the "fields" array.
         var fieldNames = data.GetProperty("fields").EnumerateArray()
@@ -75,9 +75,9 @@ public sealed class SchemaControllerTests
         fieldNames.Should().NotContain("internalNote");
         fieldNames.Should().NotContain("internalSlug");
 
-        // SEC-14: TranslationMetadata.Fields is a second, separate raw sidecar field-name list under
+        // TranslationMetadata.Fields is a second, separate raw sidecar field-name list under
         // "translation.fields" -- it must be filtered the same way, or the Hidden+Translatable field's
-        // NAME (internalSlug) still leaked here even after SEC-13 redacted its VALUE.
+        // NAME (internalSlug) still leaked here even after the value redaction step.
         var translationFieldNames = data.GetProperty("translation").GetProperty("fields")
             .EnumerateArray().Select(f => f.GetString()).ToList();
         translationFieldNames.Should().NotContain("internalSlug");

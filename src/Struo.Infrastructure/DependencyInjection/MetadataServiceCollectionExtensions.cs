@@ -19,7 +19,7 @@ public static class MetadataServiceCollectionExtensions
             .Distinct().ToArray();
 
         // Eager scan at registration -> immutable singleton. No per-request reflection.
-        // SafeGetTypes tolerates an assembly with an unresolvable type (audit A4).
+        // SafeGetTypes tolerates an assembly with an unresolvable type.
         var allTypes = allAssemblies.SelectMany(MetadataScanner.SafeGetTypes).ToList();
 
         var collections = MetadataScanner.Scan(allAssemblies);
@@ -54,6 +54,15 @@ public static class MetadataServiceCollectionExtensions
     /// <c>Struo:ContentAssemblies</c> in configuration. A named assembly that cannot be loaded is a
     /// fail-fast <see cref="MetadataException"/> — never silently skipped.
     /// </summary>
+    /// <remarks>
+    /// Reads <paramref name="config"/> synchronously at registration time — before the host's
+    /// <c>WebApplicationBuilder.Build()</c> runs — so only configuration sources already installed on
+    /// the passed <see cref="IConfiguration"/> are visible to this scan. Sources spliced in later, such
+    /// as <c>WebApplicationFactory.ConfigureAppConfiguration</c> or <c>IWebHostBuilder.UseSetting</c>,
+    /// are NOT visible here. Integration tests that need to select a content assembly must supply it
+    /// through an environment variable instead (e.g. <c>Struo__ContentAssemblies__0</c>), set before the
+    /// host process starts.
+    /// </remarks>
     public static IServiceCollection AddStruoMetadata(
         this IServiceCollection services, IConfiguration config, params Assembly[] hostAssemblies)
     {

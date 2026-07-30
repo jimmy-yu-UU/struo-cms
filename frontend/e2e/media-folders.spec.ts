@@ -1,20 +1,20 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// Batch C (media-library folders) live gate. Covers the 12-item admin-UX backlog's #5 (folder
-// browsing) + #7 (filename -> Title autofill, already implemented server-side by
-// Struo.Infrastructure.Files.FileService.UploadAsync) + #6 (no "open in full editor" escape hatch
-// on the file detail dialog) + the C-1 data-loss regression: MediaDetailDialog.load() must fetch
+// Media-library folders live gate. Covers folder browsing, filename -> Title autofill (already
+// implemented server-side by Struo.Infrastructure.Files.FileService.UploadAsync), the absence of
+// an "open in full editor" escape hatch on the file detail dialog, and a data-loss regression:
+// MediaDetailDialog.load() must fetch
 // the item with `deep=folder` so its Folder TreeSelect reflects the file's REAL folder before any
 // Save -- before that fix, `folderId` came back `undefined` on every load, so any Save (even one
 // that only touched Alt text) silently sent `folderId: null` and unfiled the file.
 //
 // See media.spec.ts for the shared upload/login/mdField conventions this spec reuses verbatim.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 // Smallest valid 1x1 transparent PNG -- see media.spec.ts for why this is sufficient for
 // ImageDimensionReader.TryRead's PNG() header check.
@@ -177,7 +177,7 @@ test.afterEach(async ({ page }) => {
   }
 })
 
-test('media folders: create, upload with title autofill, folder survives a save (C-1), move to Uncategorized, no full-editor escape hatch, and the non-empty delete guard', async ({ page }) => {
+test('media folders: create, upload with title autofill, folder survives a save, move to Uncategorized, no full-editor escape hatch, and the non-empty delete guard', async ({ page }) => {
   await login(page)
   await page.goto('/media')
   await expect(page).toHaveURL(/\/media$/)
@@ -186,7 +186,7 @@ test('media folders: create, upload with title autofill, folder survives a save 
   const folderName = `C-${STAMP}`
   createdFolderId = await createFolder(page, folderName)
 
-  // 2. Enter it, upload a file, and confirm #7 (filename -> Title autofill) on the real backend.
+  // 2. Enter it, upload a file, and confirm filename -> Title autofill on the real backend.
   await enterFolder(page, folderName)
   const fileBase = `photo-${STAMP}`
   const fileName = `${fileBase}.png`
@@ -196,7 +196,7 @@ test('media folders: create, upload with title autofill, folder survives a save 
   await openDetail(page, fileName)
   await expect(mdField(page, 'Title').locator('input')).toHaveValue(fileBase)
 
-  // 3. C-1 regression guard: the Folder TreeSelect must already show the REAL folder (not
+  // 3. Regression guard: the Folder TreeSelect must already show the REAL folder (not
   // "Uncategorized") on this very first load, before any Save has happened.
   await expect(mdField(page, 'Folder').getByRole('combobox')).toHaveAccessibleName(`Folder ${folderName}`)
 
@@ -215,7 +215,7 @@ test('media folders: create, upload with title autofill, folder survives a save 
   await expect(mdField(page, 'Folder').getByRole('combobox')).toHaveAccessibleName(`Folder ${folderName}`)
   await expect(mdField(page, 'Alt text').locator('input')).toHaveValue(alt)
 
-  // 5. #6: no "open in full editor" escape hatch anywhere in the detail dialog.
+  // 5. No "open in full editor" escape hatch anywhere in the detail dialog.
   await expect(detailDialog(page).getByRole('button', { name: /full editor/i })).toHaveCount(0)
   await expect(detailDialog(page).getByRole('link', { name: /full editor/i })).toHaveCount(0)
 

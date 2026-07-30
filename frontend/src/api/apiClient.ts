@@ -1,6 +1,6 @@
 export type ValidationDetail = { field: string; message: string }
 
-// The shape of the server's error envelope body (9a).
+// The shape of the server's error envelope body.
 export type ApiErrorBody = {
   code?: string
   message: string

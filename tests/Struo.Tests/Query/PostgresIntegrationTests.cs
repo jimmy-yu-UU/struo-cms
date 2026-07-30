@@ -15,11 +15,11 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Opt-in PostgreSQL integration tests (audit D4). These run against a REAL Postgres only when a
+/// Opt-in PostgreSQL integration tests. These run against a REAL Postgres only when a
 /// connection is configured — via the <c>STRUO_TEST_PG_CONNECTION</c> env var, or the Struo.Api
 /// <c>Testing:PostgresConnection</c> appsettings key (Development overrides base); otherwise every
 /// test is a no-op pass. The point is to catch the "SQLite-green ≠ Postgres-correct" class of bug
-/// (uuid vs text casts, bigint, the D2 compare-and-swap) BEFORE it reaches a live deploy — the
+/// (uuid vs text casts, bigint, the optimistic-concurrency compare-and-swap) BEFORE it reaches a live deploy — the
 /// project's live-gate discipline, automated as a suite you can run locally before merging.
 ///
 /// Configure once in appsettings.Development.json (same place as the dev DB):
@@ -74,7 +74,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     private IItemRepository BuildRepo() => BuildRepoWithGraph().Repo;
 
     // Same wiring as BuildRepo(), but also returns the RelationshipGraph/filter-resolver/options
-    // needed to drive RelationExpander directly (Task P1.2: self-relation N+1 check on real PG).
+    // needed to drive RelationExpander directly (self-relation N+1 check on real PG).
     private (IItemRepository Repo, RelationshipGraph Graph, IRelationFilterResolver FilterResolver, StruoQueryOptions Options)
         BuildRepoWithGraph()
     {
@@ -123,7 +123,7 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     public void Dispose() => _db?.Dispose();
 
-    // D5 on real Postgres: non-page-aligned offset returns the exact window.
+    // On real Postgres: non-page-aligned offset returns the exact window.
     [Fact]
     public async Task Offset_window_is_exact_on_postgres()
     {
@@ -138,7 +138,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         result.Rows.Select(r => ((Category)r).Name).Should().Equal("C1", "C2");
     }
 
-    // D2 on real Postgres: compare-and-swap (WHERE id AND version=expected) rejects a stale update.
+    // On real Postgres: compare-and-swap (WHERE id AND version=expected) rejects a stale update.
     [Fact]
     public async Task Stale_version_update_conflicts_on_postgres()
     {
@@ -176,7 +176,7 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     private static object? ReadProp(object e, string name) => e.GetType().GetProperty(name, ReadPropFlags)?.GetValue(e);
 
-    // Task P1.2 (non-SQLite leg): category.parent (self-relation M2O) 6-level ancestor chain on
+    // Non-SQLite leg: category.parent (self-relation M2O) 6-level ancestor chain on
     // REAL Postgres — mirrors DeepNestingBatchingTests' SQLite batching invariant (one WhereIn
     // query per level, linear in depth) but drives SqlSugarItemRepository against Postgres, where
     // the Guid FK (uuid column) binding is the PG-specific risk (same concern as

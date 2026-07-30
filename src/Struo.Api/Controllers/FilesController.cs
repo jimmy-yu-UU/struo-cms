@@ -22,7 +22,7 @@ public sealed class FilesController(
     // pipeline rather than the generic ItemService, so RBAC must be enforced here too — otherwise any
     // authenticated caller (incl. a role-less SSO user) could upload or delete any file, bypassing the
     // per-collection grants that govern every other collection. That RBAC policy lives in
-    // IFileAccessPolicy (BL-1) so it isn't duplicated with PermissionResolutionMiddleware.
+    // IFileAccessPolicy so it isn't duplicated with PermissionResolutionMiddleware.
     [HttpPost]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Upload(CancellationToken ct)
@@ -59,7 +59,7 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // SEC-5: a non-published file requires a genuine per-collection read grant, not merely a
+        // A non-published file requires a genuine per-collection read grant, not merely a
         // logged-in session (a role-less JIT/SSO user could otherwise fetch any draft). 404 (not 403)
         // so existence isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
@@ -80,11 +80,11 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // SEC-5 (see Get above): non-published content is gated on CanRead("file"). 404 so existence
-        // isn't leaked.
+        // Same gate as Get above: a non-published file requires a genuine per-collection read grant,
+        // not merely a logged-in session. 404 (not 403) so existence isn't leaked.
         if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
 
-        // P2.4: on-the-fly image transform. Only when the caller actually asked for one (at least one
+        // On-the-fly image transform. Only when the caller actually asked for one (at least one
         // of width/height/format present), the content behind this row is an image, and the feature is
         // enabled. Otherwise fall straight through to the existing passthrough behavior below —
         // unchanged for every non-image file and for image requests with no transform params.
@@ -162,7 +162,7 @@ public sealed class FilesController(
         return File(stream, row.ContentType, fileDownloadName: row.FileName);
     }
 
-    // #12: default DELETE is now trash (recoverable); ?purge=true is the permanent hard delete
+    // Default DELETE is trash (recoverable); ?purge=true is the permanent hard delete
     // (FileService.DeleteAsync — row + sidecar translations + blob + any site_settings.logofileid
     // reference, same as before this change).
     [HttpDelete("{id:guid}")]

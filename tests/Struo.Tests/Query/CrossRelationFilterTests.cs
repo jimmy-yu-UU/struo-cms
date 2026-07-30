@@ -7,8 +7,8 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Filter_m2m_tags_name_exists was deleted in Phase 5.5 (Tag entity removed) and
-// restored below as Filter_m2m_articles_by_tag_name in Phase 8c.2 (Task 3 de-risk).
+// NOTE: Filter_m2m_tags_name_exists was deleted (Tag entity removed) and
+// restored below as Filter_m2m_articles_by_tag_name (de-risk).
 
 [Collection("ApiIntegration")]
 public class CrossRelationFilterTests(ApiFactory factory)
@@ -101,7 +101,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     public async Task Filter_o2m_category_by_article_id()
     {
         // NOTE: filtering an o2m relation by the child's translatable `title` is locale-aware
-        // relation querying (Task 5). Here we filter the o2m relation by the child's
+        // relation querying. Here we filter the o2m relation by the child's
         // non-translatable own-collection field (id) to exercise the same two-phase resolution.
         var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "category", new { name = "O2MFilterCat" });
@@ -169,7 +169,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
     [Fact]
     public async Task Filter_m2m_articles_by_tag_name()
     {
-        // Restores the Phase-5.5-deleted M2M cross-relation filter coverage now that Tag exists again.
+        // M2M cross-relation filter coverage, restored now that Tag exists again.
         // Proves RelationFilterResolver's M2M hop (junction targetFk -> parentFk) end-to-end on SQLite:
         // "articles that have AT LEAST ONE tag named X" (ANY/EXISTS).
         var c = await _factory.CreateAuthenticatedClientAsync();

@@ -50,7 +50,7 @@ public sealed class SettingsController(
 
         await settings.UpsertAsync(name, body.LogoFileId, currentUser.GetCurrentUserId(), ct);
 
-        // SEC-7: evict the /api/config cache immediately so this save is reflected right away
+        // Evict the /api/config cache immediately so this save is reflected right away
         // rather than waiting out ConfigController's 30s TTL.
         cache.Remove(ConfigController.CacheKey);
 

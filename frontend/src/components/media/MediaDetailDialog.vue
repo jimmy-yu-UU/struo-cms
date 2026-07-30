@@ -131,9 +131,9 @@ async function onSave(): Promise<void> {
     emit('close')
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
-      // Optimistic-lock clash (D2): someone else changed the item since we loaded it. Recover by
+      // Optimistic-lock clash: someone else changed the item since we loaded it. Recover by
       // refreshing only the concurrency token, preserving the user's in-progress edits, so the
-      // next Save overwrites with the current version instead of 409-ing forever (FE-18).
+      // next Save overwrites with the current version instead of 409-ing forever.
       conflict.value = true
       await recoverFromConflict()
     } else {
@@ -179,7 +179,7 @@ async function onCopyUrl(): Promise<void> {
     await navigator.clipboard.writeText(fileUrl.value)
     toast.add({ severity: 'success', summary: t('media.urlCopied'), life: 2000 })
   } catch {
-    // Clipboard unavailable (e.g. insecure context, permission denied) — surface it (SEC-12)
+    // Clipboard unavailable (e.g. insecure context, permission denied) — surface it
     // rather than silently doing nothing, so the user knows the copy did not happen.
     toast.add({ severity: 'error', summary: t('media.copyFailed'), life: 3500 })
   }

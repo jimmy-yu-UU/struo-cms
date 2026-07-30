@@ -1,7 +1,7 @@
 import type { FieldMeta } from '../types/schema'
 
 /**
- * FE-R5 translation-completeness dot semantics (option a): a locale "has content"
+ * Translation-completeness dot semantics: a locale "has content"
  * when at least one of its translatable fields holds a non-empty value. Pure —
  * computed from the in-memory form model, no backend aggregate. NOT a validity or
  * required-field check.

@@ -120,7 +120,7 @@ describe('ApiClient', () => {
     expect(err.message).toBe('nope')
   })
 
-  // M1: mutations carry the CSRF header; safe GETs do not.
+  // Mutations carry the CSRF header; safe GETs do not.
   it('attaches the CSRF header on mutations', async () => {
     const f = mockFetch(200, { success: true, data: {} })
     vi.stubGlobal('fetch', f)

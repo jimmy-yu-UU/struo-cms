@@ -104,7 +104,7 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         }
 
         // relations (single-level value pre-nested by ItemService deep expansion).
-        // To-many (O2M/M2M) list fields gain nested-list args (8c.3b); M2O stays a bare object field.
+        // To-many (O2M/M2M) list fields gain nested-list args; M2O stays a bare object field.
         foreach (var rel in meta.Relations)
         {
             var target = SchemaTypeMapper.TypeName(rel.TargetCollection);
@@ -264,14 +264,14 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
 
     // Shared by create/update inputs: writable own-fields (scalars, File/Image, Files, multi-value,
     // Json/KeyValue), Tags, Repeater, and M2M foreign-key arrays — all nullable. Translatable own-fields
-    // are excluded (8b.2b typed translations input).
+    // are excluded — translations use the dedicated typed translations input instead.
     private void AddWritableFields(InputObjectTypeConfiguration config, CollectionMetadata meta)
     {
         var desc = registry.Get(meta.Name);
         foreach (var f in meta.Fields)
         {
             if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
-            if (f.Translatable) continue; // -> 8b.2b
+            if (f.Translatable) continue; // handled by the typed translations input below
 
             string? sdl = f.Interface switch
             {
@@ -293,7 +293,7 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
                 config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse("[ID!]")));
         }
 
-        // Typed translations input (8b.2b) — only when the collection has a translation sidecar.
+        // Typed translations input — only when the collection has a translation sidecar.
         // Translatable own-fields stay excluded above (`if (f.Translatable) continue;`); they are
         // carried here instead.
         if (meta.Translation is not null)

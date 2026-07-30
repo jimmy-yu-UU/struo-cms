@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// SEC-5: non-published file content/metadata must not be readable merely because the caller is
+// Non-published file content/metadata must not be readable merely because the caller is
 // authenticated — a genuine per-collection CanRead("file") grant is required, the same gate every
 // other collection enforces. A role-less JIT/SSO user could otherwise fetch any draft file. 404
 // (not 403) so the endpoint does not leak the existence of unpublished assets.

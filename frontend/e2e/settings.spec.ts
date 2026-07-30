@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
-// Audit 2026-07-21 Batch 4 (TEST-6) live gate: Site Settings branding editor (/settings,
-// super-admin only) — save-then-persist, and the FE-5-style unsaved-changes leave guard
+// Live gate: Site Settings branding editor (/settings, super-admin only) — save-then-persist,
+// and the same unsaved-changes leave guard pattern as ItemFormView
 // (SettingsView.vue's guardLeave() reuses ItemFormView's lib/formDirty.ts unsavedConfirm copy).
 //
 // CRITICAL: `site_settings` is a SINGLETON row shared by the whole dev DB — every write here
@@ -10,11 +10,11 @@ import { type Page } from '@playwright/test'
 // afterEach unconditionally PUTs the ORIGINAL branding back via the authenticated API so this
 // spec never leaks a stamped brand name into the shared environment.
 
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@struo.local'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'change-me-please'
+const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
+const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
-// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5080'
+// See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
 
 const GUARD_HEADER = 'Unsaved changes'
 
@@ -62,7 +62,7 @@ async function apiGetBranding(page: Page): Promise<{ brandName: string; brandLog
   // Unwrap the API envelope: EnvelopeResultFilter wraps every response as { success, data:{...} }.
   // Reading res.json() directly yielded { brandName: undefined }, which corrupted captureOriginal()
   // and made afterEach's restore PUT a blank name (400, swallowed) — leaking the stamped brand name
-  // into the shared singleton row. (Review finding, batch 4.)
+  // into the shared singleton row.
   const body = await res.json()
   return body.data
 }

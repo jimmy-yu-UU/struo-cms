@@ -204,7 +204,7 @@ public class ItemServicePermissionTests : IDisposable
         await act.Should().NotThrowAsync<PermissionDeniedException>();
     }
 
-    // D2: optimistic concurrency. version starts at 0 and increments on each successful update.
+    // Optimistic concurrency. version starts at 0 and increments on each successful update.
     [Fact]
     public async Task Version_increments_on_update()
     {
@@ -219,7 +219,7 @@ public class ItemServicePermissionTests : IDisposable
         updated!["version"].Should().Be(1L);
     }
 
-    // D2: a stale version (someone else already updated) is rejected with a 409-mapped conflict.
+    // A stale version (someone else already updated) is rejected with a 409-mapped conflict.
     [Fact]
     public async Task Stale_version_update_throws_conflict()
     {
@@ -237,7 +237,7 @@ public class ItemServicePermissionTests : IDisposable
         await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 
-    // D2: an update that omits version stays backward compatible (no conflict, still increments).
+    // An update that omits version stays backward compatible (no conflict, still increments).
     [Fact]
     public async Task Update_without_version_still_succeeds_and_increments()
     {

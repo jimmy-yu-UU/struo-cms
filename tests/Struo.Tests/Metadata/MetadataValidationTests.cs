@@ -94,7 +94,7 @@ namespace Struo.Tests.Metadata
             field.Options!.Should().ContainSingle(o => o.Value == "archived" && o.Label == "archived");
         }
 
-        // 7g+ slice 4 Task 2: Repeater scan-time fail-fast guards.
+        // Repeater scan-time fail-fast guards.
 
         [CmsCollection("RepeaterNotAList")]
         private sealed class RepeaterNotAList

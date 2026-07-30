@@ -14,7 +14,7 @@ public static class OidcWiring
 {
     public static IServiceCollection AddStruoOidc(this IServiceCollection services, IConfiguration config)
     {
-        // ARC-5: fail fast at boot. When OIDC is disabled validation always passes; when enabled it
+        // Fail fast at boot. When OIDC is disabled validation always passes; when enabled it
         // requires Authority/ClientId/ClientSecret to be present (a half-configured external login
         // would otherwise only fail at the first sign-in attempt).
         services.AddOptions<OidcOptions>()

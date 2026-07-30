@@ -6,7 +6,7 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Produces the externally-safe view of a revision snapshot (SEC-2). <see cref="RevisionSnapshotBuilder"/>
+/// Produces the externally-safe view of a revision snapshot. <see cref="RevisionSnapshotBuilder"/>
 /// deliberately captures every field of an item — including ones marked
 /// <see cref="Struo.Domain.Metadata.Models.FieldMetadata.Hidden"/> — because a revert must be able to
 /// restore the full item state (see <c>ItemService.RevertAsync</c>, which reads the raw, unredacted

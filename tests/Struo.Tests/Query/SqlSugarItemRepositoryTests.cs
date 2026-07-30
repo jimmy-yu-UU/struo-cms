@@ -48,7 +48,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    // D5: a non-page-aligned offset returns the exact window (offset is absolute, not a page index).
+    // A non-page-aligned offset returns the exact window (offset is absolute, not a page index).
     [Fact]
     public async Task Query_offset_returns_exact_window()
     {
@@ -64,7 +64,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         result.Rows.Select(r => ((Category)r).Name).Should().Equal("C1", "C2");
     }
 
-    // D1: aggregate-write atomicity.
+    // Aggregate-write atomicity.
     [Fact]
     public async Task InTransaction_rolls_back_on_throw()
     {
@@ -87,7 +87,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         (await _db.Queryable<Category>().CountAsync()).Should().Be(1);
     }
 
-    // D1: nesting-safety — an inner InTransactionAsync must join the outer one, not commit
+    // Nesting-safety — an inner InTransactionAsync must join the outer one, not commit
     // independently, so an outer rollback also undoes the inner write.
     [Fact]
     public async Task Nested_InTransaction_rolls_back_with_outer()
@@ -155,7 +155,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         (await _repo.GetByIdAsync("article", created.Id.ToString())).Should().BeNull();
     }
 
-    // CS-2: a malformed id must surface as the mappable QueryException (-> HTTP 400), not a raw
+    // A malformed id must surface as the mappable QueryException (-> HTTP 400), not a raw
     // FormatException (which the exception handler cannot map and masks as a 500).
     [Fact]
     public async Task GetByIdAsync_with_malformed_id_throws_QueryException_not_FormatException()
@@ -171,7 +171,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         await act.Should().ThrowAsync<QueryException>();
     }
 
-    // CS-3: the by-id read path must forward the CancellationToken to the ORM query so an
+    // The by-id read path must forward the CancellationToken to the ORM query so an
     // already-cancelled request stops at the DB call instead of running to completion.
     [Fact]
     public async Task GetByIdAsync_honors_cancellation()
@@ -185,7 +185,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
-    // CS-3: the create path must forward the CancellationToken to the ORM insert.
+    // The create path must forward the CancellationToken to the ORM insert.
     [Fact]
     public async Task CreateAsync_honors_cancellation()
     {
@@ -200,7 +200,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         (await _db.Queryable<Article>().CountAsync(CancellationToken.None)).Should().Be(0);
     }
 
-    // CS-3 review fix: identity-PK collections (Language: long IsIdentity) get their id from the
+    // Identity-PK collections (Language: long IsIdentity) get their id from the
     // DB, so the create path must back-populate it on the returned entity — ExecuteCommandAsync
     // alone would leave Id=0 and break the create response / GraphQL re-read.
     [Fact]
@@ -213,7 +213,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
         (await _repo.GetByIdAsync("language", created.Id.ToString())).Should().NotBeNull();
     }
 
-    // CS-3 review fix: the identity-PK create branch calls ExecuteReturnEntityAsync (no ct overload
+    // The identity-PK create branch calls ExecuteReturnEntityAsync (no ct overload
     // in SqlSugarCore 5.1.4.215), so it must observe an already-cancelled token pre-flight —
     // symmetric with the Guid path's ExecuteCommandAsync(ct) semantics.
     [Fact]

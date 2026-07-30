@@ -2,7 +2,7 @@
 
 StruoCMS is licensed under the **MIT License**. This file lists third-party components used by the
 on-the-fly image-transform feature (`GET /api/files/{id}/content?width=&height=&format=&fit=&quality=`,
-see `docs/guide/05-image-transforms.md`) and their license terms. Including these components does
+see `docs/guide/en/11-files-and-media.md`) and their license terms. Including these components does
 **not** change StruoCMS's own license — StruoCMS remains MIT.
 
 ## libvips

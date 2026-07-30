@@ -16,7 +16,7 @@ public class LanguageCollectionTests(ApiFactory factory)
     [Fact]
     public async Task Language_collection_is_registered_in_schema()
     {
-        var c = await _factory.CreateAuthenticatedClientAsync(); // SEC-8: /api/schema now requires auth
+        var c = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
         var resp = await c.GetAsync("/api/schema/language");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields")

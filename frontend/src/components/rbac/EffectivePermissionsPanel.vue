@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type EffectivePermissions } from '../../api/rbacApi'
 
-// 問題 4: read-only preview of a user's merged grants, fed by the same resolver the backend
+// Read-only preview of a user's merged grants, fed by the same resolver the backend
 // authorizes with. When roleIds is passed, the panel follows the CURRENT (possibly unsaved)
 // TagSelect selection live via the backend's `?roles=` hypothetical query, debounced so rapid
 // toggling doesn't fire a request per click.

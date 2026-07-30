@@ -1,6 +1,6 @@
 import type { FormModel } from '../types/itemForm'
 
-// Dirty-state tracking for item forms (FE-5).
+// Dirty-state tracking for item forms.
 //
 // A form is "dirty" when the user's editable content differs from the last
 // committed baseline. We snapshot the model as a deterministic JSON string and
@@ -9,7 +9,7 @@ import type { FormModel } from '../types/itemForm'
 //
 // `version` is deliberately excluded: it is an optimistic-concurrency token, not
 // user content. During 409-conflict recovery the token is refreshed in place, and
-// that refresh must never by itself flag the form as dirty (FE-4 interplay).
+// that refresh must never by itself flag the form as dirty.
 export function snapshotModel(model: FormModel): string {
   return JSON.stringify({
     shared: model.shared,
@@ -23,7 +23,7 @@ export function isDirty(baseline: string, model: FormModel): boolean {
 }
 
 // Confirm copy for the leave guard — mirrors the pure-helper convention in
-// deleteAction.ts. i18n via an injected translator (FE-16); callers pass their
+// deleteAction.ts. i18n via an injected translator; callers pass their
 // own `t` from useI18n() so the copy renders in the active UI locale.
 type Translate = (key: string) => string
 

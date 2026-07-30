@@ -28,7 +28,7 @@ function uploaded(f: FileRow): string {
     </thead>
     <tbody>
       <!--
-        FE-25: a table row is not a button, so it must not claim `role="button"` (that gave
+        A table row is not a button, so it must not claim `role="button"` (that gave
         screen readers contradictory roles). Table semantics stay intact on the <tr>; the real,
         natively keyboard-activatable <button> in the name cell (mirrors MediaGrid's tile
         buttons) is the accessible primary action. The row keeps its own @click purely as a

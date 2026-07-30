@@ -44,9 +44,9 @@ public sealed class RelationExpander(
         Func<object, object> parentId, Func<object, string, object?> readProp,
         string? locale = null, CancellationToken ct = default)
     {
-        // filterResolver is consumed for nested-filter push-down (Task 6, O2M/M2M target-side
-        // rewrite) and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing
-        // (Task 7, ApplyListArgs). Guarded here too so a null DI registration fails fast.
+        // filterResolver is consumed for nested-filter push-down (O2M/M2M target-side rewrite)
+        // and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
+        // ApplyListArgs below). Guarded here too so a null DI registration fails fast.
         ArgumentNullException.ThrowIfNull(filterResolver);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -173,7 +173,7 @@ public sealed class RelationExpander(
     /// Applies the nested-list <c>sort</c> (own-field, multi-key, asc/desc) then <c>offset</c>/<c>limit</c>
     /// to a single parent's group of target entities, in memory. When <c>Sort</c> is null the caller's
     /// existing order is preserved (O2M: fetch order; M2M: junction order). An omitted <c>Limit</c>
-    /// returns all rows (8c.3a back-compat); an explicit <c>Limit</c> is clamped to
+    /// returns all rows for backward compatibility; an explicit <c>Limit</c> is clamped to
     /// <c>options.MaxLimit</c>. This is the per-parent windowing that keeps the batched fetch N+1-safe.
     /// Instance method: reads <c>options.MaxLimit</c> off the injected <see cref="StruoQueryOptions"/>.
     /// </summary>

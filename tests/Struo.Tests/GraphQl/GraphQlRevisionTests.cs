@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Task 8 (Phase 9c): GraphQL parity for revisions — proves the same round trip
+/// GraphQL parity for revisions — proves the same round trip
 /// <see cref="Struo.Tests.Api.RevisionEndpointTests"/> drives over REST also works over
 /// <c>/graphql</c> through the real host pipeline (ApiFactory): the shared <c>Revision</c> type,
 /// <c>articleRevisions</c>/<c>articleRevision</c> query fields, and the <c>revertArticle</c>
@@ -89,7 +89,7 @@ public class GraphQlRevisionTests(ApiFactory factory)
         snapshot.GetProperty("status").GetString().Should().Be("draft");
     }
 
-    /// <summary>SEC-2: <c>xArticleRevision</c> shares <c>ItemService.GetRevisionAsync</c> with the REST
+    /// <summary><c>xArticleRevision</c> shares <c>ItemService.GetRevisionAsync</c> with the REST
     /// endpoint, so it must return the same redacted snapshot. Article's Hidden fields
     /// (<c>internalNote</c>, <c>internalSlug</c>) are excluded from the GraphQL schema entirely (by
     /// design — <see cref="GraphQlSchemaTests"/>), so they cannot be set via a GraphQL mutation; this

@@ -20,7 +20,7 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 
 namespace Struo.Tests.Files;
 
-// #12: File soft-delete — FileService.TrashAsync (default delete: stamps DeletedAt/DeletedBy,
+// File soft-delete — FileService.TrashAsync (default delete: stamps DeletedAt/DeletedBy,
 // retains blob + FileTranslation rows, clears site_settings.logofileid when applicable) and
 // FileService.RestoreAsync (clears DeletedAt/DeletedBy). FileService.DeleteAsync stays as-is and
 // now serves as the "purge" operation (already hard-deletes row + translations + blob + logo ref).

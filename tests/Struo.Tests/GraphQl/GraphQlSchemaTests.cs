@@ -12,8 +12,8 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Builds the full dynamic schema (StruoTypeModule) against the Task-6 fake metadata fixtures (no DB)
-/// and asserts on the printed SDL — the schema-shape gate for Task 7 (object/list/filter types + root
+/// Builds the full dynamic schema (StruoTypeModule) against FakeMetadataFixtures (no DB) and
+/// asserts on the printed SDL — the schema-shape gate (object/list/filter types + root
 /// query fields per collection, incl. relations/files/repeater/translations, hidden/password excluded).
 /// </summary>
 public class GraphQlSchemaTests
@@ -90,7 +90,7 @@ public class GraphQlSchemaTests
         sdl.Should().Contain("gallery: [ID!]");
         sdl.Should().Contain("galleryFiles: [File!]");
         sdl.Should().Contain("category: Category");
-        // 8c.3b: M2M relation fields gain nested-list args (filter/sort/limit/offset).
+        // M2M relation fields gain nested-list args (filter/sort/limit/offset).
         sdl.Should().Contain("tags(filter: TagFilterInput, sort: [String!], limit: Int, offset: Int): [Tag!]");
         sdl.Should().Contain("translations: [Translation!]");
     }
@@ -141,7 +141,7 @@ public class GraphQlSchemaTests
         // so there is only the nested filter field (no "tagsId").
         input.Fields.Any(f => f.Name == "tags" && f.Type.NamedType().Name == "TagFilterInput")
             .Should().BeTrue();
-        // 8c.1 M2O fields are retained.
+        // M2O fields are retained.
         input.Fields.Any(f => f.Name == "category" && f.Type.NamedType().Name == "CategoryFilterInput")
             .Should().BeTrue();
         input.Fields.Any(f => f.Name == "categoryId" && f.Type.NamedType().Name == "IdFilter")
@@ -160,7 +160,7 @@ public class GraphQlSchemaTests
         // CategoryFilterInput) resolves by name without a build loop (BuildSchemaAsync would throw).
         input.Fields.Any(f => f.Name == "articles" && f.Type.NamedType().Name == "ArticleFilterInput")
             .Should().BeTrue();
-        // 8c.1 M2O self-reference is retained.
+        // M2O self-reference is retained.
         input.Fields.Any(f => f.Name == "parent" && f.Type.NamedType().Name == "CategoryFilterInput")
             .Should().BeTrue();
     }

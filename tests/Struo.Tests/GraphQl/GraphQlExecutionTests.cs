@@ -17,7 +17,7 @@ namespace Struo.Tests.GraphQl;
 
 /// <summary>
 /// Executes real GraphQL queries through the dynamic schema (StruoTypeModule) against a
-/// <see cref="FakeGraphQlDataSource"/> — the Task-7 root-resolver behaviour gate: list shape
+/// <see cref="FakeGraphQlDataSource"/> — the root-resolver behaviour gate: list shape
 /// (items/total), filter/sort/pagination/search flowing into the captured <see cref="QueryModel"/>,
 /// single-by-id, single-missing -> null data, locale-argument forwarding, and the translations map
 /// projection (regression guard for the ItemService-shape bug described below).
@@ -29,7 +29,7 @@ public class GraphQlExecutionTests
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
             .AddScoped<IGraphQlDataSource>(_ => ds)
-            // FileByIdDataLoader's ctor takes StruoQueryOptions (Task-9 review fix: chunk the
+            // FileByIdDataLoader's ctor takes StruoQueryOptions (it chunks the
             // batch fetch to MaxLimit-sized slices) — HotChocolate's ctx.DataLoader<T>() resolves
             // it via ActivatorUtilities against request services, so it must be registered here too.
             .AddSingleton(new StruoQueryOptions())
@@ -190,7 +190,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task 9 N+1 regression lock: two article rows share the same heroImageId — the File
+    /// N+1 regression lock: two article rows share the same heroImageId — the File
     /// resolver must batch every requested id across all sibling rows into exactly ONE
     /// "file" QueryAsync call (not one per row) via <see cref="FileFieldResolvers"/>'s
     /// BatchDataLoader, and the returned File node's fields must be resolvable.
@@ -241,7 +241,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task-9 review fix regression (Minor): the scalar path (<c>heroImage</c>) already covers
+    /// Regression coverage: the scalar path (<c>heroImage</c>) already covers
     /// null-on-missing, but the list-shaped field (<c>galleryFiles</c>) — <see
     /// cref="FileFieldResolvers.ResolveList"/> — had no direct execution-level test of its two
     /// defining behaviours: it must resolve ids in the REQUESTED order (not whatever order the
@@ -290,7 +290,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Task 10: selecting a relation sub-field (<c>category { name }</c>) on the list element must
+    /// Selecting a relation sub-field (<c>category { name }</c>) on the list element must
     /// build a <see cref="DeepSpec"/> containing exactly that relation name and pass it into the
     /// captured <see cref="QueryModel"/> — the fake data source then returns an already-nested
     /// "category" dict on the article row (mirroring ItemService's deep-expansion shape), which the
@@ -326,10 +326,10 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// 8c.3a: selecting a relation sub-field OF a relation (<c>category { name parent { name } }</c>,
+    /// Selecting a relation sub-field OF a relation (<c>category { name parent { name } }</c>,
     /// depth 2) must build a NESTED <see cref="DeepSpec"/> — <c>category</c>'s own
     /// <see cref="DeepRelationSpec.Deep"/> must itself contain a <c>parent</c> entry — not a flat
-    /// depth-1 tree (pre-8c.3a, <c>SelectionRelations</c> only ever looked at the element type's
+    /// depth-1 tree (previously, <c>SelectionRelations</c> only ever looked at the element type's
     /// direct children, so <c>parent</c> was silently dropped and would have resolved to null).
     /// The fake data source mirrors ItemService's deep-expansion shape by pre-nesting "parent" inside
     /// "category" on the row; the schema's relation field is a plain pass-through pure resolver (see
@@ -374,7 +374,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// 8c.3a negative: <see cref="StruoQueryOptions.MaxRelationDepth"/> (5) is enforced by
+    /// Negative case: <see cref="StruoQueryOptions.MaxRelationDepth"/> (5) is enforced by
     /// ItemService, which this suite's <see cref="FakeGraphQlDataSource"/> bypasses entirely (no real
     /// ItemService sits in the call path), so a client selection nested deep enough to matter here
     /// must instead be caught by HotChocolate's own <c>AddMaxExecutionDepthRule(12)</c> — added to
@@ -382,7 +382,7 @@ public class GraphQlExecutionTests
     /// (<see cref="Struo.Api.GraphQl.GraphQlServiceCollectionExtensions.AddStruoGraphQl"/>) — which
     /// runs at document-validation time, before any resolver (including the now-recursive
     /// <see cref="CollectionResolvers.SelectionDeepSpec"/>) ever executes. This proves the recursive
-    /// selection-walk introduced by 8c.3a has no runaway/unbounded behaviour reachable from a client: an
+    /// recursive selection-walk has no runaway/unbounded behaviour reachable from a client: an
     /// over-deep query is rejected up front, with no partial data alongside the error.
     /// </summary>
     [Fact]
@@ -409,7 +409,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Final-review fix regression: HotChocolate merges non-aliased duplicate selections, but
+    /// Regression coverage: HotChocolate merges non-aliased duplicate selections, but
     /// ALIASED selections of the SAME relation (<c>a: category</c> / <c>b: category</c>) stay
     /// distinct child selections that both report <c>Field.Name == "category"</c>. Before the fix,
     /// <see cref="CollectionResolvers"/>'s selection-to-relation-name projection returned
@@ -449,7 +449,7 @@ public class GraphQlExecutionTests
         item.GetProperty("b").GetProperty("name").GetString().Should().Be("News");
     }
 
-    /// <summary>Task 10: no relation sub-field selected -> Deep stays null (no over-fetching).</summary>
+    /// <summary>No relation sub-field selected -> Deep stays null (no over-fetching).</summary>
     [Fact]
     public async Task Relation_not_selected_leaves_Deep_null()
     {
@@ -507,7 +507,7 @@ public class GraphQlExecutionTests
     // — the sub-field names in the GraphQL query ("question"/"answer") are camelCase.
     private sealed record FaqRow(string Question, string Answer);
 
-    // ARC-3: this in-process executor has NO HttpContext, so the shared DomainErrorMap treats the
+    // This in-process executor has NO HttpContext, so the shared DomainErrorMap treats the
     // caller as unauthenticated and PermissionDenied surfaces as UNAUTHORIZED (REST-parity), not the
     // old unconditional FORBIDDEN. AddHttpContextAccessor is required so the filter can be activated.
     [Fact]

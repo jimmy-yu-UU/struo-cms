@@ -11,7 +11,7 @@ namespace Struo.Application.Query;
 /// <summary>
 /// Projects a persisted entity into the outbound field/value dictionary the API emits, honoring
 /// field selection, per-field read permissions, hidden/system flags, and the always-present
-/// <c>id</c>/<c>version</c> keys. Extracted verbatim from <see cref="ItemService"/> (ARC-1); the
+/// <c>id</c>/<c>version</c> keys. Extracted verbatim from <see cref="ItemService"/>; the
 /// concrete return type stays <see cref="Dictionary{TKey,TValue}"/> because callers (<c>GetAsync</c>,
 /// the translation overlay, deep-expansion) downcast the rows.
 /// </summary>
@@ -33,7 +33,7 @@ public sealed class ItemProjector(IEntityRegistry registry, IPermissionService p
         dict[idKey] = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entity);
 
         // Always expose the concurrency token (like id, independent of field selection) so the client
-        // can echo it back on update for optimistic-locking (D2).
+        // can echo it back on update for optimistic-locking.
         if (entity is Struo.Domain.Auditing.AuditableEntity versioned)
             dict["version"] = versioned.Version;
 

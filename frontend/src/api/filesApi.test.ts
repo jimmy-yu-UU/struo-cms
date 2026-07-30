@@ -44,13 +44,13 @@ describe('filesApi', () => {
     expect(spy).toHaveBeenCalledWith('/files/f1')
   })
 
-  it('remove({purge:true}) appends ?purge=true (#12)', async () => {
+  it('remove({purge:true}) appends ?purge=true', async () => {
     const spy = vi.spyOn(apiClient, 'delete').mockResolvedValue(undefined as never)
     await filesApi.remove('f1', { purge: true })
     expect(spy).toHaveBeenCalledWith('/files/f1?purge=true')
   })
 
-  it('restore() posts to the restore route (#12)', async () => {
+  it('restore() posts to the restore route', async () => {
     const spy = vi.spyOn(apiClient, 'post').mockResolvedValue(undefined as never)
     await filesApi.restore('f1')
     expect(spy).toHaveBeenCalledWith('/files/f1/restore')

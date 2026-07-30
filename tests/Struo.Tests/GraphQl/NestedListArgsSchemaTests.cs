@@ -12,7 +12,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Schema-shape gate for Task 9 (8c.3b): O2M/M2M relation fields declare
+/// Schema-shape gate: O2M/M2M relation fields declare
 /// filter/sort/limit/offset args; M2O relation fields declare none.
 /// Mirrors GraphQlSchemaTests' schema-build harness verbatim (no reusable
 /// helper exists there, so the build code is inlined here rather than

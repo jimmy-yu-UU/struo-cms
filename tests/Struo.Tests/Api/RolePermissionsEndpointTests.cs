@@ -42,7 +42,7 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
             .Should().Be(HttpStatusCode.NotFound);
     }
 
-    // 問題 3: the matrix PUTs the whole grant set; unsent rows disappear, all-false rows are absent.
+    // The matrix PUTs the whole grant set; unsent rows disappear, all-false rows are absent.
     [Fact]
     public async Task Put_replaces_the_full_grant_set_and_drops_all_false_rows()
     {
@@ -89,7 +89,7 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
         Entries(got.GetProperty("data")).Should().BeEquivalentTo([("article", true, false, false)]);
     }
 
-    // Final-review fix: grants are stored under the canonical collection name regardless of
+    // Grants are stored under the canonical collection name regardless of
     // the caller's casing, so the admin matrix (which keys by canonical name) always sees them.
     [Fact]
     public async Task Put_canonicalizes_collection_casing()
