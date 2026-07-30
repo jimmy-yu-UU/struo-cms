@@ -175,7 +175,12 @@ compose 檔案的情況下覆寫——`STRUO_MINIO_PORT` / `STRUO_MINIO_CONSOLE_
 不是一個 `CanRead` 授權，也不僅僅是已登入。這道關卡刻意設在寫入上:`public` 對每一個呼叫端都是一道
 權限底線 (第 12 章)，所以一旦 `file` 帶有一個公開*讀取*授權——這正是匿名提供圖片服務的文件記載
 設定——`CanRead("file")` 對匿名者與已驗證的呼叫端都同樣成立，因此完全無法把關任何東西;一份草稿是
-一種編輯狀態，所以能*編輯*檔案的呼叫端，才是能看見它的呼叫端，而且沒有任何公開角色會被授予寫入權。
+一種編輯狀態，所以能*編輯*檔案的呼叫端，才是能看見它的呼叫端。**出貨時的**種子資料只會授予 `public`
+一項讀取授權——`RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/RbacSeeder.cs:48-57`)
+針對每一個 `Rbac:PublicReadCollections` 項目，只插入 `CanRead = true`，`CanWrite`/`CanDelete`
+從未被動過——但 RBAC 模型中沒有任何東西*禁止*一位超級管理員透過角色權限矩陣，把 `public` 的寫入
+授權授予出去 (第 12 章示範了正是這個授權流程，即時針對 `role` 集合操作)；若對 `file` 做同樣的事，
+會把草稿存取權擴大到每一個已登入的呼叫端，因為這一節所把關的那個寫入授權，屆時也會變成公開的。
 這項檢查失敗時，會回傳單純的 `404` 而不是 `403`，所以一份草稿的存在與否，不會外洩給一個沒有該授權
 的呼叫端 (`FilesController.Get`/`Download`，`src/Struo.Api/Controllers/FilesController.cs:57-72`、
 `74-163`)。這也代表一個**已移入回收桶** (軟刪除——見下文) 的檔案，這兩個 action 也都會回傳

@@ -131,9 +131,11 @@ is `AuthSchemes.Adaptive` (`src/Struo.Api/Auth/AuthWiring.cs`), a forwarding pol
 to the `Bearer` handler whenever the request's `Authorization` header starts with `Bearer `, and to
 `Cookie` otherwise — on every endpoint, `/graphql` included. A bearer-only client is therefore resolved
 as **itself**, with its own roles' grants (unioned with the `public` floor, chapter 12), exactly as a
-cookie session would be. Because a `Bearer`-authenticated request carries no session cookie,
-`CsrfProtectionMiddleware` exempts it from the `X-Struo-CSRF` requirement above (chapter 9's CSRF
-section) — a bearer-driven `/graphql` call needs neither a cookie nor the CSRF header.
+cookie session would be. `CsrfProtectionMiddleware` exempts any request whose `Authorization` header
+starts with `Bearer ` from the `X-Struo-CSRF` requirement above (chapter 9's CSRF section) — that check
+runs, and returns, before the middleware ever looks for a session cookie, so the exemption holds even if
+the request also happens to carry one. A `/graphql` call driven purely by a bearer token therefore needs
+neither a session cookie nor the CSRF header.
 
 Every GraphQL example in this chapter still runs against a cookie session with the CSRF header, because
 that's the natural shape of a browser-based GraphQL client (Nitro IDE, a SPA) — not because a
