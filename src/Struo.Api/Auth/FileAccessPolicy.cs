@@ -1,6 +1,7 @@
 // src/Struo.Api/Auth/FileAccessPolicy.cs
 using Microsoft.AspNetCore.Authentication;
 using Struo.Application.Abstractions;
+using Struo.Application.Files;
 using Struo.Application.Security;
 
 namespace Struo.Api.Auth;
@@ -15,40 +16,32 @@ public sealed class FileAccessPolicy(
     IRolePermissionStore permissionStore,
     ICurrentPermissions currentPermissions) : IFileAccessPolicy
 {
-    private const string FileCollection = "file";
+    public bool CanWrite() => permissions.CanWrite(FileCollection.Name);
 
-    public bool CanWrite() => permissions.CanWrite(FileCollection);
-
-    public bool CanDelete() => permissions.CanDelete(FileCollection);
+    public bool CanDelete() => permissions.CanDelete(FileCollection.Name);
 
     /// <summary>
-    /// May the current caller read a NON-published file? Requires both (a) an authenticated
-    /// identity and (b) a genuine <c>CanRead("file")</c> grant for that identity.
+    /// May the current caller read a NON-published file? Requires both (a) an authenticated identity
+    /// and (b) a <c>CanWrite("file")</c> grant.
     /// </summary>
     /// <remarks>
-    /// FilesController's Get/Download carry no <c>[Authorize]</c> so anonymous callers can still
-    /// fetch published files (public image serving). Two consequences that this method handles:
-    /// <list type="bullet">
-    /// <item>Auth is probed, not enforced. <see cref="AuthSchemes.CookieOrBearer"/> is a comma-joined
-    /// pair meant for <c>[Authorize]</c>'s multi-scheme syntax, not a single registered scheme, so it
-    /// can't be handed to <c>AuthenticateAsync</c>; each real scheme is probed independently.</item>
-    /// <item>Because there is no <c>[Authorize]</c>, <c>UseAuthentication</c> only ran the DEFAULT
-    /// (cookie) scheme, so <c>PermissionResolutionMiddleware</c> resolved the per-request permission
-    /// snapshot from the cookie identity — or from anonymous/public for a bearer-only caller. For the
-    /// bearer path we therefore adopt the token's principal and re-resolve its real grants, so
-    /// <c>CanRead("file")</c> reflects the actual caller rather than the public floor (which, when
-    /// "file" is a public-read collection, would otherwise let any bearer token read drafts).</item>
-    /// </list>
-    /// The authenticated pre-condition is kept deliberately: with "file" as a public-read collection an
-    /// anonymous caller's <c>CanRead("file")</c> is true, so gating on <c>CanRead</c> alone would be
-    /// weaker than the status quo for anonymous callers.
+    /// The gate is WRITE, not read, because <c>public</c> is a permission floor for every caller
+    /// (<c>SqlSugarRolePermissionStore</c>): when <c>file</c> is a public-read collection — the
+    /// documented, expected setup for serving images anonymously — <c>CanRead("file")</c> is true for
+    /// anonymous and authenticated callers alike and therefore gates nothing. A draft is an editorial
+    /// state, so the caller who may edit files is the caller who may see them. No public role is given
+    /// write, so this is immune to the floor.
+    /// <para>FilesController's Get/Download carry no <c>[Authorize]</c> so anonymous callers can still
+    /// fetch published files; auth is probed, not enforced. <see cref="AuthSchemes.CookieOrBearer"/> is
+    /// a comma-joined pair for <c>[Authorize]</c>'s multi-scheme syntax, not a registered scheme, so it
+    /// cannot be handed to <c>AuthenticateAsync</c> — each real scheme is probed independently.</para>
     /// </remarks>
     public async Task<bool> CanReadUnpublishedAsync(HttpContext httpContext, CancellationToken ct)
     {
         // Fast path: a cookie identity was already authenticated by UseAuthentication and its grants
         // are in the per-request snapshot resolved by PermissionResolutionMiddleware.
         if (currentUser.GetCurrentUserId() is not null)
-            return permissions.CanRead(FileCollection);
+            return permissions.CanWrite(FileCollection.Name);
 
         // Bearer-only caller: probe the bearer scheme explicitly (no [Authorize] means it was never
         // run), adopt its principal, and resolve THAT user's real per-collection grants. The
@@ -68,6 +61,6 @@ public sealed class FileAccessPolicy(
         if (bearerUserId is null) return false;
         await PermissionResolutionMiddleware.ResolveAndSetAsync(
             bearerUserId, permissionStore, currentPermissions, ct);
-        return permissions.CanRead(FileCollection);
+        return permissions.CanWrite(FileCollection.Name);
     }
 }

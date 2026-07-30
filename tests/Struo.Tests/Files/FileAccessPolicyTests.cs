@@ -13,7 +13,7 @@ namespace Struo.Tests.Files;
 // FileAccessPolicy is the extracted RBAC decision-owner for the "file" collection, absorbing
 // the permission-related dependencies FilesController used to hold directly. These unit tests cover
 // the parts reachable without a full authentication host (CanWrite/CanDelete delegation, and the
-// cookie/"already authenticated" fast path of CanReadUnpublishedAsync); the bearer-adopt path is
+// write-grant gate of CanReadUnpublishedAsync); the bearer-adopt path is
 // exercised end-to-end by FileUnpublishedRbacTests, which stayed green across this refactor.
 public class FileAccessPolicyTests
 {
@@ -61,13 +61,13 @@ public class FileAccessPolicyTests
     }
 
     [Fact]
-    public async Task CanReadUnpublishedAsync_fast_path_reads_the_current_snapshot_when_already_authenticated()
+    public async Task CanReadUnpublishedAsync_allows_an_authenticated_caller_with_file_write()
     {
-        // A cookie identity is already present (GetCurrentUserId() is non-null), so the method must
-        // return permissions.CanRead("file") directly without probing the bearer scheme at all — the
-        // fake IRolePermissionStore throwing proves that path is never touched.
+        // Drafts are an editorial state: the gate is the WRITE grant, not read. A read grant is
+        // exactly what the public floor hands every authenticated caller, so keying on it would
+        // expose every draft to every signed-in user.
         var policy = new FileAccessPolicy(
-            new FakePermissionService(read: true, write: false, delete: false),
+            new FakePermissionService(read: true, write: true, delete: false),
             new FakeCurrentUserAccessor(Guid.NewGuid()), new UnusedRolePermissionStore(), new CurrentPermissions());
 
         var result = await policy.CanReadUnpublishedAsync(new DefaultHttpContext(), CancellationToken.None);
@@ -76,15 +76,15 @@ public class FileAccessPolicyTests
     }
 
     [Fact]
-    public async Task CanReadUnpublishedAsync_fast_path_denies_when_the_snapshot_lacks_read()
+    public async Task CanReadUnpublishedAsync_denies_an_authenticated_caller_with_read_but_no_write()
     {
         var policy = new FileAccessPolicy(
-            new FakePermissionService(read: false, write: false, delete: false),
+            new FakePermissionService(read: true, write: false, delete: false),
             new FakeCurrentUserAccessor(Guid.NewGuid()), new UnusedRolePermissionStore(), new CurrentPermissions());
 
         var result = await policy.CanReadUnpublishedAsync(new DefaultHttpContext(), CancellationToken.None);
 
-        result.Should().BeFalse();
+        result.Should().BeFalse("a public-floor read grant must not unlock drafts");
     }
 
     // A defensive floor. In practice BearerTokenAuthenticationHandler always stamps a
