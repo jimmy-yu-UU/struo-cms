@@ -82,10 +82,10 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
         (await anon.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // Bearer path: Get/Download carry no [Authorize], so UseAuthentication only ran the default cookie
-    // scheme and the per-request permission snapshot reflects anonymous for a bearer-only caller. The
-    // gate must adopt the token's principal and enforce ITS real CanRead("file") grant — otherwise any
-    // bearer token would inherit the public floor and read drafts.
+    // Bearer path: Get/Download carry no [Authorize], but the AuthSchemes.Adaptive default policy
+    // scheme (see BearerReadAuthenticationTests) authenticates the bearer token there too, and
+    // PermissionResolutionMiddleware resolves ITS real CanWrite("file") grant into the per-request
+    // snapshot — otherwise any bearer token would inherit the public floor and read drafts.
     private async Task<HttpClient> BearerClientForAsync(HttpClient admin, Guid userId)
     {
         var gen = await admin.PostAsync($"/api/users/{userId}/access-token", null);
