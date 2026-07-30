@@ -149,10 +149,11 @@ state where an accidental in-place mutation would be visible to every subsequent
   /api/schema` wire shape, checked from both ends. It exists because the admin SPA mirrors the backend
   DTOs by hand, and drift between them is silent to every other gate — an unknown `FieldInterface`
   falls back to a read-only renderer instead of erroring, and a field whose interface has no
-  list-column formatter just disappears from the list view. Unlike E2E, this layer **is** run by CI: it
-  needs no live API or database, only the two committed halves plus the snapshot file, so it rides
-  inside the existing `dotnet test`/`pnpm test` commands. See `schema/README.md` for the full contract
-  and the regeneration command.
+  list-column formatter just disappears from the list view. Unlike E2E, this layer **is** run by CI:
+  nothing about it is live or external — the backend half exercises `GET /api/schema` through the same
+  in-process `WebApplicationFactory`/SQLite fixture other API tests use, not a running server or a real
+  database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands. See
+  `schema/README.md` for the full contract and the regeneration command.
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
