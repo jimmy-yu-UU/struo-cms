@@ -138,7 +138,13 @@ bearer 權杖驅動的 `/graphql` 呼叫，既不需要 session cookie，也不�
 本章中的每一個 GraphQL 範例，仍然是在一個帶有 CSRF 標頭的 cookie session 下執行的，但這只是因為
 一個以瀏覽器為基礎的 GraphQL 客戶端 (Nitro IDE、一個 SPA) 天生就是這個樣子——不是因為一個純
 bearer 的客戶端無法驅動 `/graphql`。它可以，而且與一個 cookie session 完全平等，包括下方的每一個
-mutation。
+mutation。以下是證明，不是空口斷言——一個只被授予 `mediaFolder` 讀取權的角色所核發的 bearer
+權杖，不帶 cookie、也不帶 CSRF 標頭，驅動一次 `mediaFolders` 查詢:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer 13XX3-bzyoJwQ399_eEplnQpLrNhMETssBqNVUyokw4" -d '{"query":"{ mediaFolders { items { id } } }"}'
+{"data":{"mediaFolders":{"items":[{"id":"019fac90-2300-78da-8a3c-f281dac532e0"},{"id":"019fac8f-fb2b-77ae-a152-f25fddf54ef8"}]}}}
+```
 
 ### 讀取即時 schema
 

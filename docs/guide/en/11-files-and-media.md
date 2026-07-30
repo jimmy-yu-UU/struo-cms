@@ -177,8 +177,8 @@ write, deliberately: `public` is a permission floor for every caller (chapter 12
 a public *read* grant — the documented setup for serving images anonymously — `CanRead("file")` is true
 for anonymous and authenticated callers alike and would gate nothing at all; a draft is an editorial
 state, so the caller who may *edit* files is the caller who may see them. The **shipped** seed only
-ever gives `public` a read grant — `RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/
-RbacSeeder.cs:48-57`) inserts `CanRead = true` and nothing else for every `Rbac:PublicReadCollections`
+ever gives `public` a read grant — `RbacSeeder.SeedAsync`
+(`src/Struo.Infrastructure/Identity/RbacSeeder.cs:48-57`) inserts `CanRead = true` and nothing else for every `Rbac:PublicReadCollections`
 entry, `CanWrite`/`CanDelete` are never touched — but nothing in the RBAC model *forbids* a super-admin
 from granting `public` write on `file` through the Role permission matrix (chapter 12 demonstrates
 exactly this grant flow, live, against the `role` collection); doing so on `file` would widen draft
