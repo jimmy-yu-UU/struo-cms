@@ -1,4 +1,3 @@
-// tests/Struo.Tests/Support/RepoRoot.cs
 namespace Struo.Tests.Support;
 
 /// <summary>
@@ -12,9 +11,15 @@ internal static class RepoRoot
 {
     private const string SolutionFileName = "StruoCMS.slnx";
 
-    public static string Find()
+    public static string Find() => Find(AppContext.BaseDirectory);
+
+    /// <summary>
+    /// Overload seam for testing the fail-loud behavior: lets a test point the walk at a
+    /// directory with no .slnx ancestor without needing to relocate the real test binary.
+    /// </summary>
+    internal static string Find(string startDirectory)
     {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        for (var dir = new DirectoryInfo(startDirectory); dir is not null; dir = dir.Parent)
         {
             if (File.Exists(Path.Combine(dir.FullName, SolutionFileName)))
                 return dir.FullName;
@@ -22,7 +27,7 @@ internal static class RepoRoot
 
         throw new InvalidOperationException(
             $"Could not locate the repository root: no '{SolutionFileName}' in any ancestor of " +
-            $"'{AppContext.BaseDirectory}'.");
+            $"'{startDirectory}'.");
     }
 
     public static string SchemaSnapshotPath() =>
