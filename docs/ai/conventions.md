@@ -144,6 +144,15 @@ state where an accidental in-place mutation would be visible to every subsequent
 - **Frontend unit** (`pnpm test`, Vitest, `jsdom` environment): `*.test.ts` files sit next to the
   source file they cover (e.g. `frontend/src/lib/buildItemPayload.ts` /
   `frontend/src/lib/buildItemPayload.test.ts`).
+- **Contract** (`schema/core-collections.json` plus `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs`
+  and `frontend/tests/schemaContract.test.ts`): a committed snapshot of the core collections' `GET
+  /api/schema` wire shape, checked from both ends. It exists because the admin SPA mirrors the backend
+  DTOs by hand, and drift between them is silent to every other gate — an unknown `FieldInterface`
+  falls back to a read-only renderer instead of erroring, and a field whose interface has no
+  list-column formatter just disappears from the list view. Unlike E2E, this layer **is** run by CI: it
+  needs no live API or database, only the two committed halves plus the snapshot file, so it rides
+  inside the existing `dotnet test`/`pnpm test` commands. See `schema/README.md` for the full contract
+  and the regeneration command.
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
