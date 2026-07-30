@@ -144,12 +144,16 @@ state where an accidental in-place mutation would be visible to every subsequent
 - **Frontend unit** (`pnpm test`, Vitest, `jsdom` environment): `*.test.ts` files sit next to the
   source file they cover (e.g. `frontend/src/lib/buildItemPayload.ts` /
   `frontend/src/lib/buildItemPayload.test.ts`).
-- **Contract** (`schema/core-collections.json` plus `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs`
-  and `frontend/tests/schemaContract.test.ts`): a committed snapshot of the core collections' `GET
-  /api/schema` wire shape, checked from both ends. It exists because the admin SPA mirrors the backend
-  DTOs by hand, and drift between them is silent to every other gate — an unknown `FieldInterface`
-  falls back to a read-only renderer instead of erroring, and a field whose interface has no
-  list-column formatter just disappears from the list view. Unlike E2E, this layer **is** run by CI:
+- **Contract** (`schema/core-collections.json` and `schema/interfaces.json` plus
+  `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs` and `frontend/tests/schemaContract.test.ts`):
+  committed snapshots of the core collections' `GET /api/schema` wire shape and of every declared
+  `FieldInterface`/`RelationInterface` member, checked from both ends. It exists because the admin SPA
+  mirrors the backend DTOs and enums by hand, and drift between them is silent to every other gate — an
+  unknown `FieldInterface` falls back to a read-only renderer instead of erroring, a field whose
+  interface has no list-column formatter just disappears from the list view, and an unmapped
+  `RelationInterface` falls back to `'readonly'`. The enum snapshot is what makes the interface half
+  unconditional: a new member is caught when it is declared, not only once some core collection uses it.
+  Unlike E2E, this layer **is** run by CI:
   nothing about it is live or external — the backend half exercises `GET /api/schema` through the same
   in-process `WebApplicationFactory`/SQLite fixture other API tests use, not a running server or a real
   database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands. See

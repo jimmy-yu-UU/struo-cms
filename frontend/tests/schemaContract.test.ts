@@ -9,15 +9,23 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import { registry } from '../src/lib/fieldTypes/registry'
 import { ALL_FIELD_INTERFACES } from '../src/lib/fieldTypes/types'
+import { relationInputKind } from '../src/lib/relationInputKind'
 import { selectListColumns } from '../src/lib/selectListColumns'
 import type { CollectionMeta, FieldMeta } from '../src/types/schema'
 
 // The backend half of this contract is tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs, which
-// regenerates this file from the real GET /api/schema response. Read it from disk rather than
-// importing it, so a missing file fails with a clear path instead of a module-resolution error.
+// regenerates both files below. Read them from disk rather than importing them, so a missing file
+// fails with a clear path instead of a module-resolution error.
 const SNAPSHOT_PATH = fileURLToPath(new URL('../../schema/core-collections.json', import.meta.url))
+const INTERFACES_PATH = fileURLToPath(new URL('../../schema/interfaces.json', import.meta.url))
 
 const collections: CollectionMeta[] = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
+
+// Every member of the backend's two interface enums, in the same camelCase form the wire uses.
+// Unlike core-collections.json this does not depend on any collection USING an interface, which is
+// what makes the assertions below unconditional.
+const interfaces: { fieldInterfaces: string[]; relationInterfaces: string[] } =
+  JSON.parse(readFileSync(INTERFACES_PATH, 'utf8'))
 
 // A Repeater field carries a nested sub-field schema, and the registry renders both levels,
 // so both levels are part of the contract.
@@ -83,6 +91,59 @@ describe('schema contract: core collections vs the field-type registry', () => {
     }
 
     expect(gaps, 'backend DTO keys the frontend types require are absent').toEqual([])
+  })
+})
+
+// A6/A7/A8. The assertions in the block above are conditional: they only see an interface that some
+// core collection actually uses, and new field types are typically introduced for content
+// collections rather than for the seven framework tables. These three close that gap by checking the
+// backend enums directly, so a new member is caught the moment it is declared.
+describe('schema contract: the frontend covers every declared backend interface', () => {
+  it('reads non-empty interface lists', () => {
+    expect(interfaces.fieldInterfaces.length).toBeGreaterThan(0)
+    expect(interfaces.relationInterfaces.length).toBeGreaterThan(0)
+  })
+
+  it('declares every backend FieldInterface member in ALL_FIELD_INTERFACES', () => {
+    const known = new Set<string>(ALL_FIELD_INTERFACES)
+    const missing = interfaces.fieldInterfaces.filter((i) => !known.has(i))
+
+    expect(
+      missing,
+      'backend FieldInterface members absent from frontend ALL_FIELD_INTERFACES',
+    ).toEqual([])
+  })
+
+  it('gives every backend FieldInterface member its own registry entry', () => {
+    // Key presence, not object identity — see the note on the equivalent assertion above.
+    const missing = interfaces.fieldInterfaces.filter(
+      (i) => !Object.prototype.hasOwnProperty.call(registry, i))
+
+    expect(
+      missing,
+      'backend FieldInterface members with no dedicated registry component (these render silently read-only)',
+    ).toEqual([])
+  })
+
+  it('lists no field interface the backend no longer declares', () => {
+    // The reverse direction: catches a frontend entry left behind after a backend member is removed.
+    const declared = new Set(interfaces.fieldInterfaces)
+    const stale = ALL_FIELD_INTERFACES.filter((i) => !declared.has(i))
+
+    expect(stale, 'frontend ALL_FIELD_INTERFACES entries the backend enum no longer declares').toEqual([])
+  })
+
+  it('resolves every backend RelationInterface member to a real relation input', () => {
+    // relationInputKind() returns 'readonly' for anything absent from its MAP, and no mapped member
+    // resolves to 'readonly', so that value is an unambiguous signal of a silent fallback — unlike
+    // the field registry, where the shared readonlyDef makes identity checks useless.
+    const unmapped = interfaces.relationInterfaces
+      .filter((i) => relationInputKind(i) === 'readonly')
+
+    expect(
+      unmapped,
+      'backend RelationInterface members with no relationInputKind mapping (these render silently read-only)',
+    ).toEqual([])
   })
 })
 
