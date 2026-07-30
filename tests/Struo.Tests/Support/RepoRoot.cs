@@ -32,4 +32,7 @@ internal static class RepoRoot
 
     public static string SchemaSnapshotPath() =>
         Path.Combine(Find(), "schema", "core-collections.json");
+
+    public static string InterfacesSnapshotPath() =>
+        Path.Combine(Find(), "schema", "interfaces.json");
 }

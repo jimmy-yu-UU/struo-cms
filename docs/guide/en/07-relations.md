@@ -248,9 +248,9 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 
 ## Admin pickers
 
-`RelationInterface` (`src/Struo.Domain/Metadata/Enums/RelationInterface.cs`) has seven values, but
-the shipped admin SPA only wires up four of them to a real input; the rest fall back to a read-only
-display (`frontend/src/lib/relationInputKind.ts`):
+`RelationInterface` (`src/Struo.Domain/Metadata/Enums/RelationInterface.cs`) has four values, and the
+shipped admin SPA wires every one of them to a real input
+(`frontend/src/lib/relationInputKind.ts`):
 
 | `RelationInterface` | Admin component | Behavior |
 |---|---|---|
@@ -258,7 +258,16 @@ display (`frontend/src/lib/relationInputKind.ts`):
 | `TagSelect` | `RelationPicker` (PrimeVue `MultiSelect`) | Multi-value picker for many-to-many relations, same search behavior. |
 | `TreeSelect` | `RelationPicker` (PrimeVue `TreeSelect`) | Single-value picker over a tree built from a self-referencing many-to-one's target rows. |
 | `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | Read-only, paginated, lazy-loaded list of the target collection filtered by the relation's reverse FK; clicking a row navigates to that row's own item-edit page. Shows only after the parent has been saved (a brand-new, unsaved parent has no id to filter by yet). |
-| `FilePicker` / `ImagePicker` / `FilesPicker` | *(none — falls back to a plain label)* | These three enum values exist and are captured in metadata, but `relationInputKind.ts`'s interface-to-component map has no entry for them, so `RelationInput.vue` falls through to its final, unconditional branch: a bare `<span class="readonly-relation">{{ relation.label }} (read-only)</span>` — not an input element at all, so `Editable` has nothing to apply to. |
+
+`relationInputKind.ts` still has a final, unconditional fallback for an interface its map does not
+recognize — a bare `<span class="readonly-relation">{{ relation.label }} (read-only)</span>` rather
+than an input element, so `Editable` has nothing to apply to. Nothing in the shipped enum reaches it:
+the schema contract gate (`schema/interfaces.json`, see `schema/README.md`) fails `pnpm test` if a
+`RelationInterface` member has no entry in that map, so the fallback is unreachable by construction
+rather than by convention. It matters only if you add a member and skip the frontend half — which is
+exactly what the gate refuses to let you do. Earlier versions shipped three unmapped members
+(`FilePicker`, `ImagePicker`, `FilesPicker`) that did land on it; they were removed, since file
+references are modelled as `FieldInterface` `File`/`Image`/`Files` rather than as relations.
 
 Every picker resolves a target row's display label from `[CmsRelation(DisplayTemplate = ...)]` via
 `resolveDisplayLabel` — a plain `{FieldName}` substitution against the target's own projected
