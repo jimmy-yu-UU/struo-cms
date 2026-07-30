@@ -81,7 +81,7 @@ same endpoint would be rejected without it:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6 \
-    -H "Authorization: Bearer vezSJKN-p7HkNqffT-r_lT40u263OGWyccUdZjm_SkI" \
+    -H "Authorization: Bearer <token>" \
     -H "Content-Type: application/json" -d '{"status":"published"}'
 HTTP/1.1 200 OK
 {"success":true,"data":{"id":"5b4de227-0997-4bb1-b1e7-9565b3cffce6","version":5, ...}}

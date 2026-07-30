@@ -202,7 +202,10 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 `AddAuthentication(AuthSchemes.Adaptive)` 加上 `AddPolicyScheme` 註冊)，只要請求的
 `Authorization` 標頭以 `Bearer ` 開頭，就轉發給 `Bearer`，否則轉發給 `Cookie`。因為 `Adaptive`
 是預設機制，ASP.NET Core 會以這種方式驗證**每一個請求**——無論該 action 是否帶有 `[Authorize]`
-attribute——比對出實際符合的那個真正機制。
+attribute——比對出實際符合的那個真正機制。這個選擇器只看標頭本身，從不會參考 cookie:一個同時帶有
+session cookie 與 `Authorization: Bearer` 標頭的呼叫端，在每一個不帶 `[Authorize]` 的 action 上，
+都會被解析成 bearer 身分，所以一個失效或已撤銷的權杖，會讓該呼叫端降級成 `public` 底線，而不是回退
+到 cookie 自己的授權——這是刻意設計成 fail-closed，不是一個 bug (第 12 章涵蓋 `public` 底線)。
 
 帶有 `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` (一份以逗號連接的機制清單:
 `"Cookies,Bearer"`) 的 action——`ItemsController`/`FilesController` 上的每一個寫入，以及
@@ -415,7 +418,7 @@ $ curl -s -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
 
 $ curl -s -X POST http://localhost:5221/api/users/<id>/access-token -H "X-Struo-CSRF: 1" -b cookies.txt
-{"success":true,"data":{"token":"clWm9Pe2-c3N84facW83-sADRU6DCpoKp8vresC2Cz0"}}
+{"success":true,"data":{"token":"<token>"}}
 
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<id>/effective-permissions?roles="
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}
