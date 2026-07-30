@@ -2,7 +2,7 @@
 
 Chapter 3 documents every configuration key's semantics. This chapter is about what happens if a
 production deployment gets one of them wrong, plus the operational surface around configuration:
-schema management, startup and failure behavior, logging, health probes, backups, and the three
+schema management, startup and failure behavior, logging, health probes, backups, and the four
 layers of tests this repository ships.
 
 ## Production checklist
@@ -165,7 +165,7 @@ orchestrator's liveness/readiness probes:
   values) are ordinary source-controlled or deployment-pipeline artifacts — back them up the same way as
   the rest of the deployment, not as a database concern.
 
-## The three test layers
+## The four test layers
 
 - **Backend unit/integration** — `tests/Struo.Tests` (xUnit), run with `dotnet test`. SQLite by default:
   most tests build a unique temp-file database per test (`Support/SqliteTestDatabase.cs`, deleted on
@@ -184,6 +184,14 @@ orchestrator's liveness/readiness probes:
   only the **frontend** dev server (`pnpm dev`, reused if one is already running) — both projects still
   need a running API and database reachable at the configured proxy target; nothing in the Playwright
   config starts either of those.
+- **Schema contract** — a committed pair of files, `schema/core-collections.json` (the seven core
+  collections in `GET /api/schema`'s wire shape) and `schema/interfaces.json` (every declared
+  `FieldInterface` and `RelationInterface` member), asserted from both sides: the backend snapshot test
+  `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs` and the frontend contract test
+  `frontend/tests/schemaContract.test.ts`, which feeds the same files through the real
+  `selectListColumns` and field-type `registry`. This is a fourth *kind* of test, not a fourth command:
+  both halves ride inside `dotnet test` and `pnpm test` above. `schema/README.md` is authoritative,
+  including the `UPDATE_SCHEMA_SNAPSHOT=1` regeneration step.
 
 ## What CI runs — and what it deliberately does not
 
@@ -203,6 +211,11 @@ CI deliberately runs **neither** `pnpm e2e` nor `pnpm e2e:sample`/`pnpm e2e:all`
 starts a database, starts the API, or invokes `playwright test`. End-to-end coverage needs a live API
 and a live database running alongside the frontend dev server — a heavier environment than either job
 here sets up — so running it is a local, pre-merge discipline in this repository, not an automated gate.
+
+The schema contract gate needed no `ci.yml` change at all: `CoreSchemaSnapshotTests` is just another
+test in the `backend` job's existing `dotnet test` step, and `schemaContract.test.ts` is just another
+test in the `frontend` job's existing `pnpm test` step — both halves ride inside the same two commands
+already covered above.
 
 ## Next steps
 
