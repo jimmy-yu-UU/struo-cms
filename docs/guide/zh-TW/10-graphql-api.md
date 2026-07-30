@@ -130,9 +130,10 @@ attribute，但驗證這件事本身，已經不再仰賴是否存在這樣一�
 只要請求的 `Authorization` 標頭以 `Bearer ` 開頭，就會轉發給 `Bearer` handler，否則轉發給
 `Cookie`——在每一個端點上都是如此，`/graphql` 也不例外。因此一個純 bearer 的客戶端，會被解析為
 **它自己**，連同它自己角色的授權 (與 `public` 底線聯集，第 12 章)，與一個 cookie session 完全
-相同。因為一個以 `Bearer` 驗證的請求不會帶有 session cookie，`CsrfProtectionMiddleware` 會把它
-從上方的 `X-Struo-CSRF` 要求中豁免 (第 9 章的 CSRF 段落)——一次由 bearer 驅動的 `/graphql`
-呼叫，既不需要 cookie，也不需要 CSRF 標頭。
+相同。只要請求的 `Authorization` 標頭以 `Bearer ` 開頭，`CsrfProtectionMiddleware` 就會把它從上方的
+`X-Struo-CSRF` 要求中豁免 (第 9 章的 CSRF 段落)——這項檢查會在 middleware 檢視 session cookie
+之前就先執行並回傳，所以即使該請求恰好也帶有一個 session cookie，這項豁免依然成立。因此一次純粹由
+bearer 權杖驅動的 `/graphql` 呼叫，既不需要 session cookie，也不需要 CSRF 標頭。
 
 本章中的每一個 GraphQL 範例，仍然是在一個帶有 CSRF 標頭的 cookie session 下執行的，但這只是因為
 一個以瀏覽器為基礎的 GraphQL 客戶端 (Nitro IDE、一個 SPA) 天生就是這個樣子——不是因為一個純

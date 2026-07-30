@@ -207,9 +207,11 @@ attribute——比對出實際符合的那個真正機制。
 帶有 `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` (一份以逗號連接的機制清單:
 `"Cookies,Bearer"`) 的 action——`ItemsController`/`FilesController` 上的每一個寫入，以及
 `UsersController`/`RolesController`/`LanguagesController`/`SettingsController`/`SchemaController`
-上的每一個 action，再加上 `AuthController` 的 `logout`/`me`——額外為 `[Authorize]` 自身的
-挑戰/拒絕邏輯明確指名了**兩種**機制，所以在這些地方，一個 bearer 權杖向來與一個 cookie 效果完全
-相同:
+上的每一個 action，再加上 `AuthController` 的 `logout`/`me`——額外明確指名了**兩種**機制:ASP.NET
+Core 的 `PolicyEvaluator` 會依序對每一個指名的機制呼叫 `AuthenticateAsync`，並把成功驗證出來的
+principal 合併起來，這在驅動 `[Authorize]` 自身挑戰/拒絕邏輯之外，同時也是在做驗證本身——所以在
+這些地方，無論 `Adaptive` 原本預設會轉發給哪個機制，一個 bearer 權杖向來都會被探測到，效果與一個
+cookie 完全相同:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/<id> -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"status":"published"}'
@@ -370,9 +372,9 @@ $ curl -s -i -X DELETE http://localhost:5221/api/items/mediaFolder/<guides-id> -
 
 | 方法與路徑 | 查詢參數 | 本文 | 回應 | 驗證 | 權限 |
 |---|---|---|---|---|---|
-| `POST /api/files` | — | `multipart/form-data`:`file` (必填)、`folderId` (選填) | `201`，`{ id, fileName, contentType, size, width, height, status, folderId }` | Cookie or Bearer | `IFileAccessPolicy.CanWrite()` |
-| `GET /api/files/{id}` | — | — | `200` 中介資料，或 `404` (一個未發布的檔案，除非呼叫端具有讀取未發布內容的權限，否則同樣是 `404`) | 無 | 已發布的檔案不需要任何權限;其他情況則需要讀取授權 |
-| `GET /api/files/{id}/content` | `width`、`height`、`format`、`fit`、`quality` (圖片轉換，第 11 章) | — | `200` 位元組 (串流，或在 `Struo:Files:PresignedRedirect` 開啟時為 `302`)，或 `404` | 無 | 與上方的 `Get` 相同 |
+| `POST /api/files` | — | `multipart/form-data`:`file` (必填)、`folderId` (選填) | `201`，`Location: /api/files/{id}`，`{ id, fileName, contentType, size, width, height, status, folderId }` | Cookie or Bearer | `IFileAccessPolicy.CanWrite()` |
+| `GET /api/files/{id}` | — | — | `200` 中介資料，或 `404` (一個未發布的檔案，除非呼叫端具有讀取未發布內容的權限，否則同樣是 `404`) | 無 (不帶 `[Authorize]`;但若請求帶有 cookie 或 bearer 憑證，`Adaptive` 仍會驗證它——右側的權限檢查需要它) | 已發布的檔案不需要任何權限;一個未發布的檔案則需要**已驗證的身分，加上一個 `file` 寫入授權** (`IFileAccessPolicy.CanReadUnpublished`——第 11 章——不是讀取授權) |
+| `GET /api/files/{id}/content` | `width`、`height`、`format`、`fit`、`quality` (圖片轉換，第 11 章) | — | `200` 位元組 (串流，或在 `Struo:Files:PresignedRedirect` 開啟時為 `302`)，或 `404` | 與上方的 `Get` 相同 | 與上方的 `Get` 相同 |
 | `DELETE /api/files/{id}` | `purge` (bool，預設 `false`) | — | `204`，或 `404` | Cookie or Bearer | `CanDelete()` |
 | `POST /api/files/{id}/restore` | — | — | `204`，或 `404` | Cookie or Bearer | `CanDelete()` |
 
@@ -399,7 +401,7 @@ HTTP/1.1 204 No Content
 
 | 方法與路徑 | 本文 | 回應 | 權限 |
 |---|---|---|---|
-| `POST /api/users` | `{ email, password, name? }` | `201`，`{ id, email, name }` | 超級管理員 |
+| `POST /api/users` | `{ email, password, name? }` | `201`，`Location: /api/items/user/{id}`，`{ id, email, name }` | 超級管理員 |
 | `PUT /api/users/{id}/password` | `{ newPassword, currentPassword? }` | `204`，或 `404` | 超級管理員 (變更另一位使用者) ——或本人，並提供 `currentPassword` |
 | `POST /api/users/{id}/access-token` | — | `200`，`{ token }` (只會顯示一次——只有雜湊值會被儲存) | 超級管理員 |
 | `DELETE /api/users/{id}/access-token` | — | `204`，或 `404` | 超級管理員 |

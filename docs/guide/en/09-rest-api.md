@@ -208,8 +208,11 @@ attribute on the action — as whichever of the two real schemes actually matche
 Actions that carry `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` (a comma-joined
 scheme list: `"Cookies,Bearer"`) — every write on `ItemsController`/`FilesController`, and every action
 on `UsersController`/`RolesController`/`LanguagesController`/`SettingsController`/`SchemaController`,
-plus `AuthController`'s `logout`/`me` — additionally name **both** schemes for `[Authorize]`'s own
-challenge/forbid logic, so a bearer token has always worked identically to a cookie there:
+plus `AuthController`'s `logout`/`me` — additionally name **both** schemes explicitly: ASP.NET Core's
+`PolicyEvaluator` calls `AuthenticateAsync` against each named scheme in turn and merges whichever
+principals succeed, on top of driving `[Authorize]`'s own challenge/forbid logic — so on these actions a
+bearer token has always probed and worked identically to a cookie, regardless of which scheme `Adaptive`
+would have forwarded to by default:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/<id> -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"status":"published"}'
@@ -379,9 +382,9 @@ The dedicated upload/storage/image-transform pipeline for the `file` collection 
 
 | Method & path | Query params | Body | Response | Auth | Permission |
 |---|---|---|---|---|---|
-| `POST /api/files` | — | `multipart/form-data`: `file` (required), `folderId` (optional) | `201`, `{ id, fileName, contentType, size, width, height, status, folderId }` | Cookie or Bearer | `IFileAccessPolicy.CanWrite()` |
-| `GET /api/files/{id}` | — | — | `200` metadata, or `404` (a non-published file also `404`s unless the caller has read-unpublished access) | none | none for a published file; read grant otherwise |
-| `GET /api/files/{id}/content` | `width`, `height`, `format`, `fit`, `quality` (image transform, chapter 11) | — | `200` bytes (streamed, or `302` when `Struo:Files:PresignedRedirect` is on), or `404` | none | same as `Get` above |
+| `POST /api/files` | — | `multipart/form-data`: `file` (required), `folderId` (optional) | `201`, `Location: /api/files/{id}`, `{ id, fileName, contentType, size, width, height, status, folderId }` | Cookie or Bearer | `IFileAccessPolicy.CanWrite()` |
+| `GET /api/files/{id}` | — | — | `200` metadata, or `404` (a non-published file also `404`s unless the caller has read-unpublished access) | none (`[Authorize]`-absent; `Adaptive` still authenticates a cookie or bearer credential if present — needed for the permission check at right) | none for a published file; for a non-published one, an **authenticated identity plus a `file` write grant** (`IFileAccessPolicy.CanReadUnpublished` — chapter 11 — not a read grant) |
+| `GET /api/files/{id}/content` | `width`, `height`, `format`, `fit`, `quality` (image transform, chapter 11) | — | `200` bytes (streamed, or `302` when `Struo:Files:PresignedRedirect` is on), or `404` | same as `Get` above | same as `Get` above |
 | `DELETE /api/files/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete()` |
 | `POST /api/files/{id}/restore` | — | — | `204`, or `404` | Cookie or Bearer | `CanDelete()` |
 
@@ -408,7 +411,7 @@ HTTP/1.1 204 No Content
 
 | Method & path | Body | Response | Permission |
 |---|---|---|---|
-| `POST /api/users` | `{ email, password, name? }` | `201`, `{ id, email, name }` | super-admin |
+| `POST /api/users` | `{ email, password, name? }` | `201`, `Location: /api/items/user/{id}`, `{ id, email, name }` | super-admin |
 | `PUT /api/users/{id}/password` | `{ newPassword, currentPassword? }` | `204`, or `404` | super-admin (changing another user) — or self, proving `currentPassword` |
 | `POST /api/users/{id}/access-token` | — | `200`, `{ token }` (shown once — only the hash is stored) | super-admin |
 | `DELETE /api/users/{id}/access-token` | — | `204`, or `404` | super-admin |

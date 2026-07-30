@@ -178,10 +178,10 @@ liveness/readiness 探針使用：
   正在執行的 API 與資料庫；Playwright 設定中沒有任何東西會啟動這兩者中的任何一個。
 - **Schema 契約**——一對受版控的檔案，`schema/core-collections.json`(七個核心集合在
   `GET /api/schema` 連線形狀下的樣子)與 `schema/interfaces.json`(每一個已宣告的 `FieldInterface`
-  與 `RelationInterface` 成員)，從兩側各自斷言:後端的快照測試
+  與 `RelationInterface` 成員)，從兩側各自斷言：後端的快照測試
   `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs`，以及前端的契約測試
   `frontend/tests/schemaContract.test.ts`——後者會把同一組檔案，餵進真正的 `selectListColumns`
-  與欄位型別 `registry`。這是第四種*類型*的測試，不是第四道指令:兩邊都搭乘在上方已有的
+  與欄位型別 `registry`。這是第四種*類型*的測試，不是第四道指令：兩邊都搭乘在上方已有的
   `dotnet test` 與 `pnpm test` 之中。`schema/README.md` 是權威來源，包括
   `UPDATE_SCHEMA_SNAPSHOT=1` 這個重新產生快照的步驟。
 
@@ -203,7 +203,7 @@ CI 刻意**兩者皆不執行**——既不執行 `pnpm e2e`，也不執行 `pnp
 正在執行的 API 與資料庫，與前端開發伺服器一起運作——這比這裡任何一個 job 所架設的環境都要重——因此在
 這個儲存庫中，執行它是一項本機、合併前的自律行為，而不是一道自動化關卡。
 
-Schema 契約關卡完全不需要變更 `ci.yml`:`CoreSchemaSnapshotTests` 只是 `backend` job 既有的
+Schema 契約關卡完全不需要變更 `ci.yml`：`CoreSchemaSnapshotTests` 只是 `backend` job 既有的
 `dotnet test` 步驟中的另一個測試，而 `schemaContract.test.ts` 也只是 `frontend` job 既有的
 `pnpm test` 步驟中的另一個測試——兩邊都搭乘在上方已經涵蓋過的同兩道指令之中。
 

@@ -176,8 +176,14 @@ grant (`FileAccessPolicy.cs:36-37`), not a `CanRead` grant and not merely being 
 write, deliberately: `public` is a permission floor for every caller (chapter 12), so once `file` carries
 a public *read* grant — the documented setup for serving images anonymously — `CanRead("file")` is true
 for anonymous and authenticated callers alike and would gate nothing at all; a draft is an editorial
-state, so the caller who may *edit* files is the caller who may see them, and no public role is ever
-given write. This check returns a plain `404` rather than `403` when it fails, so a draft's existence
+state, so the caller who may *edit* files is the caller who may see them. The **shipped** seed only
+ever gives `public` a read grant — `RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/
+RbacSeeder.cs:48-57`) inserts `CanRead = true` and nothing else for every `Rbac:PublicReadCollections`
+entry, `CanWrite`/`CanDelete` are never touched — but nothing in the RBAC model *forbids* a super-admin
+from granting `public` write on `file` through the Role permission matrix (chapter 12 demonstrates
+exactly this grant flow, live, against the `role` collection); doing so on `file` would widen draft
+access to every signed-in caller, since the write grant this section gates on would then be public
+too. This check returns a plain `404` rather than `403` when it fails, so a draft's existence
 isn't leaked to a caller without the grant (`FilesController.Get`/`Download`,
 `src/Struo.Api/Controllers/FilesController.cs:57-72`, `74-163`). This also means a **trashed** file
 (soft-deleted — see below) 404s from both actions too, since `FileService.GetAsync` reads through the

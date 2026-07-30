@@ -63,11 +63,11 @@ token 來輪替，這會覆寫既有的雜湊值)。每一個以 bearer 驗證�
 **預設沒有任何 `[Authorize]` attribute 指名 Bearer**——`ItemsController`/`FilesController`/
 `UsersController`/`RolesController` 等控制器的每一個寫入 action，都明確標示了
 `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`，所以在這些地方，bearer token
-向來與 cookie 的作用完全相同。過去缺少的是那些完全沒有指名任何機制的 action:`ItemsController` 的
+向來與 cookie 的作用完全相同。過去缺少的是那些完全沒有指名任何機制的 action：`ItemsController` 的
 讀取 action，以及 `/graphql` (第 10 章)，都不帶任何 `[Authorize]` attribute，而在
 `AuthSchemes.Adaptive` 成為預設驗證機制之前，ASP.NET Core 對這些 action 永遠只會自動執行 Cookie
 handler——一個純 bearer 的呼叫端命中其中之一時，會被解析為匿名者。`Adaptive`
-(`src/Struo.Api/Auth/AuthWiring.cs`) 補上了這個缺口:只要請求帶有 `Authorization: Bearer …`，
+(`src/Struo.Api/Auth/AuthWiring.cs`) 補上了這個缺口：只要請求帶有 `Authorization: Bearer …`，
 它就會轉發給 `Bearer`，無論該端點**是否**帶有 attribute——因此一個純 bearer 的呼叫端，現在讀取
 `ItemsController` (與 `/graphql`) 時，會被解析為它自己，連同它自己角色的授權與下方的 `public`
 底線聯集，與一個 cookie session 完全相同。已即時驗證：一個 bearer 請求不需要 `X-Struo-CSRF`
@@ -334,7 +334,7 @@ $ docker exec struo-postgres psql -U struo -d struo -t -c "select password from 
 `GET /api/users/{id}/effective-permissions`(僅限 super-admin，第 9 章)的存在，正是為了讓管理後台的
 使用者編輯表單能夠在尚未儲存之前，先顯示某個角色選擇「會」授予什麼。它重複使用了一個真正的請求所經過的
 完全相同一組解析元件(`IRolePermissionStore` + `PermissionResolver`)，因此這個預覽本質上就與實際會被
-強制執行的內容完全一致——而不是另外維護的一份近似值。這也包括上方的 `public` 底線:`LoadForRolesAsync`
+強制執行的內容完全一致——而不是另外維護的一份近似值。這也包括上方的 `public` 底線：`LoadForRolesAsync`
 會把同一份 `public` 授權，聯集進一個假設性的角色集合之中，就像 `LoadForUserAsync` 把它聯集進一個真正
 呼叫端所儲存的角色一樣，所以這個預覽絕不可能與請求管線實際會解析出的結果不一致——預覽一個空的或尚未
 儲存的角色選擇，仍然至少會顯示那道底線，絕不會是一個人為造成的空結果。以下三種不同的請求形狀，全都針對
