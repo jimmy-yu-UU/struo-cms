@@ -1,4 +1,3 @@
-// tests/Struo.Tests/Support/RepoRootTests.cs
 using AwesomeAssertions;
 using Xunit;
 
@@ -14,9 +13,30 @@ public sealed class RepoRootTests
     }
 
     [Fact]
+    public void Find_ThrowsWhenNoAncestorContainsTheSolutionFile()
+    {
+        var probeDirectory = Path.Combine(Path.GetTempPath(), "RepoRootTests-" + Guid.NewGuid());
+        Directory.CreateDirectory(probeDirectory);
+
+        try
+        {
+            var act = () => RepoRoot.Find(probeDirectory);
+            act.Should().Throw<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(probeDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SchemaSnapshotPath_PointsAtTheCoreCollectionsFile()
     {
-        RepoRoot.SchemaSnapshotPath().Should()
-            .Be(Path.Combine(RepoRoot.Find(), "schema", "core-collections.json"));
+        var path = RepoRoot.SchemaSnapshotPath();
+
+        path.Should().EndWith(Path.Combine("schema", "core-collections.json"));
+
+        var root = Path.GetDirectoryName(Path.GetDirectoryName(path));
+        File.Exists(Path.Combine(root!, "StruoCMS.slnx")).Should().BeTrue();
     }
 }
