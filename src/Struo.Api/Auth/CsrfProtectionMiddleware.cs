@@ -47,8 +47,7 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
         if (SafeMethods.Contains(request.Method)) return false;
 
         // Bearer-authenticated requests carry no ambient browser credential, so they cannot be forged.
-        var authorization = request.Headers.Authorization.ToString();
-        if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return false;
+        if (AuthSchemes.HasBearerHeader(request)) return false;
 
         // Only requests riding on the session cookie need the guard.
         if (!request.Cookies.ContainsKey(AuthSchemes.SessionCookieName)) return false;
