@@ -10,9 +10,9 @@ using Xunit;
 namespace Struo.Tests.Files;
 
 // Non-published file content/metadata must not be readable merely because the caller is
-// authenticated — a genuine per-collection CanRead("file") grant is required, the same gate every
-// other collection enforces. A role-less JIT/SSO user could otherwise fetch any draft file. 404
-// (not 403) so the endpoint does not leak the existence of unpublished assets.
+// authenticated — a genuine per-collection CanWrite("file") grant is required. A role-less JIT/SSO
+// user could otherwise fetch any draft file. 404 (not 403) so the endpoint does not leak the
+// existence of unpublished assets.
 //
 // NOTE on the test harness: ApiFactory seeds "file" into Rbac:PublicReadCollections, and the "public"
 // role is a FLOOR for every caller (SqlSugarRolePermissionStore) — so CanRead("file") is true for

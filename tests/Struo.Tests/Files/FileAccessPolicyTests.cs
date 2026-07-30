@@ -14,7 +14,8 @@ namespace Struo.Tests.Files;
 // the permission-related dependencies FilesController used to hold directly. These unit tests cover
 // the parts reachable without a full authentication host (CanWrite/CanDelete delegation, and the
 // write-grant gate of CanReadUnpublishedAsync); the bearer-adopt path is
-// exercised end-to-end by FileUnpublishedRbacTests, which stayed green across this refactor.
+// exercised end-to-end by FileUnpublishedRbacTests, which stayed green across the FileAccessPolicy
+// extraction.
 public class FileAccessPolicyTests
 {
     private sealed class FakePermissionService(bool read, bool write, bool delete) : IPermissionService
