@@ -142,7 +142,7 @@ mutation。以下是證明，不是空口斷言——一個只被授予 `mediaFo
 權杖，不帶 cookie、也不帶 CSRF 標頭，驅動一次 `mediaFolders` 查詢:
 
 ```
-$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer 13XX3-bzyoJwQ399_eEplnQpLrNhMETssBqNVUyokw4" -d '{"query":"{ mediaFolders { items { id } } }"}'
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '{"query":"{ mediaFolders { items { id } } }"}'
 {"data":{"mediaFolders":{"items":[{"id":"019fac90-2300-78da-8a3c-f281dac532e0"},{"id":"019fac8f-fb2b-77ae-a152-f25fddf54ef8"}]}}}
 ```
 

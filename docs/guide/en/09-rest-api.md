@@ -203,7 +203,12 @@ scheme is: `AuthSchemes.Adaptive` (`"Adaptive"`, registered via `AddAuthenticati
 plus `AddPolicyScheme` in `AuthWiring.AddStruoAuth`) forwards to `Bearer` whenever the request's
 `Authorization` header starts with `Bearer `, and to `Cookie` otherwise. Because `Adaptive` is the
 default, ASP.NET Core authenticates **every request** this way — with or without an `[Authorize]`
-attribute on the action — as whichever of the two real schemes actually matches the request.
+attribute on the action — as whichever of the two real schemes actually matches the request. The
+header alone decides, and the cookie is never consulted by this selector: a caller presenting BOTH a
+session cookie and an `Authorization: Bearer` header is resolved as the bearer identity on every
+`[Authorize]`-free action, so a bad or revoked token downgrades that caller to the `public` floor
+rather than falling back to the cookie's own grants — fail-closed by design, not a bug (chapter 12
+covers the `public` floor).
 
 Actions that carry `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` (a comma-joined
 scheme list: `"Cookies,Bearer"`) — every write on `ItemsController`/`FilesController`, and every action
@@ -425,7 +430,7 @@ $ curl -s -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
 
 $ curl -s -X POST http://localhost:5221/api/users/<id>/access-token -H "X-Struo-CSRF: 1" -b cookies.txt
-{"success":true,"data":{"token":"clWm9Pe2-c3N84facW83-sADRU6DCpoKp8vresC2Cz0"}}
+{"success":true,"data":{"token":"<token>"}}
 
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<id>/effective-permissions?roles="
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}
