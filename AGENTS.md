@@ -131,8 +131,8 @@ change; run all four before anything touching both stacks.
 `dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
 not been mirrored into `schema/core-collections.json`; `pnpm test` includes
 `frontend/tests/schemaContract.test.ts`, which fails when the admin SPA cannot render the snapshot.
-Regenerate with `UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot` and commit the
-result — see `schema/README.md` for the full contract.
+Regenerate with `UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot` (bash) and commit the
+result — see `schema/README.md` for the full contract, including the PowerShell form of that command.
 
 **Live-PostgreSQL verification is required for any change to DB behavior** (a migration, a
 `SqlSugarClientFactory` column-mapping change, a query-building change) — SQLite passing is not evidence

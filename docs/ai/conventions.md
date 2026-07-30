@@ -153,14 +153,20 @@ state where an accidental in-place mutation would be visible to every subsequent
   nothing about it is live or external — the backend half exercises `GET /api/schema` through the same
   in-process `WebApplicationFactory`/SQLite fixture other API tests use, not a running server or a real
   database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands. See
-  `schema/README.md` for the full contract and the regeneration command.
+  `schema/README.md` for the full contract and the regeneration command. `schemaContract.test.ts`
+  deliberately departs from the co-location convention the Frontend unit bullet above states: it lives
+  in `frontend/tests/`, not next to a source file, and runs under Vitest's `node` environment rather
+  than `jsdom` (a `// @vitest-environment node` pragma, needed to read the snapshot file from disk
+  without Vite's dev-server URL rewriting getting in the way).
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
   sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs only `dotnet build` +
   `dotnet test` and `pnpm test` + `pnpm build`) — both need a live API and database, not just a build.
 
-See `docs/guide/en/15-deployment-operations-testing.md`, "The three test layers", for the full picture.
+See `docs/guide/en/15-deployment-operations-testing.md` for the backend/frontend/E2E layers in more
+depth — that chapter predates the Contract layer above and does not cover it; this document and
+`schema/README.md` are the only places the schema contract gate is described.
 
 ## Commit message format
 

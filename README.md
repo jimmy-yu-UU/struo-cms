@@ -72,6 +72,8 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
 - `Struo.Application` — application-layer abstractions, options, query/security contracts.
 - `Struo.Infrastructure` — SqlSugar wiring, identity, files, health checks, DI extensions.
 - `Struo.Api` — the ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`.
+- `schema/` — committed core-collection wire-shape snapshot (`core-collections.json`) the schema
+  contract gate checks both stacks against — see `schema/README.md`.
 
 Framework code never references `samples/*` — only `tests/Struo.Tests` does, which is what makes
 `samples/Struo.Sample.Blog` truly optional and deletable.
