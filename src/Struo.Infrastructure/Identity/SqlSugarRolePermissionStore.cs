@@ -13,16 +13,16 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
     /// </remarks>
     public async Task<RolePermissionData> LoadForUserAsync(Guid? userId, CancellationToken ct = default)
     {
-        var publicRoles = await PublicRolesAsync(ct);
-        if (userId is null) return await ToDataAsync(publicRoles, ct);
+        if (userId is null) return await ToDataAsync(await PublicRolesAsync(ct), ct);
 
-        var assigned = await db.Queryable<UserRole>()
-            .InnerJoin<Role>((ur, r) => ur.RoleId == r.Id)
-            .Where((ur, r) => ur.UserId == userId.Value)
-            .Select((ur, r) => r)
+        var roles = await db.Queryable<Role>()
+            .Where(r => r.Name == RbacSeeder.PublicRoleName ||
+                        SqlFunc.Subqueryable<UserRole>()
+                            .Where(ur => ur.RoleId == r.Id && ur.UserId == userId.Value)
+                            .Any())
             .ToListAsync(ct);
 
-        return await ToDataAsync(publicRoles.Concat(assigned).DistinctBy(r => r.Id).ToList(), ct);
+        return await ToDataAsync(roles.DistinctBy(r => r.Id).ToList(), ct);
     }
 
     /// <summary>Previews the effective permissions of a hypothetical role set. Unions the same
@@ -31,13 +31,14 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
     public async Task<RolePermissionData> LoadForRolesAsync(
         IReadOnlyList<Guid> roleIds, CancellationToken ct = default)
     {
-        var publicRoles = await PublicRolesAsync(ct);
-        if (roleIds.Count == 0) return await ToDataAsync(publicRoles, ct);
+        if (roleIds.Count == 0) return await ToDataAsync(await PublicRolesAsync(ct), ct);
 
         var ids = roleIds.ToList();
-        var selected = await db.Queryable<Role>().Where(r => ids.Contains(r.Id)).ToListAsync(ct);
+        var roles = await db.Queryable<Role>()
+            .Where(r => r.Name == RbacSeeder.PublicRoleName || ids.Contains(r.Id))
+            .ToListAsync(ct);
 
-        return await ToDataAsync(publicRoles.Concat(selected).DistinctBy(r => r.Id).ToList(), ct);
+        return await ToDataAsync(roles.DistinctBy(r => r.Id).ToList(), ct);
     }
 
     private Task<List<Role>> PublicRolesAsync(CancellationToken ct) =>

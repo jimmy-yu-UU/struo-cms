@@ -2,6 +2,7 @@
 using Struo.Application.Abstractions;
 using Struo.Application.Files;
 using Struo.Application.Security;
+using Struo.Infrastructure.Identity;
 
 namespace Struo.Api.Auth;
 
@@ -26,7 +27,9 @@ public sealed class FileAccessPolicy(
     /// (<c>SqlSugarRolePermissionStore</c>): when <c>file</c> is a public-read collection — the
     /// documented setup for serving images anonymously — <c>CanRead("file")</c> is true for anonymous
     /// and authenticated callers alike and therefore gates nothing. A draft is an editorial state, so
-    /// the caller who may edit files is the caller who may see them; no public role is given write.
+    /// the caller who may edit files is the caller who may see them. The shipped seed
+    /// (<see cref="RbacSeeder.SeedAsync"/>) grants <c>public</c> read only — granting it write as well
+    /// would widen this gate to every caller.
     /// <para>Both identity kinds are already resolved by the time this runs: the default
     /// <see cref="AuthSchemes.Adaptive"/> policy scheme authenticates cookie AND bearer callers on
     /// every endpoint, including FilesController's Get/Download which carry no <c>[Authorize]</c>, and

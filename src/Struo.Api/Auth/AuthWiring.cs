@@ -35,10 +35,18 @@ public static class AuthWiring
             : CookieSecurePolicy.SameAsRequest;
 
         services.AddAuthentication(AuthSchemes.Adaptive)
+            // The header alone decides — the cookie is never consulted here. A caller presenting
+            // BOTH a session cookie and an Authorization: Bearer header is resolved as the bearer
+            // identity, not the cookie identity: PolicyEvaluator still authenticates both named
+            // schemes and merges principals on [Authorize(AuthenticationSchemes = CookieOrBearer)]
+            // actions, but on every [Authorize]-free endpoint (item reads, /graphql, GET
+            // /api/files/{id} and /content) this selector's choice is the only one that runs. A
+            // bad/junk/revoked token therefore downgrades that caller to anonymous (the public
+            // floor) on those endpoints rather than falling back to the cookie's own grants —
+            // fail-closed by design, not a bug.
             .AddPolicyScheme(AuthSchemes.Adaptive, AuthSchemes.Adaptive, options =>
                 options.ForwardDefaultSelector = context =>
-                    context.Request.Headers.Authorization.ToString()
-                        .StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    AuthSchemes.HasBearerHeader(context.Request)
                         ? AuthSchemes.Bearer
                         : AuthSchemes.Cookie)
             .AddCookie(AuthSchemes.Cookie, options =>

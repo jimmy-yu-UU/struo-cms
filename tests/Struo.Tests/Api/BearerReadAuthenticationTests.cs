@@ -81,4 +81,28 @@ public class BearerReadAuthenticationTests(ApiFactory factory)
 
         (await anon.GetAsync("/api/items/category")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    // Pins AuthWiring.AddStruoAuth's ForwardDefaultSelector comment: the Authorization header alone
+    // decides, and a caller presenting BOTH a valid session cookie AND a bearer header is resolved as
+    // the BEARER identity on every [Authorize]-free endpoint — never falling back to the cookie. A
+    // junk/invalid token therefore doesn't merely fail to add grants; it makes
+    // BearerTokenAuthenticationHandler return AuthenticateResult.Fail, so this request ends up with NO
+    // authenticated identity at all on this endpoint — not the editor's own grants (from the cookie)
+    // and not even a fresh anonymous identity, since "anonymous" here specifically means "the Bearer
+    // scheme was tried and failed", which HttpContext.User.Identity.IsAuthenticated reports as false.
+    // DomainErrorMap.Map treats an unauthenticated PermissionDeniedException as 401 UNAUTHORIZED (not
+    // 403), so that is the status this test observes: 'mediaFolder' is neither public-read nor granted
+    // to the anonymous/public floor in this test host, so the read is denied, and it is denied as an
+    // unauthenticated caller, not as a forbidden one.
+    [Fact]
+    public async Task Cookie_client_with_a_junk_bearer_header_is_resolved_as_the_bearer_identity_and_downgraded()
+    {
+        var (client, _) = await factory.CreateEditorClientAsync(
+            readCollections: ["mediaFolder"], writeCollections: []);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "not-a-real-token");
+
+        var resp = await client.GetAsync("/api/items/mediaFolder");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized, await resp.Content.ReadAsStringAsync());
+    }
 }
