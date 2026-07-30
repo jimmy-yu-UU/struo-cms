@@ -130,11 +130,20 @@ picker instead of a plain text input) — frontend-only, no backend change:
 5. Mirror the new value in `frontend/src/lib/fieldTypes/types.ts` (`FieldInterface` union AND
    `ALL_FIELD_INTERFACES`) and add its entry to `frontend/src/lib/fieldTypes/registry.ts` (component +
    `defaultValue`/`parse`/`serialize`/`listColumn`), following Playbook 2a for the component itself.
-6. **Tests to add**: a backend test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs`
+6. If this new interface is used by (or an existing field's `Interface`/other `[CmsField]`/
+   `[CmsCollection]` attribute is changed to use) one of the seven core `[CmsCollection]` types, the
+   committed `schema/core-collections.json` snapshot is now stale. Regenerate it, then commit the
+   result:
+   ```bash
+   UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot
+   ```
+   Skipping this fails the `backend` CI job's `CoreSchemaSnapshotTests` with a diff against the stale
+   snapshot (`schema/README.md` has the full contract).
+7. **Tests to add**: a backend test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs`
    covering the new interface's scan-time validation, a persistence-level test if you touched
    `SqlSugarClientFactory` (follow the pattern of existing column-widening tests in
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
-7. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
+8. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
    change spans both stacks. **Live-PostgreSQL verification is required** if you touched
    `SqlSugarClientFactory`'s column mapping, since the `IsJson`/`text` truncation failure mode above
    does not reproduce on SQLite at all.
@@ -262,7 +271,10 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 5. **Tests to add**: a `*.test.ts` next to any new `lib/` helper or non-trivial component logic
    (Vitest). If the change affects a user-facing flow end-to-end, add or update a Playwright spec under
    `frontend/e2e/` (`core` project — never `e2e/sample/**` unless the change is specific to the Blog
-   sample).
+   sample). A new field-type component also needs its own `frontend/src/lib/fieldTypes/registry.ts`
+   entry (see Playbook 2a) — `frontend/tests/schemaContract.test.ts` enforces that every interface a
+   core collection actually uses has one, so a component with no registry entry fails that test rather
+   than silently rendering read-only.
 6. **Gate**: `pnpm test && pnpm build` (the four standing gates' frontend half; `pnpm build` runs
    `vue-tsc -b`, which is CI's only enforcement of the SPA's TypeScript types). Run `pnpm e2e` as a
    further check for any change touching a critical flow — it needs a live API and database and is not

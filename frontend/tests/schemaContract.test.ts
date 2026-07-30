@@ -1,8 +1,8 @@
-// This test needs no DOM; it also must run under Node's own URL implementation. Under the
-// project's default jsdom environment, the global URL constructor resolves relative refs against
-// jsdom's document location (http://localhost:3000/) instead of a file:// base, which breaks
-// fileURLToPath below. Node environment sidesteps that without touching the shared vite.config.ts.
 // @vitest-environment node
+// Vitest's jsdom environment uses Vite's *web* transform mode, in which import.meta.url is a
+// dev-server http://…/@fs/… URL, not file://, so fileURLToPath below rejects it. This test needs
+// no DOM, so the node environment (ssr transform mode, file:// module URLs) is the correct
+// scope-local fix, without touching the shared vite.config.ts.
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'

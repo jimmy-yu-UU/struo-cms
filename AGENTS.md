@@ -19,7 +19,8 @@ actual project.
 carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`, `User`,
 `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, and `SiteSettings` are framework
 tables but not collections. If you're unsure whether something is core, it's core only if it lives in
-`src/Struo.*`.
+`src/Struo.*` — `schema/` is the one exception outside that path: it holds the committed snapshot of
+these seven collections' wire metadata (`schema/README.md`), and a fork keeps it alongside `src/Struo.*`.
 
 `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is an optional, detachable **demo** — it shows how
 to define collections using the same primitives a fork would use. It is not shipped capability: the
@@ -100,9 +101,14 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    dotnet test`.
 2. **Add a field type** — swapping an editor for an existing `FieldInterface` is frontend-only
    (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches the
-   backend enum, `MetadataScanner`, possibly `SqlSugarClientFactory`'s column-widening hook, and the
-   frontend registry + type union together. Gate: all four standing gates; live-PostgreSQL check if you
-   touched column mapping.
+   backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped member
+   fails GraphQL schema build, which surfaces as a misleading `ObjectDisposedException` on
+   `IServiceProvider` during host startup rather than a clear error — see `docs/ai/task-playbooks.md`
+   Playbook 2b), possibly `SqlSugarClientFactory`'s column-widening hook, and — both required — the
+   frontend `frontend/src/lib/fieldTypes/types.ts` type union/`ALL_FIELD_INTERFACES` and its
+   `registry.ts` component. If the new value touches a core collection, regenerate
+   `schema/core-collections.json` (`schema/README.md`). Gate: all four standing gates; live-PostgreSQL
+   check if you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
@@ -118,6 +124,12 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 The **four standing gates** — the same ones CI runs on every push/PR — are `dotnet build`,
 `dotnet test`, `pnpm test`, `pnpm build` (the latter two from `frontend/`). Run whichever apply to your
 change; run all four before anything touching both stacks.
+
+`dotnet test` now includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change
+has not been mirrored into `schema/core-collections.json`; `pnpm test` now includes
+`frontend/tests/schemaContract.test.ts`, which fails when the admin SPA cannot render the snapshot.
+Regenerate with `UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot` and commit the
+result — see `schema/README.md` for the full contract.
 
 **Live-PostgreSQL verification is required for any change to DB behavior** (a migration, a
 `SqlSugarClientFactory` column-mapping change, a query-building change) — SQLite passing is not evidence
