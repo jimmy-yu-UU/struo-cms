@@ -179,7 +179,7 @@ compose 檔案的情況下覆寫——`STRUO_MINIO_PORT` / `STRUO_MINIO_CONSOLE_
 一項讀取授權——`RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/RbacSeeder.cs:48-57`)
 針對每一個 `Rbac:PublicReadCollections` 項目，只插入 `CanRead = true`，`CanWrite`/`CanDelete`
 從未被動過——但 RBAC 模型中沒有任何東西*禁止*一位超級管理員透過角色權限矩陣，把 `public` 的寫入
-授權授予出去 (第 12 章示範了正是這個授權流程，即時針對 `role` 集合操作)；若對 `file` 做同樣的事，
+授權授予出去 (第 12 章示範了正是這個授權流程，即時針對 `role` 集合操作);若對 `file` 做同樣的事，
 會把草稿存取權擴大到每一個已登入的呼叫端，因為這一節所把關的那個寫入授權，屆時也會變成公開的。
 這項檢查失敗時，會回傳單純的 `404` 而不是 `403`，所以一份草稿的存在與否，不會外洩給一個沒有該授權
 的呼叫端 (`FilesController.Get`/`Download`，`src/Struo.Api/Controllers/FilesController.cs:57-72`、

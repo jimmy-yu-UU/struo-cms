@@ -140,7 +140,13 @@ neither a session cookie nor the CSRF header.
 Every GraphQL example in this chapter still runs against a cookie session with the CSRF header, because
 that's the natural shape of a browser-based GraphQL client (Nitro IDE, a SPA) — not because a
 bearer-only client is unable to drive `/graphql`. It can, on equal footing with a cookie session,
-including every mutation below.
+including every mutation below. Proof, not assertion — a bearer token minted for a role that grants
+only `mediaFolder` read, with no cookie and no CSRF header, driving a `mediaFolders` query:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer 13XX3-bzyoJwQ399_eEplnQpLrNhMETssBqNVUyokw4" -d '{"query":"{ mediaFolders { items { id } } }"}'
+{"data":{"mediaFolders":{"items":[{"id":"019fac90-2300-78da-8a3c-f281dac532e0"},{"id":"019fac8f-fb2b-77ae-a152-f25fddf54ef8"}]}}}
+```
 
 ### Reading the live schema
 
