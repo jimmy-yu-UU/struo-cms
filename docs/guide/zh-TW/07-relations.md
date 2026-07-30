@@ -236,8 +236,8 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 
 ## 管理後台 picker
 
-`RelationInterface` (`src/Struo.Domain/Metadata/Enums/RelationInterface.cs`) 有七個值，但出貨的
-管理後台 SPA 只把其中四個接上了真正的輸入元件;其餘的都會退回唯讀顯示
+`RelationInterface` (`src/Struo.Domain/Metadata/Enums/RelationInterface.cs`) 有四個值，而出貨的
+管理後台 SPA 把每一個都接上了真正的輸入元件
 (`frontend/src/lib/relationInputKind.ts`):
 
 | `RelationInterface` | 管理後台元件 | 行為 |
@@ -246,7 +246,15 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 | `TagSelect` | `RelationPicker` (PrimeVue `MultiSelect`) | 適用於 many-to-many 關聯的多值 picker，搜尋行為相同。 |
 | `TreeSelect` | `RelationPicker` (PrimeVue `TreeSelect`) | 建立在一棵樹狀結構上的單值 picker，該樹由一個自我參照 many-to-one 的目標資料列建構而成。 |
 | `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | 目標集合的唯讀、分頁、延遲載入清單，依關聯的反向外鍵過濾;點擊一列會導向該列自己的項目編輯頁面。只有在父項已經儲存之後才會顯示 (一個全新、尚未儲存的父項，還沒有 id 可以拿來過濾)。 |
-| `FilePicker` / `ImagePicker` / `FilesPicker` | *(無——退回一個純文字標籤)* | 這三個 enum 值確實存在，也會被收錄進中介資料，但 `relationInputKind.ts` 的介面對應元件表中沒有它們的條目，所以 `RelationInput.vue` 會落到它最後那個無條件分支:一個單純的 `<span class="readonly-relation">{{ relation.label }} (read-only)</span>`——完全不是一個輸入元素，所以 `Editable` 沒有任何東西可以套用上去。 |
+
+`relationInputKind.ts` 仍然保留一個無條件的 fallback，用於它的對應表不認得的介面:一個單純的
+`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`，而不是一個輸入元素，
+所以 `Editable` 沒有任何東西可以套用上去。出貨的 enum 裡沒有任何值會走到那裡:schema 契約 gate
+(`schema/interfaces.json`，詳見 `schema/README.md`) 會在某個 `RelationInterface` 成員缺少對應表
+條目時讓 `pnpm test` 失敗，所以這個 fallback 是「因結構而不可達」，不是靠慣例維持。它只在你新增成員卻略過
+前端那一半時才有意義——而那正是 gate 不允許的事。早期版本曾出貨三個沒有對應的成員
+(`FilePicker`、`ImagePicker`、`FilesPicker`)，它們確實會落到這個 fallback;後來已移除，因為檔案
+參照是以 `FieldInterface` 的 `File`/`Image`/`Files` 建模，而非以關聯建模。
 
 每一個 picker，都會透過 `resolveDisplayLabel`，從 `[CmsRelation(DisplayTemplate = ...)]` 解析出
 目標資料列的顯示標籤——這是對目標自身已投影欄位做的一個單純 `{FieldName}` 代換，如果樣板 (或它
