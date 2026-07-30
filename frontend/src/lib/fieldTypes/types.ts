@@ -2,7 +2,9 @@ import type { Component } from 'vue'
 import type { FieldMeta } from '../../types/schema'
 
 // Mirrors backend Struo.Domain.Metadata.Enums.FieldInterface (camelCase).
-// MUST be kept in sync with that enum — adding a backend interface requires adding it here.
+// Adding a backend interface requires adding it here AND giving it a component in registry.ts.
+// Enforced, not honour-system: frontend/tests/schemaContract.test.ts fails when any interface used
+// by a core collection is missing from this list or from the registry (see schema/README.md).
 export type FieldInterface =
   | 'text' | 'textarea' | 'richText' | 'markdown' | 'code'
   | 'slug' | 'email' | 'url' | 'password' | 'color' | 'phone'
