@@ -46,7 +46,7 @@ public sealed class FilesController(
 
         await using var stream = file.OpenReadStream();
         var created = await files.UploadAsync(stream, file.FileName, file.ContentType, file.Length, folderId, ct);
-        return StatusCode(StatusCodes.Status201Created, new
+        return Created($"/api/files/{created.Id}", new
         {
             id = created.Id, fileName = created.FileName, contentType = created.ContentType,
             size = created.Size, width = created.Width, height = created.Height, status = created.Status,

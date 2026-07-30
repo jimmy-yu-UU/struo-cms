@@ -35,6 +35,16 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
                 return new ObjectResult(Envelope.Success(pr.Data, new MetaInfo(pr.Total, pr.Limit, pr.Offset)))
                 { StatusCode = paged.StatusCode };
 
+            // 201 with a Location. CreatedResult is an ObjectResult, so the generic case below would
+            // rebuild it as a plain ObjectResult and its Location-writing behavior (which happens
+            // during its own execution, after this filter) would never run. Rebuild it as a
+            // CreatedResult instead, carrying the envelope as the body. Note: CreatedAtActionResult /
+            // CreatedAtRouteResult are NOT covered — they compute their Location from IUrlHelper at
+            // formatting time and cannot be reconstructed here. Nothing in this template uses them;
+            // a fork that does should return Created(uri, value) instead.
+            case CreatedResult created:
+                return new CreatedResult(created.Location ?? string.Empty, Envelope.Success(created.Value));
+
             // Any other value-bearing result: 2xx → success, non-2xx → error by status.
             case ObjectResult obj:
             {
