@@ -121,6 +121,21 @@
 既有資料庫上授予公開讀取權限**——請直接對一個運作中的資料庫授予該權限 (透過 RBAC 管理 UI 或 API)，
 或是在針對全新資料庫的第一次啟動之前就設定好這個值。
 
+## `GraphQl`
+
+| 鍵 | 型別 | 預設 | 意義 |
+|---|---|---|---|
+| `GraphQl:ExposeSchema` | bool (可為 null) | *未設定* → 僅限 Development | 這個執行個體是否可以**揭露自己的 GraphQL schema**。它透過同一個解析出來的旗標，管控兩條能讀取 schema 的路由——introspection 查詢 (`__schema`/`__type`) 與 HotChocolate 內建的 `GET /graphql?sdl`——所以兩者不會各自漂移。未設定時維持出貨行為 (Development 開啟，其他環境關閉)。 |
+
+明確設定這個值，就能在不重新建置的情況下依環境覆寫——`GraphQl__ExposeSchema=true` 正是為那種刻意
+公開 public GraphQL API、希望正式環境也能讀取 schema 的 fork 所準備的開關。
+
+這只涉及 schema **揭露**。無論設成哪一種，透過 `POST /graphql` 的查詢執行都不受影響:一個已經知道
+自己要發什麼查詢的用戶端，執行期根本不會去讀 schema，所以關掉它不會弄壞任何 GraphQL 消費端。真正
+會受影響的是依賴 schema 的**工具鏈**——codegen、Postman/Insomnia 匯入 schema、Apollo Sandbox——這些
+應該指向 Development 或 staging 執行個體。Nitro 瀏覽器 IDE 由另一道閘門把關，不受這個設定影響，
+一律僅限 Development。各環境的實測行為見第 10 章。
+
 ## `RateLimiting:Login`
 
 | 鍵 | 型別 | 預設值 | 作用 |
