@@ -39,6 +39,9 @@ public class AuthenticationFailureEnvelopeTests(ApiFactory factory)
         public Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default) =>
             throw new InvalidOperationException("credential store unreachable");
 
+        public Task<UserCredential?> FindByIdAsync(Guid id, CancellationToken ct = default) =>
+            throw new InvalidOperationException("credential store unreachable");
+
         public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) =>
             throw new InvalidOperationException("credential store unreachable");
     }
