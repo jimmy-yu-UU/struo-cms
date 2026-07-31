@@ -198,7 +198,8 @@ public sealed class FileService(
         bool trashed = false;
         await repository.InTransactionAsync(async () =>
         {
-            trashed = await repository.SoftDeleteAsync("file", id.ToString(), DateTime.UtcNow, currentUser.GetCurrentUserId(), ct);
+            trashed = await repository.SoftDeleteAsync(
+                FileCollection.Name, id.ToString(), DateTime.UtcNow, currentUser.GetCurrentUserId(), ct);
             if (!trashed) return;
             // A trashed file is filtered out of every read; if it is the current brand logo, clear the
             // reference now so ConfigController stops resolving it into a dead /content URL (mirrors
@@ -212,5 +213,5 @@ public sealed class FileService(
     }
 
     public Task<bool> RestoreAsync(Guid id, CancellationToken ct = default) =>
-        repository.RestoreAsync("file", id.ToString(), ct);
+        repository.RestoreAsync(FileCollection.Name, id.ToString(), ct);
 }
