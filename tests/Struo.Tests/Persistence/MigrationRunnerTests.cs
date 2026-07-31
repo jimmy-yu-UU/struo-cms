@@ -136,7 +136,7 @@ public sealed class MigrationRunnerTests
                 var rows = await client.Queryable<SchemaMigration>().ToListAsync();
                 rows.Should().ContainSingle();
                 rows[0].Filename.Should().Be("001-create-widget.sql");
-                rows[0].AppliedAt.Should().NotBe(default);
+                rows[0].AppliedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
             }
             finally { dir.Delete(recursive: true); }
         }
