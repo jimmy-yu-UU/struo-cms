@@ -13,9 +13,14 @@ downstream forks.
 - **Package versions are never hand-authored.** Install via the package manager itself
   (`dotnet add package` for NuGet, `pnpm add <pkg>` for the frontend) and let it write the version
   string. NuGet versions are centralized in `Directory.Packages.props`.
-- **Database behavior is verified on live PostgreSQL, not just the SQLite test suite** — SQLite passing
-  is not evidence of PostgreSQL correctness (`AGENTS.md`'s Verification section has the documented
-  divergence and how to configure a test connection).
+- **Database behavior is verified against a live instance of the backend you are actually configured
+  for, not just the SQLite test suite** — SQLite passing is not evidence of correctness anywhere else.
+  On PostgreSQL (the verified target) run the live-PG check; it is strongly recommended for every
+  DB-behavior change. On any other backend, that backend needs its own equivalent live check — a green
+  PostgreSQL run does not transfer. This is a robustness practice, **not** a CI gate: CI runs the
+  SQLite suite only, deliberately, so that no single engine is privileged over DB replaceability.
+  (`AGENTS.md`'s Verification section has the documented divergences and how to configure a test
+  connection.)
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.
 - **When unsure about an architectural decision, stop and ask** rather than guessing.
 

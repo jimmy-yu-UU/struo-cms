@@ -120,7 +120,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
 4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`, idempotent,
    forward-only, `timestamptz` for new temporal columns, never edit an already-applied filename. Gate:
-   `dotnet build && dotnet test`, plus live-PostgreSQL verification (the runner is a SQLite no-op).
+   `dotnet build && dotnet test`, plus live verification on the configured backend (on PostgreSQL, the
+   live-PG check; the runner is a no-op on every non-PostgreSQL backend, SQLite included — see
+   Verification).
 5. **Change the admin SPA** — only when metadata isn't enough (new field editor, theming, i18n, a
    bespoke view); the SPA never hardcodes a collection's fields/columns/labels. Gate: `pnpm test &&
    pnpm build`.
@@ -139,9 +141,27 @@ frontend has no mirror for, whether or not any collection uses it.
 Regenerate with `UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot` (bash) and commit the
 result — see `schema/README.md` for the full contract, including the PowerShell form of that command.
 
-**Live-PostgreSQL verification is required for any change to DB behavior** (a migration, a
-`SqlSugarClientFactory` column-mapping change, a query-building change) — SQLite passing is not evidence
-of PostgreSQL correctness. This codebase has a documented, specific divergence: `IsJson` without an
+**Any change to DB behavior** (a migration, a `SqlSugarClientFactory` column-mapping change, a
+query-building change) **should be verified against a live instance of whichever database this
+deployment is actually configured for** — SQLite passing is not evidence of correctness on any other
+backend, and the SQLite suite is a development convenience, not the portability guarantee.
+
+- **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
+  recommended for every DB-behavior change, since it is the one backend with an existing suite
+  (`PostgresIntegrationTests`) and the one whose divergences are already catalogued. This is a
+  robustness recommendation, not a CI gate — CI deliberately runs the SQLite suite only, because
+  mandating a specific engine in CI would privilege one backend over the replaceability the ORM
+  abstraction exists to preserve.
+- **Configured for any other backend** (`MySql`/`SqlServer`/`Oracle`): that backend needs its own
+  equivalent live check before you rely on the change. Do not treat a green PostgreSQL run as
+  transferable evidence — the divergences below are type/column-semantics issues, exactly the class
+  the ORM does *not* abstract away.
+
+The portability rule that governs application code is "all DB access through SqlSugar, zero vendor
+SQL" (see Invariants). That rule keeps *query and command* code portable. It does not make
+*type mapping, column semantics, or DDL* portable, and this codebase has concrete counterexamples —
+which is why the verification above is per-backend rather than per-codebase. This codebase has a
+documented, specific divergence: `IsJson` without an
 explicit `text` column type truncates at `varchar(1)` on PostgreSQL but appears to work on SQLite,
 which ignores declared column length. Configure `Testing:PostgresConnection` to a disposable database
 whose name contains `test` — the test resolves it from the `STRUO_TEST_PG_CONNECTION` environment

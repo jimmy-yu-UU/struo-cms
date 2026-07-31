@@ -6,8 +6,13 @@ each is the linked manual chapter — read it before making the change if anythi
 
 Gate vocabulary used below: the **four standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
 (from `frontend/`), `pnpm build` (from `frontend/`) — the same four commands `.github/workflows/ci.yml`
-runs on every push/PR. **Live-PostgreSQL verification** is a separate, additional step required for any
-change to DB behavior — set `Testing:PostgresConnection` to a disposable database whose name contains
+runs on every push/PR. **Live-database verification** is a separate, additional step for any change to
+DB behavior, performed against whichever backend the deployment is configured for: on PostgreSQL (the
+verified target) it is the strongly-recommended live-PG check described below; on `MySql`/`SqlServer`/
+`Oracle` that backend needs its own equivalent check, since a green PostgreSQL run does not transfer.
+It is a robustness practice rather than a CI gate — CI runs the SQLite suite only, so that no single
+engine is privileged over DB replaceability. For the PostgreSQL
+form — set `Testing:PostgresConnection` to a disposable database whose name contains
 `test`. It resolves in this order: the `STRUO_TEST_PG_CONNECTION` environment variable first, else the
 `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`;
 either route works. Or run the application against a real PostgreSQL instance directly. SQLite passing
@@ -155,9 +160,11 @@ picker instead of a plain text input) — frontend-only, no backend change:
    `SqlSugarClientFactory` (follow the pattern of existing column-widening tests in
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
 9. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
-   change spans both stacks. **Live-PostgreSQL verification is required** if you touched
-   `SqlSugarClientFactory`'s column mapping, since the `IsJson`/`text` truncation failure mode above
-   does not reproduce on SQLite at all.
+   change spans both stacks. **Verify against the backend you are configured for** if you touched
+   `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends diverge, and
+   the `IsJson`/`text` truncation failure mode above does not reproduce on SQLite at all. On
+   PostgreSQL that means the live-PG check (strongly recommended here); on another backend, its own
+   equivalent.
 
 ## Playbook 3: Add an endpoint
 
@@ -242,10 +249,12 @@ README.md`.
    it directly (see the live-PostgreSQL step below). If the migration backs a new collection, that
    collection's own tests (Playbook 1) are the regression coverage.
 7. **Gate**: `dotnet build && dotnet test` first (the migration runner is a hard no-op on SQLite, so
-   this only confirms nothing else broke). **Live-PostgreSQL verification is required** for the
-   migration itself: point `Database:MigrationsPath` at `db/migrations/` (an absolute path) against a
-   disposable PostgreSQL database and confirm the script applies cleanly and is recorded in
-   `schema_migrations` — SQLite passing proves nothing about whether the SQL is even valid PostgreSQL.
+   this only confirms nothing else broke). **The migration itself can only be verified by applying
+   it**: point `Database:MigrationsPath` at `db/migrations/` (an absolute path) against a disposable
+   PostgreSQL database and confirm the script applies cleanly and is recorded in `schema_migrations` —
+   SQLite passing proves nothing about whether the SQL is even valid PostgreSQL. Note this step has no
+   equivalent on another backend today: `db/migrations/` holds PostgreSQL DDL and `MigrationRunner`
+   no-ops on everything else, so a fork running a different engine has no migration path at all yet.
 
 ## Playbook 5: Change the admin SPA
 
