@@ -122,7 +122,7 @@ core。不過，單純執行 `rm -rf samples/` 仍會破壞 solution 層級的 `
 | 密碼雜湊 | Isopoh.Cryptography.Argon2 2.0.0 (Argon2id) | `Directory.Packages.props` |
 | 物件儲存 (S3 後端) | AWSSDK.S3 4.0.25.3 | `Directory.Packages.props` |
 | 圖片轉換 | NetVips 3.2.0 / NetVips.Native 8.18.4 | `Directory.Packages.props` |
-| 富文本清理 | HtmlSanitizer 9.1.968-beta | `Directory.Packages.props` |
+| 富文本清理 | HtmlSanitizer 9.1.974 | `Directory.Packages.props` |
 | Session 存放 | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis 10.0.9 | `Directory.Packages.props` |
 | SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.9 | `Directory.Packages.props` |
 | 測試執行器 | xUnit 2.9.3 | `Directory.Packages.props` |
