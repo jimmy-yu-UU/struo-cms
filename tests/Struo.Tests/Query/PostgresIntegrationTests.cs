@@ -230,4 +230,111 @@ public sealed class PostgresIntegrationTests : IDisposable
             ancestor = (Dictionary<string, object?>)ancestor["parent"]!;
         ancestor["name"].Should().Be("PgRoot"); // 6 hops up the chain lands exactly on root
     }
+
+    // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
+    // filter materializes before rewriting it into `id IN (...)`; uses category.parent (self-relation)
+    // so only the Category table is needed. PG-specific risk being covered: the resolved set is a list
+    // of Guids that has to bind as uuid, so a cap that fired on the wrong side of that binding — or a
+    // rewrite that produced an untyped IN list — would pass on SQLite and fail here.
+    [Fact]
+    public async Task Resolved_id_set_cap_rejects_an_over_wide_dotted_filter_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, _, filterResolver, options) = BuildRepoWithGraph();
+
+        const string stamp = "PgCapWide";
+        for (var i = 0; i < 4; i++)
+            await repo.CreateAsync("category", new Category { Name = $"{stamp}-p{i}" });
+
+        options.MaxResolvedFilterIds = 3; // leaf resolves 4 parents -> over the cap
+
+        var act = async () => await filterResolver.RewriteAsync(
+            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp));
+
+        (await act.Should().ThrowAsync<QueryException>())
+            .WithMessage("*too many rows*")
+            .WithMessage("*MaxResolvedFilterIds*");
+    }
+
+    // Control for the cap: a filter resolving WITHIN the cap must still rewrite to the correct
+    // `id IN (...)` on Postgres, uuid-bound. Guards against the cap being enforced so eagerly that
+    // legitimate dotted filters break, and against the rewrite losing the ids.
+    [Fact]
+    public async Task Resolved_id_set_cap_leaves_a_within_cap_dotted_filter_correct_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, _, filterResolver, options) = BuildRepoWithGraph();
+
+        const string stamp = "PgCapNarrow";
+        var parent = (Category)await repo.CreateAsync("category", new Category { Name = stamp });
+        var childA = (Category)await repo.CreateAsync(
+            "category", new Category { Name = $"{stamp}-a", ParentId = parent.Id });
+        var childB = (Category)await repo.CreateAsync(
+            "category", new Category { Name = $"{stamp}-b", ParentId = parent.Id });
+
+        options.MaxResolvedFilterIds = 50;
+
+        var rewritten = await filterResolver.RewriteAsync(
+            "category", new ComparisonFilter("parent.name", QueryOperator.Eq, stamp));
+
+        var comparison = rewritten.Should().BeOfType<ComparisonFilter>().Subject;
+        comparison.FieldPath.Should().Be("id");
+        comparison.Op.Should().Be(QueryOperator.In);
+        comparison.Value.Should().BeAssignableTo<IReadOnlyList<object>>();
+        ((IReadOnlyList<object>)comparison.Value!).Cast<Guid>()
+            .Should().BeEquivalentTo([childA.Id, childB.Id]);
+    }
+
+    // The credential-write audit path on real Postgres. SqlSugarUserAccountStore's mutators are
+    // column-scoped SetColumns updates that chain UpdatedAt/UpdatedBy/Version + 1, and two of the
+    // values written are NULL (a system actor's UpdatedBy, and AccessToken on revoke). An untyped null
+    // parameter is sent to Npgsql as text, which PG rejects against uuid/varchar columns (42804) —
+    // exactly the divergence SQLite hides, since it ignores the distinction. This asserts all three
+    // mutators round-trip on PG, including the null cases.
+    [Fact]
+    public async Task User_credential_writes_stamp_audit_and_bump_version_on_postgres()
+    {
+        if (!PgConfigured) return;
+        BuildRepoWithGraph();                       // establishes _db against the disposable test DB
+        _db!.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
+
+        var store = new Struo.Infrastructure.Identity.SqlSugarUserAccountStore(_db);
+        var actor = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var email = $"pg-cred-{Guid.CreateVersion7():N}@struo.test";
+
+        var id = await store.CreateAsync(email, "enc:initial", "PG Cred Target");
+        (await store.ExistsAsync(id)).Should().BeTrue();
+        (await store.FindProfileAsync(id))!.Email.Should().Be(email);
+
+        Struo.Infrastructure.Identity.User Load() =>
+            _db!.Queryable<Struo.Infrastructure.Identity.User>().Where(u => u.Id == id).First();
+
+        var created = Load();
+
+        (await store.SetPasswordAsync(id, "enc:rotated", actor, DateTime.UtcNow)).Should().BeTrue();
+        var afterPassword = Load();
+        afterPassword.Password.Should().Be("enc:rotated");
+        afterPassword.Version.Should().Be(created.Version + 1);
+        afterPassword.UpdatedBy.Should().Be(actor);
+
+        (await store.SetAccessTokenAsync(id, "token-hash", actor, DateTime.UtcNow)).Should().BeTrue();
+        var afterIssue = Load();
+        afterIssue.AccessToken.Should().Be("token-hash");
+        afterIssue.AccessTokenCreatedAt.Should().NotBeNull();
+        afterIssue.AccessTokenLastUsedAt.Should().BeNull("SetAccessTokenAsync writes a typed NULL here");
+        afterIssue.Version.Should().Be(afterPassword.Version + 1);
+
+        // Both null-valued columns in one statement: AccessToken (varchar) and UpdatedBy (uuid).
+        (await store.ClearAccessTokenAsync(id, actor: null, DateTime.UtcNow)).Should().BeTrue();
+        var afterRevoke = Load();
+        afterRevoke.AccessToken.Should().BeNull();
+        afterRevoke.UpdatedBy.Should().BeNull("a system actor writes a typed NULL uuid, not PG error 42804");
+        afterRevoke.Version.Should().Be(afterIssue.Version + 1);
+
+        // Unknown id reports false rather than throwing, so the controllers' 404 stays correct.
+        (await store.SetPasswordAsync(Guid.CreateVersion7(), "enc:x", actor, DateTime.UtcNow))
+            .Should().BeFalse();
+
+        _db.Deleteable<Struo.Infrastructure.Identity.User>().Where(u => u.Id == id).ExecuteCommand();
+    }
 }
