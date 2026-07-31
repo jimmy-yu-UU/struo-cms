@@ -224,6 +224,11 @@ public sealed class SqlSugarItemRepository(
                         queryLocale, fieldCondition, ct);
                     foreach (var pid in parentIds)
                         allParentIds.Add(pid?.ToString() ?? "");
+                    // Checked INSIDE the loop, not once after it: the union across N translatable
+                    // searchable fields is what has to stay bounded, and a per-field check after the
+                    // fact would already have every field's ids in memory.
+                    ResolvedIdSetGuard.EnsureCount(
+                        allParentIds.Count, options.MaxResolvedFilterIds, $"search on '{field}'");
                 }
                 allParentIds.Remove("");
 
