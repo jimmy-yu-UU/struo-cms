@@ -128,4 +128,12 @@ public sealed class OptionsValidationTests
         ove.Should().NotBeNull("OIDC enabled without ClientId must fail fast at startup");
         string.Join(" ", ove!.Failures).Should().Contain("Oidc");
     }
+
+    [Fact]
+    public void AutoSyncSchema_defaults_to_false()
+    {
+        // 預設必須是安全側：不開啟就不會有任何自動結構同步。
+        new Struo.Application.Configuration.DatabaseOptions()
+            .AutoSyncSchema.Should().BeFalse();
+    }
 }
