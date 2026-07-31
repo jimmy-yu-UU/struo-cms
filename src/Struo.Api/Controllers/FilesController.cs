@@ -46,7 +46,7 @@ public sealed class FilesController(
 
         await using var stream = file.OpenReadStream();
         var created = await files.UploadAsync(stream, file.FileName, file.ContentType, file.Length, folderId, ct);
-        return StatusCode(StatusCodes.Status201Created, new
+        return Created($"/api/files/{created.Id}", new
         {
             id = created.Id, fileName = created.FileName, contentType = created.ContentType,
             size = created.Size, width = created.Width, height = created.Height, status = created.Status,
@@ -62,7 +62,7 @@ public sealed class FilesController(
         // A non-published file requires a genuine per-collection read grant, not merely a
         // logged-in session (a role-less JIT/SSO user could otherwise fetch any draft). 404 (not 403)
         // so existence isn't leaked.
-        if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
+        if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
         return Ok(new
         {
             id = row.Id, fileName = row.FileName, contentType = row.ContentType,
@@ -82,7 +82,7 @@ public sealed class FilesController(
         if (row is null) return NotFound();
         // Same gate as Get above: a non-published file requires a genuine per-collection read grant,
         // not merely a logged-in session. 404 (not 403) so existence isn't leaked.
-        if (row.Status != "published" && !await access.CanReadUnpublishedAsync(HttpContext, ct)) return NotFound();
+        if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
 
         // On-the-fly image transform. Only when the caller actually asked for one (at least one
         // of width/height/format present), the content behind this row is an image, and the feature is

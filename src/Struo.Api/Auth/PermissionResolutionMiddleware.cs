@@ -5,7 +5,9 @@ using Struo.Application.Security;
 namespace Struo.Api.Auth;
 
 /// <summary>Resolves the caller's effective permissions ONCE per request (after authentication)
-/// into the scoped <see cref="ICurrentPermissions"/> snapshot. One DB load per request.</summary>
+/// into the scoped <see cref="ICurrentPermissions"/> snapshot. One role/permission resolution per
+/// request — how many DB round trips that resolution costs is an implementation detail of
+/// <see cref="IRolePermissionStore"/>, not of this middleware.</summary>
 public sealed class PermissionResolutionMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(
@@ -18,14 +20,9 @@ public sealed class PermissionResolutionMiddleware(RequestDelegate next)
         await next(context);
     }
 
-    /// <summary>
-    /// The load+resolve+set sequence shared with <see cref="FileAccessPolicy"/>'s bearer-adopt
-    /// path — both need to (re)compute an effective-permissions snapshot for a given user id and
-    /// publish it into the scoped <see cref="ICurrentPermissions"/> holder. Kept here, alongside the
-    /// middleware that owns the per-request cookie-path resolution, so the sequence is defined in
-    /// exactly one place instead of being duplicated.
-    /// </summary>
-    internal static async Task ResolveAndSetAsync(
+    /// <summary>Loads the caller's raw role/permission rows, folds them into an effective-permissions
+    /// snapshot, and publishes it into the scoped <see cref="ICurrentPermissions"/> holder.</summary>
+    private static async Task ResolveAndSetAsync(
         Guid? userId, IRolePermissionStore store, ICurrentPermissions current, CancellationToken ct)
     {
         var data = await store.LoadForUserAsync(userId, ct);

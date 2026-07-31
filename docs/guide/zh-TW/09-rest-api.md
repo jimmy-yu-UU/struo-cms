@@ -130,7 +130,7 @@ Retry-After: 60
 | 狀態 | 適用時機 |
 |---|---|
 | `200 OK` | 一次讀取，或是結果會有意義地回傳在本文中的一次寫入 (建立/更新/取得/列出全部都回傳 `200`——注意下方 `Created` 的 `201` 是唯一的例外)。 |
-| `201 Created` | `POST /api/items/{collection}`、`POST /api/users`，以及 `POST /api/files`——回應本文帶有建立好的資料列。**這三者永遠都不會送出 `Location` 標頭**:`ItemsController.Create` 與 `UsersController.Create` 都呼叫了 `Created(uri, value)` (一個 `CreatedResult`，它自身的 `ExecuteResultAsync` 通常會寫出一個 `Location` 標頭)，但 `EnvelopeResultFilter` 的 `case ObjectResult obj` 分支也會比對到 `CreatedResult` (它本身就是一種 `ObjectResult`)，並把它換成一個**單純的** `ObjectResult`，只帶有包裝後的本文與狀態碼——原本 `CreatedResult` 寫入 `Location` 的行為從未執行。`FilesController.Upload` 一開始就沒有嘗試過寫入 `Location` 標頭 (它回傳的是 `StatusCode(201, ...)`，而不是 `Created(...)`)。已即時驗證:無論是 `POST /api/items/mediaFolder` 還是 `POST /api/users`，即使 controller 原始碼呼叫了 `Created(...)`，都不會送出 `Location` 標頭。 |
+| `201 Created` | `POST /api/items/{collection}`、`POST /api/users`，以及 `POST /api/files`——回應本文帶有建立好的資料列，而這三者都會送出一個相對的 `Location` 標頭，指向該資料列的正規 `GET` 路由:分別是 `/api/items/{collection}/{id}`、`/api/items/user/{id}` (刻意指向通用的 items 路由，而不是一個專屬的 users 路由——資料列實際上就是從那裡讀回來的)，以及 `/api/files/{id}`。`ItemsController.Create`、`UsersController.Create` 與 `FilesController.Upload` 全部都呼叫 `Created(uri, value)` (一個 `CreatedResult`，它自身的 `ExecuteResultAsync` 通常會寫出 `Location`)。`EnvelopeResultFilter` 在其通用的 `ObjectResult` 分支之前，特別處理了 `CreatedResult`，把它重建成一個**新的** `CreatedResult`，帶有包裝後的本文——所以當 ASP.NET Core 格式化回應時，寫入 `Location` 的行為仍然會執行，不同於通用分支會把它壓平成一個單純的 `ObjectResult` 而遺失標頭。`CreatedAtActionResult`/`CreatedAtRouteResult` 則刻意**不**被這個重建機制涵蓋:它們的 `Location` 是在格式化時，由 `IUrlHelper` 計算出來的——那已經是這個 filter 執行完之後的事了，所以無法在這裡重建。這個樣板中沒有任何地方使用這兩種結果型別;若一個 fork 需要用到其中之一，應該改回傳 `Created(uri, value)`。 |
 | `204 No Content` | 每一次刪除 (回收桶或清除)、還原，以及登出——完全沒有本文;`EnvelopeResultFilter` 會明確地讓一個 `NoContentResult` 保持裸狀態，不會把它包進信封裡。 |
 | `400 Bad Request` | `BAD_USER_INPUT` 或 `VALIDATION` (見錯誤代碼表)。 |
 | `401 Unauthorized` | `UNAUTHORIZED`。 |
@@ -192,17 +192,29 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 
 - **Cookie** (`AuthSchemes.Cookie`，名為 `struo.session` 的 session cookie)——由
   `POST /api/auth/login` 設定，是一張以 Redis (或記憶體內備援;第 3 章) 為後盾、8 小時滑動有效期的
-  票證。這是**預設的驗證機制** (`AddAuthentication(AuthSchemes.Cookie)`)，所以不論 action 是否帶有
-  `[Authorize]` attribute，ASP.NET Core 都會在**每一次請求時自動驗證它**。
+  票證。
 - **Bearer** (`AuthSchemes.Bearer`，一個由 `POST /api/users/{id}/access-token` 取得的逐使用者存取
   權杖，以 `Authorization: Bearer <token>` 送出)——由 `BearerTokenAuthenticationHandler`
   (`src/Struo.Api/Auth/BearerTokenAuthenticationHandler.cs`) 對照雜湊過的權杖儲存區做驗證。
 
+這兩者本身都不是 ASP.NET Core 的*預設*驗證機制——真正的預設是第三個轉發用機制:
+`AuthSchemes.Adaptive` (`"Adaptive"`，透過 `AuthWiring.AddStruoAuth` 中的
+`AddAuthentication(AuthSchemes.Adaptive)` 加上 `AddPolicyScheme` 註冊)，只要請求的
+`Authorization` 標頭以 `Bearer ` 開頭，就轉發給 `Bearer`，否則轉發給 `Cookie`。因為 `Adaptive`
+是預設機制，ASP.NET Core 會以這種方式驗證**每一個請求**——無論該 action 是否帶有 `[Authorize]`
+attribute——比對出實際符合的那個真正機制。這個選擇器只看標頭本身，從不會參考 cookie:一個同時帶有
+session cookie 與 `Authorization: Bearer` 標頭的呼叫端，在每一個不帶 `[Authorize]` 的 action 上，
+都會被解析成 bearer 身分，所以一個失效或已撤銷的權杖，會讓該呼叫端降級成 `public` 底線，而不是回退
+到 cookie 自己的授權——這是刻意設計成 fail-closed，不是一個 bug (第 12 章涵蓋 `public` 底線)。
+
 帶有 `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` (一份以逗號連接的機制清單:
 `"Cookies,Bearer"`) 的 action——`ItemsController`/`FilesController` 上的每一個寫入，以及
 `UsersController`/`RolesController`/`LanguagesController`/`SettingsController`/`SchemaController`
-上的每一個 action，再加上 `AuthController` 的 `logout`/`me`——會明確地同時探測**兩種**機制，所以在
-這些地方，一個 bearer 權杖的效果與一個 cookie 完全相同:
+上的每一個 action，再加上 `AuthController` 的 `logout`/`me`——額外明確指名了**兩種**機制:ASP.NET
+Core 的 `PolicyEvaluator` 會依序對每一個指名的機制呼叫 `AuthenticateAsync`，並把成功驗證出來的
+principal 合併起來，這在驅動 `[Authorize]` 自身挑戰/拒絕邏輯之外，同時也是在做驗證本身——所以在
+這些地方，無論 `Adaptive` 原本預設會轉發給哪個機制，一個 bearer 權杖向來都會被探測到，效果與一個
+cookie 完全相同:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/<id> -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"status":"published"}'
@@ -211,36 +223,20 @@ HTTP/1.1 200 OK
 ```
 
 **`ItemsController` 的讀取 action (`/api/items/{collection}` 與 `/api/items/{collection}/{id}`
-上的 `GET`/`POST query`，再加上 `.../revisions` 系列 action) 完全不帶任何 `[Authorize]`
+上的 `GET`/`POST query`，再加上 `.../revisions` 系列 action) 仍然完全不帶任何 `[Authorize]`
 attribute**——這是刻意的，因為一次讀取只需要一般的逐集合 `CanRead` RBAC 檢查，而不是一個一律要求
-驗證的門檻 (第 8 章)。由於 Bearer 不是預設機制，除非請求上有其他東西強制觸發，否則 ASP.NET Core
-永遠不會為這些特定 action 執行 Bearer 處理器——一般的瀏覽器導覽只會自動驗證預設 (Cookie) 機制。
-因此，一個純粹只帶 bearer 的呼叫端命中這些 action 時，會被視為**匿名者**，而不是該權杖所屬的
-使用者，只能得到匿名者/公開角色所授予的權限 (預設為完全沒有):
-
-```
-$ curl -s -i -H "Authorization: Bearer <token>" "http://localhost:5221/api/items/file?sort=fileName"
-HTTP/1.1 401 Unauthorized
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
-
-$ curl -s -i -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName"
-HTTP/1.1 200 OK
-{"success":true,"data":[...],"meta":{"total":3,"limit":25,"offset":0}}
-```
-
-同一個 bearer 權杖，對任何一個帶 `[Authorize]` 的端點都能正常運作，包括另一個 controller 上的
-一個手足讀取 action:
+驗證的門檻 (第 8 章)，`Adaptive` 並不會改變這一點。真正改變的是:一個純 bearer 呼叫端命中這些
+action 時，會解析成哪個身分。`Adaptive` 即使在一個完全沒有指名任何機制的 action 上，仍然會驗證
+`Bearer` 標頭，所以呼叫端會被解析為**它自己**——連同它自己的角色授權 (與 `public` 底線聯集，第
+12 章)——與一個以 cookie 驗證的呼叫端完全相同，而不是被當成匿名者。一個真正匿名的請求 (完全沒有
+任何憑證) 仍然只能得到 `public` 自身授權所允許的內容，這一點沒有改變。因此同一個 bearer 權杖，
+無論命中 `ItemsController` 上的一次單純讀取，還是另一個 controller 上帶 `[Authorize]` 的手足
+端點，現在的行為都完全相同:
 
 ```
 $ curl -s -H "Authorization: Bearer <token>" "http://localhost:5221/api/languages"
 {"success":true,"data":[{"code":"en","name":"English","isDefault":true}, ...]}
 ```
-
-**實際上的結果:** 一個純粹由 bearer 權杖驅動的 API 客戶端，可以寫入每一個集合 (每一個寫入 action
-都帶有 `[Authorize]`)，但除非它同時持有一張 session cookie，否則無法透過 `GET`/`POST query` 讀取
-一個集合的項目——`ItemsController` 上的讀取，永遠只會看到環境中的 cookie 身分。這是出貨的
-controller 中一個真實、已驗證過的不對稱現象，不是文件上的簡化說法:一個依賴純 bearer API 客戶端做
-讀取的 fork，需要在這些 action 上自行加上 `[Authorize]` attribute (或等效的驗證機制選擇器)。
 
 `LanguagesController` 與 `SchemaController` 值得注意的地方，是它們只要求*已通過驗證*，而不需要
 一個逐集合的 `CanRead` 授權——任何已登入的使用者 (無論 cookie 或 bearer) 都能讀取完整的語言清單或
@@ -321,10 +317,10 @@ Content-Length: 0
 
 | 方法與路徑 | 查詢參數 | 本文 | 回應 | 驗證 | 權限 |
 |---|---|---|---|---|---|
-| `GET /api/items/{collection}` | `filter[...]`、`sort`、`limit`、`offset`、`fields`、`deep`、`search`、`locale`、`deleted` | — | `200`，清單 + `meta` | 無 (不帶 `[Authorize]`;只認環境中的 cookie——見上文) | `CanRead` |
+| `GET /api/items/{collection}` | `filter[...]`、`sort`、`limit`、`offset`、`fields`、`deep`、`search`、`locale`、`deleted` | — | `200`，清單 + `meta` | 無 (不帶 `[Authorize]`;但若請求帶有 cookie 或 bearer 憑證，`Adaptive` 仍會驗證它——見上文) | `CanRead` |
 | `POST /api/items/{collection}/query` | `locale`、`deleted` (即使在這裡也是從 URL 讀取) | JSON 信封 (第 8 章) | `200`，清單 + `meta` | 無 (同上) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`、`locale`、`deleted` | — | `200` 項目，或 `404` | 無 (同上) | `CanRead` (`deleted=only\|with` 額外需要 `CanDelete`) |
-| `POST /api/items/{collection}` | — | 可寫入欄位組成的 JSON 物件 | `201` 已建立的項目 (沒有 `Location` 標頭——見上方的「狀態碼慣例」) | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
+| `POST /api/items/{collection}` | — | 可寫入欄位組成的 JSON 物件 | `201` 已建立的項目，`Location: /api/items/{collection}/{id}` (見上方的「狀態碼慣例」) | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `PUT /api/items/{collection}/{id}` | — | JSON 物件，部分更新 (只有送出的鍵值會疊加——但請見上方 `Required` 欄位的但書) | `200` 已更新的項目，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool，預設 `false`) | — | `204`，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` 已還原的項目，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
@@ -379,9 +375,9 @@ $ curl -s -i -X DELETE http://localhost:5221/api/items/mediaFolder/<guides-id> -
 
 | 方法與路徑 | 查詢參數 | 本文 | 回應 | 驗證 | 權限 |
 |---|---|---|---|---|---|
-| `POST /api/files` | — | `multipart/form-data`:`file` (必填)、`folderId` (選填) | `201`，`{ id, fileName, contentType, size, width, height, status, folderId }` | Cookie or Bearer | `IFileAccessPolicy.CanWrite()` |
-| `GET /api/files/{id}` | — | — | `200` 中介資料，或 `404` (一個未發布的檔案，除非呼叫端具有讀取未發布內容的權限，否則同樣是 `404`) | 無 | 已發布的檔案不需要任何權限;其他情況則需要讀取授權 |
-| `GET /api/files/{id}/content` | `width`、`height`、`format`、`fit`、`quality` (圖片轉換，第 11 章) | — | `200` 位元組 (串流，或在 `Struo:Files:PresignedRedirect` 開啟時為 `302`)，或 `404` | 無 | 與上方的 `Get` 相同 |
+| `POST /api/files` | — | `multipart/form-data`:`file` (必填)、`folderId` (選填) | `201`，`Location: /api/files/{id}`，`{ id, fileName, contentType, size, width, height, status, folderId }` | Cookie or Bearer | `IFileAccessPolicy.CanWrite()` |
+| `GET /api/files/{id}` | — | — | `200` 中介資料，或 `404` (一個未發布的檔案，除非呼叫端具有讀取未發布內容的權限，否則同樣是 `404`) | 無 (不帶 `[Authorize]`;但若請求帶有 cookie 或 bearer 憑證，`Adaptive` 仍會驗證它——右側的權限檢查需要它) | 已發布的檔案不需要任何權限;一個未發布的檔案則需要**已驗證的身分，加上一個 `file` 寫入授權** (`IFileAccessPolicy.CanReadUnpublished`——第 11 章——不是讀取授權) |
+| `GET /api/files/{id}/content` | `width`、`height`、`format`、`fit`、`quality` (圖片轉換，第 11 章) | — | `200` 位元組 (串流，或在 `Struo:Files:PresignedRedirect` 開啟時為 `302`)，或 `404` | 與上方的 `Get` 相同 | 與上方的 `Get` 相同 |
 | `DELETE /api/files/{id}` | `purge` (bool，預設 `false`) | — | `204`，或 `404` | Cookie or Bearer | `CanDelete()` |
 | `POST /api/files/{id}/restore` | — | — | `204`，或 `404` | Cookie or Bearer | `CanDelete()` |
 
@@ -408,7 +404,7 @@ HTTP/1.1 204 No Content
 
 | 方法與路徑 | 本文 | 回應 | 權限 |
 |---|---|---|---|
-| `POST /api/users` | `{ email, password, name? }` | `201`，`{ id, email, name }` | 超級管理員 |
+| `POST /api/users` | `{ email, password, name? }` | `201`，`Location: /api/items/user/{id}`，`{ id, email, name }` | 超級管理員 |
 | `PUT /api/users/{id}/password` | `{ newPassword, currentPassword? }` | `204`，或 `404` | 超級管理員 (變更另一位使用者) ——或本人，並提供 `currentPassword` |
 | `POST /api/users/{id}/access-token` | — | `200`，`{ token }` (只會顯示一次——只有雜湊值會被儲存) | 超級管理員 |
 | `DELETE /api/users/{id}/access-token` | — | `204`，或 `404` | 超級管理員 |
@@ -422,7 +418,7 @@ $ curl -s -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
 
 $ curl -s -X POST http://localhost:5221/api/users/<id>/access-token -H "X-Struo-CSRF: 1" -b cookies.txt
-{"success":true,"data":{"token":"clWm9Pe2-c3N84facW83-sADRU6DCpoKp8vresC2Cz0"}}
+{"success":true,"data":{"token":"<token>"}}
 
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<id>/effective-permissions?roles="
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}

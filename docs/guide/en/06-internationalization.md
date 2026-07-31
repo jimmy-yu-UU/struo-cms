@@ -109,15 +109,24 @@ field is that the error names the locale: `"Field '{name}' exceeds maximum lengt
 '{locale}'."`
 
 One consequence worth stating plainly: `File` rows are only ever created through the dedicated
-upload pipeline (`FileService.UploadAsync`, chapter 11), which seeds the default-locale `Title`
-from the uploaded filename automatically. `File`'s parent fields (`fileName`, `contentType`, `size`,
-…) are all `ReadOnly`, and a `ReadOnly` field backed by a nullable-capable CLR type — every `string`
-property qualifies, per chapter 5 — is nulled out by `ItemDeserializer` on any generic create; a
-generic `POST /api/items/file` therefore always fails the database's `NOT NULL` constraint on
-`filename` before it ever reaches translation validation. A collection with a translation sidecar
-that *is* created through the generic items API (any collection you define yourself with
-`[CmsTranslations]`) does not have this restriction — only `File` special-cases creation this way,
-because of its custom upload pipeline.
+upload pipeline (`FileService.UploadAsync`, chapter 11) — file rows are owned by that pipeline, not
+by the generic items API. `ItemService.CreateAsync` checks the ordinary `CanWrite` grant *first*
+(`ItemService.cs:108`, chapter 12's `AdminOnly` section documents this check ordering for every
+collection) — a caller with no write grant on `file` at all sees the generic `"Write not permitted."`
+(`FORBIDDEN`) before ever reaching the collection-specific rejection below. Only once that passes does
+the guard specific to `File` run: `ItemService.cs:115-117` rejects a generic `POST /api/items/file`
+outright with `400 BAD_USER_INPUT`, quoting the exact message from source: "Files cannot be created
+through the generic items API. Upload one with POST /api/files instead." — before it ever reaches
+translation validation, `ReadOnly` stripping, or any other generic-create machinery. The same guard
+rejects a GraphQL `createFile` mutation identically, since both protocols share
+`ItemService.CreateAsync`. This second check is unrelated to `File`'s `fileName`/`contentType`/`size`
+fields being `ReadOnly`: even a body that supplied every required column would still be rejected,
+because the *collection* is off-limits to generic create, not merely its fields. A collection with a
+translation sidecar that *is* created through the generic items API (any collection you define
+yourself with `[CmsTranslations]`) has no such restriction — only `File` special-cases creation this
+way, because of its dedicated upload pipeline; its per-locale `title`/
+`alt` are still edited normally afterward through `PUT /api/items/file/{id}`, the ordinary
+generic-update path.
 
 ## The default-locale rule
 

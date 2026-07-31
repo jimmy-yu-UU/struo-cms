@@ -11,8 +11,10 @@ public sealed record RolePermissionData(
 /// <summary>
 /// Loads the RBAC data for a caller, querying the DB <b>directly</b> and bypassing the generic
 /// projection / permission gating — the query that resolves the gate must never itself be gated
-/// (mirrors <see cref="IUserCredentialStore"/>). <paramref name="userId"/> null = anonymous, which
-/// loads the <c>public</c> role's grants.
+/// (mirrors <see cref="IUserCredentialStore"/>). The <c>public</c> role is a permission FLOOR: its
+/// grants are unioned into the result for every caller — anonymous (<paramref name="userId"/> is
+/// null), role-less, and role-holding alike — so a caller's own roles can only ADD to what
+/// <c>public</c> already exposes, never subtract from it.
 /// </summary>
 public interface IRolePermissionStore
 {
@@ -20,7 +22,9 @@ public interface IRolePermissionStore
 
     /// <summary>
     /// Loads RBAC data for a HYPOTHETICAL role set (User-form preview of an unsaved TagSelect
-    /// selection). An empty list follows the same public-role floor as a role-less user.
+    /// selection). Unions the same <c>public</c>-role floor as <see cref="LoadForUserAsync"/>: the
+    /// result always includes what <c>public</c> grants, whether the list is empty or names specific
+    /// roles.
     /// Ids not matching an existing role are simply absent from the result — the caller decides
     /// whether that is an error.
     /// </summary>

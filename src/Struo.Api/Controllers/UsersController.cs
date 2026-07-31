@@ -100,7 +100,7 @@ public sealed class UsersController(
     /// <summary>
     /// Read-only preview for the User form. Reuses the exact per-request resolution pair
     /// (IRolePermissionStore + PermissionResolver), so the preview is by construction identical to
-    /// real authorization — including the public-role floor for role-less users and the super-admin
+    /// real authorization — including the public-role floor for every caller and the super-admin
     /// short-circuit. Projection mirrors AuthController.Me: probe each schema collection.
     /// </summary>
     [HttpGet("{id:guid}/effective-permissions")]
@@ -139,8 +139,9 @@ public sealed class UsersController(
             }
             data = await rolePermissions.LoadForRolesAsync(ids, ct);
             // Unknown ids silently shrinking the preview would show grants that don't match the
-            // selection — reject instead. (Empty request -> public role loads; roles named
-            // 'public' are still a real match, so only compare when ids were requested.)
+            // selection — reject instead. Skip when no ids were requested: there is nothing to
+            // validate (no id can be "missing" when none was asked for), and the empty request still
+            // gets the public floor via LoadForRolesAsync's built-in union.
             if (ids.Count > 0)
             {
                 var loaded = data.Roles.Select(r => r.Id).ToHashSet();

@@ -65,21 +65,23 @@ and never expires on its own (there is no TTL — a token is permanent until exp
 hash). Every bearer-authenticated request updates `AccessTokenLastUsedAt`, throttled to once per minute
 per token so a busy integration doesn't turn every call into a write.
 
-**Bearer is not the default scheme**, so ASP.NET Core only ever runs the bearer handler for an action
-that explicitly names it — every write action across `ItemsController`/`FilesController`/
-`UsersController`/`RolesController`/etc. is `[Authorize(AuthenticationSchemes =
-AuthSchemes.CookieOrBearer)]`, so a bearer token works identically to a cookie there. `ItemsController`'s
-**read** actions carry no `[Authorize]` at all, so a bearer-only caller hitting a plain `GET
-/api/items/{collection}` is treated as anonymous, not as the token's identity — this is chapter 9's
-documented asymmetry, not something specific to this chapter, but it is a genuine, shipped RBAC
-consequence worth restating here: a purely-bearer API client can write to every collection it has a
-grant for, but cannot read one via `ItemsController` without also holding a session cookie. Live-verified
-that a bearer request needs no `X-Struo-CSRF` header to succeed (see below) where a cookie request to the
+**No `[Authorize]` attribute names Bearer by default** — every write action across
+`ItemsController`/`FilesController`/`UsersController`/`RolesController`/etc. is explicit about it
+(`[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`), so a bearer token has always worked
+identically to a cookie there. What used to be missing was the actions naming **no** scheme at all:
+`ItemsController`'s read actions, and `/graphql` (chapter 10), carry no `[Authorize]` attribute, and
+before `AuthSchemes.Adaptive` existed as the default authenticate scheme, ASP.NET Core only ever ran the
+Cookie handler automatically for those — a bearer-only caller hitting one of them was resolved as
+anonymous. `Adaptive` (`src/Struo.Api/Auth/AuthWiring.cs`) closes that gap: it forwards to `Bearer`
+whenever the request carries `Authorization: Bearer …`, on **every** endpoint, attributed or not — so a
+bearer-only caller now reads through `ItemsController` (and `/graphql`) as itself, with its own roles'
+grants unioned with the `public` floor below, exactly as a cookie session would. Live-verified that a
+bearer request needs no `X-Struo-CSRF` header to succeed (see below) where a cookie request to the
 same endpoint would be rejected without it:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6 \
-    -H "Authorization: Bearer vezSJKN-p7HkNqffT-r_lT40u263OGWyccUdZjm_SkI" \
+    -H "Authorization: Bearer <token>" \
     -H "Content-Type: application/json" -d '{"status":"published"}'
 HTTP/1.1 200 OK
 {"success":true,"data":{"id":"5b4de227-0997-4bb1-b1e7-9565b3cffce6","version":5, ...}}
@@ -167,13 +169,18 @@ deployment is expected to constrain it explicitly — a single-tenant `Authority
 and/or `AllowedEmailDomains`, and `RequireEmailVerified = true` — rather than rely on the zero-config
 defaults that keep local development frictionless.
 
-**Role-less users landing on the public floor:** a freshly JIT-provisioned user (or any user with no
-`UserRole` rows at all) is not a hard error — `SqlSugarRolePermissionStore.LoadForUserAsync`
-(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs:23-27`) falls back to the `public`
-role's own grants whenever an authenticated user's role set comes back empty, which is exactly the same
-grant set an anonymous caller sees. In other words: signing in via OIDC (or existing as a user with roles
-never assigned) never grants *less* than being anonymous, and never grants more than the `public` role
-was explicitly given — there is no separate "authenticated but ungranted" tier below `public`.
+**`public` is the floor for every caller:** `SqlSugarRolePermissionStore.LoadForUserAsync`
+(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs:14-26`) unions the `public` role's
+own grants into **every** caller's effective permissions — anonymous, role-less, and role-holding alike
+— not merely as a fallback for a user whose role set comes back empty. A caller's own roles can only
+*add* to what `public` already grants, never subtract: the model has no deny semantics —
+`PermissionResolver.Resolve` folds every role's read/write/delete grants together with `OR` and nothing
+else — so a role could never have meaningfully narrowed the floor even before this union existed. That
+matters because, before it existed, a signed-in user's grants came *only* from their own assigned roles:
+a user with roles could therefore read **less** than an anonymous visitor, whenever `public` held a
+grant their roles didn't happen to repeat — logged in, and worse off. Unioning `public` into every
+result fixes that asymmetry: a freshly JIT-provisioned user, a user with no `UserRole` rows, and a user
+holding a full set of roles all see at least what `public` grants, and never less.
 
 ## Users, roles, permissions: the data model
 
@@ -356,15 +363,21 @@ a super-admin changing someone else's, or as the account's own owner supplying a
 admin's User-edit form can show what a role selection *would* grant without saving it first. It reuses
 the exact same resolution pair (`IRolePermissionStore` + `PermissionResolver`) that a real request goes
 through, so the preview is by construction identical to what would actually be enforced — not a
-separately-maintained approximation. Three distinct request shapes, all live-verified against a
-role-less `editor@example.com`:
+separately-maintained approximation. This includes the `public` floor above: `LoadForRolesAsync` unions
+the same `public` grants into a hypothetical role set that `LoadForUserAsync` unions into a real
+caller's stored roles, so the preview can never disagree with what the request pipeline would actually
+resolve — previewing an empty or unsaved role selection still shows at least the floor, never an
+artificially empty result. Three distinct request shapes, all live-verified against a role-less
+`editor@example.com`:
 
 ```
-# absent `roles=` -> the user's actually-STORED roles (editor has none -> public floor, currently empty)
+# absent `roles=` -> the user's actually-STORED roles, unioned with the public floor (editor holds
+# none, so this is just the floor itself, currently empty)
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-permissions"
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}
 
-# `roles=` present but EMPTY -> hypothetical preview of "no roles selected" (same public floor)
+# `roles=` present but EMPTY -> hypothetical preview of an empty role set, unioned with the same
+# public floor
 $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-permissions?roles="
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{}}}
 
@@ -389,8 +402,9 @@ actual super-admin session (chapter 9).
 ## Next steps
 
 - Chapter 8, [Query DSL](08-query-dsl.md), and chapter 9, [REST API](09-rest-api.md), for the
-  `X-Struo-CSRF` mechanism itself, the full cookie/bearer endpoint tables, and the read-side bearer
-  asymmetry this chapter only restates.
+  `X-Struo-CSRF` mechanism itself, the full cookie/bearer endpoint tables, and how the default
+  `Adaptive` authentication scheme resolves a bearer-only caller identically on every endpoint, reads
+  included.
 - Chapter 3, [Configuration Reference](03-configuration-reference.md), for every config key named in this
   chapter — `Auth:BootstrapAdmin`, `Rbac:PublicReadCollections`, `RateLimiting:Login`, `Redis`, `Oidc` —
   in full, including their first-boot-only and restart caveats.

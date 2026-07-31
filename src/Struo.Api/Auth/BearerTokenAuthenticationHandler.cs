@@ -16,10 +16,9 @@ public sealed class BearerTokenAuthenticationHandler(
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var header = Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(header) || !header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return AuthenticateResult.NoResult();
+        if (!AuthSchemes.HasBearerHeader(Request)) return AuthenticateResult.NoResult();
 
+        var header = Request.Headers.Authorization.ToString();
         var token = header["Bearer ".Length..].Trim();
         if (token.Length == 0) return AuthenticateResult.NoResult();
 
