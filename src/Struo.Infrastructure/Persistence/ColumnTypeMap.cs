@@ -7,9 +7,10 @@ namespace Struo.Infrastructure.Persistence;
 /// backend. This is the single place a vendor type name may appear in <c>src/</c>.
 ///
 /// <para>
-/// PostgreSQL and SQLite are this repository's verified backends; the other three mappings are
-/// chosen to be syntactically valid and semantically reasonable so that CodeFirst table creation
-/// succeeds, and are documented as unverified in <c>AGENTS.md</c>.
+/// PostgreSQL is this repository's verified runtime target; SQLite is used for the test suite only
+/// (see <c>AGENTS.md</c>). The other three mappings (MySQL, SqlServer, Oracle) are chosen to be
+/// syntactically valid and semantically reasonable so that CodeFirst table creation succeeds — they
+/// are not claimed to be verified against a live instance of those backends.
 /// </para>
 /// </summary>
 internal static class ColumnTypeMap
@@ -18,10 +19,15 @@ internal static class ColumnTypeMap
     {
         ColumnShape.LongText => dbType switch
         {
-            DbType.PostgreSQL or DbType.MySql or DbType.Sqlite => "text",
+            DbType.PostgreSQL or DbType.Sqlite => "text",
+            // MySQL's TEXT caps at 65,535 bytes — not unbounded, unlike every other mapping here.
+            // A full item Revision.Snapshot or a realistic RichText/Markdown/Json body can exceed
+            // that (error 1406 in strict mode, silent truncation otherwise). LONGTEXT (up to 4 GiB)
+            // is the conventional MySQL choice for unbounded text.
+            DbType.MySql => "longtext",
             DbType.SqlServer => "nvarchar(max)",
             DbType.Oracle => "clob",
-            _ => "text",
+            _ => throw new ArgumentOutOfRangeException(nameof(dbType), dbType, "Unmapped DbType for ColumnShape.LongText."),
         },
         ColumnShape.TimestampWithTimeZone => dbType switch
         {
@@ -35,7 +41,7 @@ internal static class ColumnTypeMap
             // substring matches), so this literal is accepted as-is — preserving exactly the
             // column type the existing test suite has always created.
             DbType.Sqlite => "timestamptz",
-            _ => "timestamptz",
+            _ => throw new ArgumentOutOfRangeException(nameof(dbType), dbType, "Unmapped DbType for ColumnShape.TimestampWithTimeZone."),
         },
         _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "Unmapped ColumnShape."),
     };
