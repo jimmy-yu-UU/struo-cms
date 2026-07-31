@@ -1,13 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SqlSugar;
 using Struo.Api.Auth;
 using Struo.Api.Http;
 using ErrorCodes = Struo.Api.Http.ErrorCodes; // disambiguates from the global `HotChocolate.ErrorCodes` using (GraphQl)
 using Struo.Application.Abstractions;
 using Struo.Application.Metadata;
 using Struo.Application.Security;
-using Struo.Infrastructure.Identity;
 
 namespace Struo.Api.Controllers;
 
@@ -18,7 +16,7 @@ public sealed record ChangePasswordRequest(string NewPassword, string? CurrentPa
 [Route("api/users")]
 [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
 public sealed class UsersController(
-    ISqlSugarClient db, IPasswordHasher hasher, IUserCredentialStore store,
+    IUserAccountStore accounts, IPasswordHasher hasher, IUserCredentialStore store,
     ICurrentPermissions permissions, ICurrentUserAccessor currentUser) : ControllerBase
 {
     private const int MinPasswordLength = 8;
@@ -40,11 +38,7 @@ public sealed class UsersController(
         if (await store.FindByEmailAsync(body.Email, ct) is not null)
             return ApiResults.Fail(StatusCodes.Status409Conflict, ErrorCodes.Conflict, "Email already in use.");
 
-        var id = Guid.CreateVersion7();
-        await db.Insertable(new User
-        {
-            Id = id, Email = body.Email, Password = hasher.Hash(body.Password), Name = body.Name, IsActive = true
-        }).ExecuteCommandAsync(ct);
+        var id = await accounts.CreateAsync(body.Email, hasher.Hash(body.Password), body.Name, ct);
         return Created($"/api/items/user/{id}", new { id, email = body.Email, name = body.Name });
     }
 
@@ -63,16 +57,15 @@ public sealed class UsersController(
         else
         {
             // Self-service: must prove knowledge of the current password.
-            var existing = await db.Queryable<User>().Where(u => u.Id == id).FirstAsync(ct);
+            var existing = await store.FindByIdAsync(id, ct);
             if (existing is null) return NotFound();
-            if (string.IsNullOrEmpty(body.CurrentPassword) || !hasher.Verify(existing.Password, body.CurrentPassword))
+            if (string.IsNullOrEmpty(body.CurrentPassword) || !hasher.Verify(existing.PasswordEncoded, body.CurrentPassword))
                 return ApiResults.Fail(StatusCodes.Status401Unauthorized, ErrorCodes.Unauthorized, "Current password is incorrect.");
         }
 
-        var updated = await db.Updateable<User>()
-            .SetColumns(u => u.Password == hasher.Hash(body.NewPassword))
-            .Where(u => u.Id == id).ExecuteCommandAsync(ct);
-        return updated == 0 ? NotFound() : NoContent();
+        var updated = await accounts.SetPasswordAsync(
+            id, hasher.Hash(body.NewPassword), currentUser.GetCurrentUserId(), DateTime.UtcNow, ct);
+        return updated ? NoContent() : NotFound();
     }
 
     [HttpPost("{id:guid}/access-token")]
@@ -80,11 +73,9 @@ public sealed class UsersController(
     {
         if (RequireAdmin() is { } denied) return denied;
         var (token, hash) = AccessTokenHasher.Generate();
-        var now = DateTime.UtcNow;
-        var updated = await db.Updateable<User>()
-            .SetColumns(u => new User { AccessToken = hash, AccessTokenCreatedAt = now, AccessTokenLastUsedAt = null })
-            .Where(u => u.Id == id).ExecuteCommandAsync(ct);
-        if (updated == 0) return NotFound();
+        var updated = await accounts.SetAccessTokenAsync(
+            id, hash, currentUser.GetCurrentUserId(), DateTime.UtcNow, ct);
+        if (!updated) return NotFound();
         return Ok(new { token }); // shown once
     }
 
@@ -92,9 +83,9 @@ public sealed class UsersController(
     public async Task<IActionResult> RevokeToken(Guid id, CancellationToken ct)
     {
         if (RequireAdmin() is { } denied) return denied;
-        var updated = await db.Updateable<User>()
-            .SetColumns(u => u.AccessToken == null).Where(u => u.Id == id).ExecuteCommandAsync(ct);
-        return updated == 0 ? NotFound() : NoContent();
+        var updated = await accounts.ClearAccessTokenAsync(
+            id, currentUser.GetCurrentUserId(), DateTime.UtcNow, ct);
+        return updated ? NoContent() : NotFound();
     }
 
     /// <summary>
@@ -111,7 +102,7 @@ public sealed class UsersController(
         CancellationToken ct)
     {
         if (RequireAdmin() is { } denied) return denied;
-        if (!await db.Queryable<User>().Where(u => u.Id == id).AnyAsync(ct))
+        if (!await accounts.ExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
 
         RolePermissionData data;
