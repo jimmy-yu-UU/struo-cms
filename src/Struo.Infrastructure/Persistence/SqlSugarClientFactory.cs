@@ -51,6 +51,14 @@ public static class SqlSugarClientFactory
 
                     if (column.IsPrimarykey || column.IsIgnore) return;
 
+                    // Explicit dialect-neutral shape wins over every convention below.
+                    var shape = property.GetCustomAttribute<ColumnShapeAttribute>()?.Shape;
+                    if (shape is not null)
+                    {
+                        column.DataType = ColumnTypeMap.For(shape.Value, dbType);
+                        return;
+                    }
+
                     // Multi-value fields (List<string> / List<TagItem>) always map to a JSON column —
                     // it's the only valid mapping for a List<> property. An explicit
                     // [SugarColumn(IsJson = true)] on the same property is redundant but compatible.
@@ -65,7 +73,7 @@ public static class SqlSugarClientFactory
                     if (mvField is not null && JsonColumnInterfaces.Contains(mvField.Interface))
                     {
                         column.IsJson = true;
-                        column.DataType = "text";
+                        column.DataType = ColumnTypeMap.For(ColumnShape.LongText, dbType);
                         return;
                     }
 
@@ -99,17 +107,19 @@ public static class SqlSugarClientFactory
                         // A realistic RichText body (a table, a couple of styled paragraphs) trivially
                         // blows past 255 chars and fails on Postgres with 22001 "value too long for
                         // type character varying(255)" — as verified against a live Postgres
-                        // database. Widen just these interfaces to `text`. An explicit
-                        // [SugarColumn(ColumnDataType = ...)] on the property always wins over this
-                        // convention. Plain Text fields keep SqlSugar's
-                        // default varchar(255) for now, pending the dedicated MaxLength feature.
+                        // database. Widen just these interfaces to the LongText shape. A property with
+                        // an explicit [ColumnShape] already returned above, before this convention runs;
+                        // a third-party fork's own [SugarColumn(ColumnDataType = ...)] is also
+                        // respected here and wins over this convention. Plain Text fields keep
+                        // SqlSugar's default varchar(255) for now, pending the dedicated MaxLength
+                        // feature.
                         var explicitDataType = property.GetCustomAttribute<SugarColumn>()?.ColumnDataType;
                         if (string.IsNullOrEmpty(explicitDataType))
                         {
                             var cmsField = property.GetCustomAttribute<CmsFieldAttribute>();
                             if (cmsField is not null && ContentBearingInterfaces.Contains(cmsField.Interface))
                             {
-                                column.DataType = "text";
+                                column.DataType = ColumnTypeMap.For(ColumnShape.LongText, dbType);
                             }
                         }
                     }
