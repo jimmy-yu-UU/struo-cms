@@ -17,9 +17,9 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
     // at most one translation row per locale. The two columns share one group name, so SqlSugar
     // CodeFirst emits a single composite unique index (same mechanism as Revision.cs), created by
     // InitTables from UniqueGroupNameList in dev. The non-unique [SugarIndex] above is KEPT
-    // (accepted-redundant dev index; see db/migrations/README.md). This sample schema is not part of the
-    // core baseline (db/migrations/001-core-baseline.sql is core-only), so a downstream fork that keeps
-    // this entity must add the equivalent composite UNIQUE to its own migrations.
+    // (accepted-redundant dev index; see db/migrations/README.md). This sample schema is not part of
+    // StruoCMS core, so a downstream fork that keeps this entity must add the equivalent composite
+    // UNIQUE to its own migrations.
     [SugarColumn(UniqueGroupNameList = ["ux_article_translations_fk_locale"])]
     public Guid ArticleId { get; set; }
     [SugarColumn(UniqueGroupNameList = ["ux_article_translations_fk_locale"])]

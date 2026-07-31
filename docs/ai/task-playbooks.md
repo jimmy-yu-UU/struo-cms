@@ -217,44 +217,38 @@ Background: `docs/guide/en/15-deployment-operations-testing.md`, "Schema managem
 README.md`.
 
 1. Determine the next number: the current highest `NNN-*.sql` filename in `db/migrations/` **+ 1**,
-   zero-padded (the shipped baseline is `001-core-baseline.sql`; a fresh fork's first migration is
-   `002-...`).
+   zero-padded. The template ships **zero** scripts, so a fresh fork's first migration is `001-...`.
 2. Create `db/migrations/NNN-short-kebab-description.sql` with a header comment (date, author, one-line
-   intent — follow `001-core-baseline.sql`'s own header for the pattern). One logical change per file.
-3. Write the SQL **idempotently** (`CREATE TABLE IF NOT EXISTS`, `CREATE [UNIQUE] INDEX IF NOT EXISTS`,
-   guarded `ALTER`, `DO $$ ... $$` existence checks) and **forward-only** — no automatic down-migration;
-   a rollback is a new compensating script, not an edit to this one.
-4. Use `timestamptz` (not bare `timestamp`) for any new column or table storing an instant, and store
-   UTC — this is the convention, not a uniform fact about the existing baseline: check
-   `001-core-baseline.sql` for the specific table you are altering rather than assuming either type,
-   and do not retroactively convert an existing bare-`timestamp` column while you're at it unless that
-   specific column is the subject of this migration (re-anchoring already-stored values against a
-   session time zone is a silent data shift). This matters most for a migration backing a new
-   `AuditableEntity`-derived collection (Playbook 1): `AuditableEntity.CreatedAt`/`UpdatedAt`
-   (`src/Struo.Domain/Auditing/AuditableEntity.cs`) are plain `DateTime` properties with no
-   `[SugarColumn]` override, so SqlSugar's CodeFirst default for `DateTime` is what dev `InitTables`
-   actually produces for those two columns when the entity doesn't override them — bare
-   `timestamp without time zone`. That's not uniform across the baseline, though: `MediaFolder`
-   (`src/Struo.Infrastructure/Files/MediaFolder.cs`) is `AuditableEntity`-backed but overrides both
-   columns to `timestamptz`, and `001-core-baseline.sql`'s `media_folders` table reflects it — so check
-   the specific table you are altering rather than assuming either type. Hand-writing `timestamptz` for
-   a new collection's `createdat`/`updatedat` in its migration, without also giving the entity an
-   explicit column-type override, diverges from what `InitTables` produces for the same entity —
-   exactly the parity Playbook 1 step 11 asks you to confirm.
+   intent). One logical change per file.
+3. Write plain, portable SQL: standard types (`varchar(n)`, `integer`, `bigint`, `boolean`, `timestamp`,
+   `numeric(p,s)`), no PostgreSQL-specific syntax (`jsonb`/`uuid`/`timestamptz`/`serial`, `DO $$ … $$`,
+   `::` casts, `RETURNING`). **Idempotency is not required, and `IF NOT EXISTS` should be avoided** —
+   the CodeFirst-created `schema_migrations` tracking table already guarantees each filename runs at
+   most once, and `IF NOT EXISTS` is not supported on SQL Server. Forward-only — no automatic
+   down-migration; a rollback is a new compensating script, not an edit to this one. See
+   `db/migrations/README.md` §5 for the full prefer/avoid tables.
+4. Use a time-zone-aware type (not bare `timestamp`) for any new column or table storing an instant,
+   and store UTC — this is the convention, not a claim about any single file: there is no baseline file
+   to check anymore, so for a table you are altering, check that entity's own
+   `[SugarColumn]`/`[ColumnShape]` declaration in `src/`, or query the live schema directly, rather than
+   assuming either type. Do not retroactively convert an existing bare-`timestamp` column while you're
+   at it unless that specific column is the subject of this migration (re-anchoring already-stored
+   values against a session time zone is a silent data shift).
 5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
-   tracks applied migrations by filename only (`schema_migrations (filename text PRIMARY KEY, appliedat
-   timestamptz)`), with no checksum, so an edited file with an already-applied filename is silently
-   never re-run. Ship a new file instead.
+   tracks applied migrations by filename only, in the CodeFirst-created `schema_migrations` table, with
+   no checksum, so an edited file with an already-applied filename is silently never re-run. Ship a new
+   file instead.
 6. **Tests to add**: this is SQL, not C# — there is no unit test for a migration script itself. Verify
-   it directly (see the live-PostgreSQL step below). If the migration backs a new collection, that
+   it directly (see the live-database step below). If the migration backs a new collection, that
    collection's own tests (Playbook 1) are the regression coverage.
-7. **Gate**: `dotnet build && dotnet test` first (the migration runner is a hard no-op on SQLite, so
-   this only confirms nothing else broke). **The migration itself can only be verified by applying
-   it**: point `Database:MigrationsPath` at `db/migrations/` (an absolute path) against a disposable
-   PostgreSQL database and confirm the script applies cleanly and is recorded in `schema_migrations` —
-   SQLite passing proves nothing about whether the SQL is even valid PostgreSQL. Note this step has no
-   equivalent on another backend today: `db/migrations/` holds PostgreSQL DDL and `MigrationRunner`
-   no-ops on everything else, so a fork running a different engine has no migration path at all yet.
+7. **Gate**: `dotnet build && dotnet test` first — `MigrationRunner` now runs on every backend,
+   including the SQLite test suite, so this exercises the runner itself (though not your specific SQL,
+   which SQLite may accept or reject differently than your actual target backend). **The migration
+   itself can only be verified by applying it**: point `Database:MigrationsPath` at `db/migrations/` (an
+   absolute path) against a disposable instance of the backend you are actually configured for, and
+   confirm the script applies cleanly and is recorded in `schema_migrations`. PostgreSQL is this
+   repository's only verified live target; on any other backend, that backend needs its own equivalent
+   live check — a green SQLite (or PostgreSQL) run does not transfer.
 
 ## Playbook 5: Change the admin SPA
 
