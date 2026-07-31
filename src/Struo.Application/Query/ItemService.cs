@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
+using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Revisions;
@@ -106,6 +107,14 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
+        // File rows are owned by the upload pipeline: StorageKey/Size/ContentType/dimensions are all
+        // derived from the blob, and FileName is ReadOnly so the generic write path cannot even set it
+        // (it used to null it into a NOT NULL column and 500). Reject explicitly here rather than at
+        // the controller, so REST and the GraphQL createFile mutation are both covered. Reads, updates
+        // (the admin media UI edits per-locale Title/Alt this way) and deletes are unaffected.
+        if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
+            throw new QueryException(
+                "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");
         // A non-object top-level body (array/scalar) reaches ValidateLanguageCodeIfNeeded /
         // Deserialize below, both of which assume an object and throw an unhandled
         // InvalidOperationException (-> 500) otherwise. Reject it here as the established

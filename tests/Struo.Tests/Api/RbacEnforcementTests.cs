@@ -50,4 +50,15 @@ public class RbacEnforcementTests(ApiFactory factory)
         var write = await client.PostAsJsonAsync("/api/items/category", new { name = "X" });
         write.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task Authenticated_editor_reads_a_public_granted_collection_it_was_not_granted()
+    {
+        // 'category' is public-read via ApiFactory config; this editor's role only mentions 'article'.
+        // public is a FLOOR, so being signed in must never read LESS than being anonymous.
+        var (client, _) = await factory.CreateEditorClientAsync(
+            readCollections: ["article"], writeCollections: ["article"]);
+
+        (await client.GetAsync("/api/items/category")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }

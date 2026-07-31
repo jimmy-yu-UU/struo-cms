@@ -124,18 +124,27 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 {"data":{"languages":{"items":[{"code":"zh-TW","name":"繁體中文","isDefault":false},{"code":"en","name":"English","isDefault":true}],"total":2}}}
 ```
 
-**一個 bearer 權杖完全無法驗證 `/graphql`。** `MapGraphQL` 沒有帶任何強制指定機制的
-`[Authorize]` attribute，而預設的驗證機制是 Cookie (第 9 章)——所以在這個端點上，一個 `Bearer`
-標頭根本不會被檢視，已即時驗證:
+**一個 bearer 權杖確實能驗證 `/graphql`。** `MapGraphQL` 本身沒有帶任何 `[Authorize]`
+attribute，但驗證這件事本身，已經不再仰賴是否存在這樣一個 attribute:預設的驗證機制是
+`AuthSchemes.Adaptive` (`src/Struo.Api/Auth/AuthWiring.cs`)，這是一個轉發用的 policy scheme，
+只要請求的 `Authorization` 標頭以 `Bearer ` 開頭，就會轉發給 `Bearer` handler，否則轉發給
+`Cookie`——在每一個端點上都是如此，`/graphql` 也不例外。因此一個純 bearer 的客戶端，會被解析為
+**它自己**，連同它自己角色的授權 (與 `public` 底線聯集，第 12 章)，與一個 cookie session 完全
+相同。只要請求的 `Authorization` 標頭以 `Bearer ` 開頭，`CsrfProtectionMiddleware` 就會把它從上方的
+`X-Struo-CSRF` 要求中豁免 (第 9 章的 CSRF 段落)——這項檢查會在 middleware 檢視 session cookie
+之前就先執行並回傳，所以即使該請求恰好也帶有一個 session cookie，這項豁免依然成立。因此一次純粹由
+bearer 權杖驅動的 `/graphql` 呼叫，既不需要 session cookie，也不需要 CSRF 標頭。
+
+本章中的每一個 GraphQL 範例，仍然是在一個帶有 CSRF 標頭的 cookie session 下執行的，但這只是因為
+一個以瀏覽器為基礎的 GraphQL 客戶端 (Nitro IDE、一個 SPA) 天生就是這個樣子——不是因為一個純
+bearer 的客戶端無法驅動 `/graphql`。它可以，而且與一個 cookie session 完全平等，包括下方的每一個
+mutation。以下是證明，不是空口斷言——一個只被授予 `mediaFolder` 讀取權的角色所核發的 bearer
+權杖，不帶 cookie、也不帶 CSRF 標頭，驅動一次 `mediaFolders` 查詢:
 
 ```
-$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '{"query":"query { languages { items { code } } } "}'
-{"errors":[{"message":"Read not permitted.","path":["languages"],"extensions":{"code":"UNAUTHORIZED"}}],"data":null}
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '{"query":"{ mediaFolders { items { id } } }"}'
+{"data":{"mediaFolders":{"items":[{"id":"019fac90-2300-78da-8a3c-f281dac532e0"},{"id":"019fac8f-fb2b-77ae-a152-f25fddf54ef8"}]}}}
 ```
-
-這代表本章中的每一個 GraphQL 範例，都是在一個帶有 CSRF 標頭的 cookie session 下執行的——目前
-完全沒有辦法只靠一個純 bearer 權杖的客戶端來驅動 `/graphql` (這是第 9 章針對 `ItemsController`
-讀取 action 所指出的同一種不對稱現象的更強版本)。
 
 ### 讀取即時 schema
 

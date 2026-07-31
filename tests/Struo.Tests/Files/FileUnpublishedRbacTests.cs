@@ -10,16 +10,14 @@ using Xunit;
 namespace Struo.Tests.Files;
 
 // Non-published file content/metadata must not be readable merely because the caller is
-// authenticated — a genuine per-collection CanRead("file") grant is required, the same gate every
-// other collection enforces. A role-less JIT/SSO user could otherwise fetch any draft file. 404
-// (not 403) so the endpoint does not leak the existence of unpublished assets.
+// authenticated — a genuine per-collection CanWrite("file") grant is required. A role-less JIT/SSO
+// user could otherwise fetch any draft file. 404 (not 403) so the endpoint does not leak the
+// existence of unpublished assets.
 //
-// NOTE on the test harness: ApiFactory seeds "file" into Rbac:PublicReadCollections, and an
-// authenticated user with NO role inherits the "public" role (the public floor in
-// SqlSugarRolePermissionStore). That makes a role-less user's CanRead("file") == true here, so a
-// role-less client is indistinguishable from anonymous permission-wise and cannot demonstrate the
-// gate. The case that actually exercises CanRead is an authenticated user that HAS a role (hence no
-// public floor) but was NOT granted "file" read — used below.
+// NOTE on the test harness: ApiFactory seeds "file" into Rbac:PublicReadCollections, and the "public"
+// role is a FLOOR for every caller (SqlSugarRolePermissionStore) — so CanRead("file") is true for
+// anonymous and authenticated callers alike and cannot gate anything. The gate is the "file" WRITE
+// grant: drafts are an editorial state, and no public role is given write.
 [Collection("ApiIntegration")]
 public class FileUnpublishedRbacTests(ApiFactory factory)
 {
@@ -45,12 +43,12 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Nonpublished_denied_to_authenticated_user_without_file_read()
+    public async Task Nonpublished_denied_to_authenticated_user_without_file_write()
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraftAsync(admin);
 
-        // Authenticated, has a role (so no public floor) but NO "file" read grant.
+        // Authenticated, has a role, inherits the public read floor on "file" — but NO "file" write grant.
         var (editor, _) = await _factory.CreateEditorClientAsync(
             readCollections: ["article"], writeCollections: ["article"]);
 
@@ -59,13 +57,13 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Nonpublished_visible_to_user_with_file_read()
+    public async Task Nonpublished_visible_to_user_with_file_write()
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraftAsync(admin);
 
         var (reader, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["file"], writeCollections: []);
+            readCollections: ["file"], writeCollections: ["file"]);
 
         (await reader.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);
         var contentResp = await reader.GetAsync($"/api/files/{id}/content");
@@ -84,10 +82,10 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
         (await anon.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // Bearer path: Get/Download carry no [Authorize], so UseAuthentication only ran the default cookie
-    // scheme and the per-request permission snapshot reflects anonymous for a bearer-only caller. The
-    // gate must adopt the token's principal and enforce ITS real CanRead("file") grant — otherwise any
-    // bearer token would inherit the public floor and read drafts.
+    // Bearer path: Get/Download carry no [Authorize], but the AuthSchemes.Adaptive default policy
+    // scheme (see BearerReadAuthenticationTests) authenticates the bearer token there too, and
+    // PermissionResolutionMiddleware resolves ITS real CanWrite("file") grant into the per-request
+    // snapshot — otherwise any bearer token would inherit the public floor and read drafts.
     private async Task<HttpClient> BearerClientForAsync(HttpClient admin, Guid userId)
     {
         var gen = await admin.PostAsync($"/api/users/{userId}/access-token", null);
@@ -99,7 +97,7 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Nonpublished_denied_to_bearer_caller_without_file_read()
+    public async Task Nonpublished_denied_to_bearer_caller_without_file_write()
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraftAsync(admin);
@@ -113,13 +111,13 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Nonpublished_visible_to_bearer_caller_with_file_read()
+    public async Task Nonpublished_visible_to_bearer_caller_with_file_write()
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadDraftAsync(admin);
 
         var (_, readerId) = await _factory.CreateEditorClientAsync(
-            readCollections: ["file"], writeCollections: []);
+            readCollections: ["file"], writeCollections: ["file"]);
         var bearer = await BearerClientForAsync(admin, readerId);
 
         (await bearer.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);

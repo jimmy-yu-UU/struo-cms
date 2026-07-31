@@ -50,10 +50,11 @@ Content-Type: multipart/form-data
 
 需要 Cookie or Bearer，再加上 `IFileAccessPolicy.CanWrite()`——這是 `file` 集合的 RBAC 授權，
 之所以在這裡而不是在 `ItemService` 內部強制執行，是因為上傳完全繞過了它
-(`src/Struo.Api/Auth/FileAccessPolicy.cs`)。一次成功的上傳是 `201`，帶有該資料列的公開形狀
-(沒有 `Location` 標頭——第 9 章對 `EnvelopeResultFilter`/`CreatedResult` 的說明在這裡同樣適用，
-而且 `FilesController.Upload` 一開始就從未呼叫過 `Created(...)`，只直接呼叫
-`StatusCode(201, ...)`):
+(`src/Struo.Api/Auth/FileAccessPolicy.cs`)。一次成功的上傳是 `201`，帶有該資料列的公開形狀，
+以及一個 `Location: /api/files/{id}` 標頭——第 9 章對 `EnvelopeResultFilter`/`CreatedResult`
+的說明在這裡同樣適用:`FilesController.Upload` 呼叫 `Created($"/api/files/{id}", ...)`，而這個
+filter 會重建該 `CreatedResult` (而不是把它壓平成一個單純的 `ObjectResult`)，讓標頭在包裝之後
+仍然存活:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/files -H "X-Struo-CSRF: 1" -b cookies.txt \
@@ -169,15 +170,19 @@ compose 檔案的情況下覆寫——`STRUO_MINIO_PORT` / `STRUO_MINIO_CONSOLE_
 
 `GET /api/files/{id}` 與 `GET /api/files/{id}/content` 都不帶任何 `[Authorize]`——允許匿名
 請求通過，這樣一個**已發布**檔案的中介資料/位元組，就能不需要 session 就內嵌在公開頁面中。一個
-**未發布** (`status != "published"`) 的檔案，額外需要 `IFileAccessPolicy.CanReadUnpublishedAsync`
-——一個真正的 `file` 集合 `CanRead` 授權，而不僅僅是已登入 (所以一個無角色的 SSO/JIT 使用者
-(第 12 章)，不能只靠有 session 就取得草稿)——**除非 `file` 本身就是一個公開可讀的集合** (第 12
-章示範了如何即時授予這一點):這項檢查自身的快速路徑，對任何已驗證身分來說，就只是單純的
-`permissions.CanRead("file")` (`FileAccessPolicy.cs:46-51`)，而一旦 `file` 帶有公開讀取授權，
-這項授權對一個無角色的已驗證使用者，與對一個匿名者是完全同樣成立的，透過的是第 12 章記載的同一套
-公開底線機制 (`FileAccessPolicy.cs:41-44` 自己的文件註解就明確說明了這一點)。這項檢查失敗時，
-會回傳單純的 `404` 而不是 `403`，所以一份草稿的存在與否，不會外洩給一個沒有該授權的呼叫端
-(`FilesController.Get`/`Download`，`src/Struo.Api/Controllers/FilesController.cs:57-72`、
+**未發布** (`status != "published"`) 的檔案，額外需要 `IFileAccessPolicy.CanReadUnpublished`
+——一個**已驗證的身分**，加上一個 `file` 集合的**`CanWrite`**授權 (`FileAccessPolicy.cs:36-37`)，
+不是一個 `CanRead` 授權，也不僅僅是已登入。這道關卡刻意設在寫入上:`public` 對每一個呼叫端都是一道
+權限底線 (第 12 章)，所以一旦 `file` 帶有一個公開*讀取*授權——這正是匿名提供圖片服務的文件記載
+設定——`CanRead("file")` 對匿名者與已驗證的呼叫端都同樣成立，因此完全無法把關任何東西;一份草稿是
+一種編輯狀態，所以能*編輯*檔案的呼叫端，才是能看見它的呼叫端。**出貨時的**種子資料只會授予 `public`
+一項讀取授權——`RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/RbacSeeder.cs:48-57`)
+針對每一個 `Rbac:PublicReadCollections` 項目，只插入 `CanRead = true`，`CanWrite`/`CanDelete`
+從未被動過——但 RBAC 模型中沒有任何東西*禁止*一位超級管理員透過角色權限矩陣，把 `public` 的寫入
+授權授予出去 (第 12 章示範了正是這個授權流程，即時針對 `role` 集合操作);若對 `file` 做同樣的事，
+會把草稿存取權擴大到每一個已登入的呼叫端，因為這一節所把關的那個寫入授權，屆時也會變成公開的。
+這項檢查失敗時，會回傳單純的 `404` 而不是 `403`，所以一份草稿的存在與否，不會外洩給一個沒有該授權
+的呼叫端 (`FilesController.Get`/`Download`，`src/Struo.Api/Controllers/FilesController.cs:57-72`、
 `74-163`)。這也代表一個**已移入回收桶** (軟刪除——見下文) 的檔案，這兩個 action 也都會回傳
 `404`，因為 `FileService.GetAsync` 讀取時，會經過與其他每一次讀取相同的 `ISoftDeletable`
 查詢過濾器——已即時驗證:
@@ -379,6 +384,6 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?deleted=with&sort
 - 第 8 章 [查詢 DSL](08-query-dsl.md) 與第 9 章 [REST API](09-rest-api.md)，涵蓋
   `file`/`mediaFolder` 集合自身中介資料上，一般的 `filter`/`sort`/`deleted=` 介面。
 - 第 12 章 [認證、SSO 與 RBAC](12-auth-and-rbac.md)，涵蓋 `IFileAccessPolicy` 與
-  `CanReadUnpublishedAsync` 背後的 `file` 集合 RBAC 授權。
+  `CanReadUnpublished` 背後的 `file` 集合 RBAC 授權。
 - 第 13 章 [版本紀錄與軟刪除](13-revisions-and-soft-delete.md)，涵蓋一般性的
   `ISoftDeletable`/全域查詢過濾器/`deleted=` 機制，而 `File` 正是它唯一即時上線的範例。
