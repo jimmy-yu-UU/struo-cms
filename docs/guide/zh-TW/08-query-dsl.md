@@ -127,6 +127,26 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bsize%5D%
 `_and`/`_or` 底下多少層;超過這個上限，會在任何查詢執行之前擲出 `"Too many filter conditions
 (max 50)."`。
 
+還有第二個上限，它限制的是不同的東西:不是查詢的形狀，而是回答這個查詢**中間**可以花多少工。
+帶點號的 (跨關聯) 篩選，以及對可翻譯欄位的搜尋，兩者的實作方式都是先把條件解析成一組根 id，
+再改寫成本集合自身的 `id IN (...)`——這趟走訪見第 7 章。`StruoQueryOptions.MaxResolvedFilterIds`
+(預設 **5000**) 為那趟解析的每一步設下上限:葉節點查詢、每一次回走的跳躍，以及可翻譯搜尋的
+聯集。它之所以存在，是因為上面那些上限限制的是**結果頁**，而不是這個中間集合——少了它，一個
+刻意放寬的條件 (`?filter[category.name][_contains]=a`、`?search=a`) 就要付出 O(表大小) 的記憶體
+外加一句巨大的 SQL，而且任何持有讀取授權的呼叫者都能觸發，包括在 `public` 授予讀取之處的匿名
+呼叫者。
+
+超過上限屬於用戶端錯誤，而不是截斷:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory.name%5D%5B_contains%5D=a"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Resolving 'category.name' matched too many rows (7412, limit 5000). Narrow the filter or search term, or raise Query:MaxResolvedFilterIds."}}
+```
+
+改成截斷的話，會默默丟掉符合條件的資料列並回傳靜靜出錯的結果，所以這個查詢是被拒絕的。如果
+某個 fork 的正當篩選會解析出更大的集合，就把 `Query:MaxResolvedFilterIds` 調高——代價是記憶體
+加上 SQL 語句大小，每個 uuid 大約 40 個位元組的語句文字。
+
 ## 排序
 
 `sort=` 是一份逗號分隔的欄位名稱清單，每一個都可以選擇性地加上 `-` 前綴代表降冪，並依給定的
