@@ -10,13 +10,13 @@ using Xunit;
 namespace Struo.Tests.Persistence;
 
 /// <summary>
-/// Core index parity: every [SugarIndex] declared on a core FrameworkEntityTypes entity must be BOTH
-/// emitted by CodeFirst (InitTables) in dev/test AND captured in db/migrations/001-core-baseline.sql for
-/// production — previously this test only checked the first half (InitTables on SQLite) and never opened
-/// the baseline file, so a declared index dropped from the baseline would go unnoticed. Declared indexes
-/// are discovered by reflecting [SugarIndex] off FrameworkEntityTypes.All rather than hardcoded, so a new
-/// core entity's index is covered automatically. Sample (Blog) index parity is the sample's own concern
-/// and is not asserted here.
+/// Core index parity: every [SugarIndex] declared on a core FrameworkEntityTypes entity must be emitted
+/// by CodeFirst (InitTables). There is no longer a separate hand-maintained baseline SQL file to check
+/// for parity against — CodeFirst is the only table/index creator now, in every environment and on every
+/// backend, so asserting against InitTables directly is the whole check. Declared indexes are discovered
+/// by reflecting [SugarIndex] off FrameworkEntityTypes.All rather than hardcoded, so a new core entity's
+/// index is covered automatically. Sample (Blog) index parity is the sample's own concern and is not
+/// asserted here.
 /// (FileTranslation's redundant plain btree was dropped — its (fileid, locale) lookup is served by
 /// the composite UNIQUE index — so FileTranslation no longer contributes a mapped plain btree here.)
 /// </summary>
@@ -80,21 +80,4 @@ public sealed class IndexParityTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(CoreMappedIndexNames))]
-    public void Baseline_captures_each_core_mapped_index(string indexName)
-    {
-        var sql = BaselineSql();
-        sql.Should().Contain($"CREATE INDEX IF NOT EXISTS {indexName}",
-            $"db/migrations/001-core-baseline.sql must create index '{indexName}' for production");
-    }
-
-    private static string BaselineSql()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "db", "migrations")))
-            dir = dir.Parent;
-        dir.Should().NotBeNull("the repo's db/migrations directory must be locatable from the test host");
-        return File.ReadAllText(Path.Combine(dir!.FullName, "db", "migrations", "001-core-baseline.sql"));
-    }
 }

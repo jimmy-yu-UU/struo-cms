@@ -14,7 +14,8 @@ namespace Struo.Tests.Persistence;
 /// make overlay reads non-deterministic. The entities declare a composite UNIQUE via
 /// <c>[SugarColumn(UniqueGroupNameList = [...])]</c> on the FK + Locale columns, which CodeFirst
 /// <c>InitTables</c> materialises as a unique index (the same mechanism the revisions backstop uses).
-/// The matching physical DDL for live PostgreSQL is <c>001-core-baseline.sql</c>.
+/// CodeFirst creates the matching physical index on any backend where these tables do not already
+/// exist.
 /// </summary>
 public sealed class TranslationUniqueConstraintTests
 {
