@@ -22,6 +22,12 @@ public sealed class SqlSugarUserCredentialStore(ISqlSugarClient db) : IUserCrede
         return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.AccessTokenLastUsedAt);
     }
 
+    public async Task<UserCredential?> FindByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        var u = await db.Queryable<User>().Where(x => x.Id == id).FirstAsync(ct);
+        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.AccessTokenLastUsedAt);
+    }
+
     public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) =>
         db.Updateable<User>()
             .SetColumns(u => u.AccessTokenLastUsedAt == nowUtc)
