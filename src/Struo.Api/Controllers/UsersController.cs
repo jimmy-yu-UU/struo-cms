@@ -28,6 +28,38 @@ public sealed class UsersController(
             ? null
             : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, "Admin role required.");
 
+    /// <summary>
+    /// Chains the audit trio (<c>UpdatedAt</c>/<c>UpdatedBy</c>/<c>Version + 1</c>) onto a
+    /// credential-column UPDATE. The credential endpoints below write via SqlSugar's
+    /// column-expression form, which is NOT <c>UpdateByObject</c> — so
+    /// <c>AuditAop</c> (hooked only on <c>InsertByObject</c>/<c>UpdateByObject</c>) never fires for
+    /// them, and they bypass <c>SqlSugarItemRepository.UpdateGenericAsync</c>'s version bump as well.
+    /// Without this, a password change left no record of who made it and did not advance the
+    /// optimistic-lock token, so a client holding a pre-change <c>version</c> could still write
+    /// successfully instead of getting the 409 every other write path produces.
+    /// <para>
+    /// Uses the <c>SetColumns(u =&gt; new User{...})</c> member-init overload, not the
+    /// <c>u =&gt; u.Col == value</c> equality overload, for the same reason
+    /// <c>SqlSugarItemRepository.SoftDeleteGenericAsync</c> does: a null <c>UpdatedBy</c> is typed
+    /// from the underlying CLR type (Guid) instead of being sent as an untyped null, which PostgreSQL
+    /// rejects against a <c>uuid</c> column (42804). <c>Version = u.Version + 1</c> resolves to the
+    /// SQL fragment <c>version = version + 1</c> — increment-only, no CAS: these endpoints take no
+    /// client version, so they must never fail on one.
+    /// </para>
+    /// Guarded by <c>UserCredentialWriteAuditTests</c>.
+    /// </summary>
+    private IUpdateable<User> WithCredentialAudit(IUpdateable<User> updateable)
+    {
+        var now = DateTime.UtcNow;
+        var actor = currentUser.GetCurrentUserId();
+        return updateable.SetColumns(u => new User
+        {
+            UpdatedAt = now,
+            UpdatedBy = actor,
+            Version = u.Version + 1,
+        });
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest body, CancellationToken ct)
     {
@@ -69,8 +101,11 @@ public sealed class UsersController(
                 return ApiResults.Fail(StatusCodes.Status401Unauthorized, ErrorCodes.Unauthorized, "Current password is incorrect.");
         }
 
-        var updated = await db.Updateable<User>()
-            .SetColumns(u => u.Password == hasher.Hash(body.NewPassword))
+        // Hashed once, here, rather than left inside the SetColumns expression for SqlSugar's
+        // resolver to evaluate.
+        var newHash = hasher.Hash(body.NewPassword);
+        var updated = await WithCredentialAudit(db.Updateable<User>()
+                .SetColumns(u => new User { Password = newHash }))
             .Where(u => u.Id == id).ExecuteCommandAsync(ct);
         return updated == 0 ? NotFound() : NoContent();
     }
@@ -81,8 +116,8 @@ public sealed class UsersController(
         if (RequireAdmin() is { } denied) return denied;
         var (token, hash) = AccessTokenHasher.Generate();
         var now = DateTime.UtcNow;
-        var updated = await db.Updateable<User>()
-            .SetColumns(u => new User { AccessToken = hash, AccessTokenCreatedAt = now, AccessTokenLastUsedAt = null })
+        var updated = await WithCredentialAudit(db.Updateable<User>()
+                .SetColumns(u => new User { AccessToken = hash, AccessTokenCreatedAt = now, AccessTokenLastUsedAt = null }))
             .Where(u => u.Id == id).ExecuteCommandAsync(ct);
         if (updated == 0) return NotFound();
         return Ok(new { token }); // shown once
@@ -92,8 +127,9 @@ public sealed class UsersController(
     public async Task<IActionResult> RevokeToken(Guid id, CancellationToken ct)
     {
         if (RequireAdmin() is { } denied) return denied;
-        var updated = await db.Updateable<User>()
-            .SetColumns(u => u.AccessToken == null).Where(u => u.Id == id).ExecuteCommandAsync(ct);
+        var updated = await WithCredentialAudit(db.Updateable<User>()
+                .SetColumns(u => new User { AccessToken = null }))
+            .Where(u => u.Id == id).ExecuteCommandAsync(ct);
         return updated == 0 ? NotFound() : NoContent();
     }
 
