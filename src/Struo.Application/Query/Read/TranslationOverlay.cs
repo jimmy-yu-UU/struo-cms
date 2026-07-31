@@ -1,4 +1,5 @@
 // src/Struo.Application/Query/Read/TranslationOverlay.cs
+using Struo.Application.Files;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
@@ -100,10 +101,10 @@ public sealed class TranslationOverlay(IItemRepository repository, IEntityRegist
             var byId = new Dictionary<Guid, IReadOnlyDictionary<string, object?>>();
             if (imageIds.Count > 0)
             {
-                var files = await repository.QueryWhereInAsync("file", "id", imageIds, ct);
+                var files = await repository.QueryWhereInAsync(FileCollection.Name, "id", imageIds, ct);
                 foreach (var f in files)
                 {
-                    var projected = projector.ProjectFor("file", f, null);
+                    var projected = projector.ProjectFor(FileCollection.Name, f, null);
                     if (projected.TryGetValue("id", out var idVal) && idVal is Guid g)
                         byId[g] = projected;
                 }
