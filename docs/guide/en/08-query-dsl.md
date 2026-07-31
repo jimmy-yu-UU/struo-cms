@@ -130,6 +130,27 @@ default **50** — counted across every leaf `ComparisonFilter` the walk visits,
 they're nested under `_and`/`_or`; exceeding it throws `"Too many filter conditions (max 50)."` before
 any query runs.
 
+A second cap bounds something different: not the shape of the query, but how much intermediate work
+answering it may take. A dotted (cross-relation) filter and a search over a translatable field are both
+answered by resolving the condition to a set of root ids and rewriting it into an own-collection
+`id IN (...)` — see chapter 7 for the walk. `StruoQueryOptions.MaxResolvedFilterIds` (default **5000**)
+bounds every step of that resolution: the leaf lookup, each walk-back hop, and the translatable-search
+union. It exists because the caps above bound the *result page*, not this intermediate set — without it a
+deliberately wide condition (`?filter[category.name][_contains]=a`, `?search=a`) costs O(table) memory
+plus one enormous SQL statement, and it is reachable by any caller holding a read grant, including an
+anonymous one wherever `public` grants read.
+
+Exceeding it is a client error, not a truncation:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory.name%5D%5B_contains%5D=a"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Resolving 'category.name' matched too many rows (7412, limit 5000). Narrow the filter or search term, or raise Query:MaxResolvedFilterIds."}}
+```
+
+Truncating instead would silently drop matching rows and return quietly wrong results, so the query is
+refused. Raise `Query:MaxResolvedFilterIds` if a fork's legitimate filters resolve to larger sets — the
+cost is memory plus SQL statement size, roughly 40 bytes of statement text per uuid.
+
 ## Sorting
 
 `sort=` is a comma list of field names, each optionally prefixed with `-` for descending, applied in

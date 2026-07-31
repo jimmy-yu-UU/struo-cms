@@ -10,6 +10,11 @@ public interface IUserCredentialStore
     Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default);
     Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default);
 
+    /// <summary>Credential lookup by id, for the self-service password change's proof-of-knowledge
+    /// check. Here rather than on <see cref="IUserAccountStore"/> because it hands back a password
+    /// hash, which is exactly what this interface exists to keep off the generic read path.</summary>
+    Task<UserCredential?> FindByIdAsync(Guid id, CancellationToken ct = default);
+
     /// <summary>Records that the given user's access token was just used. Callers throttle how often
     /// they invoke this (last-used is observability, not per-request accounting).</summary>
     Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default);

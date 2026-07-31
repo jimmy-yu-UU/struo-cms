@@ -10,6 +10,9 @@ public class AuthServiceTests
     {
         public Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default) => Task.FromResult(byEmail);
         public Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
+        // AuthService authenticates by email only; the by-id lookup exists for the self-service
+        // password change and is not part of what these tests exercise.
+        public Task<UserCredential?> FindByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
         public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => Task.CompletedTask;
     }
     private sealed class PlainHasher : IPasswordHasher
@@ -70,6 +73,7 @@ public class AuthServiceTests
     {
         public Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default) => Task.FromResult(cred);
         public Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
+        public Task<UserCredential?> FindByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<UserCredential?>(null);
         public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => Task.CompletedTask;
     }
 

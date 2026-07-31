@@ -142,9 +142,17 @@ try
 
     app.UseSerilogRequestLogging();
     app.UseStruoCors(app.Configuration);
+    // Must sit ahead of UseAuthentication: UseExceptionHandler only catches exceptions thrown
+    // DOWNSTREAM of its own position, so while it was registered after authentication/authorization,
+    // an infrastructure failure INSIDE the authentication stage (an unreachable Redis ticket store,
+    // BearerTokenAuthenticationHandler's credential lookup failing) escaped StruoExceptionHandler and
+    // went out as a bare 500 with an empty body — breaking the "envelope wraps every REST response"
+    // invariant and skipping the mask-and-log treatment of internal detail. Guarded by
+    // AuthenticationFailureEnvelopeTests. It stays INSIDE Serilog request logging (so the handled 500
+    // is what gets logged) and INSIDE CORS (so the error response still carries CORS headers).
+    app.UseExceptionHandler();
     app.UseAuthentication();
     app.UseAuthorization();
-    app.UseExceptionHandler();
     app.UseMiddleware<Struo.Api.Auth.CsrfProtectionMiddleware>();
     app.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>();
     app.UseRateLimiter();

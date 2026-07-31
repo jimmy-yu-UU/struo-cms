@@ -185,6 +185,41 @@ sidecar at that locale. Implementation: `RelationFilterResolver`
 See `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md` for the query DSL these four
 query-layer seams jointly implement.
 
+### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`)
+
+All five live in `src/Struo.Application/Security/`, all five are implemented by a `SqlSugar*` class in
+`src/Struo.Infrastructure/Identity/`, and all five are registered scoped in
+`ServiceCollectionExtensions.AddStruoInfrastructure`. They are deliberately narrow rather than one
+identity god-interface, split by *consumer* rather than by table:
+
+- **`IUserCredentialStore`** → `SqlSugarUserCredentialStore`. The authentication read path
+  (`AuthService`, `BearerTokenAuthenticationHandler`) plus the self-service password change's
+  proof-of-knowledge check. Its reason for existing is that it hands back password hashes, so it
+  bypasses the generic projection to keep them off the normal read path — which is also why the
+  by-id lookup lives here rather than on `IUserAccountStore`.
+- **`IUserAccountStore`** → `SqlSugarUserAccountStore`. User-account administration: create, exists,
+  profile projection, and the three credential mutations (set password, issue/revoke access token).
+  Every mutator stamps `UpdatedAt`/`UpdatedBy` and increments `Version` itself, because these are
+  column-scoped `SetColumns` updates and therefore outside both `AuditAop` (which hooks only
+  `InsertByObject`/`UpdateByObject`) and `SqlSugarItemRepository`'s version bump.
+- **`IPermissionGrantStore`** → `SqlSugarPermissionGrantStore`. The RBAC *write* side — the admin
+  permission matrix's read and atomic full-replace of a role's grants.
+- **`IRolePermissionStore`** → `SqlSugarRolePermissionStore`. The RBAC *read* side, resolving a
+  caller's effective permissions once per request. Kept separate from the write side above because it
+  documents itself as bypassing permission gating on purpose: the query that resolves the gate must
+  never itself be gated.
+- **`IExternalUserStore`** → `SqlSugarExternalUserStore`. OIDC just-in-time provisioning by email.
+
+`tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary these exist to
+create: no file under `src/Struo.Api/Controllers/` may mention `ISqlSugarClient`. Before these seams,
+`UsersController`/`RolesController`/`AuthController.Me` injected the SqlSugar client and wrote
+`Insertable`/`Updateable`/`Deleteable`/`Ado.BeginTranAsync` inline against `Struo.Infrastructure.Identity`
+entity types — which quietly falsified `IItemRepository`'s billing as "the seam a fork implements to
+point at a different storage engine", and put those writes outside the repository's audit/version
+behavior. Note the guard bans raw ORM access only: three controllers still depend on the concrete
+`Struo.Infrastructure.Files.FileService` (aliased, so its `File` type doesn't collide with
+`System.IO.File`), which is a service rather than an ORM handle.
+
 ### File storage backends (`IFileStorage`)
 
 The extension point for file storage backends is `IFileStorage`

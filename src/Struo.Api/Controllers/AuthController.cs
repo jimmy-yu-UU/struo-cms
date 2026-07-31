@@ -47,7 +47,7 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     public async Task<IActionResult> Me(
         [FromServices] Struo.Application.Security.ICurrentPermissions permissions,
         [FromServices] Struo.Application.Metadata.SchemaService schema,
-        [FromServices] SqlSugar.ISqlSugarClient db,
+        [FromServices] IUserAccountStore accounts,
         CancellationToken ct)
     {
         var eff = permissions.Current;
@@ -69,10 +69,9 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
         string? name = null;
         if (Guid.TryParse(uid, out var userId))
         {
-            var u = await db.Queryable<Struo.Infrastructure.Identity.User>()
-                .Where(x => x.Id == userId).FirstAsync(ct);
-            email = u?.Email;
-            name = u?.Name;
+            var profile = await accounts.FindProfileAsync(userId, ct);
+            email = profile?.Email;
+            name = profile?.Name;
         }
 
         return Ok(new

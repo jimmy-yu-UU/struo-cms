@@ -77,13 +77,16 @@ public sealed class RelationFilterResolver(
         // QueryTranslationParentIdsAsync will map it to the CLR property name on the translation entity.
         var fieldCondition = new ComparisonFilter(c.FieldPath, c.Op, c.Value);
 
-        return await repository.QueryTranslationParentIdsAsync(
-            tm.TranslationEntityType,
-            tm.ForeignKeyProperty,
-            tm.LocaleProperty,
-            queryLocale,
-            fieldCondition,
-            ct);
+        return ResolvedIdSetGuard.Ensure(
+            await repository.QueryTranslationParentIdsAsync(
+                tm.TranslationEntityType,
+                tm.ForeignKeyProperty,
+                tm.LocaleProperty,
+                queryLocale,
+                fieldCondition,
+                ct),
+            options.MaxResolvedFilterIds,
+            c.FieldPath);
     }
 
     private async Task<IReadOnlyList<object>> ResolveRootIdsAsync(
@@ -91,15 +94,21 @@ public sealed class RelationFilterResolver(
     {
         var path = RelationPath.Parse(rootCollection, c.FieldPath, graph, metadata, options.MaxRelationDepth);
 
-        // Leaf: ids in the terminal collection matching "leaf <op> value".
+        // Leaf: ids in the terminal collection matching "leaf <op> value". Bounded here AND after every
+        // hop below: the leaf can be narrow while a walk-back hop fans out (one parent category, a
+        // million children), so guarding only the leaf would leave the amplification wide open.
         var leafCondition = new ComparisonFilter(path.LeafField, c.Op, c.Value);
-        IReadOnlyList<object> set = await repository.QueryIdsAsync(path.TerminalCollection, leafCondition, ct);
+        IReadOnlyList<object> set = ResolvedIdSetGuard.Ensure(
+            await repository.QueryIdsAsync(path.TerminalCollection, leafCondition, ct),
+            options.MaxResolvedFilterIds, c.FieldPath);
 
         // Walk back leaf -> root, one hop per segment.
         for (var i = path.Segments.Count - 1; i >= 0; i--)
         {
             if (set.Count == 0) return set;
-            set = await HopAsync(path.Segments[i], set, ct);
+            set = ResolvedIdSetGuard.Ensure(
+                await HopAsync(path.Segments[i], set, ct),
+                options.MaxResolvedFilterIds, c.FieldPath);
         }
         return set;
     }
