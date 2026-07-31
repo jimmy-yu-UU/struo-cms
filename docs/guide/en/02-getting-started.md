@@ -148,7 +148,7 @@ you design your own.
 | `GET /api/ping` | Lightweight envelope response, useful for smoke-testing the REST pipeline |
 | `/scalar` | Interactive API explorer (Mars theme) — **non-Production only** |
 | `/openapi/v1.json` | Generated OpenAPI document — **non-Production only** |
-| `/graphql` | GraphQL endpoint — reachable in every environment; only the in-browser Nitro IDE and introspection are **Development-only** (`GraphQlServiceCollectionExtensions.cs:69,88`) — stricter than the non-Production gate above. Its `?sdl` schema route is **not** gated the same way — chapter 10 covers that. |
+| `/graphql` | GraphQL endpoint — reachable in every environment; the in-browser Nitro IDE is **Development-only**, and both schema-disclosure routes (introspection and `?sdl`) are gated together by `GraphQl:ExposeSchema`, which defaults to Development-only — stricter than the non-Production gate above. Query *execution* is unaffected by that gate; chapter 10 covers the distinction. |
 
 Confirmed against this checkout:
 

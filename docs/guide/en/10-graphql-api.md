@@ -60,7 +60,9 @@ both read from `GraphQlServiceCollectionExtensions`:
 - **Nitro IDE** (HotChocolate's bundled in-browser GraphQL explorer) — `options.Tool.Enable =
   app.Environment.IsDevelopment()`: same rule, browser tool only in Development.
 
-**A third way to read the schema is not gated on either of those, and is reachable in Production.**
+**A third way to read the schema exists, and it used to be gated by neither of those.** It is now
+gated by the same setting as introspection — `GraphQl:ExposeSchema` (chapter 3) — but it is worth
+understanding why, because the two are easy to assume equivalent when they are not.
 `GET /graphql?sdl` is a HotChocolate built-in route on the same `/graphql` path that serves the
 complete schema as plain SDL text — anonymously, with no session cookie and no `X-Struo-CSRF` header
 (it's a safe `GET`, so `CsrfProtectionMiddleware` never even considers it):
@@ -79,10 +81,11 @@ type Query {
   language(id: ID!, locale: String): Language @cost(weight: "10")
 ```
 
-`.DisableIntrospection(!env.IsDevelopment())` (`GraphQlServiceCollectionExtensions.cs`) gates
-introspection *queries* (`__schema`/`__type` selections inside a normal GraphQL request) — it says
-nothing about the `?sdl` query-string route, and `MapGraphQL("/graphql")` itself carries no
-environment gate of its own. **This was verified empirically against a real Production-mode instance,
+`.DisableIntrospection(...)` (`GraphQlServiceCollectionExtensions.cs`) gates introspection *queries*
+(`__schema`/`__type` selections inside a normal GraphQL request) — it says nothing about the `?sdl`
+query-string route, and `MapGraphQL("/graphql")` carries no environment gate of its own. When that
+gate read `!env.IsDevelopment()` and nothing governed `?sdl`, the result was the split below.
+**This was verified empirically against a real Production-mode instance,
 not inferred from reading the two gates separately** — a second instance of this exact codebase was
 started with `ASPNETCORE_ENVIRONMENT=Production` against a disposable scratch database (left completely
 isolated from the documented `:5221` instance and its `struo` database), and probed:
@@ -103,14 +106,47 @@ $ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql"      
 404
 ```
 
-So in Production: a genuine introspection *query* is correctly refused (`HC0046`), and the browser IDE
-is correctly gone (`404`) — but **`?sdl` still serves the entire schema, in full, to an anonymous
-caller**. A reader who stops at "introspection is refused outside Development" would wrongly conclude
-the schema is unreachable in production; it is fully reachable, just through a different route than the
-one that's actually gated. Nothing in this framework's own configuration surface (chapter 3) turns this
-route off — the only mitigation available today is blocking `/graphql?sdl` (or matching on the `sdl`
-query string generally) at the reverse proxy/ingress in front of a production deployment, the same layer
-chapter 3 already points to for concerns HotChocolate itself has no toggle for.
+That transcript is what this template used to ship: a genuine introspection *query* correctly refused
+(`HC0046`), the browser IDE correctly gone (`404`) — and **`?sdl` still serving the entire schema, in
+full, to an anonymous caller**. A reader who stopped at "introspection is refused outside Development"
+would wrongly conclude the schema was unreachable in production; it was fully reachable, just through a
+different route than the one that was actually gated.
+
+**Both disclosure routes are now gated by one flag.** `GraphQl:ExposeSchema` (chapter 3) resolves once
+in `GraphQlServiceCollectionExtensions.ResolveExposeSchema` and feeds both
+`.DisableIntrospection(!exposeSchema)` and HotChocolate's `GraphQLServerOptions.EnableSchemaRequests`,
+which is the option that actually governs the `?sdl` route. Unset — the default — means
+Development-only, so nothing changes for a local install. Re-measured against Production-mode and
+Development-mode hosts:
+
+| Route | Development | Production (default) |
+|---|---|---|
+| `GET /graphql?sdl` | `200`, full SDL | **`404`, empty body** |
+| `POST /graphql` introspection query | `200` | `400` `HC0046` |
+| `POST /graphql` ordinary query | `200`, data | **`200`, data** |
+| Nitro browser IDE (`GET /graphql`) | enabled | `404` |
+
+**Closing disclosure does not close execution.** `?sdl` and introspection are schema *discovery*,
+whereas a client executes through `POST /graphql` with a query document — and a client that already
+knows its queries never reads the schema at runtime. The third row is the one that matters if you
+consume this API from a GraphQL frontend: it is unaffected. `SchemaExposureGateTests` asserts it
+explicitly, so a future change cannot quietly break the consumption path while tightening disclosure.
+
+What closing it *does* affect is schema-dependent **tooling** — codegen, Postman/Insomnia schema
+import, Apollo Sandbox, IDE plugins. Point those at a Development or staging instance, where both
+routes are open.
+
+If you are deliberately publishing a public GraphQL API and want the schema readable in production, turn
+it back on by configuration alone, no rebuild:
+
+```
+GraphQl__ExposeSchema=true
+```
+
+That re-enables introspection *and* `?sdl` together, deliberately: whether a schema is public is one
+decision, not two. The Nitro browser IDE stays Development-only regardless of this setting — shipping a
+browser IDE is a much larger decision than serving SDL text. Blocking the route at the reverse
+proxy/ingress remains a reasonable belt-and-braces measure, but it is no longer the only option.
 
 A cookie-authenticated request to `/graphql` needs the **same** `X-Struo-CSRF` header REST writes need
 (chapter 9) — `CsrfProtectionMiddleware` guards every non-safe HTTP method regardless of path, and

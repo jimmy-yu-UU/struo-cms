@@ -129,6 +129,23 @@ exists. **Editing this key and restarting the app does not retroactively grant p
 existing database** — either grant the permission directly (RBAC admin UI or API) against a live
 database, or set the value before the very first boot against a fresh one.
 
+## `GraphQl`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `GraphQl:ExposeSchema` | bool (nullable) | *unset* → Development only | Whether this instance may **disclose its GraphQL schema**. Governs both routes that can read it — introspection queries (`__schema`/`__type`) and HotChocolate's built-in `GET /graphql?sdl` — through one resolved flag, so the two cannot drift apart. Unset preserves the shipped behavior (open in Development, closed everywhere else). |
+
+Set it explicitly to override per environment without a rebuild — `GraphQl__ExposeSchema=true` is the
+intended switch for a fork that deliberately publishes a public GraphQL API and wants its schema
+readable in production.
+
+This is schema **disclosure** only. Query execution through `POST /graphql` is unaffected either way: a
+client that already knows its queries never reads the schema at runtime, so closing this breaks no
+GraphQL consumer. What it does affect is schema-dependent **tooling** — codegen, Postman/Insomnia schema
+import, Apollo Sandbox — which should point at a Development or staging instance. The Nitro browser IDE
+is gated separately and stays Development-only regardless of this setting. Chapter 10 has the measured
+per-environment behavior.
+
 ## `RateLimiting:Login`
 
 | Key | Type | Default | Effect |

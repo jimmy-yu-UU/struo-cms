@@ -3,15 +3,32 @@ using HotChocolate.AspNetCore;
 using HotChocolate.Execution.Configuration;
 using HotChocolate.Types;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Struo.Application.Configuration;
 
 namespace Struo.Api.GraphQl;
 
 public static class GraphQlServiceCollectionExtensions
 {
-    public static IServiceCollection AddStruoGraphQl(this IServiceCollection services, IHostEnvironment env)
+    /// <summary>
+    /// Resolves whether this instance may disclose its schema. Shared by the introspection gate below
+    /// and the <c>?sdl</c> gate in <see cref="MapStruoGraphQl"/> so the two cannot drift apart — they
+    /// are one concern, and their drift is exactly what left <c>?sdl</c> serving the full schema
+    /// anonymously in Production while introspection was correctly refused. Null/absent config means
+    /// Development-only, which is the shipped behavior.
+    /// </summary>
+    internal static bool ResolveExposeSchema(IConfiguration config, IHostEnvironment env) =>
+        config.GetSection(GraphQlOptions.SectionName)
+            .GetValue<bool?>(nameof(GraphQlOptions.ExposeSchema))
+        ?? env.IsDevelopment();
+
+    public static IServiceCollection AddStruoGraphQl(
+        this IServiceCollection services, IHostEnvironment env, IConfiguration config)
     {
+        services.AddOptions<GraphQlOptions>().BindConfiguration(GraphQlOptions.SectionName);
+        var exposeSchema = ResolveExposeSchema(config, env);
         // Registered on the application IServiceCollection (not chained via
         // IRequestExecutorBuilder.AddErrorFilter<T>()): the schema-services container HotChocolate
         // builds for the operation-execution pipeline is a filtered subset of app services that
@@ -66,7 +83,7 @@ public static class GraphQlServiceCollectionExtensions
                 o.MaxFieldCost = 150.0;
                 o.MaxTypeCost = 150.0;
             })
-            .DisableIntrospection(!env.IsDevelopment())
+            .DisableIntrospection(!exposeSchema)
             // Pin both root scopes to Request explicitly (Mutation would otherwise fall back to
             // HotChocolate's implicit default) so resolvers — query AND mutation — resolve scoped
             // services against the HTTP request's DI scope. That's what lets ItemService's RBAC
@@ -83,7 +100,18 @@ public static class GraphQlServiceCollectionExtensions
     }
 
     public static void MapStruoGraphQl(this WebApplication app)
-        => app.MapGraphQL("/graphql")
-              .WithOptions(options =>
-                  options.Tool.Enable = app.Environment.IsDevelopment()); // Nitro IDE dev-only
+    {
+        var exposeSchema = ResolveExposeSchema(app.Configuration, app.Environment);
+        app.MapGraphQL("/graphql")
+            .WithOptions(options =>
+            {
+                options.Tool.Enable = app.Environment.IsDevelopment(); // Nitro IDE dev-only
+                // HotChocolate's built-in GET /graphql?sdl route serves the COMPLETE schema as SDL
+                // text. DisableIntrospection does NOT cover it (that gates __schema/__type selections
+                // inside a query document) and MapGraphQL carries no environment gate of its own, so
+                // before this Production served the whole schema to an anonymous caller. Gated on the
+                // same flag as introspection so the two disclosure routes stay in step.
+                options.EnableSchemaRequests = exposeSchema;
+            });
+    }
 }

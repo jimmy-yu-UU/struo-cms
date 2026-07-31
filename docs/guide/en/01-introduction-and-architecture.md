@@ -128,7 +128,7 @@ Backend:
 | Password hashing | Isopoh.Cryptography.Argon2 2.0.0 (Argon2id) | `Directory.Packages.props` |
 | Object storage (S3 backend) | AWSSDK.S3 4.0.25.3 | `Directory.Packages.props` |
 | Image transforms | NetVips 3.2.0 / NetVips.Native 8.18.4 | `Directory.Packages.props` |
-| Rich-text sanitization | HtmlSanitizer 9.1.968-beta | `Directory.Packages.props` |
+| Rich-text sanitization | HtmlSanitizer 9.1.974 | `Directory.Packages.props` |
 | Session store | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis 10.0.9 | `Directory.Packages.props` |
 | SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.9 | `Directory.Packages.props` |
 | Test runner | xUnit 2.9.3 | `Directory.Packages.props` |

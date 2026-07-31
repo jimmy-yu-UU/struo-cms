@@ -64,7 +64,7 @@ try
     // builder.Configuration before this line to be seen by the metadata scan.
     builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
     builder.Services.AddStruoData();
-    builder.Services.AddStruoGraphQl(builder.Environment);
+    builder.Services.AddStruoGraphQl(builder.Environment, builder.Configuration);
     builder.Services.AddStruoFiles();
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
     builder.Services.AddStruoCors(builder.Configuration);

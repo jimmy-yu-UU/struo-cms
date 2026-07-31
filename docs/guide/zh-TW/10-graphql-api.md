@@ -61,7 +61,9 @@ schema、它所產生的 query/filter/mutation 介面，以及它的錯誤形狀
   `options.Tool.Enable = app.Environment.IsDevelopment()`:規則相同，瀏覽器工具只在 Development
   中提供。
 
-**還有第三種讀取 schema 的方式，不受上述任何一項把關，而且在 Production 中也能觸及。**
+**還有第三種讀取 schema 的方式，它過去不受上述任何一項把關。** 現在它已經和 introspection 由同一個
+設定把關——`GraphQl:ExposeSchema` (第 3 章)——但值得理解為什麼，因為這兩者很容易被誤以為等價，
+實際上並不是。
 `GET /graphql?sdl` 是 HotChocolate 內建在同一個 `/graphql` 路徑上的路由，會以純 SDL 文字的形式
 提供完整的 schema——匿名存取，不需要 session cookie，也不需要 `X-Struo-CSRF` 標頭 (因為這是一個
 安全的 `GET`，`CsrfProtectionMiddleware` 根本不會考慮它):
@@ -80,9 +82,10 @@ type Query {
   language(id: ID!, locale: String): Language @cost(weight: "10")
 ```
 
-`.DisableIntrospection(!env.IsDevelopment())` (`GraphQlServiceCollectionExtensions.cs`) 把關的是
-introspection *查詢* (一般 GraphQL 請求中的 `__schema`/`__type` 選取)——它完全沒有提到 `?sdl`
-這個查詢字串路由，而 `MapGraphQL("/graphql")` 本身也不帶任何環境把關。**這一點已透過對一個真正
+`.DisableIntrospection(...)` (`GraphQlServiceCollectionExtensions.cs`) 把關的是 introspection *查詢*
+(一般 GraphQL 請求中的 `__schema`/`__type` 選取)——它完全沒有提到 `?sdl` 這個查詢字串路由，而
+`MapGraphQL("/graphql")` 本身也不帶任何環境把關。當那道把關寫的是 `!env.IsDevelopment()`、而 `?sdl`
+無人管束時，結果就是下面這種落差。**這一點已透過對一個真正
 Production 模式執行個體做實證驗證，而不是分別閱讀這兩道把關後推論出來的**——用完全相同的程式碼庫
 另外啟動了第二個執行個體，設定 `ASPNETCORE_ENVIRONMENT=Production`，指向一個可拋棄的暫用資料庫
 (與本文件所用的 `:5221` 執行個體及其 `struo` 資料庫完全隔離)，並做了以下探測:
@@ -103,13 +106,44 @@ $ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql"      
 404
 ```
 
-所以在 Production 中:一個真正的 introspection *查詢* 會被正確拒絕 (`HC0046`)，瀏覽器 IDE 也
-確實消失了 (`404`)——但**`?sdl` 仍然會把完整的 schema，原封不動地提供給一個匿名呼叫端**。一個
-只看到「introspection 在 Development 之外會被拒絕」就停下來的讀者，會誤以為 schema 在正式環境
-中無法觸及;實際上它完全可以觸及，只是走的是另一條路由，而不是真正被把關的那一條。這個框架自身的
-設定介面 (第 3 章) 中，沒有任何東西可以關掉這條路由——目前唯一可行的緩解方式，是在正式環境
-部署前方的 reverse proxy/ingress 上封鎖 `/graphql?sdl` (或一般性地比對 `sdl` 查詢字串)，這正是
-第 3 章已經指出的、HotChocolate 自身完全沒有開關可控制之疑慮該處理的同一層。
+上面那份記錄就是這個模板過去出貨的樣子:一個真正的 introspection *查詢* 會被正確拒絕 (`HC0046`)，
+瀏覽器 IDE 也確實消失了 (`404`)——但**`?sdl` 仍然會把完整的 schema，原封不動地提供給一個匿名
+呼叫端**。一個只看到「introspection 在 Development 之外會被拒絕」就停下來的讀者，會誤以為 schema
+在正式環境中無法觸及;實際上它完全可以觸及，只是走的是另一條路由，而不是真正被把關的那一條。
+
+**現在兩條揭露路由由同一個旗標把關。** `GraphQl:ExposeSchema` (第 3 章) 在
+`GraphQlServiceCollectionExtensions.ResolveExposeSchema` 中解析一次，同時餵給
+`.DisableIntrospection(!exposeSchema)` 以及 HotChocolate 的
+`GraphQLServerOptions.EnableSchemaRequests`——後者才是真正管控 `?sdl` 路由的那個選項。未設定 (預設)
+代表僅限 Development，所以對本機安裝來說沒有任何改變。針對 Production 模式與 Development 模式的
+執行個體重新實測:
+
+| 路由 | Development | Production (預設) |
+|---|---|---|
+| `GET /graphql?sdl` | `200`，完整 SDL | **`404`，空 body** |
+| `POST /graphql` introspection 查詢 | `200` | `400` `HC0046` |
+| `POST /graphql` 一般查詢 | `200`，有資料 | **`200`，有資料** |
+| Nitro 瀏覽器 IDE (`GET /graphql`) | 啟用 | `404` |
+
+**關掉揭露不等於關掉執行。** `?sdl` 與 introspection 屬於 schema *發現*，而用戶端是透過
+`POST /graphql` 帶查詢語句來執行的——一個已經知道自己要發什麼查詢的用戶端，執行期根本不會去讀
+schema。第三列就是你用 GraphQL 前端接資料時真正該關心的那一列:它完全不受影響。
+`SchemaExposureGateTests` 明確斷言了這一點，所以日後有人收緊揭露時，不會默默弄壞接資料的路徑。
+
+關掉它真正會影響的是依賴 schema 的**工具鏈**——codegen、Postman/Insomnia 匯入 schema、Apollo
+Sandbox、IDE 外掛。請把這些指向 Development 或 staging 執行個體，那裡兩條路由都是開著的。
+
+如果你是刻意要公開一個 public GraphQL API、希望正式環境也能讀取 schema，只要改設定就行，不需要
+重新建置:
+
+```
+GraphQl__ExposeSchema=true
+```
+
+這會**同時**重新啟用 introspection 與 `?sdl`——這是刻意的:「schema 要不要公開」是一個決定，不是
+兩個。Nitro 瀏覽器 IDE 不受這個設定影響，一律僅限 Development——對外提供一個瀏覽器 IDE，是比提供
+SDL 文字大得多的決定。在 reverse proxy/ingress 上封鎖這條路由仍然是合理的雙重保險，但它已經不是
+唯一的選項了。
 
 一個以 cookie 驗證的 `/graphql` 請求，需要與 REST 寫入 (第 9 章) **相同**的 `X-Struo-CSRF`
 標頭——`CsrfProtectionMiddleware` 不論路徑為何，都會把關每一個非安全 HTTP 方法，而
