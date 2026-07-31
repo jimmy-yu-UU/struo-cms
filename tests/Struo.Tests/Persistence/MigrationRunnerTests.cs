@@ -56,36 +56,89 @@ public sealed class MigrationRunnerTests
         MigrationRunner.SelectPending(ordered, applied).Should().BeEmpty();
     }
 
-    // ---- Runner behaviour on a non-PostgreSQL client: hard no-op ----
+    // ---- Runner behaviour on a non-PostgreSQL backend: applies normally ----
 
-    [Fact]
-    public async Task ApplyAsync_on_sqlite_is_noop_and_creates_no_tracking_table()
+    private static (SqliteTestDatabase, ISqlSugarClient) NewClient()
     {
-        using var file = new SqliteTestDatabase();
+        var file = new SqliteTestDatabase();
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Empty));
+        return (file, client);
+    }
 
+    [Fact]
+    public async Task ApplyAsync_applies_scripts_on_a_non_PostgreSQL_backend()
+    {
+        var (file, client) = NewClient();
         var dir = Directory.CreateTempSubdirectory("struo_mig_");
-        try
+        using (file)
         {
-            await File.WriteAllTextAsync(
-                Path.Combine(dir.FullName, "001-noop.sql"),
-                "CREATE TABLE should_never_exist (id integer);");
+            try
+            {
+                await File.WriteAllTextAsync(
+                    Path.Combine(dir.FullName, "001-create-widget.sql"),
+                    "CREATE TABLE widget (id integer);");
 
-            var applied = await MigrationRunner.ApplyAsync(client, dir.FullName, logger: null, ct: default);
+                var applied = await MigrationRunner.ApplyAsync(client, dir.FullName, logger: null);
 
-            applied.Should().BeEmpty();
+                applied.Should().ContainSingle().Which.Should().Be("001-create-widget.sql");
 
-            var tables = client.DbMaintenance.GetTableInfoList(false);
-            tables.Any(t => t.Name.Equals("schema_migrations", StringComparison.OrdinalIgnoreCase))
-                  .Should().BeFalse("the runner must not touch a non-PostgreSQL database");
-            tables.Any(t => t.Name.Equals("should_never_exist", StringComparison.OrdinalIgnoreCase))
-                  .Should().BeFalse("no migration SQL should execute on a non-PostgreSQL database");
+                var tables = client.DbMaintenance.GetTableInfoList(false);
+                tables.Any(t => t.Name.Equals("widget", StringComparison.OrdinalIgnoreCase))
+                      .Should().BeTrue("the runner must no longer be a PostgreSQL-only no-op");
+                tables.Any(t => t.Name.Equals("schema_migrations", StringComparison.OrdinalIgnoreCase))
+                      .Should().BeTrue("the tracking table is created via CodeFirst on any backend");
+            }
+            finally { dir.Delete(recursive: true); }
         }
-        finally
+    }
+
+    [Fact]
+    public async Task ApplyAsync_is_idempotent_across_runs()
+    {
+        var (file, client) = NewClient();
+        var dir = Directory.CreateTempSubdirectory("struo_mig_");
+        using (file)
         {
-            dir.Delete(recursive: true);
+            try
+            {
+                await File.WriteAllTextAsync(
+                    Path.Combine(dir.FullName, "001-create-widget.sql"),
+                    "CREATE TABLE widget (id integer);");
+
+                (await MigrationRunner.ApplyAsync(client, dir.FullName, logger: null))
+                    .Should().ContainSingle();
+
+                // 第二次執行不得重跑（重跑會因 widget 已存在而丟例外）。
+                (await MigrationRunner.ApplyAsync(client, dir.FullName, logger: null))
+                    .Should().BeEmpty("already-recorded filenames are skipped");
+            }
+            finally { dir.Delete(recursive: true); }
+        }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_records_the_applied_filename_in_the_tracking_entity()
+    {
+        var (file, client) = NewClient();
+        var dir = Directory.CreateTempSubdirectory("struo_mig_");
+        using (file)
+        {
+            try
+            {
+                await File.WriteAllTextAsync(
+                    Path.Combine(dir.FullName, "001-create-widget.sql"),
+                    "CREATE TABLE widget (id integer);");
+
+                await MigrationRunner.ApplyAsync(client, dir.FullName, logger: null);
+
+                var rows = await client.Queryable<SchemaMigration>().ToListAsync();
+                rows.Should().ContainSingle();
+                rows[0].Filename.Should().Be("001-create-widget.sql");
+                rows[0].AppliedAt.Should().NotBe(default);
+            }
+            finally { dir.Delete(recursive: true); }
         }
     }
 }
