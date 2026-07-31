@@ -130,8 +130,8 @@ public static class MigrationRunner
         return justApplied;
     }
 
-    // 僅在追蹤表不存在時建立，且走 CodeFirst——既有部署（PostgreSQL 上的 text/timestamptz 版本）
-    // 因此完全不受影響，也不需要任何 migration。
+    // 僅在追蹤表不存在時建立，且走 CodeFirst——任何既有部署的追蹤表（不論其欄位是何種型別）因此完全
+    // 不受影響，也不需要任何 migration。
     private static void EnsureTrackingTable(ISqlSugarClient db)
     {
         var exists = db.DbMaintenance.GetTableInfoList(false)

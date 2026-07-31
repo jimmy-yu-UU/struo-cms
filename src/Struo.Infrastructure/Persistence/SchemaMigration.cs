@@ -12,9 +12,11 @@ namespace Struo.Infrastructure.Persistence;
 /// </para>
 ///
 /// <para>
-/// <c>AppliedAt</c> 刻意<b>不</b>指定 <c>ColumnDataType</c>。本 repo 對新增溫度欄位的慣例是
-/// <c>timestamptz</c>，但該字面型別在 MySQL / SqlServer / Oracle 並不存在；此處以可攜性優先，交由
-/// SqlSugar 依各 dialect 映射 <see cref="DateTime"/>。
+/// <c>AppliedAt</c> 依本 repo 對「baseline 之後新增的框架表」溫度欄位的慣例，標記為時區感知
+/// （<see cref="ColumnShape.TimestampWithTimeZone"/>），而非寫死的 vendor 型別字面，因此在五個後端皆可
+/// 建表成功——見 <see cref="ColumnTypeMap"/>。此舉讓「新建立」的追蹤表與既有 PostgreSQL 部署上
+/// （由舊版 runner 建出的）<c>timestamptz</c> 欄位一致。既有的追蹤表本身<b>不會</b>因為這個標記而被改
+/// 動：<see cref="EnsureTrackingTable"/> 只在表不存在時才建立，已存在的表永遠原樣沿用。
 /// </para>
 /// </summary>
 [SugarTable("schema_migrations")]
@@ -25,5 +27,6 @@ public sealed class SchemaMigration
     public string Filename { get; set; } = "";
 
     [SugarColumn(ColumnName = "appliedat")]
+    [ColumnShape(ColumnShape.TimestampWithTimeZone)]
     public DateTime AppliedAt { get; set; }
 }
