@@ -182,21 +182,32 @@ try
         // created during THIS startup (table-creation is the sole seeding trigger).
         var existingBefore = DataSeeder.GetTableNames(db);
 
-        // Development-only: SqlSugar CodeFirst creates missing tables and additively adds missing
-        // columns to existing tables. It performs no destructive schema changes and never runs in
-        // production (structural changes go through reviewed migration scripts).
-        if (app.Environment.IsDevelopment())
-        {
-            var entityTypes = scope.ServiceProvider
-                .GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>()
-                .CollectForInitTables();
-            DatabaseInitializer.InitializeDevelopmentSchema(db, app.Environment, entityTypes.ToArray());
-        }
+        var dbOptions = scope.ServiceProvider
+            .GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
 
-        // Reviewed *.sql schema migrations. Config-driven (Database:MigrationsPath), all environments,
-        // hard no-op on non-PostgreSQL. Runs AFTER InitTables and BEFORE seeding.
-        var migrationsPath =
-            builder.Configuration.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName)["MigrationsPath"];
+        var entityTypes = scope.ServiceProvider
+            .GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>()
+            .CollectForInitTables()
+            .ToArray();
+
+        var schemaLogger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>().CreateLogger("Struo.SchemaInit");
+
+        // ALL environments, ALL backends: create tables that do not exist yet, so an empty database
+        // bootstraps itself and DataSeeder can seed the tables created during THIS startup. Existing
+        // tables are never touched here — InitTables in its default mode would modify and DROP
+        // columns, so only entity types whose table is absent are handed to it.
+        DatabaseInitializer.CreateMissingTables(db, existingBefore, schemaLogger, entityTypes);
+
+        // Opt-in, Development only: full CodeFirst structural sync of EXISTING tables. Ignored with a
+        // warning elsewhere. Evolving existing tables outside dev goes through reviewed migrations.
+        if (dbOptions.AutoSyncSchema)
+            DatabaseInitializer.SyncSchema(db, app.Environment, schemaLogger, entityTypes);
+
+        // Reviewed *.sql schema migrations — ALTER-only by convention. Config-driven
+        // (Database:MigrationsPath), all environments, all backends. The template ships zero scripts.
+        // Runs AFTER table creation and BEFORE seeding.
+        var migrationsPath = dbOptions.MigrationsPath;
         if (!string.IsNullOrWhiteSpace(migrationsPath))
         {
             var migrationLogger = scope.ServiceProvider

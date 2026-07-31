@@ -87,22 +87,4 @@ public static class DatabaseInitializer
             "(Development only).", entityTypes.Length);
         return true;
     }
-
-    /// <summary>
-    /// 過渡用：由 Task 3 的 <c>Program.cs</c> 改寫取代後刪除。
-    /// </summary>
-    public static void InitializeDevelopmentSchema(
-        ISqlSugarClient client, IHostEnvironment environment, params Type[] entityTypes)
-    {
-        if (!environment.IsDevelopment())
-        {
-            throw new InvalidOperationException(
-                "InitTables is only permitted in the Development environment. " +
-                $"Current environment: '{environment.EnvironmentName}'. " +
-                "Production schema changes must go through reviewed migration scripts.");
-        }
-
-        if (entityTypes.Length == 0) return;
-        client.CodeFirst.InitTables(entityTypes);
-    }
 }
