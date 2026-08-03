@@ -136,4 +136,42 @@ public sealed class OptionsValidationTests
         new Struo.Application.Configuration.DatabaseOptions()
             .AutoSyncSchema.Should().BeFalse();
     }
+
+    [Fact]
+    public void AutoSyncSchema_binds_true_from_configuration()
+    {
+        // 這個鍵是 Production 上唯一能觸發破壞性結構同步的開關（Program.cs:204）。若某次改名或改
+        // section 讓它靜默失聯，行為看起來完全正常（永遠不同步），沒有任何東西會發現它已是死碼。
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:AutoSyncSchema"] = "true",
+            })
+            .Build();
+
+        var options = new Struo.Application.Configuration.DatabaseOptions();
+        config.GetSection("Database").Bind(options);
+
+        options.AutoSyncSchema.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shipped_appsettings_disables_AutoSyncSchema()
+    {
+        // C# 端預設安全不代表出貨檔安全——模板使用者拿到的是這個 json，不是 new DatabaseOptions()。
+        // 用 ConfigurationBuilder 讀取：它容忍該檔內的 "// AutoSyncSchema" 註解鍵，手寫
+        // JsonDocument.Parse 會炸在註解上。
+        var path = Path.Combine(RepoRoot.Find(), "src", "Struo.Api", "appsettings.json");
+        File.Exists(path).Should().BeTrue($"出貨的 appsettings 必須存在於 '{path}'");
+
+        var config = new ConfigurationBuilder().AddJsonFile(path, optional: false).Build();
+
+        // 先確認鍵存在：鍵被整段刪掉時 GetValue<bool> 也會回 false，光斷言 false 會假綠燈。
+        config["Database:AutoSyncSchema"].Should().NotBeNull(
+            "出貨檔必須明寫這個鍵，讓讀者看得到預設值");
+
+        var options = new Struo.Application.Configuration.DatabaseOptions();
+        config.GetSection("Database").Bind(options);
+        options.AutoSyncSchema.Should().BeFalse("出貨預設必須是安全側");
+    }
 }
