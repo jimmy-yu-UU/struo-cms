@@ -131,11 +131,18 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
-4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`, idempotent,
-   forward-only, `timestamptz` for new temporal columns, never edit an already-applied filename. Gate:
-   `dotnet build && dotnet test`, plus live verification on the configured backend (on PostgreSQL, the
-   live-PG check; the runner is a no-op on every non-PostgreSQL backend, SQLite included — see
-   Verification).
+4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`; the template
+   ships **zero** scripts, so a fresh fork's first is `001-...`, and anything already there belongs to
+   that fork. Forward-only, plain portable SQL (no PostgreSQL-only syntax); idempotency is no longer
+   required — `MigrationRunner` tracks applied filenames in the CodeFirst-created `schema_migrations`
+   table, so each file runs at most once. The runner applies pending scripts on **any** configured
+   backend (no PostgreSQL gate) and is off by default — `Database:MigrationsPath` empty disables it
+   entirely. Creating tables isn't its job: `DatabaseInitializer.CreateMissingTables` does that, in
+   every environment and on every backend, so scripts here are ALTER-only by convention. See
+   `db/migrations/README.md` for the full portability guidance and known limits. Gate: `dotnet build &&
+   dotnet test` (exercises the runner, including on SQLite), plus live verification on the configured
+   backend — PostgreSQL is this repo's only verified live target; any other backend needs its own
+   equivalent check.
 5. **Change the admin SPA** — only when metadata isn't enough (new field editor, theming, i18n, a
    bespoke view); the SPA never hardcodes a collection's fields/columns/labels. Gate: `pnpm test &&
    pnpm build`.
