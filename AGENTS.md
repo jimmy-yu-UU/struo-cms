@@ -19,8 +19,10 @@ actual project.
 carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`, `User`,
 `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, and `SiteSettings` are framework
 tables but not collections. If you're unsure whether something is core, it's core only if it lives in
-`src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` and
-`db/migrations/` among them. `schema/` is core too, despite living outside that path: it holds the
+`src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` among
+them. `db/migrations/` is **not** one of them: only its `README.md` — documenting the mechanism — is
+core; the template ships no scripts, and any script a fork adds there is that fork's own content, not
+core capability. `schema/` is core too, despite living outside that path: it holds the
 committed snapshots of these seven collections' wire metadata and of the declared interface enums
 (`schema/README.md`), and a fork keeps
 it alongside `src/Struo.*`.
@@ -64,16 +66,16 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
   only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental. Schema
   creation (CodeFirst) is designed and mapped to run on all five backends, via a dialect-neutral
-  `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type literals out of `src/` — but that mapping
-  itself is unverified against a live MySQL/SqlServer/Oracle instance. What remains unverified either way
-  is the query layer: some ORDER-BY and literal-coercion code paths are written against
-  PostgreSQL/SQLite behavior specifically.
+  `[ColumnShape]`/`ColumnTypeMap` layer that confines vendor type literals to a single mapping file — but
+  that mapping itself is unverified against a live MySQL/SqlServer/Oracle instance, and so is the query
+  layer: some ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior
+  specifically.
 
 ## Invariants
 
 - **All database access is through SqlSugar; zero vendor SQL.** Migration scripts under
   `db/migrations/` are the one place raw SQL is written deliberately — and the template ships **none**:
-  the directory is empty, and any script there belongs to the fork that put it there. Replaceability is
+  it holds only its `README.md`, and any script there belongs to the fork that put it there. Replaceability is
   a choice made once, at fork time, not a property every deployment must preserve forever: the core
   contains no vendor SQL; a fork writing PostgreSQL-specific ALTERs for the database it actually runs
   is not a violation.
@@ -135,9 +137,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
 4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`; the template
    ships **zero** scripts, so a fresh fork's first is `001-...`, and anything already there belongs to
-   that fork. Forward-only, plain portable SQL (no PostgreSQL-only syntax); idempotency is no longer
-   required — `MigrationRunner` tracks applied filenames in the CodeFirst-created `schema_migrations`
-   table, so each file runs at most once. The runner applies pending scripts on **any** configured
+   that fork. Forward-only, plain portable SQL (no PostgreSQL-only syntax); idempotency is not required —
+   `MigrationRunner` tracks applied filenames in `schema_migrations`, so each file runs at most once;
+   never edit an already-applied filename. The runner applies pending scripts on **any** configured
    backend (no PostgreSQL gate) and is off by default — `Database:MigrationsPath` empty disables it
    entirely. Creating tables isn't its job: `DatabaseInitializer.CreateMissingTables` does that, in
    every environment and on every backend, so scripts here are ALTER-only by convention. See
