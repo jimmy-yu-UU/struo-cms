@@ -67,13 +67,16 @@ Adding a collection is purely additive to a fork's own content project — it ne
    is replacing the template's "ships with zero collections" posture permanently), update or remove
    that test deliberately as part of the same change — don't leave it contradicting the new
    configuration.
-7. **Restart the API.** In Development, `InitTables` creates the table automatically from the entity
-   class (additive column changes too, never destructive) — confirm the admin SPA's sidebar shows the
-   new collection under its configured `Group`.
+7. **Restart the API.** CodeFirst creates the table automatically from the entity class — in **every**
+   environment, not just Development. Because the table doesn't exist yet, this step is inherently
+   non-destructive: it only ever creates, never alters or drops anything on an existing table (that's a
+   separate, opt-in mechanism, `Database:AutoSyncSchema`, Development-only — see Playbook 4) — confirm
+   the admin SPA's sidebar shows the new collection under its configured `Group`.
 8. **Grant RBAC** read/write/delete permissions for the collection to whichever roles need them — a
    brand-new collection has zero grants, so only a super-admin can use it until you add some.
-9. **Write a production migration** before deploying: a new `NNN-short-kebab-description.sql` under
-   `db/migrations/` for the new table (see Playbook 4).
+9. **Nothing further is needed for the table itself before deploying** — CodeFirst creates it in
+   Production the same way it does everywhere else. A migration under `db/migrations/` is only needed
+   later, if you change the shape of a table that already holds data you need to keep (see Playbook 4).
 10. **Tests to add**: if the collection has any non-trivial behavior worth locking down (a relation, a
     computed default, an interaction with soft delete/revisions), add a test in your content project's
     own test suite, or, for framework-level behavior you are exercising rather than declaring, follow
@@ -82,8 +85,9 @@ Adding a collection is purely additive to a fork's own content project — it ne
     and generic CRUD behavior. Do not add your business collection's tests under `tests/Struo.Tests` —
     that project is the framework's own test suite.
 11. **Gate**: `dotnet build && dotnet test` (the four standing gates' backend half). Add
-    live-PostgreSQL verification before a production deploy — confirm the migration script actually
-    produces the same table `InitTables` would have (compare columns/indexes).
+    live-database verification before a production deploy, against whichever backend you are actually
+    configured for — confirm CodeFirst creates the new table with the columns/indexes/constraints you
+    expect; a green SQLite run does not guarantee the same result on PostgreSQL or another backend.
 
 ## Playbook 2: Add a field type
 
@@ -230,8 +234,9 @@ README.md`.
 4. Use a time-zone-aware type (not bare `timestamp`) for any new column or table storing an instant,
    and store UTC — this is the convention, not a claim about any single file: there is no baseline file
    to check anymore. If the column is also modeled as an entity property, mark it
-   `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (`src/Struo.Infrastructure/Persistence/
-   ColumnShape.cs`) rather than a PostgreSQL-only `timestamptz` literal, so CodeFirst resolves the
+   `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
+   (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) rather than a PostgreSQL-only `timestamptz`
+   literal, so CodeFirst resolves the
    matching type per backend and a freshly created table agrees with what this migration adds to an
    existing one. Hand-writing the DDL directly instead (a column no entity property backs)?
    `ColumnTypeMap.cs` centralizes the per-backend literal to copy in — see `db/migrations/README.md` §5

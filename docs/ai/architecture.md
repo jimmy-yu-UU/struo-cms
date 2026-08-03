@@ -105,8 +105,9 @@ File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision, 
 Implementation: `EntityTypeCollector` (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`).
 Registered as a singleton via the container:
 `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
-(`MetadataServiceCollectionExtensions.cs:45`). Consumed only by the Development-only `InitTables` path
-(`Program.cs`) — Production never calls it.
+(`MetadataServiceCollectionExtensions.cs:45`). Consumed by `DatabaseInitializer.CreateMissingTables`
+(`Program.cs`), which runs in every environment, on every backend — table creation is no longer gated to
+Development (see `docs/guide/en/15-deployment-operations-testing.md`, "Schema management").
 
 ### `IRelationshipGraph`
 
