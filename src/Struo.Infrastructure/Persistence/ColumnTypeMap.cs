@@ -28,8 +28,7 @@ namespace Struo.Infrastructure.Persistence;
 /// pinned <c>5.1.4.215</c>, none of them tagged upstream. The endpoints were bounded, not every commit
 /// in between: the relevant methods below are byte-identical between the <c>5.1.4.197</c> tag and
 /// <c>master</c> as of this writing (diffed directly), so the divergence risk is low but not zero.
-/// <b>This is a
-/// source-reading conclusion, not a result verified against a live SQL Server or MySQL
+/// <b>This is a source-reading conclusion, not a result verified against a live SQL Server or MySQL
 /// instance.</b>
 /// </para>
 /// <para>
