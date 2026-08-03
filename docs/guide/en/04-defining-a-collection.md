@@ -1,8 +1,9 @@
 # 4. Defining a Collection
 
 This chapter shows how a downstream fork adds its own content type. Everything here is additive: it
-touches no framework code, only a new entity class (in your own project) plus, where you deploy
-against Postgres, a migration script.
+touches no framework code, only a new entity class (in your own project). CodeFirst creates its table
+automatically, on whichever backend you run and in every environment — a brand-new collection needs no
+migration script at all (see "Creating the table" below).
 
 ## The metadata-driven model
 
@@ -190,22 +191,24 @@ then restart the API (this is a startup-time-only scan — chapter 3). `samples/
 exactly this pattern, already built, as a **detachable demo** — chapter 16 walks through opting it in
 with these same two steps, and removing it again cleanly.
 
-## Creating the table: dev `InitTables` vs. production migrations
+## Creating the table: CodeFirst handles it in every environment
 
-In **Development**, leave `Database:MigrationsPath` empty (the default) and just run the API. SqlSugar's
-CodeFirst step (`DatabaseInitializer.InitializeDevelopmentSchema`, gated on
-`app.Environment.IsDevelopment()`) creates any table missing for every scanned entity type — your
-content collections, their translation sidecars, and any M2M junction tables
-(`EntityTypeCollector.CollectForInitTables` — see `src/Struo.Api/Program.cs`) — and additively adds
-missing columns to existing tables. It performs no destructive schema changes and never runs outside
-Development.
+Just restart the API — nothing needs configuring for the table itself. Table creation is not gated by
+environment: whenever an entity type's table does not yet exist, SqlSugar's CodeFirst step creates it —
+your content collection's own table, its translation sidecar's table (if it has one), and any M2M
+junction table it declares (`EntityTypeCollector.CollectForInitTables` — see `src/Struo.Api/Program.cs`)
+— before anything else runs, on any of the five configured backends, in Development and Production alike.
+Because a brand-new collection's table does not exist yet, this is the only step needed to bring it into
+existence: **a new collection needs no migration script for its initial table, in any environment.**
 
-In **Production**, `InitTables` never runs. Instead, point `Database:MigrationsPath` at a directory of
-reviewed `*.sql` scripts (honored only when `Database:DbType` is `PostgreSQL`); the migration runner
-applies them at startup, after any dev `InitTables` step and before database seeding. The core schema's
-own bootstrap script is `db/migrations/001-core-baseline.sql` — your new collection needs its own
-migration script added to that same directory before a production deployment. Chapter 15 covers writing
-and applying migrations end-to-end.
+Migrations only enter the picture later, once the table already holds data you need to preserve and you
+need to change its shape — renaming a column, narrowing a type, adding a `NOT NULL` constraint to a
+populated table, and the like. `Database:MigrationsPath` points `MigrationRunner` at a directory of
+reviewed `*.sql` scripts for exactly that case, and the runner now applies on every backend, not just
+PostgreSQL. There is also `Database:AutoSyncSchema`, a Development-only opt-in that lets CodeFirst alter
+existing tables automatically — convenient for fast schema iteration before real data exists, hazardous
+once it does. Chapter 15 covers both mechanisms end-to-end, including the nine-item hazard list for
+`AutoSyncSchema` and how to write a portable migration.
 
 ## Checklist for adding a collection end-to-end
 
@@ -222,13 +225,14 @@ and applying migrations end-to-end.
    one (chapter 7).
 6. Add a `ProjectReference` from `src/Struo.Api/Struo.Api.csproj` to your content project, and add its
    assembly name to `Struo:ContentAssemblies`.
-7. Restart the API. In Development, `InitTables` creates the table automatically — confirm the admin
-   SPA's sidebar now shows a "Content" navigation group with your collection in it (compare chapter 2's
-   "no collections yet" state).
+7. Restart the API. CodeFirst creates the table automatically — in every environment, not just
+   Development — confirm the admin SPA's sidebar now shows a "Content" navigation group with your
+   collection in it (compare chapter 2's "no collections yet" state).
 8. Grant RBAC read/write/delete permissions for the collection to the roles that need them (chapter 12)
    — a brand-new collection has no grants yet, so only a super-admin can use it until you do.
-9. Before a Production deployment, write a reviewed `*.sql` migration for the new table and add it to
-   the directory named by `Database:MigrationsPath` (chapter 15).
+9. Nothing further is needed before a Production deployment for the table itself — CodeFirst creates it
+   there too, automatically. A migration is only needed later, if you change the shape of a table that
+   already holds data you need to keep (chapter 15).
 
 ## Next steps
 

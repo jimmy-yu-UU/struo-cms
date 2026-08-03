@@ -1,4 +1,5 @@
 using SqlSugar;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Revisions;
 
@@ -20,8 +21,9 @@ public sealed class Revision
     // makes a concurrent lost-update race fail closed (unique violation -> the capture's transaction
     // rolls back with the item write) instead of silently duplicating a revision number. The three
     // columns share one group name so SqlSugar CodeFirst emits a single composite unique index
-    // (ux_revisions_item_no) — the same mechanism the Identity entities use (see UserRole). The
-    // matching physical DDL for live/existing databases lives in db/migrations/001-core-baseline.sql.
+    // (ux_revisions_item_no) — the same mechanism the Identity entities use (see UserRole). CodeFirst
+    // creates this index on any backend where the table does not yet exist; it is never retrofitted
+    // onto an already-existing table.
     [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public string CollectionName { get; set; } = "";
     [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
@@ -30,11 +32,11 @@ public sealed class Revision
     public long RevisionNumber { get; set; }
     public string Operation { get; set; } = "";
 
-    // MUST be `text`: SqlSugar's default varchar(255) overflows on Postgres for a realistic snapshot
-    // (the same content-column-widening problem SqlSugarClientFactory's EntityService hook solves
-    // for [CmsField] content interfaces). Explicit here rather than via a convention, because
-    // Snapshot is a plain framework column with no [CmsField] interface to key off of.
-    [SugarColumn(ColumnDataType = "text")] public string Snapshot { get; set; } = "";
+    // MUST be unbounded: SqlSugar's default varchar(255) overflows for a realistic snapshot (the same
+    // content-column-widening problem the EntityService hook solves for [CmsField] content
+    // interfaces). Declared explicitly rather than by convention, because Snapshot is a plain
+    // framework column with no [CmsField] interface to key off of.
+    [ColumnShape(ColumnShape.LongText)] public string Snapshot { get; set; } = "";
 
     public DateTime CreatedAt { get; set; }
     [SugarColumn(IsNullable = true)] public Guid? CreatedBy { get; set; }

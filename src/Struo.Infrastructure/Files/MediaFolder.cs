@@ -2,6 +2,7 @@ using SqlSugar;
 using Struo.Domain.Auditing;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Files;
 
@@ -20,11 +21,12 @@ public sealed class MediaFolder : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
-    // New framework table → timestamptz (the baseline AuditableEntity tables predate the
-    // rule and stay `timestamp`; convention binds new schema only). Same literal-type mechanism
-    // as SiteSettings.UpdatedAt, so InitTables emits the identical column type for both.
-    [SugarColumn(ColumnDataType = "timestamptz")] public override DateTime CreatedAt { get; set; }
-    [SugarColumn(ColumnDataType = "timestamptz")] public override DateTime UpdatedAt { get; set; }
+    // New framework table → time-zone-aware timestamps. The baseline AuditableEntity tables predate
+    // this convention and stay zone-less; the convention binds new schema only. Declared as a
+    // dialect-neutral shape (not a vendor type literal) so CodeFirst table creation works on every
+    // backend — see ColumnTypeMap.
+    [ColumnShape(ColumnShape.TimestampWithTimeZone)] public override DateTime CreatedAt { get; set; }
+    [ColumnShape(ColumnShape.TimestampWithTimeZone)] public override DateTime UpdatedAt { get; set; }
 
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Name { get; set; } = string.Empty;

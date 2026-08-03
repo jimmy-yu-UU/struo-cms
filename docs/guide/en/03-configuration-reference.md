@@ -25,9 +25,10 @@ explicitly below.
 |---|---|---|---|
 | `Database:DbType` | enum: `PostgreSQL`\|`MySql`\|`SqlServer`\|`Sqlite`\|`Oracle` | `PostgreSQL` | Selects the SqlSugar backend. Only `PostgreSQL` is the verified runtime target; `Sqlite` is test-only; `MySql`/`SqlServer`/`Oracle` are type-mapped but experimental. |
 | `Database:ConnectionString` | string, required | none — ships as a `REPLACE_ME` placeholder | ADO.NET connection string for the selected engine. A missing or empty value fails startup (`[Required]` + `ValidateOnStart`), rather than surfacing as a confusing failure on first query. |
-| `Database:MigrationsPath` | string?, optional | empty/absent (disabled) | Directory of reviewed `*.sql` migration scripts applied at startup by the migration runner. Only honored when `DbType` is `PostgreSQL` — a hard no-op on every other backend. Development normally leaves this empty and lets `InitTables` build the schema from the entity classes instead; Production points it at the deployed migrations directory so `001-core-baseline.sql` bootstraps an empty database. |
+| `Database:MigrationsPath` | string?, optional | empty/absent (disabled) | Directory of reviewed `*.sql` migration scripts, applied at startup by `MigrationRunner`. Runs on **every** configured backend, not just PostgreSQL — a script targeting a backend it wasn't written for simply fails at apply time; there is no per-backend guard. Leaving it empty disables the runner entirely, on any backend. It is one of three schema-management layers, alongside table creation (which runs unconditionally, in every environment, and needs no configuration) and `Database:AutoSyncSchema` below — chapter 15 has the full picture. |
+| `Database:AutoSyncSchema` | bool | `false` | Lets CodeFirst run a full structural sync — add, modify, and **drop** columns — against tables that already exist, driven straight from the entity classes. Takes effect only in Development; set to `true` in any other environment and it is ignored, with a logged warning, rather than honored. Off by default because, against a table that already holds data, this can silently destroy it (a column rename reads as "drop one column, add another," for instance) — chapter 15's nine-item hazard table covers this in full. |
 
-All three require a restart to take effect.
+All four require a restart to take effect.
 
 ## `Struo:ContentAssemblies`
 
