@@ -159,8 +159,9 @@ public sealed class OptionsValidationTests
     public void Shipped_appsettings_disables_AutoSyncSchema()
     {
         // C# 端預設安全不代表出貨檔安全——模板使用者拿到的是這個 json，不是 new DatabaseOptions()。
-        // 用 ConfigurationBuilder 讀取：它容忍該檔內的 "// AutoSyncSchema" 註解鍵，手寫
-        // JsonDocument.Parse 會炸在註解上。
+        // 用 ConfigurationBuilder 讀取：這是 Program.cs 實際載入設定的同一條路徑，且會走到
+        // 與 AutoSyncSchema_binds_true_from_configuration 相同的 ConfigurationBinder，兩者一起
+        // 覆蓋真正可能壞掉的機制。
         var path = Path.Combine(RepoRoot.Find(), "src", "Struo.Api", "appsettings.json");
         File.Exists(path).Should().BeTrue($"出貨的 appsettings 必須存在於 '{path}'");
 
