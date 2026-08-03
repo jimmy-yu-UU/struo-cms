@@ -51,7 +51,12 @@ public class FrameworkEntityTypesTests
         // [SugarTable]，省去從集合差異反推的步驟，並讓這條規則本身變成一則明寫、被檢查的斷言。
         // 兩條測試仍有共同死角：一個既不在 All、也沒有 [SugarTable] 的型別，永遠不會進入
         // scanned 或 accountedFor，兩邊都不會失衡——這是「用允許清單比對」這種偵測方式本身的
-        // 極限（掃不到沒人引用過的型別），不是任一條斷言能補上的洞。
+        // 極限（掃不到沒人引用過的型別），不是任一條斷言能補上的洞。另一個死角是掃描範圍：
+        // PersistedInfrastructureTypes() 只掃 typeof(FrameworkEntityTypes).Assembly（即
+        // Struo.Infrastructure），若日後有持久化的 framework 型別落在別的組件，這裡也看不到——
+        // 目前沒有這樣的型別（Struo.Domain 的 SeoTranslation 是抽象基底、不帶 [SugarTable]，不算
+        // 反例；`[SugarTable]` 目前全部落在 Struo.Infrastructure），但這是掃描機制本身的限制，
+        // 不是任一條斷言能補上的洞。
         foreach (var type in FrameworkEntityTypes.All)
         {
             var attribute = type.GetCustomAttribute<SugarTable>();

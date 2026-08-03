@@ -103,8 +103,12 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   measured on real PostgreSQL by
   `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`; on SQLite the
   same unfiltered call leaves the removed column in place
-  (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`), so this repo's
-  SQLite-only CI suite cannot demonstrate the claim by itself), while reviewed `db/migrations/` scripts
+  (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because
+  SQLite or SqlSugar's SQLite dialect lacks the capability, but because this repo's
+  `SqlSugarClientFactory` never sets `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`,
+  the flag that gates it (manual ch.15 row 7 has the detail, including what flipping that flag actually
+  does) — so this repo's SQLite-only CI suite cannot demonstrate the claim by itself), while reviewed
+  `db/migrations/` scripts
   applied by `MigrationRunner` are the all-environments path. The runner works on any backend;
   `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
@@ -199,11 +203,15 @@ variable first, falling back to the `Testing:PostgresConnection` key in
 `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
 directly against a real PostgreSQL instance.
 
-**Known local-environment flake, unresolved as of 2026-08-03**: `PostgresIntegrationTests` has been
-observed failing 7/8 on the maintainer's machine with a locally-raised Npgsql socket abort on whichever
-test the process happens to schedule first (seen on both `Stale_version_update_conflicts_on_postgres`
-and `Offset_window_is_exact_on_postgres`); the cause is unexplained and not established as a regression
-— a fresh red on this suite should not be assumed to be one you just caused.
+**Known local-environment flake, unresolved as of 2026-08-03**: on the maintainer's machine,
+`PostgresIntegrationTests` has 1 of its 8 tests go red — not 7 of 8 — with a locally-raised Npgsql
+socket abort on whichever test the process happens to schedule first (seen on both
+`Stale_version_update_conflicts_on_postgres` and `Offset_window_is_exact_on_postgres`); it reproduced in
+9 of 11 runs. This batch's load-bearing test, `PostgresIntegrationTests
+.Unfiltered_InitTables_drops_a_removed_column_on_postgres`, passed in all 11 of those runs. The cause is
+unexplained, but it is not new to this branch: the same abort (same `Offset_window_is_exact_on_postgres`
+failure, same stack trace) reproduced at the merge-base `74c5dcc` too, in 5 of 6 runs — a fresh red on
+this suite should not be assumed to be one you just caused.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
