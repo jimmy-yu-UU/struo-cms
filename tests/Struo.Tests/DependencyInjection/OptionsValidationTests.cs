@@ -145,12 +145,12 @@ public sealed class OptionsValidationTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Database:AutoSyncSchema"] = "true",
+                [$"{Struo.Application.Configuration.DatabaseOptions.SectionName}:AutoSyncSchema"] = "true",
             })
             .Build();
 
         var options = new Struo.Application.Configuration.DatabaseOptions();
-        config.GetSection("Database").Bind(options);
+        config.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName).Bind(options);
 
         options.AutoSyncSchema.Should().BeTrue();
     }
@@ -168,11 +168,11 @@ public sealed class OptionsValidationTests
         var config = new ConfigurationBuilder().AddJsonFile(path, optional: false).Build();
 
         // 先確認鍵存在：鍵被整段刪掉時 GetValue<bool> 也會回 false，光斷言 false 會假綠燈。
-        config["Database:AutoSyncSchema"].Should().NotBeNull(
+        config[$"{Struo.Application.Configuration.DatabaseOptions.SectionName}:AutoSyncSchema"].Should().NotBeNull(
             "出貨檔必須明寫這個鍵，讓讀者看得到預設值");
 
         var options = new Struo.Application.Configuration.DatabaseOptions();
-        config.GetSection("Database").Bind(options);
+        config.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName).Bind(options);
         options.AutoSyncSchema.Should().BeFalse("出貨預設必須是安全側");
     }
 }
