@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -96,6 +97,28 @@ public class DatabaseInitializerTests
             created.Should().ContainSingle().Which.Should().Be(typeof(Tag));
             ColumnCount(client, "articles").Should().Be(1);
             TableExists(client, "tags").Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public void CreateMissingTables_creates_a_table_for_every_core_framework_entity()
+    {
+        // The central claim of the CodeFirst/Migration split: table creation for the full core set is
+        // uniform, automatic, and not dependent on any hand-maintained SQL file. Pinned positively —
+        // every FrameworkEntityTypes.All type must resolve to an actual table afterward.
+        var (db, client) = NewClient();
+        using (db)
+        {
+            DatabaseInitializer.CreateMissingTables(
+                client, Snapshot(client), logger: null, FrameworkEntityTypes.All.ToArray());
+
+            foreach (var entityType in FrameworkEntityTypes.All)
+            {
+                var tableName = client.EntityMaintenance.GetTableName(entityType);
+                TableExists(client, tableName).Should().BeTrue(
+                    $"CreateMissingTables must create a table for core entity '{entityType.Name}' " +
+                    $"(expected table '{tableName}')");
+            }
         }
     }
 

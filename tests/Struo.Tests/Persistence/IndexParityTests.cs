@@ -79,5 +79,4 @@ public sealed class IndexParityTests
             IndexNames(client).Should().Contain(allDeclaredIndexNames);
         }
     }
-
 }

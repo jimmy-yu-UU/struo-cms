@@ -28,12 +28,19 @@ What this means in practice:
   environment.
 - **An existing table is never touched automatically.** The only way an already-existing table gets
   altered without a reviewed script is `AutoSyncSchema=true`, and that setting only takes effect in
-  Development — it is silently ignored (with a logged warning) anywhere else. Outside Development, the
+  Development — it is ignored (with a logged warning) anywhere else. Outside Development, the
   only way to alter an existing table is a script in this directory, applied by `MigrationRunner`.
 - **This runs identically on all five backends**, not just PostgreSQL. Table creation, `AutoSyncSchema`,
   and `MigrationRunner` all execute regardless of `Database:DbType`. PostgreSQL remains the only backend
-  this repository verifies live; the other four are expected to work because CodeFirst's DDL generation
-  is dialect-neutral (see `ColumnTypeMap.cs`), but they are not part of this repo's live verification.
+  this repository verifies live; the other four are expected to work because this repo maps every
+  dialect-specific column shape it needs to a per-backend type literal itself (`ColumnTypeMap.cs`,
+  applied by the `SqlSugarClientFactory` entity-service hook) rather than emitting one hardcoded literal
+  — but that mapping is not part of this repo's live verification for MySQL/SqlServer/Oracle.
+- **Execution order is fixed, and it matters.** At startup: a table-name snapshot, then
+  `CreateMissingTables`, then optional `SyncSchema` (Development only), then `MigrationRunner`, then
+  dev-only `SchemaGuard`, then `DataSeeder`'s seeding. `MigrationRunner` runs **after** CodeFirst table
+  creation, so the tables its `ALTER` scripts target already exist by the time it runs, and **before**
+  `DataSeeder` seeds, so seed data lands on the final structure rather than a partially-migrated one.
 
 ## 3. When you need to write a migration
 
@@ -91,6 +98,19 @@ Avoid, with a portable alternative:
 | Dialect-specific functions (`now()` vs `GETDATE()` vs `SYSDATE`) | Differ per engine | Pass the value from the application layer, or accept the coupling deliberately in your own fork |
 | `RETURNING` | Non-standard | A separate query |
 
+**A note on timestamps:** the bare `timestamp` in the *prefer* list above is the standard-SQL type
+name for "a point in time," not a retraction of this repo's time-zone-aware convention. A new framework
+table's instant-storing columns should still be time-zone-aware, storing UTC (see
+`docs/ai/task-playbooks.md`, Playbook 4). The portable way to satisfy that convention is not a
+PostgreSQL-only `timestamptz` literal in the script: if the column is also modeled as an entity
+property, mark it `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
+(`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) so CodeFirst resolves the matching literal per
+backend, and a freshly created table ends up with the same column this migration is adding to an
+existing one. If you are hand-writing the DDL directly instead — a column not backed by any entity
+property CodeFirst would ever create — `ColumnTypeMap.cs` is where those per-backend literals
+(`timestamptz` on PostgreSQL, `datetime(6)` on MySQL, `datetimeoffset` on SQL Server, `timestamp with
+time zone` on Oracle) are centralized; copy the one for your backend rather than assuming PostgreSQL's.
+
 **Idempotency is no longer required, and this reverses what an earlier version of this document said.**
 The previous rule asked every script to be idempotent (`IF NOT EXISTS`, guarded `ALTER`, existence
 checks), inherited from a since-deleted baseline script that needed to be safely re-appliable. That
@@ -122,6 +142,13 @@ Other rules, unchanged from before:
    what ran" — nothing more. If you need checksums, reversible migrations, or a dry-run mode, use a
    dedicated tool (DbUp, Flyway, Liquibase) instead; leaving `Database:MigrationsPath` empty disables
    this mechanism entirely so it does not conflict with one.
+4. **`Database:MigrationsPath` must be an absolute path in Production.** The runner passes the
+   configured value straight to a directory-exists check with no content-root resolution of its own. A
+   relative value resolves against the **process's current working directory** at launch, which is not
+   guaranteed to be the application's own folder — confirmed live: a relative path that exists only
+   relative to the repository root, not the process's actual working directory, throws
+   `DirectoryNotFoundException` and the process exits with code 1. Configure an absolute path for any
+   deployment where the launcher might not `cd` into the application's own directory first.
 
 ## 7. Upgrading core across a fork
 
