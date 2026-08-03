@@ -114,8 +114,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 1. **Add a collection** — new entity class (outside `src/Struo.*`) inheriting `AuditableEntity`, with
    `[CmsCollection]`/`[CmsField]`; wire its assembly into `Struo:ContentAssemblies` + a
-   `ProjectReference` from `Struo.Api`; grant RBAC; write a production migration. Gate: `dotnet build &&
-   dotnet test`.
+   `ProjectReference` from `Struo.Api`; grant RBAC. No migration needed to introduce the table —
+   `DatabaseInitializer.CreateMissingTables` creates it automatically on next startup, in every
+   environment and on every backend; a migration is only for altering a table that already exists
+   (Playbook 4). Gate: `dotnet build && dotnet test`.
 2. **Add a field type** — swapping an editor for an existing `FieldInterface` is frontend-only
    (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches the
    backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped member
