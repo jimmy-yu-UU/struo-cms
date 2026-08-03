@@ -47,7 +47,12 @@ startup. This is deliberately uniform across every environment and backend — i
 repository used to have, where a `Production` deployment configured for `MySql`, `SqlServer` or `Oracle`
 started up cleanly against a completely empty database (no schema, no seed data, `DbReadinessCheck`
 reporting healthy) and only failed on the first query, because table creation used to run in Development
-only and the migration runner used to be gated to PostgreSQL alone.
+only and the migration runner used to be gated to PostgreSQL alone. That said, "uniform" describes the
+*code path*, not the evidence behind it: PostgreSQL is the only backend this repository verifies against
+a live instance (chapter 1). `MySql`, `SqlServer` and `Oracle` are type-mapped by design so this same
+code path is expected to produce valid DDL on them too, but that expectation is backed by no live run
+against any of the three — treat table creation on those three as untested until you have run it
+yourself.
 
 **What never happens automatically: an existing table.** The only two ways an already-existing table gets
 altered are an explicit `Database:AutoSyncSchema=true` in Development, or a reviewed script applied by
@@ -68,12 +73,12 @@ The governing rule:
 | # | Scenario | What auto-sync actually does | Correct handling |
 |---|---|---|---|
 | 1 | **Column rename** | Read as "old property gone + new property appeared" → `DROP COLUMN` + `ADD COLUMN`, **that column's data is permanently lost** | Write an `ALTER TABLE … RENAME COLUMN` migration first, then change the entity |
-| 2 | Remove a property | `DROP COLUMN`, data lost | Confirm the data is genuinely no longer needed; in a real environment do this via an explicit migration |
+| 2 | Remove a property | `DROP COLUMN`, data lost | Confirm the data is genuinely no longer needed; in Production do this via an explicit migration |
 | 3 | Type narrowing (e.g. `varchar(255)` → `varchar(50)`) | Depending on the engine: fails, or **silently truncates** | Three-step migration: add the new column → backfill and validate → cut over and drop the old one |
 | 4 | Add a `NOT NULL` column to an existing populated table | `ALTER` fails, startup aborts | Three-step migration: add it nullable first → backfill → then add the `NOT NULL` constraint |
 | 5 | Add `UNIQUE` to a column that already has duplicate values | `ALTER` fails, startup aborts | Migration deduplicates first (a data operation), then adds the constraint |
 | 6 | Split/merge columns, or extract a new table | A structural diff cannot express this intent; the result is always either data loss or empty columns | Always a migration |
-| 7 | Dropping a column on the SQLite backend | SQLite does not support `DROP COLUMN` | Backend behavior differs — never assume every engine behaves the same way |
+| 7 | Dropping a column on the SQLite backend | SQLite has supported `ALTER TABLE … DROP COLUMN` since 3.35.0 (2021), but refuses it when the column is a `PRIMARY KEY`, is `UNIQUE`, is indexed, or is referenced by a generated column, a partial index, a trigger, or a view | Backend behavior differs — never assume every engine behaves the same way |
 | 8 | Multiple replicas (`replicas > 1`) starting concurrently | Every replica computes and runs its own DDL diff at the same time — a race | See "Known limits" below |
 | 9 | Wanting to preview a deployment | The DDL that will run **cannot be previewed** — it is computed from the live code diff at startup | This is the core reason `AutoSyncSchema` is never meant to be turned on in Production |
 
@@ -128,10 +133,14 @@ and a freshly created table agrees with what a migration adds to an existing one
 directly (a column no entity property backs)? `ColumnTypeMap.cs` centralizes the per-backend literal to
 copy in. Either way, check the target table's actual current column type — the entity declaration in
 `src/`, or the live schema — rather than assuming one; this repository's own framework tables are not
-uniform (most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, while
-`site_settings.updatedat` is `timestamptz`), and none of the existing bare-`timestamp` columns have been
-retroactively converted, since re-anchoring already-stored values against a session time zone is a silent
-data shift.
+uniform. Most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, but
+`media_folders.createdat`/`updatedat` are already time-zone-aware
+(`[ColumnShape(ColumnShape.TimestampWithTimeZone)]` on both —
+`src/Struo.Infrastructure/Files/MediaFolder.cs`), and so are `site_settings.updatedat` and the migration
+runner's own tracking column, `schema_migrations.appliedat`
+(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`). None of the existing bare-`timestamp`
+columns have been retroactively converted, since re-anchoring already-stored values against a session
+time zone is a silent data shift.
 
 ### Known limits
 
@@ -187,11 +196,13 @@ The practical path:
   ```
   [17:34:20 FTL] StruoCMS host terminated unexpectedly
   System.IO.DirectoryNotFoundException: MigrationRunner: migrations directory not found: 'db/migrations'. Check the Database:MigrationsPath configuration value.
-     at Struo.Infrastructure.Persistence.MigrationRunner.ApplyAsync(ISqlSugarClient db, String migrationsDirectory, ILogger logger, CancellationToken ct) in D:\dotnet\struo-cms\src\Struo.Infrastructure\Persistence\MigrationRunner.cs:line 73
-     at Program.<Main>$(String[] args) in D:\dotnet\struo-cms\src\Struo.Api\Program.cs:line 196
+     at Struo.Infrastructure.Persistence.MigrationRunner.ApplyAsync(ISqlSugarClient db, String migrationsDirectory, ILogger logger, CancellationToken ct)
+     at Program.<Main>$(String[] args)
   ```
 
-  and the process's own exit code was `1`.
+  Stack-frame line numbers are omitted deliberately: this transcript predates later edits that shifted
+  both `MigrationRunner.cs` and `Program.cs`, so the original numbers no longer point at the right
+  lines — the behavior itself, and the process's own exit code of `1`, are unchanged.
 - **Dev schema guard:** `SchemaGuard.AssertCriticalConstraintsAsync` runs in Development only, after
   table creation, the optional `SyncSchema`, and the migration runner, and asserts that the `revisions`
   composite UNIQUE index and each configured translation sidecar's UNIQUE `(fk, locale)` index
