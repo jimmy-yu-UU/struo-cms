@@ -168,8 +168,13 @@ public class DatabaseInitializerTests
         // 已經完成（batch A 的 Task 2）：同一組探針型別在真 PostgreSQL 上跑出相反的結果——Doomed 欄位
         // 被 DROP 掉了，見 Struo.Tests.Query.PostgresIntegrationTests
         // .Unfiltered_InitTables_drops_a_removed_column_on_postgres（opt-in，僅在設定 PG 連線時執行）。
-        // 這條測試的作用是把「SQLite 上到底會不會」從未知釘成事實：若哪天 SqlSugar 的 SQLite
-        // dialect 開始刪欄位，這裡會紅，我們就知道 CI 套件的證明力改變了。
+        // 已知成因，不是「SQLite 做不到」：SqlSugar 的 SqliteCodeFirst.ExistLogic（上游 tag 5.1.4.197，
+        // Src/Asp.NetCore2/SqlSugar/Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs:10,50-58）確實實作了
+        // DROP COLUMN，但把關在 ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn 之後；
+        // SqlSugarClientFactory 從未設定過 MoreSettings（`grep -rn "MoreSettings" src/ tests/` 除了編譯
+        // 產物外沒有命中），所以這個判斷永遠是 false。這是設定造成的，不是 SQLite 引擎或 SqlSugar 的
+        // SQLite dialect 本身的極限——這條測試的作用是把「在這個儲存庫目前的設定下，SQLite 上到底會不會」
+        // 從未知釘成事實：若哪天有人打開那個旗標，這裡會紅，我們就知道 CI 套件的證明力改變了。
         var (db, client) = NewClient();
         using (db)
         {
