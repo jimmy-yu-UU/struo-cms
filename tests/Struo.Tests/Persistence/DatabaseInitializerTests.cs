@@ -163,36 +163,48 @@ public class DatabaseInitializerTests
     [Fact]
     public void Unfiltered_InitTables_does_not_drop_columns_on_Sqlite()
     {
-        // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：SQLite dialect 不會刪掉 entity 已移除的欄位。
-        // 因此「InitTables 會 DROP COLUMN」這個架構前提**無法**用 SQLite 測套件證明——證據在
-        // PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres。
+        // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 SQLite 上，欄位沒有被刪掉。
+        // 因此「InitTables 會 DROP COLUMN」這個架構前提無法用 SQLite 測套件證明；PostgreSQL 端的
+        // 量測是後續工作（見 batch A 的 Task 2），屆時再指向實際的測試名稱。
         // 這條測試的作用是把「SQLite 上到底會不會」從未知釘成事實：若哪天 SqlSugar 的 SQLite
         // dialect 開始刪欄位，這裡會紅，我們就知道 CI 套件的證明力改變了。
         var (db, client) = NewClient();
         using (db)
         {
             client.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
-            client.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
-
             client.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
                   .Select(c => c.DbColumnName)
-                  .Should().Contain("Doomed");
+                  .Should().Contain("Doomed", "前置條件：探針表必須先帶有這一欄");
+
+            client.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
+
+            var columns = client.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+                  .Select(c => c.DbColumnName).ToList();
+            columns.Should().Contain("Doomed");
+            columns.Should().Contain("Id", "其他欄位不該在同一次 rebuild 中被意外弄丟");
+            columns.Should().Contain("Keep", "其他欄位不該在同一次 rebuild 中被意外弄丟");
         }
     }
 
     [Fact]
-    public void SyncSchema_in_Development_applies_unfiltered_InitTables_semantics()
+    public void SyncSchema_in_Development_adds_a_column_to_an_existing_table_through_the_public_seam()
     {
-        // SyncSchema 是 Database:AutoSyncSchema 實際走的入口（Program.cs:204）。上一條測試釘住的是
-        // SqlSugar 的行為，這一條釘住的是「本 repo 的公開 API 確實把那個行為原封不動放出來」。
+        // 與 :128 的 SyncSchema_runs_in_Development_and_alters_an_existing_table 不同之處：那條測試
+        // 只斷言欄位數變多，證明力較弱（欄位數字對得上也可能是巧合）。這條測試改用共用探針對出明確
+        // 欄位名，並帶精確的前置條件（表必須先「不含」Doomed），因此能證明 DDL 確實透過
+        // DatabaseInitializer.SyncSchema 這個公開入口流到既有表——反向探針方向，
+        // 與 Unfiltered_InitTables_does_not_drop_columns_on_Sqlite（刪除面）互補。
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
+            client.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
+            client.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+                  .Select(c => c.DbColumnName)
+                  .Should().NotContain("Doomed", "前置條件：探針表一開始不能有這一欄");
 
             var ran = DatabaseInitializer.SyncSchema(
                 client, new FakeHostEnvironment("Development"), logger: null,
-                typeof(DestructiveInitProbeNarrow));
+                typeof(DestructiveInitProbeWide));
 
             ran.Should().BeTrue();
             client.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
