@@ -59,9 +59,11 @@ persisted entity types, gathered in one list — `FrameworkEntityTypes.All`. Tha
 | `SiteSettings` | `site_settings` |
 
 If a piece of code is not under `src/Struo.*` and not one of the ten types above, it is not core. In
-particular, `samples/Struo.Sample.Blog` is a demo, deleted on fork; `db/migrations/` carries core-only
-schema (the `001-core-baseline.sql` bootstrap); and framework code never references `samples/*` — this
-is a checkable invariant, not just a convention (see the dependency rule below).
+particular, `samples/Struo.Sample.Blog` is a demo, deleted on fork; `db/migrations/` ships **zero** SQL
+scripts for the core — CodeFirst creates the core's own tables in every environment, on any of the five
+supported backends, so core needs no bootstrap script of its own — and any scripts a fork adds under
+`db/migrations/` belong to that fork, not to core; and framework code never references `samples/*` —
+this is a checkable invariant, not just a convention (see the dependency rule below).
 
 ## Solution layout
 
@@ -77,7 +79,7 @@ struo-cms/
 ├── tests/
 │   └── Struo.Tests/            # xUnit tests; references all four src projects and the sample
 ├── frontend/                    # Vue 3 admin SPA (separate pnpm workspace)
-├── db/migrations/               # reviewed *.sql schema migrations (PostgreSQL, core schema only)
+├── db/migrations/               # reviewed *.sql scripts that alter existing tables (all backends); ships empty
 └── docs/                        # this manual
 ```
 

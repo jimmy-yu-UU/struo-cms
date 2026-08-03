@@ -19,8 +19,10 @@ actual project.
 carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`, `User`,
 `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, and `SiteSettings` are framework
 tables but not collections. If you're unsure whether something is core, it's core only if it lives in
-`src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` and
-`db/migrations/` among them. `schema/` is core too, despite living outside that path: it holds the
+`src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` among
+them. `db/migrations/` is **not** one of them: only its `README.md` — documenting the mechanism — is
+core; the template ships no scripts, and any script a fork adds there is that fork's own content, not
+core capability. `schema/` is core too, despite living outside that path: it holds the
 committed snapshots of these seven collections' wire metadata and of the declared interface enums
 (`schema/README.md`), and a fork keeps
 it alongside `src/Struo.*`.
@@ -42,7 +44,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
 | `frontend/` | The Vue 3 + PrimeVue admin SPA, a separate pnpm workspace. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
-| `db/migrations/` | Core-only, reviewed SQL migration scripts (`001-core-baseline.sql` is the prod bootstrap). |
+| `db/migrations/` | Reviewed, forward-only ALTER scripts for evolving an already-created schema; the template ships none — anything here belongs to the fork that put it there. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`) and this `ai/` reference set. |
 | `tests/Struo.Tests` | The backend xUnit suite (unit, integration, and the template-invariant guard). |
@@ -62,13 +64,21 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 - **Target framework**: .NET 10 (`net10.0`, `Directory.Build.props`). **Database support**: SqlSugar
   is configured for five backends (`Database:DbType`: `PostgreSQL`/`MySql`/`SqlServer`/`Sqlite`/
   `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
-  only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental — some
-  ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior specifically.
+  only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental. Schema
+  creation (CodeFirst) is designed and mapped to run on all five backends, via a dialect-neutral
+  `[ColumnShape]`/`ColumnTypeMap` layer that confines vendor type literals to a single mapping file — but
+  that mapping itself is unverified against a live MySQL/SqlServer/Oracle instance, and so is the query
+  layer: some ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior
+  specifically.
 
 ## Invariants
 
 - **All database access is through SqlSugar; zero vendor SQL.** Migration scripts under
-  `db/migrations/` are the one place raw SQL is written deliberately, and are PostgreSQL-only by design.
+  `db/migrations/` are the one place raw SQL is written deliberately — and the template ships **none**:
+  it holds only its `README.md`, and any script there belongs to the fork that put it there. Replaceability is
+  a choice made once, at fork time, not a property every deployment must preserve forever: the core
+  contains no vendor SQL; a fork writing PostgreSQL-specific ALTERs for the database it actually runs
+  is not a violation.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
@@ -84,8 +94,13 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`ItemWriteSideSync.cs`).
 - **Immutable update patterns**: domain/query model types are `record`s with `init` properties, updated
   via non-destructive `with` expressions, not mutated in place.
-- **`InitTables` is Development-only.** Production schema changes go through reviewed migrations under
-  `db/migrations/` applied by `MigrationRunner` (PostgreSQL-only; a hard no-op on any other backend).
+- **CodeFirst creates; migrations evolve.** Tables that do not yet exist are created by
+  `DatabaseInitializer.CreateMissingTables` in **every environment and on every backend**, so an empty
+  database bootstraps itself and `DataSeeder` seeds what was just created. **Existing** tables are never
+  touched automatically: full CodeFirst structural sync is opt-in via `Database:AutoSyncSchema` and
+  honoured in Development only (SqlSugar's default `InitTables` modifies *and* **drops** columns), while
+  reviewed `db/migrations/` scripts applied by `MigrationRunner` are the all-environments path. The
+  runner works on any backend; `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
   on REST: the REST write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/
@@ -101,8 +116,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 1. **Add a collection** — new entity class (outside `src/Struo.*`) inheriting `AuditableEntity`, with
    `[CmsCollection]`/`[CmsField]`; wire its assembly into `Struo:ContentAssemblies` + a
-   `ProjectReference` from `Struo.Api`; grant RBAC; write a production migration. Gate: `dotnet build &&
-   dotnet test`.
+   `ProjectReference` from `Struo.Api`; grant RBAC. No migration needed to introduce the table —
+   `DatabaseInitializer.CreateMissingTables` creates it automatically on next startup, in every
+   environment and on every backend; a migration is only for altering a table that already exists
+   (Playbook 4). Gate: `dotnet build && dotnet test`.
 2. **Add a field type** — swapping an editor for an existing `FieldInterface` is frontend-only
    (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches the
    backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped member
@@ -118,11 +135,18 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
-4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`, idempotent,
-   forward-only, `timestamptz` for new temporal columns, never edit an already-applied filename. Gate:
-   `dotnet build && dotnet test`, plus live verification on the configured backend (on PostgreSQL, the
-   live-PG check; the runner is a no-op on every non-PostgreSQL backend, SQLite included — see
-   Verification).
+4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`; the template
+   ships **zero** scripts, so a fresh fork's first is `001-...`, and anything already there belongs to
+   that fork. Forward-only, plain portable SQL (no PostgreSQL-only syntax); idempotency is not required —
+   `MigrationRunner` tracks applied filenames in `schema_migrations`, so each file runs at most once;
+   never edit an already-applied filename. The runner applies pending scripts on **any** configured
+   backend (no PostgreSQL gate) and is off by default — `Database:MigrationsPath` empty disables it
+   entirely. Creating tables isn't its job: `DatabaseInitializer.CreateMissingTables` does that, in
+   every environment and on every backend, so scripts here are ALTER-only by convention. See
+   `db/migrations/README.md` for the full portability guidance and known limits. Gate: `dotnet build &&
+   dotnet test` (exercises the runner, including on SQLite), plus live verification on the configured
+   backend — PostgreSQL is this repo's only verified live target; any other backend needs its own
+   equivalent check.
 5. **Change the admin SPA** — only when metadata isn't enough (new field editor, theming, i18n, a
    bespoke view); the SPA never hardcodes a collection's fields/columns/labels. Gate: `pnpm test &&
    pnpm build`.

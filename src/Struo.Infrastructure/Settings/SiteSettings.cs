@@ -1,4 +1,5 @@
 using SqlSugar;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Settings;
 
@@ -16,17 +17,14 @@ public sealed class SiteSettings
 
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
 
-    // text: avoids the recurring Postgres varchar(255) mapping (see Revision.Snapshot).
-    [SugarColumn(ColumnDataType = "text")] public string BrandName { get; set; } = "";
+    // Unbounded: avoids the recurring varchar(255) mapping overflow (see Revision.Snapshot).
+    [ColumnShape(ColumnShape.LongText)] public string BrandName { get; set; } = "";
 
     [SugarColumn(IsNullable = true)] public Guid? LogoFileId { get; set; }
 
-    // Matches db/migrations/001-core-baseline.sql's `updatedat timestamptz` (and the
-    // timestamptz convention for new temporal columns) so a CodeFirst dev/test InitTables build creates
-    // the SAME column type Postgres production gets from the migration, instead of silently diverging to
-    // bare `timestamp`. Verified compatible with the SQLite test provider: SQLite does not validate
-    // declared column type names (only computes a storage "affinity" from substring matches), so the
-    // literal string "timestamptz" is accepted as-is by CREATE TABLE and InitTables succeeds unchanged.
-    [SugarColumn(ColumnDataType = "timestamptz")] public DateTime UpdatedAt { get; set; }
+    // Time-zone-aware, matching the convention for temporal columns on framework tables added after
+    // the baseline. Declared as a dialect-neutral shape rather than a vendor type literal so
+    // CodeFirst creates a valid column on every backend — see ColumnTypeMap.
+    [ColumnShape(ColumnShape.TimestampWithTimeZone)] public DateTime UpdatedAt { get; set; }
     [SugarColumn(IsNullable = true)] public Guid? UpdatedBy { get; set; }
 }

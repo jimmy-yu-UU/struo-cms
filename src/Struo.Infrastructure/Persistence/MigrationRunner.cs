@@ -5,18 +5,23 @@ namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
 /// Lightweight, forward-only SQL migration runner. Applies the reviewed <c>*.sql</c> files under a
-/// configured directory to a PostgreSQL database, tracking applied filenames in a
-/// <c>schema_migrations</c> table so each file runs at most once.
+/// configured directory, tracking applied filenames in a <c>schema_migrations</c> table so each file
+/// runs at most once.
 ///
 /// <para>
-/// Runs on PostgreSQL only. On any other backend (notably the SQLite used by the unit-test suite)
-/// <see cref="ApplyAsync"/> is a hard no-op: it neither reads nor creates the tracking table and
-/// executes no SQL. The framework's dev-only <see cref="DatabaseInitializer"/> continues to own
-/// CodeFirst <c>InitTables</c>; this runner is the separate, all-environments path for reviewed DDL.
+/// Runs on <b>any</b> configured backend. Creating tables is not its job — <see
+/// cref="DatabaseInitializer.CreateMissingTables"/> does that in every environment — so scripts here
+/// are ALTER-only by convention, and the template ships none.
 /// </para>
 ///
 /// <para>
-/// Executing raw SQL here (via <see cref="IAdo"/>) is the accepted migration-file pattern — it is the
+/// Known limits, documented in <c>db/migrations/README.md</c>: tracking is by filename with no
+/// checksum; there is no advisory lock (concurrent replicas may both attempt a pending file); and the
+/// per-file transaction cannot roll back DDL on MySQL / Oracle, where DDL commits implicitly.
+/// </para>
+///
+/// <para>
+/// Executing raw SQL here (via <see cref="IAdo"/>) is the accepted migration-file pattern — the
 /// documented exception to the "all DB access via SqlSugar ORM, zero vendor SQL" rule, which targets
 /// application query/command code, not versioned schema scripts.
 /// </para>
@@ -46,7 +51,7 @@ public static class MigrationRunner
     /// <summary>
     /// Applies every pending migration file under <paramref name="migrationsDirectory"/> in ordinal
     /// filename order and returns the filenames actually applied during this run (empty when nothing
-    /// was pending, or when the client is not PostgreSQL).
+    /// was pending).
     ///
     /// Each file runs inside its own transaction together with the tracking-row insert; on the first
     /// failure that file's transaction is rolled back, the run is aborted, and the exception is
@@ -59,15 +64,6 @@ public static class MigrationRunner
         ArgumentNullException.ThrowIfNull(db);
         ArgumentException.ThrowIfNullOrWhiteSpace(migrationsDirectory);
 
-        if (db.CurrentConnectionConfig.DbType != DbType.PostgreSQL)
-        {
-            logger?.LogInformation(
-                "MigrationRunner: skipping — configured database is {DbType}, not PostgreSQL. " +
-                "Reviewed .sql migrations are applied on PostgreSQL only.",
-                db.CurrentConnectionConfig.DbType);
-            return [];
-        }
-
         if (!Directory.Exists(migrationsDirectory))
         {
             throw new DirectoryNotFoundException(
@@ -75,10 +71,10 @@ public static class MigrationRunner
                 "Check the Database:MigrationsPath configuration value.");
         }
 
-        await EnsureTrackingTableAsync(db);
+        EnsureTrackingTable(db);
 
         var applied = new HashSet<string>(
-            await db.Ado.SqlQueryAsync<string>($"SELECT filename FROM {TrackingTable}"),
+            await db.Queryable<SchemaMigration>().Select(m => m.Filename).ToListAsync(),
             StringComparer.Ordinal);
 
         var fileNames = Directory.EnumerateFiles(migrationsDirectory, "*.sql")
@@ -107,10 +103,11 @@ public static class MigrationRunner
             {
                 await db.Ado.BeginTranAsync();
                 await db.Ado.ExecuteCommandAsync(sql);
-                await db.Ado.ExecuteCommandAsync(
-                    $"INSERT INTO {TrackingTable} (filename, appliedat) VALUES (@filename, @appliedat)",
-                    new SugarParameter("@filename", fileName),
-                    new SugarParameter("@appliedat", DateTimeOffset.UtcNow));
+                await db.Insertable(new SchemaMigration
+                {
+                    Filename = fileName,
+                    AppliedAt = DateTime.UtcNow,
+                }).ExecuteCommandAsync();
                 await db.Ado.CommitTranAsync();
             }
             catch (Exception ex)
@@ -133,13 +130,13 @@ public static class MigrationRunner
         return justApplied;
     }
 
-    // timestamptz — the timestamp convention that every new framework table follows.
-    private static Task EnsureTrackingTableAsync(ISqlSugarClient db) =>
-        db.Ado.ExecuteCommandAsync(
-            $"""
-             CREATE TABLE IF NOT EXISTS {TrackingTable} (
-                 filename  text        PRIMARY KEY,
-                 appliedat timestamptz NOT NULL
-             );
-             """);
+    // 僅在追蹤表不存在時建立，且走 CodeFirst——任何既有部署的追蹤表（不論其欄位是何種型別）因此完全
+    // 不受影響，也不需要任何 migration。
+    private static void EnsureTrackingTable(ISqlSugarClient db)
+    {
+        var exists = db.DbMaintenance.GetTableInfoList(false)
+            .Any(t => t.Name.Equals(TrackingTable, StringComparison.OrdinalIgnoreCase));
+
+        if (!exists) db.CodeFirst.InitTables(typeof(SchemaMigration));
+    }
 }

@@ -16,13 +16,15 @@ namespace Struo.Infrastructure.Persistence;
 /// derives one per collection from <c>IMetadataProvider.GetCollections()</c>'s <c>Translation</c>
 /// metadata, resolving table/column names via <c>ISqlSugarClient.EntityMaintenance</c> (the same
 /// resolution SqlSugar itself uses) — so this guard never hardcodes a collection or table name and a
-/// fork's own sidecars are protected automatically, the same way core's <c>file_translations</c> is. On
-/// live PostgreSQL the indexes are created by <c>db/migrations/001-core-baseline.sql</c> (core sidecars)
-/// or a fork's own <c>NNN-…</c> migrations (downstream sidecars); on a CodeFirst dev/test database they
-/// are created by <c>InitTables</c> from each entity's <c>UniqueGroupNameList</c>. Because the index NAME
-/// differs by backend and by creation path, the guard detects each index by uniqueness + column
-/// coverage, never by a fixed name. A sidecar table absent from the connected database is skipped rather
-/// than demanded (a fork may not use every sidecar).
+/// fork's own sidecars are protected automatically, the same way core's <c>file_translations</c> is.
+/// Indexes on core tables are created by CodeFirst (<c>InitTables</c>) from each entity's
+/// <c>UniqueGroupNameList</c>, in every environment and on every backend that table is created in; a
+/// fork's own downstream sidecar gets the same treatment for tables it defines itself. An existing
+/// database whose tables predate this guarantee needs a reviewed migration under
+/// <c>db/migrations/</c> to add the missing index. Because the index NAME differs by backend and by
+/// creation path, the guard detects each index by uniqueness + column coverage, never by a fixed name. A
+/// sidecar table absent from the connected database is skipped rather than demanded (a fork may not use
+/// every sidecar).
 ///
 /// Deliberately NOT a general schema-diff engine (YAGNI): only correctness-critical constraints belong
 /// here. The hot-path performance indexes (<c>[SugarIndex]</c>) are intentionally out of scope —
@@ -50,8 +52,9 @@ public static class SchemaGuard
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
             "the `revisions` table has no composite UNIQUE index over " +
             "(collectionname, itemid, revisionnumber). This index is the backstop that makes a concurrent " +
-            "revision-number race fail closed. Apply db/migrations/001-core-baseline.sql (live " +
-            "PostgreSQL), or recreate the dev schema so InitTables re-emits it from Revision's " +
+            "revision-number race fail closed. If this is an existing database whose `revisions` table " +
+            "predates this guarantee, add a reviewed migration under db/migrations/ to create the index; " +
+            "otherwise recreate the dev schema so InitTables re-emits it from Revision's " +
             "UniqueGroupNameList.", ct);
 
         // Backstop — each caller-supplied translation sidecar's UNIQUE (fk, locale). Skipped when
@@ -63,10 +66,10 @@ public static class SchemaGuard
                 [sidecar.ForeignKeyColumn, sidecar.LocaleColumn], requireTableExists: false,
                 $"the `{sidecar.TableName}` table has no UNIQUE index over " +
                 $"({sidecar.ForeignKeyColumn}, {sidecar.LocaleColumn}). This index is the backstop that " +
-                "keeps per-locale overlay reads deterministic. Apply the migration that creates this " +
-                "sidecar's composite UNIQUE index (db/migrations/001-core-baseline.sql for a core " +
-                "sidecar, or the fork's own NNN-… migration for its own sidecar), or recreate the dev " +
-                "schema so InitTables re-emits it from the translation entity's UniqueGroupNameList.", ct);
+                "keeps per-locale overlay reads deterministic. If this is an existing database whose " +
+                "table predates this guarantee (core sidecar or the fork's own), add a reviewed " +
+                "migration under db/migrations/ to create the index; otherwise recreate the dev schema " +
+                "so InitTables re-emits it from the translation entity's UniqueGroupNameList.", ct);
         }
     }
 
