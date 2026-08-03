@@ -12,6 +12,54 @@ namespace Struo.Infrastructure.Persistence;
 /// syntactically valid and semantically reasonable so that CodeFirst table creation succeeds — they
 /// are not claimed to be verified against a live instance of those backends.
 /// </para>
+///
+/// <para>
+/// Two of the literals below are already parenthesised — <c>"nvarchar(max)"</c> (SqlServer,
+/// <see cref="ColumnShape.LongText"/>) and <c>"datetime(6)"</c> (MySQL,
+/// <see cref="ColumnShape.TimestampWithTimeZone"/>). Whether SqlSugar appends a further length
+/// suffix to a <c>DbColumnInfo.DataType</c> that already contains parentheses (which would emit
+/// malformed DDL such as <c>nvarchar(max)(4000)</c>) was checked by reading SqlSugar
+/// <c>SqlSugarCore 5.1.4.197</c> source — the closest published tag to the pinned
+/// <c>5.1.4.215</c>; no tag matching <c>5.1.4.215</c> exists upstream, and the relevant methods
+/// below are byte-identical between that tag and <c>master</c> as of this writing, so the
+/// divergence risk is low but not zero. <b>This is a source-reading conclusion, not a result
+/// verified against a live SQL Server or MySQL instance.</b>
+/// </para>
+/// <para>
+/// Both <c>SqlServerDbMaintenance</c> and <c>MySqlDbMaintenance</c> resolve the length suffix
+/// through a <c>GetSize(DbColumnInfo item)</c> method that reads only <c>item.Length</c> /
+/// <c>item.DecimalDigits</c> — it never inspects <c>item.DataType</c> for existing parentheses.
+/// The shared base implementation
+/// (<c>Src/Asp.NetCore2/SqlSugar/Abstract/DbMaintenanceProvider/Methods.cs</c>, used as-is by
+/// SqlServer) returns a <c>null</c> size whenever <c>Length == 0 &amp;&amp; DecimalDigits == 0</c>:
+/// <c>"else if (item.Length &gt; 0 &amp;&amp; item.DecimalDigits == 0) { dataSize = ... }"</c> — none
+/// of its branches match when both are zero, so <c>dataSize</c> stays <c>null</c>.
+/// <c>MySqlDbMaintenance.GetSize</c> (<c>Src/Asp.NetCore2/SqlSugar/Realization/MySql/DbMaintenance/
+/// MySqlDbMaintenance.cs</c>) has the same zero/zero fallthrough. A <c>null</c> <c>dataSize</c> is
+/// substituted as an empty string by <c>string.Format</c>, so the composed column clause (e.g.
+/// SqlServer's <c>CreateTableColumn = "{0} {1}{2} {3} {4} {5}"</c>, where <c>{1}</c> is
+/// <c>DataType</c> and <c>{2}</c> is <c>dataSize</c>) renders as just <c>nvarchar(max)</c> with no
+/// trailing suffix. This holds for both CREATE TABLE
+/// (<c>CodeFirstProvider.NoExistLogic</c> → <c>EntityColumnToDbColumn</c> →
+/// <c>DbMaintenance.CreateTable</c> → <c>GetCreateTableSql</c> → <c>GetSize</c>) and ALTER TABLE ADD
+/// COLUMN (<c>CodeFirstProvider.ExistLogic</c> → the same <c>EntityColumnToDbColumn</c> →
+/// <c>DbMaintenance.AddColumn</c> → <c>GetAddColumnSql</c> → <c>GetSize</c>) — both paths share the
+/// identical helper, so there is no divergence between table creation and column addition here.
+/// </para>
+/// <para>
+/// <c>item.Length</c> reaches <c>GetSize</c> as <c>0</c> because: (1) <c>DbColumnInfo.Length</c>
+/// defaults to <c>0</c> (a plain C# <c>int</c>); (2) the <c>EntityService</c> hook in
+/// <c>SqlSugarClientFactory.cs</c> sets only <c>column.DataType</c> for a
+/// <see cref="ColumnShapeAttribute"/>-marked property and never touches <c>column.Length</c>; (3)
+/// <c>CodeFirstProvider.Execute</c>'s own default-length injection
+/// (<c>"if (item.PropertyInfo.PropertyType == UtilConstants.StringType &amp;&amp;
+/// item.DataType.IsNullOrEmpty() &amp;&amp; item.Length == 0) { item.Length = DefultLength; }"</c>)
+/// is guarded on <c>DataType.IsNullOrEmpty()</c>, which is false once <c>ColumnTypeMap.For</c> has
+/// already assigned a literal; and (4) <c>EntityColumnToDbColumn</c> copies <c>Length</c> straight
+/// through (<c>"Length = item.Length,"</c>) without ever re-deriving it from the <c>DataType</c>
+/// string. Net result: for these two shaped, pre-parenthesised mappings, length stays unset and no
+/// suffix is appended on either backend.
+/// </para>
 /// </summary>
 internal static class ColumnTypeMap
 {
