@@ -78,18 +78,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     private (IItemRepository Repo, RelationshipGraph Graph, IRelationFilterResolver FilterResolver, StruoQueryOptions Options)
         BuildRepoWithGraph()
     {
-        // Safety guard: these tests DELETE rows. Refuse to run unless the target database name contains
-        // "test", so a connection accidentally pointed at the dev/prod DB can never wipe it.
-        var dbName = Conn!
-            .Split(';')
-            .Select(p => p.Trim())
-            .FirstOrDefault(p => p.StartsWith("Database=", StringComparison.OrdinalIgnoreCase))
-            ?.Split('=', 2)[1] ?? "";
-        if (!dbName.Contains("test", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException(
-                $"Refusing destructive PG tests against database '{dbName}': its name must contain 'test'. " +
-                "Point Testing:PostgresConnection (or STRUO_TEST_PG_CONNECTION) at a disposable database, " +
-                "e.g. Database=web-struo-cms-test-db.");
+        GuardDisposableDatabase();
 
         _db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
@@ -119,6 +108,33 @@ public sealed class PostgresIntegrationTests : IDisposable
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, options);
         var filterResolver = new RelationFilterResolver(repo, graph, provider, registry, options);
         return (repo, graph, filterResolver, options);
+    }
+
+    // 安全守衛：這些測試會 DELETE 資料列、DROP 探針表。除非目標 DB 名稱含 "test" 一律拒跑，
+    // 這樣一條誤指向 dev/prod 的連線永遠不可能清掉它。
+    private void GuardDisposableDatabase()
+    {
+        var dbName = Conn!
+            .Split(';')
+            .Select(p => p.Trim())
+            .FirstOrDefault(p => p.StartsWith("Database=", StringComparison.OrdinalIgnoreCase))
+            ?.Split('=', 2)[1] ?? "";
+        if (!dbName.Contains("test", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Refusing destructive PG tests against database '{dbName}': its name must contain 'test'. " +
+                "Point Testing:PostgresConnection (or STRUO_TEST_PG_CONNECTION) at a disposable database, " +
+                "e.g. Database=web-struo-cms-test-db.");
+    }
+
+    // schema 層級的探測不需要 repository/metadata wiring，只要一個連上可丟棄測試 DB 的 client。
+    private ISqlSugarClient BuildRawClient()
+    {
+        GuardDisposableDatabase();
+        _db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
+            new TestCurrentUserAccessor(Guid.Empty));
+        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        return _db;
     }
 
     public void Dispose() => _db?.Dispose();
@@ -336,5 +352,36 @@ public sealed class PostgresIntegrationTests : IDisposable
             .Should().BeFalse();
 
         _db.Deleteable<Struo.Infrastructure.Identity.User>().Where(u => u.Id == id).ExecuteCommand();
+    }
+
+    // 未過濾的 InitTables 在真 Postgres 上對既有表做什麼。SQLite 不驗證宣告型別、其 dialect 的
+    // 結構同步能力也與 PG 不同，所以「InitTables 會 DROP COLUMN」這個架構前提只有在這裡才證得出來。
+    [Fact]
+    public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var db = BuildRawClient();
+        try
+        {
+            if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
+                db.DbMaintenance.DropTable("destructive_init_probe");
+
+            db.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
+            db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+              .Select(c => c.DbColumnName.ToLowerInvariant())
+              .Should().Contain("doomed", "前置條件：探針表必須先帶有這一欄");
+
+            db.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
+
+            db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+              .Select(c => c.DbColumnName.ToLowerInvariant())
+              .Should().NotContain("doomed",
+                  "entity 移除屬性後，未過濾的 InitTables 在 PostgreSQL 上 DROP COLUMN");
+        }
+        finally
+        {
+            if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
+                db.DbMaintenance.DropTable("destructive_init_probe");
+        }
     }
 }
