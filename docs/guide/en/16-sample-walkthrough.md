@@ -61,9 +61,9 @@ must be *named* (`ContentAssemblies`) — chapter 4 covers why. `Struo:ContentAs
 before the host builds (chapter 3), so the change only takes effect on the **next** restart; a running
 instance must be stopped and started again, not just have its configuration file edited underneath it.
 
-Restarting after both edits, dev `InitTables` then creates the sample's tables
+Restarting after both edits, CodeFirst then creates the sample's tables
 (`articles`, `article_translations`, `tags`, `article_tags`, `categories`) the same way it creates any
-other content collection's tables. Verified live against this checkout: after making both edits and
+other content collection's tables, in any environment. Verified live against this checkout: after making both edits and
 restarting, `GET /api/schema` (as the bootstrap admin) lists `article`, `category` and `tag` alongside
 the seven framework collections (chapter 4), where a moment before it listed only the framework ones.
 
@@ -252,10 +252,10 @@ is optional.
    and prune the sample-suite material from `frontend/e2e/README.md` — the `sample` bullet in its
    opening suite list, the `pnpm e2e:sample` prerequisite bullet (Blog sample opt-in and `E2E_STAMP`),
    and the chapter-16 pointer in its "Further reading" section.
-10. **Drop the sample's tables** from any database that has run it — dev `InitTables` created them, and
+10. **Drop the sample's tables** from any database that has run it — CodeFirst created them, and
     nothing drops them automatically: `articles`, `article_translations`, `tags`, `article_tags`,
-    `categories`. They were never part of `db/migrations/001-core-baseline.sql` or any other tracked
-    migration (chapter 15), so no migration needs writing to remove them — a direct
+    `categories`. They were never part of any tracked migration under `db/migrations/` (chapter 15), so
+    no migration needs writing to remove them — a direct
     `DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags CASCADE;`
     against your development database is enough.
 

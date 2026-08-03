@@ -55,9 +55,11 @@ PostgreSQL/SQLite 的行為所寫的。
 | `SiteSettings` | `site_settings` |
 
 如果某段程式碼不在 `src/Struo.*` 之下，也不是以上十種型別之一，它就不是 core。特別是
-`samples/Struo.Sample.Blog` 是一個示範專案，fork 時會被刪除;`db/migrations/` 只承載 core-only 的
-schema (`001-core-baseline.sql` 這個 bootstrap);而框架程式碼永遠不會參照 `samples/*`——這是一項可
-檢驗的不變條件 (invariant)，不只是一種慣例 (見下方的依賴規則)。
+`samples/Struo.Sample.Blog` 是一個示範專案，fork 時會被刪除;`db/migrations/` 為核心出貨**零份** SQL
+腳本——CodeFirst 會在每一個環境、五種受支援後端的任何一種上建立核心自己的資料表，因此核心不需要自己的
+bootstrap 腳本——一個 fork 若在 `db/migrations/` 下新增腳本，那些腳本屬於該 fork，不屬於核心;而框架
+程式碼永遠不會參照 `samples/*`——這是一項可檢驗的不變條件 (invariant)，不只是一種慣例 (見下方的依賴
+規則)。
 
 ## 方案 (Solution) 版面配置
 
@@ -73,7 +75,7 @@ struo-cms/
 ├── tests/
 │   └── Struo.Tests/            # xUnit tests; references all four src projects and the sample
 ├── frontend/                    # Vue 3 admin SPA (separate pnpm workspace)
-├── db/migrations/               # reviewed *.sql schema migrations (PostgreSQL, core schema only)
+├── db/migrations/               # reviewed *.sql scripts that alter existing tables (all backends); ships empty
 └── docs/                        # this manual
 ```
 

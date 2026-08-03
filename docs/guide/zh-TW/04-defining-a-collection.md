@@ -1,7 +1,8 @@
 # 4. 定義一個集合
 
 本章示範下游 fork 如何新增自己的內容型別。這裡的一切都是新增性質:不會動到任何框架程式碼，只需要一個
-新的 entity 類別 (位於你自己的專案中)，以及在你部署到 Postgres 時，一支 migration 腳本。
+新的 entity 類別 (位於你自己的專案中)。CodeFirst 會自動建立它的資料表，不論你執行哪一種後端、也不論
+哪一個環境——一個全新的集合完全不需要任何 migration 腳本 (見下方「建立資料表」一節)。
 
 ## 中介資料驅動模型
 
@@ -180,20 +181,22 @@ UI 可用)，而 `Tags` 通常不會設定，讓使用者能真正自由輸入�
 掃描——第 3 章)。`samples/Struo.Sample.Blog` 正是這種模式、已經建好的一個**可拆卸示範**——第 16 章
 會走過用同樣這兩個步驟選用啟用它，以及如何再乾淨地移除它。
 
-## 建立資料表:開發環境的 `InitTables` 與正式環境的 migration
+## 建立資料表:CodeFirst 在每一個環境中都會自動處理
 
-在**開發環境**中，讓 `Database:MigrationsPath` 保持空白 (預設值)，直接執行 API 即可。SqlSugar 的
-CodeFirst 步驟 (`DatabaseInitializer.InitializeDevelopmentSchema`，受
-`app.Environment.IsDevelopment()` 把關) 會為每一個被掃描到的 entity 型別——你的內容集合、它們的翻譯
-附屬資料表，以及任何 M2M 關聯表 (`EntityTypeCollector.CollectForInitTables`——見
-`src/Struo.Api/Program.cs`)——建立任何缺少的資料表，並以新增的方式為既有資料表補上缺少的欄位。它不會
-執行任何破壞性的 schema 變更，而且絕不會在開發環境之外執行。
+直接重新啟動 API 即可——資料表本身不需要任何設定。建表不受環境把關:只要某個 entity 型別的資料表尚不
+存在，SqlSugar 的 CodeFirst 步驟就會建立它——你的內容集合自己的資料表、它的翻譯附屬資料表 (若有)，
+以及它宣告的任何 M2M 關聯表 (`EntityTypeCollector.CollectForInitTables`——見
+`src/Struo.Api/Program.cs`)——這一切都發生在其他任何動作之前，在任何一種已設定的五種後端上，開發環境
+與正式環境皆然。因為一個全新集合的資料表尚不存在，這就是讓它成形所需要的唯一步驟:**一個新集合的
+初始資料表，在任何環境中都不需要任何 migration 腳本。**
 
-在**正式環境**中，`InitTables` 絕不會執行。取而代之的是，把 `Database:MigrationsPath` 指向一個存放
-已審查的 `*.sql` 腳本的目錄 (只有當 `Database:DbType` 為 `PostgreSQL` 時才會被採用);migration
-runner 會在啟動時套用它們，時機在任何開發環境 `InitTables` 步驟之後、資料庫種子植入之前。核心 schema
-自身的 bootstrap 腳本是 `db/migrations/001-core-baseline.sql`——你的新集合需要把它自己的 migration
-腳本加到同一個目錄中，才能進行正式環境部署。第 15 章完整涵蓋撰寫與套用 migration 的方式。
+Migration 只有在之後才會派上用場——當這張資料表已經存有你需要保留的資料，而你需要變更它的形狀時:
+例如改欄位名稱、收窄型別、對一張已有資料的資料表加上 `NOT NULL` 約束等等。`Database:MigrationsPath`
+正是為了這種情況，讓 `MigrationRunner` 指向一個存放已審查 `*.sql` 腳本的目錄，而且這個 runner 現在
+會在每一種後端上執行，不只 PostgreSQL。另外還有 `Database:AutoSyncSchema`，一個僅限 Development 的
+選用開關，讓 CodeFirst 自動變更既有資料表——在真正的資料出現之前用來快速迭代 schema 很方便，但一旦
+有了真正的資料就很危險。第 15 章完整涵蓋這兩套機制，包括 `AutoSyncSchema` 的九項危險情境清單，以及
+如何撰寫具可攜性的 migration。
 
 ## 新增一個集合的端到端檢查清單
 
@@ -210,12 +213,12 @@ runner 會在啟動時套用它們，時機在任何開發環境 `InitTables` �
    (第 7 章)。
 6. 從 `src/Struo.Api/Struo.Api.csproj` 為你的內容專案加上一個 `ProjectReference`，並把它的組件
    名稱加入 `Struo:ContentAssemblies`。
-7. 重新啟動 API。在開發環境中，`InitTables` 會自動建立資料表——確認管理後台 SPA 的側欄現在顯示一個
-   「Content」導覽群組，且其中有你的集合 (對照第 2 章「尚無集合時」的狀態)。
+7. 重新啟動 API。CodeFirst 會自動建立資料表——在每一個環境中都會，不只開發環境——確認管理後台 SPA
+   的側欄現在顯示一個「Content」導覽群組，且其中有你的集合 (對照第 2 章「尚無集合時」的狀態)。
 8. 把這個集合的 RBAC 讀取/寫入/刪除權限授予需要的角色 (第 12 章)——一個全新的集合還沒有任何授權，
    所以在你這麼做之前，只有超級管理員能使用它。
-9. 在正式環境部署之前，為這張新資料表撰寫一支已審查的 `*.sql` migration，並把它加到
-   `Database:MigrationsPath` 指名的目錄中 (第 15 章)。
+9. 針對正式環境部署，資料表本身不需要任何額外動作——CodeFirst 在那裡也會自動建立它。只有當你之後要
+   變更一張已經存有你需要保留之資料的資料表的形狀時，才需要一支 migration (第 15 章)。
 
 ## 接下來該去哪
 

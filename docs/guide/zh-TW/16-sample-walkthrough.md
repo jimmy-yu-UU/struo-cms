@@ -57,9 +57,9 @@
 (第 3 章)，因此這項變更只會在**下一次**重新啟動時生效；一個正在執行的執行個體必須被停止並重新啟動，
 而不只是在它底下把設定檔編輯掉。
 
-完成這兩項編輯後重新啟動，dev `InitTables` 就會建立這個範例的資料表(`articles`、
+完成這兩項編輯後重新啟動，CodeFirst 就會建立這個範例的資料表(`articles`、
 `article_translations`、`tags`、`article_tags`、`categories`)，方式與它建立任何其他內容集合的
-資料表完全相同。已針對這份檢出程式碼即時驗證：完成這兩項編輯並重新啟動之後，`GET /api/schema`
+資料表完全相同，且在任何環境都一樣。已針對這份檢出程式碼即時驗證：完成這兩項編輯並重新啟動之後，`GET /api/schema`
 (以啟動用管理員身分)會在七個框架集合之外(第 4 章)，一併列出 `article`、`category` 與 `tag`，
 而在此之前一刻，它還只列出框架集合。
 
@@ -242,9 +242,9 @@ pnpm e2e:sample
    作為唯一的端到端 script；並從 `frontend/e2e/README.md` 中清除與範例套件相關的內容——它開頭套件
    清單中的 `sample` 項目、`pnpm e2e:sample` 那項先決條件(Blog 範例選用啟用與 `E2E_STAMP`)，
    以及其「Further reading」一節中指向第 16 章的連結。
-10. **從任何執行過它的資料庫中，卸除這個範例的資料表**——dev `InitTables` 建立了它們，而沒有任何
+10. **從任何執行過它的資料庫中，卸除這個範例的資料表**——CodeFirst 建立了它們，而沒有任何
     東西會自動卸除它們：`articles`、`article_translations`、`tags`、`article_tags`、
-    `categories`。它們從來不是 `db/migrations/001-core-baseline.sql` 或任何其他受追蹤 migration
+    `categories`。它們從來不是 `db/migrations/` 下任何受追蹤 migration
     (第 15 章)的一部分，因此不需要撰寫任何 migration 來移除它們——針對你的開發資料庫直接執行
     一次 `DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags
     CASCADE;` 就足夠了。
