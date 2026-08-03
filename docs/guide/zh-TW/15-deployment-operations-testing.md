@@ -45,7 +45,11 @@ Schema 管理依**職責**、而非依環境，拆分為三層：
 資料表植入初始資料。這是刻意做到跨環境、跨後端一致的——它補上了這個儲存庫過去確實存在的一個落差：一個
 設定為 `MySql`、`SqlServer` 或 `Oracle` 的 `Production` 部署，過去會針對一個完全空白的資料庫乾淨地
 啟動(沒有 schema、沒有種子資料，`DbReadinessCheck` 卻回報 Healthy)，直到第一次查詢才失敗——因為建表
-過去只在 Development 執行，而 migration runner 過去只把關 PostgreSQL。
+過去只在 Development 執行，而 migration runner 過去只把關 PostgreSQL。話雖如此，「一致」描述的是*程式
+碼路徑*，不是這個路徑背後的證據:PostgreSQL 是這個儲存庫唯一針對正在執行中的實例驗證過的後端(第 1
+章)。`MySql`、`SqlServer` 與 `Oracle` 依設計做了型別對應，因此預期同一條程式碼路徑在它們身上也會產生
+有效的 DDL，但這三個後端都沒有任何一次即時執行能佐證這一點——在你自己實際跑過之前，請把這三個後端上
+的建表視為未經驗證。
 
 **永遠不會自動發生的事：既有資料表。** 一張已經存在的資料表，唯二會被改動的方式，是在 Development 中
 明確設定 `Database:AutoSyncSchema=true`，或是由 `MigrationRunner` 套用一支已審查的腳本。兩者都是
@@ -68,7 +72,7 @@ Schema 管理依**職責**、而非依環境，拆分為三層：
 | 4 | 對既有資料表新增 `NOT NULL` 欄位 | ALTER 失敗，啟動中斷 | migration 三步：先加可空欄位 → 回填 → 再加 NOT NULL 約束 |
 | 5 | 對含重複值的欄位加 UNIQUE | ALTER 失敗，啟動中斷 | migration 先去重(資料操作)→ 再加約束 |
 | 6 | 拆分／合併欄位、抽出獨立表 | 結構 diff 無法表達此意圖，結果必為資料遺失或空欄位 | 一律 migration |
-| 7 | SQLite 後端刪欄位 | SQLite 不支援 `DROP COLUMN` | 後端差異，勿假設各引擎行為一致 |
+| 7 | SQLite 後端刪欄位 | SQLite 自 3.35.0(2021 年)起已支援 `ALTER TABLE … DROP COLUMN`，但當該欄位是 `PRIMARY KEY`、是 `UNIQUE`、已建立索引，或被某個 generated column、partial index、trigger 或 view 參照時，會拒絕執行 | 後端差異，勿假設各引擎行為一致 |
 | 8 | 多副本(`replicas > 1`)同時啟動 | 各副本同時進行 DDL diff 與執行，存在競態 | 見下方「已知限制」 |
 | 9 | 想預覽部署 | **無法預覽**將執行的 DDL(啟動時由 code diff 即時計算) | 這正是不在 Production 啟用的核心理由 |
 
@@ -118,9 +122,13 @@ bootstrap 腳本，而該 baseline 現已不存在(template 出貨零份 `.sql` 
 `timestamptz` 字面型別，這樣 CodeFirst 就會依各後端解析出對應的型別，讓一張全新建立的資料表，與這支
 migration 為既有資料表所加上的欄位一致。若是直接手寫 DDL(一個沒有任何 entity 屬性支撐的欄位)？
 `ColumnTypeMap.cs` 集中收錄了各後端對應的字面型別可供複製。不論哪一種情況，都請直接檢查目標資料表
-實際目前的欄位型別——`src/` 中的 entity 宣告，或是正在執行中的 schema——而不要假設是任一種；這個
-儲存庫自己的框架資料表也並不一致(大多數 `AuditableEntity` 的 `createdat`/`updatedat` 欄位都是裸的
-`timestamp`，而 `site_settings.updatedat` 則是 `timestamptz`)，而且沒有任何既有的裸 `timestamp`
+實際目前的欄位型別——`src/` 中的 entity 宣告，或是正在執行中的 schema——而不要假設是任一種;這個
+儲存庫自己的框架資料表也並不一致。大多數 `AuditableEntity` 的 `createdat`/`updatedat` 欄位都是裸的
+`timestamp`，但 `media_folders.createdat`/`updatedat` 已經具時區感知
+(兩者皆標記 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`——
+`src/Struo.Infrastructure/Files/MediaFolder.cs`)，`site_settings.updatedat` 以及 migration
+runner 自己的追蹤欄位 `schema_migrations.appliedat`
+(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`) 也是如此。沒有任何既有的裸 `timestamp`
 欄位曾被回溯性地轉換過，因為把已經儲存的值重新錨定到某個 session 時區，是一次靜默的資料位移。
 
 ### 已知限制
@@ -170,11 +178,13 @@ template 出貨**零份** SQL 腳本，而且建表是 create-only 的——它�
   ```
   [17:34:20 FTL] StruoCMS host terminated unexpectedly
   System.IO.DirectoryNotFoundException: MigrationRunner: migrations directory not found: 'db/migrations'. Check the Database:MigrationsPath configuration value.
-     at Struo.Infrastructure.Persistence.MigrationRunner.ApplyAsync(ISqlSugarClient db, String migrationsDirectory, ILogger logger, CancellationToken ct) in D:\dotnet\struo-cms\src\Struo.Infrastructure\Persistence\MigrationRunner.cs:line 73
-     at Program.<Main>$(String[] args) in D:\dotnet\struo-cms\src\Struo.Api\Program.cs:line 196
+     at Struo.Infrastructure.Persistence.MigrationRunner.ApplyAsync(ISqlSugarClient db, String migrationsDirectory, ILogger logger, CancellationToken ct)
+     at Program.<Main>$(String[] args)
   ```
 
-  而該行程自己的結束代碼確實是 `1`。
+  堆疊追蹤中的行號刻意省略：這份文字紀錄的產生時間早於後續變更，而那些變更已經讓
+  `MigrationRunner.cs` 與 `Program.cs` 兩份檔案裡原本的行號不再對應正確位置——行為本身，以及該行程
+  結束代碼確實是 `1` 這件事，都沒有改變。
 - **Dev schema 防護：** `SchemaGuard.AssertCriticalConstraintsAsync` 只在 Development 中執行，於
   建表、選用的 `SyncSchema` 與 migration runner 之後，並斷言 `revisions` 的複合 UNIQUE 索引，以及
   每個已設定翻譯附屬資料表的 UNIQUE `(fk, locale)` 索引確實實際存在——若缺少任一個，就拋出一個帶有
