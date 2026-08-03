@@ -63,9 +63,10 @@ instance must be stopped and started again, not just have its configuration file
 
 Restarting after both edits, CodeFirst then creates the sample's tables
 (`articles`, `article_translations`, `tags`, `article_tags`, `categories`) the same way it creates any
-other content collection's tables, in any environment. Verified live against this checkout: after making both edits and
-restarting, `GET /api/schema` (as the bootstrap admin) lists `article`, `category` and `tag` alongside
-the seven framework collections (chapter 4), where a moment before it listed only the framework ones.
+other content collection's tables, in any environment. Verified live against this checkout: after making
+both edits and restarting, `GET /api/schema` (as the bootstrap admin) lists `article`, `category` and
+`tag` alongside the seven framework collections (chapter 4), where a moment before it listed only the
+framework ones.
 
 While the sample is opted in this way, one shipped backend test intentionally goes red:
 `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s

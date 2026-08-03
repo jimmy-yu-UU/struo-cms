@@ -59,9 +59,9 @@
 
 完成這兩項編輯後重新啟動，CodeFirst 就會建立這個範例的資料表(`articles`、
 `article_translations`、`tags`、`article_tags`、`categories`)，方式與它建立任何其他內容集合的
-資料表完全相同，且在任何環境都一樣。已針對這份檢出程式碼即時驗證：完成這兩項編輯並重新啟動之後，`GET /api/schema`
-(以啟動用管理員身分)會在七個框架集合之外(第 4 章)，一併列出 `article`、`category` 與 `tag`，
-而在此之前一刻，它還只列出框架集合。
+資料表完全相同，且在任何環境都一樣。已針對這份檢出程式碼即時驗證：完成這兩項編輯並重新啟動之後，
+`GET /api/schema`(以啟動用管理員身分)會在七個框架集合之外(第 4 章)，一併列出 `article`、
+`category` 與 `tag`，而在此之前一刻，它還只列出框架集合。
 
 以這種方式選用啟用範例時，一個出貨的後端測試會刻意轉紅：
 `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` 的
