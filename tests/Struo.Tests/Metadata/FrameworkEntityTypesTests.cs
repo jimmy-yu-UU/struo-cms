@@ -46,9 +46,12 @@ public class FrameworkEntityTypesTests
     [Fact]
     public void Every_member_of_All_carries_a_SugarTable_attribute()
     {
-        // 上一條測試的偵測規則是「帶 [SugarTable]」。若某天有人加一個靠推導表名的框架 entity，
-        // 掃描掃不到它，上一條會照樣綠——這條斷言把「必須標 [SugarTable]」升格為受檢規則，
-        // 讓偵測規則自己不會悄悄失效。
+        // 上一條的 BeEquivalentTo 是雙向比對，其實已經會為同一種缺陷（All 內有型別缺 [SugarTable]）
+        // 報錯；這條的價值不是「補上一條漏掉的角落」，而是把失敗訊息換成直接點名是哪個型別缺
+        // [SugarTable]，省去從集合差異反推的步驟，並讓這條規則本身變成一則明寫、被檢查的斷言。
+        // 兩條測試仍有共同死角：一個既不在 All、也沒有 [SugarTable] 的型別，永遠不會進入
+        // scanned 或 accountedFor，兩邊都不會失衡——這是「用允許清單比對」這種偵測方式本身的
+        // 極限（掃不到沒人引用過的型別），不是任一條斷言能補上的洞。
         foreach (var type in FrameworkEntityTypes.All)
         {
             var attribute = type.GetCustomAttribute<SugarTable>();
