@@ -42,7 +42,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
 | `frontend/` | The Vue 3 + PrimeVue admin SPA, a separate pnpm workspace. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
-| `db/migrations/` | Core-only, reviewed SQL migration scripts (`001-core-baseline.sql` is the prod bootstrap). |
+| `db/migrations/` | Reviewed, forward-only ALTER scripts for evolving an already-created schema; the template ships none — anything here belongs to the fork that put it there. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`) and this `ai/` reference set. |
 | `tests/Struo.Tests` | The backend xUnit suite (unit, integration, and the template-invariant guard). |
@@ -62,13 +62,21 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 - **Target framework**: .NET 10 (`net10.0`, `Directory.Build.props`). **Database support**: SqlSugar
   is configured for five backends (`Database:DbType`: `PostgreSQL`/`MySql`/`SqlServer`/`Sqlite`/
   `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
-  only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental — some
-  ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior specifically.
+  only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental. Schema
+  creation (CodeFirst) is designed and mapped to run on all five backends, via a dialect-neutral
+  `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type literals out of `src/` — but that mapping
+  itself is unverified against a live MySQL/SqlServer/Oracle instance. What remains unverified either way
+  is the query layer: some ORDER-BY and literal-coercion code paths are written against
+  PostgreSQL/SQLite behavior specifically.
 
 ## Invariants
 
 - **All database access is through SqlSugar; zero vendor SQL.** Migration scripts under
-  `db/migrations/` are the one place raw SQL is written deliberately, and are PostgreSQL-only by design.
+  `db/migrations/` are the one place raw SQL is written deliberately — and the template ships **none**:
+  the directory is empty, and any script there belongs to the fork that put it there. Replaceability is
+  a choice made once, at fork time, not a property every deployment must preserve forever: the core
+  contains no vendor SQL; a fork writing PostgreSQL-specific ALTERs for the database it actually runs
+  is not a violation.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
@@ -84,8 +92,13 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`ItemWriteSideSync.cs`).
 - **Immutable update patterns**: domain/query model types are `record`s with `init` properties, updated
   via non-destructive `with` expressions, not mutated in place.
-- **`InitTables` is Development-only.** Production schema changes go through reviewed migrations under
-  `db/migrations/` applied by `MigrationRunner` (PostgreSQL-only; a hard no-op on any other backend).
+- **CodeFirst creates; migrations evolve.** Tables that do not yet exist are created by
+  `DatabaseInitializer.CreateMissingTables` in **every environment and on every backend**, so an empty
+  database bootstraps itself and `DataSeeder` seeds what was just created. **Existing** tables are never
+  touched automatically: full CodeFirst structural sync is opt-in via `Database:AutoSyncSchema` and
+  honoured in Development only (SqlSugar's default `InitTables` modifies *and* **drops** columns), while
+  reviewed `db/migrations/` scripts applied by `MigrationRunner` are the all-environments path. The
+  runner works on any backend; `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
   on REST: the REST write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/
