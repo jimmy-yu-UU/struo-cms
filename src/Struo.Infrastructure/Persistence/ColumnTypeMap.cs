@@ -18,12 +18,18 @@ namespace Struo.Infrastructure.Persistence;
 /// <see cref="ColumnShape.LongText"/>) and <c>"datetime(6)"</c> (MySQL,
 /// <see cref="ColumnShape.TimestampWithTimeZone"/>). Whether SqlSugar appends a further length
 /// suffix to a <c>DbColumnInfo.DataType</c> that already contains parentheses (which would emit
-/// malformed DDL such as <c>nvarchar(max)(4000)</c>) was checked by reading SqlSugar
-/// <c>SqlSugarCore 5.1.4.197</c> source — the closest published tag to the pinned
-/// <c>5.1.4.215</c>; no tag matching <c>5.1.4.215</c> exists upstream, and the relevant methods
-/// below are byte-identical between that tag and <c>master</c> as of this writing, so the
-/// divergence risk is low but not zero. <b>This is a source-reading conclusion, not a result
-/// verified against a live SQL Server or MySQL instance.</b>
+/// malformed DDL such as <c>nvarchar(max)(4000)</c>) was checked by reading the upstream source at
+/// <c>https://github.com/DotNetNext/SqlSugar</c> (the <c>donet5/SqlSugar</c> slug this package is
+/// still sometimes referenced by is a 301 redirect to the same repository, confirmed by reading the
+/// HTTP response), tag <c>5.1.4.197</c> — the closest published git tag to the pinned
+/// <c>5.1.4.215</c>. The upstream tag series stops at <c>5.1.4.197</c>: sixteen further stable NuGet
+/// releases (<c>5.1.4.198</c> through <c>5.1.4.215</c>, skipping <c>.212</c>/<c>.213</c>, which as of
+/// this writing only ever shipped as prerelease builds) sit between that tag and the pin, none of
+/// them tagged upstream. The endpoints were bounded, not every commit in between: the relevant
+/// methods below are byte-identical between the <c>5.1.4.197</c> tag and <c>master</c> as of this
+/// writing (diffed directly), so the divergence risk is low but not zero. <b>This is a
+/// source-reading conclusion, not a result verified against a live SQL Server or MySQL
+/// instance.</b>
 /// </para>
 /// <para>
 /// Both <c>SqlServerDbMaintenance</c> and <c>MySqlDbMaintenance</c> resolve the length suffix
@@ -34,8 +40,8 @@ namespace Struo.Infrastructure.Persistence;
 /// SqlServer) returns a <c>null</c> size whenever <c>Length == 0 &amp;&amp; DecimalDigits == 0</c>:
 /// <c>"else if (item.Length &gt; 0 &amp;&amp; item.DecimalDigits == 0) { dataSize = ... }"</c> — none
 /// of its branches match when both are zero, so <c>dataSize</c> stays <c>null</c>.
-/// <c>MySqlDbMaintenance.GetSize</c> (<c>Src/Asp.NetCore2/SqlSugar/Realization/MySql/DbMaintenance/
-/// MySqlDbMaintenance.cs</c>) has the same zero/zero fallthrough. A <c>null</c> <c>dataSize</c> is
+/// <c>MySqlDbMaintenance.GetSize</c> (<c>Src/Asp.NetCore2/SqlSugar/Realization/MySql/DbMaintenance/MySqlDbMaintenance.cs</c>)
+/// has the same zero/zero fallthrough. A <c>null</c> <c>dataSize</c> is
 /// substituted as an empty string by <c>string.Format</c>, so the composed column clause (e.g.
 /// SqlServer's <c>CreateTableColumn = "{0} {1}{2} {3} {4} {5}"</c>, where <c>{1}</c> is
 /// <c>DataType</c> and <c>{2}</c> is <c>dataSize</c>) renders as just <c>nvarchar(max)</c> with no
@@ -55,10 +61,44 @@ namespace Struo.Infrastructure.Persistence;
 /// (<c>"if (item.PropertyInfo.PropertyType == UtilConstants.StringType &amp;&amp;
 /// item.DataType.IsNullOrEmpty() &amp;&amp; item.Length == 0) { item.Length = DefultLength; }"</c>)
 /// is guarded on <c>DataType.IsNullOrEmpty()</c>, which is false once <c>ColumnTypeMap.For</c> has
-/// already assigned a literal; and (4) <c>EntityColumnToDbColumn</c> copies <c>Length</c> straight
-/// through (<c>"Length = item.Length,"</c>) without ever re-deriving it from the <c>DataType</c>
-/// string. Net result: for these two shaped, pre-parenthesised mappings, length stays unset and no
-/// suffix is appended on either backend.
+/// already assigned a literal — the <c>EntityService</c> hook that assigns it runs earlier in the
+/// same pipeline, inside <c>EntityMaintenance.GetEntityInfoNoCache</c>
+/// (<c>Abstract/EntityMaintenance/EntityMaintenance.cs:424-430</c>), which builds the
+/// <c>EntityInfo</c> that <c>CodeFirstProvider.Execute</c> subsequently injects the default length
+/// into, so the hook's assignment is already in place by the time the guard is checked; and (4)
+/// <c>EntityColumnToDbColumn</c> copies <c>Length</c> straight through
+/// (<c>"Length = item.Length,"</c>) without ever re-deriving it from the <c>DataType</c> string. Net
+/// result: for these two shaped, pre-parenthesised mappings, length stays unset and no suffix is
+/// appended on either backend.
+/// </para>
+/// <para>
+/// A third length-touching mechanism exists in the CREATE path and is also a no-op for these two
+/// literals: both providers run a <c>ConvertCreateColumnInfo(DbColumnInfo x)</c> pre-pass before
+/// <c>GetSize</c> — SqlServer's <c>CreateTable</c> calls it per column
+/// (<c>Realization/SqlServer/DbMaintenance/SqlServerDbMaintenance.cs</c>, method defined at lines
+/// 756-770, invoked from line 721), and MySQL's <c>GetCreateTableSql</c> does the same
+/// (<c>Realization/MySql/DbMaintenance/MySqlDbMaintenance.cs</c>, method defined at lines 792-806,
+/// invoked from line 537). SqlServer's version only rewrites <c>DataType</c> when it
+/// case-insensitively equals <c>"nvarchar"</c> or <c>"varchar"</c> and <c>Length &lt; 1</c> —
+/// <c>"nvarchar(max)".EqualCase("nvarchar")</c> is <c>false</c>, so the already-parenthesised
+/// literal never matches that branch. MySQL's version checks the same two names plus a
+/// <c>{"longtext", "date"}</c> array — <c>"datetime(6)"</c> matches neither, so it also passes
+/// through untouched. Both are no-ops here for the same underlying reason <c>GetSize</c> is: the
+/// condition that would trigger a rewrite never holds for a value that already contains its own
+/// parentheses.
+/// </para>
+/// <para>
+/// The <see cref="ColumnShape.LongText"/> conclusion above is not limited to properties carrying
+/// <see cref="ColumnShapeAttribute"/>: a multi-value <c>[CmsField]</c> property (a JSON column)
+/// resolves to the identical <c>ColumnTypeMap.For(ColumnShape.LongText, dbType)</c> call inside the
+/// same <c>EntityService</c> hook (<c>SqlSugarClientFactory.cs:104-108</c>), so
+/// <c>"nvarchar(max)"</c> reaches SQL Server through this route too. The reasoning holds there for
+/// the same reason: that branch sets <c>column.IsJson = true</c> and <c>column.DataType</c> only,
+/// never <c>column.Length</c>, and <c>CodeFirstProvider.EntityColumnToDbColumn</c> does not copy
+/// <c>IsJson</c> into the resulting <c>DbColumnInfo</c> at all — it is not one of the fields its
+/// object initializer sets — so nothing about the JSON route changes the zero-length conclusion. A
+/// fork relying on JSON columns on SQL Server is covered by the same no-op finding as the shaped
+/// properties above.
 /// </para>
 /// </summary>
 internal static class ColumnTypeMap

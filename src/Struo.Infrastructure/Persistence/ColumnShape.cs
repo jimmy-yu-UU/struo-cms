@@ -39,6 +39,15 @@ public enum ColumnShape
 /// omit <c>[ColumnShape]</c> on that property. Pinned by
 /// <c>ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType</c>.
 /// </para>
+/// <para>
+/// That same early <c>return</c> also outranks the hook's later multi-value <c>[CmsField]</c> JSON
+/// branch (<c>SqlSugarClientFactory.cs:103-109</c>), which otherwise sets both
+/// <c>column.IsJson = true</c> and a widened <c>DataType</c> for a JSON-column field interface. A
+/// property that carries both <see cref="ColumnShapeAttribute"/> and a JSON-column
+/// <c>[CmsField]</c> interface never reaches that branch, so it silently loses <c>IsJson = true</c>
+/// — only the shape's <c>DataType</c> is applied. Do not combine <see cref="ColumnShapeAttribute"/>
+/// with a multi-value/JSON <c>[CmsField]</c> interface on the same property.
+/// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class ColumnShapeAttribute(ColumnShape shape) : Attribute

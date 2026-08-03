@@ -34,8 +34,12 @@ When a property needs a DDL column type other than SqlSugar's default C#-type ma
 `[SugarColumn(ColumnDataType = "...")]`: the shape is a dialect-neutral enum member (`LongText`,
 `TimestampWithTimeZone`) that `ColumnTypeMap.For` (`src/Struo.Infrastructure/Persistence/
 ColumnTypeMap.cs`) resolves to the correct per-backend literal inside `SqlSugarClientFactory`'s
-`EntityService` hook, so the same property works unchanged on PostgreSQL, MySQL, SQL Server, Oracle,
-and SQLite. A fork that only ever runs one backend is free to write
+`EntityService` hook, so the same property is *designed* to work unchanged on PostgreSQL, MySQL, SQL
+Server, Oracle, and SQLite — but only the PostgreSQL and SQLite literals are exercised by a live
+instance; the MySQL/SQL Server/Oracle literals are chosen to be syntactically valid and are not
+claimed to be verified against a live instance of those three (`ColumnTypeMap.cs`'s own class doc has
+the full evidence trail, including a source-read-only conclusion about a parenthesised-literal edge
+case on SQL Server/MySQL). A fork that only ever runs one backend is free to write
 `[SugarColumn(ColumnDataType = "...")]` directly instead — that convention is respected too, just at
 lower precedence.
 
