@@ -59,7 +59,12 @@ Schema 管理依**職責**、而非依環境，拆分為三層：
 
 `Database:AutoSyncSchema`(bool，預設 `false`，僅限 Development——第 3 章)會開啟針對既有資料表的
 完整 CodeFirst 結構同步，允許 SqlSugar 依 entity 類別完全比照新增、修改與刪除欄位。它很強大，而在一張
-存有你在乎的資料的資料表上，它很危險。總則：
+存有你在乎的資料的資料表上，它很危險。經實測，「刪除」這件事其實依後端而異：在真正的 PostgreSQL 上，
+被移除的欄位確實會被刪除(`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`)；
+但在 SQLite 上，同一個未過濾呼叫卻會把該欄位原封不動地留下
+(`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`，見下方第 7 項)——因此
+這個儲存庫只跑 SQLite 的 CI 套件，無法單靠自己證明下方的破壞性情境；只有一次即時的 PostgreSQL 執行才能。
+總則：
 
 > 任何涉及既有資料的結構變更，一律走 migration。`AutoSyncSchema` 僅適用於 Development 中尚無正式資料
 > 的 schema 快速迭代。
@@ -72,7 +77,7 @@ Schema 管理依**職責**、而非依環境，拆分為三層：
 | 4 | 對既有資料表新增 `NOT NULL` 欄位 | ALTER 失敗，啟動中斷 | migration 三步：先加可空欄位 → 回填 → 再加 NOT NULL 約束 |
 | 5 | 對含重複值的欄位加 UNIQUE | ALTER 失敗，啟動中斷 | migration 先去重(資料操作)→ 再加約束 |
 | 6 | 拆分／合併欄位、抽出獨立表 | 結構 diff 無法表達此意圖，結果必為資料遺失或空欄位 | 一律 migration |
-| 7 | SQLite 後端刪欄位 | SQLite 自 3.35.0(2021 年)起已支援 `ALTER TABLE … DROP COLUMN`，但當該欄位是 `PRIMARY KEY`、是 `UNIQUE`、已建立索引，或被某個 generated column、partial index、trigger 或 view 參照時，會拒絕執行 | 後端差異，勿假設各引擎行為一致 |
+| 7 | SQLite 後端刪欄位 | 實測(SqlSugarCore 5.1.4.215)：SqlSugar 的 CodeFirst 同步在 SQLite 上**完全不會**刪除被移除的欄位——即使該欄位只是一個普通欄位，既非 `PRIMARY KEY`、也非 `UNIQUE`、未建立索引(`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`)。這與 SQLite 這個資料庫引擎本身自 3.35.0(2021 年)起原生支援 `ALTER TABLE … DROP COLUMN`(且僅在該欄位是 `PRIMARY KEY`、`UNIQUE`、已索引或被參照時才拒絕)的能力無關——SqlSugar 在這個後端上的同步根本沒有把這個操作實作出來。正是這個落差，使得上方第 1、2 項只能在 PostgreSQL 上被證實 | 勿假設某後端自身原生支援的 DDL 能力，等同於 SqlSugar 的 CodeFirst 同步在該後端上實際做的事——請逐一後端驗證，如同這個儲存庫對 PostgreSQL 所做的 |
 | 8 | 多副本(`replicas > 1`)同時啟動 | 各副本同時進行 DDL diff 與執行，存在競態 | 見下方「已知限制」 |
 | 9 | 想預覽部署 | **無法預覽**將執行的 DDL(啟動時由 code diff 即時計算) | 這正是不在 Production 啟用的核心理由 |
 

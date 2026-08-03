@@ -69,7 +69,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `[ColumnShape]`/`ColumnTypeMap` layer that confines vendor type literals to a single mapping file — but
   that mapping itself is unverified against a live MySQL/SqlServer/Oracle instance, and so is the query
   layer: some ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior
-  specifically.
+  specifically. The per-backend type decisions behind that layer, and the evidence for each, are recorded
+  in `ColumnTypeMap`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`).
 
 ## Invariants
 
@@ -98,9 +99,14 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `DatabaseInitializer.CreateMissingTables` in **every environment and on every backend**, so an empty
   database bootstraps itself and `DataSeeder` seeds what was just created. **Existing** tables are never
   touched automatically: full CodeFirst structural sync is opt-in via `Database:AutoSyncSchema` and
-  honoured in Development only (SqlSugar's default `InitTables` modifies *and* **drops** columns), while
-  reviewed `db/migrations/` scripts applied by `MigrationRunner` are the all-environments path. The
-  runner works on any backend; `Database:MigrationsPath` empty (the default) disables it.
+  honoured in Development only (SqlSugar's default `InitTables` modifies *and* **drops** columns —
+  measured on real PostgreSQL by
+  `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`; on SQLite the
+  same unfiltered call leaves the removed column in place
+  (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`), so this repo's
+  SQLite-only CI suite cannot demonstrate the claim by itself), while reviewed `db/migrations/` scripts
+  applied by `MigrationRunner` are the all-environments path. The runner works on any backend;
+  `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
   on REST: the REST write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/

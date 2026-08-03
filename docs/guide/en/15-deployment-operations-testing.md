@@ -64,7 +64,12 @@ that do not yet exist, on any backend, in any environment.
 `Database:AutoSyncSchema` (bool, default `false`, Development-only — chapter 3) turns on a full CodeFirst
 structural sync against tables that already exist, allowing SqlSugar to add, modify and drop columns to
 match the entity classes exactly. It is powerful, and on a table holding data you care about, dangerous.
-The governing rule:
+Measured directly, "drop" is engine-specific: on real PostgreSQL a removed column really is dropped
+(`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`), but on SQLite the
+identical unfiltered call leaves the column in place instead
+(`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`, row 7 below) — so this
+repository's SQLite-only CI suite cannot demonstrate the destructive scenarios below by itself; only a
+live PostgreSQL run can. The governing rule:
 
 > Any structural change that touches existing data must go through a migration. `AutoSyncSchema` is
 > intended only for fast schema iteration in Development, on a schema that does not yet hold any real
@@ -78,7 +83,7 @@ The governing rule:
 | 4 | Add a `NOT NULL` column to an existing populated table | `ALTER` fails, startup aborts | Three-step migration: add it nullable first → backfill → then add the `NOT NULL` constraint |
 | 5 | Add `UNIQUE` to a column that already has duplicate values | `ALTER` fails, startup aborts | Migration deduplicates first (a data operation), then adds the constraint |
 | 6 | Split/merge columns, or extract a new table | A structural diff cannot express this intent; the result is always either data loss or empty columns | Always a migration |
-| 7 | Dropping a column on the SQLite backend | SQLite has supported `ALTER TABLE … DROP COLUMN` since 3.35.0 (2021), but refuses it when the column is a `PRIMARY KEY`, is `UNIQUE`, is indexed, or is referenced by a generated column, a partial index, a trigger, or a view | Backend behavior differs — never assume every engine behaves the same way |
+| 7 | Dropping a column on the SQLite backend | Measured (SqlSugarCore 5.1.4.215): SqlSugar's CodeFirst sync does **not** drop a removed column on SQLite at all — even for a plain column that is none of `PRIMARY KEY`/`UNIQUE`/indexed (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`). This is despite SQLite itself natively supporting `ALTER TABLE … DROP COLUMN` since 3.35.0 (2021, with its own refusal cases for `PRIMARY KEY`/`UNIQUE`/indexed/referenced columns) — SqlSugar's sync on this backend simply doesn't surface the operation. This gap is exactly why rows 1–2 above can only be demonstrated on PostgreSQL | Never assume a backend's own native DDL capability is what SqlSugar's CodeFirst sync actually does on it — verify per backend, as this repository does for PostgreSQL |
 | 8 | Multiple replicas (`replicas > 1`) starting concurrently | Every replica computes and runs its own DDL diff at the same time — a race | See "Known limits" below |
 | 9 | Wanting to preview a deployment | The DDL that will run **cannot be previewed** — it is computed from the live code diff at startup | This is the core reason `AutoSyncSchema` is never meant to be turned on in Production |
 
