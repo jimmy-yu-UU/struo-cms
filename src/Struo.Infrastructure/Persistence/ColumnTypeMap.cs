@@ -22,10 +22,11 @@ namespace Struo.Infrastructure.Persistence;
 /// <c>https://github.com/DotNetNext/SqlSugar</c> (the <c>donet5/SqlSugar</c> slug this package is
 /// still sometimes referenced by is a 301 redirect to the same repository, confirmed by reading the
 /// HTTP response), tag <c>5.1.4.197</c> — the closest published git tag to the pinned
-/// <c>5.1.4.215</c>. The upstream tag series stops at <c>5.1.4.197</c>: sixteen further stable NuGet
-/// releases (<c>5.1.4.198</c> through <c>5.1.4.215</c>, skipping <c>.212</c>/<c>.213</c>, which as of
-/// this writing only ever shipped as prerelease builds) sit between that tag and the pin, none of
-/// them tagged upstream. The endpoints were bounded, not every commit in between: the relevant
+/// <c>5.1.4.215</c>. The upstream tag series stops at <c>5.1.4.197</c>: fifteen further stable NuGet
+/// releases (<c>5.1.4.198</c> through <c>5.1.4.211</c>, then <c>5.1.4.214</c> — <c>.212</c>/<c>.213</c>
+/// as of this writing only ever shipped as prerelease builds) sit strictly between that tag and the
+/// pinned <c>5.1.4.215</c>, none of them tagged upstream. The endpoints were bounded, not every commit
+/// in between: the relevant
 /// methods below are byte-identical between the <c>5.1.4.197</c> tag and <c>master</c> as of this
 /// writing (diffed directly), so the divergence risk is low but not zero. <b>This is a
 /// source-reading conclusion, not a result verified against a live SQL Server or MySQL
@@ -62,23 +63,28 @@ namespace Struo.Infrastructure.Persistence;
 /// item.DataType.IsNullOrEmpty() &amp;&amp; item.Length == 0) { item.Length = DefultLength; }"</c>)
 /// is guarded on <c>DataType.IsNullOrEmpty()</c>, which is false once <c>ColumnTypeMap.For</c> has
 /// already assigned a literal — the <c>EntityService</c> hook that assigns it runs earlier in the
-/// same pipeline, inside <c>EntityMaintenance.GetEntityInfoNoCache</c>
-/// (<c>Abstract/EntityMaintenance/EntityMaintenance.cs:424-430</c>), which builds the
-/// <c>EntityInfo</c> that <c>CodeFirstProvider.Execute</c> subsequently injects the default length
-/// into, so the hook's assignment is already in place by the time the guard is checked; and (4)
+/// same pipeline, at
+/// <c>Src/Asp.NetCore2/SqlSugar/Abstract/EntityMaintenance/EntityMaintenance.cs:424-430</c>. That
+/// call site is lexically inside the private <c>SetColumns</c> method (<c>:307</c>), which
+/// <c>GetEntityInfoNoCache</c> (<c>:58</c>) calls at <c>:89</c> while building the <c>EntityInfo</c>
+/// that <c>CodeFirstProvider.Execute</c> subsequently injects the default length into — so the hook's
+/// assignment is already in place by the time the guard is checked; and (4)
 /// <c>EntityColumnToDbColumn</c> copies <c>Length</c> straight through
 /// (<c>"Length = item.Length,"</c>) without ever re-deriving it from the <c>DataType</c> string. Net
 /// result: for these two shaped, pre-parenthesised mappings, length stays unset and no suffix is
 /// appended on either backend.
 /// </para>
 /// <para>
-/// A third length-touching mechanism exists in the CREATE path and is also a no-op for these two
-/// literals: both providers run a <c>ConvertCreateColumnInfo(DbColumnInfo x)</c> pre-pass before
-/// <c>GetSize</c> — SqlServer's <c>CreateTable</c> calls it per column
-/// (<c>Realization/SqlServer/DbMaintenance/SqlServerDbMaintenance.cs</c>, method defined at lines
-/// 756-770, invoked from line 721), and MySQL's <c>GetCreateTableSql</c> does the same
-/// (<c>Realization/MySql/DbMaintenance/MySqlDbMaintenance.cs</c>, method defined at lines 792-806,
-/// invoked from line 537). SqlServer's version only rewrites <c>DataType</c> when it
+/// A third length-touching mechanism exists and is also a no-op for these two literals: both
+/// providers run a <c>ConvertCreateColumnInfo(DbColumnInfo x)</c> pre-pass before <c>GetSize</c> — not
+/// only in the CREATE path (SqlServer's <c>CreateTable</c> calls it per column at
+/// <c>Realization/SqlServer/DbMaintenance/SqlServerDbMaintenance.cs:721</c>; MySQL's
+/// <c>GetCreateTableSql</c> does the same at
+/// <c>Realization/MySql/DbMaintenance/MySqlDbMaintenance.cs:537</c>) but also in the modify path
+/// (SqlServer's <c>UpdateColumn</c> calls it at <c>SqlServerDbMaintenance.cs:498</c>; MySQL's
+/// <c>UpdateColumn</c> at <c>MySqlDbMaintenance.cs:612</c>) — both providers' method is defined once,
+/// at <c>SqlServerDbMaintenance.cs:756-770</c> and <c>MySqlDbMaintenance.cs:792-806</c> respectively,
+/// and reused by every caller. SqlServer's version only rewrites <c>DataType</c> when it
 /// case-insensitively equals <c>"nvarchar"</c> or <c>"varchar"</c> and <c>Length &lt; 1</c> —
 /// <c>"nvarchar(max)".EqualCase("nvarchar")</c> is <c>false</c>, so the already-parenthesised
 /// literal never matches that branch. MySQL's version checks the same two names plus a
