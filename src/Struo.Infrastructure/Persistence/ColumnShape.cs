@@ -29,8 +29,16 @@ public enum ColumnShape
 }
 
 /// <summary>
-/// Marks a property with the dialect-neutral <see cref="ColumnShape"/> it needs. Takes precedence
-/// over the convention-based widening in <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook.
+/// Marks a property with the dialect-neutral <see cref="ColumnShape"/> it needs.
+///
+/// <para>
+/// Precedence: this attribute wins over BOTH the convention-based widening in
+/// <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook AND an explicit
+/// <c>[SugarColumn(ColumnDataType = "...")]</c> on the same property — the hook resolves the shape
+/// and returns before either is considered. A fork that wants its own vendor literal to win must
+/// omit <c>[ColumnShape]</c> on that property. Pinned by
+/// <c>ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType</c>.
+/// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class ColumnShapeAttribute(ColumnShape shape) : Attribute
