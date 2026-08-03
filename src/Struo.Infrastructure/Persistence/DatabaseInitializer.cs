@@ -15,9 +15,15 @@ namespace Struo.Infrastructure.Persistence;
 ///
 /// <para>
 /// <b>SqlSugar 的 <c>InitTables</c> 預設模式對既有表是破壞性的</b>：它會新增欄位、**修改**欄位型別，
-/// 並在 entity 移除屬性時 **DROP COLUMN**（官方文件：「正式数据一定要禁删除列操作」）。因此
+/// 並在 entity 移除屬性時 **DROP COLUMN**（官方文件：「正式数据一定要禁删除列操作」）。這一點由
+/// <c>DatabaseInitializerTests</c>（SQLite 上的實測行為）與
+/// <c>PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres</c>
+/// （真引擎上的破壞性證明）釘住，不再只是文件敘述——但兩者的結論相反：在真 PostgreSQL 上，移除的欄位
+/// 確實被 DROP；在 SQLite 上，同一個探針卻被保留下來。因此本節開頭的破壞性主張只在 PostgreSQL 上證得出
+/// 來，這個儲存庫只跑 SQLite 的 CI 套件永遠無法自行證明它。因此
 /// <see cref="CreateMissingTables"/> 的安全性不建立在旗標上，而建立在物理事實上——只把「表尚不存在」的
-/// entity 型別交給 <c>InitTables</c>，此時它只可能 CREATE。
+/// entity 型別交給 <c>InitTables</c>，此時它只可能 CREATE；這一點與 <c>InitTables</c> 在既有表上究竟會
+/// 不會刪欄位無關。
 /// </para>
 /// </summary>
 public static class DatabaseInitializer
