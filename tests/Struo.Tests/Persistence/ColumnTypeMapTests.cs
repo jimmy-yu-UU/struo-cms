@@ -175,6 +175,11 @@ public class ColumnTypeMapTests
             deletedAt.DataType.Should().ContainEquivalentOf("timestamptz");
             notes.DataType.Should().ContainEquivalentOf("text");
 
+            // Explicit assertion of the fact "the column is nullable" itself. The insert-null below is
+            // a behavioral guard (the DB genuinely accepts null) — a different layer, both stay.
+            deletedAt.IsNullable.Should().BeTrue();
+            notes.IsNullable.Should().BeTrue();
+
             // A NOT NULL column would reject this insert of explicit nulls. Succeeding proves
             // nullability inference actually ran for these two shaped properties.
             var row = new ColumnShapeNullableTestEntity { DeletedAt = null, Notes = null };
