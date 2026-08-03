@@ -157,4 +157,47 @@ public class DatabaseInitializerTests
                 "非 Development 必須完全不動 schema");
         }
     }
+
+    // ---- 未過濾的 InitTables：SQLite 上的實測行為 ----
+
+    [Fact]
+    public void Unfiltered_InitTables_does_not_drop_columns_on_Sqlite()
+    {
+        // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：SQLite dialect 不會刪掉 entity 已移除的欄位。
+        // 因此「InitTables 會 DROP COLUMN」這個架構前提**無法**用 SQLite 測套件證明——證據在
+        // PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres。
+        // 這條測試的作用是把「SQLite 上到底會不會」從未知釘成事實：若哪天 SqlSugar 的 SQLite
+        // dialect 開始刪欄位，這裡會紅，我們就知道 CI 套件的證明力改變了。
+        var (db, client) = NewClient();
+        using (db)
+        {
+            client.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
+            client.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
+
+            client.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+                  .Select(c => c.DbColumnName)
+                  .Should().Contain("Doomed");
+        }
+    }
+
+    [Fact]
+    public void SyncSchema_in_Development_applies_unfiltered_InitTables_semantics()
+    {
+        // SyncSchema 是 Database:AutoSyncSchema 實際走的入口（Program.cs:204）。上一條測試釘住的是
+        // SqlSugar 的行為，這一條釘住的是「本 repo 的公開 API 確實把那個行為原封不動放出來」。
+        var (db, client) = NewClient();
+        using (db)
+        {
+            client.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
+
+            var ran = DatabaseInitializer.SyncSchema(
+                client, new FakeHostEnvironment("Development"), logger: null,
+                typeof(DestructiveInitProbeNarrow));
+
+            ran.Should().BeTrue();
+            client.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+                  .Select(c => c.DbColumnName)
+                  .Should().Contain("Doomed");
+        }
+    }
 }
