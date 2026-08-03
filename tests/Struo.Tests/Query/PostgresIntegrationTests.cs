@@ -356,6 +356,8 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     // 未過濾的 InitTables 在真 Postgres 上對既有表做什麼。SQLite 不驗證宣告型別、其 dialect 的
     // 結構同步能力也與 PG 不同，所以「InitTables 會 DROP COLUMN」這個架構前提只有在這裡才證得出來。
+    // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 PostgreSQL 上，Doomed 欄位被 DROP 掉了——
+    // 與 SQLite 的量測結果（DatabaseInitializerTests）相反。
     [Fact]
     public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()
     {
@@ -373,15 +375,22 @@ public sealed class PostgresIntegrationTests : IDisposable
 
             db.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
 
-            db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
+            var columnsAfter = db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
               .Select(c => c.DbColumnName.ToLowerInvariant())
-              .Should().NotContain("doomed",
-                  "entity 移除屬性後，未過濾的 InitTables 在 PostgreSQL 上 DROP COLUMN");
+              .ToList();
+            columnsAfter.Should().Contain("id", "同一次 rebuild 不應連帶丟失其他欄位");
+            columnsAfter.Should().Contain("keep", "同一次 rebuild 不應連帶丟失其他欄位");
+            columnsAfter.Should().NotContain("doomed",
+                "entity 移除屬性後，未過濾的 InitTables 在 PostgreSQL 上 DROP COLUMN");
         }
         finally
         {
-            if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
-                db.DbMaintenance.DropTable("destructive_init_probe");
+            try
+            {
+                if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
+                    db.DbMaintenance.DropTable("destructive_init_probe");
+            }
+            catch { /* best-effort cleanup; don't mask the real failure */ }
         }
     }
 }
