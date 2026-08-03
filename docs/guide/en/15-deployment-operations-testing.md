@@ -13,7 +13,7 @@ shared development database or the running development API.
 
 | Setting | Required value | Consequence if wrong |
 |---|---|---|
-| `Database:MigrationsPath` | An **absolute** path | `MigrationRunner.ApplyAsync` (`src/Struo.Infrastructure/Persistence/MigrationRunner.cs`) passes the configured value straight to `Directory.Exists(...)` with no content-root resolution of its own — unlike `Struo:Files:ImageTransform:CachePath`, which is explicitly resolved against `IHostEnvironment.ContentRootPath` (`FileStorageServiceCollectionExtensions.cs:51`). A relative value therefore resolves against the **process's current working directory** at launch, which is not guaranteed to be the application's own folder (a systemd unit's `WorkingDirectory`, a container's `WORKDIR`, or any launcher that `cd`s elsewhere before starting the process can all differ from it). Verified live: run from `src/Struo.Api` with `MigrationsPath=db/migrations` (present only relative to the repository root, not that directory) throws `DirectoryNotFoundException: MigrationRunner: migrations directory not found: 'db/migrations'` and the process exits with code 1; run instead with the absolute path `D:/dotnet/struo-cms/db/migrations` against an empty scratch database, it correctly created all 10 core tables and recorded `001-core-baseline.sql` in `schema_migrations`. |
+| `Database:MigrationsPath` | An **absolute** path | `MigrationRunner.ApplyAsync` (`src/Struo.Infrastructure/Persistence/MigrationRunner.cs`) passes the configured value straight to `Directory.Exists(...)` with no content-root resolution of its own — unlike `Struo:Files:ImageTransform:CachePath`, which is explicitly resolved against `IHostEnvironment.ContentRootPath` (`FileStorageServiceCollectionExtensions.cs:51`). A relative value therefore resolves against the **process's current working directory** at launch, which is not guaranteed to be the application's own folder (a systemd unit's `WorkingDirectory`, a container's `WORKDIR`, or any launcher that `cd`s elsewhere before starting the process can all differ from it). Confirmed live (`db/migrations/README.md` §6): a relative path that exists only relative to the repository root, not the process's actual working directory, throws `DirectoryNotFoundException: MigrationRunner: migrations directory not found: '<path>'` and the process exits with code `1`. The runner itself now applies on **every** backend, not just PostgreSQL; leaving this key empty (the default) disables it entirely, on any backend. |
 | `Auth:BootstrapAdmin:Password` | Overridden before the **first** boot against a fresh database | Consulted only once, the first time the `users` table is created (`DataSeeder.cs`); a later boot never re-reads it. A `Production` start still seeded with the literal default `admin` logs a `WARNING` naming the exact setting to change (`DataSeeder.WarnIfDefaultAdminPasswordInProduction`) but does **not** refuse to start — verified live: `[17:30:16 WRN] Bootstrap admin is using the default password 'admin'. Change it immediately via Auth__BootstrapAdmin__Password.` The warning compares the **currently configured** value against the literal string `"admin"` (`DataSeeder.cs:63`), not the password hash actually stored for the account — so an operator who let the database seed with the default and only later sets a strong value in configuration silences the warning on every subsequent boot while the stored account still has the original default-password hash. |
 | `RateLimiting:Login:Enabled` | `false` only when per-IP limiting is enforced at the ingress/edge | The in-app login limiter partitions by `Connection.RemoteIpAddress` and its counters live in per-process memory (`Program.cs`, the `AddRateLimiter`/`AddPolicy("login", …)` block). Left `true` behind a load balancer fanning out to N replicas, the effective limit becomes ≈N× the configured value, inconsistently, and never a true global cap — the code's own comment states this is "delegated to the ingress/edge/WAF" for exactly that reason. |
 | Reverse-proxy forwarded headers | The deployment must add `UseForwardedHeaders` (with `KnownProxies`/`KnownNetworks`) itself | `Program.cs` never calls `app.UseForwardedHeaders(...)` anywhere in the pipeline — the comment beside the login limiter's partition key says so explicitly ("deliberately out of scope here"). Behind any reverse proxy, `Connection.RemoteIpAddress` is the **proxy's** address, not the real client's, so every login attempt through that proxy collapses into a single rate-limit partition — either every user behind the proxy shares one 5-per-60s bucket (an accidental self-inflicted denial of service), or, combined with `RateLimiting:Login:Enabled=false`, no per-IP protection exists at all if the edge layer isn't actually providing it either. |
@@ -24,63 +24,150 @@ shared development database or the running development API.
 
 ## Schema management
 
-- **Development:** `InitTables` (SqlSugar CodeFirst) creates missing tables and additively adds missing
-  columns, driven straight from the entity classes; it runs only when `app.Environment.IsDevelopment()`
-  (`Program.cs`) and never in Production.
-- **Reviewed migrations:** setting `Database:MigrationsPath` (chapter 3) points `MigrationRunner` at a
-  directory of `NNN-short-kebab-description.sql` files. It runs in **every** environment once
-  configured — that is the point, reviewed scripts reaching Production is the whole mechanism — and is
-  a hard no-op on any non-PostgreSQL backend (`db.CurrentConnectionConfig.DbType != DbType.PostgreSQL`
-  short-circuits with no reads or writes at all).
-- **Tracking:** a `schema_migrations (filename text PRIMARY KEY, appliedat timestamptz)` table the
-  runner creates on first use. Applied filenames are recorded by **filename only** — no checksum or
-  content hash — so a file already recorded as applied is never re-run, even if its on-disk content is
-  later edited (`001-core-baseline.sql`'s own "FILENAME-KEYED TRACKING" comment spells out the
-  consequence: never edit a filename that may already be recorded as applied anywhere; ship a new file
-  instead).
-- **Writing the next script:** `NNN-short-kebab-description.sql`, a single contiguous zero-padded
-  series (the next number is always the current highest **+ 1**), one logical change per file,
-  idempotent (`IF NOT EXISTS` / guarded `ALTER` / `DO $$ … $$` existence checks), forward-only (no
-  automatic down-migration — a rollback is a new compensating script). The shipped baseline is
-  `001-core-baseline.sql`; a fork's first schema change is `002-…` (`db/migrations/README.md`).
-- **Timestamp convention:** any new temporal column uses `timestamptz`, never bare `timestamp`, storing
-  UTC — the convention the tracking table's own `appliedat` column follows. The baseline itself is not
-  uniform: most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, but
-  `media_folders.createdat`/`media_folders.updatedat` and `site_settings.updatedat` (`site_settings` has
-  no `createdat` column at all) are already `timestamptz` (`db/migrations/001-core-baseline.sql`,
-  `src/Struo.Infrastructure/Files/MediaFolder.cs`) — check the baseline directly for the table being
-  altered rather than assuming either type. None of the baseline's existing bare-`timestamp` columns are
-  deliberately retro-migrated to close that gap, since re-anchoring already-stored values against a
-  session time zone is a silent data shift (`db/migrations/README.md`).
+Schema management is split into three layers by **responsibility**, not by environment:
 
-Verified live: applying `001-core-baseline.sql` via `MigrationRunner` to an empty scratch database
-(`Database:MigrationsPath` set to its absolute path, `ASPNETCORE_ENVIRONMENT=Production`) produced
-exactly the ten core tables plus the tracking table, with the single file recorded as applied:
+| Responsibility | Executor | Environment | Backend | Default |
+|---|---|---|---|---|
+| Create tables that **do not exist** | CodeFirst (filtered `InitTables`) | All environments | All five | Always on |
+| **Alter existing** tables (automatic diff) | Full CodeFirst sync (`SyncSchema`) | Development only | All five | `Database:AutoSyncSchema=false` — must be explicitly turned on |
+| **Alter existing** tables (reviewed) | `MigrationRunner` + `.sql` scripts under `Database:MigrationsPath` | All environments | All five | `Database:MigrationsPath` empty = off |
 
-```
-$ docker exec struo-postgres psql -U struo -d struo_probe -c "\dt"
-             List of relations
- Schema |       Name        | Type  | Owner
---------+-------------------+-------+-------
- public | file_translations | table | struo
- public | files             | table | struo
- public | languages         | table | struo
- public | media_folders     | table | struo
- public | permissions       | table | struo
- public | revisions         | table | struo
- public | roles             | table | struo
- public | schema_migrations | table | struo
- public | site_settings     | table | struo
- public | user_roles        | table | struo
- public | users             | table | struo
-(11 rows)
+**Startup order** (`Program.cs`): a table-name snapshot → `CreateMissingTables` (all environments, all
+backends, unconditional) → optional `SyncSchema` (only runs its full sync if `Database:AutoSyncSchema=true`
+*and* the host is in Development — set anywhere else, it is ignored with a logged warning rather than
+honored) → `MigrationRunner.ApplyAsync` (only if `Database:MigrationsPath` is configured) → dev-only
+`SchemaGuard` → `DataSeeder` seeding. Table creation runs first because the migration runner's `ALTER`
+scripts target tables that must already exist by the time it runs; `SchemaGuard` and seeding both run
+last because they depend on the schema already being in its final shape.
 
-$ docker exec struo-postgres psql -U struo -d struo_probe -c "SELECT * FROM schema_migrations;"
-       filename        |           appliedat
------------------------+-------------------------------
- 001-core-baseline.sql | 2026-07-29 09:32:09.208427+00
-(1 row)
-```
+**The one initialization guarantee that holds everywhere:** in any environment, on any of the five
+configured backends, whenever an entity type's table does not yet exist, it gets created before anything
+else runs, and `DataSeeder` then seeds initial data into whichever tables were newly created during that
+startup. This is deliberately uniform across every environment and backend — it closes a real gap this
+repository used to have, where a `Production` deployment configured for `MySql`, `SqlServer` or `Oracle`
+started up cleanly against a completely empty database (no schema, no seed data, `DbReadinessCheck`
+reporting healthy) and only failed on the first query, because table creation used to run in Development
+only and the migration runner used to be gated to PostgreSQL alone.
+
+**What never happens automatically: an existing table.** The only two ways an already-existing table gets
+altered are an explicit `Database:AutoSyncSchema=true` in Development, or a reviewed script applied by
+`MigrationRunner`. Both are opt-in and off by default; the default configuration only ever creates tables
+that do not yet exist, on any backend, in any environment.
+
+### The nine auto-sync hazards
+
+`Database:AutoSyncSchema` (bool, default `false`, Development-only — chapter 3) turns on a full CodeFirst
+structural sync against tables that already exist, allowing SqlSugar to add, modify and drop columns to
+match the entity classes exactly. It is powerful, and on a table holding data you care about, dangerous.
+The governing rule:
+
+> Any structural change that touches existing data must go through a migration. `AutoSyncSchema` is
+> intended only for fast schema iteration in Development, on a schema that does not yet hold any real
+> data.
+
+| # | Scenario | What auto-sync actually does | Correct handling |
+|---|---|---|---|
+| 1 | **Column rename** | Read as "old property gone + new property appeared" → `DROP COLUMN` + `ADD COLUMN`, **that column's data is permanently lost** | Write an `ALTER TABLE … RENAME COLUMN` migration first, then change the entity |
+| 2 | Remove a property | `DROP COLUMN`, data lost | Confirm the data is genuinely no longer needed; in a real environment do this via an explicit migration |
+| 3 | Type narrowing (e.g. `varchar(255)` → `varchar(50)`) | Depending on the engine: fails, or **silently truncates** | Three-step migration: add the new column → backfill and validate → cut over and drop the old one |
+| 4 | Add a `NOT NULL` column to an existing populated table | `ALTER` fails, startup aborts | Three-step migration: add it nullable first → backfill → then add the `NOT NULL` constraint |
+| 5 | Add `UNIQUE` to a column that already has duplicate values | `ALTER` fails, startup aborts | Migration deduplicates first (a data operation), then adds the constraint |
+| 6 | Split/merge columns, or extract a new table | A structural diff cannot express this intent; the result is always either data loss or empty columns | Always a migration |
+| 7 | Dropping a column on the SQLite backend | SQLite does not support `DROP COLUMN` | Backend behavior differs — never assume every engine behaves the same way |
+| 8 | Multiple replicas (`replicas > 1`) starting concurrently | Every replica computes and runs its own DDL diff at the same time — a race | See "Known limits" below |
+| 9 | Wanting to preview a deployment | The DDL that will run **cannot be previewed** — it is computed from the live code diff at startup | This is the core reason `AutoSyncSchema` is never meant to be turned on in Production |
+
+The reason so many of these are real hazards rather than edge cases is structural, not incidental:
+CodeFirst's automatic sync computes a **structural diff** between the entity classes and the live
+table — it knows the target shape, but it has no idea what you *intended*. A rename and a "drop one
+column, add another" are indistinguishable to a diff.
+
+### Writing a migration: portability and idempotency
+
+Prefer standard SQL, to preserve the option of switching database engines later:
+
+- `ALTER TABLE … ADD COLUMN` / `DROP COLUMN` / `RENAME COLUMN`
+- `CREATE INDEX` / `CREATE UNIQUE INDEX`
+- `UPDATE` / `INSERT` / `DELETE` for data backfills
+- Standard type names: `varchar(n)`, `integer`, `bigint`, `boolean`, `timestamp`, `numeric(p,s)`
+
+Avoid, with a portable alternative:
+
+| Avoid | Why | Instead |
+|---|---|---|
+| PostgreSQL-specific types (`jsonb`, `uuid`, `timestamptz`, `serial`) | Don't exist on the other four backends | Standard types; let the ORM handle the application-level mapping |
+| `DO $$ … $$` | PL/pgSQL, PostgreSQL-only | Split into multiple plain statements |
+| `IF NOT EXISTS` on `ALTER` / `CREATE INDEX` | Not supported on SQL Server | **Not needed** — the tracking table already guarantees each file runs at most once (see below) |
+| `::` cast syntax | PostgreSQL-only | `CAST(x AS type)` |
+| Dialect-specific functions (`now()` vs `GETDATE()` vs `SYSDATE`) | Differ per engine | Pass the value from the application layer, or accept the coupling deliberately in your own fork |
+| `RETURNING` | Non-standard | A separate query |
+
+**Idempotency is not required, and this reverses earlier guidance.** An earlier version of this
+repository's migration guidance asked every script to guard itself (`IF NOT EXISTS`, guarded `ALTER`,
+existence checks) — that requirement traced back to a baseline bootstrap script that needed to be safely
+re-appliable, and that baseline no longer exists (the template ships zero `.sql` files; see below). The
+CodeFirst-created `schema_migrations` tracking table guarantees every filename is applied at most once,
+so a script never needs to protect itself against being re-run — and `IF NOT EXISTS` is one of the least
+portable constructs in the avoid-list above (SQL Server has no equivalent syntax at all). Portability now
+takes priority over idempotency: write the plain, non-defensive form of a statement.
+
+Applied filenames are tracked by **filename only** — no checksum or content hash — in a
+`schema_migrations` table that CodeFirst itself creates (so this mechanism carries no vendor SQL of its
+own). A file already recorded as applied is never re-run, even if its on-disk content is later edited —
+**never edit a filename that may already be applied anywhere; ship a new file instead.** File naming
+(`NNN-short-kebab-description.sql`, a single contiguous zero-padded series, one logical change per file)
+and the rest of the mechanics are in `db/migrations/README.md`, the reference copy of this guidance —
+this chapter and that file are kept consistent.
+
+**Timestamp convention:** any new temporal column should be time-zone-aware, storing UTC, rather than
+bare `timestamp` — the standard-SQL `timestamp` in the prefer-list above names the type, not a retraction
+of this convention. If the column is modeled as an entity property, mark it
+`[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`)
+rather than a PostgreSQL-only `timestamptz` literal, so CodeFirst resolves the matching per-backend type
+and a freshly created table agrees with what a migration adds to an existing one. Hand-writing the DDL
+directly (a column no entity property backs)? `ColumnTypeMap.cs` centralizes the per-backend literal to
+copy in. Either way, check the target table's actual current column type — the entity declaration in
+`src/`, or the live schema — rather than assuming one; this repository's own framework tables are not
+uniform (most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, while
+`site_settings.updatedat` is `timestamptz`), and none of the existing bare-`timestamp` columns have been
+retroactively converted, since re-anchoring already-stored values against a session time zone is a silent
+data shift.
+
+### Known limits
+
+1. **DDL rollback does not work on MySQL or Oracle.** The runner wraps each file's execution together
+   with its tracking-row insert in one transaction, but MySQL and Oracle both commit DDL implicitly — a
+   failure partway through a script on those backends leaves whatever DDL already ran in place; the
+   transaction cannot roll it back. Back up before running structural changes on these backends and do it
+   during a maintenance window.
+2. **No advisory lock.** If multiple replicas start concurrently against the same `Database:MigrationsPath`
+   directory, more than one process may attempt the same pending file at the same time. Deploy schema
+   changes with a single replica first (or as a separate one-off job) rather than relying on N replicas
+   racing each other. The same caveat applies to CodeFirst table creation and to `AutoSyncSchema` (hazard
+   #8 above).
+3. **No checksum, no down-migration, no dry-run.** This runner's job is "apply `ALTER` scripts and record
+   what ran" — nothing more. If you need checksums, reversible migrations, or a dry-run mode, use a
+   dedicated tool (DbUp, Flyway, Liquibase) instead; leaving `Database:MigrationsPath` empty disables this
+   mechanism entirely so it does not conflict with one.
+
+### Upgrading core across a fork
+
+The template ships **zero** SQL scripts, and table creation is create-only — it never touches a table
+that already exists. Together, these two facts mean **a change to StruoCMS core's own schema cannot
+automatically reach an existing fork's deployment.**
+
+The practical path:
+
+- Core schema changes are announced in release notes — which table changed, which column, and to what
+  type.
+- Each fork writes its own `ALTER` script(s), for the backend it actually runs, in its own
+  `db/migrations/`, based on that announcement.
+- As a diagnostic aid, you can run `Database:AutoSyncSchema=true` in Development against a **copy** of
+  your production schema to see what CodeFirst's diff would change. Treat that only as a hint about what
+  to write by hand — **the diff's output is not the production execution plan**; the hazard table above
+  (destructive renames, silent truncation, and the rest) applies to that diff exactly as it does
+  anywhere else, so a change the diff proposes is not automatically safe to copy verbatim into a
+  migration script.
 
 ## Startup behavior and failure modes
 
@@ -106,12 +193,13 @@ $ docker exec struo-postgres psql -U struo -d struo_probe -c "SELECT * FROM sche
 
   and the process's own exit code was `1`.
 - **Dev schema guard:** `SchemaGuard.AssertCriticalConstraintsAsync` runs in Development only, after
-  `InitTables` and the migration runner, and asserts that the `revisions` composite UNIQUE index and
-  each configured translation sidecar's UNIQUE `(fk, locale)` index physically exist — throwing
-  `InvalidOperationException` with an actionable message if either is missing, rather than letting the
-  app run with a silent correctness gap. It is a fail-fast dev convenience, not a Production safety net;
-  Production schemas are expected to already carry these indexes from `001-core-baseline.sql` or a
-  fork's own migrations.
+  table creation, the optional `SyncSchema`, and the migration runner, and asserts that the `revisions`
+  composite UNIQUE index and each configured translation sidecar's UNIQUE `(fk, locale)` index
+  physically exist — throwing `InvalidOperationException` with an actionable message if either is
+  missing, rather than letting the app run with a silent correctness gap. It is a fail-fast dev
+  convenience, not a Production safety net — Production schemas are expected to already carry these
+  indexes from CodeFirst table creation or a fork's own migrations, and Production gets no automatic
+  check that they actually do.
 
 ## Logging and log files
 
