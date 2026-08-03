@@ -16,7 +16,7 @@ namespace Struo.Infrastructure.Persistence;
 /// （<see cref="ColumnShape.TimestampWithTimeZone"/>），而非寫死的 vendor 型別字面，因此在五個後端皆可
 /// 建表成功——見 <see cref="ColumnTypeMap"/>。此舉讓「新建立」的追蹤表與既有 PostgreSQL 部署上
 /// （由舊版 runner 建出的）<c>timestamptz</c> 欄位一致。既有的追蹤表本身<b>不會</b>因為這個標記而被改
-/// 動：<see cref="EnsureTrackingTable"/> 只在表不存在時才建立，已存在的表永遠原樣沿用。
+/// 動：<c>MigrationRunner.EnsureTrackingTable</c> 只在表不存在時才建立，已存在的表永遠原樣沿用。
 /// </para>
 /// </summary>
 [SugarTable("schema_migrations")]
