@@ -26,9 +26,9 @@ namespace Struo.Infrastructure.Persistence;
 /// releases (<c>5.1.4.198</c> through <c>5.1.4.211</c>, then <c>5.1.4.214</c> — <c>.212</c>/<c>.213</c>
 /// as of this writing only ever shipped as prerelease builds) sit strictly between that tag and the
 /// pinned <c>5.1.4.215</c>, none of them tagged upstream. The endpoints were bounded, not every commit
-/// in between: the relevant
-/// methods below are byte-identical between the <c>5.1.4.197</c> tag and <c>master</c> as of this
-/// writing (diffed directly), so the divergence risk is low but not zero. <b>This is a
+/// in between: the relevant methods below are byte-identical between the <c>5.1.4.197</c> tag and
+/// <c>master</c> as of this writing (diffed directly), so the divergence risk is low but not zero.
+/// <b>This is a
 /// source-reading conclusion, not a result verified against a live SQL Server or MySQL
 /// instance.</b>
 /// </para>
@@ -83,7 +83,7 @@ namespace Struo.Infrastructure.Persistence;
 /// <c>Realization/MySql/DbMaintenance/MySqlDbMaintenance.cs:537</c>) but also in the modify path
 /// (SqlServer's <c>UpdateColumn</c> calls it at <c>SqlServerDbMaintenance.cs:498</c>; MySQL's
 /// <c>UpdateColumn</c> at <c>MySqlDbMaintenance.cs:612</c>) — both providers' method is defined once,
-/// at <c>SqlServerDbMaintenance.cs:756-770</c> and <c>MySqlDbMaintenance.cs:792-806</c> respectively,
+/// at <c>SqlServerDbMaintenance.cs:756-771</c> and <c>MySqlDbMaintenance.cs:792-808</c> respectively,
 /// and reused by every caller. SqlServer's version only rewrites <c>DataType</c> when it
 /// case-insensitively equals <c>"nvarchar"</c> or <c>"varchar"</c> and <c>Length &lt; 1</c> —
 /// <c>"nvarchar(max)".EqualCase("nvarchar")</c> is <c>false</c>, so the already-parenthesised
