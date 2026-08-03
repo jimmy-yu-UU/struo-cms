@@ -199,6 +199,12 @@ variable first, falling back to the `Testing:PostgresConnection` key in
 `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
 directly against a real PostgreSQL instance.
 
+**Known local-environment flake, unresolved as of 2026-08-03**: `PostgresIntegrationTests` has been
+observed failing 7/8 on the maintainer's machine with a locally-raised Npgsql socket abort on whichever
+test the process happens to schedule first (seen on both `Stale_version_update_conflicts_on_postgres`
+and `Offset_window_is_exact_on_postgres`); the cause is unexplained and not established as a regression
+— a fresh red on this suite should not be assumed to be one you just caused.
+
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
 four standing gates, and is not run by CI.
