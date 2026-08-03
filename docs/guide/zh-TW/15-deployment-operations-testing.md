@@ -160,6 +160,12 @@ template 出貨**零份** SQL 腳本，而且建表是 create-only 的——它�
   的提示——**這份 diff 的輸出並非 production 的執行計畫**；上方的危險情境表(破壞性改名、靜默截斷等)
   對這份 diff 的適用程度，與其他任何地方完全相同，因此 diff 提議的變更並不因此自動變得可以照抄進
   migration 腳本。
+- **會複製 `db/migrations/*.sql` 的部署管線，可能不再自動建立該目錄。** template 現在預設出貨
+  **零份** `.sql` 檔案，而先前一律出貨 `001-core-baseline.sql`；因此一個「複製 `db/migrations/`
+  底下現有內容」的管線步驟，不再保證部署映像中該目錄本身存在。若 `Database:MigrationsPath` 已設定
+  但目錄不存在，啟動時會拋出 `DirectoryNotFoundException`，行程並以結束代碼 `1` 退出(見上方
+  正式環境檢查清單中 `Database:MigrationsPath` 那一列，以及 `db/migrations/README.md` §6 第
+  4 項)。請確認你的管線在此設定值被配置之處，仍會建立該目錄——即使是空的。
 
 ## 啟動行為與失敗模式
 

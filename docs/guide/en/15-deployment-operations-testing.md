@@ -177,6 +177,14 @@ The practical path:
   (destructive renames, silent truncation, and the rest) applies to that diff exactly as it does
   anywhere else, so a change the diff proposes is not automatically safe to copy verbatim into a
   migration script.
+- **A deploy pipeline that copies `db/migrations/*.sql` may no longer create the directory itself.** The
+  template now ships **zero** `.sql` files by default, where it previously always shipped
+  `001-core-baseline.sql`; a pipeline step that copies whatever exists under `db/migrations/` therefore no
+  longer guarantees the directory exists in the deployed image. If `Database:MigrationsPath` is configured
+  and the directory is absent, startup throws `DirectoryNotFoundException` and the process exits with code
+  `1` (see the `Database:MigrationsPath` row in the Production checklist above, and `db/migrations/README.md`
+  §6, item 4). Confirm the pipeline still creates the directory — even empty — wherever this key is
+  configured.
 
 ## Startup behavior and failure modes
 

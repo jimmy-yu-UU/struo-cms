@@ -23,6 +23,9 @@ namespace Struo.Infrastructure.Persistence;
 public sealed class SchemaMigration
 {
     // Length 191：MySQL 舊版 InnoDB 的索引前綴上限為 767 bytes，utf8mb4 下 191*4 = 764 仍可作為主鍵。
+    // 已知且刻意的分歧：新建 PostgreSQL 部署因此得到 varchar(191)，既有部署(舊 runner 手寫 DDL)則是
+    // text——與 AppliedAt 不同，這個欄位當時未被納入「新舊 PostgreSQL 不應分歧」的考量，事後判斷此分歧
+    // 無害(單純檔名字串，兩種型別讀寫結果相同)，因此不比照 AppliedAt 加上 ColumnShape 去追平，維持原樣。
     [SugarColumn(ColumnName = "filename", IsPrimaryKey = true, Length = 191)]
     public string Filename { get; set; } = "";
 
