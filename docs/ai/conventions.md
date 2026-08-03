@@ -107,14 +107,14 @@ Every deployment-tunable value is bound through the `IOptions<T>` pattern from `
 environment-variable overrides (`Section__Key`), never hardcoded in source — `DatabaseOptions`,
 `FileStorageOptions`, `OidcOptions`, `StruoQueryOptions`, `RateLimiting:Login`, `Serilog:*`, and so on
 (`docs/guide/en/03-configuration-reference.md` is the full reference). A relative filesystem path in
-configuration must be resolved against the correct root explicitly — `Struo:Files:ImageTransform:
-CachePath` is resolved against `IHostEnvironment.ContentRootPath`
+configuration must be resolved against the correct root explicitly —
+`Struo:Files:ImageTransform:CachePath` is resolved against `IHostEnvironment.ContentRootPath`
 (`FileStorageServiceCollectionExtensions.cs`), which is the pattern to copy; `Database:MigrationsPath`
 by contrast is passed straight to `Directory.Exists` with no content-root resolution of its own, so it
-**must** be given as an absolute path in Production (`src/Struo.Infrastructure/Persistence/
-MigrationRunner.cs`) — see `docs/guide/en/15-deployment-operations-testing.md`. New tunables should
-follow the `ImageTransform:CachePath` pattern (explicit content-root resolution), not the
-`MigrationsPath` one.
+**must** be given as an absolute path in Production
+(`src/Struo.Infrastructure/Persistence/MigrationRunner.cs`) — see
+`docs/guide/en/15-deployment-operations-testing.md`. New tunables should follow the
+`ImageTransform:CachePath` pattern (explicit content-root resolution), not the `MigrationsPath` one.
 
 ## Immutability
 

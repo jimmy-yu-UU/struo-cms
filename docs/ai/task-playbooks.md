@@ -236,9 +236,9 @@ README.md`.
    to check anymore. If the column is also modeled as an entity property, mark it
    `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
    (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) rather than a PostgreSQL-only `timestamptz`
-   literal, so CodeFirst resolves the
-   matching type per backend and a freshly created table agrees with what this migration adds to an
-   existing one. Hand-writing the DDL directly instead (a column no entity property backs)?
+   literal, so CodeFirst resolves the matching type per backend and a freshly created table agrees with
+   what this migration adds to an existing one. Hand-writing the DDL directly instead (a column no
+   entity property backs)?
    `ColumnTypeMap.cs` centralizes the per-backend literal to copy in — see `db/migrations/README.md` §5
    for the full mapping. Either way, check the target table's actual current column type (the entity
    declaration in `src/`, or the live schema) rather than assuming one. Do not retroactively convert an
