@@ -190,4 +190,44 @@ public class ColumnTypeMapTests
             read.Notes.Should().BeNull();
         }
     }
+
+    [SugarTable("column_shape_precedence_test_entity")]
+    private sealed class ColumnShapePrecedenceTestEntity
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
+        public long Id { get; set; }
+
+        // 同一個屬性上兩種相衝的宣告：dialect-neutral 的 shape 與明寫的 vendor 字面值。
+        [ColumnShape(ColumnShape.LongText)]
+        [SugarColumn(ColumnDataType = "varchar(7)")]
+        public string? Body { get; set; }
+    }
+
+    /// <summary>
+    /// [ColumnShape] 蓋掉屬性上明寫的 [SugarColumn(ColumnDataType = ...)]。這是 fork 最可能誤解的
+    /// 一點（「我明寫的應該贏」），而它會靜默地得到相反結果。優先序來自 EntityService hook 的
+    /// 早退（SqlSugarClientFactory.cs:86-91）；本測試把它從實作細節升格為受檢規格，否則哪天有人
+    /// 重排 hook 分支順序，fork 的 DDL 會無聲改變。
+    /// </summary>
+    [Fact]
+    public void ColumnShape_wins_over_an_explicitly_declared_ColumnDataType()
+    {
+        var db = new SqliteTestDatabase();
+        using (db)
+        {
+            var client = SqlSugarClientFactory.Create(
+                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+                new TestCurrentUserAccessor(Guid.Empty));
+
+            client.CodeFirst.InitTables<ColumnShapePrecedenceTestEntity>();
+
+            var body = client.DbMaintenance
+                .GetColumnInfosByTableName("column_shape_precedence_test_entity", false)
+                .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
+
+            // SQLite 逐字記錄宣告型別（只從中推導 storage affinity），所以這條斷言在 SQLite 上有效。
+            body.DataType.Should().ContainEquivalentOf("text");
+            body.DataType.Should().NotContainEquivalentOf("varchar");
+        }
+    }
 }

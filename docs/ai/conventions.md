@@ -27,6 +27,31 @@ that plainly instead of implying enforcement that does not exist.
   `<subject>.test.ts` for frontend unit tests, co-located next to the source file it covers
   (`frontend/src/lib/buildItemPayload.ts` / `buildItemPayload.test.ts`).
 
+## Column type mapping
+
+When a property needs a DDL column type other than SqlSugar's default C#-type mapping, prefer
+`[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) over a literal
+`[SugarColumn(ColumnDataType = "...")]`: the shape is a dialect-neutral enum member (`LongText`,
+`TimestampWithTimeZone`) that `ColumnTypeMap.For` (`src/Struo.Infrastructure/Persistence/
+ColumnTypeMap.cs`) resolves to the correct per-backend literal inside `SqlSugarClientFactory`'s
+`EntityService` hook, so the same property works unchanged on PostgreSQL, MySQL, SQL Server, Oracle,
+and SQLite. A fork that only ever runs one backend is free to write
+`[SugarColumn(ColumnDataType = "...")]` directly instead — that convention is respected too, just at
+lower precedence.
+
+**Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
+shape and returns before the explicit `ColumnDataType` is ever consulted
+(`SqlSugarClientFactory.cs:86-91`). There is no warning for the conflict; a fork that wants its own
+vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
+`ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
+(`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
+
+Core itself must never write a vendor type literal outside `ColumnTypeMap.cs` — that file is the one
+place in `src/` a string like `"timestamptz"` or `"longtext"` may appear. An empty MySQL/SQL Server/
+Oracle database fails `InitTables` outright on a type name that only exists on PostgreSQL, so any
+`[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go through `[ColumnShape]`
+instead.
+
 ## File organization
 
 Both `Struo.Application` and `Struo.Infrastructure` are organized **by feature area**, not by technical
