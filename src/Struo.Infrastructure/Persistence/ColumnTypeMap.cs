@@ -96,14 +96,13 @@ namespace Struo.Infrastructure.Persistence;
 /// The <see cref="ColumnShape.LongText"/> conclusion above is not limited to properties carrying
 /// <see cref="ColumnShapeAttribute"/>: a multi-value <c>[CmsField]</c> property (a JSON column)
 /// resolves to the identical <c>ColumnTypeMap.For(ColumnShape.LongText, dbType)</c> call inside the
-/// same <c>EntityService</c> hook's JSON-column branch, so
-/// <c>"nvarchar(max)"</c> reaches SQL Server through this route too. The reasoning holds there for
-/// the same reason: that branch sets <c>column.IsJson = true</c> and <c>column.DataType</c> only,
-/// never <c>column.Length</c>, and <c>CodeFirstProvider.EntityColumnToDbColumn</c> does not copy
-/// <c>IsJson</c> into the resulting <c>DbColumnInfo</c> at all — it is not one of the fields its
-/// object initializer sets — so nothing about the JSON route changes the zero-length conclusion. A
-/// fork relying on JSON columns on SQL Server is covered by the same no-op finding as the shaped
-/// properties above.
+/// same <c>EntityService</c> hook's JSON-column branch, so <c>"nvarchar(max)"</c> reaches SQL Server
+/// through this route too. The reasoning holds there for the same reason: that branch sets
+/// <c>column.IsJson = true</c> and <c>column.DataType</c> only, never <c>column.Length</c>, and
+/// <c>CodeFirstProvider.EntityColumnToDbColumn</c> does not copy <c>IsJson</c> into the resulting
+/// <c>DbColumnInfo</c> at all — it is not one of the fields its object initializer sets — so nothing
+/// about the JSON route changes the zero-length conclusion. A fork relying on JSON columns on SQL
+/// Server is covered by the same no-op finding as the shaped properties above.
 /// </para>
 /// </summary>
 internal static class ColumnTypeMap
