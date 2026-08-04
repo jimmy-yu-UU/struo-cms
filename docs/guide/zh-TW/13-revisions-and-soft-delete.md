@@ -230,7 +230,7 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 ### 全域查詢過濾器
 
 這道底線只會在 `SqlSugarClient` 建構時註冊一次，套用到連線範圍所建立的每一個內部內容
-(`SqlSugarClientFactory.cs:140-150`)：
+(在 `SqlSugarClientFactory.Create` 的 `SqlSugarScope` configure-action 中)：
 
 ```csharp
 db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);

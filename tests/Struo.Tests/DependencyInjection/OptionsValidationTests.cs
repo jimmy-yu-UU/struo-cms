@@ -71,24 +71,6 @@ public sealed class OptionsValidationTests
         }
     }
 
-    private static OptionsValidationException? FindOptionsValidation(Exception? ex)
-    {
-        while (ex is not null)
-        {
-            if (ex is OptionsValidationException ove) return ove;
-            if (ex is AggregateException agg)
-            {
-                foreach (var inner in agg.InnerExceptions)
-                {
-                    var found = FindOptionsValidation(inner);
-                    if (found is not null) return found;
-                }
-            }
-            ex = ex.InnerException;
-        }
-        return null;
-    }
-
     [Fact]
     public async Task Host_starts_with_full_valid_configuration()
     {
@@ -100,7 +82,7 @@ public sealed class OptionsValidationTests
     public async Task Missing_database_connection_string_fails_startup()
     {
         var error = await StartupErrorAsync(s => s["Database:ConnectionString"] = "");
-        var ove = FindOptionsValidation(error);
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
         ove.Should().NotBeNull("an empty Database:ConnectionString must fail fast at startup");
         string.Join(" ", ove!.Failures).Should().Contain("ConnectionString");
     }
@@ -109,7 +91,7 @@ public sealed class OptionsValidationTests
     public async Task Query_max_limit_zero_fails_startup()
     {
         var error = await StartupErrorAsync(s => s["Query:MaxLimit"] = "0");
-        var ove = FindOptionsValidation(error);
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
         ove.Should().NotBeNull("Query:MaxLimit below the [Range] floor must fail fast at startup");
         string.Join(" ", ove!.Failures).Should().Contain("MaxLimit");
     }
@@ -124,7 +106,7 @@ public sealed class OptionsValidationTests
             s["Oidc:ClientId"] = "";
             s["Oidc:ClientSecret"] = "test-secret";
         });
-        var ove = FindOptionsValidation(error);
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
         ove.Should().NotBeNull("OIDC enabled without ClientId must fail fast at startup");
         string.Join(" ", ove!.Failures).Should().Contain("Oidc");
     }
