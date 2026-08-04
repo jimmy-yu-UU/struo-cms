@@ -39,6 +39,6 @@ public sealed class OidcOptions
     /// consumed; both of <c>OidcWiring.AddStruoOidc</c>'s binds call this.</summary>
     public void ApplyCollectionDefaults()
     {
-        if (Scopes.Length == 0) Scopes = DefaultScopes;
+        if (Scopes.Length == 0) Scopes = [.. DefaultScopes];
     }
 }

@@ -57,7 +57,7 @@ public sealed class FileStorageOptions
         /// consumed.</summary>
         public void ApplyCollectionDefaults()
         {
-            if (AllowedFormats.Length == 0) AllowedFormats = DefaultAllowedFormats;
+            if (AllowedFormats.Length == 0) AllowedFormats = [.. DefaultAllowedFormats];
         }
     }
 
