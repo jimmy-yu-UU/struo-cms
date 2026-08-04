@@ -30,6 +30,11 @@ namespace Struo.Tests.DependencyInjection;
 /// name as literally spelled in the file is the only thing the two sides share, which is exactly the
 /// coupling under test.
 /// </para>
+/// <para>
+/// Scope: this closes the divergence for the <c>Database</c> section only. The same shipped-file-vs-binder
+/// mismatch is possible for <c>Struo:Files</c>, <c>Oidc</c>, <c>RateLimiting:Login</c>,
+/// <c>Auth:BootstrapAdmin</c> and <c>Branding</c>, none of which is covered here.
+/// </para>
 /// </summary>
 public sealed class ShippedConfigurationBindingTests
 {

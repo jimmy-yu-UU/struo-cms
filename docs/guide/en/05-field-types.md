@@ -129,10 +129,13 @@ JSON-column branch runs, so a property carrying both would keep the shape's colu
 `IsJson` — and with the shape declared `LongText` (the only sensible choice here) both branches resolve
 a JSON-column interface to the same `text`, so losing `IsJson` was the combination's *only* effect,
 reproducing the truncation pitfall above. Symptom: an `InvalidOperationException` naming the property
-and the offending interface — thrown at startup if CodeFirst still has to create that table, otherwise
-on the first operation that touches the entity, on an existing database where the table already exists.
-Fix: remove `[ColumnShape]` from that property — the JSON-column mapping already widens the column to
-`text` *and* sets `IsJson`, so the shape adds nothing. This applies only to the six
+and the offending interface, thrown at **startup** for anything in the `InitTables` set — every
+framework entity plus every `[CmsCollection]` type — whether or not its table already exists, because
+`DatabaseInitializer.CreateMissingTables` asks `EntityMaintenance` for each type's table name to compute
+the missing set, and building that `EntityInfo` runs the hook over every property. Only an entity
+*outside* that set — a fork's own non-collection entity used directly through `ISqlSugarClient` — fails
+on first use instead. Fix: remove `[ColumnShape]` from that property — the JSON-column mapping already
+widens the column to `text` *and* sets `IsJson`, so the shape adds nothing. This applies only to the six
 `JsonColumnInterfaces` (`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`);
 `[ColumnShape]` alongside a content-bearing interface (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`)
 is legal and unchanged, since there both paths agree on `text`.
