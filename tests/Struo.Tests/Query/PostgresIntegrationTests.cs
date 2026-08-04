@@ -49,9 +49,9 @@ public sealed class PostgresIntegrationTests : IDisposable
     //
     // Whichever source wins, the resolved string goes through PgTestConnectionString.DisablePooling:
     // each test here builds and disposes its own client, but Npgsql's pool is process-wide and
-    // outlives them, and reusing a pooled physical connection across test boundaries is what made
-    // exactly one test in this suite abort mid-read. See that class for the full diagnosis and why
-    // this is isolation rather than tolerance.
+    // outlives them, and reuse of a pooled physical connection across a connection-close boundary
+    // (between tests, or between commands within one test) is what made one test in this suite abort
+    // mid-read. See that class for the full diagnosis and why this is isolation rather than tolerance.
     private static string? ResolveConnection()
     {
         var env = Environment.GetEnvironmentVariable(ConnEnv);
