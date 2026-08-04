@@ -19,6 +19,12 @@ file watcher is otherwise active. Where a key has an additional wrinkle beyond "
 example, a value that is only ever consulted the first time a table is created — that is called out
 explicitly below.
 
+**Array-valued settings replace their default, they do not merge with it.** Setting `Oidc:Scopes` or
+`Struo:Files:ImageTransform:AllowedFormats` in your own configuration entirely replaces the built-in
+default listed for it below — it does not add to it. These are the only two array-valued settings in
+this chapter that ship with a non-empty built-in default; every other array-valued setting defaults to
+an empty array, where this distinction does not arise.
+
 ## `Database`
 
 | Key | Type | Default | Effect |
