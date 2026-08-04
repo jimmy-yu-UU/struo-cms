@@ -191,12 +191,11 @@ public sealed class ShippedConfigurationBindingTests
         bound.ImageTransform.DefaultQuality.Should().Be(shippedImage.GetProperty("DefaultQuality").GetInt32());
         bound.ImageTransform.CachePath.Should().Be(shippedImage.GetProperty("CachePath").GetString());
 
-        // NOT asserted here on purpose: ConfigurationBinder appends bound array elements to a non-empty
-        // C# property default instead of replacing them, so AllowedFormats binds to 8 entries (the 4
-        // shipped ones duplicated after the 4 C# defaults), not the 4 the file ships. That is a real
-        // product defect, fixed in the next commit — asserting it here would either be red for a defect
-        // this task does not own, or weakened into a superset check that would stay green through the
-        // very bug Task 2 fixes. Left unasserted rather than either.
+        // Discriminating too, unlike the group above: ImageTransformOptions.AllowedFormats defaults to
+        // [] in C# (ApplyCollectionDefaults supplies DefaultAllowedFormats only when still empty after
+        // binding), so this compares the shipped 4 entries against a genuinely bound value, not a
+        // coincidental match with the default.
+        bound.ImageTransform.AllowedFormats.Should().Equal(StringArray(shippedImage.GetProperty("AllowedFormats")));
     }
 
     [Fact]
@@ -221,21 +220,20 @@ public sealed class ShippedConfigurationBindingTests
 
         // Equal to their C# defaults today; same reasoning as the Files test above. Enabled is the one
         // worth naming: shipped false and default false, so this assertion would NOT notice a section
-        // that stopped binding — the placeholders above are what would. AllowedEmailDomains belongs in
-        // this group too: it ships [] against a C# default of [] (OidcOptions.cs), so — unlike Scopes
-        // just below — the binder-append defect is invisible on it (empty appended to empty is still
-        // empty), which is why it is safe to assert directly here rather than being left out like Scopes.
-        // It still discriminates on file-side key drift only: a renamed shipped key makes GetProperty
-        // throw before this line runs, rather than this Equal() catching a binding failure.
+        // that stopped binding — the placeholders above are what would. AllowedEmailDomains ships []
+        // against a C# default of [] (OidcOptions.cs). It still discriminates on file-side key drift
+        // only: a renamed shipped key makes GetProperty throw before this line runs, rather than this
+        // Equal() catching a binding failure.
         bound.Enabled.Should().Be(shipped.GetProperty("Enabled").GetBoolean());
         bound.CallbackPath.Should().Be(shipped.GetProperty("CallbackPath").GetString());
         bound.ReturnUrlDefault.Should().Be(shipped.GetProperty("ReturnUrlDefault").GetString());
         bound.RequireEmailVerified.Should().Be(shipped.GetProperty("RequireEmailVerified").GetBoolean());
         bound.AllowedEmailDomains.Should().Equal(StringArray(shipped.GetProperty("AllowedEmailDomains")));
 
-        // Scopes NOT asserted here on purpose: OidcOptions.Scopes has a non-empty C# default
-        // (["openid", "email", "profile"]), so ConfigurationBinder appends the shipped 3 entries onto it
-        // instead of replacing it, producing 6 not 3. Real defect, fixed next commit.
+        // Scopes: OidcOptions.Scopes now defaults to [] (ApplyCollectionDefaults supplies DefaultScopes
+        // only when the bound value is still empty), so ConfigurationBinder replaces rather than
+        // appends here and this comparison discriminates cleanly against the shipped 3 entries.
+        bound.Scopes.Should().Equal(StringArray(shipped.GetProperty("Scopes")));
     }
 
     /// <summary>

@@ -20,6 +20,11 @@ public static class FileStorageServiceCollectionExtensions
         services.AddOptions<FileStorageOptions>()
             .BindConfiguration(FileStorageOptions.SectionName)
             .ValidateOnStart();
+        // IPostConfigureOptions runs after all binding and before IValidateOptions (confirmed by
+        // experiment: FileStorageOptionsValidator observes ImageTransform.AllowedFormats already
+        // repopulated by this callback even when the configuration omits the key entirely), so
+        // FileStorageOptionsValidator below still sees a fully-populated object.
+        services.PostConfigure<FileStorageOptions>(options => options.ApplyCollectionDefaults());
         services.AddSingleton<IValidateOptions<FileStorageOptions>, FileStorageOptionsValidator>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<FileStorageOptions>>().Value);
 

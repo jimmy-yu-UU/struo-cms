@@ -9,7 +9,13 @@ public class OidcOptionsTests
     [Fact]
     public void Defaults_are_safe_and_disabled()
     {
+        // Scopes itself is [] on a raw OidcOptions — ConfigurationBinder appends bound array elements
+        // to a non-empty property default instead of replacing it, so the default scopes live in
+        // OidcOptions.DefaultScopes and are applied by ApplyCollectionDefaults (called via
+        // PostConfigure after binding, in production, at both of AddStruoOidc's bind sites). Calling it
+        // here reproduces exactly what a deployment that never configures Scopes ends up with.
         var o = new OidcOptions();
+        o.ApplyCollectionDefaults();
         o.Enabled.Should().BeFalse();
         o.RequireEmailVerified.Should().BeFalse();
         o.CallbackPath.Should().Be("/signin-oidc");
