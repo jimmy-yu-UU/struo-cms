@@ -17,7 +17,7 @@ public class FrameworkEntityTypesTests
 {
     /// <summary>
     /// 刻意不在 All 內的持久化型別。schema_migrations 由 MigrationRunner 自己在不存在時建立
-    /// （MigrationRunner.cs:133-140），刻意不走 EntityTypeCollector——migration 追蹤表必須先於
+    /// （`MigrationRunner.EnsureTrackingTable`），刻意不走 EntityTypeCollector——migration 追蹤表必須先於
     /// 任何 migration 存在。
     /// </summary>
     private static readonly Type[] IntentionallyOutsideAll = [typeof(SchemaMigration)];

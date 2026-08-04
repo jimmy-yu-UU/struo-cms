@@ -79,7 +79,7 @@ the scanned `CollectionMetadata` list. Implementation: `CachedMetadataProvider`
 (`src/Struo.Infrastructure/Metadata/CachedMetadataProvider.cs`), a thin read-only wrapper around the
 list `MetadataScanner.Scan` produced. Registered as a singleton, constructed directly (not via the
 container) in `MetadataServiceCollectionExtensions.AddStruoMetadata`
-(`src/Struo.Infrastructure/DependencyInjection/MetadataServiceCollectionExtensions.cs:26`):
+(`src/Struo.Infrastructure/DependencyInjection/MetadataServiceCollectionExtensions.cs`):
 `services.AddSingleton<IMetadataProvider>(new CachedMetadataProvider(collections))`. This is mostly a
 consumed seam (GraphQL's `StruoTypeModule`, `ItemsController`, `SchemaController` all read from it) —
 a fork extends what it returns by adding `[CmsCollection]` classes to a scanned assembly, not by
@@ -93,7 +93,7 @@ type, field→property map, id property name, lazily-built property-accessor cac
 `EntityRegistry` (`src/Struo.Infrastructure/Metadata/EntityRegistry.cs`), built from
 `MetadataScanner.ScanDescriptors`. Registered as a singleton, same construction pattern:
 `services.AddSingleton<IEntityRegistry>(new EntityRegistry(descriptors))`
-(`MetadataServiceCollectionExtensions.cs:29`).
+(`MetadataServiceCollectionExtensions.cs`).
 
 ### `IEntityTypeCollector`
 
@@ -105,7 +105,7 @@ File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision, 
 Implementation: `EntityTypeCollector` (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`).
 Registered as a singleton via the container:
 `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
-(`MetadataServiceCollectionExtensions.cs:45`). Consumed by `DatabaseInitializer.CreateMissingTables`
+(`MetadataServiceCollectionExtensions.cs`). Consumed by `DatabaseInitializer.CreateMissingTables`
 (`Program.cs`), which runs in every environment, on every backend — table creation is no longer gated to
 Development (see `docs/guide/en/15-deployment-operations-testing.md`, "Schema management").
 
@@ -117,7 +117,7 @@ methods `InboundSetNull`/`InboundCascade` that default to an empty list (so an o
 a test fake, still compiles). Implementation: `RelationshipGraph`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`), which also implements a second interface,
 `IM2MDescriptorSource`. Registered as a singleton, with the **same instance** bound to both interfaces
-plus its own concrete type (`MetadataServiceCollectionExtensions.cs:40-43`):
+plus its own concrete type (`MetadataServiceCollectionExtensions.cs`):
 ```csharp
 var graph = new RelationshipGraph(collections, collectionTypes);
 services.AddSingleton<IRelationshipGraph>(graph);
@@ -135,8 +135,8 @@ implementation: `ItemService` (`src/Struo.Application/Query/ItemService.cs`) —
 few Application-layer classes with real business logic rather than a pure contract; it enforces RBAC
 internally by calling `ICurrentPermissions.CanRead`/`CanWrite`/`CanDelete` before each operation and
 throwing `PermissionDeniedException` on denial. Registered scoped, with `IItemUseCases` resolved from
-the same `ItemService` instance (`src/Struo.Infrastructure/DependencyInjection/
-DataServiceCollectionExtensions.cs:38,41`):
+the same `ItemService` instance in `DataServiceCollectionExtensions.AddStruoData`
+(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`):
 ```csharp
 services.AddScoped<ItemService>();
 services.AddScoped<IItemUseCases>(sp => sp.GetRequiredService<ItemService>());
@@ -157,7 +157,7 @@ override one of them would otherwise silently orphan referential rows on purge, 
 class the defaults exist to prevent. Sole implementation: `SqlSugarItemRepository`
 (`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`). Registered scoped:
 `services.AddScoped<IItemRepository, SqlSugarItemRepository>()`
-(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs:29`). This is the seam
+(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`). This is the seam
 a fork would implement to point at a different storage engine; any replacement must implement the three
 purge primitives explicitly or purge will throw for every collection.
 
@@ -170,7 +170,7 @@ relationship-graph descriptors and junction CLR types live)" specifically so `St
 references SqlSugar internals. Implementation: `RelationExpander`
 (`src/Struo.Infrastructure/Query/RelationExpander.cs`). Registered scoped:
 `services.AddScoped<IRelationExpander, RelationExpander>()`
-(`DataServiceCollectionExtensions.cs:30`).
+(`DataServiceCollectionExtensions.cs`).
 
 ### `IRelationFilterResolver`
 
@@ -181,7 +181,7 @@ queryLocale, ct)` rewrites every dotted (cross-relation) filter node into an own
 sidecar at that locale. Implementation: `RelationFilterResolver`
 (`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`). Registered scoped:
 `services.AddScoped<IRelationFilterResolver, RelationFilterResolver>()`
-(`DataServiceCollectionExtensions.cs:31`).
+(`DataServiceCollectionExtensions.cs`).
 
 See `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md` for the query DSL these four
 query-layer seams jointly implement.
@@ -229,7 +229,7 @@ The extension point for file storage backends is `IFileStorage`
 implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
-(`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs:26-32`) by a
+(`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) by a
 factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, anything else —
 including the default — selects `LocalFileStorage`), registered singleton. Adding a third backend means
 implementing `IFileStorage` and extending that lambda's branch (or switch) to select it. See
@@ -242,8 +242,8 @@ The GraphQL schema's extension point is HotChocolate's own `ITypeModule`, implem
 `IEntityRegistry` as constructor dependencies and, in `CreateTypesAsync`, emits one object type + list wrapper + filter
 input + two root query fields (and, per-collection, mutation fields) for every scanned collection, plus
 shared value types (`TagItem`, `Translation`, the `DeletedFilter` enum, revision types, shared filter
-inputs). Registered in `GraphQlServiceCollectionExtensions`
-(`src/Struo.Api/GraphQl/GraphQlServiceCollectionExtensions.cs:26,47`):
+inputs). Registered in `GraphQlServiceCollectionExtensions.AddStruoGraphQl`
+(`src/Struo.Api/GraphQl/GraphQlServiceCollectionExtensions.cs`):
 ```csharp
 services.AddSingleton<StruoTypeModule>();
 // ...

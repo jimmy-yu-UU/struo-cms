@@ -115,7 +115,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   on REST: the REST write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/
   `ItemService.UpdateCoreAsync` strip only `IsSystem`/`ReadOnly` fields) — a client that already knows a
   hidden field's name can still set it via a normal REST create/update. GraphQL is stricter here:
-  `CollectionSchemaBuilder` (`src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs:156,176,273`) excludes
+  `CollectionSchemaBuilder` (`src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs`) excludes
   `Hidden`/`ReadOnly`/`IsSystem` fields from every create/update input type, so a hidden field never
   appears as a GraphQL mutation argument in the first place. Do not rely on `Hidden` alone as a write
   guard for a privileged column; pair it with `ReadOnly` (or keep the field off the write path some

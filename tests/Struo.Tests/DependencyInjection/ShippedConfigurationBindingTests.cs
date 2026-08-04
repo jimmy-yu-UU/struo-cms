@@ -110,7 +110,8 @@ public sealed class ShippedConfigurationBindingTests
         // below (not off the JsonDocument parse in ShippedSection("Database"), and not off the bound
         // DatabaseOptions). This is load-bearing against the shipped file's own "Database" section
         // going missing or being emptied out: GetChildren() would then be empty and this fails as a
-        // plain assertion, matching the sibling idiom at OptionsValidationTests.cs:170-172 ("鍵被整段
+        // plain assertion, matching the sibling idiom at
+        // OptionsValidationTests.Shipped_appsettings_disables_AutoSyncSchema ("鍵被整段
         // 刪掉時 GetValue<bool> 也會回 false，光斷言 false 會假綠燈"). It does NOT, by itself, catch the
         // section-name divergence this file's Step 3 mutation exercises (BindConfiguration bound to a
         // hardcoded "Db" instead of DatabaseOptions.SectionName) — that mutation lives inside
