@@ -249,7 +249,7 @@ general mechanism.
 ### The global query filter
 
 The floor is registered once, at `SqlSugarClient` construction, for every inner context the connection
-scope creates (`SqlSugarClientFactory.cs:140-150`):
+scope creates (in `SqlSugarClientFactory.Create`'s `SqlSugarScope` configure-action):
 
 ```csharp
 db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
