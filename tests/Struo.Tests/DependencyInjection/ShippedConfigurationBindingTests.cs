@@ -30,10 +30,13 @@ namespace Struo.Tests.DependencyInjection;
 /// default.
 /// </para>
 /// <para>
-/// The expected side below is read with <see cref="JsonDocument"/> by LITERAL path
-/// (<c>"Database"</c>), and the actual side comes entirely from the production binder. The section
-/// name as literally spelled in the file is the only thing the two sides share, which is exactly the
-/// coupling under test.
+/// For the three binder-based tests below (<c>Database</c>, <c>Struo:Files</c>, <c>Oidc</c>), the
+/// expected side is read with <see cref="JsonDocument"/> by LITERAL path (e.g. <c>"Database"</c>), and
+/// the actual side comes entirely from the production binder. The section name as literally spelled in
+/// the file is the only thing the two sides share there, which is exactly the coupling under test. The
+/// two key-shape tests (<c>Branding</c>, <c>RateLimiting:Login</c>) do NOT follow this pattern — they
+/// locate the section through the <c>SectionName</c> constant on both sides, for the reason recorded on
+/// those tests, so this paragraph's guarantee does not extend to them.
 /// </para>
 /// <para>
 /// Scope: <c>Database</c>, <c>Struo:Files</c> and <c>Oidc</c> are covered the same way — shipped file in,
@@ -104,7 +107,7 @@ public sealed class ShippedConfigurationBindingTests
         var configuration = ShippedConfiguration();
 
         // Presence check, read off the SAME IConfiguration instance handed to AddStruoInfrastructure
-        // below (not off the JsonDocument parse in ShippedDatabaseSection, and not off the bound
+        // below (not off the JsonDocument parse in ShippedSection("Database"), and not off the bound
         // DatabaseOptions). This is load-bearing against the shipped file's own "Database" section
         // going missing or being emptied out: GetChildren() would then be empty and this fails as a
         // plain assertion, matching the sibling idiom at OptionsValidationTests.cs:170-172 ("鍵被整段
@@ -218,16 +221,21 @@ public sealed class ShippedConfigurationBindingTests
 
         // Equal to their C# defaults today; same reasoning as the Files test above. Enabled is the one
         // worth naming: shipped false and default false, so this assertion would NOT notice a section
-        // that stopped binding — the placeholders above are what would.
+        // that stopped binding — the placeholders above are what would. AllowedEmailDomains belongs in
+        // this group too: it ships [] against a C# default of [] (OidcOptions.cs), so — unlike Scopes
+        // just below — the binder-append defect is invisible on it (empty appended to empty is still
+        // empty), which is why it is safe to assert directly here rather than being left out like Scopes.
+        // It still discriminates on file-side key drift only: a renamed shipped key makes GetProperty
+        // throw before this line runs, rather than this Equal() catching a binding failure.
         bound.Enabled.Should().Be(shipped.GetProperty("Enabled").GetBoolean());
         bound.CallbackPath.Should().Be(shipped.GetProperty("CallbackPath").GetString());
         bound.ReturnUrlDefault.Should().Be(shipped.GetProperty("ReturnUrlDefault").GetString());
         bound.RequireEmailVerified.Should().Be(shipped.GetProperty("RequireEmailVerified").GetBoolean());
-
-        // Scopes NOT asserted here on purpose, same reason as Files' AllowedFormats above: OidcOptions.Scopes
-        // has a non-empty C# default (["openid", "email", "profile"]), so ConfigurationBinder appends the
-        // shipped 3 entries onto it instead of replacing it, producing 6 not 3. Real defect, fixed next commit.
         bound.AllowedEmailDomains.Should().Equal(StringArray(shipped.GetProperty("AllowedEmailDomains")));
+
+        // Scopes NOT asserted here on purpose: OidcOptions.Scopes has a non-empty C# default
+        // (["openid", "email", "profile"]), so ConfigurationBinder appends the shipped 3 entries onto it
+        // instead of replacing it, producing 6 not 3. Real defect, fixed next commit.
     }
 
     /// <summary>
@@ -280,6 +288,14 @@ public sealed class ShippedConfigurationBindingTests
     /// Comparing the children of the section the <c>SectionName</c> constant names against the options
     /// type's property names catches that in both directions — an unbindable key in the file, and a
     /// property the file forgot to document.
+    /// <para>
+    /// Limit: both sides here are located through the same <c>SectionName</c> constant, and <c>Program</c>
+    /// binds these two sections inline with that same constant. So this test cannot catch the class doc's
+    /// headline scenario for these two sections: if <c>Program</c> is edited to bind a hardcoded literal
+    /// that has drifted from <c>SectionName</c> (and the shipped file is updated to match that same
+    /// literal), production silently reverts to defaults while this test — which never reads
+    /// <c>Program</c> — stays green. This is the same limit the bootstrap-admin test records above.
+    /// </para>
     /// </summary>
     [Fact]
     public void Shipped_appsettings_Branding_keys_match_BrandingOptions() =>
