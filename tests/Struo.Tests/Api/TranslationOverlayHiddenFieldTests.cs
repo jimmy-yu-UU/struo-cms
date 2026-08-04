@@ -61,7 +61,7 @@ public class TranslationOverlayHiddenFieldTests(ApiFactory factory)
     }
 
     /// <summary>Same leak, other overlay call site: <c>ItemService.QueryAsync</c> (list/GET-collection
-    /// path, ItemService.cs:69) shares the exact same <c>TranslationOverlay.ApplyAsync</c> call as the
+    /// path) shares the exact same <c>TranslationOverlay.ApplyAsync</c> call as the
     /// single-item GET tested above, but is a distinct code path (goes through <c>ItemProjector.Project</c>
     /// per-row, not the single-entity overload) -- cheap to pin given the two call sites could drift.</summary>
     [Fact]

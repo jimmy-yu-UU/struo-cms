@@ -122,7 +122,7 @@ public sealed class OptionsValidationTests
     [Fact]
     public void AutoSyncSchema_binds_true_from_configuration()
     {
-        // 這個鍵是 Production 上唯一能觸發破壞性結構同步的開關（Program.cs:204）。若某次改名或改
+        // 這個鍵是 Production 上唯一能觸發破壞性結構同步的開關（見 Program.cs 裡 `if (dbOptions.AutoSyncSchema)` 那條分支）。若某次改名或改
         // section 讓它靜默失聯，行為看起來完全正常（永遠不同步），沒有任何東西會發現它已是死碼。
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
