@@ -207,8 +207,8 @@ public class ColumnTypeMapTests
 
     /// <summary>
     /// [ColumnShape] 蓋掉屬性上明寫的 [SugarColumn(ColumnDataType = ...)]。這是 fork 最可能誤解的
-    /// 一點（「我明寫的應該贏」），而它會靜默地得到相反結果。優先序來自 EntityService hook 的
-    /// 早退（SqlSugarClientFactory.cs:86-91）；本測試把它從實作細節升格為受檢規格，否則哪天有人
+    /// 一點（「我明寫的應該贏」），而它會靜默地得到相反結果。優先序來自 EntityService hook 中
+    /// [ColumnShape] 分支的早退（return）；本測試把它從實作細節升格為受檢規格，否則哪天有人
     /// 重排 hook 分支順序，fork 的 DDL 會無聲改變。
     /// </summary>
     [Fact]

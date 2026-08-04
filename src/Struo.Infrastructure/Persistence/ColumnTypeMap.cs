@@ -96,7 +96,7 @@ namespace Struo.Infrastructure.Persistence;
 /// The <see cref="ColumnShape.LongText"/> conclusion above is not limited to properties carrying
 /// <see cref="ColumnShapeAttribute"/>: a multi-value <c>[CmsField]</c> property (a JSON column)
 /// resolves to the identical <c>ColumnTypeMap.For(ColumnShape.LongText, dbType)</c> call inside the
-/// same <c>EntityService</c> hook (<c>SqlSugarClientFactory.cs:104-108</c>), so
+/// same <c>EntityService</c> hook's JSON-column branch, so
 /// <c>"nvarchar(max)"</c> reaches SQL Server through this route too. The reasoning holds there for
 /// the same reason: that branch sets <c>column.IsJson = true</c> and <c>column.DataType</c> only,
 /// never <c>column.Length</c>, and <c>CodeFirstProvider.EntityColumnToDbColumn</c> does not copy

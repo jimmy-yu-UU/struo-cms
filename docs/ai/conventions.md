@@ -45,9 +45,9 @@ lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted
-(`SqlSugarClientFactory.cs:86-116`, the whole `[ColumnShape]` branch: the shape is read at the top and
-the branch returns at its end). There is no warning for the conflict; a fork that wants its own
-vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
+(`SqlSugarClientFactory`'s `EntityService` hook, the whole `[ColumnShape]` branch: the shape is read
+at the top and the branch returns at its end). There is no warning for the conflict; a fork that
+wants its own vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
 `ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
 (`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
 
