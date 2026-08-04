@@ -36,7 +36,7 @@ namespace Struo.Tests.Support;
 /// was never investigated — the residual unknown recorded in AGENTS.md is what would decide it — and
 /// disabling pooling here removes the repo's only local reproduction of it.
 /// </summary>
-public static class PgTestConnectionString
+internal static class PgTestConnectionString
 {
     // Whole-key match: `Pooling` as a key at the start of the string or after a `;`, up to its `=`.
     // Substring matches (e.g. an "Application Name=Pooling-probe" value) must not count as the key.
