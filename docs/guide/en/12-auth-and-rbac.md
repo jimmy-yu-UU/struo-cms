@@ -162,7 +162,8 @@ tenant pinning ships **fail-closed**:
 | Domain allow-list | `Oidc:AllowedEmailDomains` | `[]` (unrestricted) | Rejects (`DomainNotAllowed`) unless the email's domain is in the list. |
 
 The source itself documents this as an **accepted risk**, not an oversight
-(`OidcOptions`, `src/Struo.Application/Security/OidcOptions.cs:16-22`): because linking is by email
+(`OidcOptions.RequireEmailVerified`/`AllowedTenantId`/`AllowedEmailDomains`,
+`src/Struo.Application/Security/OidcOptions.cs`): because linking is by email
 equality, a deployment that enables OIDC without pinning at least one of these could have a password
 account taken over by any identity provider identity presenting a matching email. A production OIDC
 deployment is expected to constrain it explicitly — a single-tenant `Authority` plus `AllowedTenantId`

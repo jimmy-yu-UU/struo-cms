@@ -150,8 +150,9 @@ Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OnT
 | 電子郵件已驗證 | `Oidc:RequireEmailVerified` | `false` | 除非 token 的 `email_verified` claim 為 `true`，否則拒絕(`EmailNotVerified`)。 |
 | 網域允許清單 | `Oidc:AllowedEmailDomains` | `[]`(不受限) | 除非電子郵件的網域在清單之中，否則拒絕(`DomainNotAllowed`)。 |
 
-原始碼本身明確記載這是一項**可接受的風險**，而非疏漏(`OidcOptions`，
-`src/Struo.Application/Security/OidcOptions.cs:16-22`)：因為連結是以電子郵件相等性為依據，一個在未
+原始碼本身明確記載這是一項**可接受的風險**，而非疏漏
+(`OidcOptions.RequireEmailVerified`/`AllowedTenantId`/`AllowedEmailDomains`，
+`src/Struo.Application/Security/OidcOptions.cs`)：因為連結是以電子郵件相等性為依據，一個在未
 鎖定上述任一道防護的情況下啟用 OIDC 的部署，可能會讓任何身分提供者中出現相符電子郵件的身分接管一個密碼
 帳號。正式環境的 OIDC 部署預期會明確加以限制——單一租戶的 `Authority`，加上 `AllowedTenantId` 和／或
 `AllowedEmailDomains`，並將 `RequireEmailVerified` 設為 `true`——而不是仰賴那組讓本機開發保持零摩擦
