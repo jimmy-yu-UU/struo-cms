@@ -2,6 +2,8 @@ using System.Reflection;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Revisions;
@@ -228,6 +230,107 @@ public class ColumnTypeMapTests
             // SQLite 逐字記錄宣告型別（只從中推導 storage affinity），所以這條斷言在 SQLite 上有效。
             body.DataType.Should().ContainEquivalentOf("text");
             body.DataType.Should().NotContainEquivalentOf("varchar");
+        }
+    }
+
+    [SugarTable("column_shape_json_conflict_test_entity")]
+    private sealed class ColumnShapeJsonConflictTestEntity
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
+        public long Id { get; set; }
+
+        // 同一個屬性上兩種互斥的宣告：dialect-neutral 的 shape，與一個會對映成 JSON 欄位的
+        // [CmsField] 介面。這個組合永遠不是正確的宣告，所以 hook 必須拒絕而非靜默解析。
+        [ColumnShape(ColumnShape.LongText)]
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)]
+        public List<string> Tags { get; set; } = [];
+    }
+
+    /// <summary>
+    /// 走到 shape 分支的早退之前，hook 必須拒絕「[ColumnShape] + JSON-column [CmsField]」。
+    /// 兩條路算出的 DataType 完全相同（都是 LongText），所以這個組合唯一的效果就是丟掉
+    /// <c>IsJson</c>；而少了 IsJson，SqlSugar 根本不會序列化那個 List&lt;&gt;，CodeFirst 也會讓長度
+    /// 保持未設定——在 PostgreSQL 上就是 varchar(1)，任何真實值寫入都會 22001 失敗。
+    /// 也就是說這不是「順序不巧」，而是一個沒有正確用途的宣告。
+    /// </summary>
+    [Fact]
+    public void ColumnShape_combined_with_a_JSON_column_CmsField_is_refused()
+    {
+        var db = new SqliteTestDatabase();
+        using (db)
+        {
+            var client = SqlSugarClientFactory.Create(
+                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+                new TestCurrentUserAccessor(Guid.Empty));
+
+            var act = () => client.CodeFirst.InitTables<ColumnShapeJsonConflictTestEntity>();
+
+            // SqlSugar 在自己的 pipeline 內反射 entity，可能把 hook 丟出的例外包一層，所以沿
+            // inner-exception 鏈找型別，而不是對最外層型別硬斷言——與
+            // OptionsValidationTests.FindOptionsValidation 存在的理由相同。
+            var thrown = act.Should().Throw<Exception>().Which;
+            var guard = FindInvalidOperation(thrown);
+            guard.Should().NotBeNull("hook 必須拒絕 [ColumnShape] 與 JSON-column [CmsField] 併用");
+            guard!.Message.Should().Contain(nameof(ColumnShapeJsonConflictTestEntity.Tags),
+                "訊息必須指名違規的 property，否則讀者無從下手");
+            guard.Message.Should().Contain("Remove [ColumnShape]",
+                "訊息必須直接給出修法");
+        }
+    }
+
+    private static InvalidOperationException? FindInvalidOperation(Exception? ex)
+    {
+        while (ex is not null)
+        {
+            if (ex is InvalidOperationException ioe) return ioe;
+            if (ex is AggregateException agg)
+            {
+                foreach (var inner in agg.InnerExceptions)
+                {
+                    var found = FindInvalidOperation(inner);
+                    if (found is not null) return found;
+                }
+            }
+            ex = ex.InnerException;
+        }
+        return null;
+    }
+
+    [SugarTable("column_shape_content_field_test_entity")]
+    private sealed class ColumnShapeContentFieldTestEntity
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
+        public long Id { get; set; }
+
+        // 合法的組合：content-bearing 介面（非 JSON 欄位）。兩條路都算出 LongText，shape 先贏，
+        // 結果一致，沒有任何東西被丟掉。
+        [ColumnShape(ColumnShape.LongText)]
+        [CmsField(Label = "Body", Interface = FieldInterface.RichText)]
+        public string Body { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 負向控制。守衛必須窄到只擋 JSON-column 介面：shape 與 content-bearing 介面
+    /// （RichText/Textarea/Markdown/Code/Json）併用是合法的，若守衛寫成「任何 [CmsField]」，
+    /// 這條會紅。沒有這條測試，上面那條會允許一個過寬的實作通過。
+    /// </summary>
+    [Fact]
+    public void ColumnShape_combined_with_a_content_bearing_CmsField_is_still_allowed()
+    {
+        var db = new SqliteTestDatabase();
+        using (db)
+        {
+            var client = SqlSugarClientFactory.Create(
+                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+                new TestCurrentUserAccessor(Guid.Empty));
+
+            client.CodeFirst.InitTables<ColumnShapeContentFieldTestEntity>();
+
+            var body = client.DbMaintenance
+                .GetColumnInfosByTableName("column_shape_content_field_test_entity", false)
+                .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
+
+            body.DataType.Should().ContainEquivalentOf("text");
         }
     }
 }
