@@ -266,34 +266,17 @@ public class ColumnTypeMapTests
             var act = () => client.CodeFirst.InitTables<ColumnShapeJsonConflictTestEntity>();
 
             // SqlSugar 在自己的 pipeline 內反射 entity，可能把 hook 丟出的例外包一層，所以沿
-            // inner-exception 鏈找型別，而不是對最外層型別硬斷言——與
-            // OptionsValidationTests.FindOptionsValidation 存在的理由相同。
+            // inner-exception 鏈找型別，而不是對最外層型別硬斷言——用共用的
+            // ExceptionChainSearch.FindInner，與 OptionsValidationTests 那邊用的是同一個
+            // helper，理由相同。
             var thrown = act.Should().Throw<Exception>().Which;
-            var guard = FindInvalidOperation(thrown);
+            var guard = ExceptionChainSearch.FindInner<InvalidOperationException>(thrown);
             guard.Should().NotBeNull("hook 必須拒絕 [ColumnShape] 與 JSON-column [CmsField] 併用");
             guard!.Message.Should().Contain(nameof(ColumnShapeJsonConflictTestEntity.Tags),
                 "訊息必須指名違規的 property，否則讀者無從下手");
             guard.Message.Should().Contain("Remove [ColumnShape]",
                 "訊息必須直接給出修法");
         }
-    }
-
-    private static InvalidOperationException? FindInvalidOperation(Exception? ex)
-    {
-        while (ex is not null)
-        {
-            if (ex is InvalidOperationException ioe) return ioe;
-            if (ex is AggregateException agg)
-            {
-                foreach (var inner in agg.InnerExceptions)
-                {
-                    var found = FindInvalidOperation(inner);
-                    if (found is not null) return found;
-                }
-            }
-            ex = ex.InnerException;
-        }
-        return null;
     }
 
     [SugarTable("column_shape_content_field_test_entity")]
