@@ -50,6 +50,20 @@ vendor literal to win on a shaped property must remove `[ColumnShape]` from it. 
 `ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
 (`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
 
+**A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
+`InvalidOperationException` naming the property when `[ColumnShape]` co-occurs with a
+`JsonColumnInterfaces` member (`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`).
+The shape branch's early return outranks the later JSON branch, which sets both `IsJson = true` and a
+widened `DataType`; since both branches resolve a JSON-column interface to the same `LongText`
+literal, the combination's only effect was silently dropping `IsJson`, and without it SqlSugar never
+serializes the collection and the column takes CodeFirst's unset length — `varchar(1)` on PostgreSQL,
+which rejects every real value with 22001. Remove `[ColumnShape]` from such a property; the JSON
+mapping already applies `LongText`. A **content-bearing** interface
+(`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal — both paths compute
+`LongText`, so nothing is lost. Pinned by
+`ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused` and
+`..._combined_with_a_content_bearing_CmsField_is_still_allowed`.
+
 Core itself must never write a vendor type literal outside `ColumnTypeMap.cs` — that file is the one
 place in `src/` a string like `"timestamptz"` or `"longtext"` may appear. An empty MySQL/SQL Server/
 Oracle database fails `InitTables` outright on a type name that only exists on PostgreSQL, so any

@@ -119,6 +119,19 @@ CodeFirst 的欄位長度保持未設定，而 Postgres 對此的預設值是 `v
 慣例之外的屬性上自行設定 `[SugarColumn(IsJson = true)]`，就必須同時設定
 `ColumnDataType = "text"`。
 
+**JSON 欄位上加 `[ColumnShape]` 會被拒絕。** 原因:CodeFirst hook 解析明寫的
+`[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) 之後就會早退，不會走到它的
+JSON 欄位分支;因此一個同時帶著兩者的屬性會保留 shape 的欄位型別、並丟掉 `IsJson`——而由於兩條路
+對 JSON 欄位介面都解析出同一個 `text`，丟掉 `IsJson` 就是這個組合*唯一*的效果，正好重現上面那個
+截斷陷阱。徵狀:擲出 `InvalidOperationException`，訊息會指名該屬性與違規的介面——如果 CodeFirst
+仍須建立該資料表，這會在啟動時發生;若是在資料表已存在的既有資料庫上，則會發生在第一次觸及該
+entity 的操作時。
+修法:把 `[ColumnShape]` 從該屬性上移除——JSON 欄位的對映本來就會把欄位加寬為 `text` *並且*設定
+`IsJson`，shape 沒有帶來任何東西。這只適用於六個 `JsonColumnInterfaces`
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`);`[ColumnShape]` 與承載內容
+介面 (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) 併用是合法的，也未改變,因為那裡兩條路對
+`text` 的結論一致。
+
 **在其 `JsonDocument` 被釋放之後，再讀取 `JsonElement` 會擲出例外。** 原因:`System.Text.Json` 的
 `JsonElement` 只有在產生它的 `JsonDocument` 仍存活時才有效;用 `using var doc =
 JsonDocument.Parse(raw)` 解析 `Json` 欄位的原始儲存文字，然後在那個 `using` 區塊的範圍之外回傳或

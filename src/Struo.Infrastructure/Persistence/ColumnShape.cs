@@ -40,13 +40,25 @@ public enum ColumnShape
 /// <c>ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType</c>.
 /// </para>
 /// <para>
-/// That same early <c>return</c> also outranks the hook's later multi-value <c>[CmsField]</c> JSON
-/// branch (<c>SqlSugarClientFactory.cs:103-109</c>), which otherwise sets both
-/// <c>column.IsJson = true</c> and a widened <c>DataType</c> for a JSON-column field interface. A
-/// property that carries both <see cref="ColumnShapeAttribute"/> and a JSON-column
-/// <c>[CmsField]</c> interface never reaches that branch, so it silently loses <c>IsJson = true</c>
-/// — only the shape's <c>DataType</c> is applied. Do not combine <see cref="ColumnShapeAttribute"/>
-/// with a multi-value/JSON <c>[CmsField]</c> interface on the same property.
+/// Combining this attribute with a JSON-column <c>[CmsField]</c> interface (the multi-value selects,
+/// <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>) is <b>refused</b>: the hook throws an
+/// <see cref="InvalidOperationException"/> naming the property, either at startup — if CodeFirst still
+/// has to create that entity's table — or on the first operation that reflects the entity, on an
+/// existing database where the table is already present. It used to be resolved silently, and
+/// the result was always broken — the early <c>return</c> here outranks the hook's later JSON branch
+/// (<c>SqlSugarClientFactory.cs:103-109</c>), which sets both <c>column.IsJson = true</c> and a
+/// widened <c>DataType</c>, so the property kept the <c>DataType</c> and lost <c>IsJson</c>. Since
+/// both branches resolve a JSON-column interface to the same <see cref="ColumnShape.LongText"/>
+/// literal, losing <c>IsJson</c> was the combination's only effect, and without it SqlSugar never
+/// serializes the collection and CodeFirst leaves the length unset — <c>varchar(1)</c> on PostgreSQL,
+/// where every write of a real value fails with 22001. Pinned by
+/// <c>ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused</c>.
+/// </para>
+/// <para>
+/// A <b>content-bearing</b> <c>[CmsField]</c> interface (<c>RichText</c>, <c>Textarea</c>,
+/// <c>Markdown</c>, <c>Code</c>, <c>Json</c>) is a different case and stays legal: both paths resolve
+/// to <see cref="ColumnShape.LongText"/>, the shape simply wins first, and nothing is lost. Pinned by
+/// <c>ColumnTypeMapTests.ColumnShape_combined_with_a_content_bearing_CmsField_is_still_allowed</c>.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
