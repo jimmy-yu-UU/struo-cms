@@ -64,6 +64,15 @@ that do not yet exist, on any backend, in any environment.
 `Database:AutoSyncSchema` (bool, default `false`, Development-only — chapter 3) turns on a full CodeFirst
 structural sync against tables that already exist, allowing SqlSugar to add, modify and drop columns to
 match the entity classes exactly. It is powerful, and on a table holding data you care about, dangerous.
+Measured directly on real PostgreSQL, a removed column really is dropped
+(`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`). On SQLite the
+identical unfiltered call leaves the column in place instead
+(`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because SQLite
+or SqlSugar's SQLite dialect lacks the capability (SqlSugar's `SqliteCodeFirst.ExistLogic` does
+implement `DROP COLUMN`), but because that code path is gated behind
+`ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`, which this repository's
+`SqlSugarClientFactory` never sets (row 7 below has the detail). So this repository's SQLite-only CI
+suite cannot demonstrate that a removed column is actually dropped; only the live PostgreSQL run does.
 The governing rule:
 
 > Any structural change that touches existing data must go through a migration. `AutoSyncSchema` is
@@ -78,7 +87,7 @@ The governing rule:
 | 4 | Add a `NOT NULL` column to an existing populated table | `ALTER` fails, startup aborts | Three-step migration: add it nullable first → backfill → then add the `NOT NULL` constraint |
 | 5 | Add `UNIQUE` to a column that already has duplicate values | `ALTER` fails, startup aborts | Migration deduplicates first (a data operation), then adds the constraint |
 | 6 | Split/merge columns, or extract a new table | A structural diff cannot express this intent; the result is always either data loss or empty columns | Always a migration |
-| 7 | Dropping a column on the SQLite backend | SQLite has supported `ALTER TABLE … DROP COLUMN` since 3.35.0 (2021), but refuses it when the column is a `PRIMARY KEY`, is `UNIQUE`, is indexed, or is referenced by a generated column, a partial index, a trigger, or a view | Backend behavior differs — never assume every engine behaves the same way |
+| 7 | Dropping a column on the SQLite backend | Measured (SqlSugarCore 5.1.4.215): a removed column survives on SQLite in this repository (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) because `SqliteCodeFirst.ExistLogic` gates every drop attempt behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`, which this repository's `SqlSugarClientFactory` never sets. Verified against upstream (tag `5.1.4.197`): the drop set itself is unfiltered — `Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs:24-27` puts *every* removed column into `dropColumns`, `PRIMARY KEY`/`UNIQUE`/indexed included, with no exclusion — and the actual drop, `DbMaintenance.DropColumn` (`Abstract/DbMaintenanceProvider/Methods.cs:532-538`), just formats `SqliteDbMaintenance`'s `DropColumnToTableSql` (`Realization/Sqlite/DbMaintenance/SqliteDbMaintenance.cs:118-124`, plain `ALTER TABLE {0} DROP {1}`) and executes it — no table-rebuild fallback, and `SqliteDbMaintenance` does not override `DropColumn` itself. So a fork that turns the flag on gets more than one outcome, not a uniform unlock: an ordinary column drops silently; a column SQLite itself refuses to drop natively (e.g. `PRIMARY KEY`, `UNIQUE`, indexed, referenced by a `CHECK` constraint or a `FOREIGN KEY`, or referenced by a generated column, a partial index, a trigger, or a view; native support since SQLite 3.35.0, 2021) makes the raw `ALTER TABLE` fail and the exception propagate — the sync throws and startup aborts; it is **not** dropped | This repository's configuration is why the column survives here — but flipping the flag does not uniformly "unlock" SQLite drops: it trades silent data loss for ordinary columns against a hard startup failure for restricted ones. Never assume a backend's own native DDL capability is what SqlSugar's CodeFirst sync actually does on it — verify per backend, as this repository does for PostgreSQL |
 | 8 | Multiple replicas (`replicas > 1`) starting concurrently | Every replica computes and runs its own DDL diff at the same time — a race | See "Known limits" below |
 | 9 | Wanting to preview a deployment | The DDL that will run **cannot be previewed** — it is computed from the live code diff at startup | This is the core reason `AutoSyncSchema` is never meant to be turned on in Production |
 

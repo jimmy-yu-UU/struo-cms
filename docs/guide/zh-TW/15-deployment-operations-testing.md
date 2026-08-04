@@ -59,7 +59,16 @@ Schema 管理依**職責**、而非依環境，拆分為三層：
 
 `Database:AutoSyncSchema`(bool，預設 `false`，僅限 Development——第 3 章)會開啟針對既有資料表的
 完整 CodeFirst 結構同步，允許 SqlSugar 依 entity 類別完全比照新增、修改與刪除欄位。它很強大，而在一張
-存有你在乎的資料的資料表上，它很危險。總則：
+存有你在乎的資料的資料表上，它很危險。經實測，在真正的 PostgreSQL 上，被移除的欄位確實會被刪除
+(`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`)。在 SQLite 上，
+同一個未過濾呼叫卻會把該欄位原封不動地留下
+(`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`)——原因並不是 SQLite
+或 SqlSugar 的 SQLite dialect 缺少這個能力(SqlSugar 的 `SqliteCodeFirst.ExistLogic` 確實實作了
+`DROP COLUMN`)，而是這段程式碼被把關在
+`ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn` 之後，而這個儲存庫的
+`SqlSugarClientFactory` 從未設定過 `MoreSettings`(細節見下方第 7 項)。因此這個儲存庫只跑 SQLite 的
+CI 套件，無法證明被移除的欄位真的會被刪除；只有那次真實的 PostgreSQL 執行才證得出來。
+總則：
 
 > 任何涉及既有資料的結構變更，一律走 migration。`AutoSyncSchema` 僅適用於 Development 中尚無正式資料
 > 的 schema 快速迭代。
@@ -72,7 +81,7 @@ Schema 管理依**職責**、而非依環境，拆分為三層：
 | 4 | 對既有資料表新增 `NOT NULL` 欄位 | ALTER 失敗，啟動中斷 | migration 三步：先加可空欄位 → 回填 → 再加 NOT NULL 約束 |
 | 5 | 對含重複值的欄位加 UNIQUE | ALTER 失敗，啟動中斷 | migration 先去重(資料操作)→ 再加約束 |
 | 6 | 拆分／合併欄位、抽出獨立表 | 結構 diff 無法表達此意圖，結果必為資料遺失或空欄位 | 一律 migration |
-| 7 | SQLite 後端刪欄位 | SQLite 自 3.35.0(2021 年)起已支援 `ALTER TABLE … DROP COLUMN`，但當該欄位是 `PRIMARY KEY`、是 `UNIQUE`、已建立索引，或被某個 generated column、partial index、trigger 或 view 參照時，會拒絕執行 | 後端差異，勿假設各引擎行為一致 |
+| 7 | SQLite 後端刪欄位 | 實測(SqlSugarCore 5.1.4.215)：在這個儲存庫裡，被移除的欄位在 SQLite 上會存活下來(`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`)，原因是 `SqliteCodeFirst.ExistLogic` 把每一次刪除嘗試都把關在 `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn` 之後，而這個儲存庫的 `SqlSugarClientFactory` 從未設定過它。對照上游(tag `5.1.4.197`)驗證過：要刪除的集合本身沒有過濾——`Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs:24-27` 把*每一個*被移除的欄位都放進 `dropColumns`，`PRIMARY KEY`、`UNIQUE`、已索引的欄位都不例外，完全沒有排除；而真正執行刪除的 `DbMaintenance.DropColumn`(`Abstract/DbMaintenanceProvider/Methods.cs:532-538`)只是把 `SqliteDbMaintenance` 的 `DropColumnToTableSql`(`Realization/Sqlite/DbMaintenance/SqliteDbMaintenance.cs:118-124`，純粹的 `ALTER TABLE {0} DROP {1}`)格式化後直接執行——沒有任何 table-rebuild 的後備方案，`SqliteDbMaintenance` 也沒有覆寫 `DropColumn` 本身。所以一個把這個旗標打開的 fork，得到的結果不只一種，也不是均勻解鎖：一個普通欄位會被靜默刪除；一個 SQLite 自身原生就會拒絕刪除的欄位(例如 `PRIMARY KEY`、`UNIQUE`、已建立索引、被 `CHECK` 約束或 `FOREIGN KEY` 參照，或被某個 generated column、partial index、trigger 或 view 參照；原生支援自 SQLite 3.35.0 起，2021 年)會讓那句原生 `ALTER TABLE` 失敗、例外往外拋——同步會丟例外，啟動中斷；它**不會**被刪除 | 欄位在這裡會存活下來，原因是這個儲存庫的設定——但打開這個旗標並不會讓 SQLite 均勻地「解鎖」刪欄位：它是用普通欄位的靜默資料遺失，換來受限欄位的啟動硬失敗。勿假設某後端自身原生支援的 DDL 能力，等同於 SqlSugar 的 CodeFirst 同步在該後端上實際做的事——請逐一後端驗證，如同這個儲存庫對 PostgreSQL 所做的 |
 | 8 | 多副本(`replicas > 1`)同時啟動 | 各副本同時進行 DDL diff 與執行，存在競態 | 見下方「已知限制」 |
 | 9 | 想預覽部署 | **無法預覽**將執行的 DDL(啟動時由 code diff 即時計算) | 這正是不在 Production 啟用的核心理由 |
 

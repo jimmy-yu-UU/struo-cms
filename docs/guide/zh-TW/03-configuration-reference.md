@@ -23,7 +23,7 @@
 | `Database:DbType` | enum: `PostgreSQL`\|`MySql`\|`SqlServer`\|`Sqlite`\|`Oracle` | `PostgreSQL` | 選擇 SqlSugar 後端。只有 `PostgreSQL` 是經驗證的執行期目標;`Sqlite` 僅用於測試;`MySql`/`SqlServer`/`Oracle` 雖有型別對應但屬實驗性質。 |
 | `Database:ConnectionString` | string，必填 | 無——出貨時為 `REPLACE_ME` 預留值 | 所選引擎的 ADO.NET 連線字串。缺少或空值會導致啟動失敗 (`[Required]` + `ValidateOnStart`)，而不是在第一次查詢時才浮現令人困惑的失敗。 |
 | `Database:MigrationsPath` | string?，選填 | 空白/未設定 (停用) | 已審查的 `*.sql` migration 腳本所在目錄，由 `MigrationRunner` 在啟動時套用。會在**每一個**已設定的後端上執行，不只 PostgreSQL——一支針對錯誤後端撰寫的腳本，只會在套用時單純失敗;沒有任何 per-backend 的守衛。留空會在任何後端上完全停用這個 runner。這是三層 schema 管理機制之一，另外兩層是建表(全環境無條件執行，不需要任何設定)與下方的 `Database:AutoSyncSchema`——完整全貌見第 15 章。 |
-| `Database:AutoSyncSchema` | bool | `false` | 讓 CodeFirst 對已存在的資料表執行一次完整的結構同步——新增、修改，以及**刪除**欄位——直接由 entity 類別驅動。只有在 Development 才會生效;在其他任何環境設為 `true`，都會被忽略並記錄一則警告，而不會被採納。預設關閉，因為對一張已經存有資料的資料表而言，這可能會靜默地摧毀資料(例如一次欄位改名，會被讀成「刪一欄、加一欄」)——第 15 章的九項危險情境表完整涵蓋這一點。 |
+| `Database:AutoSyncSchema` | bool | `false` | 讓 CodeFirst 對已存在的資料表執行一次完整的結構同步——新增、修改，以及**刪除**欄位——直接由 entity 類別驅動。只有在 Development 才會生效;在其他任何環境設為 `true`，都會被忽略並記錄一則警告，而不會被採納。預設關閉，因為對一張已經存有資料的資料表而言，這可能會靜默地摧毀資料(例如一次欄位改名，會被讀成「刪一欄、加一欄」)——第 15 章的九項危險情境表完整涵蓋這一點。「刪除」這一半本身依後端／設定而異，並非放諸四海皆準：在 PostgreSQL 上實測會發生;在 SQLite 上實測不會，因為 SqlSugar 把 SQLite 的 `DROP COLUMN` 把關在一個這個儲存庫從未設定過的 `ConnectionConfig.MoreSettings` 旗標之後——細節見第 15 章第 7 項。 |
 
 以上四項都需要重新啟動才會生效。
 
