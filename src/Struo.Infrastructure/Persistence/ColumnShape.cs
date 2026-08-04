@@ -48,12 +48,11 @@ public enum ColumnShape
 /// resolved silently, and the result was always broken — the early <c>return</c> here outranks the
 /// hook's later JSON branch, which sets both <c>column.IsJson = true</c> and a widened
 /// <c>DataType</c>, so the property kept the <c>DataType</c> and lost <c>IsJson</c>. Both branches
-/// resolve a JSON-column interface to
-/// <see cref="ColumnShape.LongText"/>, so with the shape declared as that same value — the only
-/// sensible choice here — losing <c>IsJson</c> was the combination's only effect, and without it
-/// SqlSugar never serializes the collection and CodeFirst leaves the length unset —
-/// <c>varchar(1)</c> on PostgreSQL, where every write of a real value fails with 22001. Pinned by
-/// <c>ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused</c>.
+/// resolve a JSON-column interface to <see cref="ColumnShape.LongText"/>, so with the shape declared
+/// as that same value — the only sensible choice here — losing <c>IsJson</c> was the combination's
+/// only effect, and without it SqlSugar never serializes the collection and CodeFirst leaves the
+/// length unset — <c>varchar(1)</c> on PostgreSQL, where every write of a real value fails with 22001.
+/// Pinned by <c>ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused</c>.
 /// </para>
 /// <para>
 /// A <b>content-bearing</b> <c>[CmsField]</c> interface (<c>RichText</c>, <c>Textarea</c>,
