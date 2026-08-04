@@ -46,10 +46,16 @@ public sealed class PostgresIntegrationTests : IDisposable
     // Connection resolution (in order): the STRUO_TEST_PG_CONNECTION env var (CI / one-off), else the
     // Struo.Api appsettings key Testing:PostgresConnection (appsettings.Development.json overrides
     // appsettings.json) — so it's configured in the same place as the dev DB. Empty/absent -> skip.
+    //
+    // Whichever source wins, the resolved string goes through PgTestConnectionString.DisablePooling:
+    // each test here builds and disposes its own client, but Npgsql's pool is process-wide and
+    // outlives them, and reusing a pooled physical connection across test boundaries is what made
+    // exactly one test in this suite abort mid-read. See that class for the full diagnosis and why
+    // this is isolation rather than tolerance.
     private static string? ResolveConnection()
     {
         var env = Environment.GetEnvironmentVariable(ConnEnv);
-        if (!string.IsNullOrWhiteSpace(env)) return env;
+        if (!string.IsNullOrWhiteSpace(env)) return PgTestConnectionString.DisablePooling(env);
 
         var apiDir = FindApiDir();
         if (apiDir is null) return null;
@@ -58,7 +64,7 @@ public sealed class PostgresIntegrationTests : IDisposable
             .AddJsonFile(Path.Combine(apiDir, "appsettings.Development.json"), optional: true)
             .Build();
         var conn = config["Testing:PostgresConnection"];
-        return string.IsNullOrWhiteSpace(conn) ? null : conn;
+        return string.IsNullOrWhiteSpace(conn) ? null : PgTestConnectionString.DisablePooling(conn);
     }
 
     private static string? FindApiDir()
