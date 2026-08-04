@@ -202,15 +202,49 @@ variable first, falling back to the `Testing:PostgresConnection` key in
 `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
 directly against a real PostgreSQL instance.
 
-**Known local-environment flake, unresolved as of 2026-08-03**: on the maintainer's machine,
-`PostgresIntegrationTests` has 1 of its 8 tests go red — not 7 of 8 — with a locally-raised Npgsql
-socket abort on whichever test the process happens to schedule first (seen on both
-`Stale_version_update_conflicts_on_postgres` and `Offset_window_is_exact_on_postgres`); it reproduced in
-9 of 11 runs. This batch's load-bearing test,
-`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`, passed in all 11 of
-those runs. The cause is unexplained, but it is not new to this branch: the same abort (same
+**Local-environment flake, diagnosed and fixed 2026-08-04**: on the maintainer's machine,
+`PostgresIntegrationTests` had 1 of its 8 tests go red — not 7 of 8 — with a locally-raised Npgsql
+socket abort (seen on both `Stale_version_update_conflicts_on_postgres` and
+`Offset_window_is_exact_on_postgres`); it reproduced in 9 of 11 runs. The load-bearing test of the batch
+that first hit it, `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`,
+passed in all 11 of those runs. It was not caused by that branch: the same abort (same
 `Offset_window_is_exact_on_postgres` failure, same stack trace) reproduced at the merge-base `74c5dcc`
-too, in 5 of 6 runs — a fresh red on this suite should not be assumed to be one you just caused.
+too, in 5 of 6 runs — so if a red reappears on this suite, check whether pooling was re-enabled before
+assuming you caused it.
+
+The cause was **reuse of a pooled Npgsql physical connection across a connection-close boundary**, within
+or between tests. Each test builds and disposes its own `ISqlSugarClient`, but the pool is process-wide
+and outlives all of them, so a connector whose socket I/O had already been aborted client-side could be
+drawn again and die on its first read. The exception chain is `NpgsqlException: Exception while reading
+from stream` → `IOException: Unable to read data from the transport connection` → `SocketException`
+carrying the Windows `WSA_OPERATION_ABORTED` text ("the I/O operation has been aborted because of either
+a thread exit or an application request"). The fix is `PgTestConnectionString.DisablePooling`, applied to
+whichever source resolves the connection, so each test gets its own physical connection; that class
+carries the full write-up. This is test isolation, not tolerance — no retry, no swallowed exception, no
+relaxed assertion — and every test still runs real DDL and DML against a real PostgreSQL. Scoped to the
+harness: whether a pooled production process on Windows can hit the same abort was **not** investigated
+— the abort did surface inside product code, `SqlSugarItemRepository.CreateGenericAsync`, on a pooled
+connection — and the residual unknown below is what would decide it. Disabling pooling here also removes
+the repo's only local reproduction of the abort.
+
+Two observations the mechanism does **not** account for, recorded so they are not mistaken for settled:
+one run went red on the *first* test executed, when the process had touched PostgreSQL zero times and
+the pool was still empty, so a preceding test is not required (reuse across close boundaries *within* one
+test explains that run, and is equally addressed by the fix); and in full-suite order the failure landed
+on the third test executed, meaning the test right after the first one passed even though it is the one
+that would draw the connector the first test poisoned. Which test goes red is not a stable property —
+it was `Offset_window_is_exact_on_postgres` in most runs and `Stale_version_update_conflicts_on_postgres`
+in one, and in two-test subsets it failed second rather than third.
+
+What the diagnosis ruled out, so nobody repeats it: the failing test's own logic (it passes 5/5 as the
+only test in the process); a cold-start/first-connection effect (a warm-up connection opened before the
+test's own client left it red 4 of 5); the server side (PostgreSQL logged no error for any of ~20 runs,
+and `log_min_messages=warning` would have shown one — connections were 11 of a 100 ceiling, with no
+`statement_timeout` or idle-in-transaction timeout set); and a specific poisoning predecessor (the test
+fails after *any* other test in the suite, whichever one, and is green alone). Pooling was confirmed as
+*necessary* for the failure, both directions: green 5/5 with `Pooling=false`, red in 8 of 9 runs with
+pooling on. One residual unknown: *what* aborts the socket is inferred from the Windows error code — a
+thread-exit I/O cancellation, xUnit's worker threads being the plausible source — but was not proven.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the

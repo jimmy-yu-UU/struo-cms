@@ -86,6 +86,31 @@ public static class SqlSugarClientFactory
                     var shape = property.GetCustomAttribute<ColumnShapeAttribute>()?.Shape;
                     if (shape is not null)
                     {
+                        // Refused, not silently resolved. The JSON-column branch below sets BOTH
+                        // IsJson and a widened DataType; this early return would keep only the
+                        // DataType. The DataType the two branches compute for a JSON-column
+                        // interface is identical (both LongText), so the combination's only effect
+                        // is losing IsJson — and without IsJson SqlSugar never serializes the
+                        // List<>/Dictionary<> and CodeFirst leaves the length unset, which is
+                        // varchar(1) on PostgreSQL: every write of a real value fails with 22001.
+                        // There is nothing a caller could want here, so this is a declaration error,
+                        // not a precedence question.
+                        //
+                        // Deliberately narrowed to JsonColumnInterfaces. A shape combined with a
+                        // content-bearing interface (RichText/Textarea/Markdown/Code/Json) is legal:
+                        // both paths compute LongText, the shape simply wins first, and nothing is
+                        // lost. Pinned by
+                        // ColumnTypeMapTests.ColumnShape_combined_with_a_content_bearing_CmsField_is_still_allowed.
+                        var shapedField = property.GetCustomAttribute<CmsFieldAttribute>();
+                        if (shapedField is not null && JsonColumnInterfaces.Contains(shapedField.Interface))
+                        {
+                            throw new InvalidOperationException(
+                                $"'{property.DeclaringType?.FullName}.{property.Name}' carries both [ColumnShape] and " +
+                                $"[CmsField(Interface = FieldInterface.{shapedField.Interface})], which maps to a JSON " +
+                                "column. Remove [ColumnShape] from this property: the JSON-column mapping already " +
+                                "applies the LongText shape, and it also sets IsJson, which [ColumnShape] alone does not.");
+                        }
+
                         column.DataType = ColumnTypeMap.For(shape.Value, dbType);
                         return;
                     }

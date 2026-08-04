@@ -4,6 +4,15 @@ Conventions that apply across the backend and frontend. Where a convention is en
 the compiler, this document says so and names the mechanism; where it is a convention only, it says
 that plainly instead of implying enforcement that does not exist.
 
+## Citing code from docs and comments
+
+When documentation or a comment points **into this repository's own code**, cite the construct — a
+class, method, branch, or a distinguishing property — rather than a line range, because line ranges
+rot silently the first time someone inserts above them and nothing in CI catches it.
+The deliberate exception is a citation into **pinned upstream SqlSugar source**, as in
+`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`: that source is version-pinned and cannot
+shift underneath us, so a line range there stays valid.
+
 ## Naming
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.
@@ -45,10 +54,26 @@ lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted
-(`SqlSugarClientFactory.cs:86-91`). There is no warning for the conflict; a fork that wants its own
-vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
+(`SqlSugarClientFactory`'s `EntityService` hook, the whole `[ColumnShape]` branch: the shape is read
+at the top and the branch returns at its end). There is no warning for the conflict; a fork that
+wants its own vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
 `ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
 (`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
+
+**A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
+`InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
+co-occurs with a `JsonColumnInterfaces` member
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`). The shape branch's early return
+outranks the later JSON branch, which sets both `IsJson = true` and a widened `DataType`; both
+branches resolve a JSON-column interface to `LongText`, so with the shape declared `LongText` — the
+only sensible choice here — the combination's only effect was silently dropping `IsJson`, and without
+it SqlSugar never serializes the collection and the column takes CodeFirst's unset length —
+`varchar(1)` on PostgreSQL, which rejects every real value with 22001. Remove `[ColumnShape]` from
+such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
+(`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal — both paths compute
+`LongText`, so nothing is lost. Pinned by
+`ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused` and
+`..._combined_with_a_content_bearing_CmsField_is_still_allowed`.
 
 Core itself must never write a vendor type literal outside `ColumnTypeMap.cs` — that file is the one
 place in `src/` a string like `"timestamptz"` or `"longtext"` may appear. An empty MySQL/SQL Server/
