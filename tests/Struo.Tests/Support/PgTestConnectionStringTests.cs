@@ -22,6 +22,7 @@ public sealed class PgTestConnectionStringTests
     // An explicit caller choice wins: whoever sets Pooling themselves is opting into pool behaviour
     // knowingly (e.g. to re-investigate the abort documented in AGENTS.md), so don't override it.
     [Theory]
+    [InlineData("Pooling=true;Host=localhost")] // the `^` branch: Pooling as the very first key
     [InlineData("Host=localhost;Pooling=true")]
     [InlineData("Host=localhost;pooling=TRUE;Database=t-test")]
     [InlineData("Host=localhost; Pooling = true ;Database=t-test")]

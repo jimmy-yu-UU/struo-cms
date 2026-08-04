@@ -145,6 +145,21 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     public void Dispose() => _db?.Dispose();
 
+    // Guards the pooling fix against silent removal. PgTestConnectionString's own unit tests only
+    // exercise DisablePooling in isolation, so without this a future edit could drop the call in
+    // ResolveConnection and bring the abort documented in AGENTS.md back with nothing failing.
+    // Asserts the wiring, not the helper's logic.
+    [Fact]
+    public void Resolved_connection_disables_pooling()
+    {
+        if (!PgConfigured) return;
+        Conn.Should().Contain("Pooling=false",
+            "ResolveConnection must route both of its sources through " +
+            "PgTestConnectionString.DisablePooling. If you set Pooling yourself to re-investigate the " +
+            "abort recorded in AGENTS.md, this test is the expected casualty of that choice; " +
+            "otherwise the pooling fix has been dropped and the flake is back.");
+    }
+
     // On real Postgres: non-page-aligned offset returns the exact window.
     [Fact]
     public async Task Offset_window_is_exact_on_postgres()
