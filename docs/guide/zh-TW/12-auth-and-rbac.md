@@ -23,16 +23,18 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
  admin@admin.com    | $argon2id$v=19$m=65536,t=3,p=1
 ```
 
-`AuthController.Login`(`src/Struo.Api/Controllers/AuthController.cs:24-35`)會呼叫
+`AuthController.Login`(`src/Struo.Api/Controllers/AuthController.cs`)會呼叫
 `IAuthService.AuthenticateAsync`，它透過 `Argon2idPasswordHasher.Verify` 將送交的密碼與所儲存的雜湊值
 進行比對；驗證成功後，會直接以 `Cookie` 機制簽入一個 `ClaimsPrincipal`——密碼驗證與 cookie 核發發生在
 同一個請求之中，並不存在獨立的「以密碼交換 token」這道步驟。
 
 ## Session cookie 與分散式 ticket 存放
 
-**cookie** 機制(`AuthSchemes.Cookie`，常數為 `"Cookies"`)是 ASP.NET Core 的預設機制
-(`AddAuthentication(AuthSchemes.Cookie)`，`src/Struo.Api/Auth/AuthWiring.cs:37`)——無論是否標示
-`[Authorize]`，這是唯一會在每個請求上自動進行驗證的機制。它的 cookie 名稱為 `struo.session`
+**cookie** 機制(`AuthSchemes.Cookie`，常數為 `"Cookies"`)是預設的 `AuthSchemes.Adaptive` policy
+scheme，在每一個未帶 `Authorization: Bearer` 標頭的請求上會自動轉發過去的機制——無論是否標示
+`[Authorize]`：`AuthWiring.AddStruoAuth`(`src/Struo.Api/Auth/AuthWiring.cs`)真正註冊為預設驗證機制
+的是 `Adaptive` 本身，而非直接是 `Cookie`(`services.AddAuthentication(AuthSchemes.Adaptive)`)；轉發
+規則與帶 bearer 標頭的情形，見下方 Bearer token 一節。它的 cookie 名稱為 `struo.session`
 (`AuthSchemes.SessionCookieName`)，具備 `HttpOnly`、`SameSite=Lax`、8 小時滑動到期時間。
 `SecurePolicy` 在 `Production` 下為 `Always`，其他情況則為 `SameAsRequest`(本機開發/測試用的 host
 (即執行本章範例的 `Struo.Api` 執行個體)是以純 HTTP 執行的，`Always` 會讓 cookie 被悄悄地不再送回)。
@@ -43,7 +45,8 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 Ticket 存放——也就是 cookie 那組不透明金鑰背後真正的 session 狀態——是 `DistributedCacheTicketStore`
 (`src/Struo.Api/Auth/DistributedCacheTicketStore.cs`)，一個以 `IDistributedCache` 為基礎的
 `ITicketStore`：**當設定了 `Redis:ConnectionString` 時使用 StackExchange.Redis**，**否則使用記憶體內
-的分散式快取**(`AuthWiring.cs:23-27`)。兩個分支都採用相同的 8 小時滑動到期時間。實務上的差異(第 3
+的分散式快取**(`AuthWiring.AddStruoAuth` 中依 `Redis:ConnectionString` 決定的分支，
+`AuthWiring.cs`)。兩個分支都採用相同的 8 小時滑動到期時間。實務上的差異(第 3
 章已明白說明)在於：記憶體內備援方案會在行程重新啟動時遺失每一個 session——對於快速的本機執行來說沒問題，
 但不適合任何存活較久或多執行個體的情境——而 Redis 則會在重新啟動後保留 session，並在各複本之間共用。使用
 伺服器端的 ticket 存放，而非把 claim 直接編碼進 cookie 本身，正是讓「立即撤銷」得以實現的原因：
@@ -112,8 +115,9 @@ CPU 運算，無論結果為何，因此一次不受限的暴力破解嘗試同�
 
 ## OIDC／外部登入
 
-`Oidc:Enabled`(預設 `false`)掌控整個外部登入機制的註冊(`OidcWiring.AddStruoOidc`，
-`src/Struo.Api/Auth/OidcWiring.cs:20-32`)——停用時，完全不會加入任何 OIDC `AuthenticationScheme`，
+`Oidc:Enabled`(預設 `false`)掌控整個外部登入機制的註冊——`OidcWiring.AddStruoOidc`
+(`src/Struo.Api/Auth/OidcWiring.cs`)在呼叫 `AddOpenIdConnect` 之前，只要 `Enabled` 為
+`false` 或 `Authority` 為空，就會提早回傳——停用時，完全不會加入任何 OIDC `AuthenticationScheme`，
 `GET /api/auth/login/oidc` 會直接回傳普通的 `404`，而不會嘗試發起 challenge(已即時驗證，此 host
 依預設停用了 OIDC)：
 
@@ -129,8 +133,8 @@ $ curl -s http://localhost:5221/api/config
 啟用時，`Oidc:Authority`/`ClientId`/`ClientSecret` 在啟動時全部為必填(`ValidateOnStart`)；handler
 使用 authorization-code + PKCE，保留簡短的 JWT claim 名稱(`MapInboundClaims = false`，因此
 `OidcClaimsMapper` 直接讀取 `email`/`name`/`iss`/`tid`/`email_verified`，而不是它們對應的冗長 ASP.NET
-Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OnTokenValidated`
-(`OidcWiring.cs:53-72`)中，這個外部 principal 會被對應成一個 `ExternalIdentity`，並交給
+Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OidcWiring.AddStruoOidc` 裡的 `OnTokenValidated` handler
+(`OidcWiring.cs`)中，這個外部 principal 會被對應成一個 `ExternalIdentity`，並交給
 `IExternalLoginService.ResolveOrProvisionAsync`(`ExternalLoginService`，
 `src/Struo.Application/Security/ExternalLoginService.cs`)——**並非**直接簽入：OIDC principal 會被丟棄，
 換成一個本機的 `Cookie` 機制身分，只攜帶已解析出的使用者 id，而這才是真正被寫入上方 Redis 支援之 ticket
@@ -140,8 +144,8 @@ Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OnT
 **以電子郵件為基礎的 JIT 佈建：** 解析程序以外部身分的電子郵件為錨點，在儲存層**以不分大小寫**的方式與
 現有本機使用者比對。若沒有任何本機使用者相符，就會當場建立一個(`store.CreateExternalUserAsync`)——
 這正是「JIT」(just-in-time，即時)在此處的意義：第一次以外部身分登入時，不需要另一個由管理員主導的
-佈建步驟。有三道防護，各自獨立地在電子郵件比對執行之前被檢查
-(`ExternalLoginService.ResolveOrProvisionAsync:13-30`)；但只有其中兩道**預設為寬鬆**——租戶鎖定出貨時
+佈建步驟。有三道防護，各自獨立地在電子郵件比對執行之前被檢查，位於
+`ExternalLoginService.ResolveOrProvisionAsync` 內部；但只有其中兩道**預設為寬鬆**——租戶鎖定出貨時
 是**失敗封閉 (fail closed)**的：
 
 | 防護 | 設定鍵 | 預設值 | 設定後的效果 |
@@ -159,7 +163,7 @@ Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `OnT
 的零設定預設值。
 
 **`public` 對每一個呼叫端而言都是一道底線：**`SqlSugarRolePermissionStore.LoadForUserAsync`
-(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs:14-26`)會把 `public` 角色本身的
+(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs`)會把 `public` 角色本身的
 授權，聯集進**每一個**呼叫端的有效權限之中——匿名者、無角色者，以及持有角色者皆然——而不僅僅是在一個
 使用者的角色集合回傳為空時才當作備援。一個呼叫端自己的角色只能*增加* `public` 本已授予的東西，永遠
 不能減少：這個模型沒有拒絕語意——`PermissionResolver.Resolve` 只會用 `OR` 把每一個角色的
@@ -230,16 +234,15 @@ HTTP/1.1 401 Unauthorized
 ## `AdminOnly` 集合與 super-admin
 
 `CmsCollectionAttribute.AdminOnly`
-(`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs:11-18`)將一個集合的**寫入**動作
+(`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`)將一個集合的**寫入**動作
 (透過一般 CRUD 路徑進行的建立／更新／刪除)標示為無論任何委派的逐集合授權為何，一律需要 super-admin
 ——上述四個身分／授權集合是唯一設定它的集合。`ItemService.RequireSuperAdminForAdminOnly`
-(`src/Struo.Application/Query/ItemService.cs:427-431`)在失敗時會拋出 `PermissionDeniedException`，
-訊息為 `"Writes to '{collection}' require a super-admin."`——但**一般**的逐集合權限檢查會在這四條路徑
-的每一條中**先**執行，而且四條路徑用的並非同一個檢查：`CreateAsync`(`ItemService.cs:107`)與
-`UpdateCoreAsync`(`:145`)檢查 `CanWrite`，失敗時回傳 `"Write not permitted."`；`DeleteAsync`
-(`:256`)與 `RestoreAsync`(`:319`)則檢查 `CanDelete`，失敗時回傳 `"Delete not permitted."`——
-`RequireSuperAdminForAdminOnly` 在這四條路徑中都排在第二位執行(`:257`、`:320`，以及
-`CreateAsync`/`UpdateCoreAsync` 中對應的位置)，所以一個對某個 `AdminOnly` 集合完全**沒有**一般授權的
+(`src/Struo.Application/Query/ItemService.cs`)在失敗時會拋出 `PermissionDeniedException`，
+訊息為 `"Writes to '{collection}' require a super-admin."`——但**一般**的逐集合權限檢查會在這五個呼叫點
+的每一個之中**先**執行，而且五個呼叫點用的並非同一個檢查：`CreateAsync`、`UpdateCoreAsync` 與
+`RevertAsync` 檢查 `CanWrite`，失敗時回傳 `"Write not permitted."`；`DeleteAsync`
+與 `RestoreAsync` 則檢查 `CanDelete`，失敗時回傳 `"Delete not permitted."`——
+`RequireSuperAdminForAdminOnly` 緊接在這五個檢查之後執行，所以一個對某個 `AdminOnly` 集合完全**沒有**一般授權的
 呼叫端，看到的是通用的逐動詞訊息，而 AdminOnly 專屬的訊息只會出現在一個確實持有相關逐集合授權、但並非
 super-admin 的呼叫端身上。以下針對寫入情境分別即時驗證了這兩者，刻意將每一項檢查獨立出來：
 
@@ -256,7 +259,8 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 ```
 
 `RolesController` 直接在它自己的每一個 action 上強制執行相同的 super-admin 要求
-(`RequireAdmin()`，在每個 action 中最先被檢查，`RolesController.cs:31,50`)，完全不經過
+(`RequireAdmin()`，在每個 action 中最先被檢查——例如 `GetPermissions` 與 `PutPermissions`，
+`src/Struo.Api/Controllers/RolesController.cs`)，完全不經過
 `ItemService`——以下從完全不同的程式碼路徑即時驗證了相同的拒絕形狀：
 
 ```
@@ -267,9 +271,9 @@ $ curl -s -i -X PUT http://localhost:5221/api/roles/<id>/permissions -H "X-Struo
 
 **`UsersController` 對每一個 action 都做了相同的事，只有一個刻意設計的例外：**
 `PUT /api/users/{id}/password` 只有在呼叫端要變更**別人**的密碼時才會呼叫 `RequireAdmin()`
-(`ChangePassword`，`src/Struo.Api/Controllers/UsersController.cs:58-62`)——一個非管理員的已驗證使用
-者可以透過提供 `currentPassword` 來變更**自己**的密碼，該值會在寫入之前先與所儲存的雜湊值比對
-(`:63-69`)。這是整個身分／RBAC 表面中唯一一條自助式寫入路徑；其他每一個 `UsersController`/
+(`ChangePassword`，`src/Struo.Api/Controllers/UsersController.cs`)——一個非管理員的已驗證使用
+者可以透過提供 `currentPassword` 來變更**自己**的密碼，該值會在寫入之前先與所儲存的雜湊值比對，
+於 `ChangePassword` 的自助式分支之中。這是整個身分／RBAC 表面中唯一一條自助式寫入路徑；其他每一個 `UsersController`/
 `RolesController` action(建立使用者、核發／撤銷 access token、有效權限預覽、角色權限矩陣)都無條件
 需要 super-admin，沒有任何自助式例外。以下針對 `editor@example.com`(沒有任何管理授權)變更自己密碼
 的情境進行了即時驗證：一個錯誤的 `currentPassword` 會被拒絕為 `401`——這是「知識證明」而非管理員關卡，
@@ -303,14 +307,15 @@ HTTP/1.1 204 No Content
 
 一個欄位的 `Hidden` 旗標(`FieldMetadata.Hidden`，不同於 `CmsCollectionAttribute.Hidden` 那種側邊欄
 呈現意義)會無條件地從外送投影中排除——`ItemProjector.Project` 甚至在權限／欄位選取被查詢之前就先跳過它
-(`src/Struo.Application/Query/Projection/ItemProjector.cs:46`：`if (field.Hidden) continue;`)——因此
+(`src/Struo.Application/Query/Projection/ItemProjector.cs`：`if (field.Hidden) continue;`)——因此
 無論是 `fields=`、RBAC 欄位可讀性，還是一個 `deep` 展開的關聯，任何組合都不可能讓一個 `Hidden` 欄位的值
 透過 API 曝光出來。它也完全被排除在查詢 DSL 白名單之外(第 8 章)——一個指名了 `Hidden` 欄位的
 filter/sort/`fields=` 會被拒絕為未知欄位，正是為了讓一個外形像憑證的 `Hidden` 欄位，無法被透過
 `meta.total` 變成一個逐字元擷取的探測工具。
 
-在**寫入**這一側，`Hidden` 本身並不是機制所在：`ItemDeserializer.Deserialize`
-(`src/Struo.Application/Query/Write/ItemDeserializer.cs:87-95`)會在驗證執行之前，把任何標示了
+在**寫入**這一側，`Hidden` 本身並不是機制所在：`ItemDeserializer.Deserialize` 內剝除
+`IsSystem`／`ReadOnly` 欄位的迴圈
+(`src/Struo.Application/Query/Write/ItemDeserializer.cs`)會在驗證執行之前，把任何標示了
 `IsSystem` **或** `ReadOnly` 的欄位從送入的本文中剝除，並在剛反序列化出來的實體上把它重新清空。在出貨的
 schema 中，每一個 `Hidden` 欄位(`User.Password`、`User.AccessToken`)恰好也都被宣告為 `ReadOnly`，因
 此客戶端提供的值會被靜默捨棄而不會被持久化——但這種捨棄是來自 `ReadOnly` 旗標，而非單靠 `Hidden` 本身。
@@ -361,8 +366,9 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown role ids: 00000000-0000-0000-0000-000000000000"}}
 ```
 
-**缺席**的 `roles=` 參數，與一個存在但**為空**的參數，兩者之間的區別是刻意設計、也是刻意實作出來的
-(`UsersController.GetEffectivePermissions:118-126`)：ASP.NET Core 對一個純字串參數的預設模型繫結，
+**缺席**的 `roles=` 參數，與一個存在但**為空**的參數，兩者之間的區別是刻意設計、也是刻意實作出來的，
+透過 `UsersController.GetEffectivePermissions` 內的 `Request.Query.TryGetValue` 檢查
+(`UsersController.cs`)：ASP.NET Core 對一個純字串參數的預設模型繫結，
 會把兩者都摺疊成 `null`，因此該控制器改為直接讀取 `Request.Query`，正是為了讓「預覽已儲存的角色」與
 「預覽一個無角色的選擇」維持成可以區分的請求形狀。`isSuperAdmin: true` 搭配一個空的 `permissions` 映射
 (上方第三個範例)是 `EffectivePermissions` 對於 super-admin 所記載的形狀——每一項授權都是隱含的，因此
