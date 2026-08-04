@@ -45,20 +45,22 @@ lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted
-(`SqlSugarClientFactory.cs:86-91`). There is no warning for the conflict; a fork that wants its own
+(`SqlSugarClientFactory.cs:86-116`, the whole `[ColumnShape]` branch: the shape is read at the top and
+the branch returns at its end). There is no warning for the conflict; a fork that wants its own
 vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
 `ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
 (`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
 
 **A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
-`InvalidOperationException` naming the property when `[ColumnShape]` co-occurs with a
-`JsonColumnInterfaces` member (`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`).
-The shape branch's early return outranks the later JSON branch, which sets both `IsJson = true` and a
-widened `DataType`; since both branches resolve a JSON-column interface to the same `LongText`
-literal, the combination's only effect was silently dropping `IsJson`, and without it SqlSugar never
-serializes the collection and the column takes CodeFirst's unset length — `varchar(1)` on PostgreSQL,
-which rejects every real value with 22001. Remove `[ColumnShape]` from such a property; the JSON
-mapping already applies `LongText`. A **content-bearing** interface
+`InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
+co-occurs with a `JsonColumnInterfaces` member
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`). The shape branch's early return
+outranks the later JSON branch, which sets both `IsJson = true` and a widened `DataType`; both
+branches resolve a JSON-column interface to `LongText`, so with the shape declared `LongText` — the
+only sensible choice here — the combination's only effect was silently dropping `IsJson`, and without
+it SqlSugar never serializes the collection and the column takes CodeFirst's unset length —
+`varchar(1)` on PostgreSQL, which rejects every real value with 22001. Remove `[ColumnShape]` from
+such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
 (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal — both paths compute
 `LongText`, so nothing is lost. Pinned by
 `ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused` and
