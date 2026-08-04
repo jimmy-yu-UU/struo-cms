@@ -4,6 +4,15 @@ Conventions that apply across the backend and frontend. Where a convention is en
 the compiler, this document says so and names the mechanism; where it is a convention only, it says
 that plainly instead of implying enforcement that does not exist.
 
+## Citing code from docs and comments
+
+When documentation or a comment points **into this repository's own code**, cite the construct — a
+class, method, branch, or a distinguishing property — rather than a line range, because line ranges
+rot silently the first time someone inserts above them and nothing in CI catches it.
+The deliberate exception is a citation into **pinned upstream SqlSugar source**, as in
+`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`: that source is version-pinned and cannot
+shift underneath us, so a line range there stays valid.
+
 ## Naming
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.

@@ -42,9 +42,13 @@ public enum ColumnShape
 /// <para>
 /// Combining this attribute with a JSON-column <c>[CmsField]</c> interface (the multi-value selects,
 /// <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>) is <b>refused</b>: the hook throws an
-/// <see cref="InvalidOperationException"/> naming the property and the offending interface, either at
-/// startup — if CodeFirst still has to create that entity's table — or on the first operation that
-/// reflects the entity, on an existing database where the table is already present. It used to be
+/// <see cref="InvalidOperationException"/> naming the property and the offending interface. For
+/// anything in the <c>InitTables</c> set — every framework entity plus every <c>[CmsCollection]</c>
+/// type — that throw lands at <b>startup</b> whether or not the table already exists, because
+/// <c>DatabaseInitializer.CreateMissingTables</c> asks <c>EntityMaintenance</c> for each type's table
+/// name to compute the missing set, and building that <c>EntityInfo</c> runs this hook over every
+/// property. Only an entity <i>outside</i> that set — a fork's own non-collection entity
+/// used directly through <c>ISqlSugarClient</c> — fails on first use instead. It used to be
 /// resolved silently, and the result was always broken — the early <c>return</c> here outranks the
 /// hook's later JSON branch, which sets both <c>column.IsJson = true</c> and a widened
 /// <c>DataType</c>, so the property kept the <c>DataType</c> and lost <c>IsJson</c>. Both branches
