@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using SqlSugar;
@@ -52,19 +53,27 @@ public sealed class PostgresIntegrationTests : IDisposable
     // outlives them, and reuse of a pooled physical connection across a connection-close boundary
     // (between tests, or between commands within one test) is what made one test in this suite abort
     // mid-read. See that class for the full diagnosis and why this is isolation rather than tolerance.
+    //
+    // The raw string is resolved FIRST and both sources share a SINGLE exit through DisablePooling.
+    // That is deliberate: with one call site there is only one thing to drop instead of two, and
+    // Resolved_connection_disables_pooling below covers the wiring for both sources at once rather
+    // than only for whichever branch happened to run in a given process.
     private static string? ResolveConnection()
     {
-        var env = Environment.GetEnvironmentVariable(ConnEnv);
-        if (!string.IsNullOrWhiteSpace(env)) return PgTestConnectionString.DisablePooling(env);
+        var raw = Environment.GetEnvironmentVariable(ConnEnv);
 
-        var apiDir = FindApiDir();
-        if (apiDir is null) return null;
-        var config = new ConfigurationBuilder()
-            .AddJsonFile(Path.Combine(apiDir, "appsettings.json"), optional: true)
-            .AddJsonFile(Path.Combine(apiDir, "appsettings.Development.json"), optional: true)
-            .Build();
-        var conn = config["Testing:PostgresConnection"];
-        return string.IsNullOrWhiteSpace(conn) ? null : PgTestConnectionString.DisablePooling(conn);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            var apiDir = FindApiDir();
+            if (apiDir is null) return null;
+            var config = new ConfigurationBuilder()
+                .AddJsonFile(Path.Combine(apiDir, "appsettings.json"), optional: true)
+                .AddJsonFile(Path.Combine(apiDir, "appsettings.Development.json"), optional: true)
+                .Build();
+            raw = config["Testing:PostgresConnection"];
+        }
+
+        return string.IsNullOrWhiteSpace(raw) ? null : PgTestConnectionString.DisablePooling(raw);
     }
 
     private static string? FindApiDir()
@@ -149,11 +158,17 @@ public sealed class PostgresIntegrationTests : IDisposable
     // exercise DisablePooling in isolation, so without this a future edit could drop the call in
     // ResolveConnection and bring the abort documented in AGENTS.md back with nothing failing.
     // Asserts the wiring, not the helper's logic.
+    //
+    // Matched case- and whitespace-insensitively, matching DisablePooling's own IgnoreCase detection:
+    // a maintainer who configures `pooling=false` or `Pooling = false` themselves has done exactly the
+    // right thing, and a literal Contain("Pooling=false") would fail them with a message claiming the
+    // fix was dropped.
     [Fact]
     public void Resolved_connection_disables_pooling()
     {
         if (!PgConfigured) return;
-        Conn.Should().Contain("Pooling=false",
+        Conn.Should().MatchRegex(
+            new Regex(@"Pooling\s*=\s*false", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
             "ResolveConnection must route both of its sources through " +
             "PgTestConnectionString.DisablePooling. If you set Pooling yourself to re-investigate the " +
             "abort recorded in AGENTS.md, this test is the expected casualty of that choice; " +
