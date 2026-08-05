@@ -51,12 +51,12 @@ are skipped by the parent-row `Required` check (`ItemDeserializer.Deserialize` f
 sidecar sync (next section). `MetadataScanner.ScanTranslations` folds each sidecar field into the
 parent `CollectionMetadata.Fields` list too (marked `Translatable = true`), so a translatable field
 *is* filterable/sortable through the ordinary query DSL allowlist like any other own-field
-(`QueryValidator.cs:25` builds that allowlist from all non-`Hidden` `meta.Fields`, with no
-`Translatable` exclusion) — it just resolves against the sidecar table instead of the parent row,
-at the effective query locale, via `RelationFilterResolver.IsTranslatableField`/
-`ResolveTranslatableIdsAsync` (`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`, chapter 7).
-Live-verified: filtering `file` by its translatable `title` succeeds with no `?locale=` supplied at
-all (the effective locale then defaults to `DefaultCode()`, `ItemService.cs:55-57`):
+(`QueryValidator.Validate`'s field allowlist is built from all non-`Hidden` `meta.Fields`, with no
+`Translatable` exclusion) — it just resolves against the sidecar table instead of the parent row, at
+the effective query locale, via `RelationFilterResolver.IsTranslatableField`/`ResolveTranslatableIdsAsync`
+(`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`, chapter 7). Live-verified: filtering
+`file` by its translatable `title` succeeds with no `?locale=` supplied at all (the effective locale
+then defaults to `DefaultCode()`, `ItemService.QueryAsync`'s `queryLocale` default):
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Btitle%5D%5B_eq%5D=alpha-report"
@@ -111,22 +111,22 @@ field is that the error names the locale: `"Field '{name}' exceeds maximum lengt
 One consequence worth stating plainly: `File` rows are only ever created through the dedicated
 upload pipeline (`FileService.UploadAsync`, chapter 11) — file rows are owned by that pipeline, not
 by the generic items API. `ItemService.CreateAsync` checks the ordinary `CanWrite` grant *first*
-(`ItemService.cs:108`, chapter 12's `AdminOnly` section documents this check ordering for every
-collection) — a caller with no write grant on `file` at all sees the generic `"Write not permitted."`
-(`FORBIDDEN`) before ever reaching the collection-specific rejection below. Only once that passes does
-the guard specific to `File` run: `ItemService.cs:115-117` rejects a generic `POST /api/items/file`
-outright with `400 BAD_USER_INPUT`, quoting the exact message from source: "Files cannot be created
-through the generic items API. Upload one with POST /api/files instead." — before it ever reaches
-translation validation, `ReadOnly` stripping, or any other generic-create machinery. The same guard
-rejects a GraphQL `createFile` mutation identically, since both protocols share
-`ItemService.CreateAsync`. This second check is unrelated to `File`'s `fileName`/`contentType`/`size`
-fields being `ReadOnly`: even a body that supplied every required column would still be rejected,
-because the *collection* is off-limits to generic create, not merely its fields. A collection with a
-translation sidecar that *is* created through the generic items API (any collection you define
-yourself with `[CmsTranslations]`) has no such restriction — only `File` special-cases creation this
-way, because of its dedicated upload pipeline; its per-locale `title`/
-`alt` are still edited normally afterward through `PUT /api/items/file/{id}`, the ordinary
-generic-update path.
+(its earliest check; chapter 12's `AdminOnly` section documents this check ordering for every
+collection) — a caller with no write grant on `file` at all sees the generic
+`"Write not permitted."` (`FORBIDDEN`) before ever reaching the collection-specific rejection below.
+Only once that passes does the guard specific to `File` run: `ItemService.CreateAsync`'s
+`File`-collection rejection branch rejects a generic `POST /api/items/file` outright with
+`400 BAD_USER_INPUT`, quoting the exact message from source: "Files cannot be created through the
+generic items API. Upload one with POST /api/files instead." — before it ever reaches translation
+validation, `ReadOnly` stripping, or any other generic-create machinery. The same guard rejects a
+GraphQL `createFile` mutation identically, since both protocols share `ItemService.CreateAsync`. This
+second check is unrelated to `File`'s `fileName`/`contentType`/`size` fields being `ReadOnly`: even a
+body that supplied every required column would still be rejected, because the *collection* is
+off-limits to generic create, not merely its fields. A collection with a translation sidecar that
+*is* created through the generic items API (any collection you define yourself with
+`[CmsTranslations]`) has no such restriction — only `File` special-cases creation this way, because
+of its dedicated upload pipeline; its per-locale `title`/`alt` are still edited normally afterward
+through `PUT /api/items/file/{id}`, the ordinary generic-update path.
 
 ## The default-locale rule
 
@@ -259,11 +259,11 @@ from those — chapter 10 covers GraphQL mutations in full.
 ## Admin locale tabs and completeness indicators
 
 The admin SPA's `ItemForm.vue` renders the tab strip at all only when the collection has
-translatable fields (`v-if="fields.translatable.length"`, `ItemForm.vue:54`) — one tab per row
+translatable fields (`v-if="fields.translatable.length"` on the `<Tabs>` element) — one tab per row
 returned by `GET /api/languages` (via the `languageStore` Pinia store), even when only a single
 language is enabled. The small per-tab "dot," however, is gated more narrowly: it only renders when
-there is more than one enabled language *and* the collection has translatable fields
-(`showDots`, `ItemForm.vue:32`) — a single-language install with translatable fields still shows one
+there is more than one enabled language *and* the collection has translatable fields (`ItemForm.vue`'s
+`showDots` computed property) — a single-language install with translatable fields still shows one
 (dot-less) tab. Each dot's fill state comes from `hasLocaleContent` (`frontend/src/lib/localeCompleteness.ts`):
 
 ```ts
