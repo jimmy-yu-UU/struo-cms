@@ -221,11 +221,35 @@ carrying the Windows `WSA_OPERATION_ABORTED` text ("the I/O operation has been a
 a thread exit or an application request"). The fix is `PgTestConnectionString.DisablePooling`, applied to
 whichever source resolves the connection, so each test gets its own physical connection; that class
 carries the full write-up. This is test isolation, not tolerance — no retry, no swallowed exception, no
-relaxed assertion — and every test still runs real DDL and DML against a real PostgreSQL. Scoped to the
-harness: whether a pooled production process on Windows can hit the same abort was **not** investigated
-— the abort did surface inside product code, `SqlSugarItemRepository.CreateGenericAsync`, on a pooled
-connection — and the residual unknown below is what would decide it. Disabling pooling here also removes
-the repo's only local reproduction of the abort.
+relaxed assertion — and every test still runs real DDL and DML against a real PostgreSQL.
+
+Scoped to the harness — and measured 2026-08-05, because the abort does surface inside product code
+(`SqlSugarItemRepository.CreateGenericAsync`) on a pooled connection, which is production's own
+configuration. Four measurements, same machine, same container, same pooled connection string:
+
+* the suite itself with pooling re-enabled — **red in 7 of 7 runs**, same abort every time;
+* a **plain console process** running that same repository code (build a client, `InitTables`, clear,
+  five `CreateAsync`, an offset query, then the compare-and-swap update) in five threading models —
+  main-thread sequential; a dedicated thread per unit that exits; a dedicated thread that exits
+  mid-flight; a dedicated thread that also owns the async continuations via a pumping
+  `SynchronizationContext` and then exits; thread-pool threads only — **0 aborts in 30 runs each, 150
+  runs total**;
+* a **minimal xUnit project** holding nothing but that same repository code, no Struo test assembly and
+  no fixtures — **4 aborts in 46 runs**, same exception chain, same `CreateGenericAsync` frame. This is
+  the positive control, and it is what pins the trigger on the test host rather than on the repo's tests;
+* the **product itself** — `Struo.Api` booted as Production against real PostgreSQL with pooling on and
+  driven through the item endpoints (create, offset query, get-by-id, compare-and-swap update)
+  sequentially, 8-way concurrent, and with idle gaps — **22,023 requests, 0 aborts, 0 HTTP 500s, 0 error
+  log lines**.
+
+So the abort tracks the xUnit/VSTest test host, not the product's use of a pooled connection, and a
+pooled production process was not observed to hit it at a volume where the xUnit probe's rate (roughly
+one abort per fifty units of work) would have produced tens. That is a non-observation, **not** a proof
+of safety: the mechanism is still unknown, so nothing here rules the abort out for a different threading
+model, load shape or Windows build. Disabling pooling here still removes the repo's only local
+reproduction of the abort; the way back to one is to set `Pooling=true` yourself in
+`STRUO_TEST_PG_CONNECTION`, which `PgTestConnectionString.DisablePooling` deliberately honours — the
+expected casualty of that choice is `Resolved_connection_disables_pooling`, and it says so.
 
 Two observations the mechanism does **not** account for, recorded so they are not mistaken for settled:
 one run went red on the *first* test executed, when the process had touched PostgreSQL zero times and
@@ -243,8 +267,11 @@ and `log_min_messages=warning` would have shown one — connections were 11 of a
 `statement_timeout` or idle-in-transaction timeout set); and a specific poisoning predecessor (the test
 fails after *any* other test in the suite, whichever one, and is green alone). Pooling was confirmed as
 *necessary* for the failure, both directions: green 5/5 with `Pooling=false`, red in 8 of 9 runs with
-pooling on. One residual unknown: *what* aborts the socket is inferred from the Windows error code — a
-thread-exit I/O cancellation, xUnit's worker threads being the plausible source — but was not proven.
+pooling on. One residual unknown, and it stays one by decision: *what* aborts the socket is inferred from
+the Windows error code — a thread-exit I/O cancellation, xUnit's worker threads being the plausible
+source — and is still unproven. The 2026-08-05 probe leaves it standing rather than settling it, and
+weakens it slightly: three separate renderings of "a thread that exits" outside xUnit stayed green, so
+thread exit on its own does not reproduce the abort.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
