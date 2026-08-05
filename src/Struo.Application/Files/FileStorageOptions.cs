@@ -42,6 +42,10 @@ public sealed class FileStorageOptions
         /// of replacing it, which made narrowing this list impossible.</summary>
         public static readonly string[] DefaultAllowedFormats = ["webp", "jpeg", "png", "avif"];
 
+        /// <summary>Empty until <see cref="ApplyCollectionDefaults"/> runs. <c>AddStruoFiles</c>
+        /// registers that as a <c>PostConfigure</c>; a caller constructing this type directly (rather
+        /// than through DI) must call it itself, or <c>FilesController</c> will reject every explicitly
+        /// requested <c>format</c> — an empty list means no format ever matches the allow-check.</summary>
         public string[] AllowedFormats { get; set; } = [];
         public int DefaultQuality { get; set; } = 82;
 

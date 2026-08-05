@@ -104,8 +104,9 @@ public sealed class FileTranslation
 
 有一個結果值得明講:`File` 資料列只會透過專屬的上傳管線建立 (`FileService.UploadAsync`，第 11
 章)——資料列的建立權屬於這條管線，而不屬於一般的 items API。`ItemService.CreateAsync` 會*先*
-檢查一般的 `CanWrite` 授權 (這是它最先執行的檢查;第 12 章的 `AdminOnly` 段落，記載了這個檢查
-順序適用於每一個集合)——一個對 `file` 完全沒有寫入授權的呼叫端，會先看到通用的
+檢查一般的 `CanWrite` 授權 (先於下方的 `RequireSuperAdminForAdminOnly` 與 `File` 集合拒絕分支;
+第 12 章的 `AdminOnly` 段落，記載了這個檢查順序適用於每一個集合)——一個對 `file` 完全沒有寫入
+授權的呼叫端，會先看到通用的
 「Write not permitted.」(`FORBIDDEN`)，根本輪不到下方這個集合專屬的拒絕。只有在通過那一關之後，
 `File` 專屬的守衛才會執行:`ItemService.CreateAsync` 的 `File` 集合拒絕分支會直接以 `400 BAD_USER_INPUT`
 拒絕一個一般的 `POST /api/items/file`，逐字引用原始碼中的訊息:「Files cannot be created through the

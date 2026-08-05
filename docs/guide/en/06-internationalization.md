@@ -111,9 +111,10 @@ field is that the error names the locale: `"Field '{name}' exceeds maximum lengt
 One consequence worth stating plainly: `File` rows are only ever created through the dedicated
 upload pipeline (`FileService.UploadAsync`, chapter 11) — file rows are owned by that pipeline, not
 by the generic items API. `ItemService.CreateAsync` checks the ordinary `CanWrite` grant *first*
-(its earliest check; chapter 12's `AdminOnly` section documents this check ordering for every
-collection) — a caller with no write grant on `file` at all sees the generic
-`"Write not permitted."` (`FORBIDDEN`) before ever reaching the collection-specific rejection below.
+(before `RequireSuperAdminForAdminOnly` and the `File`-collection rejection branch below; chapter 12's
+`AdminOnly` section documents this check ordering for every collection) — a caller with no write
+grant on `file` at all sees the generic `"Write not permitted."` (`FORBIDDEN`) before ever reaching
+the collection-specific rejection below.
 Only once that passes does the guard specific to `File` run: `ItemService.CreateAsync`'s
 `File`-collection rejection branch rejects a generic `POST /api/items/file` outright with
 `400 BAD_USER_INPUT`, quoting the exact message from source: "Files cannot be created through the

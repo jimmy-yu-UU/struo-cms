@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Struo.Tests.Support;
@@ -27,19 +28,19 @@ namespace Struo.Tests.Documentation;
 /// seen or plausible in this repository's own citations: an ordinary colon, a colon with one trailing
 /// space, a full-width colon (<c>：</c>, plausible from a CJK IME in the zh-TW manual), an optional
 /// <c>L</c> before the digits (<c>:L204</c>), or a GitHub-style <c>#L204</c> anchor.</item>
-/// <item><b>Construct-with-range, no extension</b> (a dotted identifier chain — case-tolerant, so it
-/// also covers camelCase constructs like a frontend store method — immediately followed by a colon and
-/// a HYPHENATED range) — ENFORCED, and unconditionally so: see "the upstream exception" below for why
-/// this form gets no existence check and therefore no escape hatch at all. A dotted identifier chain
-/// followed by a hyphenated range is likewise not produced by anything else observed in this repository
-/// (ports and aspect ratios are bare numbers with no leading dotted identifier; config-key paths like
-/// <c>Database:ConnectionString</c> carry no digits).</item>
 /// <item><b>Bare continuation</b> (a lone <c>`:145`</c> or <c>`74-163`</c> sitting in the same sentence
 /// as an earlier full citation, carrying no filename of its own) — NOT ENFORCED. A bare <c>:145</c> is
 /// not reliably distinguishable from a port (<c>:5221</c>, <c>:9000</c>, <c>:6363</c>) or a time, and a
 /// bare <c>74-163</c> is not reliably distinguishable from an aspect ratio (<c>64:48</c>) or any other
 /// hyphenated pair of numbers in prose. A reviewer must still check by hand for a bare number trailing a
 /// citation sentence.</item>
+/// <item><b>Construct-with-range, no extension</b> (a dotted identifier chain — case-tolerant, so it
+/// also covers camelCase constructs like a frontend store method — immediately followed by a colon and
+/// a HYPHENATED range) — ENFORCED, and unconditionally so: see "the upstream exception" below for why
+/// this form gets no existence check and therefore no per-citation escape hatch. A dotted identifier
+/// chain followed by a hyphenated range is likewise not produced by anything else observed in this
+/// repository (ports and aspect ratios are bare numbers with no leading dotted identifier; config-key
+/// paths like <c>Database:ConnectionString</c> carry no digits).</item>
 /// <item><b>Prose</b> ("line 74", 「第 74 行」) — NOT ENFORCED. Unbounded natural-language surface; a
 /// reliable pattern would need to enumerate every phrasing in two languages and would still miss
 /// rewordings. Swept for by hand during Tasks 3-7; none were found, but nothing here re-checks that.</item>
@@ -77,7 +78,12 @@ namespace Struo.Tests.Documentation;
 /// only because this repository has never written an upstream citation that way — every one of its
 /// upstream citations is extension-anchored (see the count below). If a genuine upstream citation ever
 /// needs to be written for a bare construct, it must be re-written extension-anchored instead of relying
-/// on this form; the form itself carries no way to mark an exception.
+/// on this form; the form itself carries no existence-based way to mark an exception. A fork can still
+/// hit a false positive here on ordinary prose — e.g. "Supported Node.js: 20-22" (citation-guard:allow)
+/// in <c>docs/guide/**</c>, where <c>js</c> is not in <see cref="KnownFileExtensions"/> so the
+/// extension-anchored form never intercepts it first — and the only way out for that line is the same
+/// <c>citation-guard:allow</c> marker documented below; there is no existence check to appeal to for
+/// this form specifically.
 /// </para>
 /// <para>
 /// As of this writing there are 14 upstream-citation OCCURRENCES across 11 distinct citation texts: 7 in
@@ -140,7 +146,9 @@ public sealed class CodeCitationConventionTests
     /// covers the file types actually cited in this repository's docs/comments (verified against the
     /// full corpus while designing this test, with zero false positives at this breadth) rather than
     /// every extension that exists anywhere, since a broader list only matters if something in the
-    /// corpus would collide with it.
+    /// corpus would collide with it. <see cref="ExtensionAnchoredCitation"/>'s regex alternation is
+    /// built directly from this set (see its declaration below), so the two cannot drift apart silently
+    /// — adding an extension here is the only step needed to also recognize it in the regex.
     /// </summary>
     private static readonly HashSet<string> KnownFileExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -157,7 +165,7 @@ public sealed class CodeCitationConventionTests
     /// "word.ext" followed eventually by some unrelated colon in prose.
     /// </summary>
     private static readonly Regex ExtensionAnchoredCitation = new(
-        @"(?<path>[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.(?:cs|ts|tsx|vue|md|sql|json|ya?ml|css|scss|html|cshtml|razor|csproj|xml|config))(?:[:：]\s?L?|#L)(?<lines>\d+(?:[,-]\d+)*)",
+        $@"(?<path>[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.(?:{string.Join('|', KnownFileExtensions.Select(Regex.Escape))}))(?:[:：]\s?L?|#L)(?<lines>\d+(?:[,-]\d+)*)",
         RegexOptions.Compiled);
 
     /// <summary>

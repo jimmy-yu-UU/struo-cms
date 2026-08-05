@@ -254,8 +254,8 @@ otherwise.)
 ## `AdminOnly` collections and super-admin
 
 `CmsCollectionAttribute.AdminOnly` (`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`)
-marks a collection's **writes** (create/update/delete through the generic CRUD path) as requiring
-super-admin regardless of any delegated per-collection grant — the four identity/authorization
+marks a collection's **writes** (create/update/delete/restore/revert through the generic CRUD path) as
+requiring super-admin regardless of any delegated per-collection grant — the four identity/authorization
 collections above are the only ones that set it. `ItemService.RequireSuperAdminForAdminOnly`
 (`src/Struo.Application/Query/ItemService.cs`) throws `PermissionDeniedException` with the
 message `"Writes to '{collection}' require a super-admin."` when it fails — but the **ordinary**
@@ -281,7 +281,7 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 ```
 
 `RolesController` enforces the same super-admin requirement directly on every one of its own actions
-(`RequireAdmin()`, checked first thing in each action — e.g. `GetPermissions` and `PutPermissions`,
+(`RequireAdmin()`, checked first thing in each action — `GetPermissions` and `PutPermissions`,
 `src/Struo.Api/Controllers/RolesController.cs`) rather than going
 through `ItemService` at all — live-verified the same rejection shape from a completely different code
 path:
