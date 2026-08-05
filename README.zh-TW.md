@@ -3,7 +3,7 @@
 一個可重複使用的無頭 (headless) CMS **樣板 (template)**：fork 它、定義你自己的內容集合 (collection)，
 出貨你自己的產品。它不是一個成品 CMS 產品，也不出貨任何屬於自己的業務內容模型。
 
-[![CI](https://github.com/stu640978/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/stu640978/struo-cms/actions/workflows/ci.yml)
+[![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
 ## 你會得到什麼
 
