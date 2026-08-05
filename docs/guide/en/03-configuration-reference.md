@@ -19,6 +19,29 @@ file watcher is otherwise active. Where a key has an additional wrinkle beyond "
 example, a value that is only ever consulted the first time a table is created — that is called out
 explicitly below.
 
+**Only two array-valued settings in this chapter have a non-empty C# built-in default** —
+`Oidc:Scopes` and `Struo:Files:ImageTransform:AllowedFormats`. For those two, a configuration that
+supplies no elements at all for the key now correctly falls back to that built-in default, instead of
+the configured elements being appended onto it (the previous, broken behavior). `Struo:Files:AllowedContentTypes`
+and `Serilog:WriteTo`, below, also show a non-empty Default, but that default comes from the shipped
+`appsettings.json` file, not from a C# property initializer — the distinction in this paragraph does
+not apply to them.
+
+**Setting an array-valued key in a higher-precedence source does not shorten a list a
+lower-precedence source already populated.** `IConfiguration` merges array elements index-by-index
+across layered sources, so a narrower override only replaces the indices it explicitly sets — any
+trailing index the override omits still comes from whatever lower-precedence source set it. This is a
+property of how `IConfiguration` itself resolves an indexed key across providers (confirmed by binding
+`Oidc:Scopes` through two stacked in-memory sources — a base source setting all three indices, and a
+higher-precedence source setting only index 0 — which resolved to all three entries, not one), not
+something specific to any one setting here: it applies the same way to `Oidc:Scopes`,
+`Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:AllowedContentTypes`, and `Serilog:WriteTo`
+alike. Because the shipped `appsettings.json` already sets every element of all four explicitly, an
+environment-variable override or an `appsettings.{Environment}.json` entry that sets only a shorter
+prefix (e.g. `Oidc__Scopes__0=openid`) does **not** narrow the effective list — the shipped file's
+remaining entries still bind. To actually shorten one of these four lists, edit or remove the entries
+directly in the shipped `appsettings.json` rather than layering a shorter array on top of it.
+
 ## `Database`
 
 | Key | Type | Default | Effect |

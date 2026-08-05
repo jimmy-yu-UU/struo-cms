@@ -16,6 +16,24 @@
 運作中。若某個鍵除了「只要重新啟動」之外還有額外的眉角——例如某個值只在資料表第一次被建立時才會被
 參照——下方會明確指出。
 
+**本章只有兩個陣列型設定帶有非空的 C# 內建預設值**——`Oidc:Scopes` 和
+`Struo:Files:ImageTransform:AllowedFormats`。對這兩者而言，當設定完全沒有為該鍵提供任何元素時，現在
+會正確地退回該內建預設值，而不是把設定的元素併入到它上面(先前那個有缺陷的行為)。下方的
+`Struo:Files:AllowedContentTypes` 和 `Serilog:WriteTo` 也顯示非空的預設值，但那個預設值來自出貨的
+`appsettings.json` 檔案，而不是來自 C# 屬性初始化式——本段的區別不適用於它們。
+
+**在較高優先序的來源中設定陣列型鍵，並不會縮短較低優先序來源已經填入的清單。**
+`IConfiguration` 是跨分層來源、逐索引 (index-by-index) 合併陣列元素的，所以較窄的覆寫只會取代它明確
+設定的那些索引——覆寫省略的任何尾端索引，仍然來自設定它的那個較低優先序來源。這是 `IConfiguration`
+本身跨提供者解析索引鍵的特性(已透過堆疊兩個記憶體內設定來源驗證:一個基底來源設定全部三個索引，另一個
+較高優先序來源只設定索引 0——結果解析出全部三筆，而不是一筆)，並非本節任何單一設定獨有:
+`Oidc:Scopes`、`Struo:Files:ImageTransform:AllowedFormats`、`Struo:Files:AllowedContentTypes` 和
+`Serilog:WriteTo` 都適用同樣的行為。由於出貨的 `appsettings.json` 已經明確設定這四者的每一個元素，
+用環境變數覆寫或 `appsettings.{Environment}.json` 只設定較短的前綴(例如
+`Oidc__Scopes__0=openid`)**不會**縮短有效清單——出貨檔案裡剩下的項目仍然會被綁定。若要真正縮短這
+四份清單中的任何一份，請直接編輯或移除出貨 `appsettings.json` 裡的項目，而不是在上面疊加一個較短的
+陣列。
+
 ## `Database`
 
 | 鍵 | 型別 | 預設值 | 作用 |

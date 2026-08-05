@@ -330,7 +330,7 @@ public sealed class RevisionServiceTests
     }
 
     /// <summary>Counter-proof: <c>RevertAsync</c> must NOT go through the redacted read — it reads
-    /// the revision store directly (<c>ItemService.cs:710</c>), so a hidden field's value is still
+    /// the revision store directly (<c>ItemService.RevertAsync</c>), so a hidden field's value is still
     /// restored on revert even though the externally-returned snapshot omits it. Rev 2 explicitly
     /// CHANGES the hidden field to a different value first: with the write path's partial-merge
     /// semantics, the live row can only get "secret-token" back if the revert body actually carried

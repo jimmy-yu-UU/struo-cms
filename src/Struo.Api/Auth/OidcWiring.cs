@@ -26,8 +26,14 @@ public static class OidcWiring
                       && !string.IsNullOrWhiteSpace(o.ClientSecret)),
                 "Oidc enabled requires Authority, ClientId, ClientSecret")
             .ValidateOnStart();
+        services.PostConfigure<OidcOptions>(options => options.ApplyCollectionDefaults());
 
+        // AddOptions above only normalizes the container-resolved copy. This second bind is a SEPARATE
+        // copy read straight off IConfiguration (not through the container), and it is this local copy
+        // whose Scopes feed options.Scope below — so it needs its own ApplyCollectionDefaults call; a
+        // PostConfigure on the container registration alone would never touch it.
         var opts = config.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
+        opts.ApplyCollectionDefaults();
         if (!opts.Enabled || string.IsNullOrWhiteSpace(opts.Authority))
             return services; // scheme not registered → /api/auth/login/oidc returns 404
 
