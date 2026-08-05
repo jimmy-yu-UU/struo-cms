@@ -68,8 +68,9 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
 - `Struo.Application` — application 層的抽象、選項 (options)、查詢/安全性合約。
 - `Struo.Infrastructure` — SqlSugar 接線、身分、檔案、健康檢查、DI extension。
 - `Struo.Api` — ASP.NET Core host：controllers、GraphQL、Scalar、Serilog、`Program.cs`。
-- `schema/` — 已提交的核心集合 (core collection) 線上格式快照 (`core-collections.json`)，schema
-  contract gate 用它來檢驗前後端兩邊——詳見 `schema/README.md`。
+- `schema/` — schema contract gate 用來檢驗前後端兩邊的已提交快照:核心集合 (core collection) 的
+  線上格式 (`core-collections.json`)，以及每一個已宣告的 interface enum (`interfaces.json`)——詳見
+  `schema/README.md`。
 
 框架程式碼永遠不會參照 `samples/*`——只有 `tests/Struo.Tests` 會，這正是讓
 `samples/Struo.Sample.Blog` 真正做到選用且可刪除的原因。

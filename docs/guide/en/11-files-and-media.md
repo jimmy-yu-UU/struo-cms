@@ -15,7 +15,7 @@ subsystem those two don't: upload, storage backends, serving, transforms, and li
 `File` (`src/Struo.Infrastructure/Files/File.cs`) is `[CmsCollection("File", Group = "System",
 DefaultDisplayField = nameof(FileName), Hidden = true)]` — `Hidden` here is the presentation flag from
 chapter 4 (omitted from the admin sidebar because the media library is its own dedicated screen), not
-the field-level `Hidden` chapter 12 covers. Its own fields:
+the field-level `Hidden` chapter 5 covers. Its own fields:
 
 | Field | Interface | Read-only | Notes |
 |---|---|---|---|

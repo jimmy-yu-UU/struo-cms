@@ -90,7 +90,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-
 
 ## 快照中隱藏欄位的遮蔽
 
-因為一份快照會擷取一個項目的**全部**內容，包括任何標示 `Hidden` 的欄位(第 12 章)，一份交給外部呼叫端
+因為一份快照會擷取一個項目的**全部**內容，包括任何標示 `Hidden` 的欄位(第 5 章)，一份交給外部呼叫端
 的快照絕不能洩漏其中任何一個。`RevisionSnapshotRedactor.RedactHidden`
 (`src/Struo.Application/Query/RevisionSnapshotRedactor.cs`)會產生一份經過遮蔽的**副本**——省略任何
 其欄位中介資料為 `Hidden` 的頂層鍵，並且在 `translations.{locale}` 之內，省略任何同時屬於 `Hidden` 與
@@ -309,5 +309,7 @@ db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
   `{collection}Revisions`/`{collection}Revision`/`revert{X}` GraphQL 介面。
 - 第 11 章 [檔案、媒體與圖片轉換](11-files-and-media.md)，涵蓋針對 `file` 的即時、具體移入回收桶/
   還原/清除走查——本章軟刪除一節以抽象方式描述的唯一一個框架集合。
-- 第 12 章 [認證、SSO 與 RBAC](12-auth-and-rbac.md)，涵蓋 `RevisionSnapshotRedactor` 所讀取的
-  `Hidden` 欄位旗標，以及本章這些防護所建立於其上的 `CanRead`/`CanWrite`/`CanDelete` 授權。
+- 第 5 章 [欄位型別與介面](05-field-types.md)，涵蓋 `RevisionSnapshotRedactor` 所讀取的 `Hidden`
+  欄位旗標。
+- 第 12 章 [認證、SSO 與 RBAC](12-auth-and-rbac.md)，涵蓋本章這些防護所建立於其上的
+  `CanRead`/`CanWrite`/`CanDelete` 授權。
