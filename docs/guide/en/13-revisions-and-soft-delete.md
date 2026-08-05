@@ -167,11 +167,10 @@ No collection-specific resolver code exists for any of this — it is generated 
 
 **Admin drawer** — the admin SPA's `RevisionHistoryDrawer.vue` component
 (`frontend/src/components/revisions/RevisionHistoryDrawer.vue`) talks to the REST endpoints above (not
-GraphQL) via `itemsApi.listRevisions`/`getRevision`/`revert`
-(`frontend/src/api/itemsApi.ts`) — a list view, a snapshot detail view
-(`RevisionSnapshotView.vue`), and a revert action wired to the item form. It is a thin client over the
-same three REST endpoints documented above; it has no server-side behavior of its own beyond what
-`ItemService` already enforces.
+GraphQL) via `itemsApi.listRevisions`/`getRevision`/`revert` (`frontend/src/api/itemsApi.ts`) — a list
+view, a snapshot detail view (`RevisionSnapshotView.vue`), and a revert action wired to the item form.
+It is a thin client over the same three REST endpoints documented above; it has no server-side behavior
+of its own beyond what `ItemService` already enforces.
 
 ## What revert does and does not restore
 
