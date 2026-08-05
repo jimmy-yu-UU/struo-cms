@@ -165,8 +165,8 @@ REST 端點(而非 GraphQL)——一個列表檢視、一個快照詳情檢視(`
 
 `RevertAsync`(`src/Struo.Application/Query/ItemService.cs`)會讀取目標版本紀錄的原始快照，
 剝除其中的 `version` 鍵(這樣還原就不會回顯一個現已過期的樂觀並行控制 token，因而對目前這一列資料產生虛假的
-`409`)，並透過與一般`PUT` 完全**相同**的 `UpdateCoreAsync` 路徑重新套用結果，只是標記為
-`operation = "revert"` 而非`"update"`。在上面那次把 `status` 改成 `"published"`、每個欄位都改成各自
+`409`)，並透過與一般 `PUT` 完全**相同**的 `UpdateCoreAsync` 路徑重新套用結果，只是標記為
+`operation = "revert"` 而非 `"update"`。在上面那次把 `status` 改成 `"published"`、每個欄位都改成各自
 `"…-CHANGED"` 值的更新之後，把 `article` 還原回版本紀錄 1(它原始的 `create` 快照)：
 
 ```
