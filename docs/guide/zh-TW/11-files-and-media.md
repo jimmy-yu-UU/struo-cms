@@ -33,7 +33,7 @@ DefaultDisplayField = nameof(FileName), Hidden = true)]`——這裡的 `Hidden`
 (`src/Struo.Infrastructure/Files/FileTranslation.cs`，資料表 `file_translations`，在
 `(fileid, locale)` 上具備唯一性)，正是第 6 章記載、任何集合的 `[CmsTranslations]` 附屬資料表所
 使用的同一套機制。一次上傳，會用去除副檔名後的檔名，播下**預設語言**的 `title` 種子
-(`FileService.SaveAsync`，`src/Struo.Infrastructure/Files/FileService.cs:127-133`)——一個去除
+(`FileService.SaveAsync`，`src/Struo.Infrastructure/Files/FileService.cs`)——一個去除
 副檔名後變成空字串的點檔案 (dotfile) 會退回使用完整檔名，結果並會被夾限在 255 字元以內——所以
 每一個上傳的檔案，在媒體庫中都能立即被人類辨識，不需要額外的編輯步驟。`alt` 則永遠不會被自動
 填入;預設語言以外的語言，在有人寫入之前，完全沒有種子資料列，與任何其他可翻譯集合 (第 6 章)
@@ -63,8 +63,8 @@ $ curl -s -X POST http://localhost:5221/api/files -H "X-Struo-CSRF: 1" -b cookie
 ```
 
 每一次上傳，在寫入任何一個位元組之前，都會對照三個各自獨立的上限做驗證
-(`FileService.UploadAsync`，`src/Struo.Infrastructure/Files/FileService.cs:26-89`;預設值來自
-`src/Struo.Api/appsettings.json:15-29` 中的 `Struo:Files`，完整記載於第 3 章):
+(`FileService.UploadAsync`，`src/Struo.Infrastructure/Files/FileService.cs`;預設值來自
+`src/Struo.Api/appsettings.json` 中的 `Struo:Files`，完整記載於第 3 章):
 
 - **大小**——`Struo:Files:MaxUploadBytes`，預設 **25 MB** (`26214400` 位元組)。客戶端宣告的
   `Content-Length` 會先被前置檢查 (`QueryException`，`400`);實際串流的位元組數，則透過
@@ -103,8 +103,9 @@ $ curl -s -X POST http://localhost:5221/api/files -H "X-Struo-CSRF: 1" -b cookie
 ## 儲存後端:`local` 與 `s3`
 
 `Struo:Files:Backend` 恰好會選出一個已註冊的 `IFileStorage`
-(`FileStorageServiceCollectionExtensions.AddStruoFiles`，
-`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs:26-32`)
+(`FileStorageServiceCollectionExtensions.AddStruoFiles` 內的
+`AddSingleton<IFileStorage>` 註冊，
+`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`)
 ——`"local"` (預設) 或 `"s3"`;任何其他值都會讓啟動驗證失敗 (第 3 章)。
 
 **`local`** (`LocalFileStorage`，`src/Struo.Infrastructure/Files/LocalFileStorage.cs`) 會在
@@ -171,19 +172,20 @@ compose 檔案的情況下覆寫——`STRUO_MINIO_PORT` / `STRUO_MINIO_CONSOLE_
 `GET /api/files/{id}` 與 `GET /api/files/{id}/content` 都不帶任何 `[Authorize]`——允許匿名
 請求通過，這樣一個**已發布**檔案的中介資料/位元組，就能不需要 session 就內嵌在公開頁面中。一個
 **未發布** (`status != "published"`) 的檔案，額外需要 `IFileAccessPolicy.CanReadUnpublished`
-——一個**已驗證的身分**，加上一個 `file` 集合的**`CanWrite`**授權 (`FileAccessPolicy.cs:36-37`)，
-不是一個 `CanRead` 授權，也不僅僅是已登入。這道關卡刻意設在寫入上:`public` 對每一個呼叫端都是一道
+——一個**已驗證的身分**，加上一個 `file` 集合的**`CanWrite`**授權
+(`FileAccessPolicy.CanReadUnpublished`，`FileAccessPolicy.cs`)，不是一個 `CanRead` 授權，也不僅僅
+是已登入。這道關卡刻意設在寫入上:`public` 對每一個呼叫端都是一道
 權限底線 (第 12 章)，所以一旦 `file` 帶有一個公開*讀取*授權——這正是匿名提供圖片服務的文件記載
 設定——`CanRead("file")` 對匿名者與已驗證的呼叫端都同樣成立，因此完全無法把關任何東西;一份草稿是
 一種編輯狀態，所以能*編輯*檔案的呼叫端，才是能看見它的呼叫端。**出貨時的**種子資料只會授予 `public`
-一項讀取授權——`RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/RbacSeeder.cs:48-57`)
+一項讀取授權——`RbacSeeder.SeedAsync` (`src/Struo.Infrastructure/Identity/RbacSeeder.cs`)
 針對每一個 `Rbac:PublicReadCollections` 項目，只插入 `CanRead = true`，`CanWrite`/`CanDelete`
 從未被動過——但 RBAC 模型中沒有任何東西*禁止*一位超級管理員透過角色權限矩陣，把 `public` 的寫入
 授權授予出去 (第 12 章示範了正是這個授權流程，即時針對 `role` 集合操作);若對 `file` 做同樣的事，
 會把草稿存取權擴大到每一個已登入的呼叫端，因為這一節所把關的那個寫入授權，屆時也會變成公開的。
 這項檢查失敗時，會回傳單純的 `404` 而不是 `403`，所以一份草稿的存在與否，不會外洩給一個沒有該授權
-的呼叫端 (`FilesController.Get`/`Download`，`src/Struo.Api/Controllers/FilesController.cs:57-72`、
-`74-163`)。這也代表一個**已移入回收桶** (軟刪除——見下文) 的檔案，這兩個 action 也都會回傳
+的呼叫端 (`FilesController.Get`/`Download`，`src/Struo.Api/Controllers/FilesController.cs`)。這也代表
+一個**已移入回收桶** (軟刪除——見下文) 的檔案，這兩個 action 也都會回傳
 `404`，因為 `FileService.GetAsync` 讀取時，會經過與其他每一次讀取相同的 `ISoftDeletable`
 查詢過濾器——已即時驗證:
 
@@ -224,8 +226,8 @@ GET /api/files/{id}/content?width=&height=&format=&fit=&quality=
 
 只有在這項功能已啟用 (`Struo:Files:ImageTransform:Enabled`，預設 `true`)、`width`/`height`/
 `format` 至少存在一個，而且該檔案的 `contentType` 是以 `image/` 開頭時，才會嘗試做轉換——否則
-`Download` 會直接落回上方單純的直通/重新導向行為，不做任何改變
-(`FilesController.Download:91-94`)。以下參數取自即時程式碼，而不只是文件說明:
+`Download` 會直接落回上方單純的直通/重新導向行為，不做任何改變 (`FilesController.Download`，
+`FilesController.cs`，`wantsTransform` 判斷式)。以下參數取自即時程式碼，而不只是文件說明:
 
 | 參數 | 意義 | 夾限/預設值 |
 |---|---|---|
@@ -237,7 +239,7 @@ GET /api/files/{id}/content?width=&height=&format=&fit=&quality=
 
 只有 `fit=cover` 且**同時**給定 `width` 與 `height` 時，才會真正裁切
 (`NetVipsImageTransformer.Transform`，
-`src/Struo.Infrastructure/Files/NetVipsImageTransformer.cs:43-46`)——精確地置中裁切成那個
+`src/Struo.Infrastructure/Files/NetVipsImageTransformer.cs`)——精確地置中裁切成那個
 方框 (libvips 的 `Enums.Size.Both` + `Interesting.Centre`)。其他任何組合——`inside`/
 `contain`/一個無法辨識的值，或只給定一個維度的 `cover`——都會縮放至符合給定的邊界，絕不會超過
 原始來源的原生解析度做放大 (`Size.Down`)。兩者 (`width`、`height`) 都不要求時 (只做格式/品質
@@ -292,22 +294,23 @@ height 的請求，會先只從標頭窺視來源的寬度 (不解碼像素)，�
 
 如果轉換本身擲出例外 (一次損毀的上傳、一種不受支援的來源編碼、一次 libvips 失敗)，`Download`
 會連同檔案 id 記錄下這個例外，並退回提供**原始**位元組，而不是直接讓整個請求失敗
-(`FilesController.Download:130-145`)——一張損壞的縮圖，被認為比一張未經轉換的原圖更糟，但這個
-錯誤絕不會被靜默吞掉。
+(`FilesController.Download`，`FilesController.cs`，轉換的 `try`/`catch` 後援)——一張損壞的縮圖，
+被認為比一張未經轉換的原圖更糟，但這個錯誤絕不會被靜默吞掉。
 
 ### 快取位置與版本控制
 
 轉換後的變體會快取在磁碟上——`DiskImageVariantCache`
 (`src/Struo.Infrastructure/Files/DiskImageVariantCache.cs`)——放在
 `Struo:Files:ImageTransform:CachePath` (預設 `App_Data/image-cache`) 底下，並根據應用程式的
-**content root** (內容根目錄) 解析，絕不是行程的目前工作目錄
-(`FileStorageServiceCollectionExtensions.cs:45-52`——第 3 章對這項確切設定所標記的同一個
-CWD 對 content root 的陷阱)。快取鍵是檔案 id、目前的
+**content root** (內容根目錄) 解析，絕不是行程的目前工作目錄 (`IImageVariantCache` 註冊裡對
+`CachePath` 的解析，位於 `FileStorageServiceCollectionExtensions.cs`——第 3 章對這項確切設定所
+標記的同一個 CWD 對 content root 的陷阱)。快取鍵是檔案 id、目前的
 `Version` (`AuditableEntity` 的樂觀並行控制計數器——不是 `UpdatedAt`，因為這個 entity 把它視為
 不可為 null，所以沒有一個自然的「未設定」哨兵值可以依賴)，以及每一個轉換參數，各自在雜湊之前
-各佔自己標記過的一行 (`DiskImageVariantCache.DeriveKey`/`FilesController.Download:110-116`)
-的 SHA-256 摘要 (以小寫十六進位表示)——所以一次重新上傳 (會使 `Version` 遞增) 自然會發生
-快取未命中，而不會提供一個過時的變體，也完全不需要任何明確的快取失效機制。鍵值會依照自己前兩個
+各佔自己標記過的一行 (`DiskImageVariantCache.DeriveKey`/`FilesController.Download`，
+`FilesController.cs`) 的 SHA-256 摘要 (以小寫十六進位表示)——所以一次重新上傳 (會使 `Version`
+遞增) 自然會發生快取未命中，而不會提供一個過時的變體，也完全不需要任何明確的快取失效機制。鍵值
+會依照自己前兩個
 十六進位字元，切分進一個子目錄，並以原子方式寫入 (暫存檔案再重新命名)，所以一個並行的讀取者，
 絕不會看到一個寫到一半的變體。已即時驗證:在上方四次轉換之後，快取目錄裡每一個不同的鍵各有一個
 檔案，各自位於一個雙字元的分片目錄底下:
