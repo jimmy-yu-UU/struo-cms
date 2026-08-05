@@ -237,10 +237,19 @@ configuration. Four measurements, same machine, same container, same pooled conn
 * a **minimal xUnit project** holding nothing but that same repository code, no Struo test assembly and
   no fixtures — **4 aborts in 46 runs** (~9% of runs), same exception chain, same `CreateGenericAsync`
   frame. This is the positive control: it makes the zeros below informative rather than vacuous, and it
-  shows the repo's own test assembly is not *required* — a bare xUnit host reproduces the abort alone. It
-  does not show the host is the whole story: the repo's suite went red every run and the bare host
-  roughly one in eleven, so something in the fuller suite amplifies the rate by about an order of
-  magnitude, and what that is was not investigated;
+  shows the repo's own test assembly is not *required* — a bare xUnit host reproduces the abort alone;
+* **what raises that ~9% to the suite's every-run failure**, isolated afterwards by adding one thing at a
+  time to that same bare probe, interleaved against an unmodified control run in the same sitting: the
+  amplifier is **a second Npgsql pool in the process**. `PostgresIntegrationTests.BuildRepo` and
+  `BuildRawClient` each call `DbMaintenance.CreateDatabase()` to self-provision the disposable database,
+  and that opens a connection whose string differs only in `Database=`, which is a separate pool. Adding
+  that call to the probe took it from **2 of 15 to 15 of 15**. The cause is the second pool, not the extra
+  connection and not the swallowed exception: an extra pooled open/close on the *same* database went
+  **0 of 12**, a swallowed server-side error on the *same* database **1 of 12**, while a plain connection
+  to the maintenance database that throws nothing went **11 of 12**. Production cannot reach that state —
+  it binds one connection string, never calls `DbMaintenance.CreateDatabase()`, and never constructs an
+  `NpgsqlConnection` directly, so it has exactly one pool. This removes the *amplifier* from production,
+  not the phenomenon: the bare single-pool xUnit host still failed ~10% of runs;
 * the **product itself** — `Struo.Api` booted as Production against real PostgreSQL with pooling on and
   driven through the item endpoints (create, offset query, get-by-id, compare-and-swap update)
   sequentially, 8-way concurrent, and with idle gaps — note that a live host issues no synchronous
@@ -250,9 +259,12 @@ configuration. Four measurements, same machine, same container, same pooled conn
 
 So in everything measured here, the abort tracks the xUnit/VSTest test host, not the product's use of a
 pooled connection, and a pooled production process was not observed to hit it at a volume (≈2,200 units)
-where the xUnit probe's rate of roughly one abort per fifty units would have produced tens. That is a
-non-observation, **not** a proof of safety: the mechanism is still unknown, so nothing here rules the
-abort out for a different threading model, load shape or Windows build. Disabling pooling here still
+where the xUnit probe's rate of roughly one abort per fifty units would have produced tens. The one
+condition that made it reproduce *every* run — a second pool — is structurally absent from production,
+which is a reason and not just an absence of sightings. But that is still a non-observation, **not** a
+proof of safety: the single-pool bare host failed ~10% of runs, and the mechanism underneath both is
+still unknown, so nothing here rules the abort out for a different threading model, load shape or
+Windows build. Disabling pooling here still
 removes the repo's only local reproduction of the abort; the way back to one is to set `Pooling=true` in
 `STRUO_TEST_PG_CONNECTION`, which `PgTestConnectionString.DisablePooling` deliberately honours — the
 expected casualty of that choice is `Resolved_connection_disables_pooling`, and it says so.
