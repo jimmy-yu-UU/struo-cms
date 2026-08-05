@@ -46,12 +46,12 @@ $ curl -s -b cookies.txt http://localhost:5221/api/languages
 `Required`)，而是改在附屬資料表同步邏輯內部逐語言驗證 (下一節)。`MetadataScanner.ScanTranslations`
 也會把每一個附屬資料表欄位摺疊進父層的 `CollectionMetadata.Fields` 清單中 (標記為
 `Translatable = true`)，所以一個可翻譯欄位*確實*可以像其他任何自有欄位一樣，透過一般的查詢 DSL
-白名單做篩選/排序 (`QueryValidator.cs:25` 會從所有非 `Hidden` 的 `meta.Fields` 建構這份白名單，
+白名單做篩選/排序 (`QueryValidator.Validate` 會從所有非 `Hidden` 的 `meta.Fields` 建構這份白名單，
 沒有排除 `Translatable`)——只是它是在有效查詢語言下，透過
 `RelationFilterResolver.IsTranslatableField`/`ResolveTranslatableIdsAsync`
 (`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`，第 7 章)，改對附屬資料表而非父資料列
 解析。已透過即時環境驗證:即使完全沒有帶上 `?locale=`，用可翻譯的 `title` 篩選 `file` 依然成功
-(此時有效語言會退回預設值 `DefaultCode()`，`ItemService.cs:55-57`):
+(此時有效語言會退回預設值 `DefaultCode()`，即 `ItemService.QueryAsync` 的 `queryLocale` 預設值):
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Btitle%5D%5B_eq%5D=alpha-report"
@@ -104,11 +104,12 @@ public sealed class FileTranslation
 
 有一個結果值得明講:`File` 資料列只會透過專屬的上傳管線建立 (`FileService.UploadAsync`，第 11
 章)——資料列的建立權屬於這條管線，而不屬於一般的 items API。`ItemService.CreateAsync` 會*先*
-檢查一般的 `CanWrite` 授權 (`ItemService.cs:108`;第 12 章的 `AdminOnly` 段落，記載了這個檢查
-順序適用於每一個集合)——一個對 `file` 完全沒有寫入授權的呼叫端，會先看到通用的
+檢查一般的 `CanWrite` 授權 (先於下方的 `RequireSuperAdminForAdminOnly` 與 `File` 集合拒絕分支;
+第 12 章的 `AdminOnly` 段落，記載了這個檢查順序適用於每一個集合)——一個對 `file` 完全沒有寫入
+授權的呼叫端，會先看到通用的
 「Write not permitted.」(`FORBIDDEN`)，根本輪不到下方這個集合專屬的拒絕。只有在通過那一關之後，
-`File` 專屬的守衛才會執行:`ItemService.cs:115-117` 會直接以 `400 BAD_USER_INPUT` 拒絕一個
-一般的 `POST /api/items/file`，逐字引用原始碼中的訊息:「Files cannot be created through the
+`File` 專屬的守衛才會執行:`ItemService.CreateAsync` 的 `File` 集合拒絕分支會直接以 `400 BAD_USER_INPUT`
+拒絕一個一般的 `POST /api/items/file`，逐字引用原始碼中的訊息:「Files cannot be created through the
 generic items API. Upload one with POST /api/files instead.」——在抵達翻譯驗證、`ReadOnly`
 欄位剝除，或任何其他一般新增機制之前就先擋下。因為兩種協定共用同一個 `ItemService.CreateAsync`，
 GraphQL 的 `createFile` mutation 也會被完全相同地拒絕。這第二關與 `File` 的
@@ -244,11 +245,11 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 ## 管理後台語言分頁與完成度指示
 
 管理後台 SPA 的 `ItemForm.vue`，只有在集合帶有可翻譯欄位時，才會渲染分頁列
-(`v-if="fields.translatable.length"`，`ItemForm.vue:54`)——`GET /api/languages` 回傳的每一筆
+(`v-if="fields.translatable.length"`，位於 `<Tabs>` 元素上)——`GET /api/languages` 回傳的每一筆
 資料列 (透過 `languageStore` 這個 Pinia store) 對應一個分頁，即使只啟用了單一語言也一樣。至於每個
 分頁旁那個小小的「圓點」，把關條件則更窄:只有在已啟用語言超過一個、*且*集合帶有可翻譯欄位時，才會
-渲染 (`showDots`，`ItemForm.vue:32`)——一個只有單一語言、卻帶有可翻譯欄位的安裝，仍然會顯示一個
-(沒有圓點的) 分頁。每個圓點的填滿狀態，來自 `hasLocaleContent`
+渲染 (`ItemForm.vue` 的 `showDots` computed property)——一個只有單一語言、卻帶有可翻譯欄位的安裝，
+仍然會顯示一個 (沒有圓點的) 分頁。每個圓點的填滿狀態，來自 `hasLocaleContent`
 (`frontend/src/lib/localeCompleteness.ts`):
 
 ```ts

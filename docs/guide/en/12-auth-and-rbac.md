@@ -25,7 +25,7 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
  admin@admin.com    | $argon2id$v=19$m=65536,t=3,p=1
 ```
 
-`AuthController.Login` (`src/Struo.Api/Controllers/AuthController.cs:24-35`) calls
+`AuthController.Login` (`src/Struo.Api/Controllers/AuthController.cs`) calls
 `IAuthService.AuthenticateAsync`, which verifies the submitted password against the stored hash via
 `Argon2idPasswordHasher.Verify`; on success it signs a `Cookie`-scheme `ClaimsPrincipal` in directly —
 password verification and cookie issuance happen in the same request, there is no separate "exchange a
@@ -33,9 +33,12 @@ password for a token" step.
 
 ## Session cookies and the distributed ticket store
 
-The **cookie** scheme (`AuthSchemes.Cookie`, constant `"Cookies"`) is the ASP.NET Core default
-(`AddAuthentication(AuthSchemes.Cookie)`, `src/Struo.Api/Auth/AuthWiring.cs:37`) — the one scheme
-authenticated automatically on every request regardless of `[Authorize]`. Its cookie is named
+The **cookie** scheme (`AuthSchemes.Cookie`, constant `"Cookies"`) is the one the default
+`AuthSchemes.Adaptive` policy scheme forwards to automatically on every request lacking an
+`Authorization: Bearer` header, regardless of `[Authorize]` — `AuthWiring.AddStruoAuth`
+(`src/Struo.Api/Auth/AuthWiring.cs`) registers `Adaptive` itself, not `Cookie` directly, as the default
+authentication scheme (`services.AddAuthentication(AuthSchemes.Adaptive)`); see Bearer tokens below for
+the forwarding rule and the bearer-header case. Its cookie is named
 `struo.session` (`AuthSchemes.SessionCookieName`), `HttpOnly`, `SameSite=Lax`, 8-hour sliding expiration.
 `SecurePolicy` is `Always` in `Production` and `SameAsRequest` otherwise (the local dev/test host runs
 over plain HTTP, and `Always` would silently stop the cookie being sent back). If CORS is configured with
@@ -46,7 +49,8 @@ browsers only honor alongside `Secure`.
 Ticket storage — the actual session state behind the cookie's opaque key — is
 `DistributedCacheTicketStore` (`src/Struo.Api/Auth/DistributedCacheTicketStore.cs`), an `ITicketStore`
 backed by `IDistributedCache`: **StackExchange.Redis when `Redis:ConnectionString` is set**, an
-**in-memory distributed cache otherwise** (`AuthWiring.cs:23-27`). Both branches use identical sliding
+**in-memory distributed cache otherwise** (the `Redis:ConnectionString` branch in
+`AuthWiring.AddStruoAuth`, `AuthWiring.cs`). Both branches use identical sliding
 8-hour expiry. The practical difference (chapter 3 states this plainly) is that the in-memory fallback
 loses every session on process restart — fine for a quick local run, not for anything longer-lived or
 multi-instance — while Redis persists sessions across restarts and shares them across replicas. Using a
@@ -120,8 +124,9 @@ consciously rather than the default silently doing the wrong thing in either top
 
 ## OIDC/external login
 
-`Oidc:Enabled` (default `false`) gates the entire external-login scheme registration
-(`OidcWiring.AddStruoOidc`, `src/Struo.Api/Auth/OidcWiring.cs:20-32`) — when disabled, no OIDC
+`Oidc:Enabled` (default `false`) gates the entire external-login scheme registration —
+`OidcWiring.AddStruoOidc` (`src/Struo.Api/Auth/OidcWiring.cs`) returns early, before calling
+`AddOpenIdConnect`, whenever `Enabled` is false or `Authority` is blank — when disabled, no OIDC
 `AuthenticationScheme` is added at all, and `GET /api/auth/login/oidc` returns a plain `404` rather than
 attempting a challenge (live-verified, this host has OIDC disabled by default):
 
@@ -138,8 +143,8 @@ When enabled, `Oidc:Authority`/`ClientId`/`ClientSecret` are all required at sta
 (`ValidateOnStart`); the handler uses authorization-code + PKCE, keeps short JWT claim names
 (`MapInboundClaims = false`, so `OidcClaimsMapper` reads `email`/`name`/`iss`/`tid`/`email_verified`
 directly rather than their long ASP.NET Core claim-type equivalents), and fetches additional claims from
-the userinfo endpoint. On `OnTokenValidated`
-(`OidcWiring.cs:53-72`) the external principal is mapped to an `ExternalIdentity` and handed to
+the userinfo endpoint. On the `OnTokenValidated` handler in `OidcWiring.AddStruoOidc`
+(`OidcWiring.cs`) the external principal is mapped to an `ExternalIdentity` and handed to
 `IExternalLoginService.ResolveOrProvisionAsync` (`ExternalLoginService`,
 `src/Struo.Application/Security/ExternalLoginService.cs`) — **not** signed in directly: the OIDC
 principal is discarded and replaced with a local `Cookie`-scheme identity carrying just the resolved
@@ -151,8 +156,8 @@ how the user authenticated.
 **case-insensitively at the store layer** against existing local users. If no local user matches, one is
 created on the spot (`store.CreateExternalUserAsync`) — this is what "JIT" (just-in-time) means here: no
 separate admin-driven provisioning step is required for a first-time external sign-in to work. Three
-guards are each independently checked before the email match runs
-(`ExternalLoginService.ResolveOrProvisionAsync:13-30`); only two of them are permissive by default —
+guards are each independently checked before the email match runs, inside
+`ExternalLoginService.ResolveOrProvisionAsync`; only two of them are permissive by default —
 tenant pinning ships **fail-closed**:
 
 | Guard | Config key | Default | Effect when set |
@@ -162,7 +167,8 @@ tenant pinning ships **fail-closed**:
 | Domain allow-list | `Oidc:AllowedEmailDomains` | `[]` (unrestricted) | Rejects (`DomainNotAllowed`) unless the email's domain is in the list. |
 
 The source itself documents this as an **accepted risk**, not an oversight
-(`OidcOptions`, `src/Struo.Application/Security/OidcOptions.cs:16-22`): because linking is by email
+(`OidcOptions.RequireEmailVerified`/`AllowedTenantId`/`AllowedEmailDomains`,
+`src/Struo.Application/Security/OidcOptions.cs`): because linking is by email
 equality, a deployment that enables OIDC without pinning at least one of these could have a password
 account taken over by any identity provider identity presenting a matching email. A production OIDC
 deployment is expected to constrain it explicitly — a single-tenant `Authority` plus `AllowedTenantId`
@@ -170,7 +176,7 @@ and/or `AllowedEmailDomains`, and `RequireEmailVerified = true` — rather than 
 defaults that keep local development frictionless.
 
 **`public` is the floor for every caller:** `SqlSugarRolePermissionStore.LoadForUserAsync`
-(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs:14-26`) unions the `public` role's
+(`src/Struo.Infrastructure/Identity/SqlSugarRolePermissionStore.cs`) unions the `public` role's
 own grants into **every** caller's effective permissions — anonymous, role-less, and role-holding alike
 — not merely as a fallback for a user whose role set comes back empty. A caller's own roles can only
 *add* to what `public` already grants, never subtract: the model has no deny semantics —
@@ -247,17 +253,17 @@ otherwise.)
 
 ## `AdminOnly` collections and super-admin
 
-`CmsCollectionAttribute.AdminOnly` (`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs:11-18`)
-marks a collection's **writes** (create/update/delete through the generic CRUD path) as requiring
-super-admin regardless of any delegated per-collection grant — the four identity/authorization
+`CmsCollectionAttribute.AdminOnly` (`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`)
+marks a collection's **writes** (create/update/delete/restore/revert through the generic CRUD path) as
+requiring super-admin regardless of any delegated per-collection grant — the four identity/authorization
 collections above are the only ones that set it. `ItemService.RequireSuperAdminForAdminOnly`
-(`src/Struo.Application/Query/ItemService.cs:427-431`) throws `PermissionDeniedException` with the
+(`src/Struo.Application/Query/ItemService.cs`) throws `PermissionDeniedException` with the
 message `"Writes to '{collection}' require a super-admin."` when it fails — but the **ordinary**
-per-collection permission check runs *first* in every one of these four paths, and it is not the same
-check in all four: `CreateAsync` (`ItemService.cs:107`) and `UpdateCoreAsync` (`:145`) check `CanWrite`
-and fail with `"Write not permitted."`; `DeleteAsync` (`:256`) and `RestoreAsync` (`:319`) check
-`CanDelete` and fail with `"Delete not permitted."` instead — `RequireSuperAdminForAdminOnly` runs second
-in all four (`:257`, `:320`, and the equivalent lines in `CreateAsync`/`UpdateCoreAsync`), so a caller
+per-collection permission check runs *first* at each of the five call sites, and it is not the same
+check every time: `CreateAsync`, `UpdateCoreAsync`, and `RevertAsync` check `CanWrite`
+and fail with `"Write not permitted."`; `DeleteAsync` and `RestoreAsync` check
+`CanDelete` and fail with `"Delete not permitted."` instead — `RequireSuperAdminForAdminOnly` runs
+immediately after each of those five checks, so a caller
 with **no** ordinary grant at all on an `AdminOnly` collection sees the generic per-verb message, and the
 AdminOnly-specific message only surfaces for a caller that *does* hold the relevant per-collection grant
 but isn't super-admin. Both are live-verified for the write case, deliberately isolating each check:
@@ -275,7 +281,8 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 ```
 
 `RolesController` enforces the same super-admin requirement directly on every one of its own actions
-(`RequireAdmin()`, checked first thing in each action, `RolesController.cs:31,50`) rather than going
+(`RequireAdmin()`, checked first thing in each action — `GetPermissions` and `PutPermissions`,
+`src/Struo.Api/Controllers/RolesController.cs`) rather than going
 through `ItemService` at all — live-verified the same rejection shape from a completely different code
 path:
 
@@ -287,9 +294,9 @@ $ curl -s -i -X PUT http://localhost:5221/api/roles/<id>/permissions -H "X-Struo
 
 **`UsersController` does the same for every action except one deliberate exception:**
 `PUT /api/users/{id}/password` only calls `RequireAdmin()` when the caller is changing **someone else's**
-password (`ChangePassword`, `src/Struo.Api/Controllers/UsersController.cs:58-62`) — a non-admin
+password (`ChangePassword`, `src/Struo.Api/Controllers/UsersController.cs`) — a non-admin
 authenticated user may change their **own** password by supplying `currentPassword`, which is verified
-against the stored hash before the write proceeds (`:63-69`). This is the one self-service write path in
+against the stored hash before the write proceeds, in `ChangePassword`'s self-service branch. This is the one self-service write path in
 the entire identity/RBAC surface; every other `UsersController`/`RolesController` action (creating a
 user, issuing/revoking an access token, the effective-permissions preview, the role permission matrix)
 requires super-admin unconditionally, with no self-service exception. Live-verified against
@@ -327,15 +334,16 @@ matrix in the admin (or its underlying `PUT /api/roles/{id}/permissions` endpoin
 A field's `Hidden` flag (`FieldMetadata.Hidden`, distinct from `CmsCollectionAttribute.Hidden`'s
 sidebar-presentation meaning) is unconditionally excluded from the outbound projection —
 `ItemProjector.Project` skips it before permission/field-selection are even consulted
-(`src/Struo.Application/Query/Projection/ItemProjector.cs:46`: `if (field.Hidden) continue;`) — so no
+(`src/Struo.Application/Query/Projection/ItemProjector.cs`: `if (field.Hidden) continue;`) — so no
 combination of `fields=`, RBAC field-readability, or a `deep`-expanded relation can ever surface a
 `Hidden` field's value through the API. It is also excluded from the query-DSL whitelist entirely
 (chapter 8) — a filter/sort/`fields=` naming a `Hidden` field is rejected as an unknown field, precisely
 so a credential-shaped `Hidden` column can't be turned into a character-at-a-time extraction oracle via
 `meta.total`.
 
-On the **write** side, `Hidden` alone is not itself the mechanism: `ItemDeserializer.Deserialize`
-(`src/Struo.Application/Query/Write/ItemDeserializer.cs:87-95`) strips any field flagged `IsSystem` **or**
+On the **write** side, `Hidden` alone is not itself the mechanism: the `IsSystem`/`ReadOnly`
+field-stripping loop in `ItemDeserializer.Deserialize`
+(`src/Struo.Application/Query/Write/ItemDeserializer.cs`) strips any field flagged `IsSystem` **or**
 `ReadOnly` from the incoming body before validation runs, nulling it back out on the freshly-deserialized
 entity. In the shipped schema, every `Hidden` field (`User.Password`, `User.AccessToken`) also happens to
 be declared `ReadOnly`, so a client-supplied value for either is silently discarded rather than persisted
@@ -391,7 +399,8 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-
 ```
 
 The distinction between an **absent** `roles=` parameter and one present-but-**empty** is deliberate and
-implemented deliberately (`UsersController.GetEffectivePermissions:118-126`): ASP.NET Core's default model
+implemented deliberately, via the `Request.Query.TryGetValue` check in
+`UsersController.GetEffectivePermissions` (`UsersController.cs`): ASP.NET Core's default model
 binding would collapse both to `null` for a plain string parameter, so the controller reads
 `Request.Query` directly instead, specifically so "preview the stored roles" and "preview a role-less
 selection" remain distinguishable request shapes. `isSuperAdmin: true` with an empty `permissions` map

@@ -35,7 +35,18 @@ public sealed class FileStorageOptions
         public bool Enabled { get; set; } = true;
         public int MaxWidth { get; set; } = 4096;
         public int MaxHeight { get; set; } = 4096;
-        public string[] AllowedFormats { get; set; } = ["webp", "jpeg", "png", "avif"];
+
+        /// <summary>The formats applied by <see cref="ApplyCollectionDefaults"/> when none are
+        /// configured. Held as a named default rather than a property initializer because
+        /// ConfigurationBinder APPENDS bound array elements to a non-empty collection default instead
+        /// of replacing it, which made narrowing this list impossible.</summary>
+        public static readonly string[] DefaultAllowedFormats = ["webp", "jpeg", "png", "avif"];
+
+        /// <summary>Empty until <see cref="ApplyCollectionDefaults"/> runs. <c>AddStruoFiles</c>
+        /// registers that as a <c>PostConfigure</c>; a caller constructing this type directly (rather
+        /// than through DI) must call it itself, or <c>FilesController</c> will reject every explicitly
+        /// requested <c>format</c> — an empty list means no format ever matches the allow-check.</summary>
+        public string[] AllowedFormats { get; set; } = [];
         public int DefaultQuality { get; set; } = 82;
 
         // Root directory for cached transformed-image variants (IImageVariantCache). Relative
@@ -44,7 +55,21 @@ public sealed class FileStorageOptions
         // footgun for this codebase once the process is launched from a different working directory
         // (e.g. a systemd unit or a different shell) than the project folder.
         public string CachePath { get; set; } = "App_Data/image-cache";
+
+        /// <summary>Applies defaults that cannot live in a property initializer without
+        /// ConfigurationBinder appending to them. Must run after binding and before the value is
+        /// consumed.</summary>
+        public void ApplyCollectionDefaults()
+        {
+            if (AllowedFormats.Length == 0) AllowedFormats = [.. DefaultAllowedFormats];
+        }
     }
+
+    /// <summary>Applies defaults that cannot live in a property initializer without
+    /// ConfigurationBinder appending to them. Must run after binding and before the value is
+    /// consumed; <c>FileStorageServiceCollectionExtensions.AddStruoFiles</c> registers this as a
+    /// <c>PostConfigure</c> callback.</summary>
+    public void ApplyCollectionDefaults() => ImageTransform.ApplyCollectionDefaults();
 
     public void Validate()
     {

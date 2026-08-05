@@ -13,6 +13,20 @@ The deliberate exception is a citation into **pinned upstream SqlSugar source**,
 `src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`: that source is version-pinned and cannot
 shift underneath us, so a line range there stays valid.
 
+Enforced by `CodeCitationConventionTests`
+(`tests/Struo.Tests/Documentation/CodeCitationConventionTests.cs`), mechanically, for two of the
+four shapes citations take. A citation that names a file extension (e.g. `SomeFile.cs:123`,
+citation-guard:allow) is a violation only if the cited file resolves to a real path under `src/`,
+`tests/`, `frontend/src/`, `schema/`, `db/`, `docs/` or `samples/` (or is `AGENTS.md`/`CLAUDE.md`
+itself) — a bare filename matches by basename anywhere under those roots, a directory-prefixed one
+(as most upstream citations here are written) must match a real path suffix, and there is
+deliberately no upstream-filename allowlist, which would go stale. A citation with no file extension
+at all — a dotted `Construct.Member` name immediately followed by a hyphenated range — names no file
+to check, so it is **always** a violation with no escape hatch; write upstream citations in the
+extension-anchored form, never this one. A bare trailing number with no filename (`` `:145` ``) or a
+prose reference ("line 74") is not reliably distinguishable from a port or a time and is not covered;
+a reviewer still has to catch those by hand.
+
 ## Naming
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.

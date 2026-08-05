@@ -11,7 +11,14 @@ public sealed class OidcOptions
     public string? ClientId { get; set; }
     public string? ClientSecret { get; set; }
     public string CallbackPath { get; set; } = "/signin-oidc";
-    public string[] Scopes { get; set; } = ["openid", "email", "profile"];
+
+    /// <summary>The scopes applied by <see cref="ApplyCollectionDefaults"/> when none are configured.
+    /// Held as a named default rather than a property initializer because ConfigurationBinder APPENDS
+    /// bound array elements to a non-empty collection default instead of replacing it, which made
+    /// narrowing this list impossible.</summary>
+    public static readonly string[] DefaultScopes = ["openid", "email", "profile"];
+
+    public string[] Scopes { get; set; } = [];
     public string ReturnUrlDefault { get; set; } = "/";
     // ACCEPTED RISK: JIT provisioning links an external identity to an existing
     // local account by email equality, and these guards default to OFF. That means a deployment MUST
@@ -26,4 +33,12 @@ public sealed class OidcOptions
 
     public ExternalLoginPolicy ToPolicy() =>
         new(RequireEmailVerified, AllowedTenantId, AllowedEmailDomains);
+
+    /// <summary>Applies defaults that cannot live in a property initializer without
+    /// ConfigurationBinder appending to them. Must run after binding and before the value is
+    /// consumed; both of <c>OidcWiring.AddStruoOidc</c>'s binds call this.</summary>
+    public void ApplyCollectionDefaults()
+    {
+        if (Scopes.Length == 0) Scopes = [.. DefaultScopes];
+    }
 }
