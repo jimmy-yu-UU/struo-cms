@@ -31,8 +31,8 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 ## Session cookie 與分散式 ticket 存放
 
 **cookie** 機制(`AuthSchemes.Cookie`，常數為 `"Cookies"`)是預設的 `AuthSchemes.Adaptive` policy
-scheme，在每一個未帶 `Authorization: Bearer` 標頭的請求上會自動轉發過去的機制——無論是否標示
-`[Authorize]`：`AuthWiring.AddStruoAuth`(`src/Struo.Api/Auth/AuthWiring.cs`)真正註冊為預設驗證機制
+scheme 在每一個未帶 `Authorization: Bearer` 標頭的請求上自動轉發的對象——無論是否標示 `[Authorize]`：
+`AuthWiring.AddStruoAuth`(`src/Struo.Api/Auth/AuthWiring.cs`)真正註冊為預設驗證機制
 的是 `Adaptive` 本身，而非直接是 `Cookie`(`services.AddAuthentication(AuthSchemes.Adaptive)`)；轉發
 規則與帶 bearer 標頭的情形，見下方 Bearer token 一節。它的 cookie 名稱為 `struo.session`
 (`AuthSchemes.SessionCookieName`)，具備 `HttpOnly`、`SameSite=Lax`、8 小時滑動到期時間。
@@ -235,8 +235,8 @@ HTTP/1.1 401 Unauthorized
 
 `CmsCollectionAttribute.AdminOnly`
 (`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`)將一個集合的**寫入**動作
-(透過一般 CRUD 路徑進行的建立／更新／刪除)標示為無論任何委派的逐集合授權為何，一律需要 super-admin
-——上述四個身分／授權集合是唯一設定它的集合。`ItemService.RequireSuperAdminForAdminOnly`
+(透過一般 CRUD 路徑進行的建立／更新／刪除／還原／回復)標示為無論任何委派的逐集合授權為何，一律需要
+super-admin——上述四個身分／授權集合是唯一設定它的集合。`ItemService.RequireSuperAdminForAdminOnly`
 (`src/Struo.Application/Query/ItemService.cs`)在失敗時會拋出 `PermissionDeniedException`，
 訊息為 `"Writes to '{collection}' require a super-admin."`——但**一般**的逐集合權限檢查會在這五個呼叫點
 的每一個之中**先**執行，而且五個呼叫點用的並非同一個檢查：`CreateAsync`、`UpdateCoreAsync` 與
@@ -259,7 +259,7 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 ```
 
 `RolesController` 直接在它自己的每一個 action 上強制執行相同的 super-admin 要求
-(`RequireAdmin()`，在每個 action 中最先被檢查——例如 `GetPermissions` 與 `PutPermissions`，
+(`RequireAdmin()`，在每個 action 中最先被檢查——`GetPermissions` 與 `PutPermissions`，
 `src/Struo.Api/Controllers/RolesController.cs`)，完全不經過
 `ItemService`——以下從完全不同的程式碼路徑即時驗證了相同的拒絕形狀：
 

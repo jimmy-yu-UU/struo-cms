@@ -229,11 +229,11 @@ configuration. Four measurements, same machine, same container, same pooled conn
 
 * the suite itself with pooling re-enabled — **red in 7 of 7 runs**, same abort every time;
 * a **plain console process** running that same repository code (build a client, `InitTables`, clear,
-  five `CreateAsync`, an offset query, then the compare-and-swap update) in five threading models —
-  main-thread sequential; a dedicated thread per unit that exits; a dedicated thread that exits
-  mid-flight; a dedicated thread that also owns the async continuations via a pumping
-  `SynchronizationContext` and then exits; thread-pool threads only — **0 aborts in 30 runs each, 150
-  runs total**;
+  five `CreateAsync`, an offset query, then the compare-and-swap update — each run executes four such
+  units) in five threading models — main-thread sequential; a dedicated thread per unit that exits; a
+  dedicated thread that exits mid-flight; a dedicated thread that also owns the async continuations via
+  a pumping `SynchronizationContext` and then exits; thread-pool threads only — **0 aborts in 30 runs
+  each, 150 runs total**;
 * a **minimal xUnit project** holding nothing but that same repository code, no Struo test assembly and
   no fixtures — **4 aborts in 46 runs** (~9% of runs), same exception chain, same `CreateGenericAsync`
   frame. This is the positive control: it makes the zeros below informative rather than vacuous, and it
