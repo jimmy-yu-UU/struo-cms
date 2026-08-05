@@ -103,8 +103,7 @@ $ curl -s -X POST http://localhost:5221/api/files -H "X-Struo-CSRF: 1" -b cookie
 ## 儲存後端:`local` 與 `s3`
 
 `Struo:Files:Backend` 恰好會選出一個已註冊的 `IFileStorage`
-(`FileStorageServiceCollectionExtensions.AddStruoFiles` 內的
-`AddSingleton<IFileStorage>` 註冊，
+(`FileStorageServiceCollectionExtensions.AddStruoFiles` 內的 `AddSingleton<IFileStorage>` 註冊，
 `src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`)
 ——`"local"` (預設) 或 `"s3"`;任何其他值都會讓啟動驗證失敗 (第 3 章)。
 
@@ -309,10 +308,9 @@ height 的請求，會先只從標頭窺視來源的寬度 (不解碼像素)，�
 不可為 null，所以沒有一個自然的「未設定」哨兵值可以依賴)，以及每一個轉換參數，各自在雜湊之前
 各佔自己標記過的一行 (`DiskImageVariantCache.DeriveKey`/`FilesController.Download`，
 `FilesController.cs`) 的 SHA-256 摘要 (以小寫十六進位表示)——所以一次重新上傳 (會使 `Version`
-遞增) 自然會發生快取未命中，而不會提供一個過時的變體，也完全不需要任何明確的快取失效機制。鍵值
-會依照自己前兩個
-十六進位字元，切分進一個子目錄，並以原子方式寫入 (暫存檔案再重新命名)，所以一個並行的讀取者，
-絕不會看到一個寫到一半的變體。已即時驗證:在上方四次轉換之後，快取目錄裡每一個不同的鍵各有一個
+遞增) 自然會發生快取未命中，而不會提供一個過時的變體，也完全不需要任何明確的快取失效機制。
+鍵值會依照自己前兩個十六進位字元，切分進一個子目錄，並以原子方式寫入 (暫存檔案再重新命名)，所以一個並行的
+讀取者，絕不會看到一個寫到一半的變體。已即時驗證:在上方四次轉換之後，快取目錄裡每一個不同的鍵各有一個
 檔案，各自位於一個雙字元的分片目錄底下:
 
 ```
