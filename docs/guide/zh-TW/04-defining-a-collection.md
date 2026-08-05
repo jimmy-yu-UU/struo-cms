@@ -198,27 +198,20 @@ Migration 只有在之後才會派上用場——當這張資料表已經存有�
 有了真正的資料就很危險。第 15 章完整涵蓋這兩套機制，包括 `AutoSyncSchema` 的九項危險情境清單，以及
 如何撰寫具可攜性的 migration。
 
-## 新增一個集合的端到端檢查清單
+## 檢查清單
 
-1. 建立 (或重複使用) 一個內容類別庫專案;參照 `Struo.Domain` 取得 attribute/enum，並參照足夠的
-   SqlSugar (直接參照，或透過 `Struo.Infrastructure` 間接取得) 以便使用
-   `[SugarTable]`/`[SugarColumn]`。
-2. 撰寫 entity:繼承 `AuditableEntity`、以 `[SugarColumn(IsPrimaryKey = true)]` 覆寫 `Id`、加上
-   `[SugarTable("your_table_name")]` 與 `[CmsCollection("Your Label", ...)]`。
-3. 為每一個 API/管理後台表單應該公開的屬性加上 `[CmsField]`，並在任何
-   `Select`/`Radio`/`MultiSelect`/`CheckboxGroup` 欄位上加上 `[CmsOptions]`。
-4. 如果這個集合需要回收桶/還原或版本歷史，就實作 `ISoftDeletable` 並/或設定 `Revisions = true`
-   (第 13 章)。
-5. 如果這個集合會參照另一個集合，就用 `[CmsRelation]` + SqlSugar 的 `[Navigate]` 加上關聯
-   (第 7 章)。
-6. 從 `src/Struo.Api/Struo.Api.csproj` 為你的內容專案加上一個 `ProjectReference`，並把它的組件
-   名稱加入 `Struo:ContentAssemblies`。
-7. 重新啟動 API。CodeFirst 會自動建立資料表——在每一個環境中都會，不只開發環境——確認管理後台 SPA
-   的側欄現在顯示一個「Content」導覽群組，且其中有你的集合 (對照第 2 章「尚無集合時」的狀態)。
-8. 把這個集合的 RBAC 讀取/寫入/刪除權限授予需要的角色 (第 12 章)——一個全新的集合還沒有任何授權，
-   所以在你這麼做之前，只有超級管理員能使用它。
-9. 針對正式環境部署，資料表本身不需要任何額外動作——CodeFirst 在那裡也會自動建立它。只有當你之後要
-   變更一張已經存有你需要保留之資料的資料表的形狀時，才需要一支 migration (第 15 章)。
+把上面各節依序整理成一份可逐項打勾的清單:
+
+1. 在 `src/Struo.*` 之外建立內容類別庫，參照 `Struo.Domain` 與 SqlSugar。
+2. Entity:繼承 `AuditableEntity`、以 `[SugarColumn(IsPrimaryKey = true)]` 覆寫 `Id`、加上
+   `[SugarTable]` 與 `[CmsCollection]`。
+3. 每一個要公開的屬性加上 `[CmsField]`;選項型介面加上 `[CmsOptions]`。
+4. 視需要實作 `ISoftDeletable` 並/或設定 `Revisions = true`(第 13 章)。
+5. 關聯用 `[CmsRelation]` + `[Navigate]`(第 7 章)。
+6. 從 `Struo.Api.csproj` 加上 `ProjectReference`，**並且**把組件名稱加入
+   `Struo:ContentAssemblies`——兩者缺一，掃描就看不到它。
+7. 重新啟動。CodeFirst 會在每一個環境建立資料表。新資料表不需要 migration。
+8. 授予 RBAC 權限(第 12 章)——新集合沒有任何授權，在此之前只有超級管理員能使用它。
 
 ## 接下來該去哪
 

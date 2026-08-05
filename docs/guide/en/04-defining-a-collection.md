@@ -210,29 +210,20 @@ existing tables automatically — convenient for fast schema iteration before re
 once it does. Chapter 15 covers both mechanisms end-to-end, including the nine-item hazard list for
 `AutoSyncSchema` and how to write a portable migration.
 
-## Checklist for adding a collection end-to-end
+## Checklist
 
-1. Create (or reuse) a content class library project; reference `Struo.Domain` for the attributes/enums,
-   plus enough of SqlSugar (directly, or transitively via `Struo.Infrastructure`) for `[SugarTable]`/
-   `[SugarColumn]`.
-2. Write the entity: inherit `AuditableEntity`, override `Id` with `[SugarColumn(IsPrimaryKey = true)]`,
-   add `[SugarTable("your_table_name")]` and `[CmsCollection("Your Label", ...)]`.
-3. Add `[CmsField]` to every property the API/admin form should expose, and `[CmsOptions]` on any
-   `Select`/`Radio`/`MultiSelect`/`CheckboxGroup` field.
-4. Implement `ISoftDeletable` and/or set `Revisions = true` if the collection needs trash/restore or
-   version history (chapter 13).
-5. Add relations with `[CmsRelation]` + SqlSugar's `[Navigate]` if the collection references another
-   one (chapter 7).
-6. Add a `ProjectReference` from `src/Struo.Api/Struo.Api.csproj` to your content project, and add its
-   assembly name to `Struo:ContentAssemblies`.
-7. Restart the API. CodeFirst creates the table automatically — in every environment, not just
-   Development — confirm the admin SPA's sidebar now shows a "Content" navigation group with your
-   collection in it (compare chapter 2's "no collections yet" state).
-8. Grant RBAC read/write/delete permissions for the collection to the roles that need them (chapter 12)
-   — a brand-new collection has no grants yet, so only a super-admin can use it until you do.
-9. Nothing further is needed before a Production deployment for the table itself — CodeFirst creates it
-   there too, automatically. A migration is only needed later, if you change the shape of a table that
-   already holds data you need to keep (chapter 15).
+The sections above in order, as something to tick off:
+
+1. Content class library outside `src/Struo.*`, referencing `Struo.Domain` + SqlSugar.
+2. Entity: `AuditableEntity`, `Id` override with `[SugarColumn(IsPrimaryKey = true)]`, `[SugarTable]`,
+   `[CmsCollection]`.
+3. `[CmsField]` on every exposed property; `[CmsOptions]` on option-typed interfaces.
+4. `ISoftDeletable` and/or `Revisions = true`, if needed (chapter 13).
+5. `[CmsRelation]` + `[Navigate]` for relations (chapter 7).
+6. `ProjectReference` from `Struo.Api.csproj` **and** the assembly name in `Struo:ContentAssemblies` —
+   both, or the scan won't see it.
+7. Restart. CodeFirst creates the table, in every environment. No migration needed for a new table.
+8. Grant RBAC permissions (chapter 12) — a new collection has none, so only a super-admin can use it.
 
 ## Next steps
 

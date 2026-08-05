@@ -61,55 +61,17 @@ schema、它所產生的 query/filter/mutation 介面，以及它的錯誤形狀
   `options.Tool.Enable = app.Environment.IsDevelopment()`:規則相同，瀏覽器工具只在 Development
   中提供。
 
-**還有第三種讀取 schema 的方式，它過去不受上述任何一項把關。** 現在它已經和 introspection 由同一個
-設定把關——`GraphQl:ExposeSchema` (第 3 章)——但值得理解為什麼，因為這兩者很容易被誤以為等價，
-實際上並不是。
-`GET /graphql?sdl` 是 HotChocolate 內建在同一個 `/graphql` 路徑上的路由，會以純 SDL 文字的形式
-提供完整的 schema——匿名存取，不需要 session cookie，也不需要 `X-Struo-CSRF` 標頭 (因為這是一個
-安全的 `GET`，`CsrfProtectionMiddleware` 根本不會考慮它):
+**還有第三條揭露路由，而且它不是你會猜到的那一條。** `GET /graphql?sdl` 是 HotChocolate 內建在同一個
+`/graphql` 路徑上的路由，會以純 SDL 文字的形式提供完整 schema——匿名即可，不需 session cookie，也不需
+`X-Struo-CSRF` 標頭 (它是安全的 `GET`，`CsrfProtectionMiddleware` 根本不會考慮它)。關鍵在於
+`.DisableIntrospection(...)` **管不到它**:那道把關管的是 introspection *查詢* (一般 GraphQL 請求中的
+`__schema`/`__type` 選取)，完全沒有提到這條查詢字串路由，而 `MapGraphQL("/graphql")` 本身也不帶任何
+環境把關。
 
-```
-$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5221/graphql?sdl"
-200
-$ curl -s "http://localhost:5221/graphql?sdl" | head -8
-schema {
-  query: Query
-  mutation: Mutation
-}
-
-type Query {
-  _service: String @cost(weight: "10")
-  language(id: ID!, locale: String): Language @cost(weight: "10")
-```
-
-`.DisableIntrospection(...)` (`GraphQlServiceCollectionExtensions.cs`) 把關的是 introspection *查詢*
-(一般 GraphQL 請求中的 `__schema`/`__type` 選取)——它完全沒有提到 `?sdl` 這個查詢字串路由，而
-`MapGraphQL("/graphql")` 本身也不帶任何環境把關。當那道把關寫的是 `!env.IsDevelopment()`、而 `?sdl`
-無人管束時，結果就是下面這種落差。**這一點已透過對一個真正
-Production 模式執行個體做實證驗證，而不是分別閱讀這兩道把關後推論出來的**——用完全相同的程式碼庫
-另外啟動了第二個執行個體，設定 `ASPNETCORE_ENVIRONMENT=Production`，指向一個可拋棄的暫用資料庫
-(與本文件所用的 `:5221` 執行個體及其 `struo` 資料庫完全隔離)，並做了以下探測:
-
-```
-$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql?sdl"     # Production instance
-200
-$ curl -s "http://localhost:5299/graphql?sdl" | head -3
-schema {
-  query: Query
-  mutation: Mutation
-
-$ curl -s -i -X POST http://localhost:5299/graphql -H "Content-Type: application/json" -d '{"query":"{ __schema { queryType { name } } }"}'
-HTTP/1.1 400 Bad Request
-{"errors":[{"message":"Introspection is not allowed for the current request.","locations":[{"line":1,"column":3}],"extensions":{"code":"HC0046","field":"__schema"}}]}
-
-$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql"          # Nitro IDE (browser tool)
-404
-```
-
-上面那份記錄就是這個模板過去出貨的樣子:一個真正的 introspection *查詢* 會被正確拒絕 (`HC0046`)，
-瀏覽器 IDE 也確實消失了 (`404`)——但**`?sdl` 仍然會把完整的 schema，原封不動地提供給一個匿名
-呼叫端**。一個只看到「introspection 在 Development 之外會被拒絕」就停下來的讀者，會誤以為 schema
-在正式環境中無法觸及;實際上它完全可以觸及，只是走的是另一條路由，而不是真正被把關的那一條。
+這個模板較早的版本只把關了前者。針對一個真正的 Production 模式執行個體實測，當時出貨的樣子是:
+introspection 查詢確實被拒絕 (`HC0046`)、瀏覽器 IDE 確實消失 (`404`)——而 `?sdl` 仍然把完整 schema
+提供給匿名呼叫端。這個教訓比那個缺陷本身更長壽，所以記錄在此:**「introspection 已停用」與「schema
+讀不到」並不是同一個主張。**
 
 **現在兩條揭露路由由同一個旗標把關。** `GraphQl:ExposeSchema` (第 3 章) 在
 `GraphQlServiceCollectionExtensions.ResolveExposeSchema` 中解析一次，同時餵給
@@ -145,10 +107,9 @@ GraphQl__ExposeSchema=true
 SDL 文字大得多的決定。在 reverse proxy/ingress 上封鎖這條路由仍然是合理的雙重保險，但它已經不是
 唯一的選項了。
 
-一個以 cookie 驗證的 `/graphql` 請求，需要與 REST 寫入 (第 9 章) **相同**的 `X-Struo-CSRF`
-標頭——`CsrfProtectionMiddleware` 不論路徑為何，都會把關每一個非安全 HTTP 方法，而
-GraphQL-over-HTTP 永遠使用 `POST`，所以這一點對一個唯讀的 *query* 與對一個 mutation 是完全
-同等適用的:
+一個以 cookie 驗證的 `/graphql` 請求，需要與 REST 寫入相同的 `X-Struo-CSRF` 標頭 (第 9 章)。由於這條
+規則看的是 HTTP 方法，而 GraphQL-over-HTTP 永遠使用 `POST`，因此它對一個唯讀的 *query* 與對一個
+mutation 完全同等適用:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -b cookies.txt -d '{"query":"query { languages { total } }"}'

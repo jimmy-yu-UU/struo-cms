@@ -60,57 +60,19 @@ both read from `GraphQlServiceCollectionExtensions`:
 - **Nitro IDE** (HotChocolate's bundled in-browser GraphQL explorer) — `options.Tool.Enable =
   app.Environment.IsDevelopment()`: same rule, browser tool only in Development.
 
-**A third way to read the schema exists, and it used to be gated by neither of those.** It is now
-gated by the same setting as introspection — `GraphQl:ExposeSchema` (chapter 3) — but it is worth
-understanding why, because the two are easy to assume equivalent when they are not.
-`GET /graphql?sdl` is a HotChocolate built-in route on the same `/graphql` path that serves the
-complete schema as plain SDL text — anonymously, with no session cookie and no `X-Struo-CSRF` header
-(it's a safe `GET`, so `CsrfProtectionMiddleware` never even considers it):
+**A third disclosure route exists, and it is not the one you would guess.** `GET /graphql?sdl` is a
+HotChocolate built-in on the same `/graphql` path that serves the complete schema as plain SDL text —
+anonymously, with no session cookie and no `X-Struo-CSRF` header (it is a safe `GET`, so
+`CsrfProtectionMiddleware` never even considers it). Crucially, `.DisableIntrospection(...)` does
+**not** cover it: that gate governs introspection *queries* (`__schema`/`__type` selections inside a
+normal GraphQL request) and says nothing about the query-string route, and `MapGraphQL("/graphql")`
+carries no environment gate of its own.
 
-```
-$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5221/graphql?sdl"
-200
-$ curl -s "http://localhost:5221/graphql?sdl" | head -8
-schema {
-  query: Query
-  mutation: Mutation
-}
-
-type Query {
-  _service: String @cost(weight: "10")
-  language(id: ID!, locale: String): Language @cost(weight: "10")
-```
-
-`.DisableIntrospection(...)` (`GraphQlServiceCollectionExtensions.cs`) gates introspection *queries*
-(`__schema`/`__type` selections inside a normal GraphQL request) — it says nothing about the `?sdl`
-query-string route, and `MapGraphQL("/graphql")` carries no environment gate of its own. When that
-gate read `!env.IsDevelopment()` and nothing governed `?sdl`, the result was the split below.
-**This was verified empirically against a real Production-mode instance,
-not inferred from reading the two gates separately** — a second instance of this exact codebase was
-started with `ASPNETCORE_ENVIRONMENT=Production` against a disposable scratch database (left completely
-isolated from the documented `:5221` instance and its `struo` database), and probed:
-
-```
-$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql?sdl"     # Production instance
-200
-$ curl -s "http://localhost:5299/graphql?sdl" | head -3
-schema {
-  query: Query
-  mutation: Mutation
-
-$ curl -s -i -X POST http://localhost:5299/graphql -H "Content-Type: application/json" -d '{"query":"{ __schema { queryType { name } } }"}'
-HTTP/1.1 400 Bad Request
-{"errors":[{"message":"Introspection is not allowed for the current request.","locations":[{"line":1,"column":3}],"extensions":{"code":"HC0046","field":"__schema"}}]}
-
-$ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5299/graphql"          # Nitro IDE (browser tool)
-404
-```
-
-That transcript is what this template used to ship: a genuine introspection *query* correctly refused
-(`HC0046`), the browser IDE correctly gone (`404`) — and **`?sdl` still serving the entire schema, in
-full, to an anonymous caller**. A reader who stopped at "introspection is refused outside Development"
-would wrongly conclude the schema was unreachable in production; it was fully reachable, just through a
-different route than the one that was actually gated.
+Earlier versions of this template gated only the former. Measured against a real Production-mode
+instance, that shipped as: introspection query correctly refused (`HC0046`), browser IDE correctly gone
+(`404`) — and `?sdl` still serving the entire schema to an anonymous caller. The lesson outlives the
+bug, which is why it is recorded here: **"introspection is disabled" is not the same claim as "the
+schema is not readable."**
 
 **Both disclosure routes are now gated by one flag.** `GraphQl:ExposeSchema` (chapter 3) resolves once
 in `GraphQlServiceCollectionExtensions.ResolveExposeSchema` and feeds both
@@ -148,10 +110,9 @@ decision, not two. The Nitro browser IDE stays Development-only regardless of th
 browser IDE is a much larger decision than serving SDL text. Blocking the route at the reverse
 proxy/ingress remains a reasonable belt-and-braces measure, but it is no longer the only option.
 
-A cookie-authenticated request to `/graphql` needs the **same** `X-Struo-CSRF` header REST writes need
-(chapter 9) — `CsrfProtectionMiddleware` guards every non-safe HTTP method regardless of path, and
-GraphQL-over-HTTP always uses `POST`, so this applies to a read-only *query* exactly as much as a
-mutation:
+A cookie-authenticated request to `/graphql` needs the same `X-Struo-CSRF` header REST writes need
+(chapter 9). Because the rule keys on the HTTP method and GraphQL-over-HTTP is always `POST`, it
+applies to a read-only *query* exactly as much as a mutation:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -b cookies.txt -d '{"query":"query { languages { total } }"}'
