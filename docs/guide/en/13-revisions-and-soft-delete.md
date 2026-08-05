@@ -10,8 +10,8 @@ and how the two features interact when a collection has both.
 
 ## Enabling revisions per collection
 
-`[CmsCollection("X", Revisions = true)]`
-(`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs:29-35`) is the entire opt-in: every
+`[CmsCollection("X", Revisions = true)]` — that is, `CmsCollectionAttribute.Revisions`
+(`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`) — is the entire opt-in: every
 successful create/update on that collection appends a full snapshot of the item's post-write state to
 the framework `revisions` table, and any past revision can later be re-applied via revert. It costs
 nothing extra to declare — no interface to implement, no extra column on the entity — since revision rows
@@ -74,10 +74,10 @@ below for why, and for proof the value was still captured.)
 
 | Operation | Where captured | Recorded `operation` value |
 |---|---|---|
-| Create | Inside `repository.InTransactionAsync` in `CreateAsync`, immediately after the M2M/translation sync (`ItemService.cs:129-133`) | `"create"` |
-| Update | Inside `repository.InTransactionAsync` in `UpdateCoreAsync`, same position (`ItemService.cs:214-218`) | `"update"` (or `"revert"` — see below) |
-| Trash (soft delete) | Via `CaptureRevisionAsync`, inside the same transaction as the atomic trash UPDATE, only if it actually affected a row (`ItemService.cs:257-297`) | `"delete"` |
-| Restore | Via `CaptureRevisionAsync`, inside the same transaction as the atomic restore UPDATE (`ItemService.cs:320-341`) | `"restore"` |
+| Create | Inside `repository.InTransactionAsync` in `CreateAsync`, immediately after the M2M/translation sync | `"create"` |
+| Update | Inside `repository.InTransactionAsync` in `UpdateCoreAsync`, same position | `"update"` (or `"revert"` — see below) |
+| Trash (soft delete) | Via `CaptureRevisionAsync`, inside `DeleteAsync`'s trash branch, in the same transaction as the atomic trash UPDATE, only if it actually affected a row | `"delete"` |
+| Restore | Via `CaptureRevisionAsync`, inside `RestoreAsync`, in the same transaction as the atomic restore UPDATE | `"restore"` |
 | Revert | Re-applies the snapshot as a normal update through `UpdateCoreAsync` (see below), which itself captures a new snapshot | `"revert"` |
 
 Committing capture inside the same transaction as the write means a revision row can never exist for a
@@ -168,19 +168,19 @@ No collection-specific resolver code exists for any of this — it is generated 
 **Admin drawer** — the admin SPA's `RevisionHistoryDrawer.vue` component
 (`frontend/src/components/revisions/RevisionHistoryDrawer.vue`) talks to the REST endpoints above (not
 GraphQL) via `itemsApi.listRevisions`/`getRevision`/`revert`
-(`frontend/src/api/itemsApi.ts:63-70`) — a list view, a snapshot detail view
+(`frontend/src/api/itemsApi.ts`) — a list view, a snapshot detail view
 (`RevisionSnapshotView.vue`), and a revert action wired to the item form. It is a thin client over the
 same three REST endpoints documented above; it has no server-side behavior of its own beyond what
 `ItemService` already enforces.
 
 ## What revert does and does not restore
 
-`RevertAsync` (`ItemService.cs:366-388`) reads the target revision's raw snapshot, strips its `version`
-key (so the revert doesn't echo a now-stale optimistic-concurrency token and spuriously `409` against the
-current row), and re-applies the result through the **exact same** `UpdateCoreAsync` path an ordinary
-`PUT` uses, tagged with `operation = "revert"` instead of `"update"`. Reverting `article` above to
-revision 1 (its original `create` snapshot) after the `update` above changed `status` to `"published"`
-and every field to its `"…-CHANGED"` value:
+`RevertAsync` (`src/Struo.Application/Query/ItemService.cs`) reads the target revision's raw snapshot,
+strips its `version` key (so the revert doesn't echo a now-stale optimistic-concurrency token and
+spuriously `409` against the current row), and re-applies the result through the **exact same**
+`UpdateCoreAsync` path an ordinary `PUT` uses, tagged with `operation = "revert"` instead of `"update"`.
+Reverting `article` above to revision 1 (its original `create` snapshot) after the `update` above changed
+`status` to `"published"` and every field to its `"…-CHANGED"` value:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1/revert \
@@ -225,9 +225,10 @@ directly from reusing the normal update path:
   super-admin-if-`AdminOnly`) check, the same optimistic-concurrency machinery, and produces the same
   `200`-with-updated-item response shape as any other update.
 - Many-to-many sync during a revert **tolerates** a target row that was trashed since the snapshot was
-  captured (`includeDeleted: operation == "revert"`, `ItemService.cs:210-212`) — every other write path
-  stays strict about this. A revert to a snapshot referencing a since-trashed related row therefore
-  restores that reference rather than failing outright.
+  captured (`includeDeleted: operation == "revert"` in `UpdateCoreAsync`,
+  `src/Struo.Application/Query/ItemService.cs`) — every other write path stays strict about this. A
+  revert to a snapshot referencing a since-trashed related row therefore restores that reference rather
+  than failing outright.
 - A revert restores exactly what the snapshot captured: own fields, M2O/M2M relation state, and
   all-locale translations. It does **not** restore anything the builder excludes by construction —
   system-managed fields, or the item's soft-delete status (`DeletedAt`/`DeletedBy` are not part of the
@@ -263,7 +264,7 @@ one query (`.ClearFilter<ISoftDeletable>()`, `SqlSugarItemRepository.cs`) rather
 opt-out globally — trashed-by-default is the safe direction to fail in.
 
 The trash/restore writes themselves (`SoftDeleteAsync`/`RestoreAsync`,
-`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs:580-663`) run as a single atomic `UPDATE ...
+`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`) run as a single atomic `UPDATE ...
 WHERE deletedat IS [NOT] NULL`, not a pre-read-then-write — so trashing an already-trashed row (or
 restoring an already-live one) is a no-op at the SQL level (zero rows affected) rather than a race two
 concurrent callers could each "win". For an `AuditableEntity`, the same `UPDATE` also bumps `Version`
@@ -304,11 +305,12 @@ above). The sample Blog's `article` collection (chapter 16) does combine both �
 below is described from source rather than exercised live in this chapter, since it fell outside the
 create/update/list/view/revert cycle demonstrated above:
 
-- `ItemService.DeleteAsync`/`RestoreAsync` call `CaptureRevisionAsync` (`ItemService.cs:297`, `:341`)
-  precisely when **both** `meta.SoftDelete` and `meta.Revisions` are true for the collection being
-  trashed/restored — a `"delete"`/`"restore"` revision is recorded in the exact same transaction as the
-  atomic trash/restore `UPDATE`, using the identical affected-rows gate described above (so a no-op trash
-  of an already-trashed row records no spurious revision either).
+- `ItemService.DeleteAsync`/`RestoreAsync` call `CaptureRevisionAsync`
+  (`src/Struo.Application/Query/ItemService.cs`) precisely when **both** `meta.SoftDelete` and
+  `meta.Revisions` are true for the collection being trashed/restored — a `"delete"`/`"restore"`
+  revision is recorded in the exact same transaction as the atomic trash/restore `UPDATE`, using the
+  identical affected-rows gate described above (so a no-op trash of an already-trashed row records no
+  spurious revision either).
 - A **purge** (`?purge=true`) on a collection that is both soft-deletable and revisioned does not go
   through this path at all — it's a hard delete via the collection's normal delete pipeline, not the
   soft-delete `UPDATE`, so no `"delete"` revision is captured for a purge specifically (only for a trash).

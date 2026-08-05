@@ -9,8 +9,8 @@
 
 ## 逐集合啟用版本紀錄
 
-`[CmsCollection("X", Revisions = true)]`
-(`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs:29-35`)就是整個選用啟用的方式：
+`[CmsCollection("X", Revisions = true)]`——也就是 `CmsCollectionAttribute.Revisions`
+(`src/Struo.Domain/Metadata/Attributes/CmsCollectionAttribute.cs`)——就是整個選用啟用的方式：
 該集合上每一次成功的建立/更新，都會把該項目寫入後狀態的完整快照附加到框架的 `revisions` 資料表，而任何
 過去的版本之後都能透過還原被重新套用。宣告它不需要額外成本——不用實作介面，也不用在實體上新增欄位——因為
 版本紀錄的資料列存放在一個共用資料表中，以 `(collectionName, itemId, revisionNumber)` 為鍵，而不是掛
@@ -69,10 +69,10 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-
 
 | 操作 | 擷取位置 | 記錄的 `operation` 值 |
 |---|---|---|
-| 建立 | 在 `CreateAsync` 的 `repository.InTransactionAsync` 之中，緊接在 M2M/翻譯同步之後(`ItemService.cs:129-133`) | `"create"` |
-| 更新 | 在 `UpdateCoreAsync` 的 `repository.InTransactionAsync` 之中，相同位置(`ItemService.cs:214-218`) | `"update"`(或 `"revert"`——見下方) |
-| 移入回收桶(軟刪除) | 透過 `CaptureRevisionAsync`，與那次原子性回收桶 UPDATE 位於同一個交易之中，且僅在它確實影響到某一列資料時才會執行(`ItemService.cs:257-297`) | `"delete"` |
-| 還原(回收桶) | 透過 `CaptureRevisionAsync`，與那次原子性還原 UPDATE 位於同一個交易之中(`ItemService.cs:320-341`) | `"restore"` |
+| 建立 | 在 `CreateAsync` 的 `repository.InTransactionAsync` 之中，緊接在 M2M/翻譯同步之後 | `"create"` |
+| 更新 | 在 `UpdateCoreAsync` 的 `repository.InTransactionAsync` 之中，相同位置 | `"update"`(或 `"revert"`——見下方) |
+| 移入回收桶(軟刪除) | 透過 `CaptureRevisionAsync`，於 `DeleteAsync` 的回收桶分支之中，與那次原子性回收桶 UPDATE 位於同一個交易之中，且僅在它確實影響到某一列資料時才會執行 | `"delete"` |
+| 還原(回收桶) | 透過 `CaptureRevisionAsync`，於 `RestoreAsync` 之中，與那次原子性還原 UPDATE 位於同一個交易之中 | `"restore"` |
 | 還原(版本紀錄) | 透過 `UpdateCoreAsync` 以一般更新的形式重新套用該快照(見下方)，而這本身又會擷取一筆新的快照 | `"revert"` |
 
 把擷取動作放進與該次寫入相同的交易之中，代表一筆版本紀錄絕不可能存在於一次本身已經回滾的寫入之下——而且
@@ -156,14 +156,14 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 
 **管理後台 Drawer**——管理後台 SPA 的 `RevisionHistoryDrawer.vue` 元件
 (`frontend/src/components/revisions/RevisionHistoryDrawer.vue`)透過
-`itemsApi.listRevisions`/`getRevision`/`revert`(`frontend/src/api/itemsApi.ts:63-70`)呼叫上面的
+`itemsApi.listRevisions`/`getRevision`/`revert`(`frontend/src/api/itemsApi.ts`)呼叫上面的
 REST 端點(而非 GraphQL)——一個列表檢視、一個快照詳情檢視(`RevisionSnapshotView.vue`)，以及一個接到
 項目表單的還原動作。它只是上述三個 REST 端點之上的一層薄客戶端；除了 `ItemService` 已經強制執行的內容
 之外，它本身沒有任何伺服器端行為。
 
 ## 還原會恢復什麼，不會恢復什麼
 
-`RevertAsync`(`ItemService.cs:366-388`)會讀取目標版本紀錄的原始快照，剝除其中的 `version` 鍵(這樣
+`RevertAsync`(`src/Struo.Application/Query/ItemService.cs`)會讀取目標版本紀錄的原始快照，剝除其中的 `version` 鍵(這樣
 還原就不會回顯一個現已過期的樂觀並行控制 token，因而對目前這一列資料產生虛假的 `409`)，並透過與一般
 `PUT` 完全**相同**的 `UpdateCoreAsync` 路徑重新套用結果，只是標記為 `operation = "revert"` 而非
 `"update"`。在上面那次把 `status` 改成 `"published"`、每個欄位都改成各自 `"…-CHANGED"` 值的更新之後，
@@ -209,8 +209,9 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
   另需超級管理員)檢查、相同的樂觀並行控制機制，並產生與任何其他更新相同的 `200`(附帶更新後項目)回應
   形狀。
 - 在一次還原期間的多對多同步，**能夠容忍**一列自快照擷取以來已被移入回收桶的目標資料列
-  (`includeDeleted: operation == "revert"`，`ItemService.cs:210-212`)——其他每一條寫入路徑對此都
-  維持嚴格。因此一次還原到一個參照著某個已移入回收桶關聯資料列的快照，會恢復該參照，而不是直接失敗。
+  (`includeDeleted: operation == "revert"`，位於 `UpdateCoreAsync`，
+  `src/Struo.Application/Query/ItemService.cs`)——其他每一條寫入路徑對此都維持嚴格。因此一次還原到
+  一個參照著某個已移入回收桶關聯資料列的快照，會恢復該參照，而不是直接失敗。
 - 一次還原恰好恢復快照所擷取的內容：自身欄位、M2O/M2M 關聯狀態，以及所有語言的翻譯。它**不會**恢復
   建構器基於設計而排除的任何東西——系統管理欄位，或該項目的軟刪除狀態(`DeletedAt`/`DeletedBy` 完全
   不是快照的一部分，因為 `RevisionSnapshotBuilder` 只走訪 `[CmsField]`/關聯/翻譯)——而且它也不會回溯
@@ -244,7 +245,7 @@ db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
 偏向的安全方向。
 
 移入回收桶/還原這兩個寫入動作本身(`SoftDeleteAsync`/`RestoreAsync`，
-`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs:580-663`)都以單一原子性的
+`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`)都以單一原子性的
 `UPDATE ... WHERE deletedat IS [NOT] NULL` 執行，而不是先讀取再寫入——因此把一列已經在回收桶中的資料
 再次移入回收桶(或還原一列已經是現行有效的資料)，在 SQL 層級是一個無操作(影響零列資料)，而不是一場
 兩個並行呼叫端都可能各自「贏得」的競賽。對於一個 `AuditableEntity` 而言，同一個 `UPDATE` 也會推進
@@ -283,10 +284,10 @@ db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
 循環之外：
 
 - 當被移入回收桶/還原的集合**同時**符合 `meta.SoftDelete` 與 `meta.Revisions` 皆為 true 時，
-  `ItemService.DeleteAsync`/`RestoreAsync` 會呼叫 `CaptureRevisionAsync`(`ItemService.cs:297`、
-  `:341`)——一筆 `"delete"`/`"restore"` 版本紀錄會被記錄在與那次原子性移入回收桶/還原 `UPDATE`
-  完全相同的交易之中，使用上方描述的同一個受影響列數關卡(因此把一列已經在回收桶中的資料再次移入回收桶
-  這種無操作，同樣不會記錄一筆偽造的版本紀錄)。
+  `ItemService.DeleteAsync`/`RestoreAsync` 會呼叫 `CaptureRevisionAsync`
+  (`src/Struo.Application/Query/ItemService.cs`)——一筆 `"delete"`/`"restore"` 版本紀錄會被記錄在與
+  那次原子性移入回收桶/還原 `UPDATE` 完全相同的交易之中，使用上方描述的同一個受影響列數關卡(因此把
+  一列已經在回收桶中的資料再次移入回收桶這種無操作，同樣不會記錄一筆偽造的版本紀錄)。
 - 對一個同時可軟刪除且有版本紀錄的集合執行**清除**(`?purge=true`)，完全不會經過這條路徑——它是透過
   該集合一般的刪除管線進行的硬刪除，而不是軟刪除 `UPDATE`，因此一次清除不會(僅針對移入回收桶才會)
   記錄一筆 `"delete"` 版本紀錄。`IRevisionStore.DeleteForItemAsync` 的存在，正是為了移除一個被清除
