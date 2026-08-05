@@ -21,13 +21,10 @@ The same query model is reachable two ways:
 
 Both are read-only and go through the same RBAC read check as any other read (`ItemsController` has
 no `[Authorize]` on either action, and `ItemService` only ever checks `CanRead` for a query) — `POST
-/query` needs no *write* grant despite the verb. But `CsrfProtectionMiddleware`
-(`src/Struo.Api/Auth/CsrfProtectionMiddleware.cs`) guards every non-safe HTTP method (`POST`/`PUT`/
-`DELETE`/…, `GET`/`HEAD`/`OPTIONS`/`TRACE` are exempt) the same way regardless of read or write —
-**but only when the request rides on the session cookie**: a `Bearer`-authenticated request is
-exempt (no ambient browser credential to forge), and so is a request that carries no session cookie
-at all (nothing yet to attack). A cookie-authenticated `POST /query` with no `X-Struo-CSRF` header is
-rejected before it reaches the controller:
+/query` needs no *write* grant despite the verb. It does, however, need the `X-Struo-CSRF` header when
+cookie-authenticated: the CSRF rule keys on the HTTP **method**, not on read-versus-write, so a
+read-only `POST` is guarded exactly like a mutation (chapter 9 has the rule and its rationale in full).
+This is the one place that trips people up, so here it is live:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: application/json" -b cookies.txt -d '{}'

@@ -24,13 +24,12 @@ shared development database or the running development API.
 
 ## Schema management
 
-Schema management is split into three layers by **responsibility**, not by environment:
-
-| Responsibility | Executor | Environment | Backend | Default |
-|---|---|---|---|---|
-| Create tables that **do not exist** | CodeFirst (filtered `InitTables`) | All environments | All five | Always on |
-| **Alter existing** tables (automatic diff) | Full CodeFirst sync (`SyncSchema`) | Development only | All five | `Database:AutoSyncSchema=false` — must be explicitly turned on |
-| **Alter existing** tables (reviewed) | `MigrationRunner` + `.sql` scripts under `Database:MigrationsPath` | All environments | All five | `Database:MigrationsPath` empty = off |
+Schema management is split into three layers by **responsibility**, not by environment: CodeFirst
+creates tables that do not exist (always, everywhere), `Database:AutoSyncSchema` alters existing ones
+from an automatic diff (Development only, off by default), and `MigrationRunner` applies reviewed
+`.sql` scripts (all environments, off by default). `db/migrations/README.md` §2 has the full
+responsibility table; this section covers what a **deployment** has to get right about it, and the
+auto-sync hazards below.
 
 **Startup order** (`Program.cs`): a table-name snapshot → `CreateMissingTables` (all environments, all
 backends, unconditional) → optional `SyncSchema` (only runs its full sync if `Database:AutoSyncSchema=true`
@@ -96,104 +95,34 @@ CodeFirst's automatic sync computes a **structural diff** between the entity cla
 table — it knows the target shape, but it has no idea what you *intended*. A rename and a "drop one
 column, add another" are indistinguishable to a diff.
 
-### Writing a migration: portability and idempotency
+### Writing a migration
 
-Prefer standard SQL, to preserve the option of switching database engines later:
+Authoring rules — file naming, the portable-SQL prefer/avoid tables, why idempotency is *not* required,
+filename-only tracking, the time-zone-aware timestamp convention, and the runner's known limits (no DDL
+rollback on MySQL/Oracle, no advisory lock, no checksum/down-migration/dry-run) — all live in
+**`db/migrations/README.md`**, §§4–6. That file is the single home for them; this chapter does not
+restate it.
 
-- `ALTER TABLE … ADD COLUMN` / `DROP COLUMN` / `RENAME COLUMN`
-- `CREATE INDEX` / `CREATE UNIQUE INDEX`
-- `UPDATE` / `INSERT` / `DELETE` for data backfills
-- Standard type names: `varchar(n)`, `integer`, `bigint`, `boolean`, `timestamp`, `numeric(p,s)`
+Two of those limits have direct deployment consequences worth repeating here:
 
-Avoid, with a portable alternative:
-
-| Avoid | Why | Instead |
-|---|---|---|
-| PostgreSQL-specific types (`jsonb`, `uuid`, `timestamptz`, `serial`) | Don't exist on the other four backends | Standard types; let the ORM handle the application-level mapping |
-| `DO $$ … $$` | PL/pgSQL, PostgreSQL-only | Split into multiple plain statements |
-| `IF NOT EXISTS` on `ALTER` / `CREATE INDEX` | Not supported on SQL Server | **Not needed** — the tracking table already guarantees each file runs at most once (see below) |
-| `::` cast syntax | PostgreSQL-only | `CAST(x AS type)` |
-| Dialect-specific functions (`now()` vs `GETDATE()` vs `SYSDATE`) | Differ per engine | Pass the value from the application layer, or accept the coupling deliberately in your own fork |
-| `RETURNING` | Non-standard | A separate query |
-
-**Idempotency is not required, and this reverses earlier guidance.** An earlier version of this
-repository's migration guidance asked every script to guard itself (`IF NOT EXISTS`, guarded `ALTER`,
-existence checks) — that requirement traced back to a baseline bootstrap script that needed to be safely
-re-appliable, and that baseline no longer exists (the template ships zero `.sql` files; see below). The
-CodeFirst-created `schema_migrations` tracking table guarantees every filename is applied at most once,
-so a script never needs to protect itself against being re-run — and `IF NOT EXISTS` is one of the least
-portable constructs in the avoid-list above (SQL Server has no equivalent syntax at all). Portability now
-takes priority over idempotency: write the plain, non-defensive form of a statement.
-
-Applied filenames are tracked by **filename only** — no checksum or content hash — in a
-`schema_migrations` table that CodeFirst itself creates (so this mechanism carries no vendor SQL of its
-own). A file already recorded as applied is never re-run, even if its on-disk content is later edited —
-**never edit a filename that may already be applied anywhere; ship a new file instead.** File naming
-(`NNN-short-kebab-description.sql`, a single contiguous zero-padded series, one logical change per file)
-and the rest of the mechanics are in `db/migrations/README.md`, the reference copy of this guidance —
-this chapter and that file are kept consistent.
-
-**Timestamp convention:** any new temporal column should be time-zone-aware, storing UTC, rather than
-bare `timestamp` — the standard-SQL `timestamp` in the prefer-list above names the type, not a retraction
-of this convention. If the column is modeled as an entity property, mark it
-`[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`)
-rather than a PostgreSQL-only `timestamptz` literal, so CodeFirst resolves the matching per-backend type
-and a freshly created table agrees with what a migration adds to an existing one. Hand-writing the DDL
-directly (a column no entity property backs)? `ColumnTypeMap.cs` centralizes the per-backend literal to
-copy in. Either way, check the target table's actual current column type — the entity declaration in
-`src/`, or the live schema — rather than assuming one; this repository's own framework tables are not
-uniform. Most `AuditableEntity` `createdat`/`updatedat` columns are bare `timestamp`, but
-`media_folders.createdat`/`updatedat` are already time-zone-aware
-(`[ColumnShape(ColumnShape.TimestampWithTimeZone)]` on both —
-`src/Struo.Infrastructure/Files/MediaFolder.cs`), and so are `site_settings.updatedat` and the migration
-runner's own tracking column, `schema_migrations.appliedat`
-(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`). None of the existing bare-`timestamp`
-columns have been retroactively converted, since re-anchoring already-stored values against a session
-time zone is a silent data shift.
-
-### Known limits
-
-1. **DDL rollback does not work on MySQL or Oracle.** The runner wraps each file's execution together
-   with its tracking-row insert in one transaction, but MySQL and Oracle both commit DDL implicitly — a
-   failure partway through a script on those backends leaves whatever DDL already ran in place; the
-   transaction cannot roll it back. Back up before running structural changes on these backends and do it
-   during a maintenance window.
-2. **No advisory lock.** If multiple replicas start concurrently against the same `Database:MigrationsPath`
-   directory, more than one process may attempt the same pending file at the same time. Deploy schema
-   changes with a single replica first (or as a separate one-off job) rather than relying on N replicas
-   racing each other. The same caveat applies to CodeFirst table creation and to `AutoSyncSchema` (hazard
-   #8 above).
-3. **No checksum, no down-migration, no dry-run.** This runner's job is "apply `ALTER` scripts and record
-   what ran" — nothing more. If you need checksums, reversible migrations, or a dry-run mode, use a
-   dedicated tool (DbUp, Flyway, Liquibase) instead; leaving `Database:MigrationsPath` empty disables this
-   mechanism entirely so it does not conflict with one.
+- **No advisory lock.** Concurrently-starting replicas pointed at the same `Database:MigrationsPath` may
+  each attempt the same pending file. Deploy schema changes with a single replica first, or as a separate
+  one-off job. The same caveat applies to CodeFirst table creation and to `AutoSyncSchema` (hazard #8).
+- **A deploy pipeline that copies `db/migrations/*.sql` may no longer create the directory itself.** The
+  template ships **zero** `.sql` files, where it previously always shipped `001-core-baseline.sql`, so a
+  pipeline step that copies whatever exists there no longer guarantees the directory exists in the
+  deployed image. If `Database:MigrationsPath` is configured and the directory is absent, startup throws
+  `DirectoryNotFoundException` and the process exits `1` (the `Database:MigrationsPath` row in the
+  checklist above). Confirm the pipeline creates the directory — even empty — wherever this key is set.
 
 ### Upgrading core across a fork
 
-The template ships **zero** SQL scripts, and table creation is create-only — it never touches a table
-that already exists. Together, these two facts mean **a change to StruoCMS core's own schema cannot
-automatically reach an existing fork's deployment.**
-
-The practical path:
-
-- Core schema changes are announced in release notes — which table changed, which column, and to what
-  type.
-- Each fork writes its own `ALTER` script(s), for the backend it actually runs, in its own
-  `db/migrations/`, based on that announcement.
-- As a diagnostic aid, you can run `Database:AutoSyncSchema=true` in Development against a **copy** of
-  your production schema to see what CodeFirst's diff would change. Treat that only as a hint about what
-  to write by hand — **the diff's output is not the production execution plan**; the hazard table above
-  (destructive renames, silent truncation, and the rest) applies to that diff exactly as it does
-  anywhere else, so a change the diff proposes is not automatically safe to copy verbatim into a
-  migration script.
-- **A deploy pipeline that copies `db/migrations/*.sql` may no longer create the directory itself.** The
-  template now ships **zero** `.sql` files by default, where it previously always shipped
-  `001-core-baseline.sql`; a pipeline step that copies whatever exists under `db/migrations/` therefore no
-  longer guarantees the directory exists in the deployed image. If `Database:MigrationsPath` is configured
-  and the directory is absent, startup throws `DirectoryNotFoundException` and the process exits with code
-  `1` (see the `Database:MigrationsPath` row in the Production checklist above, and `db/migrations/README.md`
-  §6, item 4). Confirm the pipeline still creates the directory — even empty — wherever this key is
-  configured.
+Because the template ships zero SQL scripts and table creation is create-only, **a change to StruoCMS
+core's own schema cannot automatically reach an existing fork's deployment.** Core schema changes are
+announced in release notes; each fork writes its own `ALTER` script for the backend it actually runs.
+`db/migrations/README.md` §7 covers the procedure, including using `AutoSyncSchema=true` against a
+*copy* of the production schema as a diagnostic hint — never as the execution plan, since the hazard
+table above applies to that diff exactly as it does anywhere else.
 
 ## Startup behavior and failure modes
 

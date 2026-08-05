@@ -111,16 +111,25 @@ property CodeFirst would ever create — `ColumnTypeMap.cs` is where those per-b
 (`timestamptz` on PostgreSQL, `datetime(6)` on MySQL, `datetimeoffset` on SQL Server, `timestamp with
 time zone` on Oracle) are centralized; copy the one for your backend rather than assuming PostgreSQL's.
 
-**Idempotency is no longer required, and this reverses what an earlier version of this document said.**
-The previous rule asked every script to be idempotent (`IF NOT EXISTS`, guarded `ALTER`, existence
-checks), inherited from a since-deleted baseline script that needed to be safely re-appliable. That
-requirement is now gone: the `schema_migrations` tracking table already guarantees each filename runs
-at most once, so a script never needs to protect itself against being re-run. Given that guarantee,
-`IF NOT EXISTS` and friends buy nothing while costing real portability — it is among the least portable
-constructs in this list (SQL Server has no equivalent syntax at all). **Portability now takes priority
-over idempotency**; write the plain, non-defensive form of the statement.
+**Check the target column's actual current type rather than assuming one — this repository's own
+framework tables are not uniform.** Most `AuditableEntity` `createdat`/`updatedat` columns are bare
+`timestamp`, but `media_folders.createdat`/`updatedat` are already time-zone-aware (both carry
+`[ColumnShape(ColumnShape.TimestampWithTimeZone)]` — `src/Struo.Infrastructure/Files/MediaFolder.cs`),
+and so are `site_settings.updatedat` and the runner's own tracking column `schema_migrations.appliedat`
+(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`). Read the entity declaration in `src/`, or
+the live schema, before writing the `ALTER`. The existing bare-`timestamp` columns have deliberately
+**not** been retroactively converted: re-anchoring already-stored values against a session time zone is
+a silent data shift.
 
-Other rules, unchanged from before:
+**Idempotency is not required — portability takes priority over it.** The `schema_migrations` tracking
+table already guarantees each filename runs at most once, so a script never needs to protect itself
+against being re-run. Given that guarantee, `IF NOT EXISTS` and friends buy nothing while costing real
+portability — they are among the least portable constructs in the table above (SQL Server has no
+equivalent syntax at all). Write the plain, non-defensive form of the statement. (If you are carrying
+forward scripts written against this repository's older guidance, which did ask for idempotent scripts,
+they still apply correctly — the guards are simply redundant now.)
+
+Other rules:
 
 - One logical change per file (§4).
 - Prefer separate files for structural changes vs. data changes, since DDL transaction semantics differ

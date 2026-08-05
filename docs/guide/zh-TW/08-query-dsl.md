@@ -20,12 +20,9 @@
 
 兩者都是唯讀的，並且都會經過與任何其他讀取相同的 RBAC 讀取檢查 (`ItemsController` 這兩個
 action 上都沒有 `[Authorize]`，`ItemService` 對一次查詢也只會檢查 `CanRead`)——儘管動詞是
-`POST`，`POST /query` 並不需要*寫入*授權。但 `CsrfProtectionMiddleware`
-(`src/Struo.Api/Auth/CsrfProtectionMiddleware.cs`) 會以相同的方式，對每一個非安全 HTTP 方法
-(`POST`/`PUT`/`DELETE`/……，`GET`/`HEAD`/`OPTIONS`/`TRACE` 則豁免) 做把關，不論是讀取還是寫入
-——**但只有在請求依附於 session cookie 上時才會如此**:一個以 `Bearer` 驗證的請求可豁免 (沒有
-瀏覽器環境憑證可供偽造)，完全沒有帶 session cookie 的請求也一樣 (也還沒有東西可以被攻擊)。一個
-以 cookie 驗證、卻沒有 `X-Struo-CSRF` 標頭的 `POST /query`，會在抵達 controller 之前就被拒絕:
+`POST`，`POST /query` 並不需要*寫入*授權。不過在以 cookie 驗證時，它確實需要 `X-Struo-CSRF` 標頭:
+CSRF 規則看的是 HTTP **方法**，而不是讀取或寫入，所以一個唯讀的 `POST` 與一次 mutation 受到完全相同
+的把關(完整規則與理由見第 9 章)。這一點最常讓人絆倒，所以在此實測一次:
 
 ```
 $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: application/json" -b cookies.txt -d '{}'

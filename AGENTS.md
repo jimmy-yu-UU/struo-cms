@@ -202,95 +202,23 @@ variable first, falling back to the `Testing:PostgresConnection` key in
 `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
 directly against a real PostgreSQL instance.
 
-**Local-environment flake, diagnosed and fixed 2026-08-04**: on the maintainer's machine,
-`PostgresIntegrationTests` had 1 of its 8 tests go red — not 7 of 8 — with a locally-raised Npgsql
-socket abort (seen on both `Stale_version_update_conflicts_on_postgres` and
-`Offset_window_is_exact_on_postgres`); it reproduced in 9 of 11 runs. The load-bearing test of the batch
-that first hit it, `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`,
-passed in all 11 of those runs. It was not caused by that branch: the same abort (same
-`Offset_window_is_exact_on_postgres` failure, same stack trace) reproduced at the merge-base `74c5dcc`
-too, in 5 of 6 runs — so if a red reappears on this suite, check whether pooling was re-enabled before
-assuming you caused it.
+**`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
+connection across a connection-close boundary made this suite go red locally with a
+`WSA_OPERATION_ABORTED` socket abort; `PgTestConnectionString.DisablePooling` gives each test its own
+physical connection. That is test isolation, not tolerance — no retry, no swallowed exception, no
+relaxed assertion, and every test still runs real DDL and DML against a real PostgreSQL. Two things
+worth knowing before you touch it:
 
-The cause was **reuse of a pooled Npgsql physical connection across a connection-close boundary**, within
-or between tests. Each test builds and disposes its own `ISqlSugarClient`, but the pool is process-wide
-and outlives all of them, so a connector whose socket I/O had already been aborted client-side could be
-drawn again and die on its first read. The exception chain is `NpgsqlException: Exception while reading
-from stream` → `IOException: Unable to read data from the transport connection` → `SocketException`
-carrying the Windows `WSA_OPERATION_ABORTED` text ("the I/O operation has been aborted because of either
-a thread exit or an application request"). The fix is `PgTestConnectionString.DisablePooling`, applied to
-whichever source resolves the connection, so each test gets its own physical connection; that class
-carries the full write-up. This is test isolation, not tolerance — no retry, no swallowed exception, no
-relaxed assertion — and every test still runs real DDL and DML against a real PostgreSQL.
+- **If this suite turns red, check whether pooling was re-enabled before assuming you caused it.** The
+  abort is not branch-specific and which test goes red is not stable. Setting `Pooling=true` in
+  `STRUO_TEST_PG_CONNECTION` restores the reproduction on purpose — `DisablePooling` honours an explicit
+  caller choice — and the expected casualty is `Resolved_connection_disables_pooling`, which says so.
+- **The mechanism is still unknown, and production was never observed to hit it — but that is a
+  non-observation, not a proof of safety.** Don't upgrade it to one.
 
-Scoped to the harness — and measured 2026-08-05, because the abort does surface inside product code
-(`SqlSugarItemRepository.CreateGenericAsync`) on a pooled connection, which is production's own
-configuration. Four measurements, same machine, same container, same pooled connection string:
-
-* the suite itself with pooling re-enabled — **red in 7 of 7 runs**, same abort every time;
-* a **plain console process** running that same repository code (build a client, `InitTables`, clear,
-  five `CreateAsync`, an offset query, then the compare-and-swap update — each run executes four such
-  units) in five threading models — main-thread sequential; a dedicated thread per unit that exits; a
-  dedicated thread that exits mid-flight; a dedicated thread that also owns the async continuations via
-  a pumping `SynchronizationContext` and then exits; thread-pool threads only — **0 aborts in 30 runs
-  each, 150 runs total**;
-* a **minimal xUnit project** holding nothing but that same repository code, no Struo test assembly and
-  no fixtures — **4 aborts in 46 runs** (~9% of runs), same exception chain, same `CreateGenericAsync`
-  frame. This is the positive control: it makes the zeros below informative rather than vacuous, and it
-  shows the repo's own test assembly is not *required* — a bare xUnit host reproduces the abort alone;
-* **what raises that ~9% to the suite's every-run failure**, isolated afterwards by adding one thing at a
-  time to that same bare probe, interleaved against an unmodified control run in the same sitting: the
-  amplifier is **a second Npgsql pool in the process**. `PostgresIntegrationTests.BuildRepo` and
-  `BuildRawClient` each call `DbMaintenance.CreateDatabase()` to self-provision the disposable database,
-  and that opens a connection whose string differs only in `Database=`, which is a separate pool. Adding
-  that call to the probe took it from **2 of 15 to 15 of 15**. The cause is the second pool, not the extra
-  connection and not the swallowed exception: an extra pooled open/close on the *same* database went
-  **0 of 12**, a swallowed server-side error on the *same* database **1 of 12**, while a plain connection
-  to the maintenance database that throws nothing went **11 of 12**. Production cannot reach that state —
-  it binds one connection string, never calls `DbMaintenance.CreateDatabase()`, and never constructs an
-  `NpgsqlConnection` directly, so it has exactly one pool. This removes the *amplifier* from production,
-  not the phenomenon: the bare single-pool xUnit host still failed ~10% of runs;
-* the **product itself** — `Struo.Api` booted as Production against real PostgreSQL with pooling on and
-  driven through the item endpoints (create, offset query, get-by-id, compare-and-swap update)
-  sequentially, 8-way concurrent, and with idle gaps — note that a live host issues no synchronous
-  command before its first async one, the sequence every harness abort landed on, so this bounds
-  production exposure rather than reproducing the harness's shape — **22,023 requests (≈2,200 units of
-  work), 0 aborts, 0 HTTP 500s, 0 error log lines**.
-
-So in everything measured here, the abort tracks the xUnit/VSTest test host, not the product's use of a
-pooled connection, and a pooled production process was not observed to hit it at a volume (≈2,200 units)
-where the xUnit probe's rate of roughly one abort per fifty units would have produced tens. The one
-condition that made it reproduce *every* run — a second pool — is structurally absent from production,
-which is a reason and not just an absence of sightings. But that is still a non-observation, **not** a
-proof of safety: the single-pool bare host failed ~10% of runs, and the mechanism underneath both is
-still unknown, so nothing here rules the abort out for a different threading model, load shape or
-Windows build. Disabling pooling here still
-removes the repo's only local reproduction of the abort; the way back to one is to set `Pooling=true` in
-`STRUO_TEST_PG_CONNECTION`, which `PgTestConnectionString.DisablePooling` deliberately honours — the
-expected casualty of that choice is `Resolved_connection_disables_pooling`, and it says so.
-
-Two observations the mechanism does **not** account for, recorded so they are not mistaken for settled:
-one run went red on the *first* test executed, when the process had touched PostgreSQL zero times and
-the pool was still empty, so a preceding test is not required (reuse across close boundaries *within* one
-test explains that run, and is equally addressed by the fix); and in full-suite order the failure landed
-on the third test executed, meaning the test right after the first one passed even though it is the one
-that would draw the connector the first test poisoned. Which test goes red is not a stable property —
-it was `Offset_window_is_exact_on_postgres` in most runs and `Stale_version_update_conflicts_on_postgres`
-in one, and in two-test subsets it failed second rather than third.
-
-What the diagnosis ruled out, so nobody repeats it: the failing test's own logic (it passes 5/5 as the
-only test in the process); a cold-start/first-connection effect (a warm-up connection opened before the
-test's own client left it red 4 of 5); the server side (PostgreSQL logged no error for any of ~20 runs,
-and `log_min_messages=warning` would have shown one — connections were 11 of a 100 ceiling, with no
-`statement_timeout` or idle-in-transaction timeout set); and a specific poisoning predecessor (the test
-fails after *any* other test in the suite, whichever one, and is green alone). Pooling was confirmed as
-*necessary* for the failure, both directions: green 5/5 with `Pooling=false`, red in 8 of 9 runs with
-pooling on. One residual unknown, and it stays one by decision: *what* aborts the socket is inferred from
-the Windows error code — a thread-exit I/O cancellation, xUnit's worker threads being the plausible
-source — and is still unproven. The 2026-08-05 probe leaves it standing rather than settling it, and
-weakens it slightly: three separate renderings of "a thread that exits" outside xUnit stayed green, so
-thread exit on its own does not reproduce the abort — though those three renderings are a reconstruction
-of xUnit's threading, not xUnit's own, so an unmodelled rendering may still be the one that matters.
+`PgTestConnectionString`'s class doc is the full write-up: the exception chain, what the diagnosis ruled
+out, the 2026-08-05 measurements bounding production exposure, the second-pool amplifier, and the one
+residual unknown.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
@@ -307,6 +235,14 @@ four standing gates, and is not run by CI.
   `Struo.Api.csproj` into `samples/`, no default `Struo:ContentAssemblies` entry for it).
 - Never commit `src/Struo.Api/appsettings.Development.json` — it is gitignored and holds local secrets.
 - Never weaken the dependency rule (no reversed or skip-layer project references).
+- **Never add documentation the reader does not need in order to act.** No change narratives ("this used
+  to be X"), no investigation journals (they belong in the doc comment of the class they explain), no
+  restating a rule that already has a home elsewhere — link to it instead. This cuts *both* ways: do
+  **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
+  consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
+  regression. The test is "would a reader act differently without this?", never "is this long?".
+  `docs/ai/conventions.md`, "What documentation may contain", has the full rule and the four
+  anti-patterns.
 
 ## Where to read more
 
