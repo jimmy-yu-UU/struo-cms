@@ -13,6 +13,13 @@ The deliberate exception is a citation into **pinned upstream SqlSugar source**,
 `src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`: that source is version-pinned and cannot
 shift underneath us, so a line range there stays valid.
 
+Enforced by `CodeCitationConventionTests` (`tests/Struo.Tests/Documentation/CodeCitationConventionTests.cs`),
+mechanically: a citation is a violation only if the cited file's basename exists somewhere in this
+repository (no upstream-filename allowlist to go stale). The test only catches citations that name a
+file extension, or a dotted `Construct.Member` name immediately followed by a hyphenated range — a
+bare trailing number with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably
+distinguishable from a port or a time and is not covered; a reviewer still has to catch those by hand.
+
 ## Naming
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.
