@@ -316,9 +316,9 @@ the file's id, its current `Version` (the `AuditableEntity` optimistic-concurren
 about), and every transform parameter, each on its own tagged line before hashing
 (`DiskImageVariantCache.DeriveKey`/`FilesController.Download`, `FilesController.cs`) — so a
 re-upload (which bumps `Version`) naturally misses instead of ever serving a stale variant, with no
-explicit cache invalidation required. Keys are sharded into a subdirectory named after their first
-two hex characters and written atomically (temp file + rename) so a concurrent reader never observes
-a partially-written variant.
+explicit cache invalidation required. Keys are sharded into a subdirectory
+named after their first two hex characters and written atomically (temp file
++ rename) so a concurrent reader never observes a partially-written variant.
 Live-verified: after the four transforms above, the cache directory holds one file per distinct key,
 each under a two-character shard directory:
 
