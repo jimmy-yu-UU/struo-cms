@@ -32,14 +32,15 @@ namespace Struo.Tests.Support;
 ///
 /// Scoped to the harness, and measured 2026-08-05 — because the abort surfaced inside product code
 /// (<c>SqlSugarItemRepository.CreateGenericAsync</c>) on a pooled connection, which is production's own
-/// configuration, "harness-only" had to be shown rather than assumed. It now is, as far as measurement
-/// goes: the same repository code aborted 4 times in 46 runs of a minimal xUnit project (the positive
-/// control) but 0 times in 150 runs of a plain console process across five threading models, and
-/// <c>Struo.Api</c> booted as Production against real PostgreSQL with pooling on served 22,023 item-API
-/// requests with 0 aborts. The abort therefore tracks the xUnit/VSTest test host, not the product's use
-/// of a pooled connection. That is a non-observation, NOT a proof of safety — the mechanism is still
-/// unknown, so it does not rule the abort out for a different threading model, load shape or Windows
-/// build. AGENTS.md's Verification section carries the full numbers.
+/// configuration, "harness-only" had to be measured rather than assumed. It now has measurement behind
+/// it, though not proof: the same repository code aborted 4 times in 46 runs of a minimal xUnit project
+/// (the positive control) but 0 times in 150 runs of a plain console process across five threading
+/// models, and <c>Struo.Api</c> booted as Production against real PostgreSQL with pooling on served
+/// 22,023 item-API requests with 0 aborts. So in everything measured here, the abort tracks the
+/// xUnit/VSTest test host, not the product's use of a pooled connection. That is a non-observation, NOT
+/// a proof of safety — the mechanism is still unknown, so it does not rule the abort out for a different
+/// threading model, load shape or Windows build. AGENTS.md's Verification section carries the full
+/// numbers.
 ///
 /// Disabling pooling here still removes the repo's only local reproduction of the abort. The way back to
 /// one is the escape hatch below: set <c>Pooling=true</c> yourself in the connection string.

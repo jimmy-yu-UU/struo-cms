@@ -235,19 +235,25 @@ configuration. Four measurements, same machine, same container, same pooled conn
   `SynchronizationContext` and then exits; thread-pool threads only — **0 aborts in 30 runs each, 150
   runs total**;
 * a **minimal xUnit project** holding nothing but that same repository code, no Struo test assembly and
-  no fixtures — **4 aborts in 46 runs**, same exception chain, same `CreateGenericAsync` frame. This is
-  the positive control, and it is what pins the trigger on the test host rather than on the repo's tests;
+  no fixtures — **4 aborts in 46 runs** (~9% of runs), same exception chain, same `CreateGenericAsync`
+  frame. This is the positive control: it makes the zeros below informative rather than vacuous, and it
+  shows the repo's own test assembly is not *required* — a bare xUnit host reproduces the abort alone. It
+  does not show the host is the whole story: the repo's suite went red every run and the bare host
+  roughly one in eleven, so something in the fuller suite amplifies the rate by about an order of
+  magnitude, and what that is was not investigated;
 * the **product itself** — `Struo.Api` booted as Production against real PostgreSQL with pooling on and
   driven through the item endpoints (create, offset query, get-by-id, compare-and-swap update)
-  sequentially, 8-way concurrent, and with idle gaps — **22,023 requests, 0 aborts, 0 HTTP 500s, 0 error
-  log lines**.
+  sequentially, 8-way concurrent, and with idle gaps — note that a live host issues no synchronous
+  command before its first async one, the sequence every harness abort landed on, so this bounds
+  production exposure rather than reproducing the harness's shape — **22,023 requests (≈2,200 units of
+  work), 0 aborts, 0 HTTP 500s, 0 error log lines**.
 
-So the abort tracks the xUnit/VSTest test host, not the product's use of a pooled connection, and a
-pooled production process was not observed to hit it at a volume where the xUnit probe's rate (roughly
-one abort per fifty units of work) would have produced tens. That is a non-observation, **not** a proof
-of safety: the mechanism is still unknown, so nothing here rules the abort out for a different threading
-model, load shape or Windows build. Disabling pooling here still removes the repo's only local
-reproduction of the abort; the way back to one is to set `Pooling=true` yourself in
+So in everything measured here, the abort tracks the xUnit/VSTest test host, not the product's use of a
+pooled connection, and a pooled production process was not observed to hit it at a volume (≈2,200 units)
+where the xUnit probe's rate of roughly one abort per fifty units would have produced tens. That is a
+non-observation, **not** a proof of safety: the mechanism is still unknown, so nothing here rules the
+abort out for a different threading model, load shape or Windows build. Disabling pooling here still
+removes the repo's only local reproduction of the abort; the way back to one is to set `Pooling=true` in
 `STRUO_TEST_PG_CONNECTION`, which `PgTestConnectionString.DisablePooling` deliberately honours — the
 expected casualty of that choice is `Resolved_connection_disables_pooling`, and it says so.
 
@@ -271,7 +277,8 @@ pooling on. One residual unknown, and it stays one by decision: *what* aborts th
 the Windows error code — a thread-exit I/O cancellation, xUnit's worker threads being the plausible
 source — and is still unproven. The 2026-08-05 probe leaves it standing rather than settling it, and
 weakens it slightly: three separate renderings of "a thread that exits" outside xUnit stayed green, so
-thread exit on its own does not reproduce the abort.
+thread exit on its own does not reproduce the abort — though those three renderings are a reconstruction
+of xUnit's threading, not xUnit's own, so an unmodelled rendering may still be the one that matters.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
