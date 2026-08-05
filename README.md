@@ -3,7 +3,7 @@
 A reusable, headless CMS **template**: fork it, define your own content collections, ship your own
 product. It is not a finished CMS product and ships no business content models of its own.
 
-[![CI](https://github.com/stu640978/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/stu640978/struo-cms/actions/workflows/ci.yml)
+[![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
 ## What you get
 
