@@ -69,19 +69,16 @@ and never expires on its own (there is no TTL — a token is permanent until exp
 hash). Every bearer-authenticated request updates `AccessTokenLastUsedAt`, throttled to once per minute
 per token so a busy integration doesn't turn every call into a write.
 
-**No `[Authorize]` attribute names Bearer by default** — every write action across
-`ItemsController`/`FilesController`/`UsersController`/`RolesController`/etc. is explicit about it
-(`[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`), so a bearer token has always worked
-identically to a cookie there. What used to be missing was the actions naming **no** scheme at all:
-`ItemsController`'s read actions, and `/graphql` (chapter 10), carry no `[Authorize]` attribute, and
-before `AuthSchemes.Adaptive` existed as the default authenticate scheme, ASP.NET Core only ever ran the
-Cookie handler automatically for those — a bearer-only caller hitting one of them was resolved as
-anonymous. `Adaptive` (`src/Struo.Api/Auth/AuthWiring.cs`) closes that gap: it forwards to `Bearer`
-whenever the request carries `Authorization: Bearer …`, on **every** endpoint, attributed or not — so a
-bearer-only caller now reads through `ItemsController` (and `/graphql`) as itself, with its own roles'
-grants unioned with the `public` floor below, exactly as a cookie session would. Live-verified that a
-bearer request needs no `X-Struo-CSRF` header to succeed (see below) where a cookie request to the
-same endpoint would be rejected without it:
+**Bearer works on every endpoint, including the ones that name no scheme.** Write actions across
+`ItemsController`/`FilesController`/`UsersController`/`RolesController`/etc. name both schemes
+explicitly (`[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`). The actions carrying no
+`[Authorize]` attribute at all — `ItemsController`'s reads, and `/graphql` (chapter 10) — are covered
+instead by the default authenticate scheme, `AuthSchemes.Adaptive`
+(`src/Struo.Api/Auth/AuthWiring.cs`), which forwards to `Bearer` whenever the request carries
+`Authorization: Bearer …`. So a bearer-only caller reads through those as **itself**, with its own
+roles' grants unioned with the `public` floor below, exactly as a cookie session would — not as
+anonymous. Live-verified that a bearer request needs no `X-Struo-CSRF` header to succeed (see below)
+where a cookie request to the same endpoint would be rejected without it:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6 \
@@ -329,27 +326,25 @@ model most directly governs. It is consulted **only** the first time the `roles`
 only way to grant public read against a live database is directly, either through the Role permission
 matrix in the admin (or its underlying `PUT /api/roles/{id}/permissions` endpoint, demonstrated above).
 
-## Hidden fields never being projected or accepted
+## Hidden fields, from the RBAC angle
 
-A field's `Hidden` flag (`FieldMetadata.Hidden`, distinct from `CmsCollectionAttribute.Hidden`'s
-sidebar-presentation meaning) is unconditionally excluded from the outbound projection —
-`ItemProjector.Project` skips it before permission/field-selection are even consulted
-(`src/Struo.Application/Query/Projection/ItemProjector.cs`: `if (field.Hidden) continue;`) — so no
-combination of `fields=`, RBAC field-readability, or a `deep`-expanded relation can ever surface a
-`Hidden` field's value through the API. It is also excluded from the query-DSL whitelist entirely
-(chapter 8) — a filter/sort/`fields=` naming a `Hidden` field is rejected as an unknown field, precisely
-so a credential-shaped `Hidden` column can't be turned into a character-at-a-time extraction oracle via
-`meta.total`.
+Chapter 5 documents what `[CmsField(Hidden = true)]` does across schema, projection, GraphQL and the
+query DSL. Two consequences matter specifically here.
 
-On the **write** side, `Hidden` alone is not itself the mechanism: the `IsSystem`/`ReadOnly`
-field-stripping loop in `ItemDeserializer.Deserialize`
-(`src/Struo.Application/Query/Write/ItemDeserializer.cs`) strips any field flagged `IsSystem` **or**
-`ReadOnly` from the incoming body before validation runs, nulling it back out on the freshly-deserialized
-entity. In the shipped schema, every `Hidden` field (`User.Password`, `User.AccessToken`) also happens to
-be declared `ReadOnly`, so a client-supplied value for either is silently discarded rather than persisted
-— but that discarding comes from the `ReadOnly` flag, not from `Hidden` by itself. Live-verified: a
-generic `PUT` attempting to overwrite a user's password succeeds (the request itself is not rejected —
-the field is simply dropped) and the stored hash is provably unchanged:
+**Read side — why the query-DSL exclusion is a security property, not just tidiness.** A `Hidden` field
+is excluded from the filter/sort/`fields=` whitelist entirely (chapter 8), so naming one is rejected as
+an unknown field. Without that, a credential-shaped `Hidden` column would stay filterable, and
+`meta.total` would turn it into a character-at-a-time extraction oracle — the value never being
+projected would not save you.
+
+**Write side — `Hidden` is not a write guard, and the shipped schema does not rely on it as one.**
+Nothing strips a field for being `Hidden`; what strips it is the `IsSystem`/`ReadOnly` loop in
+`ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`). Both shipped
+`Hidden` fields (`User.Password`, `User.AccessToken`) are *also* declared `ReadOnly`, which is what
+actually discards a client-supplied value. Declare your own privileged fields the same way — `Hidden`
+alone leaves them writable by any caller who guesses the name. Live-verified: a generic `PUT`
+attempting to overwrite a user's password succeeds (the request is not rejected — the field is simply
+dropped) and the stored hash is provably unchanged:
 
 ```
 $ curl -s -X PUT http://localhost:5221/api/items/user/<editor-id> -H "Content-Type: application/json" \
