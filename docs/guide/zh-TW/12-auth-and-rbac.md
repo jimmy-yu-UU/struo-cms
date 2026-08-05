@@ -63,18 +63,15 @@ Ticket 存放——也就是 cookie 那組不透明金鑰背後真正的 session
 token 來輪替，這會覆寫既有的雜湊值)。每一個以 bearer 驗證的請求都會更新 `AccessTokenLastUsedAt`，並
 節流為每個 token 每分鐘最多一次，這樣一個繁忙的整合端就不會把每一次呼叫都變成一次寫入。
 
-**預設沒有任何 `[Authorize]` attribute 指名 Bearer**——`ItemsController`/`FilesController`/
-`UsersController`/`RolesController` 等控制器的每一個寫入 action，都明確標示了
-`[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`，所以在這些地方，bearer token
-向來與 cookie 的作用完全相同。過去缺少的是那些完全沒有指名任何機制的 action：`ItemsController` 的
-讀取 action，以及 `/graphql` (第 10 章)，都不帶任何 `[Authorize]` attribute，而在
-`AuthSchemes.Adaptive` 成為預設驗證機制之前，ASP.NET Core 對這些 action 永遠只會自動執行 Cookie
-handler——一個純 bearer 的呼叫端命中其中之一時，會被解析為匿名者。`Adaptive`
-(`src/Struo.Api/Auth/AuthWiring.cs`) 補上了這個缺口：只要請求帶有 `Authorization: Bearer …`，
-它就會轉發給 `Bearer`，無論該端點**是否**帶有 attribute——因此一個純 bearer 的呼叫端，現在讀取
-`ItemsController` (與 `/graphql`) 時，會被解析為它自己，連同它自己角色的授權與下方的 `public`
-底線聯集，與一個 cookie session 完全相同。已即時驗證：一個 bearer 請求不需要 `X-Struo-CSRF`
-標頭就能成功(見下方)，而對同一個端點發出的 cookie 請求若沒有這個標頭則會被拒絕：
+**Bearer 在每一個端點上都有效，包含那些沒有指名任何機制的端點。**
+`ItemsController`/`FilesController`/`UsersController`/`RolesController` 等控制器的寫入 action，都明確
+標示了兩種機制 (`[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`)。而那些完全不帶
+`[Authorize]` attribute 的 action——`ItemsController` 的讀取，以及 `/graphql` (第 10 章)——則由預設驗證
+機制 `AuthSchemes.Adaptive` (`src/Struo.Api/Auth/AuthWiring.cs`) 涵蓋:只要請求帶有
+`Authorization: Bearer …`，它就會轉發給 `Bearer`。因此一個純 bearer 的呼叫端在讀取這些端點時，會被解析
+為**它自己**，連同它自己角色的授權與下方的 `public` 底線聯集，與一個 cookie session 完全相同——而不是
+被當成匿名者。已即時驗證：一個 bearer 請求不需要 `X-Struo-CSRF` 標頭就能成功(見下方)，而對同一個端點
+發出的 cookie 請求若沒有這個標頭則會被拒絕：
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/items/file/5b4de227-0997-4bb1-b1e7-9565b3cffce6 \
@@ -303,24 +300,23 @@ HTTP/1.1 204 No Content
 針對一個現存的資料庫授予公開讀取權，唯一的方法是直接透過管理後台中的角色權限矩陣(或其底層的
 `PUT /api/roles/{id}/permissions` 端點，如上方所示)。
 
-## Hidden 欄位永遠不會被投影或接受
+## Hidden 欄位：從 RBAC 的角度看
 
-一個欄位的 `Hidden` 旗標(`FieldMetadata.Hidden`，不同於 `CmsCollectionAttribute.Hidden` 那種側邊欄
-呈現意義)會無條件地從外送投影中排除——`ItemProjector.Project` 甚至在權限／欄位選取被查詢之前就先跳過它
-(`src/Struo.Application/Query/Projection/ItemProjector.cs`：`if (field.Hidden) continue;`)——因此
-無論是 `fields=`、RBAC 欄位可讀性，還是一個 `deep` 展開的關聯，任何組合都不可能讓一個 `Hidden` 欄位的值
-透過 API 曝光出來。它也完全被排除在查詢 DSL 白名單之外(第 8 章)——一個指名了 `Hidden` 欄位的
-filter/sort/`fields=` 會被拒絕為未知欄位，正是為了讓一個外形像憑證的 `Hidden` 欄位，無法被透過
-`meta.total` 變成一個逐字元擷取的探測工具。
+第 5 章記載了 `[CmsField(Hidden = true)]` 在 schema、投影、GraphQL 與查詢 DSL 各處的作用。有兩項後果
+在這裡特別重要。
 
-在**寫入**這一側，`Hidden` 本身並不是機制所在：`ItemDeserializer.Deserialize` 內剝除
-`IsSystem`／`ReadOnly` 欄位的迴圈
-(`src/Struo.Application/Query/Write/ItemDeserializer.cs`)會在驗證執行之前，把任何標示了
-`IsSystem` **或** `ReadOnly` 的欄位從送入的本文中剝除，並在剛反序列化出來的實體上把它重新清空。在出貨的
-schema 中，每一個 `Hidden` 欄位(`User.Password`、`User.AccessToken`)恰好也都被宣告為 `ReadOnly`，因
-此客戶端提供的值會被靜默捨棄而不會被持久化——但這種捨棄是來自 `ReadOnly` 旗標，而非單靠 `Hidden` 本身。
-已即時驗證：一次試圖覆寫某使用者密碼的一般 `PUT` 會成功(請求本身不會被拒絕——該欄位只是被丟棄)，而且
-可以證明所儲存的雜湊值並未改變：
+**讀取側——查詢 DSL 的排除是一項安全性質，不只是整潔。** 一個 `Hidden` 欄位完全被排除在
+filter/sort/`fields=` 白名單之外(第 8 章)，指名它會被拒絕為未知欄位。若沒有這道排除，一個外形像憑證的
+`Hidden` 欄位仍然可被過濾，`meta.total` 就會把它變成一個逐字元擷取的探測工具——「值不會被投影」這件事
+救不了你。
+
+**寫入側——`Hidden` 不是寫入防護，出貨的 schema 也沒有把它當成寫入防護。** 沒有任何機制會因為一個欄位
+是 `Hidden` 就剝除它;真正剝除它的是 `ItemDeserializer.Deserialize`
+(`src/Struo.Application/Query/Write/ItemDeserializer.cs`)內針對 `IsSystem`／`ReadOnly` 的迴圈。出貨的
+兩個 `Hidden` 欄位(`User.Password`、`User.AccessToken`)*同時*也被宣告為 `ReadOnly`，那才是實際捨棄
+客戶端所提供之值的原因。你自己的特權欄位請比照辦理——單靠 `Hidden`，任何猜到欄位名稱的呼叫端都仍然
+寫得進去。已即時驗證：一次試圖覆寫某使用者密碼的一般 `PUT` 會成功(請求本身不會被拒絕——該欄位只是被
+丟棄)，而且可以證明所儲存的雜湊值並未改變：
 
 ```
 $ curl -s -X PUT http://localhost:5221/api/items/user/<editor-id> -H "Content-Type: application/json" \

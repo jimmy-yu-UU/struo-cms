@@ -4,6 +4,32 @@ Conventions that apply across the backend and frontend. Where a convention is en
 the compiler, this document says so and names the mechanism; where it is a convention only, it says
 that plainly instead of implying enforcement that does not exist.
 
+## What documentation may contain
+
+Every line of documentation costs every future reader — human and agent — attention they could have
+spent on the thing they came for. **Write only what the reader needs in order to act.** This is not a
+brevity contest; it is a rule about *audience*. A fact is worth a paragraph if acting without it would
+go wrong, and worth zero lines if it merely records how the repository arrived at its current state.
+
+Four failure modes, all of which this repository has actually had, and what to do instead:
+
+| Anti-pattern | Why it costs | Instead |
+|---|---|---|
+| **Change narrative** — "this used to be X, here is the old transcript, now it is Y" | The reader must decode which half is current. The old half is never actionable. | State the current behavior. Keep one sentence of history **only** when a reader might still hold the old belief and act on it (e.g. "introspection off" ≠ "schema unreadable"). |
+| **Investigation journal** — measurement runs, ruled-out hypotheses, residual unknowns | This is engineering evidence, not guidance. It is real and worth keeping — just not here. | Put it in the doc comment of the class it explains, and leave a summary plus a pointer. `PgTestConnectionString` is the worked example. |
+| **Same content in N places** | N places to update, so N−1 go stale silently — and nothing in CI catches doc drift. | Pick one home, say plainly that it is the home, and link to it. Restating a rule in a second chapter is justified only when a reader of *that* chapter would otherwise act wrongly — and then restate the rule, not its rationale. |
+| **Restating a section in its own summary** | Pure duplication inside one file. | A closing checklist should be a list of steps to tick off, not a re-explanation of each one. |
+
+**What this rule does not license.** Do not cut a caveat because it is inconvenient or long. Load-bearing
+content stays, including: an honest "this is unverified / the mechanism is unknown / this is a
+non-observation, not a proof"; a documented divergence between backends; a security consequence; the
+reason a non-obvious decision was made, where a future reader would otherwise "fix" it. Removing a
+hedge to make a claim read cleaner is a **correctness** regression, not a tidiness win. When trimming,
+the test is "would a reader act differently without this?" — not "is this long?".
+
+**Before deleting, check where the fact lives.** If it lives only in the text you are cutting, move it
+somewhere durable first and fix any pointer that would be left dangling in either direction.
+
 ## Citing code from docs and comments
 
 When documentation or a comment points **into this repository's own code**, cite the construct — a
@@ -236,9 +262,9 @@ state where an accidental in-place mutation would be visible to every subsequent
   sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs only `dotnet build` +
   `dotnet test` and `pnpm test` + `pnpm build`) — both need a live API and database, not just a build.
 
-See `docs/guide/en/15-deployment-operations-testing.md` for the backend/frontend/E2E layers in more
-depth — that chapter predates the Contract layer above and does not cover it; this document and
-`schema/README.md` are the only places the schema contract gate is described.
+See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
+the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`
+remains the authoritative reference for the contract itself and its regeneration command.
 
 ## Commit message format
 

@@ -24,13 +24,10 @@
 
 ## Schema 管理
 
-Schema 管理依**職責**、而非依環境，拆分為三層：
-
-| 職責 | 執行者 | 環境 | 後端 | 預設 |
-|---|---|---|---|---|
-| 建立**不存在**的資料表 | CodeFirst(過濾後的 `InitTables`) | 全環境 | 全部五種 | 一律啟用 |
-| **改既有**資料表(自動 diff) | 完整 CodeFirst 同步(`SyncSchema`) | 僅 Development | 全部五種 | `Database:AutoSyncSchema=false`——須明確開啟 |
-| **改既有**資料表(受審查) | `MigrationRunner` + `Database:MigrationsPath` 下的 `.sql` 腳本 | 全環境 | 全部五種 | `Database:MigrationsPath` 空白 = 關閉 |
+Schema 管理依**職責**、而非依環境，拆分為三層：CodeFirst 建立不存在的資料表(永遠、每個環境都做)、
+`Database:AutoSyncSchema` 依自動 diff 修改既有資料表(僅 Development，預設關閉)，以及 `MigrationRunner`
+套用受審查的 `.sql` 腳本(全環境，預設關閉)。完整的職責對照表在 `db/migrations/README.md` §2;本節談的是
+一個**部署**必須做對的部分，以及下方的 auto-sync 風險。
 
 **啟動順序**(`Program.cs`)：表名快照 → `CreateMissingTables`(全環境、全後端、無條件執行) →
 選用的 `SyncSchema`(只有在 `Database:AutoSyncSchema=true` **且** host 處於 Development 時才會
@@ -89,92 +86,31 @@ CI 套件，無法證明被移除的欄位真的會被刪除；只有那次真�
 是實體類別與正在執行中資料表之間的一次**結構 diff**——它知道目標形狀，但完全不知道你的*意圖*為何。
 一次改名，與一次「刪一欄、加一欄」，在 diff 眼中完全無法區分。
 
-### 撰寫 migration：可攜性與冪等性
+### 撰寫 migration
 
-盡量使用標準 SQL，以保留未來更換資料庫引擎的可能性：
+撰寫規則——檔案命名、可攜 SQL 的建議/避免對照表、為何**不需要**冪等性、以檔名為準的追蹤方式、具時區
+感知的時間戳記慣例，以及 runner 的已知限制(MySQL/Oracle 上 DDL 無法回滾、無 advisory lock、無
+checksum/down-migration/dry-run)——全部收錄於 **`db/migrations/README.md`** §§4–6。那份檔案是這些
+內容的唯一歸屬;本章不再重述。
 
-- `ALTER TABLE … ADD COLUMN` / `DROP COLUMN` / `RENAME COLUMN`
-- `CREATE INDEX` / `CREATE UNIQUE INDEX`
-- `UPDATE` / `INSERT` / `DELETE`(資料回填)
-- 標準型別名：`varchar(n)`、`integer`、`bigint`、`boolean`、`timestamp`、`numeric(p,s)`
+其中有兩項限制對部署有直接影響，值得在此重申:
 
-建議避免、並附替代方案：
-
-| 避免 | 原因 | 替代 |
-|---|---|---|
-| PostgreSQL 專屬型別(`jsonb`、`uuid`、`timestamptz`、`serial`) | 其餘四個後端無此型別 | 標準型別；由 ORM 負責應用層映射 |
-| `DO $$ … $$` | PL/pgSQL，僅 PostgreSQL | 拆為多個單純語句 |
-| `ALTER` / `CREATE INDEX` 上的 `IF NOT EXISTS` | SQL Server 不支援 | **不需要**——追蹤資料表已保證每個檔案只執行一次(見下文) |
-| `::` cast 語法 | PostgreSQL 專屬 | `CAST(x AS type)` |
-| 方言函式(`now()` vs `GETDATE()` vs `SYSDATE`) | 各引擎不同 | 由應用層傳值；或於各自 fork 中刻意接受此耦合 |
-| `RETURNING` | 非標準 | 分開查詢 |
-
-**冪等性不再是必要的，這與早先的指引相反。** 這個儲存庫較早版本的 migration 指引，要求每支腳本都自我
-防護(`IF NOT EXISTS`、有防護的 `ALTER`、存在性檢查)——那項要求源自一支需要能安全重複套用的 baseline
-bootstrap 腳本，而該 baseline 現已不存在(template 出貨零份 `.sql` 檔案；見下文)。由 CodeFirst 建立
-的 `schema_migrations` 追蹤資料表，已經保證每個檔名最多只會被套用一次，因此一支腳本永遠不需要自我防護
-以應付被重跑的情況——而 `IF NOT EXISTS` 正是上方「避免清單」中可攜性最差的語法之一(SQL Server 完全
-沒有對應的語法)。可攜性現在優先於冪等性：請撰寫語句最單純、不具防護性的形式。
-
-已套用的檔名只會**以檔名本身**被追蹤——沒有 checksum 或內容雜湊——記錄在一個由 CodeFirst 自己建立的
-`schema_migrations` 資料表中(因此這套機制本身不帶有任何 vendor SQL)。一個已被記錄為套用過的檔案，
-即使之後其磁碟內容被編輯過，也絕不會被重新執行——**絕不要編輯一個可能已經在任何地方套用過的檔名；
-請改為出貨一個新檔案。** 檔案命名(`NNN-short-kebab-description.sql`，一個連續、補零的單一序列，
-每個檔案一項邏輯變更)及其餘機制細節，記載於 `db/migrations/README.md`，也就是這份指引的權威版本——
-本章與該檔案保持一致。
-
-**時間戳記慣例：** 任何新的時間性欄位都應具時區感知(time-zone-aware)並儲存 UTC，而不是裸的
-`timestamp`——上方「建議使用」清單裡的標準 SQL `timestamp` 指的只是型別名稱，並非要撤回這項慣例。
-如果該欄位也被建模為一個 entity 屬性，請標記
-`[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
-(`src/Struo.Infrastructure/Persistence/ColumnShape.cs`)，而不是一個 PostgreSQL 專屬的
-`timestamptz` 字面型別，這樣 CodeFirst 就會依各後端解析出對應的型別，讓一張全新建立的資料表，與這支
-migration 為既有資料表所加上的欄位一致。若是直接手寫 DDL(一個沒有任何 entity 屬性支撐的欄位)？
-`ColumnTypeMap.cs` 集中收錄了各後端對應的字面型別可供複製。不論哪一種情況，都請直接檢查目標資料表
-實際目前的欄位型別——`src/` 中的 entity 宣告，或是正在執行中的 schema——而不要假設是任一種;這個
-儲存庫自己的框架資料表也並不一致。大多數 `AuditableEntity` 的 `createdat`/`updatedat` 欄位都是裸的
-`timestamp`，但 `media_folders.createdat`/`updatedat` 已經具時區感知
-(兩者皆標記 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`——
-`src/Struo.Infrastructure/Files/MediaFolder.cs`)，`site_settings.updatedat` 以及 migration
-runner 自己的追蹤欄位 `schema_migrations.appliedat`
-(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`) 也是如此。沒有任何既有的裸 `timestamp`
-欄位曾被回溯性地轉換過，因為把已經儲存的值重新錨定到某個 session 時區，是一次靜默的資料位移。
-
-### 已知限制
-
-1. **DDL 回滾在 MySQL 或 Oracle 上無效。** runner 把每個檔案的執行與其追蹤列的插入包在同一個
-   transaction 中，但 MySQL 與 Oracle 的 DDL 都是隱式 commit——在這兩個後端上，若腳本執行到一半失敗，
-   已經跑過的 DDL 會原地留下；transaction 無法將其回滾。在這些後端上執行結構變更前請先備份，並在
-   維護窗口中執行。
-2. **無 advisory lock。** 若多個副本同時針對同一個 `Database:MigrationsPath` 目錄啟動，可能有一個以上
-   的行程同時嘗試套用同一支待處理的檔案。部署 schema 變更時，請先讓單一副本完成(或改以一個獨立的
-   一次性 job)，而不要仰賴 N 個副本互相競爭。同一項限制也適用於 CodeFirst 建表，以及
-   `AutoSyncSchema`(上方危險情境 #8)。
-3. **無 checksum、無 down-migration、無 dry-run。** 這個 runner 的職責就是「套用 `ALTER` 腳本並記錄
-   已執行的內容」——僅此而已。若你需要 checksum、可回滾的 migration，或 dry-run 模式，請改用專屬工具
-   (DbUp、Flyway、Liquibase)；把 `Database:MigrationsPath` 留空會完全停用這套機制，因此不會與其他
-   工具衝突。
+- **無 advisory lock。** 同時啟動、且指向同一個 `Database:MigrationsPath` 的多個副本，可能各自嘗試
+  套用同一支待處理檔案。部署 schema 變更時請先讓單一副本完成，或改以一個獨立的一次性 job。同一項限制
+  也適用於 CodeFirst 建表與 `AutoSyncSchema`(危險情境 #8)。
+- **會複製 `db/migrations/*.sql` 的部署管線，可能不再自動建立該目錄。** template 出貨**零份** `.sql`
+  檔案，而先前一律出貨 `001-core-baseline.sql`，因此一個「複製該目錄底下現有內容」的步驟，不再保證
+  部署映像中該目錄本身存在。若 `Database:MigrationsPath` 已設定但目錄不存在，啟動時會拋出
+  `DirectoryNotFoundException`，行程以結束代碼 `1` 退出(見上方檢查清單中 `Database:MigrationsPath`
+  那一列)。請確認管線在此設定值被配置之處仍會建立該目錄——即使是空的。
 
 ### 跨 fork 升級核心版本
 
-template 出貨**零份** SQL 腳本，而且建表是 create-only 的——它絕不會動到一張已經存在的資料表。這兩項
-事實加在一起，代表 **StruoCMS 核心自身的 schema 變更，無法自動送達一個既有 fork 的部署。**
-
-實務上的做法：
-
-- 核心 schema 變更於 release notes 中明確公告——哪張表變了、哪個欄位、變成什麼型別。
-- 每個 fork 依該公告，為自己實際執行的後端撰寫對應的 `ALTER` 腳本，放進自己的 `db/migrations/`。
-- 輔助手段：可在 Development 中對一份**複本**的 production schema 執行
-  `Database:AutoSyncSchema=true`，藉此觀察 CodeFirst 的 diff 會改動什麼。但請只把它當成撰寫手動腳本
-  的提示——**這份 diff 的輸出並非 production 的執行計畫**；上方的危險情境表(破壞性改名、靜默截斷等)
-  對這份 diff 的適用程度，與其他任何地方完全相同，因此 diff 提議的變更並不因此自動變得可以照抄進
-  migration 腳本。
-- **會複製 `db/migrations/*.sql` 的部署管線，可能不再自動建立該目錄。** template 現在預設出貨
-  **零份** `.sql` 檔案，而先前一律出貨 `001-core-baseline.sql`；因此一個「複製 `db/migrations/`
-  底下現有內容」的管線步驟，不再保證部署映像中該目錄本身存在。若 `Database:MigrationsPath` 已設定
-  但目錄不存在，啟動時會拋出 `DirectoryNotFoundException`，行程並以結束代碼 `1` 退出(見上方
-  正式環境檢查清單中 `Database:MigrationsPath` 那一列，以及 `db/migrations/README.md` §6 第
-  4 項)。請確認你的管線在此設定值被配置之處，仍會建立該目錄——即使是空的。
+由於 template 出貨零份 SQL 腳本、而且建表是 create-only 的，**StruoCMS 核心自身的 schema 變更，無法
+自動送達一個既有 fork 的部署。** 核心 schema 變更會在 release notes 中公告;每個 fork 依此為自己實際
+執行的後端撰寫對應的 `ALTER` 腳本。完整程序見 `db/migrations/README.md` §7，包含把
+`AutoSyncSchema=true` 對著 production schema 的一份**複本**執行、當成撰寫時的提示——但絕不可當成執行
+計畫，因為上方的危險情境表對那份 diff 的適用程度與其他任何地方完全相同。
 
 ## 啟動行為與失敗模式
 

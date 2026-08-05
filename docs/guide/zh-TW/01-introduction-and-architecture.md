@@ -54,7 +54,9 @@ PostgreSQL/SQLite 的行為所寫的。
 | `Revision` | `revisions` |
 | `SiteSettings` | `site_settings` |
 
-如果某段程式碼不在 `src/Struo.*` 之下，也不是以上十種型別之一，它就不是 core。特別是
+有兩個目錄**雖然不在 `src/Struo.*` 之下，但仍屬於 core**，fork 時要與它一併保留:`frontend/`
+(管理後台 SPA) 與 `schema/` (schema gate 用來檢驗前後端兩邊的已提交契約快照——`schema/README.md`)。
+除了這兩者之外，任何不在 `src/Struo.*` 之下、也不是以上十種型別之一的東西，就不是 core。特別是
 `samples/Struo.Sample.Blog` 是一個示範專案，fork 時會被刪除;`db/migrations/` 為核心出貨**零份** SQL
 腳本——CodeFirst 會在每一個環境、五種受支援後端的任何一種上建立核心自己的資料表，因此核心不需要自己的
 bootstrap 腳本——一個 fork 若在 `db/migrations/` 下新增腳本，那些腳本屬於該 fork，不屬於核心;而框架

@@ -13,7 +13,7 @@
 
 `File` (`src/Struo.Infrastructure/Files/File.cs`) 是 `[CmsCollection("File", Group = "System",
 DefaultDisplayField = nameof(FileName), Hidden = true)]`——這裡的 `Hidden` 是第 4 章的展示旗標
-(從管理後台側欄中省略，因為媒體庫是它自己專屬的畫面)，而不是第 12 章涵蓋的欄位層級 `Hidden`。
+(從管理後台側欄中省略，因為媒體庫是它自己專屬的畫面)，而不是第 5 章涵蓋的欄位層級 `Hidden`。
 它自己的欄位:
 
 | 欄位 | 介面 | 唯讀 | 備註 |
