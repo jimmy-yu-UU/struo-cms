@@ -34,7 +34,7 @@ The **translatable** fields — `title` and `alt` — live on a sidecar entity, 
 (`src/Struo.Infrastructure/Files/FileTranslation.cs`, table `file_translations`, unique on
 `(fileid, locale)`), exactly the mechanism chapter 6 documents for any collection's `[CmsTranslations]`
 sidecar. An upload seeds the **default-locale** `title` from the filename with its extension stripped
-(`FileService.SaveAsync`, `src/Struo.Infrastructure/Files/FileService.cs:127-133`) — a dotfile whose
+(`FileService.SaveAsync`, `src/Struo.Infrastructure/Files/FileService.cs`) — a dotfile whose
 name strips to empty falls back to the full filename, and the result is clamped to 255 characters — so
 every uploaded file is immediately human-readable in the media library without an extra edit step.
 `alt` is never auto-populated; a locale beyond the default has no seeded row at all until someone writes
@@ -64,8 +64,8 @@ $ curl -s -X POST http://localhost:5221/api/files -H "X-Struo-CSRF: 1" -b cookie
 ```
 
 Every upload is validated against three independent limits before a single byte is written
-(`FileService.UploadAsync`, `src/Struo.Infrastructure/Files/FileService.cs:26-89`; defaults from
-`Struo:Files` in `src/Struo.Api/appsettings.json:15-29`, documented in full in chapter 3):
+(`FileService.UploadAsync`, `src/Struo.Infrastructure/Files/FileService.cs`; defaults from
+`Struo:Files` in `src/Struo.Api/appsettings.json`, documented in full in chapter 3):
 
 - **Size** — `Struo:Files:MaxUploadBytes`, default **25 MB** (`26214400` bytes). The client-declared
   `Content-Length` is checked up front (`QueryException`, `400`); the actual streamed bytes are
@@ -101,10 +101,10 @@ namespace.
 
 ## Storage backends: `local` and `s3`
 
-`Struo:Files:Backend` selects exactly one registered `IFileStorage`
-(`FileStorageServiceCollectionExtensions.AddStruoFiles`,
-`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs:26-32`) —
-`"local"` (the default) or `"s3"`; any other value fails startup validation (chapter 3).
+`Struo:Files:Backend` selects exactly one registered `IFileStorage` (the `AddSingleton<IFileStorage>`
+registration in `FileStorageServiceCollectionExtensions.AddStruoFiles`,
+`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) — `"local"`
+(the default) or `"s3"`; any other value fails startup validation (chapter 3).
 
 **`local`** (`LocalFileStorage`, `src/Struo.Infrastructure/Files/LocalFileStorage.cs`) writes/reads plain
 files under `Struo:Files:Local:RootPath` (default `App_Data/uploads`). Every resolved path is checked
@@ -171,21 +171,22 @@ exercised live here.
 `GET /api/files/{id}` and `GET /api/files/{id}/content` carry no `[Authorize]` — anonymous requests are
 allowed through so a **published** file's metadata/bytes can be embedded in public pages without a
 session. A **non-published** (`status != "published"`) file additionally requires
-`IFileAccessPolicy.CanReadUnpublished` — an **authenticated identity** and a `file`-collection **`CanWrite`**
-grant (`FileAccessPolicy.cs:36-37`), not a `CanRead` grant and not merely being logged in. The gate is
-write, deliberately: `public` is a permission floor for every caller (chapter 12), so once `file` carries
+`IFileAccessPolicy.CanReadUnpublished` — an **authenticated identity** and a `file`-collection
+**`CanWrite`** grant (`FileAccessPolicy.CanReadUnpublished`, `FileAccessPolicy.cs`), not a
+`CanRead` grant and not merely being logged in. The gate is write, deliberately: `public` is a
+permission floor for every caller (chapter 12), so once `file` carries
 a public *read* grant — the documented setup for serving images anonymously — `CanRead("file")` is true
 for anonymous and authenticated callers alike and would gate nothing at all; a draft is an editorial
 state, so the caller who may *edit* files is the caller who may see them. The **shipped** seed only
 ever gives `public` a read grant — `RbacSeeder.SeedAsync`
-(`src/Struo.Infrastructure/Identity/RbacSeeder.cs:48-57`) inserts `CanRead = true` and nothing else for every
+(`src/Struo.Infrastructure/Identity/RbacSeeder.cs`) inserts `CanRead = true` and nothing else for every
 `Rbac:PublicReadCollections` entry, `CanWrite`/`CanDelete` are never touched — but nothing in the RBAC model
 *forbids* a super-admin from granting `public` write on `file` through the Role permission matrix (chapter 12
 demonstrates exactly this grant flow, live, against the `role` collection); doing so on `file` would widen
 draft access to every signed-in caller, since the write grant this section gates on would then be public too.
 This check returns a plain `404` rather than `403` when it fails, so a draft's existence isn't leaked to a
 caller without the grant (`FilesController.Get`/`Download`,
-`src/Struo.Api/Controllers/FilesController.cs:57-72`, `74-163`). This also means a **trashed** file
+`src/Struo.Api/Controllers/FilesController.cs`). This also means a **trashed** file
 (soft-deleted — see below) 404s from both actions too, since `FileService.GetAsync` reads through the
 same `ISoftDeletable` query filter every other read does — live-verified:
 
@@ -230,7 +231,8 @@ GET /api/files/{id}/content?width=&height=&format=&fit=&quality=
 A transform is attempted only when the feature is enabled (`Struo:Files:ImageTransform:Enabled`, default
 `true`), at least one of `width`/`height`/`format` is present, and the file's `contentType` starts with
 `image/` — otherwise `Download` falls straight through to the plain passthrough/redirect behavior above,
-unchanged (`FilesController.Download:91-94`). Parameters, from the live code, not just the docs:
+unchanged (`FilesController.Download`, `FilesController.cs`, the `wantsTransform` check). Parameters,
+from the live code, not just the docs:
 
 | Parameter | Meaning | Clamping / default |
 |---|---|---|
@@ -241,7 +243,7 @@ unchanged (`FilesController.Download:91-94`). Parameters, from the live code, no
 | `quality` | Encode quality/compression | `Math.Clamp(quality ?? Struo:Files:ImageTransform:DefaultQuality, 1, 100)` — default `DefaultQuality` is **82**. |
 
 Only `fit=cover` with **both** `width` and `height` given actually crops
-(`NetVipsImageTransformer.Transform`, `src/Struo.Infrastructure/Files/NetVipsImageTransformer.cs:43-46`)
+(`NetVipsImageTransformer.Transform`, `src/Struo.Infrastructure/Files/NetVipsImageTransformer.cs`)
 — centre-cropped to exactly that box (libvips `Enums.Size.Both` + `Interesting.Centre`). Every other
 combination — `inside`/`contain`/an unrecognized value, or `cover` with only one dimension — resizes to
 fit within the given bound(s) without ever upscaling past the source's native resolution (`Size.Down`).
@@ -297,24 +299,26 @@ response header from.
 
 If the transform itself throws (a corrupt upload, an unsupported source encoding, a libvips failure),
 `Download` logs the exception with the file id and falls back to serving the **original** bytes rather
-than failing the request outright (`FilesController.Download:130-145`) — a broken thumbnail is
-considered worse than an un-transformed original, but the error is never silently swallowed.
+than failing the request outright (`FilesController.Download`, `FilesController.cs`, the transform
+`try`/`catch` fallback) — a broken thumbnail is considered worse than an un-transformed original, but
+the error is never silently swallowed.
 
 ### Cache location and versioning
 
 Transformed variants are cached on disk — `DiskImageVariantCache`
 (`src/Struo.Infrastructure/Files/DiskImageVariantCache.cs`) — under
 `Struo:Files:ImageTransform:CachePath` (default `App_Data/image-cache`), resolved against the app's
-**content root**, never the process's current working directory
-(`FileStorageServiceCollectionExtensions.cs:45-52` — the same CWD-vs-content-root footgun chapter 3
-flags for this exact setting). The cache key is the lowercase-hex SHA-256 digest of the file's id, its
-current `Version` (the `AuditableEntity` optimistic-concurrency counter — not `UpdatedAt`, which this
-entity treats as non-nullable so there's no natural "unset" sentinel to reason about), and every
-transform parameter, each on its own tagged line before hashing
-(`DiskImageVariantCache.DeriveKey`/`FilesController.Download:110-116`) — so a re-upload (which bumps
-`Version`) naturally misses instead of ever serving a stale variant, with no explicit cache invalidation
-required. Keys are sharded into a subdirectory named after their first two hex characters and written
-atomically (temp file + rename) so a concurrent reader never observes a partially-written variant.
+**content root**, never the process's current working directory (the `IImageVariantCache` registration's
+`CachePath` resolution in `FileStorageServiceCollectionExtensions.cs` — the same CWD-vs-content-root
+footgun chapter 3 flags for this exact setting). The cache key is the lowercase-hex SHA-256 digest of
+the file's id, its current `Version` (the `AuditableEntity` optimistic-concurrency counter — not
+`UpdatedAt`, which this entity treats as non-nullable so there's no natural "unset" sentinel to reason
+about), and every transform parameter, each on its own tagged line before hashing
+(`DiskImageVariantCache.DeriveKey`/`FilesController.Download`, `FilesController.cs`) — so a
+re-upload (which bumps `Version`) naturally misses instead of ever serving a stale variant, with no
+explicit cache invalidation required. Keys are sharded into a subdirectory named after their first
+two hex characters and written atomically (temp file + rename) so a concurrent reader never observes
+a partially-written variant.
 Live-verified: after the four transforms above, the cache directory holds one file per distinct key,
 each under a two-character shard directory:
 
