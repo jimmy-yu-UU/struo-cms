@@ -262,9 +262,9 @@ state where an accidental in-place mutation would be visible to every subsequent
   sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs only `dotnet build` +
   `dotnet test` and `pnpm test` + `pnpm build`) — both need a live API and database, not just a build.
 
-See `docs/guide/en/15-deployment-operations-testing.md` for the backend/frontend/E2E layers in more
-depth — that chapter predates the Contract layer above and does not cover it; this document and
-`schema/README.md` are the only places the schema contract gate is described.
+See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
+the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`
+remains the authoritative reference for the contract itself and its regeneration command.
 
 ## Commit message format
 

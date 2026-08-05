@@ -58,7 +58,10 @@ persisted entity types, gathered in one list — `FrameworkEntityTypes.All`. Tha
 | `Revision` | `revisions` |
 | `SiteSettings` | `site_settings` |
 
-If a piece of code is not under `src/Struo.*` and not one of the ten types above, it is not core. In
+Two directories are core **despite living outside `src/Struo.*`**, and a fork keeps both alongside it:
+`frontend/` (the admin SPA) and `schema/` (the committed contract snapshots the schema gate checks both
+stacks against — `schema/README.md`). Apart from those two, anything outside `src/Struo.*` that is not
+one of the ten types above is not core. In
 particular, `samples/Struo.Sample.Blog` is a demo, deleted on fork; `db/migrations/` ships **zero** SQL
 scripts for the core — CodeFirst creates the core's own tables in every environment, on any of the five
 supported backends, so core needs no bootstrap script of its own — and any scripts a fork adds under

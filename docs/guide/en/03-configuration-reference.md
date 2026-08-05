@@ -1,8 +1,13 @@
 # 3. Configuration Reference
 
-Every setting in this chapter is read from `src/Struo.Api/appsettings.json` (the committed defaults),
-optionally overridden by `appsettings.{Environment}.json`, then by environment variables, then by the
-command line — standard ASP.NET Core configuration layering.
+Every setting in this chapter is resolved through standard ASP.NET Core configuration layering:
+`src/Struo.Api/appsettings.json` (the committed defaults) first, then `appsettings.{Environment}.json`,
+then environment variables, then the command line.
+
+**Three sections are deliberately absent from the shipped `appsettings.json`** — `Query`, `Struo:Cors`
+and `GraphQl`. Their defaults live in C# (or, for `GraphQl:ExposeSchema`, in an unset-means-Development
+rule) rather than in the file, so you will not find a block to edit for them until you add one; each
+section below says so explicitly.
 
 **Environment-variable override convention:** any key can be supplied as an environment variable using
 a double-underscore (`__`) in place of each `:` in its path, e.g. `Database:ConnectionString` becomes
@@ -120,6 +125,50 @@ also runs the one-shot bucket-creation step) — see chapter 2.
 | `Struo:Files:ImageTransform:AllowedFormats` | string[] | `["webp", "jpeg", "png", "avif"]` | Output formats the transform endpoint will produce. |
 | `Struo:Files:ImageTransform:DefaultQuality` | int | `82` | Default encode quality when a request does not specify one. |
 | `Struo:Files:ImageTransform:CachePath` | string | `"App_Data/image-cache"` | Root directory for cached transformed-image variants. A relative path is resolved against the application's content root, **not** the process's current working directory — this matters if you ever launch the process from a different working directory than the project folder (e.g. a systemd unit). |
+
+## `Struo:Cors`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `Struo:Cors:AllowedOrigins` | string[] | `[]` (empty — cross-origin disabled) | Origins permitted to call the API from a different origin. Absent from the shipped `appsettings.json`; while it is empty, `app.UseCors(...)` is never invoked at all, so no CORS header is emitted on any response. |
+
+Setting any origin does **two** things, not one. It populates the `StruoSpa` policy with those origins
+plus `AllowCredentials`/`AllowAnyHeader`/`AllowAnyMethod` (`src/Struo.Api/Auth/CorsWiring.cs`), **and**
+it reconfigures the session cookie from `SameSite=Lax`/`SecurePolicy=SameAsRequest` to `SameSite=None`
++ `SecurePolicy=Always` (`src/Struo.Api/Auth/AuthWiring.cs`). Browsers only honor `SameSite=None` over
+HTTPS, so once this key is non-empty, both the SPA and the API must be served over HTTPS or
+authentication silently stops working — the cookie is set but never sent back.
+
+Leave it empty for same-origin setups, which is what both chapter 2's Vite dev proxy and a co-hosted
+production build produce. Chapter 14 covers the genuine cross-origin mode end-to-end, including the
+matching frontend build-time variable `VITE_API_BASE_URL`.
+
+Unlike most of this chapter, this key is read straight from `IConfiguration` rather than bound through
+`IOptions<T>`, so it carries no `ValidateOnStart` validation of its own. Restart required.
+
+## `Query`
+
+Bounds on the query DSL (chapter 8), enforced by `QueryValidator` and the relation/translatable-field
+resolvers. This section is **not** in the shipped `appsettings.json` — every default below comes from a
+C# property initializer on `StruoQueryOptions`
+(`src/Struo.Application/Configuration/StruoQueryOptions.cs`); add a `"Query"` block only to override one.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `Query:MaxLimit` | int | `100` | Upper bound on a page's `limit`. A larger request is clamped down to this value, not rejected. |
+| `Query:DefaultLimit` | int | `25` | The `limit` applied when a request omits it or sends a non-positive value. |
+| `Query:MaxFilterConditions` | int | `50` | Cap on total leaf conditions per query, counted across every `_and`/`_or` branch. Exceeding it throws `"Too many filter conditions (max 50)."` before any query runs. |
+| `Query:MaxRelationDepth` | int | `6` | Cap on relation **hops** in a dotted path — in a filter, a sort key, or a nested `deep`. The final leaf field is not counted, so `folder.name` is 1 hop (chapter 7). |
+| `Query:MaxResolvedFilterIds` | int | `5000` | Cap on how many ids a single filter-resolution step may materialize — a cross-relation (dotted) filter or a translatable-field search. The other caps above bound the *result page*; this one bounds that intermediate set. |
+
+`MaxResolvedFilterIds` refuses rather than truncates: exceeding it is a `400 BAD_USER_INPUT` naming the
+path and both numbers, because a silently shortened id set would return quietly wrong rows. Raise it if
+a fork's legitimate filters resolve to larger sets — the cost is memory plus SQL statement size, roughly
+40 bytes of statement text per uuid.
+
+All five are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
+negative override fails startup rather than producing a nonsensical bound. Chapter 8 covers what each
+cap bounds in context. Restart required.
 
 ## `Auth:BootstrapAdmin`
 

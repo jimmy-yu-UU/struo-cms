@@ -1,8 +1,12 @@
 # 3. 設定參考
 
-本章的每一項設定都讀自 `src/Struo.Api/appsettings.json` (已提交的預設值)，可依序被
-`appsettings.{Environment}.json`、環境變數、最後是命令列參數覆寫——這是標準的 ASP.NET Core 設定
-分層順序。
+本章的每一項設定都透過標準的 ASP.NET Core 設定分層順序解析:先是
+`src/Struo.Api/appsettings.json` (已提交的預設值)，接著依序是 `appsettings.{Environment}.json`、
+環境變數，最後是命令列參數。
+
+**其中有三節刻意不存在於出貨的 `appsettings.json` 中**——`Query`、`Struo:Cors` 與 `GraphQl`。它們的
+預設值放在 C# 裡(或者，就 `GraphQl:ExposeSchema` 而言，放在「未設定即代表僅限 Development」這條規則
+裡)，而不是放在檔案中，所以在你自己新增之前，檔案裡不會有可編輯的區塊;下方每一節都會明確說明這點。
 
 **環境變數覆寫慣例:** 任何鍵都可以用環境變數提供，把其路徑中每一個 `:` 換成雙底線 (`__`)，例如
 `Database:ConnectionString` 會變成 `Database__ConnectionString`。這個規則對本章的每一個鍵都成立，
@@ -110,6 +114,47 @@
 | `Struo:Files:ImageTransform:AllowedFormats` | string[] | `["webp", "jpeg", "png", "avif"]` | 轉換端點會輸出的格式。 |
 | `Struo:Files:ImageTransform:DefaultQuality` | int | `82` | 當請求未指定時使用的預設編碼品質。 |
 | `Struo:Files:ImageTransform:CachePath` | string | `"App_Data/image-cache"` | 快取轉換後圖片變體的根目錄。相對路徑會相對於應用程式的 content root 解析，**不是**程序的目前工作目錄——如果你曾經在不同於專案資料夾的工作目錄下啟動程序 (例如一個 systemd unit)，這一點就很重要。 |
+
+## `Struo:Cors`
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `Struo:Cors:AllowedOrigins` | string[] | `[]` (空白——停用跨來源) | 允許從不同來源呼叫此 API 的來源清單。不存在於出貨的 `appsettings.json`;只要它是空的，`app.UseCors(...)` 就完全不會被呼叫，因此任何回應都不會帶上 CORS 標頭。 |
+
+設定任何一個來源會做**兩件**事，不是一件。它會用那些來源加上
+`AllowCredentials`/`AllowAnyHeader`/`AllowAnyMethod` 填入 `StruoSpa` 政策
+(`src/Struo.Api/Auth/CorsWiring.cs`)，**而且**會把 session cookie 從
+`SameSite=Lax`/`SecurePolicy=SameAsRequest` 重新設定為 `SameSite=None` + `SecurePolicy=Always`
+(`src/Struo.Api/Auth/AuthWiring.cs`)。瀏覽器只在 HTTPS 之下才會遵守 `SameSite=None`，所以一旦這個鍵
+非空，SPA 與 API 兩邊都必須以 HTTPS 提供服務，否則認證會無聲地失效——cookie 設得出去，但永遠送不回來。
+
+同來源 (same-origin) 的部署請讓它保持空白;第 2 章的 Vite dev proxy 與同源託管的正式版建置產出的都是
+這種形態。第 14 章完整說明真正的跨來源模式，包含前端對應的建置期變數 `VITE_API_BASE_URL`。
+
+與本章大多數設定不同，這個鍵是直接從 `IConfiguration` 讀取的，並非透過 `IOptions<T>` 綁定，因此它自身
+沒有任何 `ValidateOnStart` 驗證。需要重新啟動。
+
+## `Query`
+
+查詢 DSL (第 8 章) 的各項上限，由 `QueryValidator` 以及關聯/可翻譯欄位的解析器執行。這一節**不在**
+出貨的 `appsettings.json` 裡——下方每一個預設值都來自 `StruoQueryOptions`
+(`src/Struo.Application/Configuration/StruoQueryOptions.cs`) 的 C# 屬性初始化式;只有在你要覆寫某一項
+時才需要新增 `"Query"` 區塊。
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `Query:MaxLimit` | int | `100` | 單頁 `limit` 的上限。超過的請求會被向下夾制到這個值，而不是被拒絕。 |
+| `Query:DefaultLimit` | int | `25` | 當請求省略 `limit` 或送出非正值時所套用的 `limit`。 |
+| `Query:MaxFilterConditions` | int | `50` | 每次查詢的葉節點條件總數上限，跨每一個 `_and`/`_or` 分支一併計算。超過會在任何查詢執行之前擲出 `"Too many filter conditions (max 50)."`。 |
+| `Query:MaxRelationDepth` | int | `6` | 點狀路徑中關聯**跳數 (hop)** 的上限——filter、sort 鍵或巢狀 `deep` 皆適用。最後的葉欄位不計入，所以 `folder.name` 是 1 跳 (第 7 章)。 |
+| `Query:MaxResolvedFilterIds` | int | `5000` | 單一次 filter 解析步驟最多可以具現化多少個 id 的上限——即跨關聯 (點狀) filter，或可翻譯欄位的搜尋。上方其他上限約束的是*結果頁*;這一個約束的是那個中間集合。 |
+
+`MaxResolvedFilterIds` 的作法是拒絕而非截斷:超過時回 `400 BAD_USER_INPUT`，訊息會指出路徑與兩個
+數字，因為無聲縮短的 id 集合會回傳靜默錯誤的資料列。若某個 fork 的正當 filter 就是會解析出更大的集合，
+把它調高即可——代價是記憶體加上 SQL 敘述長度，每個 uuid 大約 40 位元組的敘述文字。
+
+這五項都帶 `[Range(1, int.MaxValue)]` 驗證並以 `ValidateOnStart` 綁定，所以填 0 或負值的覆寫會讓啟動
+失敗，而不是產生一個沒有意義的上限。第 8 章說明每個上限在實際情境中約束的是什麼。需要重新啟動。
 
 ## `Auth:BootstrapAdmin`
 

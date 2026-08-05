@@ -97,7 +97,7 @@ are inserted, never updated), and carries no `ISoftDeletable`/audit shape of its
 
 ## Redaction of hidden fields in snapshots
 
-Because a snapshot captures the **entire** item including any field flagged `Hidden` (chapter 12), a
+Because a snapshot captures the **entire** item including any field flagged `Hidden` (chapter 5), a
 snapshot handed to an external caller must never leak one. `RevisionSnapshotRedactor.RedactHidden`
 (`src/Struo.Application/Query/RevisionSnapshotRedactor.cs`) produces a redacted **copy** — omitting any
 top-level key whose field metadata is `Hidden`, and, inside `translations.{locale}`, any key belonging to
@@ -333,6 +333,7 @@ create/update/list/view/revert cycle demonstrated above:
 - Chapter 11, [Files, Media & Image Transforms](11-files-and-media.md), for the live, concrete
   trash/restore/purge walkthrough against `file` — the one framework collection this chapter's soft-delete
   section describes in the abstract.
-- Chapter 12, [Authentication, SSO & RBAC](12-auth-and-rbac.md), for the `Hidden` field flag
-  `RevisionSnapshotRedactor` reads, and the `CanRead`/`CanWrite`/`CanDelete` grants this chapter's guards
-  build on.
+- Chapter 5, [Field Types & Interfaces](05-field-types.md), for the `Hidden` field flag
+  `RevisionSnapshotRedactor` reads.
+- Chapter 12, [Authentication, SSO & RBAC](12-auth-and-rbac.md), for the
+  `CanRead`/`CanWrite`/`CanDelete` grants this chapter's guards build on.
