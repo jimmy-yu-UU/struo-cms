@@ -31,7 +31,7 @@
       (GHSA-v5pm-xwqc-g5wc). Fixed in 2.7.5+ (2.X branch) per the advisory. Requires a direct
       PackageReference in Struo.Api.csproj since CentralPackageTransitivePinningEnabled is not set.
     -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.8.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
