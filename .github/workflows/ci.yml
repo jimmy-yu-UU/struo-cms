@@ -43,3 +43,81 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
+
+  # The two jobs below report to SonarQube Cloud. They are deliberately separate
+  # from the four standing gates above rather than wrapping them: the gates must
+  # stay green or red on their own evidence, not on whether an external service
+  # or its token happens to be reachable. The cost of that independence is one
+  # extra build and test run.
+  #
+  # They are skipped for pull requests from forks, which cannot read secrets.
+  # To make a failing quality gate block a merge, mark these checks as required
+  # in branch protection — no change to this file is needed.
+
+  sonar-backend:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Sonar needs full history to attribute lines to commits and to work
+          # out what counts as new code.
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: dotnet tool install --global dotnet-sonarscanner
+      - run: dotnet tool install --global dotnet-coverage
+      - name: Begin analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >
+          dotnet-sonarscanner begin
+          /k:"stu640978_struo-cms"
+          /o:"stu640978"
+          /d:sonar.host.url="https://sonarcloud.io"
+          /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
+          /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml"
+      # The build has to sit between begin and end: the C# rules run as Roslyn
+      # analyzers during compilation, which is why no snippet-level tool can
+      # analyse this codebase.
+      - run: dotnet build StruoCMS.slnx --configuration Release
+      - run: dotnet-coverage collect "dotnet test StruoCMS.slnx --no-build --configuration Release" -f xml -o coverage.xml
+      - name: End analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet-sonarscanner end
+
+  sonar-frontend:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Same suite as the `pnpm test` gate, re-run with the v8 coverage provider
+      # so there is an lcov report for Sonar to import. Without a report Sonar
+      # records 0% coverage, which is a statement about the report, not the tests.
+      - run: pnpm vitest run --coverage --coverage.reporter=lcov
+      - name: Analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        # Reads frontend/sonar-project.properties for everything else.
+        run: pnpm dlx sonarqube-scanner
