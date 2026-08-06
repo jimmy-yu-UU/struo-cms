@@ -1,15 +1,30 @@
 version: 2
 
+# Every ecosystem below sets a cooldown. A compromised release is usually
+# found and yanked within days of publication, so the window where an update
+# is dangerous is also the window where it is newest — waiting is most of the
+# defence. Dependabot already holds new versions for 3 days by default; these
+# values make that explicit and widen it where the blast radius is larger.
+#
+# This delays nothing that matters urgently: cooldown applies to version
+# updates only, never to security updates, so a published advisory still
+# produces a pull request immediately.
+
 updates:
   # The workflow pins every action to a commit SHA, which is what stops a
   # repointed tag from reaching these runners - and also what stops the actions
   # from ever updating on their own. This is the half that makes pinning
   # sustainable: Dependabot rewrites the SHA and the trailing version comment
   # together, so the pin stays readable while it moves.
+  #
+  # Only default-days here: the semver-aware cooldown keys are for ecosystems
+  # that resolve semantic versions, and actions are pinned by commit.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -28,6 +43,11 @@ updates:
     directory: "/frontend"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       frontend-minor-patch:
         patterns: ["*"]
@@ -52,6 +72,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       backend-minor-patch:
         patterns: ["*"]
