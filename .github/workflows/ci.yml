@@ -17,8 +17,8 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
       - run: dotnet restore
@@ -31,15 +31,135 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 10
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      # --ignore-scripts stops a dependency's postinstall from executing on the
+      # runner. Verified locally that the suite and the build survive it: a
+      # clean install with the flag still gives 689 passing tests and a working
+      # `pnpm build`.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm test
       - run: pnpm build
+
+  # The two jobs below report to SonarQube Cloud. They are deliberately separate
+  # from the four standing gates above rather than wrapping them: the gates must
+  # stay green or red on their own evidence, not on whether an external service
+  # or its token happens to be reachable. The cost of that independence is one
+  # extra build and test run.
+  #
+  # They are skipped for pull requests from forks, which cannot read secrets.
+  # To make a failing quality gate block a merge, mark these checks as required
+  # in branch protection — no change to this file is needed.
+
+  sonar-backend:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Sonar needs full history to attribute lines to commits and to work
+          # out what counts as new code.
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: dotnet tool install --global dotnet-sonarscanner
+      - run: dotnet tool install --global dotnet-coverage
+      - name: Resolve branch or pull request arguments
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            printf 'SONAR_ARGS=/d:sonar.pullrequest.key=%s /d:sonar.pullrequest.branch=%s /d:sonar.pullrequest.base=%s\n' \
+              "$PR_NUMBER" "$HEAD_REF" "$BASE_REF" >> "$GITHUB_ENV"
+          else
+            printf 'SONAR_ARGS=/d:sonar.branch.name=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+          fi
+      - name: Begin analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # $SONAR_ARGS is intentionally unquoted: it carries several arguments
+        # and must word-split. It is built by the step above from environment
+        # variables rather than by interpolating ${{ }} into the shell, so a
+        # branch name cannot inject anything here.
+        run: >
+          dotnet-sonarscanner begin
+          /k:"stu640978_struo-cms_backend"
+          /o:"stu640978"
+          /d:sonar.host.url="https://sonarcloud.io"
+          /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
+          /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml"
+          $SONAR_ARGS
+      # The build has to sit between begin and end: the C# rules run as Roslyn
+      # analyzers during compilation, which is why no snippet-level tool can
+      # analyse this codebase.
+      - run: dotnet build StruoCMS.slnx --configuration Release
+      - run: dotnet-coverage collect "dotnet test StruoCMS.slnx --no-build --configuration Release" -f xml -o coverage.xml
+      - name: End analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet-sonarscanner end
+
+  sonar-frontend:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      # --ignore-scripts stops a dependency's postinstall from executing on the
+      # runner. Verified locally that the suite and the build survive it: a
+      # clean install with the flag still gives 689 passing tests and a working
+      # `pnpm build`.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      # Same suite as the `pnpm test` gate, re-run with the v8 coverage provider
+      # so there is an lcov report for Sonar to import. Without a report Sonar
+      # records 0% coverage, which is a statement about the report, not the tests.
+      - run: pnpm vitest run --coverage --coverage.reporter=lcov
+      - name: Resolve branch or pull request arguments
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            printf 'SONAR_ARGS=-Dsonar.pullrequest.key=%s -Dsonar.pullrequest.branch=%s -Dsonar.pullrequest.base=%s\n' \
+              "$PR_NUMBER" "$HEAD_REF" "$BASE_REF" >> "$GITHUB_ENV"
+          else
+            printf 'SONAR_ARGS=-Dsonar.branch.name=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+          fi
+      - name: Analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        # Reads frontend/sonar-project.properties for everything else.
+        # $SONAR_ARGS unquoted for the same reason as in sonar-backend.
+        run: pnpm dlx sonarqube-scanner $SONAR_ARGS
