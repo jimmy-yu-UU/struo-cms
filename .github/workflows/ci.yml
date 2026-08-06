@@ -72,9 +72,27 @@ jobs:
           java-version: '21'
       - run: dotnet tool install --global dotnet-sonarscanner
       - run: dotnet tool install --global dotnet-coverage
+      - name: Resolve branch or pull request arguments
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            printf 'SONAR_ARGS=/d:sonar.pullrequest.key=%s /d:sonar.pullrequest.branch=%s /d:sonar.pullrequest.base=%s\n' \
+              "$PR_NUMBER" "$HEAD_REF" "$BASE_REF" >> "$GITHUB_ENV"
+          else
+            printf 'SONAR_ARGS=/d:sonar.branch.name=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+          fi
       - name: Begin analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # $SONAR_ARGS is intentionally unquoted: it carries several arguments
+        # and must word-split. It is built by the step above from environment
+        # variables rather than by interpolating ${{ }} into the shell, so a
+        # branch name cannot inject anything here.
         run: >
           dotnet-sonarscanner begin
           /k:"stu640978_struo-cms"
@@ -82,6 +100,7 @@ jobs:
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
           /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml"
+          $SONAR_ARGS
       # The build has to sit between begin and end: the C# rules run as Roslyn
       # analyzers during compilation, which is why no snippet-level tool can
       # analyse this codebase.
@@ -115,9 +134,24 @@ jobs:
       # so there is an lcov report for Sonar to import. Without a report Sonar
       # records 0% coverage, which is a statement about the report, not the tests.
       - run: pnpm vitest run --coverage --coverage.reporter=lcov
+      - name: Resolve branch or pull request arguments
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            printf 'SONAR_ARGS=-Dsonar.pullrequest.key=%s -Dsonar.pullrequest.branch=%s -Dsonar.pullrequest.base=%s\n' \
+              "$PR_NUMBER" "$HEAD_REF" "$BASE_REF" >> "$GITHUB_ENV"
+          else
+            printf 'SONAR_ARGS=-Dsonar.branch.name=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+          fi
       - name: Analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
         # Reads frontend/sonar-project.properties for everything else.
-        run: pnpm dlx sonarqube-scanner
+        # $SONAR_ARGS unquoted for the same reason as in sonar-backend.
+        run: pnpm dlx sonarqube-scanner $SONAR_ARGS
