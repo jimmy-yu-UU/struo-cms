@@ -30,6 +30,19 @@
       pulls Microsoft.OpenApi 2.0.0, which has a known HIGH severity vulnerability
       (GHSA-v5pm-xwqc-g5wc). Fixed in 2.7.5+ (2.X branch) per the advisory. Requires a direct
       PackageReference in Struo.Api.csproj since CentralPackageTransitivePinningEnabled is not set.
+
+      Stay on the 2.X branch. 3.x is not an option on .NET 10, and the reason is not this
+      repository's code - nothing here touches the Microsoft.OpenApi API surface, only
+      AddOpenApi()/MapOpenApi(). Microsoft.AspNetCore.OpenApi 10.0.10 declares a bare
+      `>= 2.0.0` dependency with no upper bound, so NuGet will resolve 3.x, and its own
+      XmlCommentGenerator then emits assignments to IOpenApiMediaType.Example, which 3.x made
+      read-only: two CS0200 errors in a generated file, verified locally and in CI. Excluding the
+      generator would trade the build error for a runtime one, because the shipped assembly is
+      compiled against 2.x. Upstream's fix was to forbid 3.x, not to enable it - release/10.0 now
+      constrains this to [2.7.5,3.0.0), which will first ship in 10.0.10's successor. 2.11.0 is the
+      head of the 2.X branch. Revisit when this project moves to .NET 11, where
+      Microsoft.AspNetCore.OpenApi 11.0.x ships against Microsoft.OpenApi 3.x.
+      (dotnet/aspnetcore#64317, #67930; a matching Dependabot ignore rule holds the major back.)
     -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
