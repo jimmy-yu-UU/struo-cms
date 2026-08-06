@@ -95,7 +95,7 @@ jobs:
         # branch name cannot inject anything here.
         run: >
           dotnet-sonarscanner begin
-          /k:"stu640978_struo-cms"
+          /k:"stu640978_struo-cms_backend"
           /o:"stu640978"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
