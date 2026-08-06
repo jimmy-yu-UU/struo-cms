@@ -54,13 +54,24 @@ jobs:
   # or its token happens to be reachable. The cost of that independence is one
   # extra build and test run.
   #
-  # They are skipped for pull requests from forks, which cannot read secrets.
+  # They are skipped for pull requests from forks, which cannot read secrets,
+  # and for Dependabot, whose pull requests are handed a separate secret store
+  # that SONAR_TOKEN is not in - they would run and then fail on an empty token.
+  # Nothing is lost by skipping them there: Dependabot changes lockfiles and
+  # version strings, so there are no new source lines for Sonar to judge, and
+  # what actually catches a bad bump is the build and test run above, which
+  # needs no secret and still runs. An undici major that removed a module jsdom
+  # imports was caught exactly that way.
+  #
   # To make a failing quality gate block a merge, mark these checks as required
   # in branch protection — no change to this file is needed.
 
   sonar-backend:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.actor != 'dependabot[bot]'
+      && (github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -117,7 +128,10 @@ jobs:
 
   sonar-frontend:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.actor != 'dependabot[bot]'
+      && (github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository)
     defaults:
       run:
         working-directory: frontend
