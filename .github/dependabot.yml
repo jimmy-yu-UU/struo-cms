@@ -34,8 +34,26 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
-# NuGet is deliberately absent. Package versions are centralised in
-# Directory.Packages.props and Dependabot does support that layout, but adding
-# a third ecosystem here would open backend dependency pull requests as well,
-# and no one has asked for that yet. Add a nuget entry with directory "/" if
-# that changes.
+  # Backend versions are centralised in Directory.Packages.props, which is the
+  # file this reads. Leaving NuGet out would not have left the backend
+  # unprotected - Dependabot's security updates cover an ecosystem whether or
+  # not it is listed here - but it would have meant the backend moved only when
+  # something was found to be vulnerable, and drifted the rest of the time until
+  # an upgrade spanned several majors at once. HtmlSanitizer sat pinned to a
+  # beta for weeks and it took a manual audit to notice; that is the class of
+  # thing this catches. It matters more than usual for a template, where a fork
+  # inherits whatever pins it was cloned with.
+  #
+  # Same split as the frontend: minor and patch grouped, majors alone. The
+  # 1,012-test suite is what stands behind either one.
+  #
+  # global.json is not covered - the SDK version there still moves by hand.
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      backend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
