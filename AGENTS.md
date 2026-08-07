@@ -46,7 +46,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `db/migrations/` | Reviewed, forward-only ALTER scripts for evolving an already-created schema; the template ships none — anything here belongs to the fork that put it there. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
-| `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`) and this `ai/` reference set. |
+| `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`), this `ai/` reference set, and the VitePress site that renders the manual (`package.json`, `.vitepress/` — its own npm project, separate from `frontend/`). |
 | `tests/Struo.Tests` | The backend xUnit suite (unit, integration, and the template-invariant guard). |
 
 ## Hard constraints
@@ -140,7 +140,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    a collection uses it yet — and `schema/core-collections.json` too if the value is used by a core
    collection (`schema/README.md`; one command does both). A new `RelationInterface` member likewise
    needs an entry in `frontend/src/lib/relationInputKind.ts`, or the relation silently renders
-   read-only. Gate: all four standing gates; live-PostgreSQL check if you touched column mapping.
+   read-only. Gate: four of the five standing gates — see `docs/ai/task-playbooks.md` Playbook 2b for
+   when the fifth applies; live-PostgreSQL check if you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
@@ -162,9 +163,11 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Verification
 
-The **four standing gates** — the same ones CI runs on every push/PR — are `dotnet build`,
-`dotnet test`, `pnpm test`, `pnpm build` (the latter two from `frontend/`). Run whichever apply to your
-change; run all four before anything touching both stacks.
+The **five standing gates** — the same ones CI runs on every push/PR — are `dotnet build`,
+`dotnet test`, `pnpm test` and `pnpm build` (the latter two from `frontend/`), and `pnpm build` from
+`docs/`, which resolves every cross-chapter link in the manual, fails on a dead one, and then checks that
+every chapter actually rendered — `vitepress build` alone exits 0 on a page whose body came out empty.
+Run whichever apply to your change; run all five before anything touching more than one of the three.
 
 `dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
 not been mirrored into `schema/core-collections.json`, or an enum change into `schema/interfaces.json`;
@@ -222,7 +225,7 @@ residual unknown.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
-four standing gates, and is not run by CI.
+five standing gates, and is not run by CI.
 
 ## Prohibitions
 
