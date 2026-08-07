@@ -72,8 +72,10 @@ parsed as an expression, and neither outcome is a build failure:
   and fails when a rendered chapter has no heading.
 
 - **`{{ something }}` — a bare identifier — empties only that sentence.** It interpolates to the empty
-  string, nothing throws, and the build is green. **Nothing catches this**, which is the reason this
-  section is a rule and not just a note.
+  string, nothing throws, and `vitepress build` is green — the rendered-output check above sees a heading
+  and passes. `pnpm build` still catches it: `check-rendered-chapters.mjs` also scans every chapter
+  *source* for a bare `{{` outside a fenced code block and unwrapped by `<span v-pre>`, which needs no
+  build to run and catches this form specifically.
 
 Wrap the span:
 
@@ -83,6 +85,11 @@ Wrap the span:
 
 Fenced code blocks need nothing — VitePress applies `v-pre` to them already. `docs/guide/en/07-relations.md`
 and its zh-TW mirror are the existing examples.
+
+A related constraint from the same config (`docs/.vitepress/config.mts`'s `srcDir: 'guide'` plus
+`ignoreDeadLinks: false`): a chapter may only markdown-link to another chapter, since anything outside
+`docs/guide/` is outside the site entirely. A link like `[AGENTS.md](../../AGENTS.md)` fails the build
+with a dead-link error. Reference a repo path in a bare code span instead — every chapter already does.
 
 ## Naming
 
