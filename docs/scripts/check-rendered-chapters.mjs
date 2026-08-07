@@ -59,7 +59,7 @@ function findBareMustaches(file) {
   lines.forEach((line, index) => {
     const opener = FENCE_LINE.exec(line)
     if (fence) {
-      if (opener && opener[1][0] === fence.char && opener[1].length >= fence.length) {
+      if (opener && opener[1].startsWith(fence.char) && opener[1].length >= fence.length) {
         fence = null
       }
       return // inside a fence, including its closing line: never prose

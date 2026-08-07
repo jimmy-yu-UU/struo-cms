@@ -133,12 +133,22 @@ jobs:
         # and must word-split. It is built by the step above from environment
         # variables rather than by interpolating ${{ }} into the shell, so a
         # branch name cannot inject anything here.
+        #
+        # docs/ is excluded from coverage, not from analysis. The .NET scanner
+        # indexes every file this project does not exclude, so the documentation
+        # site's build tooling under docs/ lands in this project - there is no
+        # third Sonar project for it. Its issues are still worth seeing, but the
+        # only coverage report here is C# (coverage.xml), so those JS/TS lines
+        # would otherwise count as new code at 0% and fail the gate. They are
+        # build scripts with no unit tests by design: the docs project's gate is
+        # its own build (see the docs job above).
         run: >
           dotnet-sonarscanner begin
           /k:"stu640978_struo-cms_backend"
           /o:"stu640978"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
+          /d:sonar.coverage.exclusions="docs/**"
           /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml"
           $SONAR_ARGS
       # The build has to sit between begin and end: the C# rules run as Roslyn
