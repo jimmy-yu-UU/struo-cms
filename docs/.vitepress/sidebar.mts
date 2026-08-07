@@ -46,12 +46,13 @@ function firstHeading(file: string): string {
     index += 1
   }
 
-  // Trailing whitespace is trimmed afterwards rather than in the pattern: a
-  // `(.+?)\s*$` tail makes the two groups ambiguous, which costs super-linear
-  // backtracking on a long line of spaces.
+  // No regex on purpose. Any "#, then whitespace, then the rest" pattern puts
+  // two quantifiers that can both match a space next to each other, and that
+  // ambiguity is super-linear on a long line of spaces (Sonar S8786). Prefix
+  // tests say the same thing with nothing to backtrack over.
   const line = lines[index] ?? ''
-  const heading = /^#[ \t]+(.*)$/.exec(line)
-  const title = heading?.[1].trim()
+  const isHeading = line.startsWith('# ') || line.startsWith('#\t')
+  const title = isHeading ? line.slice(1).trim() : ''
   if (!title) {
     throw new Error(
       `Expected an H1 as the first line of content in ${file}, found: ${JSON.stringify(line)}`,
