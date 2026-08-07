@@ -15,3 +15,6 @@
 *.ttf binary
 *.eot binary
 *.zip binary
+
+# Vendored documentation-site runtime; not our code, so exclude it from GitHub's language stats.
+docs/vendor/** linguist-vendored

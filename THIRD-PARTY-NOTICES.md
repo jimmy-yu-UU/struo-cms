@@ -2,8 +2,9 @@
 
 StruoCMS is licensed under the **MIT License**. This file lists third-party components used by the
 on-the-fly image-transform feature (`GET /api/files/{id}/content?width=&height=&format=&fit=&quality=`,
-see `docs/guide/en/11-files-and-media.md`) and their license terms. Including these components does
-**not** change StruoCMS's own license — StruoCMS remains MIT.
+see `docs/guide/en/11-files-and-media.md`) and by the developer documentation site (`docs/index.html`,
+rendered client-side by vendored assets under `docs/vendor/`), and their license terms. Including
+these components does **not** change StruoCMS's own license — StruoCMS remains MIT.
 
 ## libvips
 
@@ -45,3 +46,35 @@ maintained upstream at <https://github.com/kleisauke/libvips-packaging>.
 - **License**: **MIT**.
 - **Upstream source**: <https://github.com/kleisauke/net-vips>
 - **Version used**: **3.2.0** (see `Directory.Packages.props`).
+
+## docsify
+
+- **What it is**: the client-side renderer for the developer documentation site. It turns the
+  markdown chapters under `docs/guide/{en,zh-TW}/` into a navigable, searchable page at runtime, with
+  no build step. StruoCMS loads it, together with its search plugin, from the vendored copies at
+  `docs/vendor/docsify.min.js` and `docs/vendor/plugins/search.min.js` (see `docs/index.html`).
+- **Copyright**: © 2016 - present Docsify Contributors
+  (<https://github.com/docsifyjs/docsify/graphs/contributors>).
+- **License**: **MIT**.
+- **Upstream source**: <https://github.com/docsifyjs/docsify>
+- **Version bundled**: **5.0.0**. Read from `frontend/pnpm-lock.yaml` (`docsify@5.0.0`).
+
+## docsify-cli
+
+- **What it is**: the command-line tool used to preview the documentation site locally during
+  development (the `docs:serve` script in `frontend/package.json` runs `docsify serve ../docs`). It
+  is a devDependency of `frontend/` only and ships nothing into the site itself.
+- **Copyright**: © 2016 cinwell.li.
+- **License**: **MIT**.
+- **Upstream source**: <https://github.com/docsifyjs/docsify-cli>
+- **Version used**: **5.0.0**. Read from `frontend/pnpm-lock.yaml` (`docsify-cli@5.0.0`).
+
+## prismjs
+
+- **What it is**: the syntax highlighter docsify uses to colorize the C#, TypeScript, Bash, JSON,
+  YAML, and SQL code blocks in the documentation site. StruoCMS loads the vendored language
+  components from `docs/vendor/prism/*.min.js` (see `docs/index.html`).
+- **Copyright**: © 2012 Lea Verou.
+- **License**: **MIT**.
+- **Upstream source**: <https://github.com/PrismJS/prism>
+- **Version bundled**: **1.30.0**. Read from `frontend/pnpm-lock.yaml` (`prismjs@1.30.0`).
