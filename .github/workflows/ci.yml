@@ -48,6 +48,31 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # `pnpm build` is the manual's gate, in two halves. `vitepress build` resolves
+  # every cross-chapter link and fails on a dead one — nothing else in this repo
+  # checks them. Then check-rendered-chapters.mjs asserts every chapter actually
+  # rendered: vitepress exits 0 even when a page comes out with an empty body, so
+  # the exit code alone is not a gate. Roughly three seconds of work.
+  docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+      # Same reasoning as the frontend job: --ignore-scripts keeps a dependency's
+      # postinstall from executing on the runner.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm build
+
   # The two jobs below report to SonarQube Cloud. They are deliberately separate
   # from the four standing gates above rather than wrapping them: the gates must
   # stay green or red on their own evidence, not on whether an external service
