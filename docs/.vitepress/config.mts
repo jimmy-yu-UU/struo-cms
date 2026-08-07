@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { chapterSidebar } from './sidebar.mts'
 
 export default defineConfig({
   title: 'StruoCMS Manual',
@@ -25,11 +26,17 @@ export default defineConfig({
       label: 'English',
       lang: 'en',
       link: '/en/01-introduction-and-architecture',
+      themeConfig: {
+        sidebar: chapterSidebar('en'),
+      },
     },
     'zh-TW': {
       label: '繁體中文',
       lang: 'zh-TW',
       link: '/zh-TW/01-introduction-and-architecture',
+      themeConfig: {
+        sidebar: chapterSidebar('zh-TW'),
+      },
     },
   },
 
