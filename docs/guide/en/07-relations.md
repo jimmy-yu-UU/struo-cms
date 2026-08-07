@@ -260,7 +260,7 @@ shipped admin SPA wires every one of them to a real input
 | `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | Read-only, paginated, lazy-loaded list of the target collection filtered by the relation's reverse FK; clicking a row navigates to that row's own item-edit page. Shows only after the parent has been saved (a brand-new, unsaved parent has no id to filter by yet). |
 
 `relationInputKind.ts` still has a final, unconditional fallback for an interface its map does not
-recognize — a bare `<span class="readonly-relation">{{ relation.label }} (read-only)</span>` rather
+recognize — a bare <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span> rather
 than an input element, so `Editable` has nothing to apply to. Nothing in the shipped enum reaches it:
 the schema contract gate (`schema/interfaces.json`, see `schema/README.md`) fails `pnpm test` if a
 `RelationInterface` member has no entry in that map, so the fallback is unreachable by construction
