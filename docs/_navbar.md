@@ -1,0 +1,2 @@
+- [English](/guide/en/01-introduction-and-architecture)
+- [繁體中文](/guide/zh-TW/01-introduction-and-architecture)
