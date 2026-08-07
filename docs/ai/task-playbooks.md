@@ -4,9 +4,13 @@ Long-form, step-by-step versions of the five recipes summarized in `AGENTS.md`. 
 files to touch, the shape of the code, the tests to add, and the gate to run. Background reading for
 each is the linked manual chapter — read it before making the change if anything here is unclear.
 
-Gate vocabulary used below: the **four standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
-(from `frontend/`), `pnpm build` (from `frontend/`) — the same four commands `.github/workflows/ci.yml`
-runs on every push/PR. **Live-database verification** is a separate, additional step for any change to
+Gate vocabulary used below: the **five standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
+(from `frontend/`), `pnpm build` (from `frontend/`), and `pnpm build` (from `docs/`) — the same five
+commands `.github/workflows/ci.yml` runs on every push/PR. The `docs/` build resolves every cross-chapter
+link in the manual and fails on a dead one, then checks that every chapter actually rendered — `vitepress
+build` alone exits 0 on a page whose body came out empty; it is relevant to a change only when that
+change touches `docs/guide/**` or the docs project itself, not automatically to every playbook below.
+**Live-database verification** is a separate, additional step for any change to
 DB behavior, performed against whichever backend the deployment is configured for: on PostgreSQL (the
 verified target) it is the strongly-recommended live-PG check described below; on `MySql`/`SqlServer`/
 `Oracle` that backend needs its own equivalent check, since a green PostgreSQL run does not transfer.
@@ -22,7 +26,7 @@ an explicit `text` column type truncates on PostgreSQL at `varchar(1)`, but "wor
 SQLite ignores declared column length. **E2E** (`pnpm e2e` for the `core` Playwright project,
 `pnpm e2e:sample` for the sample) is a further, separate check for changes that touch user-facing flows
 end-to-end; it needs a live API and database reachable at the dev proxy target and is not part of the
-four standing gates or of CI.
+standing gates or of CI.
 
 ## Playbook 1: Add a collection
 
@@ -84,7 +88,8 @@ Adding a collection is purely additive to a fork's own content project — it ne
     `tests/Struo.Tests/Api/ItemsEndpointTests.cs` for how the shipped suite verifies scanned metadata
     and generic CRUD behavior. Do not add your business collection's tests under `tests/Struo.Tests` —
     that project is the framework's own test suite.
-11. **Gate**: `dotnet build && dotnet test` (the four standing gates' backend half). Add
+11. **Gate**: `dotnet build && dotnet test` (the standing gates' backend pair; this playbook does not
+    touch `docs/guide/**`, so the docs gate does not apply). Add
     live-database verification before a production deploy, against whichever backend you are actually
     configured for — confirm CodeFirst creates the new table with the columns/indexes/constraints you
     expect; a green SQLite run does not guarantee the same result on PostgreSQL or another backend.
@@ -111,7 +116,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
    changing too).
 3. **Tests to add**: a `*.test.ts` next to the new component if it has non-trivial logic, and update
    any existing test that asserts the old component was rendered for that interface.
-4. **Gate**: `pnpm test && pnpm build` (the four standing gates' frontend half).
+4. **Gate**: `pnpm test && pnpm build` (the standing gates' frontend pair; this is frontend-only and
+   doesn't touch `docs/guide/**`, so the docs gate does not apply).
 
 **2b. Add a genuinely new `FieldInterface` value** — touches all three layers `docs/guide/en/
 05-field-types.md` describes:
@@ -163,8 +169,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
    covering the new interface's scan-time validation, a persistence-level test if you touched
    `SqlSugarClientFactory` (follow the pattern of existing column-widening tests in
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
-9. **Gate**: all four standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`) — this
-   change spans both stacks. **Verify against the backend you are configured for** if you touched
+9. **Gate**: four of the five standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`)
+   — this change spans both stacks. The docs gate does not apply unless this change also updated
+   `docs/guide/en/05-field-types.md`'s `FieldInterface` reference, in which case add `pnpm build` from
+   `docs/` too. **Verify against the backend you are configured for** if you touched
    `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends diverge, and
    the `IsJson`/`text` truncation failure mode above does not reproduce on SQLite at all. On
    PostgreSQL that means the live-PG check (strongly recommended here); on another backend, its own
@@ -300,10 +308,12 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    entry (see Playbook 2a) — `frontend/tests/schemaContract.test.ts` enforces that every interface a
    core collection actually uses has one, so a component with no registry entry fails that test rather
    than silently rendering read-only.
-6. **Gate**: `pnpm test && pnpm build` (the four standing gates' frontend half; `pnpm build` runs
-   `vue-tsc -b`, which is CI's only enforcement of the SPA's TypeScript types). Run `pnpm e2e` as a
-   further check for any change touching a critical flow — it needs a live API and database and is not
-   part of the four standing gates or of CI.
+6. **Gate**: `pnpm test && pnpm build` (the standing gates' frontend pair; `pnpm build` runs
+   `vue-tsc -b`, which is CI's only enforcement of the SPA's TypeScript types) — this playbook's own
+   steps change `frontend/src`, not `docs/guide/**`, so the docs gate does not apply; if a change under
+   this playbook also edits a manual chapter (e.g. chapter 14 itself), add `pnpm build` from `docs/` too.
+   Run `pnpm e2e` as a further check for any change touching a critical flow — it needs a live API and
+   database and is not part of the standing gates or of CI.
 
 ## Next steps
 

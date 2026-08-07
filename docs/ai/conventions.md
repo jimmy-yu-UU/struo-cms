@@ -53,6 +53,37 @@ extension-anchored form, never this one. A bare trailing number with no filename
 prose reference ("line 74") is not reliably distinguishable from a port or a time and is not covered;
 a reviewer still has to catch those by hand.
 
+## Mustache syntax in the manual
+
+The documentation site compiles every chapter into a Vue component, so Vue's template compiler sees the
+rendered text — including the contents of inline `` `code` `` spans. A literal `{{ ... }}` there is
+parsed as an expression, and neither outcome is a build failure:
+
+- **`{{ something.property }}` empties the whole chapter.** `vitepress build` **exits 0** and prints
+  `build complete`, while that chapter is written out with its navigation and page frame intact and its
+  body gone. It also drops out of the search index, which is built from rendered content, and the page
+  count stays right. Only stderr says anything, and it names neither the markdown file nor the cause:
+
+  ```
+  TypeError: Cannot read properties of undefined (reading 'label')
+  ```
+
+  `pnpm build` catches this one, because `docs/scripts/check-rendered-chapters.mjs` runs after the build
+  and fails when a rendered chapter has no heading.
+
+- **`{{ something }}` — a bare identifier — empties only that sentence.** It interpolates to the empty
+  string, nothing throws, and the build is green. **Nothing catches this**, which is the reason this
+  section is a rule and not just a note.
+
+Wrap the span:
+
+```md
+<span v-pre>`<span class="readonly-relation">{{ relation.label }}</span>`</span>
+```
+
+Fenced code blocks need nothing — VitePress applies `v-pre` to them already. `docs/guide/en/07-relations.md`
+and its zh-TW mirror are the existing examples.
+
 ## Naming
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.

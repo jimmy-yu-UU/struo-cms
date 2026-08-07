@@ -74,7 +74,7 @@ jobs:
       - run: pnpm build
 
   # The two jobs below report to SonarQube Cloud. They are deliberately separate
-  # from the four standing gates above rather than wrapping them: the gates must
+  # from the five standing gates above rather than wrapping them: the gates must
   # stay green or red on their own evidence, not on whether an external service
   # or its token happens to be reachable. The cost of that independence is one
   # extra build and test run.
