@@ -8,6 +8,16 @@ start and license, see the project [`README.md`](../README.md).
 The manual is written in two languages, chapter-for-chapter. Both sets link the same 16 chapters in
 the same order.
 
+## Reading this manual in a browser
+
+The chapters below also render as a searchable site with a sidebar and a light/dark toggle:
+
+```bash
+pnpm -C frontend docs:serve
+```
+
+It needs no network access — the site's assets are committed under `docs/vendor/`.
+
 ## English
 
 | # | Chapter |
@@ -52,7 +62,8 @@ the same order.
 
 ## For AI coding agents
 
-- [`AGENTS.md`](../AGENTS.md) — the authoritative, tool-neutral description of this repository for any
+- `AGENTS.md`, in the repository root — the authoritative, tool-neutral description of this
+  repository for any
   AI coding agent working in it.
 - `docs/ai/` — supporting reference for agents: [architecture](ai/architecture.md),
   [coding conventions](ai/conventions.md), and [task playbooks](ai/task-playbooks.md).
