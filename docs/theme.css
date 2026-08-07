@@ -1,8 +1,17 @@
 /* The documentation site's entire visual design, in one variable set per theme.
  *
- * docsify's bundled themes are deliberately not loaded: each of them @imports Google Fonts from a
- * remote host, which would break offline use. That also means nothing here is an override — remove
- * a rule and the corresponding element goes unstyled.
+ * docsify's bundled themes are deliberately not loaded: several of them (e.g. the vue theme)
+ * @import Google Fonts from a remote host, which would break offline use.
+ *
+ * Not purely additive: docs/vendor/plugins/search.min.js injects its own stylesheet at runtime,
+ * written against custom properties from docsify's core.css (see the block below). Element-selector
+ * collisions go to this file, because its selectors are more specific; :root collisions would go to
+ * the plugin instead, because it appends its <style> to <head> after this stylesheet loads. Every
+ * other rule here has no such competitor: remove it and the element goes unstyled.
+ *
+ * docsify reads --_mobile-breakpoint once, at script parse time, so this stylesheet must stay a
+ * render-blocking <link> ahead of the docsify <script> in index.html — deferring it breaks the
+ * mobile sidebar with no test failing.
  *
  * Palette intent matches the admin SPA's tokens (frontend/src/assets/theme.css) closely enough to
  * read as the same product, without importing them: this file must stand alone. */
@@ -36,6 +45,30 @@
    * aria-expanded, and inert state. It must match the breakpoint used in the @media rules below;
    * without it docsify's own mobile detection never matches anything, regardless of viewport. */
   --_mobile-breakpoint: 900px;
+
+  /* docs/vendor/plugins/search.min.js calls Docsify.dom.style(...) at init and injects a
+   * stylesheet of its own, written against docsify's core.css custom properties — which this file
+   * never loads (see the header comment). Undefined, those properties resolve to invalid values:
+   * the clear (✕) button's background falls to transparent (invisible over --bg-raised) and the
+   * ⌃K kbd hint's font-size falls back to the inherited 16px body size with no border or
+   * background. Defining them here, mapped onto the palette above, fixes the plugin's own rules
+   * without touching its markup or selectors. Values that must differ by theme go through var()
+   * indirection into a palette variable that already changes below, so no dark-mode block is
+   * needed for any of these. */
+  --theme-color: var(--accent);
+  --sidebar-border-color: var(--border);
+  --form-element-bg: var(--bg-raised);
+  --form-element-color: var(--fg);
+  --form-element-border-radius: 6px;
+  --color-bg: var(--bg-subtle);
+  --color-mono-2: var(--border);
+  --color-mono-3: var(--border);
+  --color-mono-5: var(--fg-muted);
+  --color-mono-6: var(--fg-muted);
+  --border-radius: 6px;
+  --font-size-s: 0.75rem;
+  --duration-medium: 0.2s;
+  --link-underline-color-hover: var(--accent);
 }
 
 :root[data-theme='dark'] {
@@ -160,6 +193,10 @@ a:hover {
 .sidebar .search input {
   width: 100%;
   padding: 0.45rem 0.6rem;
+  /* The plugin's own injected rule reserves this for its clear button / kbd hint overlay; the
+   * shorthand above would otherwise collapse it back down and the two controls would overlap the
+   * typed text (theme.css wins the collision — see the header comment). */
+  padding-inline-end: 36px;
   background: var(--bg-raised);
   color: var(--fg);
   border: 1px solid var(--border);
@@ -170,6 +207,14 @@ a:hover {
 .sidebar .search input:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
+}
+/* Custom properties inherit, so a declaration on the element itself wins over the inherited
+ * :root value regardless of source order — no specificity fight with the plugin's own :root
+ * needed. This fixes the clear button's X-mark colour, which is otherwise --plugin-search-reset-
+ * color's inherited default (#fff, set by the plugin), against its --accent fill: poor contrast
+ * in dark mode. --accent-fg is the palette's designated on-accent foreground for exactly this. */
+.sidebar .search .clear-button {
+  --plugin-search-reset-color: var(--accent-fg);
 }
 .sidebar .search .results-panel {
   margin-top: 0.5rem;

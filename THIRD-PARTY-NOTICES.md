@@ -58,6 +58,25 @@ maintained upstream at <https://github.com/kleisauke/libvips-packaging>.
 - **License**: **MIT**.
 - **Upstream source**: <https://github.com/docsifyjs/docsify>
 - **Version bundled**: **5.0.0**. Read from `frontend/pnpm-lock.yaml` (`docsify@5.0.0`).
+- **Transitively bundled, and under a different license**: the vendored
+  `docs/vendor/plugins/search.min.js` build inlines **Dexie 4.4.4**, the IndexedDB wrapper it uses
+  to cache the search index offline. Dexie is **Apache-2.0**, not MIT — a different license from
+  the plugin file's own top-of-file banner comment ("MIT license"), which describes the plugin's
+  own code, not what it bundles. Minification stripped Dexie's copyright and license header from
+  the shipped bytes; both are restored here. Confirmed by the identifier `Dexie` surviving inside
+  the minified bundle, and by `frontend/pnpm-lock.yaml` (`dexie@4.4.4`, a direct dependency of
+  `docsify@5.0.0`) and Dexie's own `NOTICE`/`LICENSE` files, present at
+  `frontend/node_modules/.pnpm/dexie@4.4.4/node_modules/dexie/`.
+  - **Copyright**: © 2014-2017 David Fahlander.
+  - **License**: **Apache-2.0**. Full text: <https://www.apache.org/licenses/LICENSE-2.0>
+  - **Upstream source**: <https://github.com/dexie/Dexie.js>
+  - The same bundle also inlines `marked` (the markdown parser docsify itself uses to render
+    search-result excerpts), confirmed the same way; `marked` is MIT, already covered by the MIT
+    declaration above. `frontend/pnpm-lock.yaml` lists three further MIT dependencies of the
+    overall `docsify` package — `common-tags`, `medium-zoom`, `tinydate` — but neither their names
+    nor any distinguishing trace of them appears in the two files this repo actually vendors
+    (`docsify.min.js`, `plugins/search.min.js`); they most likely back docsify plugins (e.g.
+    zoom-image) that this site does not load.
 
 ## docsify-cli
 
@@ -71,9 +90,9 @@ maintained upstream at <https://github.com/kleisauke/libvips-packaging>.
 
 ## prismjs
 
-- **What it is**: the syntax highlighter docsify uses to colorize the C#, TypeScript, Bash, JSON,
-  YAML, and SQL code blocks in the documentation site. StruoCMS loads the vendored language
-  components from `docs/vendor/prism/*.min.js` (see `docs/index.html`).
+- **What it is**: the syntax highlighter docsify uses to colorize the C#, TypeScript, Bash, and
+  JSON code blocks in the documentation site. StruoCMS loads the vendored language components from
+  `docs/vendor/prism/*.min.js` (see `docs/index.html`).
 - **Copyright**: © 2012 Lea Verou.
 - **License**: **MIT**.
 - **Upstream source**: <https://github.com/PrismJS/prism>

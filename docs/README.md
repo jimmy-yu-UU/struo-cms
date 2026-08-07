@@ -3,7 +3,7 @@
 StruoCMS is a **template**, not a finished product: it ships only core headless-CMS capability, and
 downstream teams fork it to add their own content collections. This manual documents the template
 itself — the framework, its configuration, and how to extend it. For the one-page overview, quick
-start and license, see the project [`README.md`](../README.md).
+start and license, see the project's `README.md`, in the repository root.
 
 The manual is written in two languages, chapter-for-chapter. Both sets link the same 16 chapters in
 the same order.
@@ -63,7 +63,6 @@ It needs no network access — the site's assets are committed under `docs/vendo
 ## For AI coding agents
 
 - `AGENTS.md`, in the repository root — the authoritative, tool-neutral description of this
-  repository for any
-  AI coding agent working in it.
+  repository for any AI coding agent working in it.
 - `docs/ai/` — supporting reference for agents: [architecture](ai/architecture.md),
   [coding conventions](ai/conventions.md), and [task playbooks](ai/task-playbooks.md).
