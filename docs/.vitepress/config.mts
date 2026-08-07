@@ -41,6 +41,28 @@ export default defineConfig({
   },
 
   themeConfig: {
-    search: { provider: 'local' },
+    search: {
+      provider: 'local',
+      options: {
+        locales: {
+          'zh-TW': {
+            translations: {
+              button: { buttonText: '搜尋', buttonAriaLabel: '搜尋' },
+              modal: {
+                displayDetails: '顯示詳細內容',
+                resetButtonTitle: '清除',
+                backButtonTitle: '關閉搜尋',
+                noResultsText: '找不到結果',
+                footer: {
+                  selectText: '選擇',
+                  navigateText: '切換',
+                  closeText: '關閉',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   },
 })
