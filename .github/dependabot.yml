@@ -81,4 +81,20 @@ updates:
       backend-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # Microsoft.OpenApi 3.x cannot be used from .NET 10 at all. The pin exists
+      # only as a security floor (see Directory.Packages.props); the ceiling is
+      # upstream's. Microsoft.AspNetCore.OpenApi 10.0.10 declares a bare
+      # `>= 2.0.0` floor with no upper bound, so NuGet resolves 3.x happily, and
+      # then its own XmlCommentGenerator emits code that assigns to
+      # IOpenApiMediaType.Example - read-only in 3.x - and the build fails on two
+      # errors in a generated file no fork can edit. Suppressing the generator
+      # would only trade that for a runtime failure: the shipped assembly is
+      # compiled against 2.x. Without this rule Dependabot re-proposes the major
+      # on every cooldown expiry.
+      #
+      # Delete this once the project moves to .NET 11, where
+      # Microsoft.AspNetCore.OpenApi 11.0.x ships against Microsoft.OpenApi 3.x.
+      - dependency-name: "Microsoft.OpenApi"
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5
