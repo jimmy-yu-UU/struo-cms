@@ -6,6 +6,8 @@ appsettings.Development.json
 .idea/
 node_modules/
 dist/
+# VitePress's transform cache for the docs site (docs/.vitepress/cache).
+docs/.vitepress/cache/
 logs/
 *.log
 
