@@ -1,0 +1,74 @@
+name: Dependabot auto-merge
+
+# Auto-merge is deliberately narrow: NuGet patch and minor only.
+#
+# What decides the split is not how risky a version bump sounds, it is whether
+# the gates can actually see a regression in it. The 1,012-test backend suite
+# exercises the code paths a NuGet dependency sits under, and the backend has no
+# visual surface - green there means something. The frontend gates do not carry
+# the same weight: vitest runs in jsdom, which performs no layout and resolves no
+# cascade, so CSS ordering, overlay positioning and contenteditable behaviour are
+# invisible to it by construction. The 19-package frontend group merged as #19 was
+# green on every gate while also swapping the bundler engine (rolldown 1.1.3 ->
+# 1.2.3), moving @floating-ui's positioning maths, and crossing two TipTap minors;
+# all three needed a browser and a person to clear. That class of change keeps its
+# worktree verification.
+#
+# Majors never auto-merge, in any ecosystem. #18 (Microsoft.OpenApi 2 -> 3) is the
+# standing example: correctly red, but understanding *why* took reading upstream
+# issue threads, not reading a CI log.
+#
+# Note this only enables auto-merge - it does not merge. The ruleset on main still
+# has to be satisfied: backend and frontend green, and the branch up to date with
+# main (strict policy). Dependabot rebases its own branches when main moves, so a
+# pull request that goes stale resolves itself at the cost of another CI run.
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    # The repository guard matters more here than in most repositories: this is a
+    # template, and a fork inherits every workflow in it. Without the guard, a
+    # fork would silently start auto-merging its own dependency updates against
+    # gates its maintainer never agreed to. Forks that want this behaviour should
+    # change the name here deliberately.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.repository == 'jimmy-yu-UU/struo-cms'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Read Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge
+        if: >-
+          steps.metadata.outputs.package-ecosystem == 'nuget' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Say what was left alone and why. A workflow that quietly does nothing on
+      # the pull requests it declines reads, in the Actions tab, exactly like a
+      # workflow that is broken.
+      - name: Explain why this pull request was left for review
+        if: >-
+          !(steps.metadata.outputs.package-ecosystem == 'nuget' &&
+            (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+             steps.metadata.outputs.update-type == 'version-update:semver-minor'))
+        run: |
+          echo "Left for manual review - auto-merge covers NuGet patch/minor only."
+          echo "  ecosystem:   ${{ steps.metadata.outputs.package-ecosystem }}"
+          echo "  update type: ${{ steps.metadata.outputs.update-type }}"
+          echo "  packages:    ${{ steps.metadata.outputs.dependency-names }}"
