@@ -1,5 +1,42 @@
+import { readdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 import { chapterSidebar } from './sidebar.mts'
+
+const GUIDE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
+
+// Mirrors the guard's own locale derivation
+// (docs/scripts/check-rendered-chapters.mjs): a locale is a directory under
+// guide/, dot-prefixed ones excluded (the repo has empty .sonar dirs there).
+// A fork that deletes docs/guide/zh-TW/ then loses that locale here instead of
+// crashing config load with a bare `ENOENT: … scandir …/guide/zh-TW`.
+const AVAILABLE_LOCALES = new Set(
+  readdirSync(GUIDE_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => entry.name),
+)
+
+// Metadata VitePress needs per locale that cannot be derived from a directory
+// name — label and lang are prose choices, not filesystem facts. Only entries
+// whose directory actually exists (AVAILABLE_LOCALES) make it into `locales`
+// below, so removing a locale directory removes the locale, not the config.
+const LOCALE_METADATA: Record<string, { label: string; lang: string }> = {
+  en: { label: 'English', lang: 'en' },
+  'zh-TW': { label: '繁體中文', lang: 'zh-TW' },
+}
+
+// The link is the sidebar's own first entry, not a hand-copied filename: a
+// renamed chapter 1 would otherwise break the locale switcher without
+// ignoreDeadLinks ever seeing it, since this is config, not content.
+function localeConfig(key: string) {
+  const sidebar = chapterSidebar(key)
+  return {
+    ...LOCALE_METADATA[key],
+    link: sidebar[0].link,
+    themeConfig: { sidebar },
+  }
+}
 
 export default defineConfig({
   title: 'StruoCMS Manual',
@@ -21,24 +58,11 @@ export default defineConfig({
   // that this setting has no bearing on.
   ignoreDeadLinks: false,
 
-  locales: {
-    en: {
-      label: 'English',
-      lang: 'en',
-      link: '/en/01-introduction-and-architecture',
-      themeConfig: {
-        sidebar: chapterSidebar('en'),
-      },
-    },
-    'zh-TW': {
-      label: '繁體中文',
-      lang: 'zh-TW',
-      link: '/zh-TW/01-introduction-and-architecture',
-      themeConfig: {
-        sidebar: chapterSidebar('zh-TW'),
-      },
-    },
-  },
+  locales: Object.fromEntries(
+    Object.keys(LOCALE_METADATA)
+      .filter((key) => AVAILABLE_LOCALES.has(key))
+      .map((key) => [key, localeConfig(key)]),
+  ),
 
   themeConfig: {
     search: {

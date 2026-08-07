@@ -1,13 +1,19 @@
-// vitepress build exits 0 even when a page fails to render: a literal {{ }} in
-// prose or an inline code span makes Vue's compiler throw, and the page is
-// emitted with page chrome, correct filename, and an empty body. The chapter
-// then also vanishes from the search index, which is built from rendered
-// content. Page counts stay right, so nothing about the file listing shows it.
+// vitepress build exits 0 even when a page fails to render, but not every {{ }}
+// fails the same way. A literal {{ a.b }} in prose or an inline code span makes
+// Vue's compiler throw, and the page is emitted with page chrome, correct
+// filename, and an empty body. A bare identifier — {{ ident }} — throws
+// nothing: it interpolates to the empty string and empties only its own
+// sentence, not the whole page. Either way the chapter (or sentence) vanishes
+// from the search index, which is built from rendered content, and page counts
+// stay right, so nothing about the file listing shows it.
 //
 // This guard asserts the outcome instead of the cause: one rendered page per
-// chapter source, and a heading inside each rendered page. It does not attempt
-// to detect a partially rendered page — the observed failure loses the whole
-// body.
+// chapter source, and a heading inside each rendered page. It catches the
+// {{ a.b }} form, whose empty body fails the heading check. It does not, on
+// its own, catch the {{ ident }} form — the page still renders a heading, just
+// with a hole in one sentence. The source-side scan below closes that gap: it
+// walks the chapter sources themselves for a bare {{ outside fenced code and
+// unwrapped by <span v-pre>, which catches both forms before any build runs.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,7 +21,11 @@ import { fileURLToPath } from 'node:url'
 const DOCS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = join(DOCS_ROOT, '.vitepress', 'dist')
 const GUIDE = join(DOCS_ROOT, 'guide')
-const CHAPTER_SOURCE = /^\d{2}-.+\.md$/
+// [^/]+ rather than .+: the pattern is applied to a relative path with forward
+// slashes, and a dot matches a slash, so .+ here would also match a chapter
+// nested under a subdirectory (e.g. "01-dir/readme.md") as if it were a
+// top-level chapter file. [^/] keeps a match to exactly one path segment.
+const CHAPTER_SOURCE = /^\d{2}-[^/]+\.md$/
 // Files directly under a locale that are allowed not to be chapters. A file
 // nested in a subdirectory is never exempt by this — it is reported as a
 // stray filename same as a bad top-level name, since it is equally invisible
@@ -25,6 +35,46 @@ const NON_CHAPTER = new Set(['index.md'])
 const REMEDY =
   'A literal {{ }} in prose or an inline code span is the usual cause; wrap it in <span v-pre>. ' +
   'vitepress build exits 0 in this state, which is why this check exists.'
+
+const MUSTACHE_LOCATION =
+  'see docs/ai/conventions.md, "Mustache syntax in the manual"'
+
+// Catches {{ ident }} as well as {{ a.b }} — the bare-identifier form throws
+// nothing, renders a heading, and is invisible to the rendered-output checks
+// below. Runs on the sources directly, so it needs no build.
+//
+// Fences (``` or ~~~, 3 or more characters, indented up to 3 spaces) are
+// tracked rather than assumed: a closer must reuse the same character and be
+// at least as long as its opener, per CommonMark. The manual's many
+// {{ }}-containing code samples live inside fences; a scan that mistook one
+// for prose would fail on those samples, which is exactly the false positive
+// that would get this check deleted later.
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/
+
+function findBareMustaches(file) {
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+  const lineNumbers = []
+  let fence = null // { char, length } of the currently open fence, or null
+
+  lines.forEach((line, index) => {
+    const opener = FENCE_LINE.exec(line)
+    if (fence) {
+      if (opener && opener[1][0] === fence.char && opener[1].length >= fence.length) {
+        fence = null
+      }
+      return // inside a fence, including its closing line: never prose
+    }
+    if (opener) {
+      fence = { char: opener[1][0], length: opener[1].length }
+      return // the opening fence line itself is not prose either
+    }
+    if (line.includes('{{') && !line.includes('v-pre')) {
+      lineNumbers.push(index + 1)
+    }
+  })
+
+  return lineNumbers
+}
 
 // Each locale is one subdirectory of guide/ — that is exactly what srcDir's
 // locale-prefix convention (docs/.vitepress/config.mts) makes a locale.
@@ -43,18 +93,28 @@ if (LOCALES.length === 0) {
 
 const failures = []
 const chaptersByLocale = new Map()
-let checked = 0
+let checkedRoot = 0
+let checkedChapters = 0
 
 // guide/index.md is the bilingual root landing page and sits outside every
 // locale directory, so the per-locale loop below never sees it. Same two
 // assertions as a chapter, applied once: it rendered, and it is not empty.
+const rootSource = join(GUIDE, 'index.md')
 const rootPage = join(DIST, 'index.html')
 if (!existsSync(rootPage)) {
   failures.push(`index.md: no rendered page at ${rootPage}`)
 } else {
-  checked += 1
+  checkedRoot += 1
   if (!/<h1\b/.test(readFileSync(rootPage, 'utf8'))) {
     failures.push(`index.md: rendered page has no <h1> — its body is empty. ${REMEDY}`)
+  }
+}
+if (existsSync(rootSource)) {
+  for (const lineNumber of findBareMustaches(rootSource)) {
+    failures.push(
+      `index.md:${lineNumber}: contains "{{" outside a fenced code block and not wrapped in ` +
+        `<span v-pre> — ${MUSTACHE_LOCATION}`,
+    )
   }
 }
 
@@ -88,6 +148,13 @@ for (const locale of LOCALES) {
           'so it is absent from the sidebar. Rename it or add it to NON_CHAPTER.',
       )
     }
+
+    for (const lineNumber of findBareMustaches(join(localeDir, name))) {
+      failures.push(
+        `${locale}/${name}:${lineNumber}: contains "{{" outside a fenced code block and not wrapped in ` +
+          `<span v-pre> — ${MUSTACHE_LOCATION}`,
+      )
+    }
   }
 
   for (const chapter of chapters) {
@@ -98,7 +165,7 @@ for (const locale of LOCALES) {
       continue
     }
 
-    checked += 1
+    checkedChapters += 1
     if (!/<h1\b/.test(readFileSync(page, 'utf8'))) {
       failures.push(`${locale}/${chapter}: rendered page has no <h1> — its body is empty. ${REMEDY}`)
     }
@@ -124,4 +191,6 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-process.stdout.write(`checked ${checked} rendered chapter pages\n`)
+process.stdout.write(
+  `checked ${checkedRoot} rendered root page and ${checkedChapters} rendered chapter pages\n`,
+)
