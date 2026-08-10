@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en'
-import DataTable, { type DataTableState } from './DataTable.vue'
+import DataTable, { type DataTableState, toSortParam } from './DataTable.vue'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
@@ -80,5 +80,36 @@ describe('DataTable', () => {
     const w = mountTable({ total: 50, state: { sort: [], page: 3, pageSize: 25 } })
     const cells = w.findAll('tbody tr td:first-child').map((c) => c.text())
     expect(cells).toEqual(['Alpha', 'Beta'])   // both server-supplied rows still render
+  })
+
+  // TanStack derives a column id from accessorKey when the column def omits `id` explicitly.
+  // Headers must read that table-resolved id, not re-derive (or fail to derive) their own from
+  // the raw column def — otherwise a header click emits a bogus/undefined sort field.
+  it('derives the sort column id from the resolved column, not the column def, when id is omitted', async () => {
+    const idLessColumns = [
+      { accessorKey: 'title', header: 'Title', meta: { sortable: true } },
+      { accessorKey: 'status', header: 'Status', meta: { sortable: false } },
+    ]
+    const w = mountTable({ columns: idLessColumns })
+    await w.findAll('th')[0].get('button').trigger('click')
+    expect(w.emitted('update:state')![0][0]).toEqual({
+      sort: [{ id: 'title', desc: false }],   // the real accessor key, never "undefined"
+      page: 0,
+      pageSize: 25,
+    })
+  })
+})
+
+describe('toSortParam', () => {
+  it('formats an ascending sort as the bare field name', () => {
+    expect(toSortParam([{ id: 'title', desc: false }])).toBe('title')
+  })
+
+  it('formats a descending sort with a leading minus', () => {
+    expect(toSortParam([{ id: 'title', desc: true }])).toBe('-title')
+  })
+
+  it('returns undefined for no sort', () => {
+    expect(toSortParam([])).toBeUndefined()
   })
 })
