@@ -44,7 +44,6 @@ export default {
     collapse: '收合側欄',
     expand: '展開側欄',
     openMenu: '開啟導覽選單',
-    closeMenu: '關閉導覽選單',
     mainNav: '主導覽',
     brandHome: '回到儀表板',
     version: '管理後台',
