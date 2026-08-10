@@ -109,14 +109,14 @@ defineExpose({ activeLocale })
 .field :deep(.p-treeselect) { width: 100%; max-width: 480px; }
 .field label { font-size: 0.9rem; font-weight: 500; color: var(--fg); }
 .req { color: var(--danger, #dc2626); margin-left: 2px; }
-.help { color: var(--muted); font-size: 0.8rem; }
+.help { color: var(--legacy-muted); font-size: 0.8rem; }
 .field-error { color: var(--danger, #dc2626); font-size: 0.8rem; }
 .relations { display: grid; gap: 14px; }
 .relations h3 { margin: 0; font-size: 1.125rem; color: var(--fg); }
 .lbl-row { display: flex; align-items: center; gap: 8px; }
 .tr-badge {
   font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 5px;
-  background: var(--surface-2, color-mix(in srgb, var(--fg) 8%, transparent)); color: var(--muted);
+  background: var(--surface-2, color-mix(in srgb, var(--fg) 8%, transparent)); color: var(--legacy-muted);
 }
 .dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 99px;

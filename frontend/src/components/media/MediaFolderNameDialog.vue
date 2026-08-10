@@ -36,5 +36,5 @@ function onSubmit(): void {
 
 <style scoped>
 .folder-name-field { display: grid; gap: 4px; }
-.folder-name-field > span { font-size: .8rem; color: var(--muted); font-weight: 500; }
+.folder-name-field > span { font-size: .8rem; color: var(--legacy-muted); font-weight: 500; }
 </style>

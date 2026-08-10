@@ -70,7 +70,7 @@ defineExpose({ uploadFiles })
      overflows shorter viewports. Width is driven by the dialog (~78vw). */
   min-height: min(68vh, 680px);
   border: 2px dashed var(--border);
-  border-radius: var(--radius, 8px);
+  border-radius: var(--legacy-radius, 8px);
   padding: 24px;
   text-align: center;
   background: var(--surface);
@@ -78,7 +78,7 @@ defineExpose({ uploadFiles })
 }
 
 .dropzone.is-dragging {
-  border-color: var(--accent);
+  border-color: var(--legacy-accent);
   background: var(--bg);
 }
 
@@ -105,7 +105,7 @@ defineExpose({ uploadFiles })
 }
 
 .dropzone__rows li.uploading {
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 
 .dropzone__rows li.error {

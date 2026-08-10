@@ -132,5 +132,5 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
 .settings-section { max-width: 640px; display: flex; flex-direction: column; gap: 20px; }
 .settings-field { display: flex; flex-direction: column; gap: 8px; }
 .settings-actions { margin-top: 8px; }
-.settings-denied { padding: 24px; color: var(--muted); }
+.settings-denied { padding: 24px; color: var(--legacy-muted); }
 </style>

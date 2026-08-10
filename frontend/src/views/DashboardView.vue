@@ -68,7 +68,7 @@ function onRun(action: QuickAction): void {
   margin: 0;
 }
 .dashboard__greeting {
-  color: var(--muted);
+  color: var(--legacy-muted);
   margin: 4px 0 0;
 }
 .dashboard__stats {
@@ -84,7 +84,7 @@ function onRun(action: QuickAction): void {
 }
 .card {
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--legacy-radius-lg);
   background: var(--surface);
   padding: 20px;
 }
@@ -96,7 +96,7 @@ function onRun(action: QuickAction): void {
   color: var(--danger);
 }
 .dashboard__loading {
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 @media (max-width: 860px) {
   .dashboard__grid {

@@ -46,7 +46,7 @@ function onInput(e: Event): void {
 .iwrap .pi-search {
   position: absolute;
   left: 12px;
-  color: var(--muted);
+  color: var(--legacy-muted);
   pointer-events: none;
 }
 .iwrap :deep(input) {

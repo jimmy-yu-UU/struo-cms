@@ -407,7 +407,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
 
 <style scoped>
 .item-form-view { display: grid; gap: 4px; }
-.notice { color: var(--muted); }
+.notice { color: var(--legacy-muted); }
 .conflict-banner {
   display: flex;
   align-items: center;
@@ -416,7 +416,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
   margin-bottom: 1rem;
   border: 1px solid var(--warn, #d97706);
   background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
-  border-radius: var(--radius, 8px);
+  border-radius: var(--legacy-radius, 8px);
   color: var(--fg);
 }
 .conflict-text { flex: 1; }

@@ -273,16 +273,16 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 <style scoped>
 .md-grid { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 .md-preview {
-  border: 1px solid var(--border); border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border); border-radius: var(--legacy-radius-lg, 12px);
   background: var(--bg); padding: 10px; display: flex; align-items: center; justify-content: center;
   min-height: 200px; overflow: hidden;
 }
-.md-preview img { max-width: 100%; max-height: 260px; object-fit: contain; border-radius: var(--radius, 8px); }
+.md-preview img { max-width: 100%; max-height: 260px; object-fit: contain; border-radius: var(--legacy-radius, 8px); }
 .md-fields { display: grid; gap: 12px; align-content: start; }
 .md-field { display: grid; gap: 4px; }
-.md-field > span { font-size: .8rem; color: var(--muted); font-weight: 500; }
+.md-field > span { font-size: .8rem; color: var(--legacy-muted); font-weight: 500; }
 .md-kv { display: flex; justify-content: space-between; gap: 12px; font-size: .85rem; }
-.md-kv span { color: var(--muted); }
+.md-kv span { color: var(--legacy-muted); }
 .md-kv b { color: var(--fg); font-weight: 600; }
 .md-url { display: flex; gap: 6px; align-items: center; }
 .md-url :deep(input) { flex: 1; }

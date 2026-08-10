@@ -30,6 +30,6 @@ defineProps<{ title: string; caption?: string }>()
 .head-lead { display: flex; align-items: center; }
 .titles { display: grid; gap: 4px; flex: 1 1 auto; }
 .titles h1 { margin: 0; font-size: 1.5rem; color: var(--fg); }
-.caption { margin: 0; color: var(--muted); font-size: 0.875rem; }
+.caption { margin: 0; color: var(--legacy-muted); font-size: 0.875rem; }
 .head-actions { display: flex; gap: 10px; align-items: center; }
 </style>

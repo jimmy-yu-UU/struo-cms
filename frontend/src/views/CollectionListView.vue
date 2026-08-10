@@ -324,7 +324,7 @@ defineExpose({ loadItems, onPage, onSort, onSearchInput, onEdit, onNew, canWrite
   display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
   padding: 10px 14px; border: 1px solid var(--warn, #d97706);
   background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
-  border-radius: var(--radius, 8px); color: var(--fg); font-size: .9rem;
+  border-radius: var(--legacy-radius, 8px); color: var(--fg); font-size: .9rem;
 }
-.datetime { font-variant-numeric: tabular-nums; color: var(--muted); }
+.datetime { font-variant-numeric: tabular-nums; color: var(--legacy-muted); }
 </style>
