@@ -383,6 +383,32 @@ describe('CollectionListView', () => {
     expect(itemsApi.remove).toHaveBeenCalledWith('article', '1', { purge: true })
   })
 
+  it('cancelling the delete confirm skips the delete entirely', async () => {
+    seedSoftSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
+    confirmRequire.mockResolvedValue(false)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as any).onDelete({ id: '1' })
+    await flushPromises()
+    expect(itemsApi.remove).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the purge confirm skips the purge entirely', async () => {
+    seedSoftSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
+    confirmRequire.mockResolvedValue(false)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).setMode('trash')
+    await flushPromises()
+    await (w.vm as any).onPurge({ id: '1' })
+    await flushPromises()
+    expect(itemsApi.remove).not.toHaveBeenCalled()
+  })
+
   it('restore calls the API directly (no confirm) and reloads', async () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
