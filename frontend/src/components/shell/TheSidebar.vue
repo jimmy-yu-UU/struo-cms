@@ -42,7 +42,13 @@ function setGroupOpen(group: string, next: boolean): void {
   // permanently unreachable there. A header click while collapsed means "let me see
   // this" — expand the sidebar and force the group open; never toggle an already-open
   // group shut in that state.
-  if (state.value === 'collapsed') {
+  //
+  // `state` derives from the desktop `open` ref only, independent of `openMobile` — on mobile
+  // the sidebar renders as a Sheet with no group/data-collapsible ancestor, so sub-items are
+  // never CSS-hidden there regardless of the desktop cookie. Without the isMobile guard, a
+  // persisted collapsed desktop cookie makes every group-header tap on mobile force-expand and
+  // silently rewrite that desktop cookie instead of toggling the group.
+  if (!isMobile.value && state.value === 'collapsed') {
     setOpen(true)
     openGroups[group] = true
     return

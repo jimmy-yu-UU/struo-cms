@@ -44,7 +44,6 @@ export default {
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
     openMenu: 'Open navigation menu',
-    closeMenu: 'Close navigation menu',
     mainNav: 'Main navigation',
     brandHome: 'Back to dashboard',
     version: 'Admin console',
