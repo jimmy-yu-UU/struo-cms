@@ -40,9 +40,10 @@ describe('confirmStore', () => {
     await expect(second).resolves.toBe(true)
   })
 
-  // A click handler bound to a request that has since been superseded must not be able to
-  // settle the *new* request — accept()/reject() take the id the caller captured when it
-  // bound to the request it meant to answer, and settle() ignores a mismatched one.
+  // A caller that captured an id from `requestId` and later calls accept()/reject() with it —
+  // after a supersede it didn't know about — must not settle the *new* request. ConfirmHost's
+  // rendered buttons don't use this (they call accept()/reject() with no id — see the comment
+  // there); this is a store-level contract for a caller that holds an id across an await.
   it('ignores an accept/reject bound to a superseded request id', async () => {
     const store = useConfirmStore()
     const first = store.ask({ message: 'First' })

@@ -66,7 +66,10 @@ describe('ConfirmHost', () => {
     const p = useConfirmStore().ask({ message: 'Sure?' })
     await flushPromises()
     const confirmBtn = w.findAll('button').find((b) => b.text() === en.common.confirm)
-    await confirmBtn?.trigger('click')
+    // A missing button would otherwise degrade `confirmBtn?.trigger(...)` into a no-op and
+    // the test would just hang on the unresolved promise instead of failing clearly here.
+    expect(confirmBtn).toBeDefined()
+    await confirmBtn!.trigger('click')
     await expect(p).resolves.toBe(true)
   })
 
@@ -75,7 +78,8 @@ describe('ConfirmHost', () => {
     const p = useConfirmStore().ask({ message: 'Sure?' })
     await flushPromises()
     const cancelBtn = w.findAll('button').find((b) => b.text() === en.common.cancel)
-    await cancelBtn?.trigger('click')
+    expect(cancelBtn).toBeDefined()
+    await cancelBtn!.trigger('click')
     await expect(p).resolves.toBe(false)
   })
 })
