@@ -1,39 +1,21 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { useAppConfigStore } from '../../stores/appConfigStore'
+import { useAppConfigStore } from '@/stores/appConfigStore'
 
-const appConfig = useAppConfigStore()
-const { brandName, brandLogoUrl, brandInitial } = storeToRefs(appConfig)
+const { brandName, brandLogoUrl, brandInitial } = storeToRefs(useAppConfigStore())
 </script>
 
 <template>
   <img
     v-if="brandLogoUrl"
-    class="brand-logo"
+    class="size-8 flex-none rounded-md object-contain"
     :src="brandLogoUrl"
     :alt="brandName"
   />
-  <span v-else class="mark">{{ brandInitial }}</span>
+  <span
+    v-else
+    class="grid size-8 flex-none place-items-center rounded-md bg-primary text-[1.05rem] font-bold text-primary-foreground"
+  >
+    {{ brandInitial }}
+  </span>
 </template>
-
-<style scoped>
-.brand-logo {
-  width: 32px;
-  height: 32px;
-  flex: none;
-  border-radius: 8px;
-  object-fit: contain;
-}
-.mark {
-  width: 32px;
-  height: 32px;
-  flex: none;
-  border-radius: 8px;
-  background: var(--legacy-accent);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 1.05rem;
-}
-</style>
