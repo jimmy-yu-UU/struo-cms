@@ -32,16 +32,23 @@ describe('UserMenu', () => {
 
   it('shows the super-admin role label', () => {
     const auth = useAuthStore()
-    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    // A distinct name (not name/email absent) so displayName !== roleLabel — otherwise this
+    // assertion would still pass even if the role <span> were deleted outright, since
+    // displayName falls back to roleLabel when both name and email are missing.
+    auth.user = { id: 'u1', name: '陳雅婷', isSuperAdmin: true, permissions: {} }
     const wrapper = mountMenu()
-    expect(wrapper.find('button').text()).toContain('超級管理員')
+    const text = wrapper.find('button').text()
+    expect(text).toContain('陳雅婷')
+    expect(text).toContain('超級管理員')
   })
 
   it('shows the member role label for a non-super-admin', () => {
     const auth = useAuthStore()
-    auth.user = { id: 'u2', isSuperAdmin: false, permissions: {} }
+    auth.user = { id: 'u2', name: '王小明', isSuperAdmin: false, permissions: {} }
     const wrapper = mountMenu()
-    expect(wrapper.find('button').text()).toContain('一般使用者')
+    const text = wrapper.find('button').text()
+    expect(text).toContain('王小明')
+    expect(text).toContain('一般使用者')
   })
 
   it('shows the user name (fallback email) next to the avatar', () => {

@@ -8,6 +8,7 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import TheSidebar from './TheSidebar.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useSchemaStore } from '@/stores/schemaStore'
+import { useAppConfigStore } from '@/stores/appConfigStore'
 
 const push = vi.fn()
 // Mutable so 'marks the active collection from the route' can point it at a collection
@@ -51,6 +52,22 @@ describe('TheSidebar', () => {
     expect(text).toContain(en.nav.dashboard)
     expect(text).toContain(en.nav.media)
     expect(text).toContain(en.nav.settings)
+  })
+
+  // Relocated from TheTopbar's old suite: the brand button lived in the topbar before Task 8
+  // moved it into SidebarHeader, but its own two behavioural assertions never moved with it.
+  it('the brand button routes to the dashboard', async () => {
+    const w = mountSidebar()
+    const brandButton = w.find(`[aria-label="${en.shell.brandHome}"]`)
+    expect(brandButton.exists()).toBe(true)
+    await brandButton.trigger('click')
+    expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
+  })
+
+  it('renders the configured brand name', () => {
+    useAppConfigStore().brandName = 'Acme Docs'
+    const w = mountSidebar()
+    expect(w.find(`[aria-label="${en.shell.brandHome}"]`).text()).toContain('Acme Docs')
   })
 
   // A text-only assertion here passes identically on a flat list or on broken nesting.

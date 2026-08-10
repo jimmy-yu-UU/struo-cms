@@ -30,6 +30,15 @@ describe('TheTopbar', () => {
     expect(first.attributes('data-sidebar')).toBe('trigger')
   })
 
+  // The vendored SidebarTrigger only ships a hardcoded English "Toggle Sidebar" sr-only
+  // span — restores the localized accessible name the old hamburger carried via
+  // shell.openMenu, for zh-TW screen-reader users.
+  it('carries a localized accessible name on the sidebar trigger', () => {
+    const w = mountTopbar()
+    const first = w.findAll('button')[0]
+    expect(first.attributes('aria-label')).toBe(en.shell.openMenu)
+  })
+
   it('no longer renders the legacy drawer toggle', () => {
     expect(mountTopbar().find('.drawer-toggle').exists()).toBe(false)
   })
