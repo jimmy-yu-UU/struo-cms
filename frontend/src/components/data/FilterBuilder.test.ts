@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en'
+import type { FilterSpec } from '@/lib/buildListQuery'
 import FilterBuilder from './FilterBuilder.vue'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -82,13 +83,73 @@ describe('FilterBuilder', () => {
   // Select can't be driven by click under jsdom — see the other tests), but the value itself is
   // typed into the plain text Input and applied via a genuine keyup.enter, not through the
   // exposed setters.
+  //
+  // The intermediate assertion is load-bearing: without it, a regression that wires apply()
+  // into the Input's @update:model-value binding (so it fires on every keystroke, not just
+  // Enter) would still pass — setValue would emit the identical payload at emitted('apply')[0],
+  // and the keyup.enter afterwards would just add a second, unchecked emit.
   it('applies on Enter in a text value field, via real input + keyup events', async () => {
     const w = mountBuilder()
     await w.get('[data-testid="filter-add"]').trigger('click')
     await w.vm.setDraftField(0, 'title')
     const valueInput = w.get('[aria-label="Value"]')
     await valueInput.setValue('hello')
+    expect(w.emitted('apply')).toBeUndefined()
     await valueInput.trigger('keyup.enter')
+    expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_eq', value: 'hello' } })
+  })
+
+  // Task 14 will re-assign `applied` from the spec FilterBuilder itself just emitted (or from a
+  // route-query computed that mints a new object per navigation). `watch(..., { deep: true })`
+  // fires on that re-assignment even though the spec is unchanged, and a naive hydrate() would
+  // wholesale-replace the draft — silently deleting any row still mid-edit that toSpec() had
+  // dropped as half-authored. Simulate exactly that echo.
+  it('keeps an in-progress row when the consumer echoes the just-emitted spec back', async () => {
+    const w = mountBuilder()
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    await w.vm.setDraftField(0, 'title')
+    await w.vm.setDraftValue(0, 'hello')
+    await w.get('[data-testid="filter-add"]').trigger('click') // row 1: status, no value yet
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    const emittedSpec = w.emitted('apply')![0][0] as FilterSpec
+    expect(emittedSpec).toEqual({ title: { op: '_eq', value: 'hello' } })
+
+    await w.setProps({ applied: emittedSpec })
+    expect(w.findAll('[data-testid="filter-row"]')).toHaveLength(2)
+  })
+
+  // Regression for the degenerate case named alongside the above: adding a row and pressing
+  // Search before typing anything emits {} — if the consumer echoes that back verbatim, the
+  // row just added must not vanish.
+  it('keeps a freshly-added empty row when the consumer echoes an empty applied spec back', async () => {
+    const w = mountBuilder()
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    expect(w.emitted('apply')![0][0]).toEqual({})
+
+    await w.setProps({ applied: {} })
+    expect(w.findAll('[data-testid="filter-row"]')).toHaveLength(1)
+  })
+
+  // canAdd must ask "is there a free field?", not "is draft shorter than fields?" — those
+  // diverge the moment a hydrated row names a field absent from `fields` (e.g. a field removed
+  // from the collection schema after the filter was applied).
+  it('still allows adding a row when a hydrated row references a field outside `fields`', async () => {
+    const w = mount(FilterBuilder, {
+      props: { fields, applied: { ghost: { op: '_eq', value: 'x' } } },
+      global: { plugins: [i18n] },
+    })
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    expect(w.findAll('[data-testid="filter-row"]')).toHaveLength(2)
+    expect(w.get('[data-testid="filter-add"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('trims whitespace from a value before it reaches the emitted FilterSpec', async () => {
+    const w = mountBuilder()
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    await w.vm.setDraftField(0, 'title')
+    await w.vm.setDraftValue(0, '  hello  ')
+    await w.get('[data-testid="filter-apply"]').trigger('click')
     expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_eq', value: 'hello' } })
   })
 })
