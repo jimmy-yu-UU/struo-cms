@@ -36,19 +36,14 @@ function onOpenChange(next: boolean): void {
 // with the vendored buttonVariants sidestep that: only store.accept()/reject() decide the
 // outcome, and settle() happens as a side effect of that decision.
 //
-// Each handler is a computed (not an inline template expression) so the id it closes over is
-// fixed at the render that produced *this* button, not re-read at click time. If a concurrent
-// ask() supersedes the request before Vue re-renders, the still-attached (stale) button keeps
-// calling accept()/reject() with the *old* id, and settle() in the store ignores it — instead
-// of resolving the new, current request.
-const onAcceptClick = computed(() => {
-  const id = store.requestId
-  return () => store.accept(id)
-})
-const onRejectClick = computed(() => {
-  const id = store.requestId
-  return () => store.reject(id)
-})
+// These buttons call accept()/reject() with no id — they do not snapshot which request they
+// were rendered for (Vue's cached inline-handler codegen re-reads reactive state at call time,
+// not at render time, so a computed-returning-a-closure doesn't actually snapshot anything
+// either). In practice this is safe: a real user click is a separate task from whatever called
+// ask(), so Vue always flushes and re-renders in between — by the time a click lands, the
+// button on screen already belongs to the current request. confirmStore's id guard exists for
+// a different caller: code that captures an id across an await and might still be holding it
+// after a supersede (see confirmStore.ts).
 </script>
 
 <template>
@@ -59,8 +54,8 @@ const onRejectClick = computed(() => {
         <AlertDialogDescription>{{ request?.message }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <button type="button" :class="rejectClass" @click="onRejectClick">{{ rejectLabel }}</button>
-        <button type="button" :class="acceptClass" @click="onAcceptClick">{{ acceptLabel }}</button>
+        <button type="button" :class="rejectClass" @click="store.reject()">{{ rejectLabel }}</button>
+        <button type="button" :class="acceptClass" @click="store.accept()">{{ acceptLabel }}</button>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>

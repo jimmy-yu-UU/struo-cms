@@ -29,13 +29,15 @@ export const useConfirmStore = defineStore('confirm', {
       this.open = true
       return new Promise<boolean>((resolve) => { this.resolve = resolve })
     },
-    // `id`, when passed, is the id the caller captured for the request it meant to answer.
-    // Omit it to always settle the current request (existing call sites, and tests, that
-    // don't need the guard).
+    // `id`, when passed, is the id a caller captured from `requestId` at the time it asked —
+    // useful for a caller that holds onto that id across an await and might still call
+    // accept()/reject() after a later ask() has superseded its request. Omit it (as
+    // ConfirmHost's rendered buttons do — see the comment there) to always settle whatever is
+    // current.
     accept(id?: number): void { this.settle(true, id) },
     reject(id?: number): void { this.settle(false, id) },
-    // Ignores a call whose id no longer matches the pending request: a click already bound to
-    // a superseded request must not be able to resolve the *new* one that replaced it.
+    // Ignores a call whose id no longer matches the pending request, so a programmatic caller
+    // that captured an id before a supersede can't resolve the *new* request that replaced it.
     settle(accepted: boolean, id?: number): void {
       if (id !== undefined && id !== this.requestId) return
       const resolve = this.resolve
