@@ -21,6 +21,7 @@ const stubs = {
   TheTopbar: { template: '<div class="stub-topbar" />' },
   TheSidebar: { template: '<div class="stub-sidebar" />' },
   AppBreadcrumb: { template: '<div class="stub-bc" />' },
+  Toast: { template: '<div class="stub-toast" />' },
   Toaster: { template: '<div class="stub-toaster" />' },
   ConfirmHost: { template: '<div class="stub-confirm" />' },
   RouterView: true,
@@ -54,6 +55,23 @@ describe('AppShell', () => {
     expect(w.find('.stub-confirm').exists()).toBe(true)
   })
 
+  // Six production components (SettingsView, MediaLibraryView, ItemFormView, PermissionMatrix,
+  // RevisionHistoryDrawer, MediaDetailDialog) still call primevue/usetoast — ToastService stays
+  // registered in main.ts, so useToast().add() never throws, it just emits on ToastEventBus with
+  // nothing subscribed if no <Toast> is mounted. That failure mode is silent (no console
+  // warning) and invisible to those six components' own tests, which all mock
+  // primevue/usetoast and assert the call happened regardless of whether a host exists. The
+  // PrimeVue <Toast> host must stay mounted alongside <Toaster/> until the last
+  // primevue/usetoast call site migrates (S9) — this test exists so removing it again breaks
+  // the build red, not silently.
+  it('mounts the PrimeVue Toast host alongside the shadcn Toaster', () => {
+    const schema = useSchemaStore()
+    vi.spyOn(schema, 'load').mockResolvedValue()
+    const w = mountShell()
+    expect(w.find('.stub-toast').exists()).toBe(true)
+    expect(w.find('.stub-toaster').exists()).toBe(true)
+  })
+
   it('no longer renders the hand-rolled shell grid or scrim', () => {
     const schema = useSchemaStore()
     vi.spyOn(schema, 'load').mockResolvedValue()
@@ -71,12 +89,14 @@ describe('AppShell', () => {
 })
 
 // Escape-closes-drawer, route-change-closes-drawer and scrim-click-closes-drawer used to be
-// AppShell's own responsibility (sidebarStore + a hand-rolled watcher/keydown listener). They
-// are now the vendored SidebarProvider/Sheet's job (Escape + overlay click, via reka-ui's
-// Dialog primitives underneath Sheet) plus TheSidebar.go()'s setOpenMobile(false) for the
-// navigation case (Task 8). None of that is re-tested here — see the stubbed tests above,
-// which stub TheSidebar out entirely — because it belongs to Sheet's own test suite and
-// TheSidebar's, not AppShell's. Coverage is verified manually; see task-10-report.md.
+// AppShell's own responsibility (sidebarStore + a hand-rolled watcher/keydown listener).
+// Escape and overlay-click are now genuinely inherited from reka-ui's Dialog primitives
+// underneath Sheet (SheetContent.vue adds no override) — no app code, so nothing to unit-test
+// at any level. Route-change-closes-drawer is NOT inherited from anything; it's TheSidebar's
+// own `go()` (Task 8) plus a `watch(() => route.path, ...)` in TheSidebar (added in the Task 10
+// review round, to also cover browser back/forward — see TheSidebar.mobileNav.test.ts).
+// Neither belongs here: the stubbed tests above stub TheSidebar out entirely, so testing
+// TheSidebar's own internal behaviour has to live in TheSidebar's own test files.
 
 // Smoke test with the real subtree (no TheTopbar/TheSidebar stubs). This is the mount that
 // would have caught the missing SidebarProvider context that made the app throw on load for
