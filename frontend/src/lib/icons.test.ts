@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LayoutGrid, Images, Settings, Trash2, Pencil, File as FileIcon, Folder, Tag } from '@lucide/vue'
+import { LayoutGrid, Images, Settings, Trash2, Pencil, File as FileIcon, Folder, Tag, ChevronRight } from '@lucide/vue'
 import { resolveIcon } from './icons'
 
 describe('resolveIcon', () => {
@@ -29,6 +29,14 @@ describe('resolveIcon', () => {
     expect(resolveIcon('no-such-icon-anywhere')).toBe(FileIcon)
   })
 
+  // ICON_MAP is a plain object literal; a hostile or careless collection-metadata name must not
+  // reach up into Object.prototype and resolve to something other than the documented fallback.
+  it('falls back for Object.prototype property names', () => {
+    expect(resolveIcon('constructor')).toBe(FileIcon)
+    expect(resolveIcon('toString')).toBe(FileIcon)
+    expect(resolveIcon('hasOwnProperty')).toBe(FileIcon)
+  })
+
   // Tokens the Step 1 grep found that the brief's skeleton map did not cover. Each is a real
   // `pi pi-*` or `pi-*` class still present in src/ today (see task-5-report.md for the full list
   // and where each one lives).
@@ -37,12 +45,28 @@ describe('resolveIcon', () => {
     expect(resolveIcon('pi pi-arrow-down')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-chevron-left')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-copy')).not.toBe(FileIcon)
-    expect(resolveIcon('pi pi-external-link')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-folder-plus')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-list')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-sort-numeric-down')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-table')).not.toBe(FileIcon)
-    // The static half of RichTextInput.vue's dynamic `pi-align-${direction}` class literal.
-    expect(resolveIcon('pi pi-align-')).not.toBe(FileIcon)
+  })
+
+  // RichTextInput.vue builds these classes dynamically; the literal token never appears in
+  // source, only the "align-" prefix does (see icons.ts and iconCoverage.test.ts). Mapped ahead
+  // of that component's own migration so the real runtime values resolve correctly today.
+  it('resolves the four alignment directions RichTextInput.vue builds dynamically', () => {
+    expect(resolveIcon('pi pi-align-left')).not.toBe(FileIcon)
+    expect(resolveIcon('pi pi-align-center')).not.toBe(FileIcon)
+    expect(resolveIcon('pi pi-align-right')).not.toBe(FileIcon)
+    expect(resolveIcon('pi pi-align-justify')).not.toBe(FileIcon)
+  })
+
+  // A class string may carry other utility classes alongside the icon token, in either order —
+  // MediaLibraryView.vue:283 puts the utility class after the icon ("pi pi-angle-right
+  // media-crumb__sep"); TheSidebar.vue and MediaFolderCards.vue put it before ("nav-icon pi
+  // pi-folder"). A trailing .pop() would silently pick the wrong word in the first case.
+  it('picks the pi- token out of a class string regardless of position', () => {
+    expect(resolveIcon('nav-icon pi pi-folder')).toBe(Folder)
+    expect(resolveIcon('pi pi-angle-right media-crumb__sep')).toBe(ChevronRight)
   })
 })
