@@ -1,8 +1,9 @@
 import type { Component } from 'vue'
 import {
   LayoutGrid, Images, Settings, Folder, FolderPlus, File as FileIcon, FileText, FileType,
-  FileSpreadsheet, Tag, Trash2, Pencil, Eye, Plus, Search, Undo2, Copy, ExternalLink,
-  ChevronDown, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, AlignLeft, Menu, User, LogOut,
+  FileSpreadsheet, Tag, Trash2, Pencil, Eye, Plus, Search, Undo2, Copy,
+  ChevronDown, ChevronLeft, ChevronRight, ArrowUp, ArrowDown,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Menu, User, LogOut,
   Sun, Moon, Check, X, Upload, History, RotateCcw, List, ListOrdered, Table,
   Megaphone, Newspaper, Image as ImageIcon, Video, Volume2,
 } from '@lucide/vue'
@@ -14,11 +15,13 @@ import {
 //     emits and what docs/guide/*/04-defining-a-collection.md documents.
 // Keys are stored WITHOUT the "pi-" prefix so both dialects normalise to the same lookup.
 //
-// Every key here is required by one of two things: a literal `pi-*` token still present
-// somewhere under src/ (enforced by frontend/tests/iconCoverage.test.ts), or a semantic name a
-// [CmsCollection(Icon = "...")] attribute actually emits (article/folder/tag from
-// samples/Struo.Sample.Blog, megaphone from docs/guide/*/04-defining-a-collection.md). There are
-// no speculative entries — see task-5-report.md for the tokens removed from the brief's skeleton
+// Every key here is required by one of three things: a literal `pi-*` token still present in
+// shipped (non-test) source under src/ (enforced by frontend/tests/iconCoverage.test.ts); a
+// semantic name a [CmsCollection(Icon = "...")] attribute actually emits (article/folder/tag from
+// samples/Struo.Sample.Blog, megaphone from docs/guide/*/04-defining-a-collection.md); or, for the
+// four `align-*` keys, a runtime class a dynamic template literal actually builds even though no
+// literal token for it exists in source (see the comment above those keys). There are no other
+// speculative entries — see task-5-report.md for the tokens removed from the brief's skeleton
 // because nothing in the repo uses them.
 export const ICON_MAP: Record<string, Component> = {
   // --- navigation / shell ---
@@ -46,16 +49,20 @@ export const ICON_MAP: Record<string, Component> = {
   times: X,
   upload: Upload,
   copy: Copy,
-  'external-link': ExternalLink,
   history: History,
   replay: RotateCcw,
 
   // --- reordering / alignment indicators ---
   'arrow-up': ArrowUp,
   'arrow-down': ArrowDown,
-  // Static half of RichTextInput.vue's dynamic `pi-align-${direction}` class literal — the
-  // coverage scanner only sees source text, not the interpolated runtime value.
-  'align-': AlignLeft,
+  // RichTextInput.vue builds these dynamically (`` `pi pi-align-${direction}` ``), so the literal
+  // token never appears in source — only the "align-" prefix does. Mapped ahead of that
+  // component's own migration so the four real runtime classes have somewhere to resolve to; see
+  // the coverage test's prefix-match handling of tokens ending in "-".
+  'align-left': AlignLeft,
+  'align-center': AlignCenter,
+  'align-right': AlignRight,
+  'align-justify': AlignJustify,
 
   // --- rich text: lists / tables ---
   list: List,
@@ -83,13 +90,16 @@ export const ICON_MAP: Record<string, Component> = {
 /**
  * Resolves an icon name to a lucide component.
  *
- * Accepts "pi pi-foo", "pi-foo" or a bare semantic name. Unknown names fall back to a
- * generic file icon rather than throwing — collection metadata is author-supplied and a
- * typo must not break the sidebar.
+ * Accepts "pi pi-foo", "pi-foo" or a bare semantic name. A full class string may carry other
+ * utility classes alongside the icon token, in either order (e.g. "nav-icon pi pi-folder" or
+ * "pi pi-angle-down nav-chev") — the "pi-" token is picked out explicitly rather than assumed to
+ * be first or last. Unknown names fall back to a generic file icon rather than throwing —
+ * collection metadata is author-supplied and a typo must not break the sidebar.
  */
 export function resolveIcon(name: string | null | undefined): Component {
   if (!name) return FileIcon
-  const token = name.trim().split(/\s+/).pop() ?? ''
+  const parts = name.trim().split(/\s+/)
+  const token = parts.find((p) => p.startsWith('pi-')) ?? parts.pop() ?? ''
   const key = token.startsWith('pi-') ? token.slice(3) : token
-  return ICON_MAP[key] ?? FileIcon
+  return Object.hasOwn(ICON_MAP, key) ? ICON_MAP[key] : FileIcon
 }
