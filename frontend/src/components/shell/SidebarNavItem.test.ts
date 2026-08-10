@@ -45,6 +45,15 @@ describe('SidebarNavItem', () => {
     const top = mountItem({ label: 'A' })
     const sub = mountItem({ label: 'A', sub: true })
     expect(top.get('button').attributes('data-sidebar')).toBe('menu-button')
-    expect(sub.get('a, button').attributes('data-sidebar')).toBe('menu-sub-button')
+    expect(sub.get('button').attributes('data-sidebar')).toBe('menu-sub-button')
+  })
+
+  // SidebarMenuSubButton defaults `as` to "a" with no href — reka's Primitive renders
+  // that as a plain, keyboard-unreachable, non-interactive anchor. A real <button> is
+  // required for both variants; `get('button')` above already encodes this, but assert
+  // it explicitly so a regression back to the anchor fails loudly and by name.
+  it('never renders a sub-level item as a bare anchor', () => {
+    const sub = mountItem({ label: 'A', sub: true })
+    expect(sub.find('a').exists()).toBe(false)
   })
 })

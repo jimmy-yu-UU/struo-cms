@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Folder } from '@lucide/vue'
@@ -27,7 +27,28 @@ const { brandName } = storeToRefs(useAppConfigStore())
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
-const { isMobile, setOpenMobile } = useSidebar()
+const { isMobile, setOpenMobile, state, setOpen } = useSidebar()
+
+// Expanded state per real group (default open). Keyed by group name. Explicit v-model
+// (rather than Collapsible's own `default-open`) so a collapsed-rail click can force a
+// group open — see setGroupOpen below.
+const openGroups = reactive<Record<string, boolean>>({})
+function isGroupOpen(group: string): boolean {
+  return openGroups[group] ?? true
+}
+function setGroupOpen(group: string, next: boolean): void {
+  // Icon-collapsed rail: SidebarMenuSub is CSS-hidden regardless of open state
+  // (group-data-[collapsible=icon]:hidden), so a group's items are otherwise
+  // permanently unreachable there. A header click while collapsed means "let me see
+  // this" — expand the sidebar and force the group open; never toggle an already-open
+  // group shut in that state.
+  if (state.value === 'collapsed') {
+    setOpen(true)
+    openGroups[group] = true
+    return
+  }
+  openGroups[group] = next
+}
 
 const canReadMedia = computed(
   () => auth.user?.isSuperAdmin === true || auth.user?.permissions?.file?.read === true,
@@ -67,7 +88,7 @@ function go(to: { name: string; params?: Record<string, string> }): void {
       </SidebarMenu>
     </SidebarHeader>
 
-    <SidebarContent :aria-label="t('shell.mainNav')">
+    <SidebarContent>
       <div v-if="schema.loadError" class="m-2 grid gap-2 rounded-md border border-destructive p-3 text-sm text-destructive" role="alert">
         <span>{{ schema.loadError }}</span>
         <button type="button" class="justify-self-start rounded-sm border border-border px-3 py-1" @click="schema.load()">
@@ -75,7 +96,11 @@ function go(to: { name: string; params?: Record<string, string> }): void {
         </button>
       </div>
 
-      <template v-else>
+      <!-- SidebarContent renders a plain div; aria-label on a role-less element is
+           dropped by assistive tech. `contents` keeps this nav out of the flex layout
+           (SidebarContent's flex/gap classes) while still exposing a real navigation
+           landmark, replacing the `complementary` landmark the old <aside> gave. -->
+      <nav v-else class="contents" :aria-label="t('shell.mainNav')">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -109,7 +134,8 @@ function go(to: { name: string; params?: Record<string, string> }): void {
                   </SidebarMenuItem>
                 </template>
 
-                <Collapsible v-else default-open as-child class="group/collapsible">
+                <Collapsible v-else :open="isGroupOpen(g.group)" as-child class="group/collapsible"
+                             @update:open="(next: boolean) => setGroupOpen(g.group, next)">
                   <SidebarMenuItem>
                     <CollapsibleTrigger as-child>
                       <SidebarMenuButton>
@@ -133,7 +159,7 @@ function go(to: { name: string; params?: Record<string, string> }): void {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-      </template>
+      </nav>
     </SidebarContent>
 
     <SidebarFooter>
