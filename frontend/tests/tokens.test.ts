@@ -1,20 +1,17 @@
-/// <reference types="node" />
-// tsconfig.app.json (which type-checks everything under src/, including this file) has no
-// "node" types — only tsconfig.test.json (tests/**/*.ts) does. This is the first src/ test
-// to reach for a Node builtin, so it needs its own reference rather than widening the app
-// tsconfig's types for every other file under src/.
 // @vitest-environment node
 // Under the jsdom environment Vitest transforms this file in Vite's client mode, where
 // `new URL(<literal>, import.meta.url)` is rewritten twice — Vite swaps the literal for a
 // dev-server path (/@fs/…) and Vitest's normalize-url plugin swaps the base for self.location —
 // so the result is http://localhost:3000/@fs/… and fileURLToPath rejects it. Neither rewrite
 // happens in the node environment (ssr transform), which needs no DOM anyway. Same fix as
-// tests/schemaContract.test.ts.
+// tests/schemaContract.test.ts, which lives here for the same reason: tests that read files
+// from disk live in frontend/tests/ (tsconfig.test.json, which declares "node" in its types),
+// not under src/ (tsconfig.app.json, which is the app program and has no Node globals).
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf8')
+const css = readFileSync(fileURLToPath(new URL('../src/assets/tokens.css', import.meta.url)), 'utf8')
 
 function block(selector: string): string {
   // Non-greedy up to the first closing brace — every block below is flat (no nesting).
