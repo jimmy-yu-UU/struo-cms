@@ -35,8 +35,23 @@ function hydrate(spec: FilterSpec): void {
   }))
 }
 hydrate(props.applied)
-// Re-hydrate when the consumer resets the filter externally (e.g. switching collection).
-watch(() => props.applied, hydrate, { deep: true })
+
+function specsEqual(a: FilterSpec, b: FilterSpec): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  return aKeys.length === bKeys.length
+    && aKeys.every((k) => b[k] !== undefined && b[k].op === a[k].op && b[k].value === a[k].value)
+}
+// Re-hydrate when the consumer resets the filter externally (e.g. switching collection) —
+// but NOT when it merely echoes back the spec this component just emitted (Task 14 re-assigns
+// `applied` from the emitted spec, or derives it from a route-query `computed` that mints a new
+// object per navigation). `deep: true` fires on that re-assignment even though nothing changed;
+// a wholesale hydrate() there would silently delete any row toSpec() dropped as half-authored
+// (an empty value, a field not yet picked). Only rebuild the draft when the incoming spec
+// actually differs from what the current draft would itself produce.
+watch(() => props.applied, (spec) => {
+  if (!specsEqual(spec, toSpec())) hydrate(spec)
+}, { deep: true })
 
 const OPERATOR_LABEL: Record<Operator, string> = {
   _eq: 'filterBuilder.opEq',
@@ -76,10 +91,13 @@ function setDraftValue(index: number, value: string): void {
 function toSpec(): FilterSpec {
   const spec: FilterSpec = {}
   for (const row of draft.value) {
-    // A row with no field or an empty value is half-authored; sending it would filter on
-    // nothing and silently return zero results.
-    if (!row.field || row.value.trim() === '') continue
-    spec[row.field] = { op: row.op, value: row.value }
+    // A row with no field or an empty (whitespace-only) value is half-authored; sending it
+    // would filter on nothing and silently return zero results. Send the trimmed value too —
+    // leading/trailing whitespace typed into the value field is never meaningful to the
+    // backend's `_eq`/`_neq`/`_contains` comparison.
+    const value = row.value.trim()
+    if (!row.field || value === '') continue
+    spec[row.field] = { op: row.op, value }
   }
   return spec
 }
@@ -87,7 +105,11 @@ function toSpec(): FilterSpec {
 function apply(): void { emit('apply', toSpec()) }
 function clear(): void { draft.value = []; emit('apply', {}) }
 
-const canAdd = computed(() => draft.value.length < props.fields.length)
+// NOT `draft.value.length < props.fields.length`: that undercounts the moment a hydrated row
+// names a field absent from `props.fields` (e.g. a field removed from the schema after the
+// filter was applied) — draft can reach `fields.length` while a real field is still free. Ask
+// the same predicate the field picker itself uses.
+const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
 
 // Exposed for the unit tests: the reka-ui Select does not expose a DOM-driven way to pick an
 // option under jsdom, so the tests drive the draft through these instead of faking clicks.
