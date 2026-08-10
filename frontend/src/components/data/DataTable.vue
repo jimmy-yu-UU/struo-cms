@@ -45,7 +45,9 @@ export function toSortParam(sort: SortEntry[]): string | undefined {
 
 <script setup lang="ts" generic="TRow extends Record<string, unknown>">
 import { FlexRender, useTable } from '@tanstack/vue-table'
+import { useI18n } from 'vue-i18n'
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import SortableHeader from './SortableHeader.vue'
 
 export type DataTableState = {
@@ -64,6 +66,8 @@ const props = defineProps<{
   emptyMessage?: string
 }>()
 const emit = defineEmits<{ 'update:state': [DataTableState] }>()
+
+const { t } = useI18n()
 
 // EVERY manual* flag matters. Miss one and TanStack re-derives that dimension from the
 // single page it was handed — the table animates, but shows the wrong rows.
@@ -96,8 +100,22 @@ function isSortable(columnDef: DataTableColumn<TRow>): boolean {
 </script>
 
 <template>
-  <div class="overflow-x-auto" :aria-busy="props.loading ? 'true' : 'false'">
-    <Table>
+  <div class="relative overflow-x-auto" :aria-busy="props.loading ? 'true' : 'false'">
+    <!--
+      The PrimeVue DataTable this replaced showed a spinner overlay for the same `loading` prop;
+      aria-busy alone is invisible without assistive tech, so a sighted user pressing Search or
+      changing page saw stale rows with no feedback until they swapped. A dimmed body plus a
+      status overlay restores that affordance for every consumer, not just this one screen.
+    -->
+    <div
+      v-if="props.loading"
+      role="status"
+      class="absolute inset-0 z-10 flex items-center justify-center bg-background/60"
+    >
+      <span class="sr-only">{{ t('common.loading') }}</span>
+      <Skeleton class="h-9 w-9 rounded-full" />
+    </div>
+    <Table :class="props.loading ? 'opacity-50' : undefined">
       <TableHeader>
         <TableRow>
           <!--

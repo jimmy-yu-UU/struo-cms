@@ -278,14 +278,19 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `dashboard/`, `media/`, `revisions/`, `rbac/`),
    `composables/`, `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including
    `fieldTypes/`), `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
-2. **Theming**: change both `frontend/src/assets/theme.css` (the OKLch custom-property palette the
-   hand-styled shell reads) and `frontend/src/theme/preset.ts` (the PrimeVue `definePreset(Aura, ...)`
-   mapping onto the same palette) together — they must stay in sync or PrimeVue's own components drift
-   from the hand-styled shell. When overriding a PrimeVue component's built-in style, use a compound
-   selector (`.topbar .lang-switcher`) or a `:deep()` paired with a real ancestor class inside
-   `<style scoped>` — a bare PrimeVue class selector in `theme.css` ties on specificity against
-   PrimeVue's own runtime-injected stylesheet and the winner then depends on injection order, not
-   intent. Avoid `!important`.
+2. **Theming**: for a screen still on PrimeVue, change both `frontend/src/assets/theme.css` (the OKLch
+   custom-property palette those screens read) and `frontend/src/theme/preset.ts` (the PrimeVue
+   `definePreset(Aura, ...)` mapping onto the same palette) together — they must stay in sync or
+   PrimeVue's own components drift from the hand-styled shell. For a screen already migrated to
+   Tailwind/shadcn, the file to edit instead is `frontend/src/assets/tokens.css` (the shadcn semantic
+   custom properties, `--background`/`--primary`/`--radius`/…, on the same `.app-dark` toggle class).
+   **`frontend/src/components/ui/` is vendored, read-only output — never edit it and never `:deep()`
+   into it**; a re-theme changes the token layer or a wrapper component outside `ui/`. When overriding a
+   PrimeVue component's built-in style, use a `:deep()` paired with a real ancestor class inside
+   `<style scoped>` (e.g. `frontend/src/components/ItemForm.vue`'s
+   `.field :deep(.p-select) { ... }`) — a bare PrimeVue class selector in `theme.css` ties on
+   specificity against PrimeVue's own runtime-injected stylesheet and the winner then depends on
+   injection order, not intent. Avoid `!important`.
 3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
    under the right namespace (`common`, `nav`, `dashboard`, `collectionList`, `itemForm`, `media`,
    `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only

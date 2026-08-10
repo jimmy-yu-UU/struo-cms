@@ -31,8 +31,8 @@ i18n、欄位編輯器、品牌設定，以及開發伺服器如何連到 API—
 | 目錄 | 內容 |
 |---|---|
 | `api/` | 每個 REST 資源各有一個薄模組——`apiClient.ts` 是共用、能理解信封格式的 fetch 包裝器；`itemsApi.ts`、`schemaApi.ts`、`filesApi.ts`、`languagesApi.ts`、`rbacApi.ts`、`settingsApi.ts`、`appConfigApi.ts`——都是型別化呼叫，不含任何商業邏輯。 |
-| `assets/` | `theme.css`——OKLch 設計 token 自訂屬性，以及建立在其上的 shell/版面 CSS。 |
-| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`、`ListToolbar`、`TableFooter`——每個列表/表單 view 共用)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`dashboard/`、`media/`、`revisions/`、`rbac/`。 |
+| `assets/` | `theme.css`——OKLch 調色盤 token(外加少數 `--legacy-*` 前綴的 token)，供尚未遷移離開 PrimeVue 的畫面讀取；原本同一個檔案裡的 shell/版面 CSS(`.shell`、`.topbar`、`.sidebar`、`.nav-item`……)已經在那些畫面改用 Tailwind utility 之後被刪除。`tokens.css`——Tailwind v4 的進入點(`@import "tailwindcss"`)，以及已遷移畫面使用的 shadcn 語意 token 層(`--background`、`--primary`、`--radius`……)。 |
+| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`，以及 `ListToolbar`/`TableFooter`——`MediaLibraryView` 仍在使用，但 `CollectionListView` 已改用 `data/` 的基元)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`dashboard/`、`media/`、`revisions/`、`rbac/`。 |
 | `composables/` | 跨切面的響應式邏輯，例如 `useDashboardData.ts`。 |
 | `i18n/` | `index.ts`——`vue-i18n` 執行個體(`legacy: false`)，接到 `locales/`。 |
 | `layouts/` | `AppShell.vue`——每個已驗證路由都渲染於其中的 topbar + 側邊欄 + 內容格線。 |
@@ -72,31 +72,43 @@ app.use(PrimeVue, { theme: { preset: StruoPreset, options: { darkModeSelector: '
 另外手動保持同步。初始模式會在 Pinia/Vue 都還不存在之前，於 `theme/resolveInitialTheme.ts` 中解析：
 先看 `localStorage` 中有沒有已儲存的 `struo.theme`，否則看 `prefers-color-scheme`，否則使用淺色模式。
 
-要重新換主題：編輯 `preset.ts` 中的 `struoPresetConfig` 語意 token(把 `sky`/`slate` 換成不同的
-PrimeVue 調色盤 token，或手寫 OKLch 值)，並同步編輯 `theme.css` 的 `:root`/`.app-dark` 區塊中對應的
-自訂屬性。第 3 章的 `Branding:Name`/`Branding:LogoUrl` 只會觸及產品名稱與 logo，永遠不會觸及色彩調色盤
-——調色盤是原始碼中的樣板預設值，而不是一個逐部署的設定鍵。
+要為一個仍在 PrimeVue 上的畫面重新換主題：編輯 `preset.ts` 中的 `struoPresetConfig` 語意 token(把
+`sky`/`slate` 換成不同的 PrimeVue 調色盤 token，或手寫 OKLch 值)，並同步編輯 `theme.css` 的
+`:root`/`.app-dark` 區塊中對應的自訂屬性。
+
+對於已經遷移到 Tailwind/shadcn 的畫面，要改編輯的 token 層是**`frontend/src/assets/tokens.css`**——
+shadcn 的語意自訂屬性(`--background`、`--foreground`、`--primary`、`--radius`……)，在 `:root` 上為淺色
+宣告一次，並在 `.app-dark`(與 `preset.ts`/`theme.css` 相同的切換 class)上為深色重新宣告一次。
+**`frontend/src/components/ui/` 是供應商生成的唯讀輸出**(不得編輯、也不得對它 `:deep()`)——重新換
+主題要改的是 token 層(`tokens.css`)，或是一個位於 `ui/` 之外、組合其原子元件的包裝元件，絕不是
+`ui/` 內部的檔案。
+
+第 3 章的 `Branding:Name`/`Branding:LogoUrl` 只會觸及產品名稱與 logo，永遠不會觸及色彩調色盤——調色盤
+是原始碼中的樣板預設值，而不是一個逐部署的設定鍵。
 
 ## 覆寫 PrimeVue 內建的樣式
 
 **注意：** `theme.css` 中一條相同特異度 (specificity) 的規則，並不保證能穩定勝過 PrimeVue 元件自身於
 執行期注入的樣式。PrimeVue 是以它自己的樣式表出貨元件 CSS，而不是作為 `theme.css` 層疊的一部分——
 `theme.css` 中一條裸的 `.p-select { … }`，在特異度上與 PrimeVue 自己的 `.p-select` 規則打平，而誰
-勝出就取決於注入/來源順序，而不是意圖。這個問題已經在這個程式碼庫中發生過一次：`theme.css` 中緊接在
-`.topbar .lang-switcher { display: none; }` 上方的註解，就寫明它需要「0,2,0 的特異度：必須勝過
-PrimeVue 執行期注入的 `.p-select{display:inline-flex}`」。
+勝出就取決於注入/來源順序，而不是意圖。這個問題已經在這個程式碼庫中發生過一次，就在 UI 語言切換器上：
+`theme.css` 曾經有一條 `.topbar .lang-switcher { display: none; }` 規則，其註解寫明它需要「0,2,0 的
+特異度：必須勝過 PrimeVue 執行期注入的 `.p-select{display:inline-flex}`」。`UiLanguageSwitcher.vue`
+後來已經從 PrimeVue 的 `Select` 改用 shadcn/reka-ui 的版本(`@/components/ui/select`)，並改成在自己的
+trigger 上用一個 Tailwind utility(`max-[520px]:hidden`)在最窄的視窗寬度下隱藏自己——一旦元件本身
+不是 PrimeVue 的，就不需要打這場特異度戰了。
 
-**正確的做法：用一個複合選擇器來拉高特異度**，而不是一個裸的 PrimeVue class。這個程式碼庫裡已經用了
-兩種模式：
-
-- 一個在未 scoped 的 `theme.css` 中的普通複合選擇器——`.topbar .lang-switcher`(兩個 class，特異度
-  `0,2,0`)勝過裸的 `.p-select`(`0,1,0`)。
-- 在一個 `<style scoped>` 區塊之中，把一個 component-scoped 的 `:deep()` 搭配一個真正的祖先 class——
-  `frontend/src/components/ItemForm.vue` 的
-  `.field :deep(.p-select), .field :deep(.p-multiselect), .field :deep(.p-treeselect) { width: 100%;
-  max-width: 480px; }`，或是 `LoginView.vue` 的
-  `.field :deep(.p-inputtext), .field :deep(.p-password) { … }`。`:deep()` 本身並不會拉高特異度——
-  要把它搭配一個祖先 class 才行。
+**這個技巧、這一節，都只適用於仍在 PrimeVue 上的畫面。** 一個已經遷移到 Tailwind/shadcn 的畫面，
+本來就沒有 PrimeVue class 可打；用純 Tailwind utility 或 `tokens.css` 來設計樣式即可。對於仍在
+PrimeVue 上的畫面，**用一個複合選擇器來拉高特異度**，而不是一個裸的 PrimeVue class——這個程式碼庫裡
+現在還活著的模式，是在一個 `<style scoped>` 區塊之中，把一個 component-scoped 的 `:deep()` 搭配一個
+真正的祖先 class：`frontend/src/components/ItemForm.vue` 的
+`.field :deep(.p-select), .field :deep(.p-multiselect), .field :deep(.p-treeselect) { width: 100%;
+max-width: 480px; }`，或是 `LoginView.vue` 的
+`.field :deep(.p-inputtext), .field :deep(.p-password) { … }`。`:deep()` 本身並不會拉高特異度——
+要把它搭配一個祖先 class 才行。(同一個想法也可以不用 `:deep()`，改成在未 scoped 的 `theme.css` 中寫
+一個普通複合選擇器，用於不在 `<style scoped>` 區塊之內的規則——上面那條已刪除的
+`.topbar .lang-switcher` 規則就是那個變體——但這個程式碼庫目前已經沒有這個變體存活的範例了。)
 
 在這裡要避免使用 `!important`：它贏得了眼前這一次覆寫，卻讓*下一次*覆寫——不管是你自己的還是某個 fork
 的——在更糟的一層上打同一場仗。
@@ -115,7 +127,8 @@ PrimeVue 執行期注入的 `.p-select{display:inline-flex}`」。
 會在任何 store 存在之前先被解析(`localStorage['struo.uiLocale']`，否則使用寫死的預設值
 `'zh-TW'`)，接著在執行期由 `uiLocaleStore` 這個 Pinia store 擁有：`set(locale)` 會更新
 `i18n.global.locale.value`，設定 `<html lang>`，並把選擇持久化回 `localStorage`。
-`UiLanguageSwitcher.vue` 是唯一會呼叫它的地方，由一個 PrimeVue `Select` 驅動，其兩個選項分別讀取
+`UiLanguageSwitcher.vue` 是唯一會呼叫它的地方，由 shadcn/reka-ui 的 `Select` 驅動
+(`@/components/ui/select`，不是 PrimeVue 的)，其兩個選項分別讀取
 `t('lang.zh-TW')` / `t('lang.en')`。
 
 **要新增一個 UI 語言**(例如日文)：

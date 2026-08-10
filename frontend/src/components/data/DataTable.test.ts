@@ -63,6 +63,29 @@ describe('DataTable', () => {
     expect(mountTable({ rows: [], total: 0, emptyMessage: 'Nothing here' }).text()).toContain('Nothing here')
   })
 
+  // The PrimeVue DataTable this replaced rendered a spinner overlay for the same `loading` prop;
+  // this component only wired it to aria-busy, which is invisible without assistive tech. A
+  // loading affordance must actually render something a sighted user can see.
+  it('renders a visible loading indicator when loading is true', () => {
+    expect(mountTable({ loading: true }).find('[role="status"]').exists()).toBe(true)
+  })
+
+  it('renders no loading indicator when loading is false or unset', () => {
+    expect(mountTable({ loading: false }).find('[role="status"]').exists()).toBe(false)
+    expect(mountTable().find('[role="status"]').exists()).toBe(false)
+  })
+
+  it('keeps rendering the (stale) rows underneath the loading indicator, not a blank table', () => {
+    const w = mountTable({ loading: true })
+    expect(w.text()).toContain('Alpha')
+    expect(w.text()).toContain('Beta')
+  })
+
+  it('still marks the scroll wrapper aria-busy while loading', () => {
+    expect(mountTable({ loading: true }).find('.overflow-x-auto').attributes('aria-busy')).toBe('true')
+    expect(mountTable({ loading: false }).find('.overflow-x-auto').attributes('aria-busy')).toBe('false')
+  })
+
   // The single most dangerous defect in this component: with manual* unset, TanStack would
   // re-sort the already-paginated page client-side, so the UI would move but show wrong data.
   it('never reorders rows client-side', async () => {
