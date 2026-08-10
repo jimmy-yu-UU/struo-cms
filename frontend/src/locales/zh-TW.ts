@@ -14,6 +14,9 @@ export default {
     deleteFailed: '刪除失敗。',
     actionFailed: '操作失敗。',
     confirmDefaultHeader: '請確認',
+    sortAscending: '遞增排序',
+    sortDescending: '遞減排序',
+    clearSort: '清除排序',
   },
   confirm: {
     unsavedHeader: '尚未儲存的變更',

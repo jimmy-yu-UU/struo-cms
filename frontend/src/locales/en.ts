@@ -14,6 +14,9 @@ export default {
     deleteFailed: 'Delete failed.',
     actionFailed: 'Action failed.',
     confirmDefaultHeader: 'Please confirm',
+    sortAscending: 'Sort ascending',
+    sortDescending: 'Sort descending',
+    clearSort: 'Clear sorting',
   },
   confirm: {
     unsavedHeader: 'Unsaved changes',
