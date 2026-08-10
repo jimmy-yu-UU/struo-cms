@@ -263,4 +263,16 @@ export default {
       linkPrompt: '連結網址', insertImageTitle: '插入圖片',
     },
   },
+  filterBuilder: {
+    addCondition: '新增條件',
+    clear: '清除條件',
+    apply: '搜尋',
+    field: '欄位',
+    operator: '運算子',
+    value: '值',
+    remove: '移除條件',
+    opEq: '等於',
+    opNeq: '不等於',
+    opContains: '包含',
+  },
 }

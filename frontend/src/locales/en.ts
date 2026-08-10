@@ -263,4 +263,16 @@ export default {
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
     },
   },
+  filterBuilder: {
+    addCondition: 'Add condition',
+    clear: 'Clear conditions',
+    apply: 'Search',
+    field: 'Field',
+    operator: 'Operator',
+    value: 'Value',
+    remove: 'Remove condition',
+    opEq: 'equals',
+    opNeq: 'does not equal',
+    opContains: 'contains',
+  },
 }
