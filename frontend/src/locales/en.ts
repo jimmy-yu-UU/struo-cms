@@ -17,6 +17,8 @@ export default {
     sortAscending: 'Sort ascending',
     sortDescending: 'Sort descending',
     clearSort: 'Clear sorting',
+    previous: 'Previous page',
+    next: 'Next page',
   },
   confirm: {
     unsavedHeader: 'Unsaved changes',
