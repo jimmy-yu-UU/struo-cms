@@ -17,6 +17,8 @@ export default {
     sortAscending: '遞增排序',
     sortDescending: '遞減排序',
     clearSort: '清除排序',
+    previous: '上一頁',
+    next: '下一頁',
   },
   confirm: {
     unsavedHeader: '尚未儲存的變更',
