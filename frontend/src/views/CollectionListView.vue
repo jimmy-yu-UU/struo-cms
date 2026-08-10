@@ -7,7 +7,7 @@ import { Plus, Pencil, Eye, Trash2, Undo2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import DataTable, { type DataTableColumn, type DataTableState } from '@/components/data/DataTable.vue'
+import DataTable, { type DataTableColumn, type DataTableState, toSortParam } from '@/components/data/DataTable.vue'
 import DataTablePagination from '@/components/data/DataTablePagination.vue'
 import FilterBuilder from '@/components/data/FilterBuilder.vue'
 import PageHeader from '../components/common/PageHeader.vue'
@@ -181,9 +181,7 @@ async function loadItems(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    // Backend takes one field, optionally minus-prefixed: "title" / "-title".
-    const active = tableState.value.sort[0]
-    const sort = active ? (active.desc ? `-${active.id}` : active.id) : undefined
+    const sort = toSortParam(tableState.value.sort)
     await langStore.load()
     const res = await itemsApi.list(name.value, {
       page: tableState.value.page,
