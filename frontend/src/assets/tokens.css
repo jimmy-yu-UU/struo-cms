@@ -5,6 +5,7 @@
    NAMING TRAP: shadcn's --accent is the hover / focus / active SURFACE, not the brand
    colour. Brand sky is --primary. Binding sky to --accent turns every hover surface blue. */
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* shadcn defaults to `.dark`; this app has always toggled `.app-dark` and persists it in
    localStorage['struo.theme'] (src/theme/resolveInitialTheme.ts). Re-point the variant
@@ -92,6 +93,13 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  /* --destructive-foreground is deliberately NOT declared. Its only referencing call site
+     is calendar/CalendarCellTrigger.vue's data-unavailable text-destructive-foreground class,
+     on a ghost-variant button base — ghost has no background, so that text sits directly on
+     --background. shadcn's zinc default for this token is near-white, which would render
+     unavailable dates INVISIBLE on the white light-mode surface. Leaving it undeclared makes
+     the utility a silent no-op: the cell keeps inherited --foreground, and line-through still
+     communicates the disabled state. Do not "helpfully" add shadcn's default value here. */
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);

@@ -72,4 +72,11 @@ describe('tokens.css', () => {
       expect(theme, `@theme inline is missing --color-${slot}`).toContain(`--color-${slot}: var(--${slot})`)
     }
   })
+
+  // 12 vendored components use animate-in / slide-in-from-* / zoom-* utilities that only exist
+  // if this plugin is imported. Tailwind v4 emits nothing for an undefined utility, so losing
+  // this import is silent — hence a test rather than a comment.
+  it('imports tw-animate-css so the vendored components\' transitions exist', () => {
+    expect(css).toContain('@import "tw-animate-css"')
+  })
 })
