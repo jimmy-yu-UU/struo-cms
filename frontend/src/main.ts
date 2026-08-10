@@ -8,6 +8,9 @@ import 'primeicons/primeicons.css'
 // remaining hand-written PrimeVue-era rules still win during the coexistence period.
 import './assets/tokens.css'
 import './assets/theme.css'
+// vue-sonner's lib/index.js never imports its own stylesheet, so without this the toaster
+// (mounted in Task 10) would render completely unstyled.
+import 'vue-sonner/style.css'
 import App from './App.vue'
 import router from './router'
 import { apiClient } from './api/apiClient'
