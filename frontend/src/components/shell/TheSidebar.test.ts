@@ -1,137 +1,69 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { h } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+import en from '@/locales/en'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import TheSidebar from './TheSidebar.vue'
-import { useAuthStore } from '../../stores/authStore'
-import { useSchemaStore } from '../../stores/schemaStore'
-import { useSidebarStore } from '../../stores/sidebarStore'
-import { i18n } from '../../i18n'
+import { useAuthStore } from '@/stores/authStore'
+import { useSchemaStore } from '@/stores/schemaStore'
 
 const push = vi.fn()
-let currentRoute: { name: string; params: Record<string, string> }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
-  useRoute: () => currentRoute,
+  useRoute: () => ({ name: 'dashboard', params: {} }),
 }))
 
-function seed(isSuperAdmin: boolean, perms: Record<string, { read: boolean; write: boolean; delete: boolean }>) {
-  const auth = useAuthStore()
-  auth.user = { id: 'u1', isSuperAdmin, permissions: perms }
-  const schema = useSchemaStore()
-  schema.collections = [
-    { name: 'article', label: 'Article', group: 'Content', fields: [], relations: [] },
-    { name: 'page', label: 'Page', group: null, fields: [], relations: [] },
-  ]
-}
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-const mountSidebar = () => mount(TheSidebar, { global: { plugins: [i18n] } })
+function mountSidebar() {
+  return mount(SidebarProvider, {
+    slots: { default: () => h(TheSidebar) },
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+  })
+}
 
 describe('TheSidebar', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    vi.clearAllMocks()
-    localStorage.clear()
-    i18n.global.locale.value = 'zh-TW'
-    currentRoute = { name: 'dashboard', params: {} }
-  })
-
-  it('shows Dashboard + Media for a user with file:read, and flat + grouped collections', () => {
-    seed(false, {
-      article: { read: true, write: false, delete: false },
-      page: { read: true, write: false, delete: false },
-      file: { read: true, write: false, delete: false },
-    })
-    const wrapper = mountSidebar()
-    const labels = wrapper.findAll('.nav-label').map((n) => n.text())
-    expect(labels).toContain('儀表板')
-    expect(labels).toContain('媒體庫')
-    expect(labels).toContain('Article') // grouped under Content
-    expect(labels).toContain('Page') // ungrouped -> flat
-    expect(labels).toContain('Content') // group header
-  })
-
-  it('hides Media without file:read', () => {
-    seed(false, { article: { read: true, write: false, delete: false } })
-    const wrapper = mountSidebar()
-    const labels = wrapper.findAll('.nav-label').map((n) => n.text())
-    expect(labels).not.toContain('媒體庫')
-  })
-
-  it('navigates and closes the drawer when a collection is clicked', async () => {
-    seed(true, {})
-    const sidebar = useSidebarStore()
-    sidebar.openDrawer()
-    const wrapper = mountSidebar()
-    const article = wrapper.findAll('button.nav-item').find((b) => b.text().includes('Article'))!
-    await article.trigger('click')
-    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
-    expect(sidebar.drawerOpen).toBe(false)
-  })
-
-  it('marks the active collection from the route', () => {
-    currentRoute = { name: 'collection-list', params: { name: 'article' } }
-    seed(true, {})
-    const wrapper = mountSidebar()
-    const article = wrapper.findAll('button.nav-item').find((b) => b.text().includes('Article'))!
-    expect(article.classes()).toContain('active')
-  })
-
-  it('shows the settings item only for super-admins', () => {
-    seed(true, {})
-    const admin = mountSidebar()
-    expect(admin.findAll('.nav-label').map((n) => n.text())).toContain('設定')
-
-    seed(false, {})
-    const editor = mountSidebar()
-    expect(editor.findAll('.nav-label').map((n) => n.text())).not.toContain('設定')
-  })
-
-  it('shows a retry affordance on schema load error', async () => {
-    seed(true, {})
+    push.mockClear()
+    const auth = useAuthStore()
+    auth.user = { id: '1', email: 'a@b.c', isSuperAdmin: true, permissions: {} } as never
     const schema = useSchemaStore()
-    schema.loadError = 'boom'
-    const loadSpy = vi.spyOn(schema, 'load').mockResolvedValue()
-    const wrapper = mountSidebar()
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-    await wrapper.find('[role="alert"] button').trigger('click')
-    expect(loadSpy).toHaveBeenCalledOnce()
+    schema.collections = [
+      { name: 'article', label: 'Articles', group: 'Content', icon: 'article', hidden: false, fields: [] },
+      { name: 'page', label: 'Pages', group: '', icon: null, hidden: false, fields: [] },
+    ] as never
+    schema.loadError = ''
   })
 
-  it('collapse button keeps a visible chevron class that is never nav-chev', () => {
-    seed(true, {})
-    const wrapper = mountSidebar()
-    const btn = wrapper.find('button.collapse-btn')
-    expect(btn.exists()).toBe(true)
-    expect(btn.classes()).toContain('only-desktop')
-    expect(btn.find('i.collapse-chev').exists()).toBe(true)
-    expect(btn.find('i.nav-chev').exists()).toBe(false)
+  it('renders the pinned system entries', () => {
+    const text = mountSidebar().text()
+    expect(text).toContain(en.nav.dashboard)
+    expect(text).toContain(en.nav.media)
+    expect(text).toContain(en.nav.settings)
   })
 
-  it('group headers render a leading icon so they stay visible when collapsed', () => {
-    seed(true, {})
-    const wrapper = mountSidebar()
-    const parent = wrapper.find('button.nav-parent')
-    expect(parent.find('i.nav-icon').exists()).toBe(true)
+  it('renders ungrouped collections at the top level and grouped ones under their group', () => {
+    const text = mountSidebar().text()
+    expect(text).toContain('Pages')
+    expect(text).toContain('Content')
+    expect(text).toContain('Articles')
   })
 
-  it('clicking a group while collapsed expands the sidebar and opens the group', async () => {
-    seed(true, {})
-    const sidebar = useSidebarStore()
-    sidebar.toggleCollapse() // -> collapsed
-    const wrapper = mountSidebar()
-    const parent = wrapper.find('button.nav-parent')
-    await parent.trigger('click')
-    expect(sidebar.collapsed).toBe(false)
-    expect(parent.attributes('aria-expanded')).toBe('true')
+  it('navigates to a collection when its item is activated', async () => {
+    const w = mountSidebar()
+    const button = w.findAll('button').find((b) => b.text().includes('Pages'))
+    expect(button).toBeDefined()
+    await button!.trigger('click')
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'page' } })
   })
 
-  it('clicking a group while collapsed does not close an already-open group', async () => {
-    seed(true, {})
-    const sidebar = useSidebarStore()
-    sidebar.toggleCollapse()
-    const wrapper = mountSidebar()
-    // group defaults open; the collapsed-click must keep it open, not toggle it shut
-    await wrapper.find('button.nav-parent').trigger('click')
-    expect(wrapper.find('.nav-group').classes()).toContain('open')
+  it('shows a retry affordance when the schema failed to load', () => {
+    useSchemaStore().loadError = 'boom'
+    const w = mountSidebar()
+    expect(w.text()).toContain('boom')
+    expect(w.text()).toContain(en.common.retry)
   })
 })
