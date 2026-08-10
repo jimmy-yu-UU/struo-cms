@@ -60,6 +60,17 @@ function fieldByLabel(page: Page, label: string) {
 function titleInput(page: Page) {
   return translatableFieldByLabel(page, 'Title').locator('input')
 }
+// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
+// queries the server only on an explicit Search press (or Enter in the value input), never on a
+// keystroke. Add a condition, pick the field by its column label, type the value, then press
+// Search.
+async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('combobox', { name: 'Field' }).click()
+  await page.getByRole('option', { name: fieldLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: 'Value' }).fill(value)
+  await page.getByRole('button', { name: 'Search' }).click()
+}
 // Status is a Select (role="combobox" trigger + role="option" overlay), not a text input.
 async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
   const field = fieldByLabel(page, 'Status')
@@ -84,12 +95,12 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
 
   // Populated dev DB -> isolate the new row by its searchable Title, then open it via the row's
   // explicit Edit action (batch A removed row-click navigation from the collection list). The
-  // search is debounced + server-side, so wait for the table to settle to the single matching row
-  // before scoping into it — otherwise the row locator can transiently match the still-unfiltered
-  // page (trash.spec.ts idiom).
-  await page.getByPlaceholder('Search').fill(title)
+  // search only queries on the explicit Search press, so wait for the table to settle to the
+  // single matching row before scoping into it — otherwise the row locator can transiently match
+  // the still-unfiltered page (trash.spec.ts idiom).
+  await searchByField(page, 'Title', title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   // Wait until init()'s async GET has populated the form: once Title shows the value, setModel has

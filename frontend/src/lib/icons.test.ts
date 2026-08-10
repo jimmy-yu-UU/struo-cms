@@ -62,9 +62,10 @@ describe('resolveIcon', () => {
   })
 
   // A class string may carry other utility classes alongside the icon token, in either order —
-  // MediaLibraryView.vue:283 puts the utility class after the icon ("pi pi-angle-right
-  // media-crumb__sep"); TheSidebar.vue and MediaFolderCards.vue put it before ("nav-icon pi
-  // pi-folder"). A trailing .pop() would silently pick the wrong word in the first case.
+  // MediaLibraryView.vue's `.media-crumb__sep` breadcrumb separator puts the utility class after
+  // the icon ("pi pi-angle-right media-crumb__sep"); TheSidebar.vue and MediaFolderCards.vue put
+  // it before ("nav-icon pi pi-folder"). A trailing .pop() would silently pick the wrong word in
+  // the first case.
   it('picks the pi- token out of a class string regardless of position', () => {
     expect(resolveIcon('nav-icon pi pi-folder')).toBe(Folder)
     expect(resolveIcon('pi pi-angle-right media-crumb__sep')).toBe(ChevronRight)

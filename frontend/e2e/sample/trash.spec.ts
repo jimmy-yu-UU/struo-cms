@@ -29,6 +29,17 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 function rowByTitle(page: Page, title: string) {
   return page.getByRole('row', { has: page.getByText(title, { exact: true }) })
 }
+// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
+// queries the server only on an explicit Search press (or Enter in the value input), never on a
+// keystroke. Add a condition, pick the field by its column label, type the value, then press
+// Search.
+async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('combobox', { name: 'Field' }).click()
+  await page.getByRole('option', { name: fieldLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: 'Value' }).fill(value)
+  await page.getByRole('button', { name: 'Search' }).click()
+}
 
 test('soft-delete an article, see it in trash, restore, then purge', async ({ page }) => {
   await login(page)
@@ -44,18 +55,22 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
   await expect(page).toHaveURL(/\/collections\/article$/)
 
   // Populated dev DB → the new row may not be on list page 1. Title is searchable, so
-  // filter to isolate it. The search state persists across the Active/Trash switch.
-  await page.getByPlaceholder('Search').fill(title)
+  // filter to isolate it. The applied filter persists across the Active/Trash switch.
+  await searchByField(page, 'Title', title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
-  // The search is debounced + server-side, so the list transitions unfiltered (up to a full page of
-  // rows) → filtered. Acting during that transition lets a rowByTitle() action fire against the
+  // The list transitions unfiltered (up to a full page of rows) → filtered once Search is
+  // pressed. Acting during that transition lets a rowByTitle() action fire against the
   // mid-re-render DataTable and hit a strict-mode ambiguity. The stamp is unique, so wait for the
   // list to settle to exactly the one matching row before any inline row action.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
 
-  // Soft-delete from the Active list (inline action). Confirm = "Yes".
+  // Soft-delete from the Active list (inline action). CollectionListView's row actions now go
+  // through the store-backed ConfirmHost (Task 14), not PrimeVue's ConfirmDialog — its default
+  // accept label (no explicit acceptLabel passed by lib/deleteAction.ts) is common.confirm =
+  // "Confirm", not PrimeVue's "Yes". ItemFormView's own delete/unsaved-guard dialogs elsewhere in
+  // this suite are untouched by this plan and still say "Yes"/"No".
   await rowByTitle(page, title).getByRole('button', { name: 'Delete', exact: true }).click()
-  await page.getByRole('button', { name: 'Yes' }).click()
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 
   // Switch to Trash — the row is there.
@@ -72,10 +87,10 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
 
   // Soft-delete again, then purge it from Trash.
   await rowByTitle(page, title).getByRole('button', { name: 'Delete', exact: true }).click()
-  await page.getByRole('button', { name: 'Yes' }).click()
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await page.getByText('Trash', { exact: true }).click()
   await expect(page.getByText(title, { exact: true })).toBeVisible()
   await rowByTitle(page, title).getByRole('button', { name: 'Delete permanently', exact: true }).click()
-  await page.getByRole('button', { name: 'Yes' }).click()
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })

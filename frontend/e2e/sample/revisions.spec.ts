@@ -74,15 +74,27 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
   return id
 }
 
-// Populated dev DB + pagination: isolate the row by its searchable Title (server-side search), then
-// open it and wait for init()'s async GET to populate the form before any field interaction.
+// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
+// queries the server only on an explicit Search press (or Enter in the value input), never on a
+// keystroke. Add a condition, pick the field by its column label, type the value, then press
+// Search.
+async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('combobox', { name: 'Field' }).click()
+  await page.getByRole('option', { name: fieldLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: 'Value' }).fill(value)
+  await page.getByRole('button', { name: 'Search' }).click()
+}
+
+// Populated dev DB + pagination: isolate the row by its searchable Title, then open it and wait
+// for init()'s async GET to populate the form before any field interaction.
 async function openByTitle(page: Page, title: string): Promise<void> {
-  await page.getByPlaceholder('Search').fill(title)
+  await searchByField(page, 'Title', title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
   // The collection list has no row-click navigation — open via the row's explicit
-  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // Edit action instead. Wait for the filtered search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   await expect(titleInput(page)).toHaveValue(title)

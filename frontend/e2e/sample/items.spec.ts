@@ -56,17 +56,29 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
   await page.getByRole('option', { name: optionLabel }).click()
 }
 
+// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
+// queries the server only on an explicit Search press (or Enter in the value input), never on a
+// keystroke. Add a condition, pick the field by its column label, type the value, then press
+// Search.
+async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('combobox', { name: 'Field' }).click()
+  await page.getByRole('option', { name: fieldLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: 'Value' }).fill(value)
+  await page.getByRole('button', { name: 'Search' }).click()
+}
+
 // The dev DB is populated and the article list is paginated, so a freshly-created row is not
-// guaranteed to be on page 1. Isolate it by its searchable Title (server-side search) first — the
-// list's Search box resets on every remount, so re-search each time we return to the list. Mirrors
-// the create-then-open idiom in conflict.spec.ts / unsaved-guard.spec.ts / trash.spec.ts.
+// guaranteed to be on page 1. Isolate it by its searchable Title first — FilterBuilder re-hydrates
+// empty on every remount, so re-search each time we return to the list. Mirrors the
+// create-then-open idiom in conflict.spec.ts / unsaved-guard.spec.ts / trash.spec.ts.
 async function openByTitle(page: Page, title: string): Promise<void> {
-  await page.getByPlaceholder('Search').fill(title)
+  await searchByField(page, 'Title', title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
   // Row-click navigation was removed from the collection list — open via the row's explicit
-  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // Edit action instead. Wait for the filtered search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
   // Wait until init()'s async GET has populated the form before any field interaction — the URL
@@ -114,11 +126,11 @@ test('create, edit, then delete an article', async ({ page }) => {
   // ItemFormView.vue's confirm.require() doesn't override it.
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await page.getByPlaceholder('Search').fill(title)
-  // Count-settle (trash.spec.ts idiom): the debounced server-side search transitions the tbody from
-  // the unfiltered page to the filtered result. The deleted, uniquely-stamped title matches nothing,
+  await searchByField(page, 'Title', title)
+  // Count-settle (trash.spec.ts idiom): the filtered search transitions the tbody from the
+  // unfiltered page to the filtered result. The deleted, uniquely-stamped title matches nothing,
   // so wait for the table to settle to its single "No records." empty row before asserting the title
   // is gone — otherwise the assertion could pass against the still-transitioning unfiltered list.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })

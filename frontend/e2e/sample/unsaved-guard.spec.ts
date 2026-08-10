@@ -42,6 +42,17 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
   await field.getByRole('combobox').click()
   await page.getByRole('option', { name: optionLabel }).click()
 }
+// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
+// queries the server only on an explicit Search press (or Enter in the value input), never on a
+// keystroke. Add a condition, pick the field by its column label, type the value, then press
+// Search.
+async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('combobox', { name: 'Field' }).click()
+  await page.getByRole('option', { name: fieldLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: 'Value' }).fill(value)
+  await page.getByRole('button', { name: 'Search' }).click()
+}
 
 // Create an article WITH a RichText body (so the reopened form exercises TipTap load), then open it.
 // Returns the item id and leaves the page on the freshly-loaded (clean) edit form.
@@ -56,12 +67,12 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
 
-  await page.getByPlaceholder('Search').fill(title)
+  await searchByField(page, 'Title', title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
   // The collection list has no row-click navigation — open via the row's explicit
-  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // Edit action instead. Wait for the filtered search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   // Wait until init() finished loading (Title populated) so the dirty baseline is captured against
@@ -81,12 +92,12 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/category$/)
 
-  await page.getByPlaceholder('Search').fill(name)
+  await searchByField(page, 'Name', name)
   await expect(page.getByText(name, { exact: true })).toBeVisible()
   // The collection list has no row-click navigation — open via the row's explicit
-  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // Edit action instead. Wait for the filtered search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(name, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[0-9a-fA-F-]+$/)
   await expect(fieldByLabel(page, 'Name').locator('input')).toHaveValue(name)
@@ -95,12 +106,13 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
   return id
 }
 
-// Click a collection link in the sidebar. The sidebar is the <aside class="sidebar">
-// (the <nav> element now belongs to the breadcrumb), and collection links render as plain
-// buttons (SidebarNavItem) rather than a PrimeVue PanelMenu. Groups mount expanded by default
+// Click a collection link in the sidebar. Task 8's shadcn Sidebar rebuild dropped the <aside> in
+// favour of a real <nav aria-label="Main navigation"> landmark wrapping the nav groups (there is
+// no longer a bare "the sidebar" element to select by tag/class), and collection links render as
+// plain buttons (SidebarNavItem) rather than a PrimeVue PanelMenu. Groups mount expanded by default
 // (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh mount.
 async function navSidebar(page: Page, label: string): Promise<void> {
-  const sidebar = page.locator('aside.sidebar')
+  const sidebar = page.getByRole('navigation', { name: 'Main navigation' })
   const item = sidebar.getByRole('button', { name: label, exact: true })
   await expect(item).toBeVisible()
   await item.click()
