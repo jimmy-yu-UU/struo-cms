@@ -14,8 +14,6 @@ export default {
     deleteFailed: 'Delete failed.',
     actionFailed: 'Action failed.',
     confirmDefaultHeader: 'Please confirm',
-    confirmAccept: 'Confirm',
-    confirmReject: 'Cancel',
   },
   confirm: {
     unsavedHeader: 'Unsaved changes',

@@ -39,4 +39,22 @@ describe('confirmStore', () => {
     store.accept()
     await expect(second).resolves.toBe(true)
   })
+
+  // A click handler bound to a request that has since been superseded must not be able to
+  // settle the *new* request — accept()/reject() take the id the caller captured when it
+  // bound to the request it meant to answer, and settle() ignores a mismatched one.
+  it('ignores an accept/reject bound to a superseded request id', async () => {
+    const store = useConfirmStore()
+    const first = store.ask({ message: 'First' })
+    const staleId = store.requestId
+    const second = store.ask({ message: 'Second' })
+    await expect(first).resolves.toBe(false)
+
+    store.accept(staleId)
+    expect(store.open).toBe(true)
+    expect(store.request?.message).toBe('Second')
+
+    store.reject(store.requestId)
+    await expect(second).resolves.toBe(false)
+  })
 })
