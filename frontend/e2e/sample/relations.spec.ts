@@ -126,15 +126,27 @@ async function pickFirstTag(page: Page): Promise<void> {
   await page.keyboard.press('Escape')
 }
 
+// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
+// queries the server only on an explicit Search press (or Enter in the value input), never on a
+// keystroke. Add a condition, pick the field by its column label, type the value, then press
+// Search.
+async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('combobox', { name: 'Field' }).click()
+  await page.getByRole('option', { name: fieldLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: 'Value' }).fill(value)
+  await page.getByRole('button', { name: 'Search' }).click()
+}
+
 // Populated dev DB + pagination: isolate the article row by its searchable Title before opening
-// (the list's Search box resets on every remount). Mirrors conflict.spec.ts / trash.spec.ts.
+// (FilterBuilder re-hydrates empty on every remount). Mirrors conflict.spec.ts / trash.spec.ts.
 async function openArticleByTitle(page: Page, title: string): Promise<void> {
-  await page.getByPlaceholder('Search').fill(title)
+  await searchByField(page, 'Title', title)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
   // The collection list has no row-click navigation — open via the row's explicit
-  // Edit action instead. Wait for the debounced search to settle to the single matching row first
+  // Edit action instead. Wait for the filtered search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
   // Wait until init()'s async GET has populated the form before any field interaction. Without this,
@@ -194,9 +206,9 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // link, so browse the Category collection list and isolate the assigned category by its Name.
   await page.goto('/collections/category')
   await expect(page).toHaveURL(/\/collections\/category$/)
-  await page.getByPlaceholder('Search').fill(categoryName)
+  await searchByField(page, 'Name', categoryName)
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(categoryName, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[^/]+$/)
   await expect(fieldByLabel(page, 'Articles').getByText(title)).toBeVisible()
@@ -209,11 +221,11 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // ItemFormView.vue's confirm.require() doesn't override it.
   await page.getByRole('button', { name: 'Yes' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
-  await page.getByPlaceholder('Search').fill(title)
-  // Count-settle (trash.spec.ts idiom): wait for the debounced server-side search to settle the tbody
-  // to its single "No records." empty row before asserting the deleted title is gone — otherwise the
+  await searchByField(page, 'Title', title)
+  // Count-settle (trash.spec.ts idiom): wait for the filtered search to settle the tbody to its
+  // single "No records." empty row before asserting the deleted title is gone — otherwise the
   // assertion could pass against the still-transitioning unfiltered list.
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
 
@@ -256,9 +268,9 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
 
   // Open the assigned category; wait for its form + Articles RelatedList row to load.
   await page.goto('/collections/category')
-  await page.getByPlaceholder('Search').fill(categoryName)
+  await searchByField(page, 'Name', categoryName)
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
-  await expect(page.locator('.p-datatable-tbody tr')).toHaveCount(1)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByRole('row', { has: page.getByText(categoryName, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/category\/[^/]+$/)
   await expect(fieldByLabel(page, 'Articles').getByText(title)).toBeVisible()
