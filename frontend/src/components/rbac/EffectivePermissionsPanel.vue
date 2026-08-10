@@ -86,8 +86,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .effective-permissions { display: grid; gap: 12px; margin-top: 24px; }
 .panel-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.hint { color: var(--muted); margin: 0; font-size: 0.9rem; }
-.notice { color: var(--muted); margin: 0; }
+.hint { color: var(--legacy-muted); margin: 0; font-size: 0.9rem; }
+.notice { color: var(--legacy-muted); margin: 0; }
 .panel-scroll { overflow-x: auto; }
 .panel-table { border-collapse: collapse; min-width: 480px; }
 .panel-table th, .panel-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }

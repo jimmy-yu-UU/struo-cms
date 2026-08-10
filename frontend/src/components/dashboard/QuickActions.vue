@@ -44,6 +44,6 @@ function iconFor(action: QuickAction): string {
   justify-content: flex-start;
 }
 .quick__empty {
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 </style>

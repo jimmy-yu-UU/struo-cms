@@ -218,7 +218,7 @@ defineExpose({ editor, insertImage })
 .rich-text { border: 1px solid var(--border); border-radius: 6px; }
 .rich-text__toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border); }
 .rich-text__toolbar button { min-width: 30px; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: 4px; }
-.rich-text__toolbar button.active { background: var(--accent); color: var(--surface); }
+.rich-text__toolbar button.active { background: var(--legacy-accent); color: var(--surface); }
 .rich-text__toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
 .rich-text__content { padding: 10px; min-height: 8rem; }
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }

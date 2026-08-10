@@ -120,7 +120,7 @@ function onSso() {
   gap: 26px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--legacy-radius-lg);
   box-shadow: var(--shadow-2);
 }
 .brand {
@@ -136,7 +136,7 @@ function onSso() {
 }
 .brand .caption {
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 .login-form {
   display: grid;
@@ -149,7 +149,7 @@ function onSso() {
 .field label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 .field :deep(.p-inputtext),
 .field :deep(.p-password) {
@@ -169,7 +169,7 @@ function onSso() {
   display: flex;
   align-items: center;
   gap: 14px;
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.8rem;
   white-space: nowrap;
 }

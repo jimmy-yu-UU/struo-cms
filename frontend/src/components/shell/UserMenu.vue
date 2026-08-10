@@ -65,5 +65,5 @@ defineExpose({ menuModel })
 <style scoped>
 .user-menu-head { display: grid; gap: 2px; padding: 10px 12px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 .user-menu-head b { font-size: .9rem; }
-.user-menu-email { font-size: .78rem; color: var(--muted); }
+.user-menu-email { font-size: .78rem; color: var(--legacy-muted); }
 </style>

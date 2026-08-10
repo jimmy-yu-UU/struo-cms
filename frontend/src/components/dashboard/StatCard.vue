@@ -15,11 +15,11 @@ defineProps<{ caption: string; value: number | string }>()
   display: grid;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--legacy-radius-lg);
   background: var(--surface);
 }
 .stat__caption {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.85rem;
 }
 .stat__value {

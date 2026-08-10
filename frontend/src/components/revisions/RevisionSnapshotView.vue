@@ -70,23 +70,23 @@ const prettyJson = computed(() => {
 
 <style scoped>
 .rev-detail { display: grid; gap: 16px; align-content: start; min-width: 0; }
-.rev-notice { color: var(--muted); margin: 0; }
+.rev-notice { color: var(--legacy-muted); margin: 0; }
 .rev-error { color: var(--danger); }
 .rev-summary { display: grid; gap: 8px; }
 .rev-summary__row { display: flex; align-items: center; gap: 10px; }
 .rev-badge {
-  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  padding: 2px 8px; border-radius: var(--radius, 8px);
+  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--legacy-accent);
+  background: color-mix(in srgb, var(--legacy-accent) 12%, transparent);
+  padding: 2px 8px; border-radius: var(--legacy-radius, 8px);
 }
 .rev-op { font-weight: 600; color: var(--fg); }
 .rev-meta { display: grid; gap: 4px; margin: 0; }
 .rev-meta div { display: flex; gap: 8px; font-size: .85rem; }
-.rev-meta dt { color: var(--muted); margin: 0; min-width: 3.5rem; }
+.rev-meta dt { color: var(--legacy-muted); margin: 0; min-width: 3.5rem; }
 .rev-meta dd { color: var(--fg); margin: 0; }
-.rev-snapshot h3 { margin: 0 0 6px; font-size: .8rem; color: var(--muted); font-weight: 500; }
+.rev-snapshot h3 { margin: 0 0 6px; font-size: .8rem; color: var(--legacy-muted); font-weight: 500; }
 .rev-json {
-  margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius, 8px);
+  margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--legacy-radius, 8px);
   background: var(--bg); color: var(--fg); font-size: .8rem; line-height: 1.5;
   max-height: 50vh; overflow: auto; white-space: pre; word-break: normal;
 }

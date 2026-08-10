@@ -29,7 +29,7 @@ const { brandName, brandLogoUrl, brandInitial } = storeToRefs(appConfig)
   height: 32px;
   flex: none;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--legacy-accent);
   color: #fff;
   display: grid;
   place-items: center;

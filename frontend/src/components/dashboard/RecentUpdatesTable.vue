@@ -52,7 +52,7 @@ function formatUpdated(iso: string | null): string {
   border-bottom: 1px solid var(--border);
 }
 .recent th {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -63,16 +63,16 @@ function formatUpdated(iso: string | null): string {
   background: var(--bg);
 }
 .recent__title {
-  color: var(--accent);
+  color: var(--legacy-accent);
   font-weight: 550;
 }
 .recent__updated {
   font-family: var(--mono);
-  color: var(--muted);
+  color: var(--legacy-muted);
   white-space: nowrap;
 }
 .recent__empty {
-  color: var(--muted);
+  color: var(--legacy-muted);
   text-align: center;
   padding: 24px 12px;
 }
