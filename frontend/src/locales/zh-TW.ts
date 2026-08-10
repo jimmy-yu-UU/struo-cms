@@ -14,8 +14,6 @@ export default {
     deleteFailed: '刪除失敗。',
     actionFailed: '操作失敗。',
     confirmDefaultHeader: '請確認',
-    confirmAccept: '確認',
-    confirmReject: '取消',
   },
   confirm: {
     unsavedHeader: '尚未儲存的變更',
