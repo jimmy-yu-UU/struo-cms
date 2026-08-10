@@ -19,6 +19,7 @@
     "@lucide/vue": "^1.31.0",
     "@primeuix/themes": "^2.0.3",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/vue-table": "^9.1.2",
     "@tiptap/extension-image": "^3.29.2",
     "@tiptap/extension-link": "^3.29.2",
     "@tiptap/extension-subscript": "^3.29.2",
