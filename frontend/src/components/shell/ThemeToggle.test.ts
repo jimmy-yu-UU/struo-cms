@@ -17,14 +17,14 @@ describe('ThemeToggle', () => {
     const store = useThemeStore()
     store.set('light')
     const wrapper = mount(ThemeToggle, { global: { plugins: [i18n] } })
-    expect(wrapper.find('.pi-moon').exists()).toBe(true)
-    await wrapper.find('button.theme-toggle').trigger('click')
+    expect(wrapper.find('.lucide-moon').exists()).toBe(true)
+    await wrapper.find('button').trigger('click')
     expect(store.isDark).toBe(true)
-    expect(wrapper.find('.pi-sun').exists()).toBe(true)
+    expect(wrapper.find('.lucide-sun').exists()).toBe(true)
   })
 
   it('exposes an i18n aria-label', () => {
     const wrapper = mount(ThemeToggle, { global: { plugins: [i18n] } })
-    expect(wrapper.find('button.theme-toggle').attributes('aria-label')).toBe('切換主題')
+    expect(wrapper.find('button').attributes('aria-label')).toBe('切換主題')
   })
 })
