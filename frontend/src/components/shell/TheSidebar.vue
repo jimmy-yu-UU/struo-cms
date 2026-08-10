@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Folder } from '@lucide/vue'
@@ -79,6 +79,15 @@ function go(to: { name: string; params?: Record<string, string> }): void {
   // navigation would hide the page the user just asked for.
   if (isMobile.value) setOpenMobile(false)
 }
+
+// go() only covers navigation that originates from a click inside this sidebar. Browser
+// back/forward (and the OS back gesture) change route.path without ever calling go() — reka's
+// Dialog has no history listener of its own, so nothing else closes the mobile drawer for that
+// case. Watching route.path directly makes "navigation closes the drawer" structural rather
+// than incidental on go()'s own router.push call.
+watch(() => route.path, () => {
+  if (isMobile.value) setOpenMobile(false)
+})
 </script>
 
 <template>
