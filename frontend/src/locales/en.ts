@@ -72,6 +72,8 @@ export default {
     or: 'or',
     ssoMicrosoft: 'Sign in with Microsoft 365',
     failed: 'Login failed. Please try again.',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
   },
   dashboard: {
     title: 'Dashboard',
