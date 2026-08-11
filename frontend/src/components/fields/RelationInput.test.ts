@@ -48,7 +48,7 @@ function rel(overrides: Partial<RelationMeta> = {}): RelationMeta {
 
 const stubs = {
   Select: true,
-  MultiSelect: true,
+  Combobox: true,
   TreeSelect: true,
   DataTable: true,
   Column: true,
