@@ -28,7 +28,7 @@ const stubs = {
   Checkbox: { template: '<input class="stub-checkbox" />' },
   DatePicker: { template: '<input class="stub-date" />' },
   Select: { template: '<div class="stub-select" role="combobox" />' },
-  RadioButton: { template: '<input class="stub-radio" />' },
+  RadioGroup: { template: '<div class="stub-radio" />' },
 }
 
 describe('FieldInput', () => {

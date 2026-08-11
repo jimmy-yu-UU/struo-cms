@@ -224,12 +224,78 @@ describe('field components (choice + structural)', () => {
     expect(w.get('[role="combobox"]').attributes('aria-label')).toBe('Status')
   })
 
-  it('RadioField renders one option per choice', () => {
+  it('RadioField renders one radio per choice inside a single radiogroup', () => {
     const w = mount(RadioField, {
-      props: { field: field({ interface: 'radio', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }), modelValue: 'a' },
-      global: { plugins: [PrimeVue] },
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'a',
+      },
+      ...opts,
     })
-    expect(w.findAll('.radio-option')).toHaveLength(2)
+    expect(w.findAll('[role="radio"]')).toHaveLength(2)
+    expect(w.find('[role="radiogroup"]').exists()).toBe(true)
+  })
+
+  // Constraint 8: reka binds its own onClick, which runs before parent fallthrough, so this must
+  // really click rather than synthesise an emit.
+  it('RadioField emits the clicked option value', async () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'a',
+      },
+      ...opts,
+    })
+    await w.findAll('[role="radio"]')[1].trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['b'])
+  })
+
+  // Pins the template's own @update:model-value listener on the vendored root directly: a deleted
+  // listener would still pass the real-click test above only by accident of reka's internal wiring,
+  // so this asserts the wrapper's own binding independently (same rationale as Task 6's fix round).
+  it('RadioField relays the vendored RadioGroup root emit through its own listener', async () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'a',
+      },
+      ...opts,
+    })
+    await w.findComponent({ name: 'RadioGroup' }).vm.$emit('update:modelValue', 'b')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['b'])
+  })
+
+  // Inbound direction (standing-constraints Task-5 rule): mount with a non-default model and assert
+  // the matching option reflects checked state via reka's real data-state hook, never a class.
+  it('RadioField reflects a non-default model on the matching radio', () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'b',
+      },
+      ...opts,
+    })
+    const radios = w.findAll('[role="radio"]')
+    expect(radios[0].attributes('data-state')).toBe('unchecked')
+    expect(radios[1].attributes('data-state')).toBe('checked')
+  })
+
+  // reka's radio is a <button role="radio">, so wrapping it in a <label> gives no implicit
+  // association; the explicit for/id pairing is what actually associates each label.
+  it('RadioField associates each label with its radio via explicit for/id', () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'a',
+      },
+      ...opts,
+    })
+    const labels = w.findAll('label')
+    const radios = w.findAll('[role="radio"]')
+    expect(labels).toHaveLength(2)
+    labels.forEach((label, i) => {
+      expect(label.attributes('for')).toBe(radios[i].attributes('id'))
+    })
   })
 
   it('DividerField renders an hr', () => {
