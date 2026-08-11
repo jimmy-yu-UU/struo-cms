@@ -52,7 +52,13 @@ describe('FieldInput', () => {
   // from the filename), so it intercepts DateField's child the same way regardless of which
   // component that name resolves to.
   it('renders DatePicker for date interface', () => {
-    const w = mount(FieldInput, { props: { field: field({ interface: 'date' }), modelValue: null }, global: { stubs } })
+    // DateField itself (unlike the DatePicker child this stub key intercepts) is not stubbed, and
+    // it calls useI18n() unconditionally in setup, so this mount needs a real i18n plugin present
+    // even though the date interface never renders the time input whose label uses it.
+    const w = mount(FieldInput, {
+      props: { field: field({ interface: 'date' }), modelValue: null },
+      global: { plugins: [i18n], stubs },
+    })
     expect(w.find('.stub-date').exists()).toBe(true)
   })
 

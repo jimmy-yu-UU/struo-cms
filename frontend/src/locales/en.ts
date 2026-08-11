@@ -238,6 +238,7 @@ export default {
     removeOption: 'Remove {label}',
     searchOptions: 'Search options…',
     pickADate: 'Pick a date',
+    timePart: 'time',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
