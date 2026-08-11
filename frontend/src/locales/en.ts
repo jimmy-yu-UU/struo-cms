@@ -229,6 +229,9 @@ export default {
     done: 'Done',
     loadOptionsFailed: 'Failed to load options.',
     noOptions: 'No options',
+    selectedCount: '{n} selected',
+    removeOption: 'Remove {label}',
+    searchOptions: 'Search options…',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
