@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Select from 'primevue/select'
-import MultiSelect from 'primevue/multiselect'
-import TreeSelect from 'primevue/treeselect'
+import {
+  Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem,
+  ComboboxItemIndicator, ComboboxList, ComboboxTrigger, ComboboxViewport,
+} from '@/components/ui/combobox'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import TreeSelect from '@/components/form/TreeSelect.vue'
+import { Check, ChevronsUpDown, X } from '@lucide/vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -78,10 +83,10 @@ async function ensureSelectedLabels(): Promise<void> {
   }
 }
 
-// Select/MultiSelect render labels from their options list only, so a preselected
-// id that is not on the current options page would show as a raw id. Merge any
-// such selected-but-absent ids (labelled from labelById, back-filled by
-// ensureSelectedLabels) into the rendered options without mutating either source.
+// Select/Combobox render labels from their options list only, so a preselected id that is not on
+// the current options page would show as a raw id. Merge any such selected-but-absent ids
+// (labelled from labelById, back-filled by ensureSelectedLabels) into the rendered options without
+// mutating either source.
 const displayOptions = computed<Option[]>(() => {
   const selected = props.multiple
     ? ((props.modelValue as string[] | null) ?? []).map(String)
@@ -110,11 +115,42 @@ function onChange(v: unknown): void {
   emit('update:modelValue', v)
 }
 
-// TreeSelect binds an object keyed by node key; map to a single id.
-const treeValue = computed(() => (props.modelValue != null ? { [String(props.modelValue)]: true } : {}))
-function onTreeChange(selection: Record<string, boolean>): void {
-  const keys = Object.keys(selection)
-  emit('update:modelValue', keys.length ? keys[0] : null)
+// form/TreeSelect.vue takes and emits a plain key directly; no `{ [key]: true }` packing.
+function onTreeChange(key: string | null): void {
+  onChange(key)
+}
+
+// Single-select selection: the ids currently chosen, coerced to string[] regardless of the
+// single/multiple shape modelValue actually carries.
+const singleSelected = computed(() => (props.modelValue != null ? String(props.modelValue) : null))
+const multipleSelected = computed(() => ((props.modelValue as string[] | null) ?? []).map(String))
+
+const singleSelectedOption = computed(() => (
+  singleSelected.value == null ? null : displayOptions.value.find((o) => o.id === singleSelected.value) ?? null
+))
+const multipleSelectedOptions = computed(() => (
+  multipleSelected.value.map((id) => displayOptions.value.find((o) => o.id === id) ?? { id, label: id, raw: {} })
+))
+
+// aria-label overrides the trigger's visible contents entirely, so it has to carry both the
+// relation's own label AND the current value/count, matching the pattern MultiSelectField.vue and
+// DatePicker.vue settled on — a static label alone would make every pick announce identically.
+const singleAccessibleName = computed(() => (
+  singleSelectedOption.value ? `${props.relation.label}: ${singleSelectedOption.value.label}` : props.relation.label
+))
+const multipleAccessibleName = computed(() => (
+  multipleSelected.value.length
+    ? `${props.relation.label}, ${t('fields.selectedCount', { n: multipleSelected.value.length })}`
+    : props.relation.label
+))
+
+// The combobox owns neither the chip display nor the array arithmetic (PrimeVue's MultiSelect
+// owned both) — emit a new array every time per this repo's immutability convention.
+function toggleValue(id: string): void {
+  const next = multipleSelected.value.includes(id)
+    ? multipleSelected.value.filter((v) => v !== id)
+    : [...multipleSelected.value, id]
+  onChange(next)
 }
 
 // Debounce only the search-driven reloads; the initial load must not wait 300ms.
@@ -135,39 +171,100 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
 
     <TreeSelect
       v-if="tree"
-      :model-value="treeValue"
-      :options="treeNodes"
-      selection-mode="single"
+      :model-value="modelValue == null ? null : String(modelValue)"
+      :nodes="treeNodes"
+      :label="relation.label"
       :disabled="disabled"
-      :loading="loading"
       @update:model-value="onTreeChange"
     />
 
-    <MultiSelect
-      v-else-if="multiple"
-      :model-value="modelValue"
-      :options="displayOptions"
-      option-label="label"
-      option-value="id"
-      filter
-      :disabled="disabled"
-      :loading="loading"
-      @filter="(e: { value: string }) => (search = e.value)"
-      @update:model-value="onChange"
-    />
+    <div v-else-if="multiple" class="flex w-full max-w-[480px] flex-col gap-1.5">
+      <!-- Chips live outside the trigger, not inside it: the trigger renders as a <button>, and a
+           remove control nested inside another <button> is invalid HTML with real focus/click
+           hazards. -->
+      <div v-if="multipleSelectedOptions.length" class="flex flex-wrap gap-1.5">
+        <Badge v-for="opt in multipleSelectedOptions" :key="opt.id" variant="secondary" class="gap-1 py-0.5 pr-1">
+          {{ opt.label }}
+          <button
+            type="button"
+            class="inline-flex size-4 items-center justify-center rounded-full hover:bg-foreground/10"
+            :aria-label="t('fields.removeOption', { label: opt.label })"
+            :disabled="disabled"
+            @click="toggleValue(opt.id)"
+          >
+            <X class="size-3" />
+          </button>
+        </Badge>
+      </div>
+      <Combobox :model-value="multipleSelected" multiple :disabled="disabled">
+        <ComboboxAnchor class="w-full">
+          <ComboboxTrigger
+            :aria-label="multipleAccessibleName"
+            class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span :class="multipleSelected.length ? '' : 'text-muted-foreground'">
+              {{ multipleSelected.length ? t('fields.selectedCount', { n: multipleSelected.length }) : relation.label }}
+            </span>
+            <ChevronsUpDown class="size-4 shrink-0 opacity-50" />
+          </ComboboxTrigger>
+        </ComboboxAnchor>
+        <ComboboxList class="w-(--reka-combobox-trigger-width)">
+          <ComboboxInput :model-value="search" :placeholder="t('fields.searchOptions')" @update:model-value="(v) => (search = String(v ?? ''))" />
+          <ComboboxEmpty>{{ t('fields.noOptions') }}</ComboboxEmpty>
+          <ComboboxViewport>
+            <ComboboxItem
+              v-for="opt in displayOptions"
+              :key="opt.id"
+              :value="opt.id"
+              @select.prevent="toggleValue(opt.id)"
+            >
+              {{ opt.label }}
+              <ComboboxItemIndicator><Check class="size-4" /></ComboboxItemIndicator>
+            </ComboboxItem>
+          </ComboboxViewport>
+        </ComboboxList>
+      </Combobox>
+    </div>
 
-    <Select
-      v-else
-      :model-value="modelValue"
-      :options="displayOptions"
-      option-label="label"
-      option-value="id"
-      filter
-      show-clear
-      :disabled="disabled"
-      :loading="loading"
-      @filter="(e: { value: string }) => (search = e.value)"
-      @update:model-value="onChange"
-    />
+    <!-- ui/select has no search input, and this picker's options are server-side paginated, so a
+         plain Select could only ever offer the first page — the combobox shape is used here too,
+         with its own clear button standing in for PrimeVue Select's `show-clear`. -->
+    <div v-else class="flex w-full max-w-[480px] items-center gap-1.5">
+      <Combobox class="flex-1" :model-value="singleSelected" :disabled="disabled" @update:model-value="onChange">
+        <ComboboxAnchor class="w-full">
+          <ComboboxTrigger
+            :aria-label="singleAccessibleName"
+            class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span :class="singleSelectedOption ? '' : 'text-muted-foreground'">
+              {{ singleSelectedOption ? singleSelectedOption.label : relation.label }}
+            </span>
+            <ChevronsUpDown class="size-4 shrink-0 opacity-50" />
+          </ComboboxTrigger>
+        </ComboboxAnchor>
+        <ComboboxList class="w-(--reka-combobox-trigger-width)">
+          <ComboboxInput :model-value="search" :placeholder="t('fields.searchOptions')" @update:model-value="(v) => (search = String(v ?? ''))" />
+          <ComboboxEmpty>{{ t('fields.noOptions') }}</ComboboxEmpty>
+          <ComboboxViewport>
+            <ComboboxItem v-for="opt in displayOptions" :key="opt.id" :value="opt.id">
+              {{ opt.label }}
+              <ComboboxItemIndicator><Check class="size-4" /></ComboboxItemIndicator>
+            </ComboboxItem>
+          </ComboboxViewport>
+        </ComboboxList>
+      </Combobox>
+      <Button
+        v-if="modelValue != null"
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        data-testid="relation-clear"
+        :aria-label="t('fields.clear')"
+        :disabled="disabled"
+        @click="onChange(null)"
+      >
+        <X class="size-4" />
+      </Button>
+    </div>
   </div>
 </template>

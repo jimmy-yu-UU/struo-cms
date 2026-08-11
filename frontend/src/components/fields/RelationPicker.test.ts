@@ -7,12 +7,15 @@ import RelationPicker from './RelationPicker.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
+import en from '../../locales/en'
+import zhTW from '../../locales/zh-TW'
 import type { RelationMeta, CollectionMeta } from '../../types/schema'
 
-const i18n = createI18n({
-  legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.' } } },
-})
+// The real packs, not a hand-picked subset: the migrated template now calls several `fields.*`
+// keys (searchOptions, noOptions, selectedCount, removeOption, clear) that a minimal fixture
+// would silently fall back to raw key paths for, defeating the zh-TW assertions below.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+const i18nZh = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'zh-TW', messages: { 'zh-TW': zhTW } })
 
 const targetMeta: CollectionMeta = {
   name: 'category',
@@ -39,9 +42,15 @@ const relation: RelationMeta = {
 
 const stubs = {
   Select: true,
-  MultiSelect: true,
+  Combobox: true,
   TreeSelect: true,
 }
+
+// reka's own portal is itself named Teleport, colliding with VTU's `stubs: { teleport: true }`
+// and dropping slot content unless renderStubDefaultSlot is also set. Used by the tests below that
+// need the real combobox/tree subtree mounted (child-emit assertions, real clicks, zh-TW text).
+const live = { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true }
+const liveZh = { plugins: [i18nZh], stubs: { teleport: true }, renderStubDefaultSlot: true }
 
 function setupStores() {
   const schema = useSchemaStore()
@@ -49,6 +58,19 @@ function setupStores() {
   const lang = useLanguageStore()
   lang.languages = [{ code: 'en', name: 'English', isDefault: true }]
   return { schema, lang }
+}
+
+function mountPicker(
+  props: Partial<{ modelValue: unknown; multiple: boolean; tree: boolean; disabled: boolean }> = {},
+  global: Record<string, unknown> = { plugins: [i18n], stubs },
+) {
+  return mount(RelationPicker, { props: { relation, modelValue: null, ...props }, global })
+}
+
+async function open(w: ReturnType<typeof mount>): Promise<void> {
+  await w.get('[data-slot="combobox-trigger"]').trigger('click')
+  await w.vm.$nextTick()
+  await w.vm.$nextTick()
 }
 
 describe('RelationPicker', () => {
@@ -137,5 +159,269 @@ describe('RelationPicker', () => {
     await flushPromises()
     expect((w.vm as any).options).toHaveLength(1)
     expect((w.vm as any).options[0].id).toBe('new')
+  })
+
+  // show-clear was a PrimeVue Select prop; ui/select has no equivalent, so the ability to unset a
+  // relation only survives if we render the control ourselves.
+  it('offers a clear control on the single-select branch', () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: 'x' })
+    expect(w.find('[data-testid="relation-clear"]').exists()).toBe(true)
+  })
+
+  it('offers no clear control when nothing is selected', () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: null })
+    expect(w.find('[data-testid="relation-clear"]').exists()).toBe(false)
+  })
+
+  it('clearing emits null', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: 'x' })
+    await w.get('[data-testid="relation-clear"]').trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([null])
+  })
+
+  it('gives the clear button an explicit type="button" so it cannot submit ItemForm.vue\'s <form>', () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: 'x' })
+    expect(w.get('[data-testid="relation-clear"]').attributes('type')).toBe('button')
+  })
+
+  it('takes a plain key on the tree branch', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ tree: true, modelValue: null })
+    const vm = w.vm as unknown as { onTreeChange: (k: string | null) => void }
+    vm.onTreeChange('n1')
+    await w.vm.$nextTick()
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['n1'])
+  })
+
+  // jsdom cannot drive reka's TreeItem selection directly (Popover content is teleported and its
+  // own selection path is exercised by TreeSelect.test.ts already), but VTU can emit from the real
+  // vendored child, which runs RelationPicker's actual template listener rather than a call
+  // straight into the handler function.
+  it("wires TreeSelect's real update:modelValue emit through to the picker's own emit", async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ tree: true, modelValue: null }, live)
+    await flushPromises()
+    await w.findComponent({ name: 'TreeSelect' }).vm.$emit('update:modelValue', 'n1')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['n1'])
+  })
+
+  it('passes a plain key (not a keyed-object) as the tree model-value, including through a later prop change', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ tree: true, modelValue: 'n1' }, live)
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('n1')
+    await w.setProps({ modelValue: 'n2' })
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('n2')
+  })
+
+  it('passes null (not an empty keyed-object) as the tree model-value when nothing is selected', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ tree: true, modelValue: null }, live)
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe(null)
+  })
+
+  it('passes disabled through to the tree branch', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ tree: true, modelValue: null, disabled: true }, live)
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('disabled')).toBe(true)
+  })
+
+  // TreeSelect has no `field` of its own to read a label from (form/TreeSelect.vue takes a plain
+  // `label` prop for exactly this reason) — without passing the relation's own label, two tree
+  // relation fields on the same form would announce identically.
+  it("gives the tree branch's TreeSelect the relation's own label, and no placeholder override", async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ tree: true, modelValue: null }, live)
+    await flushPromises()
+    const tree = w.findComponent({ name: 'TreeSelect' })
+    expect(tree.props('label')).toBe(relation.label)
+    expect(tree.props('placeholder')).toBeUndefined()
+  })
+
+  // Real click-driven: reka's ComboboxItem selects on a genuine `click` (unlike ui/select's
+  // SelectItem, which only responds to pointerdown/pointerup), so jsdom can drive the actual
+  // production interaction on the rendered option directly.
+  it('emits the clicked option value through the real combobox on the single-select branch', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'Tech' }], total: 1 })
+    const w = mountPicker({ modelValue: null }, live)
+    await flushPromises()
+    await open(w)
+    await w.get('[role="option"]').trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['c1'])
+  })
+
+  it('reflects the incoming single-select model on the trigger, including after the model changes', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ modelValue: 'c1' }, live)
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').text()).toContain('Tech')
+    await w.setProps({ modelValue: 'c2' })
+    expect(w.get('[data-slot="combobox-trigger"]').text()).toContain('Widget')
+    expect(w.get('[data-slot="combobox-trigger"]').text()).not.toContain('Tech')
+  })
+
+  // The chip/trigger-text assertions above read this component's own computed, not reka's
+  // internal Combobox state, so they cannot tell controlled apart from reka's non-reactive
+  // `passive` (uncontrolled) mode — `aria-selected` is set from the root's own model instead, and
+  // is checked again after `setProps` because reka reads `passive: props.modelValue === void 0`
+  // once at setup, so an initial-render-only assertion cannot distinguish a live prop from a value
+  // that only happened to be right at mount.
+  it('reflects the incoming single-select model as aria-selected on the options, including after the model changes', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ modelValue: 'c1' }, live)
+    await flushPromises()
+    await open(w)
+    const items = w.findAll('[role="option"]')
+    expect(items[0].attributes('aria-selected')).toBe('true')
+    expect(items[1].attributes('aria-selected')).toBe('false')
+
+    await w.setProps({ modelValue: 'c2' })
+    expect(items[0].attributes('aria-selected')).toBe('false')
+    expect(items[1].attributes('aria-selected')).toBe('true')
+  })
+
+  it('folds the current value into the single-select trigger\'s accessible name', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'Tech' }], total: 1 })
+    const w = mountPicker({ modelValue: 'c1' }, live)
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe(`${relation.label}: Tech`)
+  })
+
+  it('genuinely disables the single-select trigger and its clear button', () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: 'x', disabled: true }, live)
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
+    expect(w.get('[data-testid="relation-clear"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows the real localized clear label under zh-TW', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: 'x' }, liveZh)
+    await flushPromises()
+    expect(w.get('[data-testid="relation-clear"]').attributes('aria-label')).toBe(zhTW.fields.clear)
+  })
+
+  // No selected value here (unlike the clear-label test above): a selected id with no matching
+  // real option is itself merged into displayOptions as a fallback row, which would always leave
+  // one item present and never trigger ComboboxEmpty.
+  it('shows the real localized search placeholder and empty-state text under zh-TW', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mountPicker({ modelValue: null }, liveZh)
+    await flushPromises()
+    await open(w)
+    expect(w.get('[data-slot="command-input"]').attributes('placeholder')).toBe(zhTW.fields.searchOptions)
+    expect(w.get('[data-slot="combobox-empty"]').text()).toBe(zhTW.fields.noOptions)
+  })
+
+  it('appends a clicked option immutably on the multi-select branch', async () => {
+    setupStores()
+    const before = ['c1']
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: before }, live)
+    await flushPromises()
+    await open(w)
+    const options = w.findAll('[role="option"]')
+    await options[1].trigger('click') // Widget
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['c1', 'c2']])
+    expect(before).toEqual(['c1'])
+  })
+
+  it('removes a value via its chip remove button on the multi-select branch', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1', 'c2'] }, live)
+    await flushPromises()
+    const removeTech = w.get('[aria-label="Remove Tech"]')
+    expect(removeTech.attributes('type')).toBe('button')
+    await removeTech.trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['c2']])
+  })
+
+  it('reflects the incoming multi-select model on the chip row, including after the model changes', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1'] }, live)
+    await flushPromises()
+    expect(w.text()).toContain('Tech')
+    expect(w.text()).not.toContain('Widget')
+    await w.setProps({ modelValue: ['c2'] })
+    expect(w.text()).not.toContain('Tech')
+    expect(w.text()).toContain('Widget')
+  })
+
+  // Same mode-check as the single-select branch: the chip row above reads this component's own
+  // computed, never reka's internal Combobox state, so it cannot distinguish controlled from
+  // `passive` mode. `aria-selected` is reka's own render, driven by the root's `multiple`
+  // model-value via its array-aware `valueComparator`.
+  it('reflects the incoming multi-select model as aria-selected on the options, including after the model changes', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1'] }, live)
+    await flushPromises()
+    await open(w)
+    const items = w.findAll('[role="option"]')
+    expect(items[0].attributes('aria-selected')).toBe('true')
+    expect(items[1].attributes('aria-selected')).toBe('false')
+
+    await w.setProps({ modelValue: ['c2'] })
+    expect(items[0].attributes('aria-selected')).toBe('false')
+    expect(items[1].attributes('aria-selected')).toBe('true')
+  })
+
+  it('folds the selected count into the multi-select trigger\'s accessible name', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1', 'c2'] }, live)
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label'))
+      .toBe(`${relation.label}, ${en.fields.selectedCount.replace('{n}', '2')}`)
+  })
+
+  it('genuinely disables the multi-select trigger and every chip remove button', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }], total: 1,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1'], disabled: true }, live)
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
+    expect(w.get('[aria-label="Remove Tech"]').attributes('disabled')).toBeDefined()
   })
 })
