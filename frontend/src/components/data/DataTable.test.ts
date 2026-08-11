@@ -210,6 +210,70 @@ describe('DataTable column visibility', () => {
     expect(w.findAll('th')).toHaveLength(2)
     expect(w.text()).toContain('published')
   })
+
+  // Review finding (Important 1): `columnVisibility` is TanStack's own state, keyed by column
+  // id, and DataTable is never remounted across a column-SET change (CollectionListView switches
+  // collection or flips active/trash mode on the same mounted instance, no `:key`). Column ids
+  // collide by design across those contexts (field names repeat; literal ids like
+  // 'actions'/'deletedAt' are shared everywhere). The guard above only ever reasons about the
+  // CURRENT set, so two hides that were individually safe in a 3-column set can zero out a
+  // 2-column set that reuses two of those same ids -- exactly CollectionListView's trash-mode
+  // [name, deletedAt, actions] -> active-mode [name, actions] transition.
+  it('resets visibility on an id-set change, so hides from one column set cannot zero out (or silently carry into) an unrelated set', async () => {
+    const wide = [
+      { id: 'name', accessorKey: 'title', header: 'Name' },
+      { id: 'deletedAt', accessorKey: 'status', header: 'Deleted' },
+      { id: 'actions', accessorKey: 'id', header: 'Actions' },
+    ]
+    const narrow = [
+      { id: 'name', accessorKey: 'title', header: 'Name' },
+      { id: 'actions', accessorKey: 'id', header: 'Actions' },
+    ]
+    const w = mountTable({ columns: wide })
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Name')!.trigger('click') // hide Name -- 2 remain (Deleted, Actions)
+    await flushPromises()
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Actions')!.trigger('click') // hide Actions -- 1 remains (Deleted); guard allows it
+    await flushPromises()
+    expect(w.findAll('th')).toHaveLength(1)
+    expect(w.get('th').text()).toBe('Deleted')
+
+    // The id-set change: 'deletedAt' drops out, but the stale Name/Actions hides are both for
+    // ids STILL present in `narrow` -- without a reset this would zero the table out entirely.
+    await w.setProps({ columns: narrow })
+    await flushPromises()
+
+    expect(w.findAll('th')).toHaveLength(2) // reset to all-visible for the new set, not zero
+    expect(w.findAll('th').map((t) => t.text())).toEqual(['Name', 'Actions'])
+  })
+
+  it('does NOT reset visibility when the column set is unchanged (only rows/other props changed)', async () => {
+    const w = mountTable()
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Status')!.trigger('click') // hide Status
+    await flushPromises()
+    expect(w.findAll('th')).toHaveLength(1)
+
+    // Same column id SET, different array reference (e.g. a language-store recompute) -- must
+    // not be mistaken for a real id-set change.
+    await w.setProps({ columns: [...columns], total: 5 })
+    await flushPromises()
+
+    expect(w.findAll('th')).toHaveLength(1) // Status is still hidden
+  })
+})
+
+describe('DataTable showColumnToggle', () => {
+  it('hides the Columns toolbar when showColumnToggle is false', () => {
+    const w = mountTable({ showColumnToggle: false })
+    expect(w.find('[data-testid="column-visibility-trigger"]').exists()).toBe(false)
+  })
+
+  it('shows the Columns toolbar by default', () => {
+    const w = mountTable()
+    expect(w.find('[data-testid="column-visibility-trigger"]').exists()).toBe(true)
+  })
 })
 
 describe('toSortParam', () => {

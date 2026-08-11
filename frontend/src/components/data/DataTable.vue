@@ -65,7 +65,7 @@ export function toSortParam(sort: SortEntry[]): string | undefined {
 </script>
 
 <script setup lang="ts" generic="TRow extends Record<string, unknown>">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { FlexRender, useTable } from '@tanstack/vue-table'
 import { useI18n } from 'vue-i18n'
 import { Columns3 } from '@lucide/vue'
@@ -85,14 +85,18 @@ export type DataTableState = {
   pageSize: number
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   columns: DataTableColumn<TRow>[]
   rows: TRow[]
   total: number
   state: DataTableState
   loading?: boolean
   emptyMessage?: string
-}>()
+  /** MediaLibraryView's grid and a compact RelatedList don't want this toolbar row. */
+  showColumnToggle?: boolean
+}>(), {
+  showColumnToggle: true,
+})
 const emit = defineEmits<{ 'update:state': [DataTableState] }>()
 
 const { t } = useI18n()
@@ -142,14 +146,36 @@ const hideableColumns = computed(() => table.getAllLeafColumns().filter((c) => c
 function isLastVisible(column: ReturnType<typeof table.getAllLeafColumns>[number]): boolean {
   return column.getIsVisible() && table.getVisibleLeafColumns().length <= 1
 }
+
+// The guard above only ever reasons about the CURRENT column set -- but `columnVisibility` is
+// TanStack's own state, keyed by column id, and it survives every column-set change: DataTable is
+// never remounted when CollectionListView switches collection or flips active/trash mode (no
+// `:key`), and column ids collide by design across those contexts (field names repeat across
+// collections; literal ids like 'actions'/'deletedAt' are shared by every collection and both
+// modes). Hiding two of three columns while a third stays visible is honoured correctly by the
+// guard in THAT column set, but if the next column set drops the one column that happened to stay
+// visible, the two stale hides can zero it out -- and even short of zero, a hide from one
+// collection would silently carry over and hide the same-named column in a completely unrelated
+// one. Watching a signature of the resolved id set (not `props.columns` by reference, which
+// churns on every unrelated recompute) and resetting to "all visible" whenever that set actually
+// changes closes both: the pathological zero-column case and the everyday cross-collection leak.
+const columnIdsSignature = computed(() => table.getAllLeafColumns().map((c) => c.id).sort().join(' '))
+watch(columnIdsSignature, () => {
+  table.setColumnVisibility({})
+})
 </script>
 
 <template>
   <div class="space-y-2">
-    <div class="flex justify-end">
+    <div v-if="props.showColumnToggle" class="flex justify-end">
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="outline" size="sm" data-testid="column-visibility-trigger">
+          <!--
+            size="default" (h-9/36px), NOT "sm" (h-8/32px) -- this sits directly above
+            DataTablePagination's page-size NativeSelect, which is h-9. A "sm" trigger here made
+            the two brand-spec "control height 36px" controls two different heights.
+          -->
+          <Button variant="outline" data-testid="column-visibility-trigger">
             <Columns3 class="size-4" aria-hidden="true" />
             {{ t('common.columns') }}
           </Button>
