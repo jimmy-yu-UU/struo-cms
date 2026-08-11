@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
 import AppShell from './AppShell.vue'
@@ -28,6 +28,19 @@ const stubs = {
 }
 
 const mountShell = () => mount(AppShell, { global: { plugins: [i18n], stubs } })
+
+// Do not delete this as unrelated boilerplate -- it fixes a real cross-test leak this file had.
+// Every mount() below (across every describe block) shares one module-level reactive
+// `routeState`, and until this call, wrappers were never unmounted: every earlier test's
+// AppShell instance stayed alive, still reactive to that same shared object. That was invisible
+// as long as nothing mutated routeState after mounting -- which is why none of the tests above
+// this line ever caught it. The routed-view remount-contract test below is the first test in
+// this file to write to routeState post-mount, and without this line every still-alive prior
+// instance's own keyed <router-view> reacts to that write too, inflating the mount count this
+// file measures (8 stray remounts instead of the real 2 -- confirmed by running that one test
+// in isolation, where it passed). enableAutoUnmount makes "one AppShell mounted at a time" true
+// in the test file the way it already is in the running app.
+enableAutoUnmount(afterEach)
 
 describe('AppShell', () => {
   beforeEach(() => {
@@ -126,5 +139,58 @@ describe('AppShell (real subtree smoke test)', () => {
     // Both inject useSidebar() — if AppShell no longer supplied SidebarProvider this mount
     // would have thrown during setup instead of getting here.
     expect(wrapper.text()).toContain('routed content')
+  })
+})
+
+// ItemFormView has no param watcher of its own — it has onMounted(init) only, and relies
+// entirely on this remount to re-run init() when navigating between two records of
+// items/:id (see ItemFormView.vue and AppShell.vue's own comment on the router-view key).
+// CollectionListView used to carry a redundant watch(name) "just in case"; it never fired in
+// the running app (route.params.name cannot change without route.path changing, since name is
+// part of the route's own path pattern) and has been deleted — this test is what actually
+// guards the collection-switch behaviour now. If AppShell's `:key="route.path"` is ever
+// removed, Vue reuses the existing router-view component instance across a params-only
+// navigation instead of remounting it, and this test fails.
+describe('AppShell (routed-view remount contract)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    routeState.path = '/collections/posts/1'
+    routeState.name = 'collection-item'
+    routeState.params = { name: 'posts', id: '1' }
+  })
+
+  // ItemFormView depends on this remount EXCLUSIVELY: it has onMounted(init) and no watcher on
+  // route.params.id/name, so this is the only thing that re-runs init() when navigating between
+  // two records of items/:id. If a future "optimisation" removes AppShell's `:key="route.path"`,
+  // this test is the alarm -- this comment is why: navigating record A -> record B would keep
+  // showing record A's data with no error, because nothing else would ever reload it.
+  it('remounts the routed view (a fresh instance) when route.path changes, not merely re-renders it', async () => {
+    const schema = useSchemaStore()
+    vi.spyOn(schema, 'load').mockResolvedValue()
+
+    let mountCount = 0
+    const RoutedStub = {
+      name: 'RoutedStub',
+      setup() { mountCount += 1 },
+      template: '<div class="routed-stub" />',
+    }
+
+    mount(AppShell, {
+      global: { plugins: [i18n], stubs: { ...stubs, RouterView: RoutedStub } },
+    })
+    // Let the real (unstubbed) SidebarProvider's own breakpoint detection and the
+    // onMounted schema.load() settle before taking the baseline -- neither is what this
+    // test is about, and asserting against a moving baseline would be flaky.
+    await flushPromises()
+    const baseline = mountCount
+
+    // A params-only navigation to a different record of the same route (collection-item) —
+    // route.path changes even though the route's `name` (the router record) does not.
+    routeState.path = '/collections/posts/2'
+    routeState.params = { name: 'posts', id: '2' }
+    await flushPromises()
+
+    expect(mountCount).toBe(baseline + 1)
   })
 })

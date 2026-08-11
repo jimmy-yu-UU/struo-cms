@@ -1,6 +1,6 @@
 <!-- frontend/src/views/CollectionListView.vue -->
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Plus, Pencil, Eye, Trash2, Undo2 } from '@lucide/vue'
@@ -282,13 +282,6 @@ async function onPurge(row: Row): Promise<void> {
 async function onRestore(row: Row): Promise<void> {
   await runAction(async () => { await itemsApi.restore(name.value, rowId(row)) })
 }
-
-watch(name, () => {
-  tableState.value = { sort: [], page: 0, pageSize: 25 }
-  filters.value = {}
-  mode.value = 'active'
-  loadItems()
-})
 
 onMounted(loadItems)
 
