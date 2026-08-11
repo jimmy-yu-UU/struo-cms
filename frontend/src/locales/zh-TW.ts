@@ -218,6 +218,7 @@ export default {
     notPermitted: '需要管理員權限',
   },
   fields: {
+    add: '新增',
     noFileSelected: '尚未選擇檔案',
     selectFile: '選擇',
     clear: '清除',
