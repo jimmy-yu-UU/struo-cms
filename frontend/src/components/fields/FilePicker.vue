@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import TreeSelect from 'primevue/treeselect'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import TreeSelect from '@/components/form/TreeSelect.vue'
 import MediaGrid from '../media/MediaGrid.vue'
 import FileThumbnail, { type FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -41,10 +41,8 @@ const folderNodes = computed<TreeNode[]>(() => [
   { key: UNFILED, label: t('media.folderUncategorized'), data: UNFILED, children: [] },
   ...buildRelationTree(folders.value.map((f) => ({ id: f.id, label: f.name, parentId: f.parentId })), 'parentId'),
 ])
-// TreeSelect single-selection binds { [key]: true } (same mapping as RelationPicker/MediaDetailDialog).
-const folderValue = computed(() => ({ [folderSel.value]: true }))
-function onFolderChange(selection: Record<string, boolean>): void {
-  folderSel.value = Object.keys(selection)[0] ?? ALL
+function onFolderChange(key: string | null): void {
+  folderSel.value = key ?? ALL
   void loadOptions()
 }
 function pickerFolderFilter(): ReturnType<typeof mediaFolderFilter> | undefined {
@@ -117,29 +115,40 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 <template>
   <div class="file-picker">
     <div v-if="current" class="file-picker__current">
-      <FileThumbnail v-if="image" :file="current" />
+      <FileThumbnail v-if="image" :file="current" class="file-picker__thumb" />
       <span>{{ current.fileName }}</span>
     </div>
-    <span v-else-if="missingId" class="file-picker__missing">{{ missingId }}</span>
-    <span v-else class="file-picker__empty">{{ t('fields.noFileSelected') }}</span>
+    <span v-else-if="missingId" class="file-picker__missing italic text-muted-foreground">{{ missingId }}</span>
+    <span v-else class="file-picker__empty italic text-muted-foreground">{{ t('fields.noFileSelected') }}</span>
 
     <div class="file-picker__actions">
-      <Button :label="t('fields.selectFile')" severity="secondary" outlined size="small" :disabled="disabled" @click="openDialog" />
-      <Button v-if="modelValue" :label="t('fields.clear')" size="small" text :disabled="disabled" @click="clear" />
+      <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="openDialog">{{ t('fields.selectFile') }}</Button>
+      <Button v-if="modelValue" type="button" variant="ghost" size="sm" :disabled="disabled" @click="clear">{{ t('fields.clear') }}</Button>
     </div>
 
-    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectAFile')" :style="{ width: 'min(78vw, 1300px)' }" :breakpoints="{ '960px': '95vw' }">
-      <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
-      <TreeSelect
-        v-if="folders.length"
-        class="file-picker__folder"
-        :model-value="folderValue"
-        :options="folderNodes"
-        selection-mode="single"
-        @update:model-value="onFolderChange"
-      />
-      <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
-      <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
+    <Dialog v-model:open="dialogOpen">
+      <!--
+        Vendored DialogContent's own width class carries the sm: modifier (sm:max-w-lg), so the
+        override re-supplies the same modifier rather than an unprefixed max-w-* — otherwise both
+        classes survive the merge and CSS source order decides, and the vendored one wins.
+      -->
+      <DialogContent class="sm:max-w-[min(78vw,1300px)]">
+        <DialogHeader>
+          <DialogTitle>{{ t('fields.selectAFile') }}</DialogTitle>
+        </DialogHeader>
+        <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
+        <div v-if="folders.length" class="file-picker__folder">
+          <TreeSelect
+            :model-value="folderSel"
+            :nodes="folderNodes"
+            :label="t('media.folderField')"
+            :placeholder="t('fields.selectAFolder')"
+            @update:model-value="onFolderChange"
+          />
+        </div>
+        <Input v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
+        <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
+      </DialogContent>
     </Dialog>
   </div>
 </template>
@@ -158,16 +167,10 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
   gap: 8px;
 }
 
-.file-picker__current :deep(.file-thumb) {
+.file-picker__thumb {
   width: 48px;
   height: 48px;
   flex: none;
-}
-
-.file-picker__missing,
-.file-picker__empty {
-  color: var(--legacy-muted);
-  font-style: italic;
 }
 
 .file-picker__actions {
@@ -176,9 +179,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 }
 
 .file-picker__folder {
-  display: block;
   margin: 8px 0 0;
-  width: 100%;
 }
 
 .file-picker__search {

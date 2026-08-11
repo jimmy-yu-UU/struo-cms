@@ -23,7 +23,7 @@ const i18n = createI18n({
 const stubs = {
   Dialog: true,
   Button: true,
-  InputText: true,
+  Input: true,
   MediaGrid: true,
 }
 
@@ -72,6 +72,54 @@ describe('FilePicker', () => {
     const w = mount(FilePicker, { props: { modelValue: 'ghost' }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     expect(w.text()).toContain('ghost')
+  })
+
+  // The current-file resolution is driven off the modelValue prop, not local state seeded once at
+  // mount — ItemFormView's 409 "reload latest" and the revisions drawer's revert both replace the
+  // whole record model well after this component is already mounted.
+  it('resolves the current file again after modelValue changes post-mount', async () => {
+    setupStores()
+    const getSpy = vi.spyOn(itemsApi, 'get')
+    getSpy.mockResolvedValueOnce({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
+    const w = mount(FilePicker, { props: { modelValue: 'f1' }, global: { plugins: [i18n], stubs } })
+    await flushPromises()
+    expect(w.text()).toContain('a.png')
+
+    getSpy.mockResolvedValueOnce({ id: 'f2', fileName: 'b.png', contentType: 'image/png', size: 2 })
+    await w.setProps({ modelValue: 'f2' })
+    await flushPromises()
+    expect(w.text()).toContain('b.png')
+    expect(w.text()).not.toContain('a.png')
+  })
+
+  // Button is rendered for real here (unlike the shared `stubs`, which stub it out) because the
+  // native `type` attribute only exists on the actual rendered <button>, not on a generic stub.
+  // ItemForm.vue wraps every field in <form @submit.prevent>, so an untyped button defaults to
+  // type="submit" and turns "Select a file" / "Clear" into a record save.
+  it('gives every button an explicit type="button"', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
+    const w = mount(FilePicker, {
+      props: { modelValue: 'f1' },
+      global: { plugins: [i18n], stubs: { Dialog: true, Input: true, MediaGrid: true } },
+    })
+    await flushPromises()
+    const buttons = w.findAll('button')
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const button of buttons) expect(button.attributes('type')).toBe('button')
+  })
+
+  it('passes disabled through to the action buttons', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
+    const w = mount(FilePicker, {
+      props: { modelValue: 'f1', disabled: true },
+      global: { plugins: [i18n], stubs: { Dialog: true, Input: true, MediaGrid: true } },
+    })
+    await flushPromises()
+    const buttons = w.findAll('button')
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const button of buttons) expect(button.attributes('disabled')).toBeDefined()
   })
 
   it('debounces search-driven option reloads into a single request', async () => {
@@ -132,7 +180,18 @@ describe('FilePicker', () => {
       })
     }
 
-    type Vm = { openDialog: () => Promise<void>; onFolderChange: (s: Record<string, boolean>) => void; loadOptions: () => Promise<void>; files: unknown[]; folders: unknown[] }
+    type Vm = { openDialog: () => Promise<void>; onFolderChange: (s: string | null) => void; loadOptions: () => Promise<void>; files: unknown[]; folders: unknown[] }
+
+    it('takes a plain folder key, not PrimeVue TreeSelect\'s keyed object', async () => {
+      setupStores()
+      mockList()
+      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
+      await flushPromises()
+      const vm = w.vm as unknown as { onFolderChange: (k: string | null) => void; folderSel: string }
+      vm.onFolderChange('f1')
+      await flushPromises()
+      expect(vm.folderSel).toBe('f1')
+    })
 
     it('sends no folder filter by default (__all): existing behavior unchanged', async () => {
       setupStores()
@@ -161,7 +220,7 @@ describe('FilePicker', () => {
       await (w.vm as unknown as Vm).openDialog()
       await flushPromises()
       listSpy.mockClear()
-      ;(w.vm as unknown as Vm).onFolderChange({ a: true })
+      ;(w.vm as unknown as Vm).onFolderChange('a')
       await flushPromises()
       const fileCall = listSpy.mock.calls.find(([collection]) => collection === 'file')
       expect(fileCall?.[1]?.filter).toEqual({ folderId: { op: '_eq', value: 'a' } })
@@ -174,7 +233,7 @@ describe('FilePicker', () => {
       await (w.vm as unknown as Vm).openDialog()
       await flushPromises()
       listSpy.mockClear()
-      ;(w.vm as unknown as Vm).onFolderChange({ __unfiled: true })
+      ;(w.vm as unknown as Vm).onFolderChange('__unfiled')
       await flushPromises()
       const fileCall = listSpy.mock.calls.find(([collection]) => collection === 'file')
       expect(fileCall?.[1]?.filter).toEqual({ folderId: { op: '_null', value: 'true' } })
@@ -198,7 +257,7 @@ describe('FilePicker', () => {
       const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
       await (w.vm as unknown as Vm).openDialog()
       await flushPromises()
-      ;(w.vm as unknown as Vm).onFolderChange({ a: true })
+      ;(w.vm as unknown as Vm).onFolderChange('a')
       await flushPromises()
       listSpy.mockClear()
       ;(w.vm as unknown as { search: string }).search = 'x'
