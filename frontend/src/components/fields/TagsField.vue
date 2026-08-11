@@ -34,13 +34,15 @@ function setLabel(i: number, v: string) {
       <Input
         :model-value="it.value"
         :disabled="disabled"
-        placeholder="value"
+        :placeholder="t('fields.tagValue')"
+        :aria-label="t('fields.tagValue')"
         @update:model-value="(v) => setValue(i, String(v ?? ''))"
       />
       <Input
         :model-value="it.label ?? ''"
         :disabled="disabled"
-        placeholder="display text (optional)"
+        :placeholder="t('fields.tagDisplayText')"
+        :aria-label="t('fields.tagDisplayText')"
         @update:model-value="(v) => setLabel(i, String(v ?? ''))"
       />
       <Button

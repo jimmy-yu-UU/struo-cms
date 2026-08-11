@@ -11,7 +11,9 @@ function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
 }
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { common: { delete: 'Delete' }, fields: { add: 'Add' } } },
+  messages: { en: { common: { delete: 'Delete' }, fields: {
+    add: 'Add', tagValue: 'value', tagDisplayText: 'display text (optional)',
+  } } },
 })
 const opts = { global: { plugins: [PrimeVue, i18n] } }
 
@@ -53,7 +55,10 @@ describe('TagsField', () => {
     })
     const inputs = w.findAll('.tag-row input')
     await inputs[1].setValue('')
-    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([[{ value: 'a' }]])
+    // toStrictEqual (not toEqual): toEqual ignores properties whose value is `undefined`, so it
+    // cannot tell { value: 'a' } apart from { value: 'a', label: undefined } — and the contract
+    // this test guards is specifically that the label key is absent, not merely undefined.
+    expect(w.emitted('update:modelValue')?.at(-1)).toStrictEqual([[{ value: 'a' }]])
   })
 
   it('no longer renders PrimeVue controls', () => {
@@ -61,20 +66,23 @@ describe('TagsField', () => {
     expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
     // The remove control must stay reachable by an accessible name, not just by class: it is an
     // icon-only button, and an icon-only button with no label is invisible to assistive tech.
-    expect(w.get('.tag-remove').attributes('aria-label')).toBeTruthy()
+    // Asserting the exact resolved string (not just truthy) catches an unresolved i18n key, which
+    // vue-i18n renders as the raw key string — truthy, but not a real name.
+    expect(w.get('.tag-remove').attributes('aria-label')).toBe('Delete')
   })
 
-  // The migration's own assertion: the vendored composition's real data-slot hooks must be present
-  // (standing-constraints's test-assertion pattern) on both the value and label inputs per row.
-  it('renders the vendored input data-slot hook on both cells of a row', () => {
+  // A negative assertion alone (no PrimeVue component) also passes for a hand-rolled <input>, so
+  // assert the vendored composition's real data-slot hook positively too: both cells of a row, and
+  // both buttons (remove and add), not just the first one found.
+  it('renders the vendored input and button data-slot hooks throughout the row', () => {
     const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a' }] }, ...opts })
     expect(w.findAll('[data-slot="input"]')).toHaveLength(2)
-    expect(w.find('[data-slot="button"]').exists()).toBe(true)
+    expect(w.findAll('[data-slot="button"]')).toHaveLength(2)
   })
 
-  // Mounted with a non-empty model so the row's remove button actually exists — an empty-model
-  // mount (Task 9's mistake) would assert nothing about the row controls at all. A read-only or
-  // RBAC-read-only field must not offer any editable or delete affordance.
+  // Mounted with a non-empty model so the row's remove button actually exists — mounting an empty
+  // model would assert nothing about the row controls at all. A read-only or RBAC-read-only field
+  // must not offer any editable or delete affordance.
   it('genuinely disables every control — both row inputs, the remove button, and the add button', () => {
     const w = mount(TagsField, {
       props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a', label: 'x' }], disabled: true }, ...opts,
@@ -86,10 +94,10 @@ describe('TagsField', () => {
     expect(w.get('.tag-add').attributes('disabled')).toBe('')
   })
 
-  // Inbound direction (standing-constraints Task-5 rule), pinned past the initial render (Task-8's
-  // fix round): a post-mount setProps is the only thing that distinguishes a genuinely prop-driven
-  // control from one seeded once via defaultValue and then left alone (ItemFormView's "Reload
-  // latest" and the revisions drawer's revert both replace the whole model after mount).
+  // A post-mount prop change is the only assertion that distinguishes a prop-driven control from
+  // one seeded once from defaultValue and then left alone; ItemFormView's "Reload latest" and the
+  // revisions drawer's revert both replace the whole model after mount, so both cells of every row
+  // must follow a model swap, not just reflect it on the first render.
   it('reflects a post-mount model replacement on both cells of every row', async () => {
     const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a', label: 'alpha' }] }, ...opts })
     let inputs = w.findAll('.tag-row input')
@@ -99,5 +107,15 @@ describe('TagsField', () => {
     inputs = w.findAll('.tag-row input')
     expect((inputs[0].element as HTMLInputElement).value).toBe('b')
     expect((inputs[1].element as HTMLInputElement).value).toBe('beta')
+  })
+
+  // Without an aria-label, both inputs are unnamed native text boxes — a screen reader announces
+  // "edit text" twice per row with no way to tell the value cell from the display-text cell.
+  it('gives the value and display-text inputs distinct, resolved accessible names', () => {
+    const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a' }] }, ...opts })
+    const [valueInput, labelInput] = w.findAll('.tag-row input')
+    expect(valueInput.attributes('aria-label')).toBe('value')
+    expect(labelInput.attributes('aria-label')).toBe('display text (optional)')
+    expect(valueInput.attributes('aria-label')).not.toBe(labelInput.attributes('aria-label'))
   })
 })

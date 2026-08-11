@@ -219,6 +219,8 @@ export default {
   },
   fields: {
     add: 'Add',
+    tagValue: 'value',
+    tagDisplayText: 'display text (optional)',
     noFileSelected: 'No file selected',
     selectFile: 'Select',
     clear: 'Clear',
