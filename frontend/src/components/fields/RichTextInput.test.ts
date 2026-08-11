@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import RichTextInput from './RichTextInput.vue'
@@ -162,29 +162,57 @@ describe('RichTextInput', () => {
     }
   })
 
-  // The active/inactive toggle now rides a data-* attribute rather than a class, so twMerge never
-  // has to fight the vendored button's own class list for the same background utility.
-  it('flags the active toolbar state through data-active rather than a class', async () => {
-    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
-    await flushPromises()
-    const btn = w.get('[data-cmd="bold"]')
-    expect(btn.attributes('data-active')).toBe('false')
-    await btn.trigger('click')
-    // tiptap/vue-3 debounces its reactive editor state across two animation frames (see its
-    // useDebouncedRef), so the template doesn't re-render on the very next microtask tick.
+  // tiptap/vue-3 debounces its reactive editor state across two animation frames (see its
+  // useDebouncedRef in @tiptap/vue-3's Editor class), so a template re-render driven by
+  // editor.isActive() needs that wait, unlike reading vm.editor.isActive() directly.
+  async function waitForEditorReactivity(): Promise<void> {
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
     await flushPromises()
+  }
+
+  it('flags active toolbar state via data-active on a hand-written control', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    expect(w.get('[data-cmd="bold"]').attributes('data-active')).toBe('false')
+    await w.get('[data-cmd="bold"]').trigger('click')
+    await waitForEditorReactivity()
     expect(w.get('[data-cmd="bold"]').attributes('data-active')).toBe('true')
   })
 
-  it('no longer renders PrimeIcons font classes', async () => {
+  // alignCenter is one instance of the align v-for; a refactor that drops the data-active binding
+  // from the loop (rather than from a single hand-written button) would only be caught by
+  // asserting a templated control, not just hand-written ones. A fresh mount (rather than
+  // chaining onto the bold click above) sidesteps tiptap's stored-mark semantics: toggling bold
+  // with no text selected only stores it as a pending mark for the next typed character, and a
+  // later, unrelated command clears that pending mark — real editor behaviour, not something this
+  // migration changed, but it would make a combined assertion flaky for reasons unrelated to
+  // data-active.
+  it('flags active toolbar state via data-active on a templated control', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
+    expect(w.get('[data-cmd="alignCenter"]').attributes('data-active')).toBe('false')
+    await w.get('[data-cmd="alignCenter"]').trigger('click')
+    await waitForEditorReactivity()
+    expect(w.get('[data-cmd="alignCenter"]').attributes('data-active')).toBe('true')
+  })
+
+  // reka's own Popover portal is named Teleport, colliding with VTU's teleport stub, so its
+  // content needs renderStubDefaultSlot (already on via globalOpts) to stay queryable; opening
+  // both panels here is what makes their own markup visible to the assertion below.
+  async function openBothMenus(w: VueWrapper): Promise<void> {
+    await w.get('[data-cmd="color"]').trigger('click')
+    await w.get('[data-cmd="table"]').trigger('click')
+  }
+
+  it('no longer renders PrimeIcons font classes, including inside either open popover panel', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await openBothMenus(w)
     expect(w.html()).not.toMatch(/class="[^"]*\bpi\b/)
   })
 
-  // Icon-only toolbar buttons need names: today the pi-* buttons have no text node at all, so a
-  // screen reader announces "button" for four alignment controls in a row.
+  // Icon-only toolbar buttons need names: an icon with no text node otherwise announces only
+  // "button" to a screen reader.
   it('names every icon-only toolbar button', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -192,5 +220,21 @@ describe('RichTextInput', () => {
       const btn = w.get(`[data-cmd="${cmd}"]`)
       expect(btn.attributes('aria-label') || btn.text(), cmd).toBeTruthy()
     }
+  })
+
+  // ItemForm.vue wraps every field in <form @submit.prevent>, and this control has no ancestor
+  // that self-injects a type onto a bare <button> the way PopoverTrigger's as-child merge does
+  // for the two menu triggers below — every one of these needs its own explicit type="button" or
+  // its first click submits the whole record instead of running its command.
+  it('gives every button-rendered data-cmd control an explicit type="button", toolbar and both open menu panels alike', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await openBothMenus(w)
+    // colorFree is deliberately <input type="color">, not a button (real <button> or the
+    // vendored Button's stub tag) — it carries no submit hazard and is asserted separately below.
+    const buttons = w.findAll('[data-cmd]').filter((el) => el.element.tagName !== 'INPUT')
+    expect(buttons.length).toBeGreaterThan(20)
+    buttons.forEach((el) => expect(el.attributes('type'), el.attributes('data-cmd')).toBe('button'))
+    expect(w.get('[data-cmd="colorFree"]').attributes('type')).toBe('color')
   })
 })
