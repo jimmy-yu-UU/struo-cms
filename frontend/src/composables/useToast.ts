@@ -10,9 +10,6 @@ export type ToastOptions = {
   life?: number
 }
 
-// Deliberately mirrors PrimeVue's useToast().add({ severity, summary, detail, life }) so the
-// ~6 existing call sites move by changing an import path, not by being rewritten. sonner's
-// own API stays behind this boundary.
 const EMITTERS: Record<ToastSeverity, (title: string, opts: { description?: string; duration?: number }) => unknown> = {
   success: toast.success,
   info: toast.info,

@@ -1,8 +1,5 @@
 <script setup lang="ts">
-// Deliberately empty, not unfinished: the maintainer's call removed the old stats/recent-updates/
-// quick-actions dashboard outright, deleting components/dashboard/, composables/useDashboardData.ts,
-// and the dashboard-only lib/ helpers along with it. This is a placeholder pending a future revisit
-// that surfaces analytics-type data instead of those old self-reported counts.
+// Deliberately empty, not unfinished — otherwise a blank page here is indistinguishable from broken.
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/common/PageHeader.vue'
 
