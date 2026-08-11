@@ -27,7 +27,7 @@ describe('languageStore', () => {
     expect(store.loaded).toBe(false)
   })
 
-  it('dedupes concurrent load() calls into a single in-flight fetch (e.g. dashboard fan-out calling load() before any has resolved)', async () => {
+  it('dedupes concurrent load() calls into a single in-flight fetch (e.g. MediaLibraryView and MediaDetailDialog both calling load() before either has resolved)', async () => {
     let resolveFetch!: (v: unknown) => void
     const pending = new Promise((resolve) => { resolveFetch = resolve })
     const spy = vi.spyOn(languagesApi, 'getEnabled')

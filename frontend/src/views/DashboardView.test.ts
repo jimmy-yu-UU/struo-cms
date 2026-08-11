@@ -15,6 +15,6 @@ describe('DashboardView', () => {
   it('renders the dashboard heading and a placeholder line', async () => {
     const w = await mountView()
     expect(w.get('h1').text()).toBe('Dashboard')
-    expect(w.text()).toContain('A more useful dashboard is coming in a future release.')
+    expect(w.text()).toContain('This dashboard is not configured yet.')
   })
 })
