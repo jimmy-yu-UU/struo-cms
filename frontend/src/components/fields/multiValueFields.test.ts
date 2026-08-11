@@ -14,7 +14,9 @@ function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
 const opts = { global: { plugins: [PrimeVue] } }
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { noOptions: 'No options' } } },
+  messages: { en: { fields: {
+    noOptions: 'No options', selectedCount: '{n} selected', removeOption: 'Remove {label}', searchOptions: 'Search options…',
+  } } },
 })
 
 describe('MultiSelectField', () => {
@@ -33,10 +35,9 @@ describe('MultiSelectField', () => {
     expect(w.find('[data-slot="combobox-trigger"]').exists()).toBe(true)
   })
 
-  // Real click path: reka's ComboboxItem/ListboxItem select on `click` (unlike ui/select's
-  // pointerdown/pointerup), so once the popup is open jsdom can drive the actual production
-  // interaction — no exposed setter, no synthesised emit (standing-constraints "reka floating
-  // controls: test the real binding, not an exposed setter").
+  // reka's ComboboxItem/ListboxItem select on a real `click` (unlike ui/select's SelectItem, which
+  // is pointerdown/pointerup), so once the popup is open jsdom can drive the actual production
+  // interaction directly on the rendered option — no exposed setter, no synthesised $emit.
   it('appends a clicked option immutably', async () => {
     const before = ['a']
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: before }, ...comboOpts })
@@ -59,7 +60,6 @@ describe('MultiSelectField', () => {
     expect(w.text()).not.toContain('Alpha')
   })
 
-  // Standing-constraints "Accessible name on every floating control".
   it('gives the trigger an accessible name from the field label', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: 'Regions', options }), modelValue: [] }, ...comboOpts })
     expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe('Regions')
@@ -70,11 +70,10 @@ describe('MultiSelectField', () => {
     expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
   })
 
-  // Inbound direction pinned across a post-mount prop change (standing-constraints "Inbound
-  // assertions must survive a POST-MOUNT prop change"). Chips render from this component's own
-  // `selected` computed reading `props.modelValue` directly rather than from any reka-owned state,
-  // so this also guards a future refactor that reads the chip list from the Combobox root's local
-  // model instead of the prop.
+  // Chips render from this component's own `selected` computed reading `props.modelValue`
+  // directly rather than from any reka-owned state, so an initial-render-only assertion would stay
+  // green even if the prop stopped being read on updates. Asserting again after a real `setProps`
+  // is what actually proves the binding stays live, not just correct at mount.
   it('reflects a non-default model on the chip row, including after the model changes', async () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
     expect(w.text()).toContain('Alpha')
@@ -82,6 +81,46 @@ describe('MultiSelectField', () => {
     await w.setProps({ modelValue: ['b'] })
     expect(w.text()).not.toContain('Alpha')
     expect(w.text()).toContain('Beta')
+  })
+
+  // Every prior assertion reads our own markup (chips, emit, data-slot, aria-label, disabled) —
+  // none of them would notice `:model-value="selected"` being deleted from `<Combobox>`, since the
+  // chips and the click-driven emits never touch reka's own state. `ListboxItem` sets
+  // `aria-selected` from the root's own model (`valueComparator` handles arrays via `.some`), so
+  // asserting it — with the popup genuinely open — is the only way to pin that binding. Checked
+  // again after `setProps` because reka reads `passive` once at setup: an initial-render-only
+  // assertion cannot distinguish a live prop from a value that was only ever right at mount.
+  it('reflects the incoming model as aria-selected on the options, including after the model changes', async () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
+    await w.get('[data-slot="combobox-trigger"]').trigger('click')
+    const items = w.findAll('[role="option"]')
+    expect(items[0].attributes('aria-selected')).toBe('true')
+    expect(items[1].attributes('aria-selected')).toBe('false')
+
+    await w.setProps({ modelValue: ['b'] })
+    expect(items[0].attributes('aria-selected')).toBe('false')
+    expect(items[1].attributes('aria-selected')).toBe('true')
+  })
+
+  // The PrimeVue MultiSelect this replaces let a user deselect with one click on a chip's own ✕,
+  // without opening anything. The trigger is a <button>, so the remove control cannot nest inside
+  // it (invalid HTML, a real click/focus hazard) — it lives in its own chip row instead, driven by
+  // the same immutable toggleValue as the in-list click path.
+  it('removes a value by clicking its own chip remove button, without opening the popup', async () => {
+    const before = ['a', 'b']
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: before }, ...comboOpts })
+    const removeAlpha = w.get('[aria-label="Remove Alpha"]')
+    expect(removeAlpha.element.tagName).toBe('BUTTON')
+    await removeAlpha.trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['b']])
+    expect(before).toEqual(['a', 'b'])
+  })
+
+  it('keeps each chip remove button independently keyboard-reachable', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a', 'b'] }, ...comboOpts })
+    const removeButtons = w.findAll('button[aria-label^="Remove "]')
+    expect(removeButtons).toHaveLength(2)
+    for (const btn of removeButtons) expect(btn.attributes('tabindex')).not.toBe('-1')
   })
 })
 
