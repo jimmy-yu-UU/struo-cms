@@ -91,9 +91,9 @@ describe('field components (simple inputs)', () => {
   it('BooleanField renders a checkbox and is disabled when asked', () => {
     const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false, disabled: true }, ...opts })
     const box = w.get('[role="checkbox"]')
-    // reka uses the aria form for disabled state on some primitives and the native attribute on
-    // others; accept either rather than pinning a vendored implementation detail.
-    expect(box.attributes('aria-disabled') ?? box.attributes('disabled')).toBeDefined()
+    // Step 1 established this concretely: reka's CheckboxRoot renders a real <button>, so
+    // `disabled` reaches it as the native HTML attribute (not aria-disabled).
+    expect(box.attributes('disabled')).toBe('')
   })
 
   // Constraint 9: reka components bind their own onClick, so the emit path is only proven by
@@ -102,6 +102,21 @@ describe('field components (simple inputs)', () => {
     const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
     await w.get('[role="checkbox"]').trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([true])
+  })
+
+  // Fix round 1: the three tests above all mounted with modelValue: false, so nothing pinned the
+  // inbound direction of BooleanField's `:model-value="modelValue === true"` binding. A deleted or
+  // inverted binding would have stayed green. aria-checked is reka's unconditional, real-ARIA hook
+  // (CheckboxRoot.js) and is what Playwright reads.
+  it('BooleanField reflects a true model as checked', () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true }, ...opts })
+    expect(w.get('[role="checkbox"]').attributes('aria-checked')).toBe('true')
+  })
+
+  it('BooleanField emits false when clicked from true', async () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true }, ...opts })
+    await w.get('[role="checkbox"]').trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
   })
 
   // The migration's own assertion: the vendored composition's real data-slot hook must be present
