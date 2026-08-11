@@ -245,6 +245,7 @@ export default {
     pickADate: 'Pick a date',
     timePart: 'time',
     selectAFolder: 'Select a folder',
+    selectAnItem: 'Select an item',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
