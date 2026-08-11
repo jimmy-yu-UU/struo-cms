@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Tabs from 'primevue/tabs'
-import TabList from 'primevue/tablist'
-import Tab from 'primevue/tab'
-import TabPanels from 'primevue/tabpanels'
-import TabPanel from 'primevue/tabpanel'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { Badge } from '@/components/ui/badge'
 import FieldInput from './fields/FieldInput.vue'
 import RelationInput from './fields/RelationInput.vue'
 import { splitFields } from '../lib/splitFields'
@@ -48,43 +46,49 @@ defineExpose({ activeLocale })
 </script>
 
 <template>
-  <form class="item-form" @submit.prevent="emit('submit')">
-    <p v-if="serverError" class="error" role="alert">{{ serverError }}</p>
+  <form class="item-form grid max-w-[860px] gap-[18px]" @submit.prevent="emit('submit')">
+    <p v-if="serverError" class="error text-destructive m-0" role="alert">{{ serverError }}</p>
 
-    <Tabs v-if="fields.translatable.length" v-model:value="activeLocale">
-      <TabList>
-        <Tab v-for="loc in locales" :key="loc.code" :value="loc.code">
-          <span v-if="showDots" class="dot" :class="{ off: !localeFilled(loc.code) }" role="img" :aria-label="dotLabel(loc.code)" />
+    <Tabs v-if="fields.translatable.length" v-model="activeLocale">
+      <TabsList>
+        <!-- `class="tab"` is a test-only hook (ItemForm.test.ts counts rendered tabs by it); it
+             carries no styling of its own. -->
+        <TabsTrigger v-for="loc in locales" :key="loc.code" :value="loc.code" class="tab">
+          <span
+            v-if="showDots"
+            class="dot mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
+            :class="localeFilled(loc.code) ? 'bg-success' : 'off border-[1.5px] border-border bg-transparent'"
+            role="img"
+            :aria-label="dotLabel(loc.code)"
+          />
           {{ loc.name }}<span v-if="loc.isDefault"> *</span>
-        </Tab>
-      </TabList>
-      <TabPanels>
-        <TabPanel v-for="loc in locales" :key="loc.code" :value="loc.code">
-          <template v-if="loc.code === activeLocale">
-            <div v-for="f in fields.translatable" :key="f.name" class="field">
-              <div class="lbl-row">
-                <label>{{ f.label }}<span v-if="f.required && loc.isDefault" class="req">*</span></label>
-                <span class="tr-badge">{{ t('itemForm.translatableBadge') }}</span>
-              </div>
-              <FieldInput :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
-              <small v-if="loc.isDefault && errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent v-for="loc in locales" :key="loc.code" :value="loc.code" class="grid gap-[18px]">
+        <template v-if="loc.code === activeLocale">
+          <Field v-for="f in fields.translatable" :key="f.name" class="field">
+            <div class="lbl-row flex items-center gap-2">
+              <FieldLabel>{{ f.label }}<span v-if="f.required && loc.isDefault" class="text-destructive ml-0.5">*</span></FieldLabel>
+              <Badge variant="secondary" class="tr-badge">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
-          </template>
-        </TabPanel>
-      </TabPanels>
+            <FieldInput :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
+            <FieldError v-if="loc.isDefault && errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
+          </Field>
+        </template>
+      </TabsContent>
     </Tabs>
 
-    <div v-for="f in fields.shared" :key="f.name" class="field">
-      <label :for="f.name">{{ f.label }}<span v-if="f.required" class="req">*</span></label>
+    <Field v-for="f in fields.shared" :key="f.name" class="field">
+      <FieldLabel :for="f.name">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
       <FieldInput :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
-      <small v-if="f.helpText" class="help">{{ f.helpText }}</small>
-      <small v-if="errors[f.name]" class="field-error" role="alert">{{ errors[f.name] }}</small>
-    </div>
+      <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
+      <FieldError v-if="errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
+    </Field>
 
-    <section v-if="meta.relations && meta.relations.length" class="relations">
-      <h3>{{ t('itemForm.relations') }}</h3>
-      <div v-for="rel in meta.relations" :key="rel.name" class="field">
-        <label>{{ rel.label }}</label>
+    <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
+      <h3 class="m-0 text-lg text-foreground">{{ t('itemForm.relations') }}</h3>
+      <Field v-for="rel in meta.relations" :key="rel.name" class="field">
+        <FieldLabel>{{ rel.label }}</FieldLabel>
         <RelationInput
           :relation="rel"
           v-model="model.relations[rel.name]"
@@ -92,35 +96,7 @@ defineExpose({ activeLocale })
           :parent-id="itemId"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
         />
-      </div>
+      </Field>
     </section>
   </form>
 </template>
-
-<style scoped>
-.item-form { display: grid; gap: 18px; max-width: 860px; }
-.error { color: var(--danger, #dc2626); margin: 0; }
-.field { display: grid; gap: 6px; }
-/* Translatable fields live inside PrimeVue's tab panel, not as direct .item-form grid children —
-   mirror the form's 18px rhythm inside the panel. */
-.item-form :deep(.p-tabpanel) { display: grid; gap: 18px; }
-.field :deep(.p-select),
-.field :deep(.p-multiselect),
-.field :deep(.p-treeselect) { width: 100%; max-width: 480px; }
-.field label { font-size: 0.9rem; font-weight: 500; color: var(--fg); }
-.req { color: var(--danger, #dc2626); margin-left: 2px; }
-.help { color: var(--legacy-muted); font-size: 0.8rem; }
-.field-error { color: var(--danger, #dc2626); font-size: 0.8rem; }
-.relations { display: grid; gap: 14px; }
-.relations h3 { margin: 0; font-size: 1.125rem; color: var(--fg); }
-.lbl-row { display: flex; align-items: center; gap: 8px; }
-.tr-badge {
-  font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 5px;
-  background: var(--surface-2, color-mix(in srgb, var(--fg) 8%, transparent)); color: var(--legacy-muted);
-}
-.dot {
-  display: inline-block; width: 8px; height: 8px; border-radius: 99px;
-  background: var(--success, #16a34a); margin-right: 6px; vertical-align: middle;
-}
-.dot.off { background: transparent; border: 1.5px solid var(--border); }
-</style>
