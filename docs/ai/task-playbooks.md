@@ -275,7 +275,7 @@ collection's fields, columns, or labels; everything comes from `GET /api/schema`
 the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 
 1. **Locate the right directory** using the map in chapter 14: `api/` (thin REST wrappers), `components/`
-   (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `dashboard/`, `media/`, `revisions/`, `rbac/`),
+   (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `media/`, `revisions/`, `rbac/`),
    `composables/`, `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including
    `fieldTypes/`), `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
 2. **Theming**: for a screen still on PrimeVue, change both `frontend/src/assets/theme.css` (the OKLch

@@ -75,32 +75,7 @@ export default {
   },
   dashboard: {
     title: '儀表板',
-    greeting: {
-      morning: '早安 — 這是您網站今天的概況。',
-      afternoon: '午安 — 這是您網站今天的概況。',
-      evening: '晚安 — 這是您網站今天的概況。',
-    },
-    stats: {
-      items: '內容項目',
-      collections: '集合',
-      media: '媒體檔案',
-      users: '使用者',
-    },
-    recent: {
-      title: '最近更新',
-      colTitle: '標題',
-      colCollection: '集合',
-      colUpdated: '更新時間',
-      empty: '尚無最近更新的內容。',
-    },
-    quick: {
-      title: '快速動作',
-      uploadMedia: '上傳媒體',
-      newItem: '新增 {label}',
-      empty: '沒有可用的快速動作。',
-    },
-    loading: '載入儀表板中…',
-    error: '無法載入儀表板資料。',
+    comingSoon: '更實用的儀表板將於未來版本推出。',
   },
   collectionList: {
     count: '共 {n} 筆',
