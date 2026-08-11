@@ -19,6 +19,8 @@ export default {
     clearSort: '清除排序',
     previous: '上一頁',
     next: '下一頁',
+    columns: '欄位',
+    rowsPerPage: '每頁筆數',
   },
   confirm: {
     unsavedHeader: '尚未儲存的變更',

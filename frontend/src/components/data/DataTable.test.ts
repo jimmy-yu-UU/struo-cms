@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en'
 import DataTable, { type DataTableState, toSortParam } from './DataTable.vue'
@@ -28,8 +28,21 @@ const RowDataTable = DataTable<Row>
 function mountTable(overrides: Record<string, unknown> = {}) {
   return mount(RowDataTable, {
     props: { columns, rows, total: 2, state, ...overrides },
-    global: { plugins: [i18n] },
+    // reka-ui's dropdown-menu portal wrapper is itself named "Teleport" (see UserMenu.test.ts) --
+    // vue-test-utils' default teleport stub only special-cases Vue's own built-in Teleport, so
+    // match it by name and keep the default slot so the column-visibility menu content stays in
+    // the mounted tree instead of vanishing.
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
+}
+
+async function openColumnMenu(w: ReturnType<typeof mountTable>): Promise<void> {
+  await w.get('[data-testid="column-visibility-trigger"]').trigger('click')
+  await flushPromises()
+}
+
+function columnCheckbox(w: ReturnType<typeof mountTable>, label: string) {
+  return w.findAll('[role="menuitemcheckbox"]').find((el) => el.text() === label)
 }
 
 describe('DataTable', () => {
@@ -120,6 +133,82 @@ describe('DataTable', () => {
       page: 0,
       pageSize: 25,
     })
+  })
+})
+
+describe('DataTable column visibility', () => {
+  // The sabotage-provable case: this is the one test that goes red if
+  // `columnVisibilityFeature` is removed from DataTable.vue's `tableFeatures({...})` call --
+  // without it, column.getIsVisible() always returns true (table-core's
+  // columnVisibilityFeature.utils.js: "if (!columnVisibility) return true") and
+  // column.toggleVisibility() doesn't exist on the resolved column object at all
+  // (assignColumnPrototype never runs), so the click below would throw instead of hiding
+  // anything. Confirmed by literally commenting the feature out and re-running this file --
+  // see the task report for the exact before/after.
+  it('hiding a column removes it from both the header row and every body row (not just one side)', async () => {
+    const w = mountTable()
+    await openColumnMenu(w)
+    const statusCheckbox = columnCheckbox(w, 'Status')
+    expect(statusCheckbox).toBeDefined()
+    await statusCheckbox!.trigger('click')
+    await flushPromises()
+
+    expect(w.findAll('th')).toHaveLength(1)
+    expect(w.get('th').text()).toBe('Title')
+    for (const row of w.findAll('tbody tr')) {
+      expect(row.findAll('td')).toHaveLength(1)
+    }
+    // Status's values would have shown up in a second cell if getVisibleCells() had left an
+    // orphan <td> behind (or if getAllCells() were still in use).
+    expect(w.text()).not.toContain('published')
+    expect(w.text()).not.toContain('draft')
+    expect(w.text()).toContain('Alpha')
+    expect(w.text()).toContain('Beta')
+  })
+
+  // getAllLeafColumns().length would still read 2 here and overhang past the single remaining
+  // header cell.
+  it('shrinks the empty-state colspan to the still-visible column count, not all leaf columns', async () => {
+    const w = mountTable({ rows: [], total: 0, emptyMessage: 'Nothing here' })
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Status')!.trigger('click')
+    await flushPromises()
+    expect(w.get('td').attributes('colspan')).toBe('1')
+  })
+
+  // The one guard requirement: an empty table is unrecoverable for a user who doesn't know to
+  // reopen the menu, so the LAST visible column's own checkbox must refuse to uncheck.
+  it('refuses to hide the last remaining visible column', async () => {
+    const w = mountTable()
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Status')!.trigger('click') // hides Status; Title is now the sole survivor
+    await flushPromises()
+
+    await openColumnMenu(w) // selecting a checkbox item closes the menu; reopen it
+    const titleCheckbox = columnCheckbox(w, 'Title')
+    expect(titleCheckbox).toBeDefined()
+    expect(titleCheckbox!.attributes('aria-disabled')).toBe('true')
+
+    await titleCheckbox!.trigger('click') // disabled -- reka's MenuItem bails before toggling
+    await flushPromises()
+
+    expect(w.findAll('th')).toHaveLength(1)
+    expect(w.get('th').text()).toBe('Title')
+    expect(w.text()).toContain('Alpha') // table never went empty
+  })
+
+  it('lets a hidden column be shown again from the same menu', async () => {
+    const w = mountTable()
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Status')!.trigger('click') // hide
+    await flushPromises()
+
+    await openColumnMenu(w)
+    await columnCheckbox(w, 'Status')!.trigger('click') // show again
+    await flushPromises()
+
+    expect(w.findAll('th')).toHaveLength(2)
+    expect(w.text()).toContain('published')
   })
 })
 

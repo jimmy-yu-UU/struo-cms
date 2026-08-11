@@ -42,6 +42,7 @@ const i18n = createI18n({
         clearSort: 'Clear sorting', previous: 'Previous page', next: 'Next page',
         confirmDefaultHeader: 'Please confirm', confirmAccept: 'Confirm', confirmReject: 'Cancel',
         loadFailed: 'Load failed', actionFailed: 'Action failed',
+        columns: 'Columns', rowsPerPage: 'Rows per page',
       },
     },
   },
@@ -225,6 +226,24 @@ describe('CollectionListView', () => {
     expect(itemsApi.list).toHaveBeenCalledWith('article', expect.objectContaining({ page: 2, sort: '-status' }))
   })
 
+  it('onPageSizeChange resets to page 0 and reloads at the new page size', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 100 })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as any
+    vm.onPageChange(3)
+    await flushPromises()
+    vi.mocked(itemsApi.list).mockClear()
+    vm.onPageSizeChange(50)
+    await flushPromises()
+    // page reset to 0 -- an offset computed against the OLD page size is meaningless here
+    expect(itemsApi.list).toHaveBeenCalledWith('article',
+      expect.objectContaining({ page: 0, rows: 50 }))
+    expect(vm.tableState).toEqual({ sort: [], page: 0, pageSize: 50 })
+  })
+
   it('sends the applied filter spec to the API', async () => {
     seedSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
@@ -265,6 +284,9 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
   })
 
+  // Deliberate product decision (not incidental): the human explicitly scoped row selection,
+  // batch operations, and click-whole-row-to-edit OUT of the shadcn table migration and asked
+  // to keep the edit-button-only interaction. Do not "fix" this by wiring row clicks to onEdit.
   it('clicking a row cell (not the edit button) does not navigate', async () => {
     seedSchema()
     seedLanguage()
