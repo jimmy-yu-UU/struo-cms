@@ -46,6 +46,9 @@ public class MetadataScannerTests
         title.Searchable.Should().BeTrue();
         title.Translatable.Should().BeTrue();
         title.Group.Should().Be("Content");
+        // The one sortable field this repo ships: it is what makes SortableHeader's three-state
+        // cycle and DataTable's "never re-sorts client-side" guards reachable in the demo.
+        title.Sortable.Should().BeTrue();
 
         var body = ArticleMeta().Fields.Single(f => f.Name == "body");
         body.Interface.Should().Be(FieldInterface.RichText);

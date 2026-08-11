@@ -24,7 +24,7 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
     public Guid ArticleId { get; set; }
     [SugarColumn(UniqueGroupNameList = ["ux_article_translations_fk_locale"])]
     public string Locale { get; set; } = "";
-    [CmsField(Label = "Title", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1, Group = "Content")]
+    [CmsField(Label = "Title", Interface = FieldInterface.Text, Required = true, Searchable = true, Sortable = true, Sort = 1, Group = "Content")]
     public string Title { get; set; } = "";
     [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Body", Interface = FieldInterface.RichText, Sort = 2, Group = "Content")]
