@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
+import { useI18n } from 'vue-i18n'
 import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { resolveDisplayLabel } from '../../lib/resolveDisplayLabel'
+import DataTable, { type DataTableColumn, type DataTableState } from '@/components/data/DataTable.vue'
+import DataTablePagination from '@/components/data/DataTablePagination.vue'
+import { Button } from '@/components/ui/button'
 import type { RelationMeta } from '../../types/schema'
 
 const props = defineProps<{ relation: RelationMeta; parentId?: string }>()
 const router = useRouter()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
+const { t } = useI18n()
 
 type Row = { id: string; label: string }
 const rows = ref<Row[]>([])
@@ -52,15 +55,45 @@ async function load(): Promise<void> {
   }
 }
 
-function onPage(e: { page: number; rows: number }): void {
-  page.value = e.page
-  perPage.value = e.rows
+function onPage(p: number): void {
+  page.value = p
+  load()
+}
+
+function onPageSize(size: number): void {
+  page.value = 0
+  perPage.value = size
   load()
 }
 
 function openItem(id: string): void {
   router.push({ name: 'collection-item', params: { name: props.relation.targetCollection, id } })
 }
+
+// This list has never had a sortable column and the query load() builds carries no sort param, so
+// the state fed to DataTable always reports an empty sort — a clickable header here would sort
+// nothing.
+const tableState = computed<DataTableState>(() => ({ sort: [], page: page.value, pageSize: perPage.value }))
+
+function onTableState(next: DataTableState): void {
+  onPage(next.page)
+}
+
+const columns = computed<DataTableColumn<Row>[]>(() => [{
+  id: 'label',
+  accessorKey: 'label',
+  header: props.relation.label,
+  // DataTable has no row-click event and no slots at all, so the navigation affordance has to be
+  // the cell itself. A button also fixes what the old whole-row click never had: a role and an
+  // accessible name.
+  cell: ({ row }) => h(Button, {
+    type: 'button',
+    variant: 'link',
+    size: 'sm',
+    'data-testid': 'related-row',
+    onClick: () => openItem(row.original.id),
+  }, () => row.original.label),
+}])
 
 onMounted(load)
 defineExpose({ load, onPage, rows, total, loading, error })
@@ -72,18 +105,23 @@ defineExpose({ load, onPage, rows, total, loading, error })
     <template v-else>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <DataTable
-        :value="rows"
-        lazy
-        paginator
-        :rows="perPage"
-        :total-records="total"
+        :columns="columns"
+        :rows="rows"
+        :total="total"
+        :state="tableState"
         :loading="loading"
-        @page="onPage"
-        @row-click="(e: { data: Row }) => openItem(e.data.id)"
-      >
-        <Column field="label" :header="relation.label" />
-        <template #empty>No related items.</template>
-      </DataTable>
+        :empty-message="t('fields.noRelatedItems')"
+        :show-column-toggle="false"
+        @update:state="onTableState"
+      />
+      <DataTablePagination
+        :page="page"
+        :page-size="perPage"
+        :total="total"
+        :show-page-size-selector="false"
+        @update:page="onPage"
+        @update:page-size="onPageSize"
+      />
     </template>
   </div>
 </template>

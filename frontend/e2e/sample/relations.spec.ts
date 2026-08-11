@@ -278,7 +278,9 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
   await nameInput.fill(`${originalName} edited`)
 
   // Click the article row in the RelatedList -> same-record params-only nav -> dirty guard prompts.
-  await fieldByLabel(page, 'Articles').getByText(title).click()
+  // The related-list table has no row-click event, so the label itself renders as the button that
+  // carries navigation; target that button rather than the row's text.
+  await fieldByLabel(page, 'Articles').getByRole('button', { name: title }).click()
   const guard = page.getByRole('alertdialog').filter({ hasText: 'Unsaved changes' })
   await expect(guard).toBeVisible()
 
