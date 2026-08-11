@@ -59,6 +59,35 @@ describe('field components (simple inputs)', () => {
     expect(w.find('input').exists()).toBe(true)
   })
 
+  // The migration's own assertion: this field must no longer resolve a PrimeVue component, and the
+  // vendored composition's real data-slot hook must be present (see standing-constraints's
+  // test-assertion pattern — a negative assertion alone also passes for a hand-rolled <input>).
+  it('NumberField renders the vendored number-field input, not PrimeVue InputNumber', () => {
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 }, ...opts })
+    expect(w.findComponent({ name: 'InputNumber' }).exists()).toBe(false)
+    expect(w.find('[data-slot="input"]').exists()).toBe(true)
+  })
+
+  it('NumberField genuinely disables the vendored input control', () => {
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3, disabled: true }, ...opts })
+    expect(w.find('[data-slot="input"]').attributes('disabled')).toBe('')
+  })
+
+  // reka's NumberFieldRoot models a cleared field as `undefined` on `update:modelValue` (confirmed
+  // by direct observation of the vendored component — see task-4-report.md's Step 1 findings), not
+  // `null` and not a bare NaN. The CMS model wants null: a nullable numeric column legitimately
+  // clears, and a NaN would survive into buildItemPayload and poison any arithmetic on the way.
+  // NumberField.vue normalises undefined/NaN -> null at this boundary so nothing downstream has to
+  // know reka's convention.
+  it('NumberField normalises a cleared input to null', async () => {
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 }, ...opts })
+    await w.get('input').setValue('')
+    await w.get('input').trigger('blur')
+    const emitted = w.emitted('update:modelValue')
+    expect(emitted).toBeTruthy()
+    expect(emitted![emitted!.length - 1][0]).toBeNull()
+  })
+
   it('BooleanField renders a checkbox and is disabled when asked', () => {
     const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true, disabled: true }, ...opts })
     expect(w.find('input[type="checkbox"]').exists()).toBe(true)
