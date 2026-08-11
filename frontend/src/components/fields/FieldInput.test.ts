@@ -22,7 +22,7 @@ function field(over: Partial<FieldMeta> = {}): FieldMeta {
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over }
 }
 const stubs = {
-  InputText: { template: '<input class="stub-text" />' },
+  Input: { template: '<input class="stub-text" />' },
   Textarea: { template: '<textarea class="stub-textarea" />' },
   InputNumber: { template: '<input class="stub-number" />' },
   Checkbox: { template: '<input class="stub-checkbox" />' },

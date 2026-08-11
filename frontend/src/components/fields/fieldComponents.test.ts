@@ -70,6 +70,19 @@ describe('field components (simple inputs)', () => {
     const dt = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: null }, ...opts })
     expect(dt.findComponent({ name: 'DatePicker' }).props('showTime')).toBe(true)
   })
+
+  // The migration's own assertion: this field must no longer resolve a PrimeVue component.
+  // findComponent({ name }) is the same lookup the pre-migration tests used for Select/DatePicker.
+  it('TextField renders the vendored Input, not PrimeVue InputText', () => {
+    const w = mount(TextField, { props: { field: field({ interface: 'text' }), modelValue: 'x' }, ...opts })
+    expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
+    expect(w.find('input').exists()).toBe(true)
+  })
+
+  it('TextareaField keeps six rows after the migration', () => {
+    const w = mount(TextareaField, { props: { field: field({ interface: 'textarea' }), modelValue: 'x' }, ...opts })
+    expect(w.get('textarea').attributes('rows')).toBe('6')
+  })
 })
 
 describe('field components (choice + structural)', () => {
