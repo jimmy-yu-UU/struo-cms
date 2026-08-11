@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import Textarea from 'primevue/textarea'
+import { Textarea } from '@/components/ui/textarea'
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
@@ -48,9 +48,15 @@ function onInput(v: string) {
 </script>
 <template>
   <div class="json-field">
-    <Textarea :model-value="text" :disabled="disabled" rows="6" class="json-textarea"
-      :invalid="error !== null" spellcheck="false"
-      @update:model-value="(v: string) => onInput(v ?? '')" />
-    <small v-if="error" class="json-error p-error">{{ error }}</small>
+    <Textarea
+      :model-value="text"
+      :disabled="disabled"
+      :rows="6"
+      :aria-invalid="error !== null"
+      class="json-textarea font-mono"
+      spellcheck="false"
+      @update:model-value="(v) => onInput(String(v ?? ''))"
+    />
+    <small v-if="error" class="json-error text-destructive text-xs" role="alert">{{ error }}</small>
   </div>
 </template>
