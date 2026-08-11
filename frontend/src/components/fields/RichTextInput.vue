@@ -15,7 +15,7 @@ import {
   Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
@@ -222,15 +222,26 @@ defineExpose({ editor, insertImage })
         :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
     </div>
     <EditorContent class="rich-text__content min-h-32 p-2.5 [&_th]:bg-muted" :editor="editor" />
+    <!--
+      DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
+      can run to several rows, reka's DialogRoot locks body scroll while open, and plain
+      DialogContent is fixed-position/viewport-centered with no scroll container of its own, so
+      rows above and below the viewport become unreachable. DialogScrollContent's overlay carries
+      its own overflow-y-auto and keeps the content box in normal flow instead.
+
+      Its own width class is an unprefixed max-w-lg (no sm: modifier, unlike plain DialogContent),
+      so max-w-4xl below is unprefixed too — matching modifiers is what makes tailwind-merge drop
+      the vendored default instead of leaving both classes to fight on source order.
+    -->
     <Dialog v-model:open="imageDialogOpen">
-      <DialogContent class="sm:max-w-4xl">
+      <DialogScrollContent class="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{{ t('fields.richtext.insertImageTitle') }}</DialogTitle>
         </DialogHeader>
         <p v-if="imageError" class="text-destructive" role="alert">{{ imageError }}</p>
         <Input v-model="imageSearch" :placeholder="t('fields.searchFiles')" class="my-1" @update:model-value="debouncedLoadImages" />
         <MediaGrid :files="files" selectable @select="onImageSelected" />
-      </DialogContent>
+      </DialogScrollContent>
     </Dialog>
   </div>
 </template>
