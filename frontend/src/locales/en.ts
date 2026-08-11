@@ -244,6 +244,7 @@ export default {
     searchOptions: 'Search options…',
     pickADate: 'Pick a date',
     timePart: 'time',
+    selectAFolder: 'Select a folder',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
