@@ -36,7 +36,8 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
 - **`src/Struo.Api`** — the ASP.NET Core host: controllers (`Controllers/`), the GraphQL schema
   (`GraphQl/`), the envelope/error-handling plumbing (`Http/`), authentication/CSRF/CORS wiring
   (`Auth/`), and `Program.cs`. References `Struo.Application` and `Struo.Infrastructure`.
-- **`frontend/`** — a separate pnpm workspace (Vue 3 + PrimeVue + Pinia), not part of the .NET solution
+- **`frontend/`** — a separate pnpm workspace (Vue 3 + Pinia, mid-migration off PrimeVue onto
+  Tailwind v4 + shadcn-vue so both UI stacks currently coexist), not part of the .NET solution
   dependency graph at all; it talks to `Struo.Api` only over REST/GraphQL HTTP calls.
 
 The dependency direction above is a structural fact of the four `.csproj` files' `ProjectReference`

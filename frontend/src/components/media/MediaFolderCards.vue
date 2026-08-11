@@ -30,11 +30,11 @@ const emit = defineEmits<{
 .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .folder-card {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--legacy-radius-lg, 12px); background: var(--surface);
   transition: border-color var(--speed, .15s), box-shadow var(--speed, .15s);
 }
-.folder-card:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
-.folder-card__icon { color: var(--accent); font-size: 1.1rem; }
+.folder-card:hover { border-color: var(--legacy-accent); box-shadow: var(--shadow-1); }
+.folder-card__icon { color: var(--legacy-accent); font-size: 1.1rem; }
 .folder-card__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
 .folder-card__actions { display: flex; }
 </style>

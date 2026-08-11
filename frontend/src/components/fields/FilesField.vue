@@ -176,7 +176,7 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
   white-space: nowrap;
 }
 .files-field__empty {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-style: italic;
 }
 .files-field__search {

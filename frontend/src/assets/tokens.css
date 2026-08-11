@@ -1,0 +1,162 @@
+/* StruoCMS design tokens — shadcn semantic contract. The values declared below (:root and
+   .app-dark) are the source of truth; there is no separate design document to defer to.
+
+   NAMING TRAP: shadcn's --accent is the hover / focus / active SURFACE, not the brand
+   colour. Brand sky is --primary. Binding sky to --accent turns every hover surface blue. */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn defaults to `.dark`; this app has always toggled `.app-dark` and persists it in
+   localStorage['struo.theme'] (src/theme/resolveInitialTheme.ts). Re-point the variant
+   rather than renaming the class — the class name is load-bearing for e2e and for the
+   first-paint script that runs before Vue mounts. */
+@custom-variant dark (&:is(.app-dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #0284c7;             /* sky-600 — brand */
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;           /* zinc-100 */
+  --secondary-foreground: #111827;
+  --muted: #f4f4f5;               /* subtle SURFACE */
+  --muted-foreground: #64748b;    /* subdued TEXT */
+  --accent: color-mix(in oklab, #111827, transparent 95%);  /* hover surface */
+  --accent-foreground: #111827;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #0284c7;
+  --success: #16a34a;
+  --warning: #d97706;
+  --sidebar: color-mix(in oklab, #111827 3%, #ffffff);
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #0284c7;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in oklab, #111827, transparent 95%);
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #0284c7;
+  --radius: 0.625rem;
+  /* Legacy bridge, NOT part of the shadcn output contract below (@theme inline has no
+     --color-surface-2 and never should): a sunken/hover rung one step darker than --surface, for
+     the unmigrated screens still on theme.css's --bg/--surface/--fg family. Must live here, not
+     in theme.css, because it resolves to --muted and only this file may write `var(--muted)` —
+     see frontend/tests/legacyTokens.test.ts's own header for why. Leaves together with theme.css's
+     --legacy-* block, once the last such screen is migrated. */
+  --surface-2: var(--muted);
+  color-scheme: light;
+}
+
+.app-dark {
+  --background: #18181b;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #38bdf8;             /* sky-400 */
+  --primary-foreground: #082f49;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: color-mix(in oklab, #fafafa, transparent 95%);
+  --accent-foreground: #fafafa;
+  --destructive: #dc2626;
+  --border: #3f3f46;
+  --input: #3f3f46;
+  --ring: #38bdf8;
+  --success: #16a34a;
+  --warning: #d97706;
+  --sidebar: color-mix(in oklab, #fafafa 3%, #18181b);
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #082f49;
+  --sidebar-accent: color-mix(in oklab, #fafafa, transparent 95%);
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #3f3f46;
+  --sidebar-ring: #38bdf8;
+  /* See the --surface-2 comment in :root above. */
+  --surface-2: var(--muted);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  /* --destructive-foreground is deliberately NOT declared. Its only referencing call site
+     is calendar/CalendarCellTrigger.vue's data-unavailable text-destructive-foreground class,
+     on a ghost-variant button base — ghost has no background, so that text sits directly on
+     --background. shadcn's zinc default for this token is near-white, which would render
+     unavailable dates INVISIBLE on the white light-mode surface. Leaving it undeclared makes
+     the utility a silent no-op: the cell keeps inherited --foreground, and line-through still
+     communicates the disabled state. Do not "helpfully" add shadcn's default value here. */
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: "Geist", "Geist Sans", system-ui, "Segoe UI", "Noto Sans TC", sans-serif;
+  --font-mono: "Fira Code", ui-monospace, Menlo, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+@layer base {
+  /* Tailwind v4's preflight is `border: 0 solid` with NO colour (v3 defaulted every bare border
+     to gray-200), so a vendored `border`/`border-r`/`border-b` utility with no accompanying
+     colour class resolves to currentColor — i.e. whatever text colour happens to sit on that
+     element. That is what produced a foreground-coloured line down the sidebar (#111827 in
+     light, #fafafa in dark) instead of a subtle border. This is Tailwind's own documented v4
+     upgrade shim: restore a sane default so every OTHER bare border utility across
+     src/components/ui/ (read-only, can't be edited directly) gets one too. Utility classes that
+     DO specify a colour (`border-destructive`, `border-input`, ...) still win — they live in
+     Tailwind's `utilities` layer, which the cascade always ranks above `base`. */
+  *,
+  ::before,
+  ::after,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
+
+  /* Tailwind v4 preflight does not restore v3's implicit `cursor: pointer` on <button> —
+     browsers default a <button> to `cursor: default`. The old shell CSS's `.nav-item { cursor:
+     pointer }` covered this pre-migration; it was deleted with the rest of that stylesheet, and
+     neither shadcn's buttonVariants nor the vendored sidebar buttons carry a cursor utility.
+     Excludes disabled controls (native `disabled` and the `aria-disabled="true"` convention the
+     vendored sidebar/menu components use) — a disabled control should not look clickable. */
+  button:not(:disabled):not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}

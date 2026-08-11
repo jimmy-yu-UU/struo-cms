@@ -41,7 +41,7 @@ const typeDisplay = computed(() => fileTypeDisplay(props.file.contentType, props
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--radius, 8px);
+  border-radius: var(--legacy-radius, 8px);
 }
 .file-chip {
   width: 100%;
@@ -52,16 +52,16 @@ const typeDisplay = computed(() => fileTypeDisplay(props.file.contentType, props
   justify-content: center;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius, 8px);
-  background: var(--bg);
+  border-radius: var(--legacy-radius, 8px);
+  background: var(--surface-2);
   padding: 8px;
   overflow: hidden;
 }
-.file-chip__icon { font-size: 32px; color: var(--muted); }
+.file-chip__icon { font-size: 32px; color: var(--legacy-muted); }
 .file-chip__meta {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .04em;
-  color: var(--muted);
+  color: var(--legacy-muted);
 }
 </style>

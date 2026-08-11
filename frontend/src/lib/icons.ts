@@ -1,0 +1,104 @@
+import type { Component } from 'vue'
+import {
+  LayoutGrid, Images, Settings, Folder, FolderPlus, File as FileIcon, FileText, FileType,
+  FileSpreadsheet, Tag, Trash2, Pencil, Eye, Plus, Search, Undo2, Copy,
+  ChevronDown, ChevronLeft, ChevronRight, ArrowUp, ArrowDown,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Menu, User, LogOut,
+  Sun, Moon, Check, X, Upload, History, RotateCcw, List, ListOrdered, Table,
+  Megaphone, Newspaper, Image as ImageIcon, Video, Volume2,
+} from '@lucide/vue'
+
+// One table, two input dialects:
+//   * PrimeIcons tokens ("pi pi-th-large" / "pi-th-large") — what this codebase's own
+//     templates say today.
+//   * Semantic names ("article", "folder") — what the backend's [CmsCollection(Icon = "...")]
+//     emits and what docs/guide/*/04-defining-a-collection.md documents.
+// Keys are stored WITHOUT the "pi-" prefix so both dialects normalise to the same lookup.
+//
+// Every key here is required by one of three things: a literal `pi-*` token still present in
+// shipped (non-test) source under src/ (enforced by frontend/tests/iconCoverage.test.ts); a
+// semantic name a [CmsCollection(Icon = "...")] attribute actually emits (article/folder/tag from
+// samples/Struo.Sample.Blog, megaphone from docs/guide/*/04-defining-a-collection.md); or, for the
+// four `align-*` keys, a runtime class a dynamic template literal actually builds even though no
+// literal token for it exists in source (see the comment above those keys). There are no other
+// speculative entries.
+export const ICON_MAP: Record<string, Component> = {
+  // --- navigation / shell ---
+  'th-large': LayoutGrid,
+  images: Images,
+  cog: Settings,
+  bars: Menu,
+  user: User,
+  'sign-out': LogOut,
+  sun: Sun,
+  moon: Moon,
+  'angle-down': ChevronDown,
+  'angle-left': ChevronLeft,
+  'angle-right': ChevronRight,
+  'chevron-left': ChevronLeft,
+
+  // --- actions ---
+  plus: Plus,
+  search: Search,
+  pencil: Pencil,
+  eye: Eye,
+  trash: Trash2,
+  undo: Undo2,
+  check: Check,
+  times: X,
+  upload: Upload,
+  copy: Copy,
+  history: History,
+  replay: RotateCcw,
+
+  // --- reordering / alignment indicators ---
+  'arrow-up': ArrowUp,
+  'arrow-down': ArrowDown,
+  // RichTextInput.vue builds these dynamically (`` `pi pi-align-${direction}` ``), so the literal
+  // token never appears in source — only the "align-" prefix does. Mapped ahead of that
+  // component's own migration so the four real runtime classes have somewhere to resolve to; see
+  // the coverage test's prefix-match handling of tokens ending in "-".
+  'align-left': AlignLeft,
+  'align-center': AlignCenter,
+  'align-right': AlignRight,
+  'align-justify': AlignJustify,
+
+  // --- rich text: lists / tables ---
+  list: List,
+  'sort-numeric-down': ListOrdered,
+  table: Table,
+
+  // --- file / media kinds ---
+  file: FileIcon,
+  'file-edit': FileText,
+  'file-pdf': FileType,
+  'file-word': FileText,
+  'file-excel': FileSpreadsheet,
+  image: ImageIcon,
+  video: Video,
+  'volume-up': Volume2,
+  folder: Folder,
+  'folder-plus': FolderPlus,
+
+  // --- semantic names emitted by [CmsCollection(Icon = "...")] ---
+  article: Newspaper,
+  tag: Tag,
+  megaphone: Megaphone,
+}
+
+/**
+ * Resolves an icon name to a lucide component.
+ *
+ * Accepts "pi pi-foo", "pi-foo" or a bare semantic name. A full class string may carry other
+ * utility classes alongside the icon token, in either order (e.g. "nav-icon pi pi-folder" or
+ * "pi pi-angle-down nav-chev") — the "pi-" token is picked out explicitly rather than assumed to
+ * be first or last. Unknown names fall back to a generic file icon rather than throwing —
+ * collection metadata is author-supplied and a typo must not break the sidebar.
+ */
+export function resolveIcon(name: string | null | undefined): Component {
+  if (!name) return FileIcon
+  const parts = name.trim().split(/\s+/)
+  const token = parts.find((p) => p.startsWith('pi-')) ?? parts.pop() ?? ''
+  const key = token.startsWith('pi-') ? token.slice(3) : token
+  return Object.hasOwn(ICON_MAP, key) ? ICON_MAP[key] : FileIcon
+}

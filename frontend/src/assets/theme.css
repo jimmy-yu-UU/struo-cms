@@ -1,18 +1,25 @@
-/* StruoCMS design tokens — source of truth: brand-spec.md (OKLch core) + prototype palette. */
+/* StruoCMS legacy design tokens — transitional. The screens not yet migrated to Tailwind/shadcn
+   (tokens.css) still read these; delete this file once every such screen is migrated. */
+/* --surface-2 is declared in tokens.css, not here — see that file's comment on --surface-2
+   (frontend/tests/legacyTokens.test.ts's header explains why only tokens.css may reference
+   --muted). */
 :root {
   --bg: oklch(0.984 0.003 247.9);
   --surface: oklch(1 0 0);
   --fg: oklch(0.208 0.042 265.8);
-  --muted: oklch(0.554 0.046 257.4);
-  --border: oklch(0.929 0.013 255.5);
-  --accent: oklch(0.588 0.158 241.9);
-  --success: #16a34a;
   --warn: #d97706;
   --danger: #dc2626;
-  --radius: 8px;
-  --radius-lg: 12px;
+  /* Renamed off the shadcn contract: tokens.css owns --muted / --accent / --radius / --radius-lg
+     now and means something different by each (subtle surface / hover surface / a 10px base
+     that derives the 6px+8px scale / a derived large radius). These four carry the
+     PRE-migration meaning — subdued text, brand sky, and literal 8px/12px corners — for the
+     views not yet on Tailwind utilities. Delete this block together with the last PrimeVue-era
+     screen. */
+  --legacy-muted: oklch(0.554 0.046 257.4);
+  --legacy-accent: oklch(0.588 0.158 241.9);
+  --legacy-radius: 8px;
+  --legacy-radius-lg: 12px;
   --speed: .15s;
-  --sidebar-w: 260px;
   --shadow-1: 0 1px 2px color-mix(in srgb, #020617 6%, transparent);
   --shadow-2: 0 6px 24px color-mix(in srgb, #020617 9%, transparent);
   --shadow-3: 0 24px 64px color-mix(in srgb, #020617 24%, transparent);
@@ -22,13 +29,23 @@
   color-scheme: light;
 }
 .app-dark {
-  --bg: oklch(0.129 0.042 264.7);
-  --surface: oklch(0.208 0.042 265.8);
-  --fg: oklch(0.968 0.007 247.9);
-  --muted: oklch(0.704 0.04 256.8);
-  --border: oklch(0.279 0.041 260.0);
-  --accent: oklch(0.746 0.16 232.7);
-  --success: #4ade80;
+  /* Re-point to the shadcn tokens (already zinc in .app-dark) rather than keeping the hand-picked
+     OKLch approximations: --bg/--surface/--fg carried a small blue chroma that read as
+     "slate, not zinc" next to the migrated shell. --bg keeps the page-backdrop role only (still
+     LoginView's .login-wrap) — its other pre-migration role, a sunken/hover rung darker than
+     --surface, now lives on --surface-2 (tokens.css) instead, since --background and --card
+     collapse to the same value here and would otherwise make that rung a no-op. */
+  --bg: var(--background);
+  --surface: var(--card);
+  --fg: var(--foreground);
+  /* --legacy-accent maps to --primary, NOT --accent: tokens.css's own NAMING TRAP comment warns
+     --accent is a hover/focus SURFACE colour, not the brand colour — binding here would swap
+     every caller's visible brand-sky accent (e.g. RichTextInput's active-toolbar-button state)
+     for a near-invisible hover tint. */
+  --legacy-muted: var(--muted-foreground);
+  --legacy-accent: var(--primary);
+  --legacy-radius: 8px;
+  --legacy-radius-lg: 12px;
   --warn: #fbbf24;
   --danger: #f87171;
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45);
@@ -40,7 +57,7 @@
 html { font-family: var(--font); }
 body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-level scrollbar */
 /* Theme toggle: fade the token-driven colors instead of hard-cutting. Scoped to color properties
-   only — a bare `transition: all` would fight the component transitions below (nav, shell grid).
+   only — a bare `transition: all` would fight component-local transitions elsewhere.
    The reduced-motion block right after this disables it wholesale. */
 *, *::before, *::after {
   transition: background-color var(--speed) ease, border-color var(--speed) ease, color var(--speed) ease;
@@ -49,115 +66,8 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* ---- Shell layout ---- */
-.shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-w, 260px) 1fr;
-  grid-template-rows: 56px 1fr;
-  grid-template-areas: 'top top' 'side main';
-  height: 100dvh;
-  transition: grid-template-columns var(--speed, .15s) ease-out;
-}
-.shell.collapsed { --sidebar-w: 76px; }
-.topbar {
-  grid-area: top; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 16px;
-  background: var(--surface); border-bottom: 1px solid var(--border); z-index: 50;
-}
-.topbar .spacer { flex: 1; }
-.topbar .brand-btn {
-  display: flex; align-items: center; gap: 10px; border: none; background: transparent;
-  padding: 4px 10px; border-radius: var(--radius, 8px); cursor: pointer; color: var(--fg); min-width: 0;
-}
-.topbar .brand-btn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar .brand-btn:hover { background: var(--bg); }
-.topbar .mark {
-  width: 28px; height: 28px; border-radius: 8px; background: var(--accent);
-  color: #fff; display: grid; place-items: center; font-weight: 700;
-}
-.user-wrap { position: relative; }
-.user-btn {
-  display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px;
-  border: none; border-radius: 999px; background: transparent; cursor: pointer; color: var(--fg);
-}
-.user-btn:hover { background: var(--bg); }
-.avatar {
-  width: 30px; height: 30px; border-radius: 999px; background: var(--bg);
-  border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted);
-}
-.user-name { display: grid; text-align: left; line-height: 1.2; }
-.user-name b { font-size: .83rem; }
-.user-name span { font-size: .7rem; color: var(--muted); }
-.sidebar {
-  grid-area: side; display: flex; flex-direction: column; gap: 4px; padding: 14px 12px;
-  background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto;
-}
-.nav-sep { border: none; border-top: 1px solid var(--border); margin: 10px 4px; width: auto; }
-.nav-item {
-  display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: var(--radius, 8px);
-  border: none; background: transparent; color: var(--muted); font-size: .9rem; font-weight: 500;
-  cursor: pointer; text-align: left; width: 100%; transition: background var(--speed, .15s), color var(--speed, .15s);
-}
-.nav-item:hover { background: var(--bg); color: var(--fg); }
-.nav-item.active { background: var(--bg); color: var(--fg); font-weight: 600; }
-.nav-parent .nav-chev { margin-left: auto; width: 14px; transition: transform var(--speed, .15s); }
-.nav-group.open .nav-parent .nav-chev { transform: rotate(180deg); }
-.nav-sub { display: grid; gap: 2px; padding-left: 18px; }
-.collapse-chev { width: 14px; text-align: center; flex: none; transition: transform var(--speed, .15s); }
-.shell.collapsed .collapse-chev { transform: rotate(180deg); }
-.side-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
-.shell.collapsed .nav-label, .shell.collapsed .side-ver, .shell.collapsed .nav-chev { display: none; }
-.shell.collapsed .nav-item { justify-content: center; padding: 9px; }
-.shell.collapsed .nav-sub { display: none; }
-.scrim { position: fixed; inset: 56px 0 0 0; background: var(--overlay); z-index: 35; border: none; padding: 0; }
-/* min-width: 0 — grid items default to min-width:auto and refuse to shrink below their
-   widest child, blowing the shell past the viewport on narrow screens. */
-.content { grid-area: main; min-width: 0; overflow-y: auto; overflow-x: clip; background: var(--surface); }
-.page { padding: 24px 28px 48px; }
 .app-breadcrumb { margin-bottom: 14px; background: transparent; border: none; padding: 0; }
-@media (max-width: 1023px) {
-  .shell { grid-template-columns: 1fr; grid-template-areas: 'top' 'main'; }
-  .sidebar {
-    position: fixed; top: 56px; bottom: 0; left: 0; width: 280px;
-    transform: translateX(-105%); transition: transform var(--speed, .15s) ease-out;
-    z-index: 40; box-shadow: var(--shadow-2);
-  }
-  .shell.drawer .sidebar { transform: none; }
-  .user-name { display: none; }
-}
-@media (max-width: 520px) {
-  .page { padding: 16px 14px 40px; }
-  .topbar { padding: 0 10px; }
-  /* 0,2,0 specificity: must beat PrimeVue's runtime-injected .p-select{display:inline-flex} */
-  .topbar .lang-switcher { display: none; }
-}
 
-/* ---- Shell: icon button, nav icon, caption, nav error ---- */
-.icon-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; padding: 0; border: none;
-  border-radius: var(--radius, 8px); background: transparent; color: var(--muted);
-  cursor: pointer; transition: background var(--speed, .15s), color var(--speed, .15s);
-}
-.icon-btn:hover { background: var(--bg); color: var(--fg); }
-@media (pointer: coarse) { .icon-btn { width: 44px; height: 44px; } }
-.nav-icon { width: 18px; text-align: center; flex: none; }
-.caption { font-size: .8rem; font-weight: 500; color: var(--muted); }
-.nav-error {
-  display: grid; gap: 8px; padding: 12px; margin: 4px 0;
-  border: 1px solid var(--danger); border-radius: var(--radius, 8px);
-  color: var(--danger); font-size: .85rem;
-}
-.nav-error button {
-  justify-self: start; padding: 6px 12px; border: 1px solid var(--border);
-  border-radius: var(--radius, 8px); background: var(--surface); color: var(--fg); cursor: pointer;
-}
-.nav-error button:hover { background: var(--bg); }
-
-/* ---- visibility utilities — keep LAST in this file: they must win source-order ties
-   against same-specificity display rules like .icon-btn / .nav-item (the desktop
-   hamburger bug was exactly this ordering trap). ---- */
-.only-mobile { display: none; }
-@media (max-width: 1023px) {
-  .only-mobile { display: inline-flex; }
-  .only-desktop { display: none; }
-}
+/* .caption still styles PageHeader/LoginView captions on unmigrated screens — remove alongside
+   this file (see the header comment above). */
+.caption { font-size: .8rem; font-weight: 500; color: var(--legacy-muted); }

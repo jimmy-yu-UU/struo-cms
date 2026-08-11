@@ -166,7 +166,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 
 .file-picker__missing,
 .file-picker__empty {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-style: italic;
 }
 

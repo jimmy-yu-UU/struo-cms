@@ -33,9 +33,9 @@ territory and needs no change under `frontend/src`.
 | Directory | Contents |
 |---|---|
 | `api/` | One thin module per REST resource — `apiClient.ts` is the shared envelope-aware fetch wrapper; `itemsApi.ts`, `schemaApi.ts`, `filesApi.ts`, `languagesApi.ts`, `rbacApi.ts`, `settingsApi.ts`, `appConfigApi.ts` — typed calls, no business logic. |
-| `assets/` | `theme.css` — the OKLch design-token custom properties and the shell/layout CSS built on them. |
-| `components/` | `ItemForm.vue` (the generated item form) directly under `components/`, plus `fields/` (one editor component per field interface, chapter 5), `common/` (`PageHeader`, `ListToolbar`, `TableFooter` — shared across every list/form view), `shell/` (topbar, sidebar nav item, theme toggle, UI language switcher, brand mark), `dashboard/`, `media/`, `revisions/`, `rbac/`. |
-| `composables/` | Cross-cutting reactive logic, e.g. `useDashboardData.ts`. |
+| `assets/` | `theme.css` — the OKLch palette tokens (plus a handful of `--legacy-*`-prefixed ones) still read by the screens not yet migrated off PrimeVue; its old shell/layout CSS (`.shell`, `.topbar`, `.sidebar`, `.nav-item`, …) has been deleted as those screens moved to Tailwind utilities. `tokens.css` — the Tailwind v4 entry point (`@import "tailwindcss"`) and the shadcn semantic token layer (`--background`, `--primary`, `--radius`, …) the migrated screens use. |
+| `components/` | `ItemForm.vue` (the generated item form) directly under `components/`, plus `ui/` (vendored shadcn atoms — `button`, `table`, `select`, `dialog`, `sidebar`, … — generated output; **read-only**, no edits and no `:deep()` into it), `data/` (`DataTable`, `SortableHeader`, `DataTablePagination`, `FilterBuilder` — the TanStack-table-backed list primitives `CollectionListView` is built on), `fields/` (one editor component per field interface, chapter 5), `common/` (`PageHeader`, plus `ListToolbar`/`TableFooter`, which `MediaLibraryView` still uses — `CollectionListView` has moved to `data/`'s primitives instead), `shell/` (topbar, sidebar nav item, theme toggle, UI language switcher, brand mark), `media/`, `revisions/`, `rbac/`. |
+| `composables/` | Cross-cutting reactive logic, e.g. `useConfirm.ts`. |
 | `i18n/` | `index.ts` — the `vue-i18n` instance (`legacy: false`), wired to `locales/`. |
 | `layouts/` | `AppShell.vue` — the topbar + sidebar + content grid every authenticated route renders inside. |
 | `lib/` | Framework-free helper functions: `fieldTypes/` (the field-type registry, below), plus the formatting/validation/query helpers views and field components share. |
@@ -76,32 +76,37 @@ class, two systems, nothing separate to keep in sync. The initial mode is resolv
 even exist, in `theme/resolveInitialTheme.ts`: a saved `struo.theme` in `localStorage`, else
 `prefers-color-scheme`, else `light`.
 
-To re-theme: edit the `struoPresetConfig` semantic tokens in `preset.ts` (swap `sky`/`slate` for
-different PrimeVue palette tokens, or hand-write OKLch values) and the corresponding custom properties
-in `theme.css`'s `:root`/`.app-dark` blocks. Chapter 3's `Branding:Name`/`Branding:LogoUrl` reach only
-the product name and logo, never the color palette — the palette is a template default edited in
-source, not a per-deployment configuration key.
+To re-theme a screen still on PrimeVue: edit the `struoPresetConfig` semantic tokens in `preset.ts`
+(swap `sky`/`slate` for different PrimeVue palette tokens, or hand-write OKLch values) and the
+corresponding custom properties in `theme.css`'s `:root`/`.app-dark` blocks.
+
+For a screen already migrated to Tailwind/shadcn, the token layer to edit instead is
+**`frontend/src/assets/tokens.css`** — the shadcn semantic custom properties (`--background`,
+`--foreground`, `--primary`, `--radius`, …), declared once on `:root` for light and re-declared on
+`.app-dark` for dark, the same toggle class `preset.ts`/`theme.css` use. **`frontend/src/components/ui/`
+is vendored, read-only output** (no edits, no `:deep()` into it) — a re-theme changes the token layer
+(`tokens.css`) or a wrapper component that sits outside `ui/` and composes its primitives, never a file
+inside `ui/` itself.
+
+Chapter 3's `Branding:Name`/`Branding:LogoUrl` reach only the product name and logo, never the color
+palette — the palette is a template default edited in source, not a per-deployment configuration key.
 
 ## Overriding PrimeVue's built-in styles
 
 **Caution:** a same-specificity rule in `theme.css` does not reliably beat a PrimeVue component's own
 runtime-injected styles. PrimeVue ships its component CSS as its own stylesheet, not as part of
 `theme.css`'s cascade — a bare `.p-select { … }` in `theme.css` ties on specificity against PrimeVue's
-own `.p-select` rule, and which one wins then depends on injection/source order, not intent. This has
-already bitten this codebase once: the comment directly above `.topbar .lang-switcher { display: none; }`
-in `theme.css` notes it needs "0,2,0 specificity: must beat PrimeVue's runtime-injected
-`.p-select{display:inline-flex}`".
+own `.p-select` rule, and which one wins then depends on injection/source order, not intent.
 
-**The correct approach: raise specificity with a compound selector**, not a bare PrimeVue class. Two
-patterns already used in this codebase:
-
-- A plain compound selector in unscoped `theme.css` — `.topbar .lang-switcher` (two classes,
-  specificity `0,2,0`) beats bare `.p-select` (`0,1,0`).
-- A component-scoped `:deep()` paired with a real ancestor class inside a `<style scoped>` block —
-  `frontend/src/components/ItemForm.vue`'s `.field :deep(.p-select), .field :deep(.p-multiselect),
-  .field :deep(.p-treeselect) { width: 100%; max-width: 480px; }`, or `LoginView.vue`'s
-  `.field :deep(.p-inputtext), .field :deep(.p-password) { … }`. `:deep()` alone does not raise
-  specificity — pairing it with an ancestor class does.
+**This technique — this section — applies only to a screen still on PrimeVue.** A screen already
+migrated to Tailwind/shadcn has no PrimeVue classes to fight in the first place; style it with plain
+Tailwind utilities or `tokens.css`. For a screen still on PrimeVue, **raise specificity with a compound
+selector**, not a bare PrimeVue class — the pattern still live in this codebase is a component-scoped
+`:deep()` paired with a real ancestor class inside a `<style scoped>` block:
+`frontend/src/components/ItemForm.vue`'s `.field :deep(.p-select), .field :deep(.p-multiselect),
+.field :deep(.p-treeselect) { width: 100%; max-width: 480px; }`, or `LoginView.vue`'s
+`.field :deep(.p-inputtext), .field :deep(.p-password) { … }`. `:deep()` alone does not raise
+specificity — pairing it with an ancestor class does.
 
 Avoid reaching for `!important` here: it wins the immediate override but leaves the *next* override —
 yours or a fork's — fighting the same battle one level worse.
@@ -121,8 +126,8 @@ The active locale is a `UiLocale` (`'zh-TW' | 'en'`, `frontend/src/theme/resolve
 resolved before any store exists (`localStorage['struo.uiLocale']`, else the hardcoded default
 `'zh-TW'`), then owned at runtime by the `uiLocaleStore` Pinia store: `set(locale)` updates
 `i18n.global.locale.value`, sets `<html lang>`, and persists the choice back to `localStorage`.
-`UiLanguageSwitcher.vue` is the only place that calls it, driven by a PrimeVue `Select` whose two
-options read `t('lang.zh-TW')` / `t('lang.en')`.
+`UiLanguageSwitcher.vue` is the only place that calls it, driven by the shadcn/reka-ui `Select`
+(`@/components/ui/select`, not PrimeVue's) whose two options read `t('lang.zh-TW')` / `t('lang.en')`.
 
 **To add a new UI locale** (e.g. Japanese):
 

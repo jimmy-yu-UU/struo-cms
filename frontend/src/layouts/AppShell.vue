@@ -1,57 +1,51 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import Toast from 'primevue/toast'
-import { useSchemaStore } from '../stores/schemaStore'
-import { useSidebarStore } from '../stores/sidebarStore'
-import TheTopbar from '../components/shell/TheTopbar.vue'
-import TheSidebar from '../components/shell/TheSidebar.vue'
-import AppBreadcrumb from '../components/shell/AppBreadcrumb.vue'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { Toaster } from '@/components/ui/sonner'
+import { useSchemaStore } from '@/stores/schemaStore'
+import TheTopbar from '@/components/shell/TheTopbar.vue'
+import TheSidebar from '@/components/shell/TheSidebar.vue'
+import AppBreadcrumb from '@/components/shell/AppBreadcrumb.vue'
+import ConfirmHost from '@/components/shell/ConfirmHost.vue'
 
 const schema = useSchemaStore()
-const sidebar = useSidebarStore()
 const route = useRoute()
-const { t } = useI18n()
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && sidebar.drawerOpen) sidebar.closeDrawer()
-}
-
-onMounted(() => {
-  schema.load()
-  window.addEventListener('keydown', onKeydown)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
-})
-
-watch(
-  () => route.path,
-  () => sidebar.closeDrawer(),
-)
+onMounted(() => { schema.load() })
 </script>
 
 <template>
-  <div class="shell" :class="{ collapsed: sidebar.collapsed, drawer: sidebar.drawerOpen }">
-    <TheTopbar />
+  <SidebarProvider>
     <TheSidebar />
-    <button
-      v-if="sidebar.drawerOpen"
-      type="button"
-      class="scrim"
-      :aria-label="t('shell.closeMenu')"
-      @click="sidebar.closeDrawer()"
-    />
-    <main class="content">
-      <div class="page">
-        <AppBreadcrumb />
-        <!-- Key on route.path so params-only navigations between records of the same route remount the
-             view (init() re-runs, loads the target item); query changes (list page/sort) do not. -->
-        <router-view :key="route.path" />
+    <SidebarInset>
+      <TheTopbar />
+      <!-- SidebarInset already renders the document's <main data-slot="sidebar-inset"> — a
+           second nested <main> here would be invalid HTML and give screen readers two
+           competing "main content" landmarks, so this is a plain <div>.
+           No overflow-y-auto: SidebarInset (vendored, read-only) never gives this div a
+           bounded height to scroll within (min-h-svh is a floor, not a cap), so that class
+           was dead — scrolling genuinely happens at the document level; see TheTopbar's
+           sticky header for how the topbar stays pinned through that. overflow-x-clip is
+           real and stays: it bounds horizontal overflow regardless of vertical scroll model. -->
+      <div class="min-w-0 flex-1 overflow-x-clip bg-card">
+        <div class="px-7 pb-12 pt-6 max-[520px]:px-4 max-[520px]:pb-10 max-[520px]:pt-4">
+          <AppBreadcrumb />
+          <!-- Key on route.path so params-only navigations between records of the same route
+               remount the view (init() re-runs, loads the target item); query changes
+               (list page/sort) do not. -->
+          <router-view :key="route.path" />
+        </div>
       </div>
-    </main>
+    </SidebarInset>
+
+    <!-- The app's global outlets, mounted exactly once. Toast (PrimeVue) stays alongside
+         Toaster (shadcn/vue-sonner) until the last `primevue/usetoast` call site migrates —
+         six views/components still call it, and ToastService.add() emits on
+         ToastEventBus with no host subscribed (silently, no error) if this is removed. -->
     <Toast position="top-right" />
-  </div>
+    <Toaster position="top-right" />
+    <ConfirmHost />
+  </SidebarProvider>
 </template>

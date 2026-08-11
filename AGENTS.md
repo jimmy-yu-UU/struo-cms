@@ -42,7 +42,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `src/Struo.Application` | Application-layer abstractions, use-case contracts, options, query/security contracts. |
 | `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, all `AddStruoXxx` DI registration. |
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
-| `frontend/` | The Vue 3 + PrimeVue admin SPA, a separate pnpm workspace. |
+| `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace — mid-migration off PrimeVue onto Tailwind v4 + shadcn-vue, so both UI stacks currently coexist. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `db/migrations/` | Reviewed, forward-only ALTER scripts for evolving an already-created schema; the template ships none — anything here belongs to the fork that put it there. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
@@ -240,11 +240,12 @@ five standing gates, and is not run by CI.
 - Never weaken the dependency rule (no reversed or skip-layer project references).
 - **Never add documentation the reader does not need in order to act.** No change narratives ("this used
   to be X"), no investigation journals (they belong in the doc comment of the class they explain), no
-  restating a rule that already has a home elsewhere — link to it instead. This cuts *both* ways: do
+  restating a rule that already has a home elsewhere — link to it instead, and no preference notes (a
+  comment or test that only justifies something never built protects no code). This cuts *both* ways: do
   **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
   consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
   regression. The test is "would a reader act differently without this?", never "is this long?".
-  `docs/ai/conventions.md`, "What documentation may contain", has the full rule and the four
+  `docs/ai/conventions.md`, "What documentation may contain", has the full rule and the five
   anti-patterns.
 
 ## Where to read more

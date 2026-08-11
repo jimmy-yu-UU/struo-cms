@@ -8,17 +8,6 @@ import { i18n } from '../../i18n'
 const push = vi.fn()
 let currentRoute: { name: string; params: Record<string, string> }
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => currentRoute }))
-vi.mock('primevue/breadcrumb', () => ({
-  default: {
-    name: 'Breadcrumb',
-    props: ['model'],
-    // PrimeVue always invokes command with { originalEvent, item } — mirror that contract here
-    // rather than calling command() bare, since the real anchor's native click event is what
-    // the fix under test (originalEvent.preventDefault()) actually operates on.
-    template:
-      '<ul class="pv-bc"><li v-for="(m,i) in model" :key="i" class="crumb" @click="m.command && m.command({ originalEvent: $event, item: m })">{{ m.label }}</li></ul>',
-  },
-}))
 
 describe('AppBreadcrumb', () => {
   beforeEach(() => {
@@ -32,31 +21,33 @@ describe('AppBreadcrumb', () => {
 
   it('renders the crumb trail and navigates on a non-leaf crumb', async () => {
     const wrapper = mount(AppBreadcrumb, { global: { plugins: [i18n] } })
-    const labels = wrapper.findAll('.crumb').map((c) => c.text())
-    expect(labels).toEqual(['儀表板', 'Content', 'Article', '編輯項目'])
-    // Click the Dashboard crumb -> pushes home.
-    await wrapper.findAll('.crumb')[0].trigger('click')
+    const items = wrapper.findAll('[data-slot="breadcrumb-item"]')
+    expect(items.map((i) => i.text())).toEqual(['儀表板', 'Content', 'Article', '編輯項目'])
+
+    // Click the Dashboard crumb (a real <a>) -> pushes home.
+    const dashboardLink = items[0].find('a')
+    expect(dashboardLink.exists()).toBe(true)
+    await dashboardLink.trigger('click')
     expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
-    // The leaf has no command -> clicking does not push again.
+
+    // The leaf has no link (BreadcrumbPage, not BreadcrumbLink) -> nothing to click, and
+    // clicking whatever it renders as does not push again.
     push.mockClear()
-    await wrapper.findAll('.crumb')[3].trigger('click')
+    expect(items[3].find('a').exists()).toBe(false)
+    await items[3].trigger('click')
     expect(push).not.toHaveBeenCalled()
   })
 
-  it('prevents the anchor default action before pushing, so a guard-suspended navigation is not cancelled by hash nav', () => {
+  it('prevents the anchor default action before pushing, so a guard-suspended navigation is not cancelled by hash nav', async () => {
     const wrapper = mount(AppBreadcrumb, { global: { plugins: [i18n] } })
-    const model = (
-      wrapper.vm as unknown as {
-        model: { label: string; command?: (event: { originalEvent?: { preventDefault: () => void } }) => void }[]
-      }
-    ).model
-    const dashboardCrumb = model.find((m) => m.label === '儀表板')!
-    expect(dashboardCrumb.command).toBeTypeOf('function')
+    const link = wrapper.findAll('[data-slot="breadcrumb-item"]')[0].find('a')
+    expect(link.exists()).toBe(true)
 
-    const preventDefault = vi.fn()
-    dashboardCrumb.command!({ originalEvent: { preventDefault } })
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault')
+    link.element.dispatchEvent(event)
 
-    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(preventDefaultSpy).toHaveBeenCalledOnce()
     expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { reactive, computed, provide, inject } from 'vue'
+import { reactive } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -32,6 +32,18 @@ const i18n = createI18n({
         purgeHeader: 'Delete permanently',
         purgeMessage: 'Permanently delete this item? This cannot be undone.',
       },
+      filterBuilder: {
+        addCondition: 'Add condition', clear: 'Clear conditions', apply: 'Search',
+        field: 'Field', operator: 'Operator', value: 'Value', remove: 'Remove condition',
+        opEq: 'equals', opNeq: 'does not equal', opContains: 'contains',
+      },
+      common: {
+        sortAscending: 'Sort ascending', sortDescending: 'Sort descending',
+        clearSort: 'Clear sorting', previous: 'Previous page', next: 'Next page',
+        confirmDefaultHeader: 'Please confirm', confirmAccept: 'Confirm', confirmReject: 'Cancel',
+        loadFailed: 'Load failed', actionFailed: 'Action failed',
+        columns: 'Columns', rowsPerPage: 'Rows per page',
+      },
     },
   },
 })
@@ -54,39 +66,11 @@ vi.mock('../api/itemsApi', () => ({
 vi.mock('../api/schemaApi', () => ({
   schemaApi: { getAll: vi.fn(), get: vi.fn() },
 }))
-// The DataTable/Column stubs render just enough real markup for the row-click and
-// icon-presence assertions below: a single <tbody><tr> to click on, and each Column's
-// #body scoped slot rendered once so action-button icons appear in the DOM. Neither
-// stub replicates PrimeVue's real per-row Column dispatch (only the first `value` row
-// is ever rendered) -- a reactive `computed` provide/inject plumbs that single row's
-// real data down to each Column so cell-content assertions (e.g. the deletedAt column)
-// can see it, and stay current when `value` changes after an async reload.
-vi.mock('primevue/datatable', () => ({
-  default: {
-    name: 'DataTable',
-    props: ['value'],
-    setup(props: { value: Record<string, unknown>[] }) {
-      provide('rowData', computed(() => props.value?.[0] ?? {}))
-      return {}
-    },
-    template: '<table><tbody><tr><slot /></tr></tbody></table>',
-  },
-}))
-vi.mock('primevue/column', () => ({
-  default: {
-    name: 'Column',
-    setup() {
-      return { rowData: inject('rowData', computed(() => ({}))) }
-    },
-    template: '<div><slot name="body" :data="rowData" /></div>',
-  },
-}))
-vi.mock('primevue/inputtext', () => ({ default: { name: 'InputText', template: '<input />' } }))
-vi.mock('primevue/selectbutton', () => ({ default: { name: 'SelectButton', template: '<div />' } }))
-vi.mock('primevue/confirmdialog', () => ({ default: { name: 'ConfirmDialog', template: '<div />' } }))
-vi.mock('primevue/button', () => ({ default: { name: 'Button', template: '<button />' } }))
+// Confirmation is asked through the store-backed composable now (see composables/useConfirm) —
+// no dialog is mounted inside this view (ConfirmHost lives once at the AppShell level), so tests
+// only need to control what require() resolves to and inspect what it was called with.
 const confirmRequire = vi.fn()
-vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
 
 function seedSchema() {
   const schema = useSchemaStore()
@@ -121,7 +105,8 @@ function seedLanguage() {
 
 describe('CollectionListView', () => {
   beforeEach(() => {
-    setActivePinia(createPinia()); vi.clearAllMocks(); pushMock.mockClear(); confirmRequire.mockClear()
+    setActivePinia(createPinia()); vi.clearAllMocks(); pushMock.mockClear()
+    confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
     mockRoute.params.name = 'article'
   })
   afterEach(() => { vi.useRealTimers() })
@@ -133,7 +118,7 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ status: 'draft' }], total: 1 })
     mountView()
     await flushPromises()
-    expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
+    expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, filter: undefined, locale: 'en', deleted: undefined })
   })
 
   it('deep link / hard refresh: loads schema itself (not pre-seeded) then loads items', async () => {
@@ -156,7 +141,7 @@ describe('CollectionListView', () => {
       relations: [],
     }])
     await flushPromises()
-    expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
+    expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: undefined, filter: undefined, locale: 'en', deleted: undefined })
     expect(wrapper.text()).not.toContain('Collection not found')
     expect(wrapper.text()).not.toContain("don't have access")
   })
@@ -206,17 +191,71 @@ describe('CollectionListView', () => {
     expect(wrapper.text()).toContain('Server error.')
   })
 
-  it('onSort builds a descending token and reloads', async () => {
-    seedSchema()
-    seedLanguage()
+  it('translates the table state into the backend sort token', async () => {
+    seedSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const wrapper = mountView()
+    const w = mountView()
+    await flushPromises()
+
+    await (w.vm as any).onTableState({ sort: [{ id: 'title', desc: true }], page: 0, pageSize: 25 })
+    await flushPromises()
+    expect(vi.mocked(itemsApi.list)).toHaveBeenLastCalledWith('article', expect.objectContaining({ sort: '-title' }))
+
+    await (w.vm as any).onTableState({ sort: [{ id: 'title', desc: false }], page: 0, pageSize: 25 })
+    await flushPromises()
+    expect(vi.mocked(itemsApi.list)).toHaveBeenLastCalledWith('article', expect.objectContaining({ sort: 'title' }))
+
+    await (w.vm as any).onTableState({ sort: [], page: 0, pageSize: 25 })
+    await flushPromises()
+    expect(vi.mocked(itemsApi.list)).toHaveBeenLastCalledWith('article', expect.objectContaining({ sort: undefined }))
+  })
+
+  it('onPageChange moves to the requested page and reloads while keeping the active sort', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 100 })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as any
+    await vm.onTableState({ sort: [{ id: 'status', desc: true }], page: 0, pageSize: 25 })
     await flushPromises()
     vi.mocked(itemsApi.list).mockClear()
-    ;(wrapper.vm as unknown as { onSort: (e: unknown) => void }).onSort({ sortField: 'status', sortOrder: -1 })
+    vm.onPageChange(2)
     await flushPromises()
-    expect(itemsApi.list).toHaveBeenCalledWith('article', { page: 0, rows: 25, sort: '-status', search: undefined, locale: 'en' })
+    expect(itemsApi.list).toHaveBeenCalledWith('article', expect.objectContaining({ page: 2, sort: '-status' }))
+  })
+
+  it('onPageSizeChange resets to page 0 and reloads at the new page size', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 100 })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as any
+    vm.onPageChange(3)
+    await flushPromises()
+    vi.mocked(itemsApi.list).mockClear()
+    vm.onPageSizeChange(50)
+    await flushPromises()
+    // page reset to 0 -- an offset computed against the OLD page size is meaningless here
+    expect(itemsApi.list).toHaveBeenCalledWith('article',
+      expect.objectContaining({ page: 0, rows: 50 }))
+    expect(vm.tableState).toEqual({ sort: [], page: 0, pageSize: 50 })
+  })
+
+  it('sends the applied filter spec to the API', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as any).onFilterApply({ title: { op: '_contains', value: 'hello' } })
+    await flushPromises()
+    expect(vi.mocked(itemsApi.list)).toHaveBeenLastCalledWith('article', expect.objectContaining({
+      filter: { title: { op: '_contains', value: 'hello' } },
+      page: 0, // a new filter must return to the first page
+    }))
   })
 
   it('onEdit navigates to the item edit page', async () => {
@@ -231,36 +270,18 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
   })
 
-  it('read-only viewer sees a view (eye) action instead of edit, and onEdit still navigates', async () => {
+  it('read-only viewer sees a view action instead of edit, and onEdit still navigates', async () => {
     seedSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: false,
       permissions: { article: { read: true, write: false, delete: false } } }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', status: 'draft' }], total: 1 })
     const w = mountView()
     await flushPromises()
-    expect(w.html()).toContain('pi-eye')
-    expect(w.html()).not.toContain('pi-pencil')
+    expect(w.find('[data-testid="row-view"]').exists()).toBe(true)
+    expect(w.find('[data-testid="row-edit"]').exists()).toBe(false)
     const vm: any = w.vm
     vm.onEdit({ id: '42' })
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
-  })
-
-  it('clicking a row body does not navigate', async () => {
-    seedSchema()
-    seedLanguage()
-    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', translations: {} }], total: 1 })
-    const wrapper = mountView()
-    await flushPromises()
-    // Emit the DataTable's own row-click component event (not a native DOM click on the
-    // stub's <tr>, which the stub never translates into anything) -- this is what a real
-    // PrimeVue DataTable emits on row click. If a listener were ever bound back onto
-    // DataTable (e.g. @row-click="onEdit"), Vue attribute fallthrough would deliver it as
-    // an onRowClick prop on the stub, and $emit('row-click', ...) below would invoke it,
-    // driving pushMock -- so this assertion actually fails against that regression.
-    wrapper.findComponent({ name: 'DataTable' }).vm.$emit('row-click', { data: { id: '42' } })
-    await flushPromises()
-    expect(pushMock).not.toHaveBeenCalled()
   })
 
   it('New button navigates to create when canWrite', async () => {
@@ -313,7 +334,7 @@ describe('CollectionListView', () => {
     ;(w.vm as any).setMode('trash')
     await flushPromises()
     expect(itemsApi.list).toHaveBeenCalledWith('article',
-      { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en', deleted: 'only' })
+      { page: 0, rows: 25, sort: undefined, filter: undefined, locale: 'en', deleted: 'only' })
   })
 
   it('edit button renders only in active mode; trash rows have no edit action', async () => {
@@ -322,10 +343,10 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42' }], total: 1 })
     const w = mountView()
     await flushPromises()
-    expect(w.html()).toContain('pi-pencil')
+    expect(w.find('[data-testid="row-edit"]').exists()).toBe(true)
     ;(w.vm as any).setMode('trash')
     await flushPromises()
-    expect(w.html()).not.toContain('pi-pencil')
+    expect(w.find('[data-testid="row-edit"]').exists()).toBe(false)
   })
 
   it('active delete on a soft-delete collection soft-deletes (no purge) and reloads', async () => {
@@ -335,12 +356,10 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
     const w = mountView()
     await flushPromises()
-    ;(w.vm as any).onDelete({ id: '1' })
-    const arg = confirmRequire.mock.calls[0][0]
-    expect(arg.message).toContain('restore')
     vi.mocked(itemsApi.list).mockClear()
-    await arg.accept()
+    await (w.vm as any).onDelete({ id: '1' })
     await flushPromises()
+    expect(confirmRequire.mock.calls[0][0].message).toContain('restore')
     expect(itemsApi.remove).toHaveBeenCalledWith('article', '1')
     expect(itemsApi.list).toHaveBeenCalled() // reloaded
   })
@@ -351,7 +370,8 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', status: 'draft' }], total: 1 })
     const w = mountView()
     await flushPromises()
-    ;(w.vm as any).onDelete({ id: '1' })
+    await (w.vm as any).onDelete({ id: '1' })
+    await flushPromises()
     expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
   })
 
@@ -364,11 +384,36 @@ describe('CollectionListView', () => {
     await flushPromises()
     ;(w.vm as any).setMode('trash')
     await flushPromises()
-    ;(w.vm as any).onPurge({ id: '1' })
-    const arg = confirmRequire.mock.calls[0][0]
-    expect(arg.message).toContain('Permanently')
-    await arg.accept()
+    await (w.vm as any).onPurge({ id: '1' })
+    await flushPromises()
+    expect(confirmRequire.mock.calls[0][0].message).toContain('Permanently')
     expect(itemsApi.remove).toHaveBeenCalledWith('article', '1', { purge: true })
+  })
+
+  it('cancelling the delete confirm skips the delete entirely', async () => {
+    seedSoftSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
+    confirmRequire.mockResolvedValue(false)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as any).onDelete({ id: '1' })
+    await flushPromises()
+    expect(itemsApi.remove).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the purge confirm skips the purge entirely', async () => {
+    seedSoftSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1' }], total: 1 })
+    confirmRequire.mockResolvedValue(false)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).setMode('trash')
+    await flushPromises()
+    await (w.vm as any).onPurge({ id: '1' })
+    await flushPromises()
+    expect(itemsApi.remove).not.toHaveBeenCalled()
   })
 
   it('restore calls the API directly (no confirm) and reloads', async () => {
@@ -405,9 +450,7 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
     const w = mountView()
     await flushPromises()
-    ;(w.vm as any).onDelete({ id: '1' })
-    const arg = confirmRequire.mock.calls[0][0]
-    await arg.accept()
+    await (w.vm as any).onDelete({ id: '1' })
     await flushPromises()
     expect(reloadSpy).toHaveBeenCalled()
   })
@@ -421,9 +464,7 @@ describe('CollectionListView', () => {
     vi.mocked(itemsApi.remove).mockResolvedValue(undefined)
     const w = mountView()
     await flushPromises()
-    ;(w.vm as any).onDelete({ id: '1' })
-    const arg = confirmRequire.mock.calls[0][0]
-    await arg.accept()
+    await (w.vm as any).onDelete({ id: '1' })
     await flushPromises()
     expect(reloadSpy).not.toHaveBeenCalled()
   })
@@ -468,47 +509,13 @@ describe('CollectionListView', () => {
     expect((w.vm as any).error).toContain('Restore failed.')
   })
 
-  // Search debounce hygiene (unmount/switch cancel) + bail clears orphaned spinner.
-  // Fake only setTimeout/clearTimeout so flushPromises (setImmediate-based) still resolves promises.
-  it('coalesces rapid search input into a single load after 300ms (debounce merge)', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    seedSchema(); seedLanguage()
-    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mountView()
-    await flushPromises() // initial onMounted load
-    vi.mocked(itemsApi.list).mockClear()
-    const vm = w.vm as any
-    vm.onSearchInput('a')
-    vm.onSearchInput('ab')
-    vm.onSearchInput('abc')
-    vi.advanceTimersByTime(299)
-    await flushPromises()
-    expect(itemsApi.list).not.toHaveBeenCalled() // still within the debounce window
-    vi.advanceTimersByTime(1)
-    await flushPromises()
-    expect(itemsApi.list).toHaveBeenCalledTimes(1)
-    expect(itemsApi.list).toHaveBeenCalledWith('article',
-      { page: 0, rows: 25, sort: undefined, search: 'abc', locale: 'en' })
-  })
-
-  it('unmount cancels a pending search: no list load fires after the component is gone', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    seedSchema(); seedLanguage()
-    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
-    const w = mountView()
-    await flushPromises()
-    vi.mocked(itemsApi.list).mockClear()
-    ;(w.vm as any).onSearchInput('foo') // schedules a debounced load
-    w.unmount()
-    vi.advanceTimersByTime(300)
-    await flushPromises()
-    expect(itemsApi.list).not.toHaveBeenCalled()
-  })
-
-  it('switching collection cancels the pending search: only watch(name) reloads (not the typed search)', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  // AppShell keys <router-view> on route.path (see AppShell.test.ts's remount-contract test), so
+  // switching collections (collections/:name) never reuses this instance — it unmounts the old
+  // one and mounts a fresh one for the new route.params.name. There is no live params watcher to
+  // "reset" here; the reset a switch produces in production IS a brand-new instance's own
+  // startup state. This test asserts exactly that startup contract: a fresh mount for a given
+  // collection begins with default sort/filters/mode and issues exactly one load for it.
+  it('a fresh mount for a collection starts with default sort/filters/mode and loads once', async () => {
     const article = {
       name: 'article', label: 'Article', defaultDisplayField: 'status',
       fields: [{ name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
@@ -522,22 +529,21 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+
+    // Simulate the remount: this IS what production does on a collection switch -- AppShell
+    // tears down the 'article' instance and mounts a brand-new one keyed on the new path, which
+    // reads 'other' as route.params.name from its very first render.
+    mockRoute.params.name = 'other'
     const w = mountView()
     await flushPromises()
-    vi.mocked(itemsApi.list).mockClear()
-    ;(w.vm as any).onSearchInput('foo') // pending debounced search against 'article'
-    mockRoute.params.name = 'other' // switch collection -> watch(name) must cancel the pending search
-    await flushPromises()
-    // watch(name) fired exactly one reload for the new collection, with search reset.
+    const vm = w.vm as any
+
+    expect(vm.tableState).toEqual({ sort: [], page: 0, pageSize: 25 })
+    expect(vm.filters).toEqual({})
+    expect(vm.mode).toBe('active')
     expect(itemsApi.list).toHaveBeenCalledTimes(1)
     expect(itemsApi.list).toHaveBeenCalledWith('other',
-      { page: 0, rows: 25, sort: undefined, search: undefined, locale: 'en' })
-    // The cancelled search must never fire, even after its window elapses.
-    vi.advanceTimersByTime(300)
-    await flushPromises()
-    expect(itemsApi.list).toHaveBeenCalledTimes(1)
-    expect(itemsApi.list).not.toHaveBeenCalledWith('article',
-      { page: 0, rows: 25, sort: '-status', search: 'foo', locale: 'en' })
+      { page: 0, rows: 25, sort: undefined, filter: undefined, locale: 'en', deleted: undefined })
   })
 
   it('bail (no longer readable) clears the spinner it would otherwise orphan', async () => {
@@ -586,15 +592,15 @@ describe('CollectionListView', () => {
     })
     const w = mountView()
     await flushPromises()
-    expect(w.find('.trash-banner').exists()).toBe(false)
+    expect(w.find('[role="status"]').exists()).toBe(false)
     ;(w.vm as any).setMode('trash')
     await flushPromises()
-    expect(w.find('.trash-banner').exists()).toBe(true)
+    expect(w.find('[role="status"]').exists()).toBe(true)
     expect(w.text()).toContain('2026')
   })
 
   // The columns/isSelectField helpers are still live
-  // (they drive the Tag branch) even though linkField/row-link coverage was removed.
+  // (they drive the Badge branch) even though linkField/row-link coverage was removed.
   it('orders the default display field first and detects select-type columns', async () => {
     seedSchema(); seedLanguage() // seedSchema's article has defaultDisplayField: 'status' (interface: select)
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }

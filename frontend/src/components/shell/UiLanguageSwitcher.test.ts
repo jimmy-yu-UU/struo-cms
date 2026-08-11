@@ -1,20 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import UiLanguageSwitcher from './UiLanguageSwitcher.vue'
 import { useUiLocaleStore } from '../../stores/uiLocaleStore'
 import { i18n } from '../../i18n'
 
-vi.mock('primevue/select', () => ({
-  default: {
-    name: 'Select',
-    props: ['modelValue', 'options', 'optionLabel', 'optionValue'],
-    emits: ['update:modelValue'],
-    template:
-      '<select class="lang-select" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)">' +
-      '<option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option></select>',
-  },
-}))
+// reka-ui's Select portal is itself named "Teleport"; SelectTrigger/SelectItem also respond to
+// pointer events, not click -- see vitest.setup.ts for why both matter here.
+function mountSwitcher() {
+  return mount(UiLanguageSwitcher, {
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+  })
+}
+
+async function openSelect(wrapper: ReturnType<typeof mountSwitcher>) {
+  await wrapper.find('[role="combobox"]').trigger('pointerdown')
+  await flushPromises()
+}
 
 describe('UiLanguageSwitcher', () => {
   beforeEach(() => {
@@ -23,18 +25,30 @@ describe('UiLanguageSwitcher', () => {
     i18n.global.locale.value = 'zh-TW'
   })
 
-  it('renders both locale options and reflects the current locale', () => {
-    const wrapper = mount(UiLanguageSwitcher, { global: { plugins: [i18n] } })
-    const options = wrapper.findAll('option').map((o) => o.text())
+  it('renders both locale options and reflects the current locale', async () => {
+    const wrapper = mountSwitcher()
+    // SelectValue's label lookup depends on SelectItem registration, which — while the
+    // dropdown is closed — happens inside a detached document fragment mounted in onMounted,
+    // one tick after the initial synchronous render.
+    await flushPromises()
+    expect(wrapper.find('[role="combobox"]').text()).toContain('繁體中文')
+
+    await openSelect(wrapper)
+    const options = wrapper.findAll('[role="option"]').map((o) => o.text())
     expect(options).toEqual(['繁體中文', 'English'])
-    expect((wrapper.find('select.lang-select').element as HTMLSelectElement).value).toBe('zh-TW')
   })
 
   it('changing the select calls uiLocaleStore.set', async () => {
     const store = useUiLocaleStore()
     const spy = vi.spyOn(store, 'set')
-    const wrapper = mount(UiLanguageSwitcher, { global: { plugins: [i18n] } })
-    await wrapper.find('select.lang-select').setValue('en')
+    const wrapper = mountSwitcher()
+
+    await openSelect(wrapper)
+    const enOption = wrapper.findAll('[role="option"]').find((o) => o.text() === 'English')
+    expect(enOption).toBeDefined()
+    await enOption!.trigger('pointerup')
+    await flushPromises()
+
     expect(spy).toHaveBeenCalledWith('en')
   })
 })

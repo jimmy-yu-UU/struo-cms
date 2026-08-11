@@ -64,7 +64,7 @@ function uploaded(f: FileRow): string {
 .media-list th {
   text-align: left;
   padding: 8px 12px;
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
@@ -72,7 +72,7 @@ function uploaded(f: FileRow): string {
   cursor: pointer;
   transition: background var(--speed, .15s);
 }
-.media-list__row:hover { background: var(--bg); }
+.media-list__row:hover { background: var(--surface-2); }
 .media-list td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
@@ -97,7 +97,7 @@ function uploaded(f: FileRow): string {
   cursor: pointer;
 }
 .media-list__open:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--legacy-accent);
   outline-offset: -2px;
 }
 </style>

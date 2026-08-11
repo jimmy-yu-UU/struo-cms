@@ -120,9 +120,10 @@ test('navigating away with an unsaved edit prompts the guard; reject keeps the e
   await brandNameInput(page).fill(edited)
 
   // Navigate away (SPA route change -> onBeforeRouteLeave -> the leave guard prompts). Use the
-  // breadcrumb "Dashboard" home crumb (AppBreadcrumb's <nav class="p-breadcrumb">, a router command),
-  // not the sidebar (which is an <aside>, no <nav>). Scoped to .p-breadcrumb so it stays unambiguous.
-  await page.locator('.p-breadcrumb').getByText('Dashboard', { exact: true }).click()
+  // breadcrumb "Dashboard" home crumb (AppBreadcrumb's vendored Breadcrumb, a router command), not
+  // the sidebar (which is an <aside>, no <nav>). Scoped to the breadcrumb's own aria-label="breadcrumb"
+  // nav landmark (src/components/ui/breadcrumb/Breadcrumb.vue) so it stays unambiguous.
+  await page.getByRole('navigation', { name: /breadcrumb/i }).getByText('Dashboard', { exact: true }).click()
   await expect(guardDialog(page)).toBeVisible()
 
   // Reject -> stays on /settings, edit preserved, no navigation happened.
