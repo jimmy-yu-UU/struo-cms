@@ -56,4 +56,13 @@ describe('SidebarNavItem', () => {
     const sub = mountItem({ label: 'A', sub: true })
     expect(sub.find('a').exists()).toBe(false)
   })
+
+  // SidebarMenuSubButton, unlike the top-level SidebarMenuButton, carries no `w-full` of its
+  // own — without it the sub-button shrinks to its label's content width and only the text (not
+  // the full row) responds to a click. Without SidebarNavItem passing `class="w-full"` through,
+  // this assertion fails.
+  it('passes w-full through to the sub-level button so the whole row is clickable', () => {
+    const sub = mountItem({ label: 'A', sub: true })
+    expect(sub.get('button').classes()).toContain('w-full')
+  })
 })

@@ -123,3 +123,31 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
 }
+
+@layer base {
+  /* Tailwind v4's preflight is `border: 0 solid` with NO colour (v3 defaulted every bare border
+     to gray-200), so a vendored `border`/`border-r`/`border-b` utility with no accompanying
+     colour class resolves to currentColor — i.e. whatever text colour happens to sit on that
+     element. That is what produced a foreground-coloured line down the sidebar (#111827 in
+     light, #fafafa in dark) instead of a subtle border. This is Tailwind's own documented v4
+     upgrade shim: restore a sane default so every OTHER bare border utility across
+     src/components/ui/ (read-only, can't be edited directly) gets one too. Utility classes that
+     DO specify a colour (`border-destructive`, `border-input`, ...) still win — they live in
+     Tailwind's `utilities` layer, which the cascade always ranks above `base`. */
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    border-color: var(--border);
+  }
+
+  /* Tailwind v4 preflight does not restore v3's implicit `cursor: pointer` on <button> —
+     browsers default a <button> to `cursor: default`. The old shell CSS's `.nav-item { cursor:
+     pointer }` covered this pre-migration; it was deleted with the rest of that stylesheet, and
+     neither shadcn's buttonVariants nor the vendored sidebar buttons carry a cursor utility.
+     Excludes disabled controls (native `disabled` and the `aria-disabled="true"` convention the
+     vendored sidebar/menu components use) — a disabled control should not look clickable. */
+  button:not(:disabled):not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}

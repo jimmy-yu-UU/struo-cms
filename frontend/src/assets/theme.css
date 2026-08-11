@@ -25,15 +25,39 @@
   color-scheme: light;
 }
 .app-dark {
-  --bg: oklch(0.129 0.042 264.7);
-  --surface: oklch(0.208 0.042 265.8);
-  --fg: oklch(0.968 0.007 247.9);
-  /* Same rename as :root above — see the comment there. Radius doesn't vary by theme, so these
-     two carry the same literal values as light mode. */
-  --legacy-muted: oklch(0.704 0.04 256.8);
-  --legacy-accent: oklch(0.746 0.16 232.7);
+  /* --bg/--surface/--fg were hand-picked OKLch approximations that carry a small blue chroma
+     (hue ~265, slate's hue family), while the shadcn shell that now surrounds these 11
+     unmigrated screens is achromatic zinc (#18181b). Side by side in dark mode that read as
+     "cards are slate-blue, not zinc" — the reported defect. Re-pointing to the shadcn tokens
+     (tokens.css's --card/--background/--foreground, already zinc in .app-dark) makes every
+     screen still consuming --bg/--surface/--fg inherit the same palette as the migrated shell,
+     with no per-file changes. Light mode was not reported broken (light --surface already equals
+     shadcn's light --card exactly — pure white either way) and light --bg's faint cool-white tint
+     against a pure-white card is a pre-existing, working depth cue, not this bug — left alone. */
+  --bg: var(--background);
+  --surface: var(--card);
+  --fg: var(--foreground);
+  /* --legacy-muted/--legacy-accent keep the pre-migration MEANING (subdued text / brand sky) but
+     were separately hand-approximated OKLch values rather than references — re-pointing them to
+     the tokens that already carry those exact meanings in tokens.css removes the duplicate
+     source of truth without changing what they resolve to (both were already tuned to
+     approximate the same slate-500/400 text and sky-600/400 brand blue).
+     --legacy-accent -> --primary, NOT --accent: tokens.css's own top-of-file comment warns
+     --accent is the hover/focus SURFACE color, not the brand colour; binding legacy-accent to it
+     would swap "brand sky" for a near-invisible hover tint, breaking every caller (e.g.
+     RichTextInput's active-toolbar-button state) that expects a visible brand-coloured accent. */
+  --legacy-muted: var(--muted-foreground);
+  --legacy-accent: var(--primary);
+  /* --legacy-radius/--legacy-radius-lg are untouched: they don't vary by theme (same 8px/12px in
+     both :root and .app-dark already, per the comment above), so there is no light/dark clash to
+     fix here, and shadcn's own radius scale has no exact 12px rung to map to (--radius-lg is
+     10px, --radius-xl is 14px) — remapping would shift corner radii on all 11 screens for a
+     defect that was never about shape. */
   --legacy-radius: 8px;
   --legacy-radius-lg: 12px;
+  /* --warn/--danger are deliberately brighter in dark mode (amber-400/red-400 vs the light-mode
+     amber-600/red-600) for contrast against a dark background; they are plain hex, not OKLch, and
+     were never blue-tinted, so they aren't part of the slate-vs-zinc defect — left alone. */
   --warn: #fbbf24;
   --danger: #f87171;
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45);

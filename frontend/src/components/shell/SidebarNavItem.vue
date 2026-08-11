@@ -22,7 +22,10 @@ const ButtonComponent = computed(() => (props.sub ? SidebarMenuSubButton : Sideb
   <!-- SidebarMenuSubButton's default `as` is "a" with no href, which reka's Primitive
        renders as a plain, keyboard-unreachable, non-interactive-to-AT anchor. Force a real
        <button> for both variants (SidebarMenuButton already defaults to "button"). -->
-  <component :is="ButtonComponent" as="button" :is-active="props.active" @click="$emit('activate')">
+  <!-- SidebarMenuSubButton (unlike the top-level SidebarMenuButton) carries no `w-full` of its
+       own, so it shrinks to its content width and only the label text is clickable. Passing the
+       class through here (our own wrapper) rather than editing the vendored component. -->
+  <component :is="ButtonComponent" as="button" class="w-full" :is-active="props.active" @click="$emit('activate')">
     <component :is="IconComponent" aria-hidden="true" />
     <span>{{ props.label }}</span>
   </component>
