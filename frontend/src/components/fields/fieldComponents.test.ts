@@ -187,17 +187,31 @@ describe('field components (choice + structural)', () => {
     expect(w.get('[role="combobox"]').attributes('disabled')).toBe('')
   })
 
-  // reka's SelectTrigger opens on pointerdown and SelectItem selects on pointerup, neither of
-  // which jsdom drives from trigger('click'), so the emit path goes through the exposed setter —
-  // the same escape hatch FilterBuilder uses for exactly this reason (standing-constraints #10).
-  it('SelectField emits the chosen option value', async () => {
+  // Fix round 1: this used to call an exposed `selectValue` setter directly, which bypassed
+  // SelectField's own @update:model-value listener entirely — deleting that listener kept the
+  // suite green (standing-constraints "reka floating controls: test the real binding, not an
+  // exposed setter"). Emitting from the vendored child runs the real template listener and its
+  // String(v) coercion. modelValue: '' (not null) is select's actual registry empty value
+  // (lib/fieldTypes/registry.ts:206), which keeps reka's SelectRoot in controlled mode — the mode
+  // production always runs in.
+  it('SelectField emits the chosen option value through its real listener', async () => {
     const w = mount(SelectField, {
-      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: null },
+      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: '' },
       global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
-    ;(w.vm as unknown as { selectValue: (v: string) => void }).selectValue('a')
-    await w.vm.$nextTick()
+    await w.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', 'a')
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['a'])
+  })
+
+  // Standing-constraints "Accessible name on every floating control": reka's SelectTrigger has no
+  // id/aria-label/aria-labelledby of its own, so ItemForm.vue's <label :for="f.name"> dangles and
+  // a screen reader announces only the picked value once one exists.
+  it('SelectField gives its trigger an accessible name from the field label', () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', label: 'Status', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: '' },
+      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    expect(w.get('[role="combobox"]').attributes('aria-label')).toBe('Status')
   })
 
   it('RadioField renders one option per choice', () => {

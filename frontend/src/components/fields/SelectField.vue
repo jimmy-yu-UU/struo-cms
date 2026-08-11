@@ -6,21 +6,20 @@ import type { FieldMeta } from '../../types/schema'
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
-const options = computed(() => (props.field.options ?? []) as { value: string; label: string }[])
+const options = computed(() => props.field.options ?? [])
 
-// reka models "nothing selected" as undefined; the CMS model uses null. Convert at this boundary
-// in both directions so neither side has to know the other's convention.
-const current = computed(() => (props.modelValue == null ? undefined : String(props.modelValue)))
-
-function selectValue(v: string): void {
-  emit('update:modelValue', v)
-}
-defineExpose({ selectValue })
+// select's registered empty value is '' (lib/fieldTypes/registry.ts:206), never null — a null
+// arriving here would only mean an unexpected caller. Coercing through `?? ''` keeps the value a
+// plain string in every case, so reka's SelectRoot never sees `undefined` and never flips into
+// its non-reactive `passive` (uncontrolled) mode, which production never exercises. (The
+// null-means-nothing-selected convention belongs to the relation picker's own field, task 21 —
+// not to this one.)
+const current = computed(() => String(props.modelValue ?? ''))
 </script>
 
 <template>
-  <Select :model-value="current" :disabled="disabled" @update:model-value="(v) => selectValue(String(v))">
-    <SelectTrigger class="w-full max-w-[480px]">
+  <Select :model-value="current" :disabled="disabled" @update:model-value="(v) => emit('update:modelValue', String(v))">
+    <SelectTrigger class="w-full max-w-[480px]" :aria-label="field.label">
       <SelectValue :placeholder="field.label" />
     </SelectTrigger>
     <SelectContent>
