@@ -237,11 +237,12 @@ four standing gates, and is not run by CI.
 - Never weaken the dependency rule (no reversed or skip-layer project references).
 - **Never add documentation the reader does not need in order to act.** No change narratives ("this used
   to be X"), no investigation journals (they belong in the doc comment of the class they explain), no
-  restating a rule that already has a home elsewhere — link to it instead. This cuts *both* ways: do
+  restating a rule that already has a home elsewhere — link to it instead, and no preference notes (a
+  comment or test that only justifies something never built protects no code). This cuts *both* ways: do
   **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
   consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
   regression. The test is "would a reader act differently without this?", never "is this long?".
-  `docs/ai/conventions.md`, "What documentation may contain", has the full rule and the four
+  `docs/ai/conventions.md`, "What documentation may contain", has the full rule and the five
   anti-patterns.
 
 ## Where to read more
