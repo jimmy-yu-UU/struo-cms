@@ -163,4 +163,20 @@ describe('TheSidebar', () => {
     await header.trigger('click')
     expect(w.text()).toContain('Articles')
   })
+
+  // Regression guard for the sidebar's horizontal-scrollbar fix: ui/separator/Separator.vue's
+  // `data-[orientation=horizontal]:w-full` beats ui/sidebar/SidebarSeparator.vue's own `w-auto`
+  // override on CSS specificity (twMerge doesn't dedupe classes carrying different modifiers,
+  // so both reach the DOM and the attribute-selector variant wins regardless of source order).
+  // TheSidebar.vue compensates by re-supplying the same modifier
+  // (`data-[orientation=horizontal]:w-auto`) on its one <SidebarSeparator /> — this only asserts
+  // the emitted class list, not layout (jsdom does no CSS layout), but it does fail if that
+  // compensating class is ever removed or edited to a mismatched modifier: with the fix reverted,
+  // `data-[orientation=horizontal]:w-full` is present and this assertion catches it.
+  it('never lets the vendored separator keep its w-full variant', () => {
+    const w = mountSidebar()
+    const separator = w.get('[data-slot="sidebar-separator"]')
+    const hasWFull = separator.classes().some((c) => c === 'w-full' || c.endsWith(':w-full'))
+    expect(hasWFull).toBe(false)
+  })
 })

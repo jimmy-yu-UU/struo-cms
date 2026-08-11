@@ -150,9 +150,22 @@ watch(() => route.path, () => {
              minus the mx-2 insets) with no override fight. If a future re-vendor of
              SidebarSeparator.vue or Separator.vue fixes this upstream (e.g. by using an
              attribute-scoped override itself), this line becomes redundant and can be dropped.
-             Any OTHER `<SidebarSeparator />` added anywhere in the app hits the same bug and
+             Any OTHER bare `<SidebarSeparator />` added anywhere in the app hits the same bug and
              needs this same `data-[orientation=horizontal]:w-auto` class — it is not fixed at
-             the source, only compensated for at this one call site. -->
+             the source, only compensated for at this one call site. This compensation is also
+             coupled to the exact modifier string upstream uses today: if a re-vendor renames the
+             variant (an `orientation-horizontal:` shorthand, `aria-orientation`, a `**:` wrapper,
+             or drops the variant for a plain `w-full`), this class silently stops matching both
+             the twMerge conflict key and the specificity contest, and the scrollbar returns with
+             no build failure — re-check this comment's premise against the new
+             Separator.vue/SidebarSeparator.vue after any re-vendor. The "flex child of
+             SidebarContent" framing above also depends on the `class="contents"` on the `<nav>`
+             below staying in place — that's what makes SidebarGroup/SidebarSeparator/SidebarGroup
+             direct flex items of SidebarContent instead of children of a plain block `<nav>`;
+             removing `contents` changes the separator's containing block and this class would need
+             re-deriving, not just re-applying. TheSidebar.test.ts asserts the separator's emitted
+             class list never contains a bare `w-full`/`:w-full` token as a guard against silent
+             regressions here. -->
         <SidebarSeparator class="data-[orientation=horizontal]:w-auto" />
 
         <SidebarGroup>
