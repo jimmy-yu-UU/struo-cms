@@ -237,6 +237,7 @@ export default {
     selectedCount: '已選 {n} 項',
     removeOption: '移除 {label}',
     searchOptions: '搜尋選項…',
+    pickADate: '選擇日期',
     richtext: {
       bold: '粗體', italic: '斜體', strikethrough: '刪除線',
       alignLeft: '靠左對齊', alignCenter: '置中對齊', alignRight: '靠右對齊', alignJustify: '兩端對齊',
