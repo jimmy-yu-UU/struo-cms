@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Table } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { IN_TABLE_ACTIONS, type TableAction } from './richTextTableActions'
 
 defineOptions({ name: 'RichTextTableMenu' })
@@ -17,26 +20,22 @@ function run(action: TableAction): void {
 </script>
 
 <template>
-  <div class="table-menu">
-    <button type="button" data-cmd="table" :disabled="disabled" aria-label="Table" title="Table"
-      class="table-menu__trigger" @click="open = !open"><i class="pi pi-table" /></button>
-    <div v-if="open" class="table-menu__panel">
-      <button type="button" data-cmd="tableInsert" class="table-menu__item" @click="run('insert')">
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <!-- type="button" is explicit even though PopoverTrigger (as-child) already merges its own
+           type="button" onto whatever it wraps: this sits inside ItemForm.vue's <form>, so the
+           Button doesn't rely on the merge behaviour of the component wrapping it. -->
+      <Button type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled" aria-label="Table" title="Table">
+        <Table />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent class="flex w-auto min-w-40 flex-col gap-0.5 p-1">
+      <button type="button" data-cmd="tableInsert" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground" @click="run('insert')">
         Insert 3×3 table
       </button>
       <button v-for="[action, label] in inTableActions" :key="action" type="button"
-        :data-cmd="`table-${action}`" class="table-menu__item" :disabled="!inTable"
+        :data-cmd="`table-${action}`" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="!inTable"
         @click="run(action)">{{ label }}</button>
-    </div>
-  </div>
+    </PopoverContent>
+  </Popover>
 </template>
-
-<style scoped>
-.table-menu { position: relative; display: inline-block; }
-.table-menu__trigger { min-width: 30px; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: 4px; }
-.table-menu__trigger:disabled { opacity: 0.5; cursor: not-allowed; }
-.table-menu__panel { position: absolute; z-index: 10; top: 100%; left: 0; margin-top: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); width: max-content; display: flex; flex-direction: column; }
-.table-menu__item { text-align: left; padding: 4px 10px; cursor: pointer; background: transparent; border: none; border-radius: 4px; }
-.table-menu__item:hover:not(:disabled) { background: var(--surface-2); }
-.table-menu__item:disabled { opacity: 0.5; cursor: not-allowed; }
-</style>
