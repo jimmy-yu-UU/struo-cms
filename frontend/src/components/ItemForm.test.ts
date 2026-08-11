@@ -31,13 +31,11 @@ const locales: LanguageInfo[] = [
   { code: 'zh-TW', name: '繁中', isDefault: false },
 ]
 const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {} }
+// Tabs/TabsList/TabsTrigger/TabsContent are thin reka wrappers with no portal, so they mount as
+// their real selves rather than stubs — this exercises the actual v-model wiring and TabsContent's
+// mount/unmount behaviour instead of simulating it.
 const stubs = {
   FieldInput: { props: ['field', 'modelValue', 'disabled'], template: '<div class="field-input" :data-name="field.name" />' },
-  Tabs: { props: ['value'], emits: ['update:value'], template: '<div class="tabs"><slot /></div>' },
-  TabList: { template: '<div><slot /></div>' },
-  Tab: { props: ['value'], template: '<button class="tab" @click="$emit(\'click\')"><slot /></button>' },
-  TabPanels: { template: '<div><slot /></div>' },
-  TabPanel: { props: ['value'], template: '<div class="tab-panel"><slot /></div>' },
 }
 
 describe('ItemForm', () => {
@@ -103,5 +101,17 @@ describe('ItemForm', () => {
     const relModel: FormModel = { shared: { status: 'draft' }, translations: {}, relations: { category: null } }
     const w = mountForm({ meta: relMeta, model: relModel, locales: [], errors: {} }, { RelationInput: true })
     expect(w.findComponent(RelationInput).exists()).toBe(true)
+  })
+  it('keeps the .field wrapper class that the e2e suite locates fields by', () => {
+    const w = mountForm({ meta, model, locales, errors: {} })
+    // Six e2e specs find a field by label inside `.field` / `.field:visible`. This is a contract,
+    // not a styling detail — dropping the class breaks them silently at the Playwright layer,
+    // where no unit test would notice.
+    expect(w.findAll('.field').length).toBeGreaterThan(0)
+  })
+  it('no longer renders PrimeVue tabs', () => {
+    const w = mountForm({ meta, model, locales, errors: {} })
+    expect(w.findComponent({ name: 'TabPanel' }).exists()).toBe(false)
+    expect(w.findAll('[role="tab"]').length).toBeGreaterThan(0)
   })
 })
