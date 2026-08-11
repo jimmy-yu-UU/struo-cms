@@ -22,8 +22,14 @@ import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import en from '../../locales/en'
+import zhTW from '../../locales/zh-TW'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+// A separate instance locked to zh-TW: fields.timePart resolves to different text in each pack
+// ('time' vs '時間'), which is the only way to prove DateField's time-input label is actually
+// running through t() rather than a hardcoded English word that happens to read back identical
+// to en.fields.timePart's current value.
+const zhI18n = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'zh-TW', messages: { 'zh-TW': zhTW } })
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
@@ -34,6 +40,7 @@ const opts = { global: { plugins: [PrimeVue] } }
 // PopoverContent is one of reka's floating components whose own portal is itself named Teleport,
 // which collides with VTU's stub unless slot rendering is switched back on.
 const dateOpts = { global: { plugins: [PrimeVue, i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+const dateOptsZhTW = { global: { plugins: [PrimeVue, zhI18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
 describe('field components (simple inputs)', () => {
   it('TextField renders an input, binds maxlength, and emits on input', async () => {
@@ -104,8 +111,8 @@ describe('field components (simple inputs)', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual([true])
   })
 
-  // Fix round 1: the three tests above all mounted with modelValue: false, so nothing pinned the
-  // inbound direction of BooleanField's `:model-value="modelValue === true"` binding. A deleted or
+  // The three tests above all mounted with modelValue: false, so nothing pinned the inbound
+  // direction of BooleanField's `:model-value="modelValue === true"` binding. A deleted or
   // inverted binding would have stayed green. aria-checked is reka's unconditional, real-ARIA hook
   // (CheckboxRoot.js) and is what Playwright reads.
   it('BooleanField reflects a true model as checked', () => {
@@ -282,6 +289,21 @@ describe('field components (simple inputs)', () => {
     expect(w.get('input[type="time"]').attributes('aria-label')).toBe(`Published at ${en.fields.timePart}`)
   })
 
+  // The previous test's comparison against en.fields.timePart cannot, by itself, tell a real t()
+  // call apart from a hardcoded English literal that happens to read 'time' — en.fields.timePart
+  // IS the English word 'time'. Mounting under zh-TW is the only way the two diverge: a hardcoded
+  // `${field.label} time` suffix would still read back with the English word even here, while a
+  // real t('fields.timePart') call resolves to zh-TW's '時間'.
+  it('DateField resolves the time-input accessible-name suffix through the active locale, not a hardcoded English word', () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime', label: 'Published at' }), modelValue: null },
+      ...dateOptsZhTW,
+    })
+    const label = w.get('input[type="time"]').attributes('aria-label')
+    expect(label).toContain('時間')
+    expect(label).not.toContain('time')
+  })
+
   // The migration's own assertion: this field must no longer resolve a PrimeVue component.
   // findComponent({ name }) is the same lookup the pre-migration tests used for Select/DatePicker.
   it('TextField renders the vendored Input, not PrimeVue InputText', () => {
@@ -363,9 +385,10 @@ describe('field components (choice + structural)', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual([''])
   })
 
-  // Standing-constraints "Accessible name on every floating control": reka's SelectTrigger has no
-  // id/aria-label/aria-labelledby of its own, so ItemForm.vue's <label :for="f.name"> dangles and
-  // a screen reader announces only the picked value once one exists.
+  // reka's SelectTrigger has no id/aria-label/aria-labelledby of its own, so ItemForm.vue's
+  // <label :for="f.name"> dangles and a screen reader announces only the picked value once one
+  // exists — every migrated floating control needs its own aria-label from field.label to cover
+  // this gap.
   it('SelectField gives its trigger an accessible name from the field label', () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', label: 'Status', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: '' },
@@ -401,8 +424,8 @@ describe('field components (choice + structural)', () => {
   })
 
   // Pins the template's own @update:model-value listener on the vendored root directly: a deleted
-  // listener would still pass the real-click test above only by accident of reka's internal wiring,
-  // so this asserts the wrapper's own binding independently (same rationale as Task 6's fix round).
+  // listener would still pass the real-click test above only by accident of reka's internal
+  // wiring, so this asserts the wrapper's own binding independently of the real-click path.
   it('RadioField relays the vendored RadioGroup root emit through its own listener', async () => {
     const w = mount(RadioField, {
       props: {
@@ -470,11 +493,11 @@ describe('field components (choice + structural)', () => {
     expect(radios[0].attributes('id')).not.toBe(radios[1].attributes('id'))
   })
 
-  // Standing-constraints "Accessible name on every floating control" extends to the radiogroup:
-  // reka's role="radiogroup" element carries no aria-label/aria-labelledby of its own, so
-  // ItemForm.vue's <label :for="f.name"> dangles (no element in the DOM carries id="f.name").
-  // aria-label isn't a declared RadioGroupRootProps key, so this pins the attrs-fallthrough path
-  // through the vendored wrapper rather than assuming it survives a future re-vendor.
+  // The same floating-control accessible-name gap extends to the radiogroup: reka's
+  // role="radiogroup" element carries no aria-label/aria-labelledby of its own, so ItemForm.vue's
+  // <label :for="f.name"> dangles (no element in the DOM carries id="f.name"). aria-label isn't a
+  // declared RadioGroupRootProps key, so this pins the attrs-fallthrough path through the
+  // vendored wrapper rather than assuming it survives a future re-vendor.
   it('RadioField gives its radiogroup an accessible name from the field label', () => {
     const w = mount(RadioField, {
       props: {
