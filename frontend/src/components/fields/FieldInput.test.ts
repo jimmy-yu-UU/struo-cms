@@ -48,6 +48,14 @@ describe('FieldInput', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-select').exists()).toBe(true)
   })
+  // This stub key matches components/form/DatePicker.vue's inferred component name (Vue infers it
+  // from the filename), so it intercepts DateField's child the same way regardless of which
+  // component that name resolves to.
+  it('renders DatePicker for date interface', () => {
+    const w = mount(FieldInput, { props: { field: field({ interface: 'date' }), modelValue: null }, global: { stubs } })
+    expect(w.find('.stub-date').exists()).toBe(true)
+  })
+
   it('renders read-only display for unsupported interface', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'somethingNew' }), modelValue: '{}' }, global: { stubs } })
     expect(w.find('.readonly-field').exists()).toBe(true)
