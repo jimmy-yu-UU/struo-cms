@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import Textarea from 'primevue/textarea'
-import type { FieldMeta } from '../../types/schema'
+import { Textarea } from '@/components/ui/textarea'
+import type { FieldMeta } from '@/types/schema'
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 </script>
