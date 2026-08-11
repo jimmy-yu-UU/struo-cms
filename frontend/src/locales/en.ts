@@ -19,6 +19,8 @@ export default {
     clearSort: 'Clear sorting',
     previous: 'Previous page',
     next: 'Next page',
+    columns: 'Columns',
+    rowsPerPage: 'Rows per page',
   },
   confirm: {
     unsavedHeader: 'Unsaved changes',

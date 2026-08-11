@@ -214,6 +214,13 @@ function onPageChange(page: number): void {
   tableState.value = { ...tableState.value, page }
   loadItems()
 }
+function onPageSizeChange(pageSize: number): void {
+  // An offset computed against the OLD page size is meaningless against the new one (e.g. page 3
+  // at 25/page starts at row 75; at 100/page that's off the end of the result set) -- always
+  // return to the first page when the size changes.
+  tableState.value = { ...tableState.value, page: 0, pageSize }
+  loadItems()
+}
 function onFilterApply(spec: FilterSpec): void {
   filters.value = spec
   // A new filter invalidates the current offset.
@@ -285,9 +292,9 @@ watch(name, () => {
 
 onMounted(loadItems)
 
-defineExpose({ loadItems, onTableState, onPageChange, onFilterApply, onEdit, onNew, canWrite, canDelete,
-  mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading, error, cellValue,
-  tableState, filters })
+defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilterApply, onEdit, onNew,
+  canWrite, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
+  error, cellValue, tableState, filters })
 </script>
 
 <template>
@@ -347,6 +354,7 @@ defineExpose({ loadItems, onTableState, onPageChange, onFilterApply, onEdit, onN
         :page-size="tableState.pageSize"
         :total="total"
         @update:page="onPageChange"
+        @update:page-size="onPageSizeChange"
       />
     </template>
   </section>

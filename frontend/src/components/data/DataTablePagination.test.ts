@@ -39,4 +39,22 @@ describe('DataTablePagination', () => {
     const last = mountPager({ page: 2, pageSize: 25, total: 60 })
     expect(last.find('[data-testid="pagination-next"]').attributes('disabled')).toBeDefined()
   })
+
+  it('shows the current page size as the selected option', () => {
+    const w = mountPager({ page: 0, pageSize: 50, total: 60 })
+    const select = w.get('[data-testid="page-size-select"]').element as HTMLSelectElement
+    expect(select.value).toBe('50')
+  })
+
+  it('offers exactly the 10/25/50/100 page-size options', () => {
+    const w = mountPager({ page: 0, pageSize: 25, total: 60 })
+    const values = w.findAll('[data-testid="page-size-select"] option').map((o) => (o.element as HTMLOptionElement).value)
+    expect(values).toEqual(['10', '25', '50', '100'])
+  })
+
+  it('emits the newly chosen page size as a number', async () => {
+    const w = mountPager({ page: 0, pageSize: 25, total: 60 })
+    await w.get('[data-testid="page-size-select"]').setValue('50')
+    expect(w.emitted('update:pageSize')![0][0]).toBe(50)
+  })
 })
