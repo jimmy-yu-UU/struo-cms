@@ -120,10 +120,21 @@ function onTreeChange(key: string | null): void {
   onChange(key)
 }
 
-// Single-select selection: the ids currently chosen, coerced to string[] regardless of the
-// single/multiple shape modelValue actually carries.
+// The single-select id, or null when nothing is chosen.
 const singleSelected = computed(() => (props.modelValue != null ? String(props.modelValue) : null))
+// The multi-select ids, coerced to string[] regardless of what shape the model actually carries.
 const multipleSelected = computed(() => ((props.modelValue as string[] | null) ?? []).map(String))
+
+// reka's ComboboxRoot defaults resetSearchTermOnSelect/resetSearchTermOnBlur to true, and
+// ComboboxInput seeds its own value from the *root's* modelValue the instant it mounts (its
+// Presence-gated content exists only while the popup is open) — with no displayValue override, a
+// scalar single-select id gets stringified straight into this search box. Because that box is
+// bound to this component's own `search` ref, the id would flow back out through
+// @update:model-value and poison `search`, firing a bogus server-side query that filters the
+// option list down to just the row already selected. The multi-select branch never hits this:
+// resetSearchTerm() takes reka's own `multiple` path there and always resets to '' regardless of
+// what the model holds.
+const emptySearchDisplay = (): string => ''
 
 const singleSelectedOption = computed(() => (
   singleSelected.value == null ? null : displayOptions.value.find((o) => o.id === singleSelected.value) ?? null
@@ -210,7 +221,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
         </ComboboxAnchor>
         <ComboboxList class="w-(--reka-combobox-trigger-width)">
           <ComboboxInput :model-value="search" :placeholder="t('fields.searchOptions')" @update:model-value="(v) => (search = String(v ?? ''))" />
-          <ComboboxEmpty>{{ t('fields.noOptions') }}</ComboboxEmpty>
+          <ComboboxEmpty>{{ loading ? t('common.loading') : t('fields.noOptions') }}</ComboboxEmpty>
           <ComboboxViewport>
             <ComboboxItem
               v-for="opt in displayOptions"
@@ -243,8 +254,13 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
           </ComboboxTrigger>
         </ComboboxAnchor>
         <ComboboxList class="w-(--reka-combobox-trigger-width)">
-          <ComboboxInput :model-value="search" :placeholder="t('fields.searchOptions')" @update:model-value="(v) => (search = String(v ?? ''))" />
-          <ComboboxEmpty>{{ t('fields.noOptions') }}</ComboboxEmpty>
+          <ComboboxInput
+            :model-value="search"
+            :display-value="emptySearchDisplay"
+            :placeholder="t('fields.searchOptions')"
+            @update:model-value="(v) => (search = String(v ?? ''))"
+          />
+          <ComboboxEmpty>{{ loading ? t('common.loading') : t('fields.noOptions') }}</ComboboxEmpty>
           <ComboboxViewport>
             <ComboboxItem v-for="opt in displayOptions" :key="opt.id" :value="opt.id">
               {{ opt.label }}
