@@ -41,7 +41,6 @@ const relation: RelationMeta = {
 }
 
 const stubs = {
-  Select: true,
   Combobox: true,
   TreeSelect: true,
 }
@@ -303,6 +302,59 @@ describe('RelationPicker', () => {
     expect(items[1].attributes('aria-selected')).toBe('true')
   })
 
+  // reka's ComboboxRoot defaults `resetSearchTermOnSelect`/`resetSearchTermOnBlur` to true, and
+  // ComboboxInput seeds its own value from the *root's* modelValue the moment it mounts (its
+  // Presence-gated content only exists once the popup opens) — with no `displayValue` override, a
+  // scalar single-select model gets stringified straight into the search box. Because that box is
+  // bound to this component's own `search` ref, the stringified id flows back through
+  // `@update:model-value`, poisoning `search` with a raw id and firing a bogus server query that
+  // filters the option list down to just the already-selected row — making it impossible to pick
+  // anything else until the user notices and manually clears it.
+  it('does not poison search with the selected id when the popup opens with a value already selected', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ modelValue: 'c1' }, live)
+    await flushPromises() // mount load settles under real timers
+    listSpy.mockClear()
+    vi.useFakeTimers()
+    try {
+      await open(w)
+      await vi.advanceTimersByTimeAsync(300) // past the debounce that a poisoned `search` would trigger
+      expect((w.vm as any).search).toBe('')
+      expect(listSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Pins the one line this task actually had to change: the debounce/latest-wins tests above only
+  // ever assign `(w.vm as any).search = ...` directly, which would stay green even if
+  // `@update:model-value` were deleted from `<ComboboxInput>` entirely. This drives a real `input`
+  // event on the rendered search box instead.
+  it('wires a real input event on the single-select search box through to search, debounced into one request', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'Tech' }], total: 1 })
+    const w = mountPicker({ modelValue: null }, live)
+    await flushPromises()
+    listSpy.mockClear()
+    await open(w)
+    vi.useFakeTimers()
+    try {
+      const input = w.get('[data-slot="command-input"]')
+      ;(input.element as HTMLInputElement).value = 'tec'
+      await input.trigger('input')
+      expect((w.vm as any).search).toBe('tec')
+      expect(listSpy).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(listSpy).toHaveBeenCalledTimes(1)
+      expect(listSpy).toHaveBeenCalledWith('category', expect.objectContaining({ search: 'tec' }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('folds the current value into the single-select trigger\'s accessible name', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'Tech' }], total: 1 })
@@ -337,6 +389,23 @@ describe('RelationPicker', () => {
     await flushPromises()
     await open(w)
     expect(w.get('[data-slot="command-input"]').attributes('placeholder')).toBe(zhTW.fields.searchOptions)
+    expect(w.get('[data-slot="combobox-empty"]').text()).toBe(zhTW.fields.noOptions)
+  })
+
+  // `loading` is part of the exposed contract (defineExpose) precisely because it is real state a
+  // consumer could act on — it must not become write-only. While a load is in flight and no
+  // options are rendered yet, the combobox's own empty-state area is the only place with room to
+  // say so without adding new markup.
+  it('shows loading text in the empty-state area while options are in flight, under zh-TW', async () => {
+    setupStores()
+    let resolveList!: (v: { data: Record<string, unknown>[]; total: number }) => void
+    const pending = new Promise<{ data: Record<string, unknown>[]; total: number }>((r) => (resolveList = r))
+    vi.spyOn(itemsApi, 'list').mockReturnValue(pending as never)
+    const w = mountPicker({ modelValue: null }, liveZh)
+    await open(w)
+    expect(w.get('[data-slot="combobox-empty"]').text()).toBe(zhTW.common.loading)
+    resolveList({ data: [], total: 0 })
+    await flushPromises()
     expect(w.get('[data-slot="combobox-empty"]').text()).toBe(zhTW.fields.noOptions)
   })
 
@@ -423,5 +492,53 @@ describe('RelationPicker', () => {
     await flushPromises()
     expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
     expect(w.get('[aria-label="Remove Tech"]').attributes('disabled')).toBeDefined()
+  })
+
+  // reka's resetSearchTerm() takes the `multiple` branch here (rootContext.multiple.value is true
+  // because <Combobox multiple> is set), which unconditionally resets to '' regardless of what the
+  // model holds — the single-select id-stringification bug above cannot occur on this branch.
+  // Asserted with a preselected value, mirroring the single-select reproduction above, so this
+  // isn't just "never tested the failing shape".
+  it('does not poison search when the popup opens with values already selected on the multi-select branch', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1', 'c2'] }, live)
+    await flushPromises()
+    listSpy.mockClear()
+    vi.useFakeTimers()
+    try {
+      await open(w)
+      await vi.advanceTimersByTimeAsync(300)
+      expect((w.vm as any).search).toBe('')
+      expect(listSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('wires a real input event on the multi-select search box through to search, debounced into one request', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: [] }, live)
+    await flushPromises()
+    listSpy.mockClear()
+    await open(w)
+    vi.useFakeTimers()
+    try {
+      const input = w.get('[data-slot="command-input"]')
+      ;(input.element as HTMLInputElement).value = 'wid'
+      await input.trigger('input')
+      expect((w.vm as any).search).toBe('wid')
+      expect(listSpy).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(listSpy).toHaveBeenCalledTimes(1)
+      expect(listSpy).toHaveBeenCalledWith('category', expect.objectContaining({ search: 'wid' }))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
