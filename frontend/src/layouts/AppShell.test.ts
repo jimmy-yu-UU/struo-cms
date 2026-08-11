@@ -29,17 +29,16 @@ const stubs = {
 
 const mountShell = () => mount(AppShell, { global: { plugins: [i18n], stubs } })
 
-// Do not delete this as unrelated boilerplate -- it fixes a real cross-test leak this file had.
-// Every mount() below (across every describe block) shares one module-level reactive
-// `routeState`, and until this call, wrappers were never unmounted: every earlier test's
-// AppShell instance stayed alive, still reactive to that same shared object. That was invisible
-// as long as nothing mutated routeState after mounting -- which is why none of the tests above
-// this line ever caught it. The routed-view remount-contract test below is the first test in
-// this file to write to routeState post-mount, and without this line every still-alive prior
-// instance's own keyed <router-view> reacts to that write too, inflating the mount count this
-// file measures (8 stray remounts instead of the real 2 -- confirmed by running that one test
-// in isolation, where it passed). enableAutoUnmount makes "one AppShell mounted at a time" true
-// in the test file the way it already is in the running app.
+// Do not delete this as unrelated boilerplate. Every mount() below (across every describe
+// block) shares one module-level reactive `routeState`, and until this call, wrappers were
+// never unmounted between tests: every earlier test's AppShell instance stayed alive and
+// reactive to that same shared object, so every later beforeEach's writes to routeState.path/
+// name/params were observed by every still-live prior instance too, not just the current
+// test's own. The running app only ever has one AppShell mounted at a time; this file did not
+// enforce that invariant. It happened to go unnoticed because no test before the routed-view
+// remount-contract test below wrote to routeState after mounting -- but that made it a latent
+// leak, not a non-issue, and the next test that depends on route-mutation-after-mount being
+// scoped to its own instance would be exposed to it. enableAutoUnmount restores the invariant.
 enableAutoUnmount(afterEach)
 
 describe('AppShell', () => {
