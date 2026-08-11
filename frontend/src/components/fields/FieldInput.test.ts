@@ -27,7 +27,7 @@ const stubs = {
   NumberField: { template: '<input class="stub-number" />' },
   Checkbox: { template: '<input class="stub-checkbox" />' },
   DatePicker: { template: '<input class="stub-date" />' },
-  Select: { template: '<select class="stub-select" />' },
+  Select: { template: '<div class="stub-select" role="combobox" />' },
   RadioButton: { template: '<input class="stub-radio" />' },
 }
 

@@ -148,12 +148,56 @@ describe('field components (simple inputs)', () => {
 })
 
 describe('field components (choice + structural)', () => {
-  it('SelectField exposes its options', () => {
+  // The migration's own assertion: the vendored Select composition has no options prop (options
+  // are SelectItem children), so the only thing worth pinning is what the trigger actually shows.
+  // This is the inbound-direction assertion (standing-constraints's Task-5 rule): it proves the
+  // control reflects a non-default incoming model, not just that something renders.
+  it('SelectField shows the current option label on the trigger', async () => {
     const w = mount(SelectField, {
-      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: 'a' },
-      global: { plugins: [PrimeVue] },
+      props: {
+        field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'b',
+      },
+      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
-    expect(w.findComponent({ name: 'Select' }).props('options')).toEqual([{ value: 'a', label: 'A' }])
+    // SelectContent teleports its (closed) items into an off-DOM DocumentFragment so SelectValue
+    // can resolve the selected item's label from the collection even while unopened; that
+    // registration lands one tick after the initial synchronous mount, so this needs a real
+    // await before the trigger reflects it — see task-6-report.md for why the brief's un-awaited
+    // version of this assertion does not hold.
+    await w.vm.$nextTick()
+    // The trigger is all that renders before the listbox opens; SelectValue reflects the selected
+    // item's text. Asserting text, not classes (constraint 5).
+    expect(w.get('[role="combobox"]').text()).toContain('Beta')
+  })
+
+  it('SelectField renders the vendored select-trigger data-slot hook', () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: 'a' },
+      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    expect(w.find('[data-slot="select-trigger"]').exists()).toBe(true)
+  })
+
+  it('SelectField genuinely disables the vendored trigger', () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: 'a', disabled: true },
+      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    expect(w.get('[role="combobox"]').attributes('disabled')).toBe('')
+  })
+
+  // reka's SelectTrigger opens on pointerdown and SelectItem selects on pointerup, neither of
+  // which jsdom drives from trigger('click'), so the emit path goes through the exposed setter —
+  // the same escape hatch FilterBuilder uses for exactly this reason (standing-constraints #10).
+  it('SelectField emits the chosen option value', async () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: null },
+      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    ;(w.vm as unknown as { selectValue: (v: string) => void }).selectValue('a')
+    await w.vm.$nextTick()
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['a'])
   })
 
   it('RadioField renders one option per choice', () => {

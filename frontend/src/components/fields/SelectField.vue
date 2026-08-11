@@ -1,10 +1,30 @@
 <script setup lang="ts">
-import Select from 'primevue/select'
+import { computed } from 'vue'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { FieldMeta } from '../../types/schema'
-defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
-defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+
+const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
+const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+
+const options = computed(() => (props.field.options ?? []) as { value: string; label: string }[])
+
+// reka models "nothing selected" as undefined; the CMS model uses null. Convert at this boundary
+// in both directions so neither side has to know the other's convention.
+const current = computed(() => (props.modelValue == null ? undefined : String(props.modelValue)))
+
+function selectValue(v: string): void {
+  emit('update:modelValue', v)
+}
+defineExpose({ selectValue })
 </script>
+
 <template>
-  <Select :model-value="modelValue" :options="field.options ?? []" option-label="label" option-value="value"
-    :disabled="disabled" @update:model-value="$emit('update:modelValue', $event)" />
+  <Select :model-value="current" :disabled="disabled" @update:model-value="(v) => selectValue(String(v))">
+    <SelectTrigger class="w-full max-w-[480px]">
+      <SelectValue :placeholder="field.label" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+    </SelectContent>
+  </Select>
 </template>
