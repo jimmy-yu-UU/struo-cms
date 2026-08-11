@@ -35,4 +35,33 @@ describe('JsonField', () => {
     expect(w.emitted('update:modelValue')).toBeUndefined()
     expect(w.find('.json-error').exists()).toBe(true)
   })
+
+  it('marks the textarea invalid via aria, not a PrimeVue class', async () => {
+    const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } }, ...opts })
+    await w.get('textarea').setValue('{ not json')
+    expect(w.get('textarea').attributes('aria-invalid')).toBe('true')
+    expect(w.find('.p-error').exists()).toBe(false)
+    // The error must be announced, not just coloured — colour alone is not an accessible error signal.
+    expect(w.get('.json-error').attributes('role')).toBe('alert')
+  })
+
+  it('renders the vendored textarea data-slot hook', () => {
+    const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } }, ...opts })
+    expect(w.find('[data-slot="textarea"]').exists()).toBe(true)
+  })
+
+  it('genuinely disables the textarea', () => {
+    const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 }, disabled: true }, ...opts })
+    expect(w.get('textarea').attributes('disabled')).toBe('')
+  })
+
+  // A post-mount prop change is the only assertion that distinguishes a prop-driven control from
+  // one seeded once and then left alone; ItemFormView's "Reload latest" and the revisions drawer's
+  // revert both replace the whole model after mount, so the buffer must follow a model swap too.
+  it('reflects a post-mount model replacement', async () => {
+    const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } }, ...opts })
+    expect((w.get('textarea').element as HTMLTextAreaElement).value).toContain('"a": 1')
+    await w.setProps({ modelValue: { b: 2 } })
+    expect((w.get('textarea').element as HTMLTextAreaElement).value).toContain('"b": 2')
+  })
 })
