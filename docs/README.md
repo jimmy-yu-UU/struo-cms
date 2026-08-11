@@ -8,6 +8,16 @@ start and license, see the project [`README.md`](../README.md).
 The manual is written in two languages, chapter-for-chapter. Both sets link the same 16 chapters in
 the same order.
 
+## Reading this manual in a browser
+
+The chapters below also render as a searchable site with a sidebar and a light/dark toggle. The site is
+its own small project, so it installs separately from the admin SPA:
+
+```bash
+pnpm -C docs install
+pnpm -C docs dev
+```
+
 ## English
 
 | # | Chapter |

@@ -54,6 +54,27 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
+  # The docs site is its own npm project under docs/ — separate lockfile,
+  # separate node_modules — so it needs its own entry; the /frontend one does not
+  # reach it. Nothing here is redistributed (VitePress is a build-time tool and
+  # none of its bytes are committed), so the blast radius is a developer machine
+  # and a CI runner rather than a deployed artifact. Same cooldowns and the same
+  # minor/patch grouping as the frontend, for the same reasons.
+  - package-ecosystem: npm
+    directory: "/docs"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      docs-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
   # Backend versions are centralised in Directory.Packages.props, which is the
   # file this reads. Leaving NuGet out would not have left the backend
   # unprotected - Dependabot's security updates cover an ecosystem whether or

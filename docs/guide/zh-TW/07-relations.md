@@ -248,7 +248,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 | `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | 目標集合的唯讀、分頁、延遲載入清單，依關聯的反向外鍵過濾;點擊一列會導向該列自己的項目編輯頁面。只有在父項已經儲存之後才會顯示 (一個全新、尚未儲存的父項，還沒有 id 可以拿來過濾)。 |
 
 `relationInputKind.ts` 仍然保留一個無條件的 fallback，用於它的對應表不認得的介面:一個單純的
-`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`，而不是一個輸入元素，
+<span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span>，而不是一個輸入元素，
 所以 `Editable` 沒有任何東西可以套用上去。出貨的 enum 裡沒有任何值會走到那裡:schema 契約 gate
 (`schema/interfaces.json`，詳見 `schema/README.md`) 會在某個 `RelationInterface` 成員缺少對應表
 條目時讓 `pnpm test` 失敗，所以這個 fallback 是「因結構而不可達」，不是靠慣例維持。它只在你新增成員卻略過

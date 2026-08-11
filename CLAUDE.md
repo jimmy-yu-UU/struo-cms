@@ -24,11 +24,13 @@ downstream forks.
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.
 - **When unsure about an architectural decision, stop and ask** rather than guessing.
 
-## The four standing gates
+## The five standing gates
 
-The same checks CI runs on every push/PR: `dotnet build`, `dotnet test`, `pnpm test`, `pnpm build` (the
-latter two from `frontend/`). Run whichever apply to your change; run all four before anything touching
-both stacks.
+The same checks CI runs on every push/PR: `dotnet build`, `dotnet test`, `pnpm test` and `pnpm build`
+(the latter two from `frontend/`), plus `pnpm build` from `docs/` — the documentation site's build is the
+manual's link gate, and it also checks that every chapter rendered with content, which `vitepress build`
+does not. Run whichever apply to your change; run all five before anything touching more than one of the
+three.
 
 ## See also
 

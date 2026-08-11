@@ -60,6 +60,44 @@ extension-anchored form, never this one. A bare trailing number with no filename
 prose reference ("line 74") is not reliably distinguishable from a port or a time and is not covered;
 a reviewer still has to catch those by hand.
 
+## Mustache syntax in the manual
+
+The documentation site compiles every chapter into a Vue component, so Vue's template compiler sees the
+rendered text — including the contents of inline `` `code` `` spans. A literal `{{ ... }}` there is
+parsed as an expression, and neither outcome is a build failure:
+
+- **`{{ something.property }}` empties the whole chapter.** `vitepress build` **exits 0** and prints
+  `build complete`, while that chapter is written out with its navigation and page frame intact and its
+  body gone. It also drops out of the search index, which is built from rendered content, and the page
+  count stays right. Only stderr says anything, and it names neither the markdown file nor the cause:
+
+  ```
+  TypeError: Cannot read properties of undefined (reading 'label')
+  ```
+
+  `pnpm build` catches this one, because `docs/scripts/check-rendered-chapters.mjs` runs after the build
+  and fails when a rendered chapter has no heading.
+
+- **`{{ something }}` — a bare identifier — empties only that sentence.** It interpolates to the empty
+  string, nothing throws, and `vitepress build` is green — the rendered-output check above sees a heading
+  and passes. `pnpm build` still catches it: `check-rendered-chapters.mjs` also scans every chapter
+  *source* for a bare `{{` outside a fenced code block and unwrapped by `<span v-pre>`, which needs no
+  build to run and catches this form specifically.
+
+Wrap the span:
+
+```md
+<span v-pre>`<span class="readonly-relation">{{ relation.label }}</span>`</span>
+```
+
+Fenced code blocks need nothing — VitePress applies `v-pre` to them already. `docs/guide/en/07-relations.md`
+and its zh-TW mirror are the existing examples.
+
+A related constraint from the same config (`docs/.vitepress/config.mts`'s `srcDir: 'guide'` plus
+`ignoreDeadLinks: false`): a chapter may only markdown-link to another chapter, since anything outside
+`docs/guide/` is outside the site entirely. A link like `[AGENTS.md](../../AGENTS.md)` fails the build
+with a dead-link error. Reference a repo path in a bare code span instead — every chapter already does.
+
 ## Naming
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.
