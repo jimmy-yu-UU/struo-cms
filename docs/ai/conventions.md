@@ -11,7 +11,7 @@ spent on the thing they came for. **Write only what the reader needs in order to
 brevity contest; it is a rule about *audience*. A fact is worth a paragraph if acting without it would
 go wrong, and worth zero lines if it merely records how the repository arrived at its current state.
 
-Four failure modes, all of which this repository has actually had, and what to do instead:
+Five failure modes, all of which this repository has actually had, and what to do instead:
 
 | Anti-pattern | Why it costs | Instead |
 |---|---|---|
@@ -19,6 +19,13 @@ Four failure modes, all of which this repository has actually had, and what to d
 | **Investigation journal** — measurement runs, ruled-out hypotheses, residual unknowns | This is engineering evidence, not guidance. It is real and worth keeping — just not here. | Put it in the doc comment of the class it explains, and leave a summary plus a pointer. `PgTestConnectionString` is the worked example. |
 | **Same content in N places** | N places to update, so N−1 go stale silently — and nothing in CI catches doc drift. | Pick one home, say plainly that it is the home, and link to it. Restating a rule in a second chapter is justified only when a reader of *that* chapter would otherwise act wrongly — and then restate the rule, not its rationale. |
 | **Restating a section in its own summary** | Pure duplication inside one file. | A closing checklist should be a list of steps to tick off, not a re-explanation of each one. |
+| **Preference note** — a comment justifying why an interaction or feature was *not* built | Nothing regresses if it's deleted. It isn't protecting code, it's recording that someone once decided against something — an obstacle for whoever builds it later, not guidance | Cut it. Keep a rationale only when removing the code it describes would break something non-obvious — there must be real code at risk, not just a past preference. |
+
+The same applies to tests. A test asserting the **absence** of unimplemented behavior protects nothing —
+it passes trivially forever and turns a preference into a constraint on whoever later implements the
+feature. This is different from a test asserting a *negative* behavior of code that already exists (e.g.
+"never reorders rows client-side"): that guards a real code path whose silent removal would corrupt
+output, and stays for the same reason the comment describing it stays.
 
 **What this rule does not license.** Do not cut a caveat because it is inconvenient or long. Load-bearing
 content stays, including: an honest "this is unverified / the mechanism is unknown / this is a

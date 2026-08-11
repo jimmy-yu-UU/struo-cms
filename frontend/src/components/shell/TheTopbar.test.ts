@@ -1,52 +1,50 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { h } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+import en from '@/locales/en'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import TheTopbar from './TheTopbar.vue'
-import { useSidebarStore } from '../../stores/sidebarStore'
-import { i18n } from '../../i18n'
 
-const push = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  useRoute: () => ({ name: 'dashboard', params: {} }),
+}))
 
-const stubs = {
-  UiLanguageSwitcher: { template: '<div class="stub-lang" />' },
-  ThemeToggle: { template: '<div class="stub-theme" />' },
-  UserMenu: { template: '<div class="stub-user" />' },
-  BrandMark: { template: '<span class="stub-brandmark" />' },
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+
+function mountTopbar() {
+  return mount(SidebarProvider, {
+    slots: { default: () => h(TheTopbar) },
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+  })
 }
 
 describe('TheTopbar', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.clearAllMocks()
-    localStorage.clear()
-    i18n.global.locale.value = 'zh-TW'
+  beforeEach(() => { setActivePinia(createPinia()) })
+
+  it('renders a sidebar trigger as its leading control', () => {
+    const w = mountTopbar()
+    const first = w.findAll('button')[0]
+    expect(first.attributes('data-sidebar')).toBe('trigger')
   })
 
-  it('the hamburger toggles the drawer', async () => {
-    const sidebar = useSidebarStore()
-    const wrapper = mount(TheTopbar, { global: { plugins: [i18n], stubs } })
-    await wrapper.find('button.drawer-toggle').trigger('click')
-    expect(sidebar.drawerOpen).toBe(true)
+  // The vendored SidebarTrigger only ships a hardcoded English "Toggle Sidebar" sr-only
+  // span — restores the localized accessible name the old hamburger carried via
+  // shell.openMenu, for zh-TW screen-reader users.
+  it('carries a localized accessible name on the sidebar trigger', () => {
+    const w = mountTopbar()
+    const first = w.findAll('button')[0]
+    expect(first.attributes('aria-label')).toBe(en.shell.openMenu)
   })
 
-  it('the brand button routes to the dashboard', async () => {
-    const wrapper = mount(TheTopbar, { global: { plugins: [i18n], stubs } })
-    await wrapper.find('button.brand-btn').trigger('click')
-    expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
-  })
-
+  // mountTopbar renders the real subcomponents, so assert on each control's own stable
+  // aria-label rather than a stub marker class.
   it('mounts the three topbar controls', () => {
-    const wrapper = mount(TheTopbar, { global: { plugins: [i18n], stubs } })
-    expect(wrapper.find('.stub-lang').exists()).toBe(true)
-    expect(wrapper.find('.stub-theme').exists()).toBe(true)
-    expect(wrapper.find('.stub-user').exists()).toBe(true)
-  })
-
-  it('renders the configured brand name', async () => {
-    const { useAppConfigStore } = await import('../../stores/appConfigStore')
-    useAppConfigStore().brandName = 'Acme Docs'
-    const wrapper = mount(TheTopbar, { global: { plugins: [i18n], stubs } })
-    expect(wrapper.find('.brand-btn').text()).toContain('Acme Docs')
+    const w = mountTopbar()
+    expect(w.find(`[aria-label="${en.lang.label}"]`).exists()).toBe(true)
+    expect(w.find(`[aria-label="${en.theme.toggle}"]`).exists()).toBe(true)
+    expect(w.find(`[aria-label="${en.user.account}"]`).exists()).toBe(true)
   })
 })

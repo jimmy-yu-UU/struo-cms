@@ -54,7 +54,7 @@ function isSelected(id: string): boolean {
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--legacy-radius-lg, 12px);
   background: var(--surface);
   cursor: pointer;
   font: inherit;
@@ -63,8 +63,8 @@ function isSelected(id: string): boolean {
   overflow: hidden;
   transition: border-color var(--speed, .15s), box-shadow var(--speed, .15s);
 }
-.media-tile:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
-.media-tile.is-selected { outline: 2px solid var(--accent); outline-offset: -1px; }
+.media-tile:hover { border-color: var(--legacy-accent); box-shadow: var(--shadow-1); }
+.media-tile.is-selected { outline: 2px solid var(--legacy-accent); outline-offset: -1px; }
 .media-tile__name {
   font-size: 13px;
   color: var(--fg);

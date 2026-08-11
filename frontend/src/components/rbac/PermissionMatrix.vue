@@ -164,7 +164,7 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })
 <style scoped>
 .permission-matrix { display: grid; gap: 12px; margin-top: 24px; }
 .matrix-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.notice { color: var(--muted); margin: 0; }
+.notice { color: var(--legacy-muted); margin: 0; }
 .matrix-scroll { overflow-x: auto; }
 .matrix-table { border-collapse: collapse; min-width: 480px; }
 .matrix-table th, .matrix-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }

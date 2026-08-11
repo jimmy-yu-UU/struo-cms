@@ -12,8 +12,8 @@ describe('BrandMark', () => {
     store.brandName = 'Acme'
     store.brandLogoUrl = null
     const wrapper = mount(BrandMark)
-    expect(wrapper.find('img.brand-logo').exists()).toBe(false)
-    expect(wrapper.find('span.mark').text()).toBe('A')
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.find('span').text()).toBe('A')
   })
 
   it('renders the logo image when a logo URL is configured', () => {
@@ -21,10 +21,10 @@ describe('BrandMark', () => {
     store.brandName = 'Acme'
     store.brandLogoUrl = 'https://cdn/logo.svg'
     const wrapper = mount(BrandMark)
-    const img = wrapper.find('img.brand-logo')
+    const img = wrapper.find('img')
     expect(img.exists()).toBe(true)
     expect(img.attributes('src')).toBe('https://cdn/logo.svg')
     expect(img.attributes('alt')).toBe('Acme')
-    expect(wrapper.find('span.mark').exists()).toBe(false)
+    expect(wrapper.find('span').exists()).toBe(false)
   })
 })

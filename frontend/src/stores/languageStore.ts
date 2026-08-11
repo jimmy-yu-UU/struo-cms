@@ -8,9 +8,12 @@ export const useLanguageStore = defineStore('language', {
     languages: [] as LanguageInfo[],
     loaded: false,
     loadError: '',
-    // In-flight fetch, shared by concurrent load() callers (e.g. the dashboard's fan-out of
-    // itemsApi calls all calling load() before any has resolved) so a race never triggers two
-    // languagesApi.getEnabled() requests (mirrors schemaStore's loadPromise pattern).
+    // In-flight fetch, shared by concurrent load() callers (e.g. AppShell's keyed router-view
+    // remounting CollectionListView on a collection switch: the outgoing instance's in-flight
+    // load() keeps running after it unmounts — an async function isn't tied to component
+    // lifecycle — and the incoming instance's onMounted fires a second load() before the first
+    // getEnabled() has resolved) so a race never triggers two languagesApi.getEnabled() requests
+    // (mirrors schemaStore's loadPromise pattern).
     loadPromise: null as Promise<void> | null,
   }),
   getters: {

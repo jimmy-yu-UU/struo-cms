@@ -341,25 +341,25 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
 <style scoped>
 .media-library { display: block; }
 .error { color: var(--danger); font-size: 0.9rem; margin: 0 0 12px; }
-.empty { color: var(--muted); text-align: center; padding: 40px 0; }
+.empty { color: var(--legacy-muted); text-align: center; padding: 40px 0; }
 .media-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   margin-top: 16px; flex-wrap: wrap;
 }
 .media-crumb { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; flex-wrap: wrap; }
-.media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; color: var(--accent); font: inherit; border-radius: var(--radius, 8px); }
+.media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; color: var(--legacy-accent); font: inherit; border-radius: var(--legacy-radius, 8px); }
 .media-crumb__link:hover { text-decoration: underline; }
-.media-crumb__sep { color: var(--muted); font-size: .75rem; }
+.media-crumb__sep { color: var(--legacy-muted); font-size: .75rem; }
 .media-crumb__current { color: var(--fg); font-weight: 600; padding: 2px 4px; }
 .trash-banner {
   display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
   padding: 10px 14px; border: 1px solid var(--warn, #d97706);
   background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
-  border-radius: var(--radius, 8px); color: var(--fg); font-size: .9rem;
+  border-radius: var(--legacy-radius, 8px); color: var(--fg); font-size: .9rem;
 }
 .media-trash-list { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .media-trash-list th {
-  text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 600;
+  text-align: left; padding: 8px 12px; color: var(--legacy-muted); font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
 .media-trash-list td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--fg); vertical-align: middle; }

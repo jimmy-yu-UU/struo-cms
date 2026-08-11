@@ -16,7 +16,7 @@ const to = computed(() => Math.min(props.first + props.rows, props.total))
 
 <style scoped>
 .table-footer {
-  color: var(--muted);
+  color: var(--legacy-muted);
   font-size: 0.875rem;
 }
 </style>

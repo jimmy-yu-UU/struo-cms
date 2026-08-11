@@ -4,7 +4,13 @@ import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
 import 'primeicons/primeicons.css'
+// tokens.css first: it brings in Tailwind (including preflight). theme.css follows so the
+// remaining hand-written PrimeVue-era rules still win during the coexistence period.
+import './assets/tokens.css'
 import './assets/theme.css'
+// vue-sonner's lib/index.js never imports its own stylesheet, so without this the toaster
+// would render completely unstyled.
+import 'vue-sonner/style.css'
 import App from './App.vue'
 import router from './router'
 import { apiClient } from './api/apiClient'
