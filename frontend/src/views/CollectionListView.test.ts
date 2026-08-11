@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import CollectionListView from './CollectionListView.vue'
+import FilterBuilder from '@/components/data/FilterBuilder.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -611,5 +612,48 @@ describe('CollectionListView', () => {
     expect(vm.columns[0].field).toBe('status')
     expect(vm.isSelectField('status')).toBe(true)
     expect(vm.isSelectField('title')).toBe(false)
+  })
+
+  // Searchable is what the backend's `search=` honours, and chapter 4 tells collection authors it
+  // governs the collection's free-text search — but selectListColumns caps at 6 columns and only
+  // admits list-displayable interfaces, so a searchable RichText body became unreachable from the
+  // list once FilterBuilder replaced the old free-text ListToolbar. It is offered here instead.
+  it('offers searchable fields that did not make the display-column cut to FilterBuilder', async () => {
+    const article = {
+      name: 'article',
+      label: 'Article',
+      defaultDisplayField: 'status',
+      fields: [
+        { name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
+          sortable: true, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false,
+          options: [{ value: 'draft', label: 'Draft' }] },
+        // richText has listColumn === null, so selectListColumns excludes it: display-ineligible
+        // but searchable, i.e. exactly the field class this test exists for.
+        { name: 'body', label: 'Body', interface: 'richText', required: false, searchable: true,
+          sortable: false, readOnly: false, hidden: false, translatable: true, sort: 1, isSystem: false },
+        // Hidden fields must never be offered: QueryValidator excludes them from its allowlist
+        // deliberately (they hold credentials), so filtering one is a guaranteed 400.
+        { name: 'internalSlug', label: 'Internal Slug', interface: 'text', required: false,
+          searchable: true, sortable: false, readOnly: false, hidden: true, translatable: false,
+          sort: 2, isSystem: false },
+      ],
+      relations: [],
+    }
+    const schema = useSchemaStore()
+    schema.collections = [article]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+
+    const w = mountView()
+    await flushPromises()
+
+    const names = (w.findComponent(FilterBuilder).props('fields') as { name: string }[]).map((f) => f.name)
+    expect(names).toContain('status')
+    expect(names).toContain('body')
+    expect(names).not.toContain('internalSlug')
+    // The display columns still come first, in their existing order.
+    expect(names[0]).toBe('status')
   })
 })
