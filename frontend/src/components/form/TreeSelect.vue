@@ -13,11 +13,16 @@ import { ChevronDown, ChevronRight } from '@lucide/vue'
 // keyed object; this one takes and emits a plain key).
 export type TreeSelectNode = { key: string; label: string; children?: TreeSelectNode[] }
 
+// `label` names the field this control belongs to (e.g. "Parent page") — DatePicker.vue takes the
+// same prop for the same reason: this component has no `field` of its own to read one from, and
+// `aria-label` below overrides the trigger's visible contents rather than supplementing them, so
+// without it two of these on one form would announce identically.
 const props = defineProps<{
   modelValue: string | null
   nodes: TreeSelectNode[]
   disabled?: boolean
   placeholder?: string
+  label?: string
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | null): void }>()
 const { t } = useI18n()
@@ -35,11 +40,17 @@ const expandedKeys = ref<string[]>(branchKeys(props.nodes))
 watch(() => props.nodes, (n) => { expandedKeys.value = branchKeys(n) })
 
 const getKey = (n: TreeSelectNode) => n.key
+// TreeRoot's default getChildren (`val => val.children`) treats an empty array as "has children"
+// (`[]` is truthy), and both real callers pass exactly that: buildRelationTree.ts seeds every node
+// with `children: []`, and FilePicker's two synthetic folder nodes hardcode it too. Without this,
+// every leaf would render a collapsed-branch chevron and announce `aria-expanded="false"` despite
+// having nothing to disclose.
+const getChildren = (n: TreeSelectNode) => (n.children?.length ? n.children : undefined)
 
-function findLabel(nodes: TreeSelectNode[], key: string): string | undefined {
+function findInTree<R>(nodes: TreeSelectNode[], key: string, pick: (n: TreeSelectNode) => R): R | undefined {
   for (const n of nodes) {
-    if (n.key === key) return n.label
-    const nested = n.children ? findLabel(n.children, key) : undefined
+    if (n.key === key) return pick(n)
+    const nested = n.children ? findInTree(n.children, key, pick) : undefined
     if (nested !== undefined) return nested
   }
   return undefined
@@ -49,14 +60,22 @@ function findLabel(nodes: TreeSelectNode[], key: string): string | undefined {
 // while the picker was open must still show something rather than reading as "nothing
 // selected"), and only the placeholder when there is truly no value.
 const triggerLabel = computed(() => {
-  if (props.modelValue === null) return props.placeholder ?? t('fields.selectAFolder')
-  return findLabel(props.nodes, props.modelValue) ?? props.modelValue
+  if (props.modelValue === null) return props.placeholder ?? t('fields.selectAnItem')
+  return findInTree(props.nodes, props.modelValue, (n) => n.label) ?? props.modelValue
 })
 
-// Deliberately independent of the current value: once a node is picked, a trigger whose only
-// accessible name comes from its own text content would have a screen reader announce the value
-// alone with no indication of what it is a value of.
-const accessibleName = computed(() => props.placeholder ?? t('fields.selectAFolder'))
+// The actual node object for the current key, fed to TreeRoot below so the open panel can show
+// which node is selected. One-way and read-only from this component's point of view: TreeRoot's
+// own `modelValue` is hardcoded `passive: true` upstream, so it just mirrors whatever this
+// computed produces and re-syncs on every change — nothing here listens for or stores its writes.
+const selectedNode = computed(() => (
+  props.modelValue === null ? undefined : findInTree(props.nodes, props.modelValue, (n) => n)
+))
+
+// aria-label overrides the trigger's visible contents rather than supplementing them, so it has to
+// carry everything the sighted trigger text shows — the field label AND the current value or
+// placeholder — or picking a value would make the announcement forget which field it came from.
+const accessibleName = computed(() => (props.label ? `${props.label}: ${triggerLabel.value}` : triggerLabel.value))
 
 // The one path both a real click on a rendered node and any other caller drive selection
 // through — not a test-only surface. Selection stays one-way: this emits and lets modelValue flow
@@ -88,17 +107,13 @@ defineExpose({ select })
         <ChevronDown class="size-4 shrink-0 opacity-50" aria-hidden="true" />
       </Button>
     </PopoverTrigger>
-    <!--
-      force-mount keeps the tree in the DOM while the popover is closed — reka's Presence would
-      otherwise unmount PopoverContent entirely, and node selectability here has nothing to do
-      with the popover's own open/closed animation state. `hidden` below is a plain Tailwind
-      utility applied by this component, not a reka data attribute.
-    -->
-    <PopoverContent force-mount :class="open ? 'w-64 p-1' : 'hidden'">
+    <PopoverContent class="w-64 p-1">
       <TreeRoot
         v-slot="{ flattenItems }"
         :items="nodes"
         :get-key="getKey"
+        :get-children="getChildren"
+        :model-value="selectedNode"
         :disabled="disabled"
         v-model:expanded="expandedKeys"
       >
@@ -109,6 +124,7 @@ defineExpose({ select })
           class="flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent hover:bg-accent"
           :style="{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }"
           @select="() => select(item.value.key)"
+          @toggle="(e: Event) => e.preventDefault()"
         >
           <ChevronDown v-if="item.hasChildren && expandedKeys.includes(item._id)" class="size-4 shrink-0 opacity-70" aria-hidden="true" />
           <ChevronRight v-else-if="item.hasChildren" class="size-4 shrink-0 opacity-70" aria-hidden="true" />
