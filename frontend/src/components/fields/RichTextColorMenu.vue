@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Baseline } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 defineOptions({ name: 'RichTextColorMenu' })
 
@@ -29,32 +32,25 @@ function clear(): void {
 </script>
 
 <template>
-  <div class="color-menu">
-    <button type="button" data-cmd="color" :disabled="disabled" aria-label="Text colour" title="Text colour"
-      class="color-menu__trigger" @click="open = !open">
-      <span :style="activeColor ? { color: activeColor } : undefined">A</span>
-    </button>
-    <div v-if="open" class="color-menu__panel">
-      <div class="color-menu__swatches">
-        <button v-for="c in PALETTE" :key="c" type="button" class="color-menu__swatch" :data-color="c"
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <!-- type="button" is explicit even though PopoverTrigger (as-child) already merges its own
+           type="button" onto whatever it wraps: this sits inside ItemForm.vue's <form>, so the
+           Button doesn't rely on the merge behaviour of the component wrapping it. -->
+      <Button type="button" variant="ghost" size="icon" data-cmd="color" :disabled="disabled" aria-label="Text colour" title="Text colour">
+        <Baseline :style="activeColor ? { color: activeColor } : undefined" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent class="w-auto p-3">
+      <div class="grid grid-cols-5 gap-1.5">
+        <button v-for="c in PALETTE" :key="c" type="button" class="size-[22px] rounded border" :data-color="c"
           :style="{ background: c }" :aria-label="`Colour ${c}`" @click="pick(c)" />
       </div>
-      <label class="color-menu__free">
-        <input type="color" data-cmd="colorFree" @change="onFreePick" />
+      <label class="mt-2 flex items-center gap-1.5 text-sm cursor-pointer">
+        <input type="color" data-cmd="colorFree" class="h-6 w-8 cursor-pointer" @change="onFreePick">
         Custom…
       </label>
-      <button type="button" data-cmd="colorClear" class="color-menu__clear" @click="clear">Clear colour</button>
-    </div>
-  </div>
+      <Button type="button" variant="outline" size="sm" data-cmd="colorClear" class="mt-2 w-full" @click="clear">Clear colour</Button>
+    </PopoverContent>
+  </Popover>
 </template>
-
-<style scoped>
-.color-menu { position: relative; display: inline-block; }
-.color-menu__trigger { min-width: 30px; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: 4px; font-weight: 700; }
-.color-menu__trigger:disabled { opacity: 0.5; cursor: not-allowed; }
-.color-menu__panel { position: absolute; z-index: 10; top: 100%; left: 0; margin-top: 4px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); width: max-content; }
-.color-menu__swatches { display: grid; grid-template-columns: repeat(5, 22px); gap: 6px; }
-.color-menu__swatch { width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
-.color-menu__free { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.85rem; cursor: pointer; }
-.color-menu__clear { display: block; margin-top: 8px; width: 100%; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid var(--border); border-radius: 4px; }
-</style>
