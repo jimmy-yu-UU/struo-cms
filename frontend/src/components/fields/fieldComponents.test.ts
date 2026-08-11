@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import PrimeVue from 'primevue/config'
 import TextField from './TextField.vue'
 import TextareaField from './TextareaField.vue'
@@ -281,7 +282,8 @@ describe('field components (choice + structural)', () => {
   })
 
   // reka's radio is a <button role="radio">, so wrapping it in a <label> gives no implicit
-  // association; the explicit for/id pairing is what actually associates each label.
+  // association; the explicit for/id pairing is what actually associates each label. Asserting
+  // non-empty AND equal (not just equal) so the check cannot pass with both sides blanked out.
   it('RadioField associates each label with its radio via explicit for/id', () => {
     const w = mount(RadioField, {
       props: {
@@ -294,8 +296,81 @@ describe('field components (choice + structural)', () => {
     const radios = w.findAll('[role="radio"]')
     expect(labels).toHaveLength(2)
     labels.forEach((label, i) => {
-      expect(label.attributes('for')).toBe(radios[i].attributes('id'))
+      const forAttr = label.attributes('for')
+      expect(forAttr).toBeTruthy()
+      expect(forAttr).toBe(radios[i].attributes('id'))
     })
+  })
+
+  // Repeaters (RepeaterField.vue) render this component once per row, as siblings inside one Vue
+  // app tree — not as separate mounts — with the same field.name. An id scheme keyed on
+  // field.name/option.value alone would collide across rows and resolve every row's <label for>
+  // and reka's own [for=…] lookup to the first row's element. useId()'s counter is scoped to a
+  // single app instance (two independent mount() calls each start their own app and would both
+  // start counting from zero, which would defeat this exact assertion), so the host component
+  // below renders two RadioField as siblings in one tree to match the real repeater shape.
+  it('RadioField scopes ids per component instance, not just per option', () => {
+    const f = field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }] })
+    const Host = defineComponent({
+      render: () => h('div', [h(RadioField, { field: f, modelValue: 'a' }), h(RadioField, { field: f, modelValue: 'a' })]),
+    })
+    const w = mount(Host, opts)
+    const radios = w.findAll('[role="radio"]')
+    expect(radios).toHaveLength(2)
+    expect(radios[0].attributes('id')).toBeTruthy()
+    expect(radios[0].attributes('id')).not.toBe(radios[1].attributes('id'))
+  })
+
+  // Standing-constraints "Accessible name on every floating control" extends to the radiogroup:
+  // reka's role="radiogroup" element carries no aria-label/aria-labelledby of its own, so
+  // ItemForm.vue's <label :for="f.name"> dangles (no element in the DOM carries id="f.name").
+  // aria-label isn't a declared RadioGroupRootProps key, so this pins the attrs-fallthrough path
+  // through the vendored wrapper rather than assuming it survives a future re-vendor.
+  it('RadioField gives its radiogroup an accessible name from the field label', () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', label: 'Status', options: [{ value: 'a', label: 'Alpha' }] }),
+        modelValue: 'a',
+      },
+      ...opts,
+    })
+    expect(w.get('[role="radiogroup"]').attributes('aria-label')).toBe('Status')
+  })
+
+  // disabled is not forwarded directly to reka's Radio; it is re-derived via provide/inject
+  // (rootContext.disabled.value || props.disabled) across RadioGroupRoot -> RadioGroupItem ->
+  // Radio. A dropped `:disabled="disabled"` on <RadioGroup> would leave every other RadioField
+  // test green while a read-only/RBAC-read-only field rendered fully clickable.
+  it('RadioField genuinely disables every radio when asked', () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
+        modelValue: 'a',
+        disabled: true,
+      },
+      ...opts,
+    })
+    const radios = w.findAll('[role="radio"]')
+    expect(radios[0].attributes('disabled')).toBe('')
+    expect(radios[1].attributes('disabled')).toBe('')
+  })
+
+  // Inbound direction, registry's real empty value: registry.ts's def() default `empty` is '' for
+  // the `radio` interface (it does not override it), so this is the actual value ItemForm.vue
+  // supplies on a fresh item, not null/undefined. Reading the vendored RadioGroup's own
+  // model-value prop (rather than an ARIA hook) pins that the coercion keeps the control in
+  // controlled mode — `current`'s prior `== null ? undefined : ...` would have passed `undefined`
+  // for a null model and flipped reka into uncontrolled (passive) mode, which production never
+  // exercises.
+  it('RadioField stays controlled when mounted with the registry\'s real empty value', () => {
+    const w = mount(RadioField, {
+      props: {
+        field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }] }),
+        modelValue: '',
+      },
+      ...opts,
+    })
+    expect(w.findComponent({ name: 'RadioGroup' }).props('modelValue')).toBe('')
   })
 
   it('DividerField renders an hr', () => {
