@@ -62,7 +62,7 @@ const props = withDefaults(defineProps<{
   state: DataTableState
   loading?: boolean
   emptyMessage?: string
-  /** MediaLibraryView's grid and a compact RelatedList don't want this toolbar row. */
+  /** Hides the column-visibility toolbar row. */
   showColumnToggle?: boolean
 }>(), {
   showColumnToggle: true,
@@ -104,10 +104,9 @@ function isSortable(columnDef: DataTableColumn<TRow>): boolean {
   return (columnDef.meta as { sortable?: boolean } | undefined)?.sortable === true
 }
 
-// Deliberately NOT part of DataTableState: unlike sort/page/pageSize, which the backend query
-// needs, which columns are shown is a pure client-side render decision. Left as TanStack's own
-// internal (uncontrolled) state — see the `features` comment above for why registering the
-// feature is what makes that state exist at all.
+// Column visibility is not part of DataTableState: unlike sort/page/pageSize, it never reaches
+// the backend query. It lives in TanStack's own internal (uncontrolled) state — see the
+// `features` comment above for why registering the feature is what makes that state exist at all.
 const hideableColumns = computed(() => table.getAllLeafColumns().filter((c) => c.getCanHide()))
 
 // Guards the "must not allow hiding every column" rule from a single per-column checkbox: a

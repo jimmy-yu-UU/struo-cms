@@ -21,15 +21,13 @@ const acceptClass = computed(() =>
 )
 const rejectClass = computed(() => buttonVariants({ variant: 'outline' }))
 
-// reka-ui's AlertDialog only ever routes Escape here — outside-click and overlay click are
-// deliberately blocked by AlertDialog's own semantics (onPointerDownOutside/onInteractOutside
-// are prevented). Route Escape back through reject() so the awaiting caller resolves false
-// instead of hanging.
+// reka-ui's AlertDialog only ever calls this for Escape. Route it back through reject() so the
+// awaiting caller resolves false instead of hanging.
 function onOpenChange(next: boolean): void {
   if (!next && store.open) store.reject()
 }
 
-// Deliberately NOT `@/components/ui/alert-dialog`'s AlertDialogAction/AlertDialogCancel: both
+// Not `@/components/ui/alert-dialog`'s AlertDialogAction/AlertDialogCancel: both
 // are reka's DialogClose under the hood, which fires its own onOpenChange(false) synchronously
 // — ahead of a plain @click handler, because Vue's mergeProps puts the component's own listener
 // first — settling every confirmation false before our handler ever runs. Plain buttons styled

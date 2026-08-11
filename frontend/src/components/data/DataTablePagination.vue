@@ -4,19 +4,17 @@ import { ChevronLeft, ChevronRight } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
-// Props in, events out, no table instance -- kept standalone deliberately so MediaLibraryView
-// (a future consumer with no DataTable/TanStack instance at all) can reuse this unchanged.
+// Props in, events out, no table instance.
 const props = withDefaults(defineProps<{
   page: number
   pageSize: number
   total: number
   /**
-   * A RelatedList embedded in an ItemForm will typically want a smaller default (5 or 10) than
-   * CollectionListView's 10/25/50/100 -- override, don't hardcode. `props.pageSize` must be one
-   * of these or the native <select> renders with no option selected (selectedIndex === -1).
+   * Override, don't hardcode: `props.pageSize` must be one of these or the native <select>
+   * renders with no option selected (selectedIndex === -1).
    */
   pageSizeOptions?: number[]
-  /** MediaLibraryView's grid and a compact RelatedList don't want the rows-per-page control. */
+  /** Hides the rows-per-page control. */
   showPageSizeSelector?: boolean
 }>(), {
   pageSizeOptions: () => [10, 25, 50, 100],

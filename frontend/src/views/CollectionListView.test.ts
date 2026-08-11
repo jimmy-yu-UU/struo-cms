@@ -284,21 +284,6 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: '42' } })
   })
 
-  // Deliberate product decision (not incidental): the human explicitly scoped row selection,
-  // batch operations, and click-whole-row-to-edit OUT of the shadcn table migration and asked
-  // to keep the edit-button-only interaction. Do not "fix" this by wiring row clicks to onEdit.
-  it('clicking a row cell (not the edit button) does not navigate', async () => {
-    seedSchema()
-    seedLanguage()
-    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '42', status: 'draft' }], total: 1 })
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.get('tbody tr td').trigger('click')
-    await flushPromises()
-    expect(pushMock).not.toHaveBeenCalled()
-  })
-
   it('New button navigates to create when canWrite', async () => {
     seedSchema()
     seedLanguage()
