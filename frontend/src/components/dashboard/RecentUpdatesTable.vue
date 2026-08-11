@@ -60,7 +60,7 @@ function formatUpdated(iso: string | null): string {
   cursor: pointer;
 }
 .recent__row:hover {
-  background: var(--bg);
+  background: var(--surface-2);
 }
 .recent__title {
   color: var(--legacy-accent);

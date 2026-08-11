@@ -53,7 +53,7 @@ const typeDisplay = computed(() => fileTypeDisplay(props.file.contentType, props
   gap: 4px;
   border: 1px solid var(--border);
   border-radius: var(--legacy-radius, 8px);
-  background: var(--bg);
+  background: var(--surface-2);
   padding: 8px;
   overflow: hidden;
 }

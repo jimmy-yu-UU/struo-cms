@@ -87,7 +87,7 @@ const prettyJson = computed(() => {
 .rev-snapshot h3 { margin: 0 0 6px; font-size: .8rem; color: var(--legacy-muted); font-weight: 500; }
 .rev-json {
   margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--legacy-radius, 8px);
-  background: var(--bg); color: var(--fg); font-size: .8rem; line-height: 1.5;
+  background: var(--surface-2); color: var(--fg); font-size: .8rem; line-height: 1.5;
   max-height: 50vh; overflow: auto; white-space: pre; word-break: normal;
 }
 .rev-actions { display: flex; justify-content: flex-end; }

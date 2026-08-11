@@ -43,6 +43,13 @@
   --sidebar-border: #e5e7eb;
   --sidebar-ring: #0284c7;
   --radius: 0.625rem;
+  /* Legacy bridge, NOT part of the shadcn output contract below (@theme inline has no
+     --color-surface-2 and never should): a sunken/hover rung one step darker than --surface,
+     for the unmigrated screens still on theme.css's --bg/--surface/--fg family. It has to live
+     here rather than in theme.css because it resolves to --muted, and tests/legacyTokens.test.ts
+     forbids every file except this one from writing `var(--muted)` — this file is the one
+     allowed to, since it's the one that owns --muted. See theme.css's --surface-2 comment. */
+  --surface-2: var(--muted);
   color-scheme: light;
 }
 
@@ -75,6 +82,8 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: #3f3f46;
   --sidebar-ring: #38bdf8;
+  /* See the --surface-2 comment in :root above. */
+  --surface-2: var(--muted);
   color-scheme: dark;
 }
 
@@ -137,7 +146,8 @@
   *,
   ::before,
   ::after,
-  ::backdrop {
+  ::backdrop,
+  ::file-selector-button {
     border-color: var(--border);
   }
 
