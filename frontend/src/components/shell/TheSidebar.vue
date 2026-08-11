@@ -135,7 +135,25 @@ watch(() => route.path, () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
+        <!-- Compensates for a specificity bug in the vendored separator, not a design choice:
+             ui/separator/Separator.vue's base classes include
+             `data-[orientation=horizontal]:w-full`, and ui/sidebar/SidebarSeparator.vue tries to
+             override it with a plain `w-auto` — but that plain class has lower CSS specificity
+             than the attribute-selector variant, and tailwind-merge's cn() doesn't dedupe classes
+             that carry different modifiers, so both classes reach the DOM and w-full wins
+             regardless of source order. The separator (a flex child of SidebarContent, which is
+             flex-col) then computes width:100% of its container *before* mx-2 margins are added
+             on top, so its right edge lands 8px past SidebarContent's right edge — the 8-16px
+             horizontal scrollbar on the sidebar. Re-supplying the *same* modifier here
+             (`data-[orientation=horizontal]:w-auto`) lets twMerge recognize the conflict and keep
+             only this class, restoring the intended flex-stretch auto-width (container width
+             minus the mx-2 insets) with no override fight. If a future re-vendor of
+             SidebarSeparator.vue or Separator.vue fixes this upstream (e.g. by using an
+             attribute-scoped override itself), this line becomes redundant and can be dropped.
+             Any OTHER `<SidebarSeparator />` added anywhere in the app hits the same bug and
+             needs this same `data-[orientation=horizontal]:w-auto` class — it is not fixed at
+             the source, only compensated for at this one call site. -->
+        <SidebarSeparator class="data-[orientation=horizontal]:w-auto" />
 
         <SidebarGroup>
           <SidebarGroupContent>
