@@ -27,7 +27,7 @@ describe('languageStore', () => {
     expect(store.loaded).toBe(false)
   })
 
-  it('dedupes concurrent load() calls into a single in-flight fetch (e.g. CollectionListView switching collections mid-load, its onMounted and watch(name) handler both calling load() before either has resolved)', async () => {
+  it('dedupes concurrent load() calls into a single in-flight fetch (e.g. a collection switch remounting the list view while the outgoing instance\'s load() is still in flight)', async () => {
     let resolveFetch!: (v: unknown) => void
     const pending = new Promise((resolve) => { resolveFetch = resolve })
     const spy = vi.spyOn(languagesApi, 'getEnabled')
