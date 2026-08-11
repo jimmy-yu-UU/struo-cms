@@ -214,9 +214,9 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await page.goto('/collections/article')
   await openArticleByTitle(page, title)
   await page.getByRole('button', { name: 'Delete' }).click()
-  // PrimeVue's default locale (@primevue/core config) sets acceptLabel = "Yes";
-  // ItemFormView.vue's confirm.require() doesn't override it.
-  await page.getByRole('button', { name: 'Yes' }).click()
+  // ItemFormView.vue's onDelete() resolves through the local confirmStore/ConfirmHost, which
+  // defaults its accept button to common.confirm ("Confirm"); deleteConfirm() doesn't override it.
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
   await searchByField(page, 'Title', title)
   // Count-settle (trash.spec.ts idiom): wait for the filtered search to settle the tbody to its
@@ -285,8 +285,9 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
   await expect(guard).toBeVisible()
 
   // Accept -> navigation proceeds, the keyed view remounts, and init() reloads the ARTICLE (Title
-  // populated) — proving the form no longer reuses stale category data.
-  await page.getByRole('button', { name: 'Yes' }).click()
+  // populated) — proving the form no longer reuses stale category data. This is ItemFormView's
+  // guardLeave() confirm via ConfirmHost, whose accept button defaults to common.confirm ("Confirm").
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
   await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
 

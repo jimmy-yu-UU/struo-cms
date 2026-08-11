@@ -107,6 +107,7 @@ export default {
     edit: 'Edit {label}',
     delete: 'Delete',
     save: 'Save',
+    saving: 'Saving…',
     back: 'Back to list',
     relations: 'Relations',
     translatableBadge: 'Translatable',

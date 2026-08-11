@@ -4,8 +4,8 @@ import { type Page } from '@playwright/test'
 // Live gate: dirty-state leave guard.
 //
 // ItemFormView snapshots the model after load; onBeforeRouteLeave compares the current model and,
-// when dirty, prompts a PrimeVue ConfirmDialog ("Unsaved changes"). Reject keeps the user on the
-// form; accept lets the navigation proceed. An untouched form (incl. a loaded RichText/TipTap body)
+// when dirty, prompts the app-wide ConfirmHost ("Unsaved changes"). Cancel keeps the user on the
+// form; Confirm lets the navigation proceed. An untouched form (incl. a loaded RichText/TipTap body)
 // must NOT prompt, and a successful Save must navigate without prompting.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
@@ -143,7 +143,10 @@ test('editing then navigating away prompts; reject stays and preserves edits, ac
   await expect(guardDialog(page)).toBeVisible()
 
   // Reject -> stay on the form, edit preserved, still the same article URL.
-  await page.getByRole('button', { name: 'No' }).click()
+  // This dialog is ItemFormView's own guardLeave() confirm, which resolves through the local
+  // confirmStore/ConfirmHost — its Cancel button defaults to common.cancel ("Cancel"), not
+  // PrimeVue's "No".
+  await page.getByRole('button', { name: 'Cancel' }).click()
   await expect(guardDialog(page)).toHaveCount(0)
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   await expect(titleInput).toHaveValue(`${title} edited`)
@@ -151,7 +154,8 @@ test('editing then navigating away prompts; reject stays and preserves edits, ac
   // Navigate again and accept -> navigation proceeds.
   await navSidebar(page, 'Category')
   await expect(guardDialog(page)).toBeVisible()
-  await page.getByRole('button', { name: 'Yes' }).click()
+  // Same ConfirmHost dialog; its accept button defaults to common.confirm ("Confirm").
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/category$/)
 })
 
@@ -203,7 +207,8 @@ test('Escape dismisses the guard (user stays); a later navigation re-triggers it
   // Guard is still functional: navigating again re-triggers it.
   await navSidebar(page, 'Category')
   await expect(guardDialog(page)).toBeVisible()
-  // Clean up navigation state by accepting.
-  await page.getByRole('button', { name: 'Yes' }).click()
+  // Clean up navigation state by accepting. ConfirmHost's accept button defaults to
+  // common.confirm ("Confirm") — not PrimeVue's "Yes" this dialog no longer uses.
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/category$/)
 })

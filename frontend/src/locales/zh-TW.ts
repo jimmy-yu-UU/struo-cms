@@ -107,6 +107,7 @@ export default {
     edit: '編輯 {label}',
     delete: '刪除',
     save: '儲存',
+    saving: '儲存中…',
     back: '返回列表',
     relations: '關聯',
     translatableBadge: '可翻譯',
