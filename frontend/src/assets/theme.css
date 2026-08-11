@@ -1,4 +1,10 @@
 /* StruoCMS design tokens — source of truth: brand-spec.md (OKLch core) + prototype palette. */
+/* --surface-2 (a sunken/hover rung one step darker than --surface, inside a card — already
+   referenced with an inline fallback by ItemForm.vue before it was ever declared anywhere) is
+   declared in tokens.css, not here: it resolves to shadcn's --muted, and
+   tests/legacyTokens.test.ts's "no file outside tokens.css consumes the renamed names" guard
+   forbids any file OTHER than tokens.css — theme.css included — from consuming --muted via a
+   var() reference. tokens.css is the one file that owns and may reference --muted directly. */
 :root {
   --bg: oklch(0.984 0.003 247.9);
   --surface: oklch(1 0 0);
@@ -33,15 +39,30 @@
      screen still consuming --bg/--surface/--fg inherit the same palette as the migrated shell,
      with no per-file changes. Light mode was not reported broken (light --surface already equals
      shadcn's light --card exactly — pure white either way) and light --bg's faint cool-white tint
-     against a pure-white card is a pre-existing, working depth cue, not this bug — left alone. */
+     against a pure-white card is a pre-existing, working depth cue, not this bug — left alone.
+
+     --bg plays TWO roles pre-migration: the page backdrop (LoginView's .login-wrap, which is the
+     only caller left pointed at --bg) AND a sunken/hover rung meant to read as darker than
+     --surface inside a card. tokens.css's dark --background and --card are the SAME value
+     (#18181b) — pointing both legacy roles at --bg here would make that second role a no-op and
+     silently delete hover feedback on every row/menu-item that used it. The eight call sites
+     that were using --bg for that second role (RecentUpdatesTable, MediaFileList,
+     RichTextTableMenu, RichTextInput, FileThumbnail, MediaDetailDialog, RevisionSnapshotView,
+     MediaUploadDropzone) were moved onto --surface-2 instead (declared in tokens.css — see the
+     comment above :root) — it points at shadcn's --muted, which already carries exactly this
+     rung (#27272a dark / #f4f4f5 light), one step above the card in both themes. --bg keeps the
+     backdrop role only. */
   --bg: var(--background);
   --surface: var(--card);
   --fg: var(--foreground);
   /* --legacy-muted/--legacy-accent keep the pre-migration MEANING (subdued text / brand sky) but
      were separately hand-approximated OKLch values rather than references — re-pointing them to
      the tokens that already carry those exact meanings in tokens.css removes the duplicate
-     source of truth without changing what they resolve to (both were already tuned to
-     approximate the same slate-500/400 text and sky-600/400 brand blue).
+     source of truth. In light mode this is a no-op: tokens.css's --muted-foreground (#64748b) is
+     slate-500, exactly what --legacy-muted's light OKLch was already tuned to. In DARK mode it
+     is a deliberate hue shift, not a no-op: tokens.css's dark --muted-foreground is #a1a1aa —
+     zinc-400, not slate-400 (#94a3b8) — so subdued text on these 11 screens de-blues in dark
+     mode along with --surface/--bg/--fg above, which is the point of this whole change.
      --legacy-accent -> --primary, NOT --accent: tokens.css's own top-of-file comment warns
      --accent is the hover/focus SURFACE color, not the brand colour; binding legacy-accent to it
      would swap "brand sky" for a near-invisible hover tint, breaking every caller (e.g.

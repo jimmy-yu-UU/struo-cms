@@ -72,7 +72,7 @@ function uploaded(f: FileRow): string {
   cursor: pointer;
   transition: background var(--speed, .15s);
 }
-.media-list__row:hover { background: var(--bg); }
+.media-list__row:hover { background: var(--surface-2); }
 .media-list td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);

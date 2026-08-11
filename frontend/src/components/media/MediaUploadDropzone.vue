@@ -79,7 +79,7 @@ defineExpose({ uploadFiles })
 
 .dropzone.is-dragging {
   border-color: var(--legacy-accent);
-  background: var(--bg);
+  background: var(--surface-2);
 }
 
 .dropzone__label {

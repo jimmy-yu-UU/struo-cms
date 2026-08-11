@@ -224,6 +224,6 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
 .rich-text__content :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; }
 .rich-text__content :deep(th), .rich-text__content :deep(td) { border: 1px solid var(--border); padding: 4px 8px; }
-.rich-text__content :deep(th) { background: var(--bg); text-align: left; }
+.rich-text__content :deep(th) { background: var(--surface-2); text-align: left; }
 .rich-text__search { display: block; margin: 8px 0 12px; width: 100%; }
 </style>

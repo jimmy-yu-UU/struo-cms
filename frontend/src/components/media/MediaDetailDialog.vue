@@ -274,7 +274,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 .md-grid { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 .md-preview {
   border: 1px solid var(--border); border-radius: var(--legacy-radius-lg, 12px);
-  background: var(--bg); padding: 10px; display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); padding: 10px; display: flex; align-items: center; justify-content: center;
   min-height: 200px; overflow: hidden;
 }
 .md-preview img { max-width: 100%; max-height: 260px; object-fit: contain; border-radius: var(--legacy-radius, 8px); }
