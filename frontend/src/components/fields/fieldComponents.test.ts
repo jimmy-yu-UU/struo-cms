@@ -21,20 +21,19 @@ import FileField from './FileField.vue'
 import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
+import en from '../../locales/en'
 
-const i18n = createI18n({
-  legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: {
-    noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
-    searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
-  } } },
-})
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over } as FieldMeta
 }
 const opts = { global: { plugins: [PrimeVue] } }
+// form/DatePicker.vue calls useI18n() for its placeholder and trigger label, and its
+// PopoverContent is one of reka's floating components whose own portal is itself named Teleport,
+// which collides with VTU's stub unless slot rendering is switched back on.
+const dateOpts = { global: { plugins: [PrimeVue, i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
 describe('field components (simple inputs)', () => {
   it('TextField renders an input, binds maxlength, and emits on input', async () => {
@@ -127,11 +126,129 @@ describe('field components (simple inputs)', () => {
     expect(w.find('[data-slot="checkbox"]').exists()).toBe(true)
   })
 
-  it('DateField sets time-only for time and show-time for dateTime', () => {
-    const t = mount(DateField, { props: { field: field({ interface: 'time' }), modelValue: null }, ...opts })
-    expect(t.findComponent({ name: 'DatePicker' }).props('timeOnly')).toBe(true)
-    const dt = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: null }, ...opts })
-    expect(dt.findComponent({ name: 'DatePicker' }).props('showTime')).toBe(true)
+  // The three interfaces this one component serves render three different control sets, because
+  // ui/calendar has no time part: date -> calendar only, time -> a time input only, dateTime ->
+  // both.
+  it('DateField renders a calendar for date, a time input for time, and both for dateTime', () => {
+    const d = mount(DateField, { props: { field: field({ interface: 'date' }), modelValue: null }, ...dateOpts })
+    expect(d.findComponent({ name: 'DatePicker' }).exists()).toBe(true)
+    expect(d.find('input[type="time"]').exists()).toBe(false)
+
+    const tm = mount(DateField, { props: { field: field({ interface: 'time' }), modelValue: null }, ...dateOpts })
+    expect(tm.findComponent({ name: 'DatePicker' }).exists()).toBe(false)
+    expect(tm.find('input[type="time"]').exists()).toBe(true)
+
+    const dt = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: null }, ...dateOpts })
+    expect(dt.findComponent({ name: 'DatePicker' }).exists()).toBe(true)
+    expect(dt.find('input[type="time"]').exists()).toBe(true)
+  })
+
+  it('DateField merges a typed time into the existing date without losing the date', async () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime' }), modelValue: new Date(2026, 7, 11, 0, 0, 0) },
+      ...dateOpts,
+    })
+    await w.get('input[type="time"]').setValue('14:30')
+    const emitted = w.emitted('update:modelValue')?.at(-1)?.[0] as Date
+    expect(emitted.getFullYear()).toBe(2026)
+    expect(emitted.getMonth()).toBe(7)
+    expect(emitted.getDate()).toBe(11)
+    expect(emitted.getHours()).toBe(14)
+    expect(emitted.getMinutes()).toBe(30)
+  })
+
+  // The reverse direction: DatePicker carries the incoming time-of-day forward on its own, but
+  // this proves that end-to-end through DateField's own wiring — a dropped `:model-value="current"`
+  // binding on DatePicker would still pass the merge test above while this one caught it.
+  it('DateField preserves an existing time when a new date is picked through the real calendar', async () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime' }), modelValue: new Date(2026, 7, 11, 14, 30, 0, 0) },
+      ...dateOpts,
+    })
+    await w.get('button').trigger('click')
+    await w.vm.$nextTick()
+    await w.vm.$nextTick()
+    await w.get('[data-value="2026-08-20"]').trigger('click')
+    const emitted = w.emitted('update:modelValue')?.at(-1)?.[0] as Date
+    expect(emitted.getDate()).toBe(20)
+    expect(emitted.getHours()).toBe(14)
+    expect(emitted.getMinutes()).toBe(30)
+  })
+
+  it('DateField clears the value entirely when the time is cleared on a time-only field', async () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'time' }), modelValue: new Date(2026, 7, 11, 14, 30, 0, 0) },
+      ...dateOpts,
+    })
+    await w.get('input[type="time"]').setValue('')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([null])
+  })
+
+  // A dateTime field still has a date the user chose; dropping it because the time box went blank
+  // would be a surprising side effect of an unrelated control, so it drops to midnight instead.
+  it('DateField drops to midnight, not null, when the time is cleared on a dateTime field', async () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime' }), modelValue: new Date(2026, 7, 11, 14, 30, 0, 0) },
+      ...dateOpts,
+    })
+    await w.get('input[type="time"]').setValue('')
+    const emitted = w.emitted('update:modelValue')?.at(-1)?.[0] as Date | null
+    expect(emitted).not.toBeNull()
+    expect(emitted!.getFullYear()).toBe(2026)
+    expect(emitted!.getMonth()).toBe(7)
+    expect(emitted!.getDate()).toBe(11)
+    expect(emitted!.getHours()).toBe(0)
+    expect(emitted!.getMinutes()).toBe(0)
+  })
+
+  // The model arrives as a Date once ItemForm round-trips a save, or as an ISO string on the very
+  // first load of an existing item (the API's raw JSON). A string without a timezone suffix
+  // parses as local time, sidestepping any dependence on the test runner's timezone.
+  it('DateField accepts an ISO string model the same as a Date', () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'time' }), modelValue: '2026-08-11T14:30:00' },
+      ...dateOpts,
+    })
+    expect((w.get('input[type="time"]').element as HTMLInputElement).value).toBe('14:30')
+  })
+
+  // registry.ts's def() default `empty` is '' for date/time/dateTime (none of the three entries
+  // override it), so this is the value ItemForm.vue actually supplies on a fresh item, not null.
+  it('DateField renders empty controls when mounted with the registry\'s real empty value', () => {
+    const w = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: '' }, ...dateOpts })
+    expect(w.findComponent({ name: 'DatePicker' }).props('modelValue')).toBeNull()
+    expect((w.get('input[type="time"]').element as HTMLInputElement).value).toBe('')
+  })
+
+  it('DateField genuinely disables both the calendar trigger and the time input', () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime' }), modelValue: null, disabled: true },
+      ...dateOpts,
+    })
+    expect(w.findComponent({ name: 'DatePicker' }).props('disabled')).toBe(true)
+    expect(w.get('input[type="time"]').attributes('disabled')).toBe('')
+  })
+
+  // Standing constraint: an inbound assertion made only at initial render cannot distinguish
+  // controlled binding from local state seeded once and never revisited; the prop must change
+  // after mount and the controls must follow.
+  it('DateField reflects a model value changed after mount', async () => {
+    const w = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: null }, ...dateOpts })
+    expect((w.get('input[type="time"]').element as HTMLInputElement).value).toBe('')
+    await w.setProps({ modelValue: new Date(2026, 7, 11, 9, 15, 0, 0) })
+    expect((w.get('input[type="time"]').element as HTMLInputElement).value).toBe('09:15')
+    expect(w.findComponent({ name: 'DatePicker' }).props('modelValue')).toEqual(new Date(2026, 7, 11, 9, 15, 0, 0))
+  })
+
+  // Two controls in one dateTime field must not share an accessible name, or a screen reader
+  // announces both as the same control once a value exists.
+  it('DateField gives the time input an accessible name distinct from the calendar trigger', () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime', label: 'Published at' }), modelValue: null },
+      ...dateOpts,
+    })
+    expect(w.findComponent({ name: 'DatePicker' }).props('label')).toBe('Published at')
+    expect(w.get('input[type="time"]').attributes('aria-label')).toBe('Published at time')
   })
 
   // The migration's own assertion: this field must no longer resolve a PrimeVue component.
