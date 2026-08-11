@@ -10,7 +10,7 @@ import type { RelationMeta, CollectionMeta } from '../../types/schema'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { noRelatedItems: 'No related items.' } } },
+  messages: { en: { fields: { noRelatedItems: 'No related items.' }, common: { loading: 'Loading…' } } },
 })
 
 const push = vi.fn()
@@ -97,8 +97,8 @@ describe('RelatedList', () => {
     const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
     await (w.vm as any).load()
     listSpy.mockClear()
-    // DataTablePagination emits two independent events (update:page / update:pageSize) instead of
-    // PrimeVue's single { page, rows } payload, so onPage is now a plain page-number setter.
+    // onPage takes a plain page number: DataTablePagination emits update:page and update:pageSize
+    // as two independent numeric events, never a combined { page, rows } payload.
     await (w.vm as any).onPage(2)
     expect(listSpy).toHaveBeenCalledWith('article', expect.objectContaining({ page: 2, rows: 10 }))
   })
@@ -131,5 +131,51 @@ describe('RelatedList', () => {
       'article',
       expect.objectContaining({ page: 2, rows: 10 }),
     )
+  })
+
+  // update:page-size only ever fires from DataTablePagination's rows-per-page <select>, which the
+  // component keeps unrendered via :show-page-size-selector="false" -- unreachable from the real
+  // UI today, but still a live listener on the emitted event, so it is worth pinning directly.
+  it('turns a pagination page-size event into a reload, reset to page 0', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await flushPromises()
+    ;(w.vm as any).onPage(2)
+    await flushPromises()
+    vi.mocked(itemsApi.list).mockClear()
+    w.findComponent({ name: 'DataTablePagination' }).vm.$emit('update:pageSize', 25)
+    await flushPromises()
+    expect(itemsApi.list).toHaveBeenCalledWith(
+      'article',
+      expect.objectContaining({ page: 0, rows: 25 }),
+    )
+  })
+
+  // The migration's whole point is this button: DataTable has no row-click event, so the label
+  // cell itself must carry navigation. Mounting the real (plan-1) DataTable, rather than stubbing
+  // it, exercises the actual cell render function and the actual DOM click through Button's
+  // real onClick -- a reordered h() prop, a renamed handler, or a dropped .original would show up
+  // here even though every other test in this file stubs DataTable out.
+  it('clicking the row label button navigates to the target record', async () => {
+    setupStores()
+    // title is translatable (targetMeta above), so resolveDisplayLabel reads it via
+    // translations.en rather than the bare `title` property.
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'a1', translations: { en: { title: 'Hello' } } }],
+      total: 1,
+    })
+    const w = mount(RelatedList, {
+      props: { relation, parentId: 'p1' },
+      global: { stubs: { DataTablePagination: true }, plugins: [i18n] },
+    })
+    await flushPromises()
+    const button = w.get('[data-testid="related-row"]')
+    expect(button.text()).toBe('Hello')
+    // A bare <button> defaults to type="submit"; this renders inside ItemForm's <form>, where that
+    // default would turn a row click into a full record save.
+    expect(button.attributes('type')).toBe('button')
+    await button.trigger('click')
+    expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: 'a1' } })
   })
 })

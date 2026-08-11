@@ -12,7 +12,7 @@ import type { RelationMeta, CollectionMeta } from '../../types/schema'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.' } } },
+  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.', noRelatedItems: 'No related items.' } } },
 })
 
 const push = vi.fn()
@@ -50,7 +50,7 @@ const stubs = {
   Combobox: true,
   TreeSelect: true,
   DataTable: true,
-  Column: true,
+  DataTablePagination: true,
 }
 
 function setupStores() {

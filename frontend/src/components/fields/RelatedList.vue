@@ -60,6 +60,10 @@ function onPage(p: number): void {
   load()
 }
 
+// DataTablePagination only fires update:page-size from its rows-per-page <select>, which
+// :show-page-size-selector="false" below keeps unrendered — 10 is a deliberate fixed size for this
+// secondary in-form list. This handler exists to satisfy DataTablePagination's event contract so
+// re-enabling the selector later needs no wiring change here.
 function onPageSize(size: number): void {
   page.value = 0
   perPage.value = size
@@ -70,9 +74,11 @@ function openItem(id: string): void {
   router.push({ name: 'collection-item', params: { name: props.relation.targetCollection, id } })
 }
 
-// This list has never had a sortable column and the query load() builds carries no sort param, so
-// the state fed to DataTable always reports an empty sort — a clickable header here would sort
-// nothing.
+// Mirrors CollectionListView.vue's update:state handling, so a future sortable column stays a
+// change confined to the columns computed below. DataTable only emits update:state when a header's
+// sort cycles; this table's single column carries no meta.sortable, so SortableHeader renders a
+// plain label and update:state never actually fires — the query load() builds has no sort param to
+// receive it anyway.
 const tableState = computed<DataTableState>(() => ({ sort: [], page: page.value, pageSize: perPage.value }))
 
 function onTableState(next: DataTableState): void {
@@ -83,9 +89,8 @@ const columns = computed<DataTableColumn<Row>[]>(() => [{
   id: 'label',
   accessorKey: 'label',
   header: props.relation.label,
-  // DataTable has no row-click event and no slots at all, so the navigation affordance has to be
-  // the cell itself. A button also fixes what the old whole-row click never had: a role and an
-  // accessible name.
+  // DataTable has no row-click event and no slots, so the cell itself carries navigation: a link
+  // button gives the row a role and an accessible name that a plain text cell would not.
   cell: ({ row }) => h(Button, {
     type: 'button',
     variant: 'link',
