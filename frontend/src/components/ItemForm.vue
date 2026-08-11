@@ -51,9 +51,7 @@ defineExpose({ activeLocale })
 
     <Tabs v-if="fields.translatable.length" v-model="activeLocale">
       <TabsList>
-        <!-- `class="tab"` is a test-only hook (ItemForm.test.ts counts rendered tabs by it); it
-             carries no styling of its own. -->
-        <TabsTrigger v-for="loc in locales" :key="loc.code" :value="loc.code" class="tab">
+        <TabsTrigger v-for="loc in locales" :key="loc.code" :value="loc.code">
           <span
             v-if="showDots"
             class="dot mr-1.5 inline-block h-2 w-2 rounded-full align-middle"

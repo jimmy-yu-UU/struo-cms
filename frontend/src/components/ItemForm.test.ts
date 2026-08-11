@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import ItemForm from './ItemForm.vue'
 import RelationInput from './fields/RelationInput.vue'
@@ -32,8 +32,9 @@ const locales: LanguageInfo[] = [
 ]
 const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {} }
 // Tabs/TabsList/TabsTrigger/TabsContent are thin reka wrappers with no portal, so they mount as
-// their real selves rather than stubs — this exercises the actual v-model wiring and TabsContent's
-// mount/unmount behaviour instead of simulating it.
+// their real selves rather than stubs. That alone only buys "no PrimeVue global needed"; the tests
+// below that exercise the v-model binding and the mount/unmount behaviour do so by actually
+// triggering reka's activation event, not merely by mounting the real component.
 const stubs = {
   FieldInput: { props: ['field', 'modelValue', 'disabled'], template: '<div class="field-input" :data-name="field.name" />' },
 }
@@ -41,7 +42,7 @@ const stubs = {
 describe('ItemForm', () => {
   it('renders a tab per locale but mounts only the active locale panel body', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
-    expect(w.findAll('.tab')).toHaveLength(2)
+    expect(w.findAll('[role="tab"]')).toHaveLength(2)
     // 1 shared (status) + translatable title for the ACTIVE locale only (1) = 2 FieldInputs
     expect(w.findAll('.field-input')).toHaveLength(2)
   })
@@ -51,6 +52,23 @@ describe('ItemForm', () => {
     ;(w.vm as unknown as { activeLocale: string }).activeLocale = 'zh-TW'
     await w.setProps({ errors: { title: 'Title is required.' } })
     expect((w.vm as unknown as { activeLocale: string }).activeLocale).toBe('en')
+  })
+  it('activates the clicked locale tab and mounts that locale\'s field body', async () => {
+    const w = mountForm({ meta, model, locales, errors: {} })
+    // reka's TabsTrigger activates on `mousedown` (activationMode defaults to 'automatic'), not
+    // `click` — a click-based trigger would pass this test while exercising nothing.
+    await w.findAll('[role="tab"]')[1].trigger('mousedown')
+    expect((w.vm as unknown as { activeLocale: string }).activeLocale).toBe('zh-TW')
+    // TabsContent's Presence settles `hidden`/data-state one microtask flush after the
+    // v-model change (usePresence awaits nextTick before dispatching its state transition).
+    await flushPromises()
+    expect(w.findAll('.field-input')).toHaveLength(2) // shared status + zh-TW's translatable title
+  })
+  it('renders each locale tab as an explicit type="button", the only <button>s inside this <form> besides field controls', () => {
+    const w = mountForm({ meta, model, locales, errors: {} })
+    for (const tab of w.findAll('[role="tab"]')) {
+      expect(tab.attributes('type')).toBe('button')
+    }
   })
   it('shows a server error banner', () => {
     const w = mountForm({ meta, model, locales, errors: {}, serverError: 'boom' })
@@ -101,17 +119,25 @@ describe('ItemForm', () => {
     const relModel: FormModel = { shared: { status: 'draft' }, translations: {}, relations: { category: null } }
     const w = mountForm({ meta: relMeta, model: relModel, locales: [], errors: {} }, { RelationInput: true })
     expect(w.findComponent(RelationInput).exists()).toBe(true)
+    // The relation lives in its own `.field` wrapper too (a THIRD call site, distinct from the
+    // shared- and translatable-field wrappers covered below) — pinned here rather than folded into
+    // an aggregate count, since this is the only test that mounts a relation at all.
+    expect(w.find('.relations .field').exists()).toBe(true)
   })
-  it('keeps the .field wrapper class that the e2e suite locates fields by', () => {
+  it('keeps the .field wrapper class on each of the three call sites the e2e suite locates fields by', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
     // Six e2e specs find a field by label inside `.field` / `.field:visible`. This is a contract,
-    // not a styling detail — dropping the class breaks them silently at the Playwright layer,
-    // where no unit test would notice.
-    expect(w.findAll('.field').length).toBeGreaterThan(0)
+    // not a styling detail — dropping the class on any ONE wrapper breaks that wrapper's fields
+    // silently at the Playwright layer. An aggregate `length > 0` cannot detect a single dropped
+    // wrapper (the other two still match), so each call site is pinned by its actual content
+    // instead of trusting the total.
+    expect(w.findAll('.field')).toHaveLength(2) // 1 shared (status) + 1 active-locale translatable (title)
+    expect(w.find('.field .field-input[data-name="status"]').exists()).toBe(true) // shared
+    expect(w.find('.field .field-input[data-name="title"]').exists()).toBe(true)  // translatable
   })
   it('no longer renders PrimeVue tabs', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
     expect(w.findComponent({ name: 'TabPanel' }).exists()).toBe(false)
-    expect(w.findAll('[role="tab"]').length).toBeGreaterThan(0)
+    expect(w.findAll('[role="tab"]')).toHaveLength(2)
   })
 })

@@ -180,14 +180,18 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
   <div class="relation-picker">
     <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
 
-    <TreeSelect
-      v-if="tree"
-      :model-value="modelValue == null ? null : String(modelValue)"
-      :nodes="treeNodes"
-      :label="relation.label"
-      :disabled="disabled"
-      @update:model-value="onTreeChange"
-    />
+    <!-- form/TreeSelect.vue is layout-neutral (`w-full`, no ceiling) so its other caller
+         (FilePicker's folder filter, already width-constrained by its dialog) isn't affected —
+         the 480px cap the other three branches below carry is applied here, at this consumer. -->
+    <div v-if="tree" class="w-full max-w-[480px]">
+      <TreeSelect
+        :model-value="modelValue == null ? null : String(modelValue)"
+        :nodes="treeNodes"
+        :label="relation.label"
+        :disabled="disabled"
+        @update:model-value="onTreeChange"
+      />
+    </div>
 
     <div v-else-if="multiple" class="flex w-full max-w-[480px] flex-col gap-1.5">
       <!-- Chips live outside the trigger, not inside it: the trigger renders as a <button>, and a
