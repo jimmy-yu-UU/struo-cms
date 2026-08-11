@@ -187,13 +187,11 @@ describe('field components (choice + structural)', () => {
     expect(w.get('[role="combobox"]').attributes('disabled')).toBe('')
   })
 
-  // Fix round 1: this used to call an exposed `selectValue` setter directly, which bypassed
-  // SelectField's own @update:model-value listener entirely — deleting that listener kept the
-  // suite green (standing-constraints "reka floating controls: test the real binding, not an
-  // exposed setter"). Emitting from the vendored child runs the real template listener and its
-  // String(v) coercion. modelValue: '' (not null) is select's actual registry empty value
-  // (lib/fieldTypes/registry.ts:206), which keeps reka's SelectRoot in controlled mode — the mode
-  // production always runs in.
+  // jsdom cannot drive reka's Select through real pointer events, but VTU can emit directly from
+  // the vendored child component, which runs SelectField's own template listener (and whatever
+  // coercion it applies) rather than bypassing it. modelValue: '' mounts with select's real
+  // registry empty value (registry.ts's def() default `empty`, which the `select` interface entry
+  // does not override), keeping reka's SelectRoot in the controlled mode production always runs.
   it('SelectField emits the chosen option value through its real listener', async () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: '' },
@@ -201,6 +199,18 @@ describe('field components (choice + structural)', () => {
     })
     await w.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', 'a')
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['a'])
+  })
+
+  // A vendored root emitting `undefined` (e.g. a hypothetical future clear action, or a different
+  // root entirely) must not turn into the literal four-character string "undefined" in the saved
+  // payload — the outbound coercion collapses a nullish emission to '' by construction.
+  it('SelectField coerces a cleared emission to an empty string, never the string "undefined"', async () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: 'a' },
+      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await w.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', undefined)
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([''])
   })
 
   // Standing-constraints "Accessible name on every floating control": reka's SelectTrigger has no
