@@ -1,4 +1,4 @@
-/** Compact tabular datetime for lists (brand-spec: mono, no locale-verbose strings). */
+/** Compact tabular datetime for lists: mono, no locale-verbose strings. */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)

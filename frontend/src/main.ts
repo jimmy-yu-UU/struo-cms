@@ -9,7 +9,7 @@ import 'primeicons/primeicons.css'
 import './assets/tokens.css'
 import './assets/theme.css'
 // vue-sonner's lib/index.js never imports its own stylesheet, so without this the toaster
-// (mounted in Task 10) would render completely unstyled.
+// would render completely unstyled.
 import 'vue-sonner/style.css'
 import App from './App.vue'
 import router from './router'
