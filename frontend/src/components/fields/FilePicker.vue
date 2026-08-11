@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import TreeSelect from '@/components/form/TreeSelect.vue'
@@ -128,11 +128,21 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 
     <Dialog v-model:open="dialogOpen">
       <!--
-        Vendored DialogContent's own width class carries the sm: modifier (sm:max-w-lg), so the
-        override re-supplies the same modifier rather than an unprefixed max-w-* — otherwise both
-        classes survive the merge and CSS source order decides, and the vendored one wins.
+        DialogScrollContent, not DialogContent: the file grid can run to several rows (openDialog
+        requests up to 50 files), and reka's DialogRoot locks body scroll while open, so a
+        fixed-position, viewport-centered box (plain DialogContent) leaves no scroll container for
+        overflow at all — rows above and below the viewport become permanently unreachable.
+        DialogScrollContent's overlay carries its own overflow-y-auto and holds the content box in
+        normal flow (relative + vertical margin) instead of fixed-centered, so the overlay itself
+        scrolls once the box is taller than the viewport.
+
+        Its own width class is an unprefixed max-w-lg (no sm: modifier, unlike plain DialogContent),
+        so the override below re-supplies no modifier either — tailwind-merge keys on (modifier
+        set, class group), and a bare max-w-lg only loses to another bare max-w-* class.
+        max-[960px]:max-w-[95vw] restores the old PrimeVue Dialog's `:breakpoints="{ '960px':
+        '95vw' }"`, which widened the dialog on medium viewports rather than keeping the 78vw cap.
       -->
-      <DialogContent class="sm:max-w-[min(78vw,1300px)]">
+      <DialogScrollContent class="max-w-[min(78vw,1300px)] max-[960px]:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>{{ t('fields.selectAFile') }}</DialogTitle>
         </DialogHeader>
@@ -148,7 +158,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
         </div>
         <Input v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
         <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
-      </DialogContent>
+      </DialogScrollContent>
     </Dialog>
   </div>
 </template>
@@ -167,7 +177,15 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
   gap: 8px;
 }
 
-.file-picker__thumb {
+/*
+ * FileThumbnail's own scoped .file-thumb rule and this one carry equal specificity (one class +
+ * one scoped-id attribute each — the div is this component's own scope AND FileThumbnail's,
+ * because a child's root node picks up both when the parent passes it a class), so which wins
+ * would otherwise depend on which style block Vite happens to emit later in the bundle. Matching
+ * both classes in one compound selector adds a second class to the specificity count, which wins
+ * regardless of source order.
+ */
+.file-thumb.file-picker__thumb {
   width: 48px;
   height: 48px;
   flex: none;
@@ -178,13 +196,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
   gap: 8px;
 }
 
-.file-picker__folder {
-  margin: 8px 0 0;
-}
-
-.file-picker__search {
-  display: block;
-  margin: 8px 0 12px;
-  width: 100%;
-}
+/* No margin here: DialogScrollContent's content box is itself `grid gap-4`, which already spaces
+   every direct child (DialogHeader, the error text, this folder filter, the search input,
+   MediaGrid) — an added margin would stack on top of that gap instead of replacing it. */
 </style>
