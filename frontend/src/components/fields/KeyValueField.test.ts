@@ -59,6 +59,20 @@ describe('KeyValueField', () => {
     expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
   })
 
+  // Without a distinct accessible name, both inputs are unnamed native text boxes — a screen
+  // reader announces "edit text" twice per row with no way to tell the key cell from the value
+  // cell. Asserted under zh-TW (not en) because comparing against the English string alone cannot
+  // distinguish a localised lookup from a hardcoded English word that happens to read back the same.
+  it('gives the key and value inputs distinct, resolved, localised accessible names and placeholders', () => {
+    const w = mount(KeyValueField, { props: { field: field({ interface: 'keyValue' }), modelValue: { a: '1' } }, ...zhOpts })
+    const [keyInput, valueInput] = w.findAll('.kv-row input')
+    expect(keyInput.attributes('aria-label')).toBe(zhTW.fields.keyValueKey)
+    expect(valueInput.attributes('aria-label')).toBe(zhTW.fields.keyValueValue)
+    expect(keyInput.attributes('aria-label')).not.toBe(valueInput.attributes('aria-label'))
+    expect(keyInput.attributes('placeholder')).toBe(zhTW.fields.keyValueKey)
+    expect(valueInput.attributes('placeholder')).toBe(zhTW.fields.keyValueValue)
+  })
+
   // A negative assertion alone (no PrimeVue component) also passes for a hand-rolled <input>, so
   // assert the vendored composition's real data-slot hook positively too: both cells of the row,
   // and both buttons (remove and add), not just the first one found.

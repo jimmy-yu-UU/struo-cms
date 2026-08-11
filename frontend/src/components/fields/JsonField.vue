@@ -51,9 +51,8 @@ function onInput(v: string) {
     <Textarea
       :model-value="text"
       :disabled="disabled"
-      :rows="6"
       :aria-invalid="error !== null"
-      class="json-textarea font-mono"
+      class="json-textarea font-mono min-h-36"
       spellcheck="false"
       @update:model-value="(v) => onInput(String(v ?? ''))"
     />

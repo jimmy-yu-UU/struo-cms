@@ -223,6 +223,8 @@ export default {
     add: '新增',
     tagValue: '值',
     tagDisplayText: '顯示文字(選填)',
+    keyValueKey: '鍵',
+    keyValueValue: '值',
     noFileSelected: '尚未選擇檔案',
     selectFile: '選擇',
     clear: '清除',
