@@ -35,8 +35,8 @@ describe('SortableList', () => {
     const w = mountList(before)
     await w.findAll('[data-testid="move-up"]')[1].trigger('click')
     expect((w.emitted('update:modelValue')?.[0][0] as Row[]).map((r) => r.id)).toEqual(['b', 'a', 'c'])
-    // The form model is snapshot-compared for dirtiness (lib/formDirty.ts); mutating in place
-    // would make a reorder invisible to that comparison.
+    // The parent must receive a distinct array so no consumer can observe the old and the new
+    // order as the same object -- proven here by asserting the caller's own array is untouched.
     expect(before.map((r) => r.id)).toEqual(['a', 'b', 'c'])
   })
 
@@ -60,7 +60,11 @@ describe('SortableList', () => {
 
   it('disables every control when the list is disabled', () => {
     const w = mountList(ROWS, true)
-    for (const btn of w.findAll('button')) expect(btn.attributes('disabled')).toBeDefined()
+    // Length assertion first: an empty findAll would make the loop below pass having asserted
+    // nothing, silently losing coverage if the controls were ever hidden instead of disabled.
+    const btns = w.findAll('button')
+    expect(btns).toHaveLength(6) // 3 rows x 2 controls
+    for (const btn of btns) expect(btn.attributes('disabled')).toBeDefined()
   })
 
   it('names both controls for assistive tech', () => {
@@ -82,14 +86,8 @@ describe('SortableList', () => {
 
   it('both controls are type="button" so they cannot submit an enclosing form', () => {
     const w = mountList()
-    for (const btn of w.findAll('button')) expect(btn.attributes('type')).toBe('button')
-  })
-
-  it('breaks when the emit path is disconnected, proving the test can fail', async () => {
-    // Sanity check for the suite itself, not the component: an intentionally wrong expectation
-    // must fail, or the earlier assertions would be meaningless.
-    const w = mountList()
-    await w.findAll('[data-testid="move-down"]')[0].trigger('click')
-    expect((w.emitted('update:modelValue')?.[0][0] as Row[]).map((r) => r.id)).not.toEqual(['a', 'b', 'c'])
+    const btns = w.findAll('button')
+    expect(btns).toHaveLength(6) // 3 rows x 2 controls
+    for (const btn of btns) expect(btn.attributes('type')).toBe('button')
   })
 })

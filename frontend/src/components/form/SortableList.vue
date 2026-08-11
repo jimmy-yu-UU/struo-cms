@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { ArrowDown, ArrowUp } from '@lucide/vue'
+import { reorder } from './sortableReorder'
 
 const props = defineProps<{
   modelValue: T[]
@@ -12,18 +13,16 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: T[]): void }>()
 defineSlots<{ item(props: { item: T; index: number }): unknown }>()
 const { t } = useI18n()
 
-// Always emit a fresh array rather than splicing the caller's: this repo's immutability
-// convention, and the parent must receive a distinct array so no consumer can observe the old
-// and the new order as the same object.
-//
-// Do NOT justify this with a dirty-check claim: snapshotModel returns a STRING and isDirty
-// re-serialises the live model, so an in-place swap would still be detected. Save is gated on
-// canWrite, never on dirtiness.
+// Duplicate itemKey() results across rows would make v-for's :key ambiguous (two <li>s claiming
+// the same key). Not guarded here, same as any other v-for :key: it is the caller's
+// responsibility to hand back unique keys, and detecting the duplicate here would only mask that
+// caller bug rather than fix it. FilesField's file ids, this component's only consumer, are
+// unique by construction.
 function move(from: number, to: number): void {
-  if (to < 0 || to >= props.modelValue.length) return
-  const next = [...props.modelValue]
-  const [item] = next.splice(from, 1)
-  next.splice(to, 0, item)
+  const next = reorder(props.modelValue, from, to)
+  // reorder() returns the SAME reference when the move was out of bounds -- that is what tells
+  // us nothing changed, so a boundary click (or any other invalid from/to) emits nothing.
+  if (next === props.modelValue) return
   emit('update:modelValue', next)
 }
 </script>
