@@ -228,6 +228,7 @@ export default {
     selectFiles: 'Select files',
     done: 'Done',
     loadOptionsFailed: 'Failed to load options.',
+    noOptions: 'No options',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
