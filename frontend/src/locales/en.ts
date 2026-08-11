@@ -221,6 +221,8 @@ export default {
   },
   fields: {
     add: 'Add',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
     tagValue: 'value',
     tagDisplayText: 'display text (optional)',
     keyValueKey: 'key',

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import Button from 'primevue/button'
+import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
+import { ArrowDown, ArrowUp, Plus, X } from '@lucide/vue'
 import { getFieldType } from '../../lib/fieldTypes/registry'
 import type { FieldMeta } from '../../types/schema'
 
@@ -10,6 +12,7 @@ type Row = Record<string, unknown>
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: Row[]): void }>()
+const { t } = useI18n()
 
 function toRows(v: unknown): Row[] {
   return Array.isArray(v) ? (v as Row[]).map((r) => ({ ...(r ?? {}) })) : []
@@ -60,11 +63,11 @@ function setSub(i: number, name: string, v: unknown): void {
 </script>
 
 <template>
-  <div class="repeater-field">
-    <div v-for="(row, i) in rows" :key="i" class="repeater-row">
-      <div class="repeater-row__fields">
-        <div v-for="sub in subFields()" :key="sub.name" class="repeater-subfield">
-          <label class="repeater-subfield__label">{{ sub.label }}</label>
+  <div class="repeater-field flex flex-col items-start gap-3">
+    <div v-for="(row, i) in rows" :key="i" class="repeater-row flex w-full gap-3 rounded-md border p-3">
+      <div class="repeater-row__fields flex flex-1 flex-col gap-2">
+        <div v-for="sub in subFields()" :key="sub.name" class="repeater-subfield flex flex-col gap-1">
+          <label class="repeater-subfield__label text-xs text-muted-foreground">{{ sub.label }}</label>
           <component
             :is="getFieldType(sub.interface).component"
             :field="sub"
@@ -74,27 +77,50 @@ function setSub(i: number, name: string, v: unknown): void {
           />
         </div>
       </div>
-      <div class="repeater-row__controls">
-        <Button class="repeater-up" icon="pi pi-arrow-up" text :disabled="disabled || i === 0" @click="moveUp(i)" />
-        <Button class="repeater-down" icon="pi pi-arrow-down" text
-          :disabled="disabled || i === rows.length - 1" @click="moveDown(i)" />
-        <Button class="repeater-remove" icon="pi pi-times" text :disabled="disabled" @click="removeAt(i)" />
+      <div class="repeater-row__controls flex flex-col gap-1">
+        <Button
+          class="repeater-up"
+          variant="ghost"
+          size="icon"
+          :aria-label="t('fields.moveUp')"
+          :disabled="disabled || i === 0"
+          @click="moveUp(i)"
+        >
+          <ArrowUp class="size-4" />
+        </Button>
+        <Button
+          class="repeater-down"
+          variant="ghost"
+          size="icon"
+          :aria-label="t('fields.moveDown')"
+          :disabled="disabled || i === rows.length - 1"
+          @click="moveDown(i)"
+        >
+          <ArrowDown class="size-4" />
+        </Button>
+        <Button
+          class="repeater-remove"
+          variant="ghost"
+          size="icon"
+          :aria-label="t('common.delete')"
+          :disabled="disabled"
+          @click="removeAt(i)"
+        >
+          <X class="size-4" />
+        </Button>
       </div>
     </div>
-    <p v-if="!rows.length" class="repeater-field__empty">No items</p>
-    <Button class="repeater-add" icon="pi pi-plus" label="Add" severity="secondary" outlined size="small" :disabled="disabled" @click="add" />
+    <p v-if="!rows.length" class="repeater-field__empty text-sm italic text-muted-foreground">No items</p>
+    <Button
+      class="repeater-add"
+      variant="outline"
+      size="sm"
+      :aria-label="t('fields.add')"
+      :disabled="disabled"
+      @click="add"
+    >
+      <Plus class="size-4" />
+      {{ t('fields.add') }}
+    </Button>
   </div>
 </template>
-
-<style scoped>
-.repeater-field { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.repeater-row {
-  display: flex; gap: 12px; width: 100%;
-  border: 1px solid var(--border); border-radius: 6px; padding: 12px;
-}
-.repeater-row__fields { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.repeater-subfield { display: flex; flex-direction: column; gap: 4px; }
-.repeater-subfield__label { font-size: 0.85em; opacity: 0.8; }
-.repeater-row__controls { display: flex; flex-direction: column; gap: 4px; }
-.repeater-field__empty { font-style: italic; opacity: 0.7; }
-</style>
