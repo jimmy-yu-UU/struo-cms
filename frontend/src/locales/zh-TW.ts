@@ -72,6 +72,8 @@ export default {
     or: '或',
     ssoMicrosoft: '使用 Microsoft 365 登入',
     failed: '登入失敗,請稍後再試。',
+    showPassword: '顯示密碼',
+    hidePassword: '隱藏密碼',
   },
   dashboard: {
     title: '儀表板',
