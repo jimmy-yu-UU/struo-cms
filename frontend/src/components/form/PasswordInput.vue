@@ -8,26 +8,28 @@ import { Eye, EyeOff } from '@lucide/vue'
 defineProps<{
   modelValue: string
   disabled?: boolean
-  id?: string
-  autocomplete?: string
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
+// Everything else a consumer passes (id, autocomplete, required, name, placeholder, aria-*, …)
+// is forwarded verbatim to the native input via $attrs below, so it needs no dedicated prop here.
+defineOptions({ inheritAttrs: false })
 const { t } = useI18n()
 
 const revealed = ref(false)
 // The label names the NEXT action, so it must flip with the state — a toggle stuck on "Show
-// password" is actively wrong once the value is visible.
+// password" is actively wrong once the value is visible. This is the only state signal the toggle
+// gives; it deliberately does not also carry aria-pressed, which would announce the same state
+// twice.
 const toggleLabel = computed(() => (revealed.value ? t('login.hidePassword') : t('login.showPassword')))
 </script>
 
 <template>
   <div class="relative">
     <Input
-      :id="id"
+      v-bind="$attrs"
       :model-value="modelValue"
       :type="revealed ? 'text' : 'password'"
       :disabled="disabled"
-      :autocomplete="autocomplete"
       class="pr-10"
       @update:model-value="(v) => emit('update:modelValue', String(v ?? ''))"
     />
@@ -36,11 +38,10 @@ const toggleLabel = computed(() => (revealed.value ? t('login.hidePassword') : t
       consumer is a login <form> — an untyped toggle would submit that form instead of revealing
       the password.
 
-      size="icon" contributes only a `size-*` utility, with no `has-[>svg]:px-*` of its own (that
-      modifier-carrying padding lives on the plain/sm/lg sizes only), so the `px-2.5` below competes
-      with nothing and applies as written. Switching this trigger to a size that DOES carry
-      `has-[>svg]:px-*` would need `px-2.5` re-supplied under that same modifier, or CSS specificity
-      would let the vendored padding win silently.
+      size="icon" carries no has-[>svg]:px-* (unlike default/xs/sm/lg), so px-2.5 below competes
+      with nothing and applies as written. dark:hover:bg-transparent re-supplies the same modifier
+      as ghost's own dark:hover:bg-accent/50 — without it, hover:bg-transparent only wins in light
+      mode and this toggle keeps a hover background in dark mode.
     -->
     <Button
       type="button"
@@ -48,11 +49,10 @@ const toggleLabel = computed(() => (revealed.value ? t('login.hidePassword') : t
       size="icon"
       :disabled="disabled"
       :aria-label="toggleLabel"
-      :aria-pressed="revealed"
-      class="absolute right-0 top-0 h-full px-2.5 hover:bg-transparent"
+      class="absolute right-0 top-0 h-full px-2.5 hover:bg-transparent dark:hover:bg-transparent"
       @click="revealed = !revealed"
     >
-      <component :is="revealed ? EyeOff : Eye" class="size-4" />
+      <component :is="revealed ? EyeOff : Eye" />
     </Button>
   </div>
 </template>

@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import PasswordInput from './PasswordInput.vue'
 import en from '@/locales/en'
+import zhTW from '@/locales/zh-TW'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const opts = { global: { plugins: [i18n] } }
@@ -43,10 +44,20 @@ describe('PasswordInput', () => {
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['abc'])
   })
 
-  it('forwards id and autocomplete to the native input', () => {
-    const w = mount(PasswordInput, { props: { modelValue: '', id: 'pw', autocomplete: 'current-password' }, ...opts })
+  // id/autocomplete/required are not dedicated props — inheritAttrs is disabled and everything
+  // fallthrough-eligible is forwarded to the native input via $attrs. required in particular is
+  // what makes the browser's native validation fire on an empty password in the login form.
+  it('forwards arbitrary attributes to the native input, not the wrapper', () => {
+    const w = mount(PasswordInput, {
+      props: { modelValue: '' },
+      attrs: { id: 'pw', autocomplete: 'current-password', required: true },
+      ...opts,
+    })
     expect(w.get('input').attributes('id')).toBe('pw')
     expect(w.get('input').attributes('autocomplete')).toBe('current-password')
+    expect(w.get('input').attributes('required')).toBeDefined()
+    expect(w.find('div').attributes('id')).toBeUndefined()
+    expect(w.find('div').attributes('required')).toBeUndefined()
   })
 
   it('disables both the input and the toggle', () => {
@@ -62,5 +73,20 @@ describe('PasswordInput', () => {
     expect((w.get('input').element as HTMLInputElement).value).toBe('secret')
     await w.setProps({ modelValue: 'changed' })
     expect((w.get('input').element as HTMLInputElement).value).toBe('changed')
+  })
+
+  it('renders the vendored input and button atoms', () => {
+    const w = mount(PasswordInput, { props: { modelValue: 'secret' }, ...opts })
+    expect(w.find('[data-slot="input"]').exists()).toBe(true)
+    expect(w.find('[data-slot="button"]').exists()).toBe(true)
+  })
+
+  it('has distinct, non-empty toggle labels in both shipped locales', () => {
+    expect(en.login.showPassword).toBeTruthy()
+    expect(en.login.hidePassword).toBeTruthy()
+    expect(zhTW.login.showPassword).toBeTruthy()
+    expect(zhTW.login.hidePassword).toBeTruthy()
+    expect(zhTW.login.showPassword).not.toBe(en.login.showPassword)
+    expect(zhTW.login.hidePassword).not.toBe(en.login.hidePassword)
   })
 })
