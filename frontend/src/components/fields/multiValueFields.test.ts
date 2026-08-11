@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import PrimeVue from 'primevue/config'
 import MultiSelectField from './MultiSelectField.vue'
 import CheckboxGroupField from './CheckboxGroupField.vue'
@@ -50,15 +51,35 @@ describe('CheckboxGroupField', () => {
     expect(before).toEqual(['a'])
   })
 
-  it('removes an already-checked option', async () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['a', 'b'] }, ...opts })
+  it('removes an already-checked option immutably', async () => {
+    const before = ['a', 'b']
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: before }, ...opts })
     await w.findAll('[role="checkbox"]')[0].trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['b']])
+    expect(before).toEqual(['a', 'b'])
   })
 
   it('treats a null model as an empty selection', () => {
     const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: null }, ...opts })
     expect(w.findAll('[role="checkbox"][aria-checked="true"]')).toHaveLength(0)
+  })
+
+  // Inbound direction (standing-constraints "Inbound direction must be pinned"): mount with a
+  // non-default model and assert the matching checkbox, not just the emit, reflects it. A prop
+  // change after mount is asserted too, not only the initial render: reka's Checkbox computes
+  // `passive: props.modelValue === void 0` once at setup, so an `undefined`-fed `:model-value` paired
+  // with a same-valued `:default-value` would render identically on the very first paint and only
+  // diverge once the model changes again without a remount — exactly what ItemFormView.vue's
+  // 409-recovery reload and the revisions-drawer revert both do.
+  it('reflects a non-default model on the matching checkbox, including after the model changes', async () => {
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['b'] }, ...opts })
+    const boxes = w.findAll('[role="checkbox"]')
+    expect(boxes[0].attributes('aria-checked')).toBe('false')
+    expect(boxes[1].attributes('aria-checked')).toBe('true')
+
+    await w.setProps({ modelValue: ['a'] })
+    expect(boxes[0].attributes('aria-checked')).toBe('true')
+    expect(boxes[1].attributes('aria-checked')).toBe('false')
   })
 
   it('propagates disabled to every checkbox, not just the first', () => {
@@ -68,13 +89,45 @@ describe('CheckboxGroupField', () => {
     for (const box of boxes) expect(box.attributes('disabled')).toBe('')
   })
 
-  // Pins the template's own `@update:model-value` listener (constraint: "test the real binding, not
-  // an exposed setter") rather than only the DOM-click path above, so deleting that one template
-  // attribute — which would leave every click test above green if the click itself still toggled
-  // native focus/aria state via reka defaults — cannot pass unnoticed.
+  // Exercises the vendored child's own emit directly rather than through a simulated DOM click,
+  // pinning the same @update:model-value listener the click-driven tests above exercise indirectly
+  // through reka's CheckboxRoot handleClick.
   it('relays the toggled array when the vendored child emits, wiring the template listener itself', async () => {
     const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['a'] }, ...opts })
     await w.findAllComponents({ name: 'Checkbox' })[1].vm.$emit('update:modelValue', true)
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['a', 'b']])
+  })
+
+  // reka derives each checkbox's accessible name from `document.querySelector('[for="${id}"]')` when
+  // no aria-label is set, and the visual click target is the whole label text via `for`; both depend
+  // on this explicit for/id pairing, not on DOM nesting (Checkbox and Label are siblings, not parent
+  // and child). Asserting non-empty AND equal so the check cannot pass with both sides blanked out.
+  it('associates each label with its checkbox via explicit for/id', () => {
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [] }, ...opts })
+    const labels = w.findAll('label')
+    const boxes = w.findAll('[role="checkbox"]')
+    expect(labels).toHaveLength(2)
+    labels.forEach((label, i) => {
+      const forAttr = label.attributes('for')
+      expect(forAttr).toBeTruthy()
+      expect(forAttr).toBe(boxes[i].attributes('id'))
+    })
+  })
+
+  // RepeaterField renders this component once per row, as siblings inside one Vue app tree — not as
+  // separate mounts — with the same field.name. useId()'s counter is scoped to a single app
+  // instance, so two independent mount() calls would each start their own app and both start
+  // counting from zero, defeating this exact assertion; the host component below renders two
+  // CheckboxGroupField as siblings in one tree to match the real repeater shape.
+  it('scopes ids per component instance, not just per option', () => {
+    const f = field({ interface: 'checkboxGroup', options: [{ value: 'a', label: 'Alpha' }] })
+    const Host = defineComponent({
+      render: () => h('div', [h(CheckboxGroupField, { field: f, modelValue: [] }), h(CheckboxGroupField, { field: f, modelValue: [] })]),
+    })
+    const w = mount(Host, opts)
+    const boxes = w.findAll('[role="checkbox"]')
+    expect(boxes).toHaveLength(2)
+    expect(boxes[0].attributes('id')).toBeTruthy()
+    expect(boxes[0].attributes('id')).not.toBe(boxes[1].attributes('id'))
   })
 })

@@ -16,10 +16,11 @@ const selected = computed(() => (Array.isArray(props.modelValue) ? (props.modelV
 const uid = useId()
 const idFor = (index: number): string => `${uid}-${index}`
 
-// PrimeVue's Checkbox owned the array arithmetic itself (array modelValue + a per-option `value`
-// prop); the vendored Checkbox has no such mode, so the add/remove is ours here. Always build a
-// new array — the CMS form model is snapshot-compared for dirtiness (lib/formDirty.ts), and
-// mutating the incoming array in place would change it without that comparison ever seeing a diff.
+// Each checkbox models a single boolean with no array semantics of its own, so building the next
+// array from the current selection and the toggled option is this component's job. `selected.value`
+// aliases the live `modelValue` array, and this repository's immutability convention is that a
+// value received through a prop is never mutated by its receiver — the emit must carry a distinct
+// array back to the parent, not the same array altered in place.
 function toggle(value: string, checked: boolean | 'indeterminate'): void {
   const next = checked === true
     ? [...selected.value, value]
@@ -29,6 +30,9 @@ function toggle(value: string, checked: boolean | 'indeterminate'): void {
 </script>
 
 <template>
+  <!-- Checkbox renders as a <button>, so tokens.css's base-layer `button:not(:disabled)` rule
+       already gives it `cursor: pointer`. Label deliberately carries no cursor utility of its own:
+       it is a separate element paired only through `for`/`id`, not the interactive control itself. -->
   <div role="group" :aria-label="field.label" class="flex flex-wrap gap-x-5 gap-y-2">
     <div v-for="(opt, i) in options" :key="opt.value" class="inline-flex items-center gap-2">
       <Checkbox
