@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import PrimeVue from 'primevue/config'
+import { createI18n } from 'vue-i18n'
 import MultiSelectField from './MultiSelectField.vue'
 import CheckboxGroupField from './CheckboxGroupField.vue'
 import type { FieldMeta } from '../../types/schema'
@@ -11,20 +12,76 @@ function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over } as FieldMeta
 }
 const opts = { global: { plugins: [PrimeVue] } }
-const options = [{ value: 'apac', label: 'APAC' }, { value: 'emea', label: 'EMEA' }]
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: { noOptions: 'No options' } } },
+})
 
 describe('MultiSelectField', () => {
-  it('passes options and value to PrimeVue MultiSelect', () => {
-    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['apac'] }, ...opts })
-    const ms = w.findComponent({ name: 'MultiSelect' })
-    expect(ms.props('options')).toEqual(options)
-    expect(ms.props('modelValue')).toEqual(['apac'])
+  const options = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]
+  const comboOpts = { global: { plugins: [PrimeVue, i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+
+  it('renders a chip per selected value', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
+    expect(w.text()).toContain('Alpha')
+    expect(w.text()).not.toContain('Beta')
   })
 
-  it('relays selection changes as an array', () => {
-    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: [] }, ...opts })
-    w.findComponent({ name: 'MultiSelect' }).vm.$emit('update:modelValue', ['apac', 'emea'])
-    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['apac', 'emea']])
+  it('renders the vendored combobox trigger, not PrimeVue MultiSelect', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: [] }, ...comboOpts })
+    expect(w.findComponent({ name: 'MultiSelect' }).exists()).toBe(false)
+    expect(w.find('[data-slot="combobox-trigger"]').exists()).toBe(true)
+  })
+
+  // Real click path: reka's ComboboxItem/ListboxItem select on `click` (unlike ui/select's
+  // pointerdown/pointerup), so once the popup is open jsdom can drive the actual production
+  // interaction — no exposed setter, no synthesised emit (standing-constraints "reka floating
+  // controls: test the real binding, not an exposed setter").
+  it('appends a clicked option immutably', async () => {
+    const before = ['a']
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: before }, ...comboOpts })
+    await w.get('[data-slot="combobox-trigger"]').trigger('click')
+    await w.findAll('[role="option"]')[1].trigger('click') // Beta
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['a', 'b']])
+    expect(before).toEqual(['a'])
+  })
+
+  it('removes an already-selected option via the same click path', async () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a', 'b'] }, ...comboOpts })
+    await w.get('[data-slot="combobox-trigger"]').trigger('click')
+    await w.findAll('[role="option"]')[0].trigger('click') // Alpha
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['b']])
+  })
+
+  it('treats a null model as an empty selection', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: null }, ...comboOpts })
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    expect(w.text()).not.toContain('Alpha')
+  })
+
+  // Standing-constraints "Accessible name on every floating control".
+  it('gives the trigger an accessible name from the field label', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: 'Regions', options }), modelValue: [] }, ...comboOpts })
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe('Regions')
+  })
+
+  it('genuinely disables the trigger', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: [], disabled: true }, ...comboOpts })
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
+  })
+
+  // Inbound direction pinned across a post-mount prop change (standing-constraints "Inbound
+  // assertions must survive a POST-MOUNT prop change"). Chips render from this component's own
+  // `selected` computed reading `props.modelValue` directly rather than from any reka-owned state,
+  // so this also guards a future refactor that reads the chip list from the Combobox root's local
+  // model instead of the prop.
+  it('reflects a non-default model on the chip row, including after the model changes', async () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
+    expect(w.text()).toContain('Alpha')
+    expect(w.text()).not.toContain('Beta')
+    await w.setProps({ modelValue: ['b'] })
+    expect(w.text()).not.toContain('Alpha')
+    expect(w.text()).toContain('Beta')
   })
 })
 

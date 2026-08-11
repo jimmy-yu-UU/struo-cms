@@ -228,6 +228,7 @@ export default {
     selectFiles: '選擇檔案',
     done: '完成',
     loadOptionsFailed: '載入選項失敗',
+    noOptions: '沒有選項',
     richtext: {
       bold: '粗體', italic: '斜體', strikethrough: '刪除線',
       alignLeft: '靠左對齊', alignCenter: '置中對齊', alignRight: '靠右對齊', alignJustify: '兩端對齊',
