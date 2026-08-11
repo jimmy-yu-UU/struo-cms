@@ -57,4 +57,26 @@ describe('DataTablePagination', () => {
     await w.get('[data-testid="page-size-select"]').setValue('50')
     expect(w.emitted('update:pageSize')![0][0]).toBe(50)
   })
+
+  // Review finding: a RelatedList embedded in an ItemForm will typically want 5/10, not
+  // CollectionListView's 10/25/50/100 -- and with no override, a `pageSize` outside the
+  // hardcoded list would render the native <select> with nothing selected.
+  it('accepts a pageSizeOptions override for a caller with different defaults', () => {
+    const w = mount(DataTablePagination, {
+      props: { page: 0, pageSize: 5, total: 12, pageSizeOptions: [5, 10, 20] },
+      global: { plugins: [i18n] },
+    })
+    const select = w.get('[data-testid="page-size-select"]').element as HTMLSelectElement
+    expect(select.value).toBe('5')
+    const values = w.findAll('[data-testid="page-size-select"] option').map((o) => (o.element as HTMLOptionElement).value)
+    expect(values).toEqual(['5', '10', '20'])
+  })
+
+  it('hides the rows-per-page control when showPageSizeSelector is false', () => {
+    const w = mount(DataTablePagination, {
+      props: { page: 0, pageSize: 25, total: 60, showPageSizeSelector: false },
+      global: { plugins: [i18n] },
+    })
+    expect(w.find('[data-testid="page-size-select"]').exists()).toBe(false)
+  })
 })

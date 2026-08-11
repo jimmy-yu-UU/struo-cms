@@ -6,10 +6,23 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
 // Props in, events out, no table instance -- kept standalone deliberately so MediaLibraryView
 // (a future consumer with no DataTable/TanStack instance at all) can reuse this unchanged.
-const props = defineProps<{ page: number; pageSize: number; total: number }>()
+const props = withDefaults(defineProps<{
+  page: number
+  pageSize: number
+  total: number
+  /**
+   * A RelatedList embedded in an ItemForm will typically want a smaller default (5 or 10) than
+   * CollectionListView's 10/25/50/100 -- override, don't hardcode. `props.pageSize` must be one
+   * of these or the native <select> renders with no option selected (selectedIndex === -1).
+   */
+  pageSizeOptions?: number[]
+  /** MediaLibraryView's grid and a compact RelatedList don't want the rows-per-page control. */
+  showPageSizeSelector?: boolean
+}>(), {
+  pageSizeOptions: () => [10, 25, 50, 100],
+  showPageSizeSelector: true,
+})
 const emit = defineEmits<{ 'update:page': [number]; 'update:pageSize': [number] }>()
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
 // Humans count from 1; the backend offsets from 0. Reuse collectionList.range so the wording
@@ -43,7 +56,7 @@ function onPageSizeChange(e: Event): void {
 
 <template>
   <div class="flex flex-wrap items-center justify-between gap-4 pt-3">
-    <div class="flex items-center gap-2">
+    <div v-if="props.showPageSizeSelector" class="flex items-center gap-2">
       <label :for="pageSizeId" class="text-sm text-muted-foreground">
         {{ $t('common.rowsPerPage') }}
       </label>
@@ -54,7 +67,7 @@ function onPageSizeChange(e: Event): void {
         class="h-9 w-20"
         @change="onPageSizeChange"
       >
-        <NativeSelectOption v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="String(size)">
+        <NativeSelectOption v-for="size in props.pageSizeOptions" :key="size" :value="String(size)">
           {{ size }}
         </NativeSelectOption>
       </NativeSelect>
