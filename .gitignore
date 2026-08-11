@@ -9,6 +9,10 @@ dist/
 logs/
 *.log
 
+# VitePress build artifacts. `dist/` above already covers docs/.vitepress/dist; the
+# dependency cache needs its own entry.
+docs/.vitepress/cache/
+
 # Environment files - never commit real secrets
 .env
 .env.local
