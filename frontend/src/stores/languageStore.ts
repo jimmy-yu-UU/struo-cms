@@ -8,9 +8,10 @@ export const useLanguageStore = defineStore('language', {
     languages: [] as LanguageInfo[],
     loaded: false,
     loadError: '',
-    // In-flight fetch, shared by concurrent load() callers (e.g. the dashboard's fan-out of
-    // itemsApi calls all calling load() before any has resolved) so a race never triggers two
-    // languagesApi.getEnabled() requests (mirrors schemaStore's loadPromise pattern).
+    // In-flight fetch, shared by concurrent load() callers (e.g. MediaLibraryView's own load()
+    // and MediaDetailDialog's load(), both awaiting Promise.all([schema.load(), langStore.load()])
+    // when a file is opened before the library's initial load has resolved) so a race never
+    // triggers two languagesApi.getEnabled() requests (mirrors schemaStore's loadPromise pattern).
     loadPromise: null as Promise<void> | null,
   }),
   getters: {

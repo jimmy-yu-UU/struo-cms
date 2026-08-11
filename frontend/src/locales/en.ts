@@ -75,7 +75,7 @@ export default {
   },
   dashboard: {
     title: 'Dashboard',
-    comingSoon: 'A more useful dashboard is coming in a future release.',
+    comingSoon: 'This dashboard is not configured yet.',
   },
   collectionList: {
     count: '{n} items',

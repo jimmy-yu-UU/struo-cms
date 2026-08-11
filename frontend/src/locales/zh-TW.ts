@@ -75,7 +75,7 @@ export default {
   },
   dashboard: {
     title: '儀表板',
-    comingSoon: '更實用的儀表板將於未來版本推出。',
+    comingSoon: '此儀表板尚未設定。',
   },
   collectionList: {
     count: '共 {n} 筆',
