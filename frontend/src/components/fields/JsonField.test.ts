@@ -45,6 +45,17 @@ describe('JsonField', () => {
     expect(w.get('.json-error').attributes('role')).toBe('alert')
   })
 
+  // aria-invalid is the only signal an assistive-tech user gets that the buffer is malformed;
+  // nothing pins that it also clears once the buffer is fixed, so a regression that leaves it
+  // stuck on "true" forever would read as a permanent, unexplained error.
+  it('clears aria-invalid once the buffer becomes valid JSON again', async () => {
+    const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } }, ...opts })
+    await w.get('textarea').setValue('{ not json')
+    expect(w.get('textarea').attributes('aria-invalid')).toBe('true')
+    await w.get('textarea').setValue('{"a": 2}')
+    expect(w.get('textarea').attributes('aria-invalid')).toBe('false')
+  })
+
   it('renders the vendored textarea data-slot hook', () => {
     const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } }, ...opts })
     expect(w.find('[data-slot="textarea"]').exists()).toBe(true)
