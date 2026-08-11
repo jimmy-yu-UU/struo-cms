@@ -157,6 +157,17 @@ describe('MultiSelectField', () => {
     expect(removeButtons.length).toBeGreaterThan(0)
     for (const btn of removeButtons) expect(btn.attributes('disabled')).toBe('')
   })
+
+  // Native <button> defaults to type="submit". This chip button is a hand-rolled <button>, not the
+  // vendored ui/button/reka trigger primitives that inject their own type — so it needs the
+  // attribute stated directly. It sits inside ItemForm.vue's <form @submit.prevent>, so an untyped
+  // button here would submit the whole record on a click that should only remove one chip.
+  it('gives each chip remove button an explicit type="button"', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a', 'b'] }, ...comboOpts })
+    const removeButtons = w.findAll('button[aria-label^="Remove "]')
+    expect(removeButtons.length).toBeGreaterThan(0)
+    for (const btn of removeButtons) expect(btn.attributes('type')).toBe('button')
+  })
 })
 
 describe('CheckboxGroupField', () => {

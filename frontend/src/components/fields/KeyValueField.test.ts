@@ -110,4 +110,13 @@ describe('KeyValueField', () => {
     expect((inputs[0].element as HTMLInputElement).value).toBe('b')
     expect((inputs[1].element as HTMLInputElement).value).toBe('2')
   })
+
+  // Native <button> defaults to type="submit". KeyValueField is dispatched inside ItemForm.vue's
+  // <form @submit.prevent>, so an untyped button here would submit (and, for a Revisions-enabled
+  // collection, snapshot) the whole record on every click instead of just editing this field.
+  it('gives the remove and add buttons an explicit type="button"', () => {
+    const w = mount(KeyValueField, { props: { field: field({ interface: 'keyValue' }), modelValue: { a: '1' } }, ...opts })
+    expect(w.get('.kv-remove').attributes('type')).toBe('button')
+    expect(w.get('.kv-add').attributes('type')).toBe('button')
+  })
 })

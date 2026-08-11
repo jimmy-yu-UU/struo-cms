@@ -60,6 +60,14 @@ describe('DatePicker', () => {
     expect(w.get('button').attributes('disabled')).toBeDefined()
   })
 
+  // Native <button> defaults to type="submit". This trigger is dispatched inside ItemForm.vue's
+  // <form @submit.prevent>, so an untyped button here would submit the whole record on a click
+  // that should only open the calendar popover.
+  it('gives the trigger an explicit type="button"', () => {
+    const w = mount(DatePicker, { props: { modelValue: null }, ...opts })
+    expect(w.get('button').attributes('type')).toBe('button')
+  })
+
   it('emits the picked date through a real click on the calendar day cell', async () => {
     const w = mount(DatePicker, { props: { modelValue: new Date(2026, 7, 1) }, ...opts })
     await open(w)

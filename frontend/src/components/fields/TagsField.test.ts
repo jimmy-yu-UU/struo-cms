@@ -118,4 +118,13 @@ describe('TagsField', () => {
     expect(labelInput.attributes('aria-label')).toBe('display text (optional)')
     expect(valueInput.attributes('aria-label')).not.toBe(labelInput.attributes('aria-label'))
   })
+
+  // Native <button> defaults to type="submit". TagsField is dispatched inside ItemForm.vue's
+  // <form @submit.prevent>, so an untyped button here would submit (and, for a Revisions-enabled
+  // collection, snapshot) the whole record on every tag click instead of just editing this array.
+  it('gives the remove and add buttons an explicit type="button"', () => {
+    const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a' }] }, ...opts })
+    expect(w.get('.tag-remove').attributes('type')).toBe('button')
+    expect(w.get('.tag-add').attributes('type')).toBe('button')
+  })
 })

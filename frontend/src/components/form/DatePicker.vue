@@ -71,7 +71,13 @@ function onCalendarUpdate(value: DateValue | undefined): void {
 <template>
   <Popover>
     <PopoverTrigger as-child>
+      <!-- type="button" is explicit here even though reka's PopoverTrigger (as-child) already
+           merges its own type="button" onto whatever it wraps — an untyped native <button> would
+           otherwise default to type="submit", and this trigger sits inside ItemForm.vue's
+           <form @submit.prevent>. Stating it directly means this Button doesn't rely on the
+           merge behaviour of the component wrapping it. -->
       <Button
+        type="button"
         variant="outline"
         :disabled="disabled"
         :aria-label="accessibleName"

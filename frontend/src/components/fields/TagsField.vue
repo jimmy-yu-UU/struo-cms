@@ -45,7 +45,12 @@ function setLabel(i: number, v: string) {
         :aria-label="t('fields.tagDisplayText')"
         @update:model-value="(v) => setLabel(i, String(v ?? ''))"
       />
+      <!-- type="button" is load-bearing: a native <button> defaults to type="submit", and this
+           component is dispatched inside ItemForm.vue's <form @submit.prevent> — an untyped
+           button here would submit (and, for a Revisions-enabled collection, snapshot) the whole
+           record on every click instead of just editing this field's local array. -->
       <Button
+        type="button"
         class="tag-remove"
         variant="ghost"
         size="icon"
@@ -56,7 +61,7 @@ function setLabel(i: number, v: string) {
         <X class="size-4" />
       </Button>
     </div>
-    <Button class="tag-add" variant="ghost" size="sm" :disabled="disabled" @click="add">
+    <Button type="button" class="tag-add" variant="ghost" size="sm" :disabled="disabled" @click="add">
       <Plus class="size-4" />
       {{ t('fields.add') }}
     </Button>
