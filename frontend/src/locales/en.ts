@@ -246,6 +246,7 @@ export default {
     timePart: 'time',
     selectAFolder: 'Select a folder',
     selectAnItem: 'Select an item',
+    noRelatedItems: 'No related items.',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
