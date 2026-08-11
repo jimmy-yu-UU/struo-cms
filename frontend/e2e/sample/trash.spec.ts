@@ -29,10 +29,7 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 function rowByTitle(page: Page, title: string) {
   return page.getByRole('row', { has: page.getByText(title, { exact: true }) })
 }
-// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
-// queries the server only on an explicit Search press (or Enter in the value input), never on a
-// keystroke. Add a condition, pick the field by its column label, type the value, then press
-// Search.
+// Search filters apply on an explicit press (or Enter), never on keystroke.
 async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
   await page.getByRole('button', { name: 'Add condition' }).click()
   await page.getByRole('combobox', { name: 'Field' }).click()
@@ -64,11 +61,11 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
   // list to settle to exactly the one matching row before any inline row action.
   await expect(page.locator('tbody tr')).toHaveCount(1)
 
-  // Soft-delete from the Active list (inline action). CollectionListView's row actions now go
-  // through the store-backed ConfirmHost (Task 14), not PrimeVue's ConfirmDialog — its default
-  // accept label (no explicit acceptLabel passed by lib/deleteAction.ts) is common.confirm =
-  // "Confirm", not PrimeVue's "Yes". ItemFormView's own delete/unsaved-guard dialogs elsewhere in
-  // this suite are untouched by this plan and still say "Yes"/"No".
+  // Soft-delete from the Active list (inline action). CollectionListView's row actions go
+  // through the store-backed ConfirmHost, not PrimeVue's ConfirmDialog — its default accept label
+  // (no explicit acceptLabel passed by lib/deleteAction.ts) is common.confirm = "Confirm", not
+  // PrimeVue's "Yes". ItemFormView's own delete/unsaved-guard dialogs elsewhere in this suite
+  // still say "Yes"/"No".
   await rowByTitle(page, title).getByRole('button', { name: 'Delete', exact: true }).click()
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)

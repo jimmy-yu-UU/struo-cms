@@ -42,10 +42,7 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
   await field.getByRole('combobox').click()
   await page.getByRole('option', { name: optionLabel }).click()
 }
-// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
-// queries the server only on an explicit Search press (or Enter in the value input), never on a
-// keystroke. Add a condition, pick the field by its column label, type the value, then press
-// Search.
+// Search filters apply on an explicit press (or Enter), never on keystroke.
 async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
   await page.getByRole('button', { name: 'Add condition' }).click()
   await page.getByRole('combobox', { name: 'Field' }).click()
@@ -106,11 +103,11 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
   return id
 }
 
-// Click a collection link in the sidebar. Task 8's shadcn Sidebar rebuild dropped the <aside> in
-// favour of a real <nav aria-label="Main navigation"> landmark wrapping the nav groups (there is
-// no longer a bare "the sidebar" element to select by tag/class), and collection links render as
-// plain buttons (SidebarNavItem) rather than a PrimeVue PanelMenu. Groups mount expanded by default
-// (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh mount.
+// Click a collection link in the sidebar: a real <nav aria-label="Main navigation"> landmark
+// wraps the nav groups (no bare "the sidebar" element to select by tag/class), and collection
+// links render as plain buttons (SidebarNavItem), not a PrimeVue PanelMenu. Groups mount expanded
+// by default (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh
+// mount.
 async function navSidebar(page: Page, label: string): Promise<void> {
   const sidebar = page.getByRole('navigation', { name: 'Main navigation' })
   const item = sidebar.getByRole('button', { name: label, exact: true })

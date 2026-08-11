@@ -5,17 +5,14 @@ import UiLanguageSwitcher from './UiLanguageSwitcher.vue'
 import { useUiLocaleStore } from '../../stores/uiLocaleStore'
 import { i18n } from '../../i18n'
 
+// reka-ui's Select portal is itself named "Teleport"; SelectTrigger/SelectItem also respond to
+// pointer events, not click -- see vitest.setup.ts for why both matter here.
 function mountSwitcher() {
-  // reka-ui's Select portal wrapper is itself named "Teleport" (same hazard as ConfirmHost /
-  // UserMenu) — stub it so SelectContent renders inline instead of vanishing from the tree.
   return mount(UiLanguageSwitcher, {
     global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
 }
 
-// reka-ui's SelectTrigger opens on pointerdown (not click) and SelectItem selects on
-// pointerup (not click) — see reka-ui/dist/Select/{SelectTrigger,SelectItem}.js. A plain
-// `.trigger('click')` never reaches either handler, so drive the real pointer events.
 async function openSelect(wrapper: ReturnType<typeof mountSwitcher>) {
   await wrapper.find('[role="combobox"]').trigger('pointerdown')
   await flushPromises()

@@ -24,9 +24,9 @@ type DraftRow = { field: string; op: Operator; value: string }
 const props = defineProps<{ fields: FilterField[]; applied: FilterSpec }>()
 const emit = defineEmits<{ apply: [FilterSpec] }>()
 
-// Draft is deliberately NOT the source of truth for the consumer. brand-spec §6 requires an
-// explicit Search press (or Enter) before anything reaches the query — editing conditions must
-// not fire requests keystroke by keystroke.
+// Draft is deliberately NOT the source of truth for the consumer: an explicit Search press (or
+// Enter) must happen before anything reaches the query — editing conditions must not fire
+// requests keystroke by keystroke.
 const draft = ref<DraftRow[]>([])
 
 function hydrate(spec: FilterSpec): void {
@@ -43,9 +43,10 @@ function specsEqual(a: FilterSpec, b: FilterSpec): boolean {
     && aKeys.every((k) => b[k] !== undefined && b[k].op === a[k].op && b[k].value === a[k].value)
 }
 // Re-hydrate when the consumer resets the filter externally (e.g. switching collection) —
-// but NOT when it merely echoes back the spec this component just emitted (Task 14 re-assigns
-// `applied` from the emitted spec, or derives it from a route-query `computed` that mints a new
-// object per navigation). `deep: true` fires on that re-assignment even though nothing changed;
+// but NOT when it merely echoes back the spec this component just emitted (the consumer
+// re-assigns `applied` from the emitted spec, or derives it from a route-query `computed` that
+// mints a new object per navigation). `deep: true` fires on that re-assignment even though
+// nothing changed;
 // a wholesale hydrate() there would silently delete any row toSpec() dropped as half-authored
 // (an empty value, a field not yet picked). Only rebuild the draft when the incoming spec
 // actually differs from what the current draft would itself produce.
@@ -178,7 +179,7 @@ defineExpose({ setDraftField, setDraftOperator, setDraftValue, fieldOptionsFor }
       </Button>
     </div>
 
-    <!-- Action row, visually separated from the condition rows (brand-spec §6) -->
+    <!-- Action row, visually separated from the condition rows -->
     <div class="flex flex-wrap items-center gap-2">
       <Button variant="outline" data-testid="filter-apply" @click="apply">
         {{ $t('filterBuilder.apply') }}

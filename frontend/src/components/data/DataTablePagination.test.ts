@@ -58,9 +58,7 @@ describe('DataTablePagination', () => {
     expect(w.emitted('update:pageSize')![0][0]).toBe(50)
   })
 
-  // Review finding: a RelatedList embedded in an ItemForm will typically want 5/10, not
-  // CollectionListView's 10/25/50/100 -- and with no override, a `pageSize` outside the
-  // hardcoded list would render the native <select> with nothing selected.
+  // See the pageSizeOptions prop's own JSDoc for why an override matters here.
   it('accepts a pageSizeOptions override for a caller with different defaults', () => {
     const w = mount(DataTablePagination, {
       props: { page: 0, pageSize: 5, total: 12, pageSizeOptions: [5, 10, 20] },

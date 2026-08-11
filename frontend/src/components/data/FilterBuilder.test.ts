@@ -99,11 +99,9 @@ describe('FilterBuilder', () => {
     expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_eq', value: 'hello' } })
   })
 
-  // Task 14 will re-assign `applied` from the spec FilterBuilder itself just emitted (or from a
-  // route-query computed that mints a new object per navigation). `watch(..., { deep: true })`
-  // fires on that re-assignment even though the spec is unchanged, and a naive hydrate() would
-  // wholesale-replace the draft — silently deleting any row still mid-edit that toSpec() had
-  // dropped as half-authored. Simulate exactly that echo.
+  // Simulates the exact echo hazard FilterBuilder.vue's `watch(() => props.applied, ...)` comment
+  // describes: the consumer re-assigns `applied` from the just-emitted spec, and a naive
+  // hydrate() would wholesale-replace the draft, silently deleting a still-mid-edit row.
   it('keeps an in-progress row when the consumer echoes the just-emitted spec back', async () => {
     const w = mountBuilder()
     await w.get('[data-testid="filter-add"]').trigger('click')

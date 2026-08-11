@@ -12,9 +12,9 @@ defineEmits<{ activate: [] }>()
 // resolveIcon accepts both dialects: this app's own "pi pi-*" strings and the semantic
 // names the backend's [CmsCollection(Icon = "...")] emits.
 const IconComponent = computed(() => resolveIcon(props.icon))
-// brand-spec §5 gives second-level items their own geometry (h-7 / px-2 with the 1px guide
-// rail) — that is exactly what SidebarMenuSubButton is for. Using the top-level button
-// inside a SidebarMenuSub would render sub-items at h-8 and lose the rail.
+// Second-level items need their own h-7/px-2 geometry with a 1px guide rail — that is exactly
+// what SidebarMenuSubButton is for. Using the top-level button inside a SidebarMenuSub would
+// render sub-items at h-8 and lose the rail.
 const ButtonComponent = computed(() => (props.sub ? SidebarMenuSubButton : SidebarMenuButton))
 </script>
 

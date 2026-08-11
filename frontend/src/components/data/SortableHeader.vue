@@ -40,7 +40,7 @@ function cycle(): void {
     :aria-sort="props.sortable ? ariaSort : undefined"
   >
     <!--
-      brand-spec table rule: header cells are 14px/weight-500, muted colour, no background fill.
+      Header cells are 14px/weight-500, muted colour, no background fill.
       text-sm/font-medium already come from TableHead's own vendored defaults (font-medium is
       already weight 500) — h-auto/py-3/px-4 replace its fixed h-10/px-2 so header cells share the
       same 12px/16px padding as body cells and the columns line up; text-muted-foreground

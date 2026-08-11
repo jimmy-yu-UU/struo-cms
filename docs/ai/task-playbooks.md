@@ -285,12 +285,9 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    Tailwind/shadcn, the file to edit instead is `frontend/src/assets/tokens.css` (the shadcn semantic
    custom properties, `--background`/`--primary`/`--radius`/…, on the same `.app-dark` toggle class).
    **`frontend/src/components/ui/` is vendored, read-only output — never edit it and never `:deep()`
-   into it**; a re-theme changes the token layer or a wrapper component outside `ui/`. When overriding a
-   PrimeVue component's built-in style, use a `:deep()` paired with a real ancestor class inside
-   `<style scoped>` (e.g. `frontend/src/components/ItemForm.vue`'s
-   `.field :deep(.p-select) { ... }`) — a bare PrimeVue class selector in `theme.css` ties on
-   specificity against PrimeVue's own runtime-injected stylesheet and the winner then depends on
-   injection order, not intent. Avoid `!important`.
+   into it**; a re-theme changes the token layer or a wrapper component outside `ui/`. See chapter 14's
+   "Overriding PrimeVue's built-in styles" for how to override a still-on-PrimeVue component's style
+   without losing a specificity fight. Avoid `!important`.
 3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
    under the right namespace (`common`, `nav`, `dashboard`, `collectionList`, `itemForm`, `media`,
    `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only

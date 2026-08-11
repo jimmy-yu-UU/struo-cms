@@ -37,9 +37,7 @@ describe('resolveIcon', () => {
     expect(resolveIcon('hasOwnProperty')).toBe(FileIcon)
   })
 
-  // Tokens the Step 1 grep found that the brief's skeleton map did not cover. Each is a real
-  // `pi pi-*` or `pi-*` class still present in src/ today (see task-5-report.md for the full list
-  // and where each one lives).
+  // Each token below is a real `pi pi-*` or `pi-*` class still present in src/ today.
   it('resolves tokens missing from the brief skeleton but present in src/', () => {
     expect(resolveIcon('pi pi-arrow-up')).not.toBe(FileIcon)
     expect(resolveIcon('pi pi-arrow-down')).not.toBe(FileIcon)

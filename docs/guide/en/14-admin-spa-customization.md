@@ -96,13 +96,7 @@ palette — the palette is a template default edited in source, not a per-deploy
 **Caution:** a same-specificity rule in `theme.css` does not reliably beat a PrimeVue component's own
 runtime-injected styles. PrimeVue ships its component CSS as its own stylesheet, not as part of
 `theme.css`'s cascade — a bare `.p-select { … }` in `theme.css` ties on specificity against PrimeVue's
-own `.p-select` rule, and which one wins then depends on injection/source order, not intent. This bit
-this codebase once already, on the UI language switcher: `theme.css` used to carry a
-`.topbar .lang-switcher { display: none; }` rule, with a comment noting it needed "0,2,0 specificity:
-must beat PrimeVue's runtime-injected `.p-select{display:inline-flex}`". `UiLanguageSwitcher.vue` has
-since moved off PrimeVue's `Select` onto the shadcn/reka-ui one (`@/components/ui/select`) and hides
-itself on the narrowest viewports with a Tailwind utility on its own trigger instead
-(`max-[520px]:hidden`) — no specificity fight needed once the component itself is not PrimeVue's.
+own `.p-select` rule, and which one wins then depends on injection/source order, not intent.
 
 **This technique — this section — applies only to a screen still on PrimeVue.** A screen already
 migrated to Tailwind/shadcn has no PrimeVue classes to fight in the first place; style it with plain
@@ -112,10 +106,7 @@ selector**, not a bare PrimeVue class — the pattern still live in this codebas
 `frontend/src/components/ItemForm.vue`'s `.field :deep(.p-select), .field :deep(.p-multiselect),
 .field :deep(.p-treeselect) { width: 100%; max-width: 480px; }`, or `LoginView.vue`'s
 `.field :deep(.p-inputtext), .field :deep(.p-password) { … }`. `:deep()` alone does not raise
-specificity — pairing it with an ancestor class does. (The same idea works as a plain compound selector
-in unscoped `theme.css`, without `:deep()`, for a rule that isn't inside a `<style scoped>` block — the
-now-deleted `.topbar .lang-switcher` rule above was that variant — but this codebase has no surviving
-example of it today.)
+specificity — pairing it with an ancestor class does.
 
 Avoid reaching for `!important` here: it wins the immediate override but leaves the *next* override —
 yours or a fork's — fighting the same battle one level worse.

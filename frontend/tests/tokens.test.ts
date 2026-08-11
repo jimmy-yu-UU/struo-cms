@@ -48,7 +48,7 @@ describe('tokens.css', () => {
     expect(block('.app-dark')).not.toContain('--accent: #38bdf8')
   })
 
-  it('uses the prototype dark values, not the stale brand-spec table', () => {
+  it('uses the intended dark zinc values, not a lighter/darker alternate', () => {
     const dark = block('.app-dark')
     expect(dark).toContain('--background: #18181b')  // zinc-900, NOT #09090b
     expect(dark).toContain('--border: #3f3f46')      // zinc-700, NOT #27272a
@@ -58,8 +58,7 @@ describe('tokens.css', () => {
     expect(css).toContain('@custom-variant dark (&:is(.app-dark *))')
   })
 
-  // 0.625rem = 10px -> radius-sm 6px (buttons/inputs), radius-md 8px (cards/dialogs),
-  // exactly the geometry brand-spec asks for.
+  // 0.625rem = 10px -> radius-sm 6px (buttons/inputs), radius-md 8px (cards/dialogs).
   it('sets the radius base so sm=6px and md=8px fall out of the scale', () => {
     expect(block(':root')).toContain('--radius: 0.625rem')
     expect(css).toContain('--radius-sm: calc(var(--radius) * 0.6)')

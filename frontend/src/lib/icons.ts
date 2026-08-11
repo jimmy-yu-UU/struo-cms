@@ -21,8 +21,7 @@ import {
 // samples/Struo.Sample.Blog, megaphone from docs/guide/*/04-defining-a-collection.md); or, for the
 // four `align-*` keys, a runtime class a dynamic template literal actually builds even though no
 // literal token for it exists in source (see the comment above those keys). There are no other
-// speculative entries — see task-5-report.md for the tokens removed from the brief's skeleton
-// because nothing in the repo uses them.
+// speculative entries.
 export const ICON_MAP: Record<string, Component> = {
   // --- navigation / shell ---
   'th-large': LayoutGrid,

@@ -91,12 +91,7 @@ shadcn 的語意自訂屬性(`--background`、`--foreground`、`--primary`、`--
 **注意：** `theme.css` 中一條相同特異度 (specificity) 的規則，並不保證能穩定勝過 PrimeVue 元件自身於
 執行期注入的樣式。PrimeVue 是以它自己的樣式表出貨元件 CSS，而不是作為 `theme.css` 層疊的一部分——
 `theme.css` 中一條裸的 `.p-select { … }`，在特異度上與 PrimeVue 自己的 `.p-select` 規則打平，而誰
-勝出就取決於注入/來源順序，而不是意圖。這個問題已經在這個程式碼庫中發生過一次，就在 UI 語言切換器上：
-`theme.css` 曾經有一條 `.topbar .lang-switcher { display: none; }` 規則，其註解寫明它需要「0,2,0 的
-特異度：必須勝過 PrimeVue 執行期注入的 `.p-select{display:inline-flex}`」。`UiLanguageSwitcher.vue`
-後來已經從 PrimeVue 的 `Select` 改用 shadcn/reka-ui 的版本(`@/components/ui/select`)，並改成在自己的
-trigger 上用一個 Tailwind utility(`max-[520px]:hidden`)在最窄的視窗寬度下隱藏自己——一旦元件本身
-不是 PrimeVue 的，就不需要打這場特異度戰了。
+勝出就取決於注入/來源順序，而不是意圖。
 
 **這個技巧、這一節，都只適用於仍在 PrimeVue 上的畫面。** 一個已經遷移到 Tailwind/shadcn 的畫面，
 本來就沒有 PrimeVue class 可打；用純 Tailwind utility 或 `tokens.css` 來設計樣式即可。對於仍在
@@ -106,9 +101,7 @@ PrimeVue 上的畫面，**用一個複合選擇器來拉高特異度**，而不�
 `.field :deep(.p-select), .field :deep(.p-multiselect), .field :deep(.p-treeselect) { width: 100%;
 max-width: 480px; }`，或是 `LoginView.vue` 的
 `.field :deep(.p-inputtext), .field :deep(.p-password) { … }`。`:deep()` 本身並不會拉高特異度——
-要把它搭配一個祖先 class 才行。(同一個想法也可以不用 `:deep()`，改成在未 scoped 的 `theme.css` 中寫
-一個普通複合選擇器，用於不在 `<style scoped>` 區塊之內的規則——上面那條已刪除的
-`.topbar .lang-switcher` 規則就是那個變體——但這個程式碼庫目前已經沒有這個變體存活的範例了。)
+要把它搭配一個祖先 class 才行。
 
 在這裡要避免使用 `!important`：它贏得了眼前這一次覆寫，卻讓*下一次*覆寫——不管是你自己的還是某個 fork
 的——在更糟的一層上打同一場仗。

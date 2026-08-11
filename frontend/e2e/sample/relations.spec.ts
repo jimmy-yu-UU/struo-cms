@@ -126,10 +126,7 @@ async function pickFirstTag(page: Page): Promise<void> {
   await page.keyboard.press('Escape')
 }
 
-// FilterBuilder replaced the old debounced Search box (Task 14, brand-spec §6): the list now
-// queries the server only on an explicit Search press (or Enter in the value input), never on a
-// keystroke. Add a condition, pick the field by its column label, type the value, then press
-// Search.
+// Search filters apply on an explicit press (or Enter), never on keystroke.
 async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
   await page.getByRole('button', { name: 'Add condition' }).click()
   await page.getByRole('combobox', { name: 'Field' }).click()

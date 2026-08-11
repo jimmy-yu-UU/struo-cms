@@ -39,13 +39,8 @@ describe('TheTopbar', () => {
     expect(first.attributes('aria-label')).toBe(en.shell.openMenu)
   })
 
-  it('no longer renders the legacy drawer toggle', () => {
-    expect(mountTopbar().find('.drawer-toggle').exists()).toBe(false)
-  })
-
-  // Old suite's "mounts the three topbar controls" test used stubs to assert presence;
-  // the brief's mountTopbar renders the real subcomponents, so assert on each control's
-  // own stable aria-label instead of a stub marker class.
+  // mountTopbar renders the real subcomponents, so assert on each control's own stable
+  // aria-label rather than a stub marker class.
   it('mounts the three topbar controls', () => {
     const w = mountTopbar()
     expect(w.find(`[aria-label="${en.lang.label}"]`).exists()).toBe(true)
