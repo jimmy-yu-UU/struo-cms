@@ -524,8 +524,13 @@ describe('CollectionListView', () => {
     expect((w.vm as any).error).toContain('Restore failed.')
   })
 
-  // Search debounce is gone; the collection-switch reset it used to guard is now covered directly.
-  it('switching collection resets sort, filters, mode and page, then reloads once for the new collection', async () => {
+  // AppShell keys <router-view> on route.path (see AppShell.test.ts's remount-contract test), so
+  // switching collections (collections/:name) never reuses this instance — it unmounts the old
+  // one and mounts a fresh one for the new route.params.name. There is no live params watcher to
+  // "reset" here; the reset a switch produces in production IS a brand-new instance's own
+  // startup state. This test asserts exactly that startup contract: a fresh mount for a given
+  // collection begins with default sort/filters/mode and issues exactly one load for it.
+  it('a fresh mount for a collection starts with default sort/filters/mode and loads once', async () => {
     const article = {
       name: 'article', label: 'Article', defaultDisplayField: 'status',
       fields: [{ name: 'status', label: 'Status', interface: 'select', required: false, searchable: false,
@@ -539,27 +544,21 @@ describe('CollectionListView', () => {
     seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+
+    // Simulate the remount: this IS what production does on a collection switch -- AppShell
+    // tears down the 'article' instance and mounts a brand-new one keyed on the new path, which
+    // reads 'other' as route.params.name from its very first render.
+    mockRoute.params.name = 'other'
     const w = mountView()
     await flushPromises()
     const vm = w.vm as any
-    // Drive the collection into a non-default state: sorted, filtered, mid-page, trash mode.
-    await vm.onTableState({ sort: [{ id: 'status', desc: true }], page: 0, pageSize: 25 })
-    await flushPromises()
-    await vm.onFilterApply({ status: { op: '_eq', value: 'draft' } })
-    await flushPromises()
-    vm.onPageChange(3)
-    await flushPromises()
-    vi.mocked(itemsApi.list).mockClear()
 
-    mockRoute.params.name = 'other' // switch collection -> watch(name) must reset everything
-    await flushPromises()
-
-    expect(itemsApi.list).toHaveBeenCalledTimes(1)
-    expect(itemsApi.list).toHaveBeenCalledWith('other',
-      { page: 0, rows: 25, sort: undefined, filter: undefined, locale: 'en', deleted: undefined })
     expect(vm.tableState).toEqual({ sort: [], page: 0, pageSize: 25 })
     expect(vm.filters).toEqual({})
     expect(vm.mode).toBe('active')
+    expect(itemsApi.list).toHaveBeenCalledTimes(1)
+    expect(itemsApi.list).toHaveBeenCalledWith('other',
+      { page: 0, rows: 25, sort: undefined, filter: undefined, locale: 'en', deleted: undefined })
   })
 
   it('bail (no longer readable) clears the spinner it would otherwise orphan', async () => {
