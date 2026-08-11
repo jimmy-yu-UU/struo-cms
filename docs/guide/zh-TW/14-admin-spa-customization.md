@@ -32,8 +32,8 @@ i18n、欄位編輯器、品牌設定，以及開發伺服器如何連到 API—
 |---|---|
 | `api/` | 每個 REST 資源各有一個薄模組——`apiClient.ts` 是共用、能理解信封格式的 fetch 包裝器；`itemsApi.ts`、`schemaApi.ts`、`filesApi.ts`、`languagesApi.ts`、`rbacApi.ts`、`settingsApi.ts`、`appConfigApi.ts`——都是型別化呼叫，不含任何商業邏輯。 |
 | `assets/` | `theme.css`——OKLch 調色盤 token(外加少數 `--legacy-*` 前綴的 token)，供尚未遷移離開 PrimeVue 的畫面讀取；原本同一個檔案裡的 shell/版面 CSS(`.shell`、`.topbar`、`.sidebar`、`.nav-item`……)已經在那些畫面改用 Tailwind utility 之後被刪除。`tokens.css`——Tailwind v4 的進入點(`@import "tailwindcss"`)，以及已遷移畫面使用的 shadcn 語意 token 層(`--background`、`--primary`、`--radius`……)。 |
-| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`，以及 `ListToolbar`/`TableFooter`——`MediaLibraryView` 仍在使用，但 `CollectionListView` 已改用 `data/` 的基元)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`dashboard/`、`media/`、`revisions/`、`rbac/`。 |
-| `composables/` | 跨切面的響應式邏輯，例如 `useDashboardData.ts`。 |
+| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`，以及 `ListToolbar`/`TableFooter`——`MediaLibraryView` 仍在使用，但 `CollectionListView` 已改用 `data/` 的基元)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`media/`、`revisions/`、`rbac/`。 |
+| `composables/` | 跨切面的響應式邏輯，例如 `useConfirm.ts`。 |
 | `i18n/` | `index.ts`——`vue-i18n` 執行個體(`legacy: false`)，接到 `locales/`。 |
 | `layouts/` | `AppShell.vue`——每個已驗證路由都渲染於其中的 topbar + 側邊欄 + 內容格線。 |
 | `lib/` | 不依賴框架的輔助函式：`fieldTypes/`(欄位型別註冊表，下方)，加上 view 與欄位元件共用的格式化/驗證/查詢輔助函式。 |
