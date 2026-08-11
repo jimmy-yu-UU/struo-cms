@@ -65,6 +65,22 @@ describe('MultiSelectField', () => {
     expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe('Regions')
   })
 
+  // The visible summary and the announced name are two different things: `aria-label` overrides
+  // name-from-contents entirely, so without folding the count in, a screen-reader user would hear
+  // only "Regions" regardless of how many values are selected.
+  it('folds the selection count into the trigger\'s accessible name once something is selected', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: 'Regions', options }), modelValue: ['a'] }, ...comboOpts })
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe('Regions, 1 selected')
+  })
+
+  it('shows a placeholder when empty and a count once something is selected', () => {
+    const empty = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: 'Regions', options }), modelValue: [] }, ...comboOpts })
+    expect(empty.get('[data-slot="combobox-trigger"]').text()).toContain('Regions')
+
+    const withSelection = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: 'Regions', options }), modelValue: ['a', 'b'] }, ...comboOpts })
+    expect(withSelection.get('[data-slot="combobox-trigger"]').text()).toContain('2 selected')
+  })
+
   it('genuinely disables the trigger', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: [], disabled: true }, ...comboOpts })
     expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
@@ -102,10 +118,9 @@ describe('MultiSelectField', () => {
     expect(items[1].attributes('aria-selected')).toBe('true')
   })
 
-  // The PrimeVue MultiSelect this replaces let a user deselect with one click on a chip's own ✕,
-  // without opening anything. The trigger is a <button>, so the remove control cannot nest inside
-  // it (invalid HTML, a real click/focus hazard) — it lives in its own chip row instead, driven by
-  // the same immutable toggleValue as the in-list click path.
+  // A remove control nested inside the trigger <button> would be invalid HTML and a real
+  // click/focus hazard, so it lives in its own chip row instead, driven by the same immutable
+  // toggleValue as the in-list click path — no popup needs to be open to remove a value.
   it('removes a value by clicking its own chip remove button, without opening the popup', async () => {
     const before = ['a', 'b']
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: before }, ...comboOpts })
@@ -116,11 +131,31 @@ describe('MultiSelectField', () => {
     expect(before).toEqual(['a', 'b'])
   })
 
+  // The test name alone doesn't prove the structure: this asserts the remove button is a sibling
+  // of the trigger, not a descendant of it, so a future regression back to nesting it inside the
+  // trigger <button> (the mistake this layout exists to avoid) fails here.
+  it('keeps the chip remove button outside the trigger, not nested inside it', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
+    const trigger = w.get('[data-slot="combobox-trigger"]')
+    const removeButton = w.get('[aria-label="Remove Alpha"]')
+    expect(trigger.element.contains(removeButton.element)).toBe(false)
+  })
+
   it('keeps each chip remove button independently keyboard-reachable', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a', 'b'] }, ...comboOpts })
     const removeButtons = w.findAll('button[aria-label^="Remove "]')
     expect(removeButtons).toHaveLength(2)
     for (const btn of removeButtons) expect(btn.attributes('tabindex')).not.toBe('-1')
+  })
+
+  // The chip remove button is a second write surface with no reka gating of its own (unlike the
+  // trigger, which reka itself disables via the shared Listbox context) — this one line is the
+  // only thing standing between a read-only/RBAC-read-only field and a user deleting stored values.
+  it('genuinely disables each chip remove button too', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'], disabled: true }, ...comboOpts })
+    const removeButtons = w.findAll('button[aria-label^="Remove "]')
+    expect(removeButtons.length).toBeGreaterThan(0)
+    for (const btn of removeButtons) expect(btn.attributes('disabled')).toBe('')
   })
 })
 
