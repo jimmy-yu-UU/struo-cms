@@ -223,6 +223,7 @@ export default {
     add: '新增',
     moveUp: '上移',
     moveDown: '下移',
+    noItems: '沒有項目',
     tagValue: '值',
     tagDisplayText: '顯示文字(選填)',
     keyValueKey: '鍵',

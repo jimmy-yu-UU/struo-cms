@@ -223,6 +223,7 @@ export default {
     add: 'Add',
     moveUp: 'Move up',
     moveDown: 'Move down',
+    noItems: 'No items',
     tagValue: 'value',
     tagDisplayText: 'display text (optional)',
     keyValueKey: 'key',

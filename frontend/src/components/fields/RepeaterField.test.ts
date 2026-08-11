@@ -102,7 +102,17 @@ describe('RepeaterField', () => {
     expect(ups[1].attributes('aria-label')).toBe(zhTW.fields.moveUp)
     expect(downs[0].attributes('aria-label')).toBe(zhTW.fields.moveDown)
     expect(w.get('.repeater-remove').attributes('aria-label')).toBe(zhTW.common.delete)
-    expect(w.get('.repeater-add').attributes('aria-label')).toBe(zhTW.fields.add)
+    // The add button carries visible text, so its accessible name already comes from that text —
+    // a separate aria-label identical to the text would be pure duplication, not an improvement.
+    expect(w.get('.repeater-add').text()).toContain(zhTW.fields.add)
+    expect(w.get('.repeater-add').attributes('aria-label')).toBeUndefined()
+  })
+
+  // Localised the same way as the accessible names above: comparing against English alone cannot
+  // tell a real lookup apart from a hardcoded string that happens to read back identical to it.
+  it('localises the empty-state message', () => {
+    const w = mount(RepeaterField, { props: { field: repeater, modelValue: [] }, ...zhOpts })
+    expect(w.get('.repeater-field__empty').text()).toBe(zhTW.fields.noItems)
   })
 
   // Boundary logic, independent of the disabled/RBAC gate covered separately below: move-up on
@@ -124,16 +134,24 @@ describe('RepeaterField', () => {
   })
 
   // A negative assertion alone (no PrimeVue markup) also passes for a hand-rolled control, so
-  // assert the vendored button's real data-slot hook positively too, across every control in a
-  // multi-row mount: move-up/move-down/remove per row, plus the add button.
+  // assert the vendored button's real data-slot hook positively too. Per-hook (not a raw total
+  // count) so this cannot be coupled to how many buttons a sub-field's own component happens to
+  // render internally.
   it('renders the vendored button data-slot hook on every control', () => {
     const w = mount(RepeaterField, { props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }] }, ...opts })
-    expect(w.findAll('[data-slot="button"]')).toHaveLength(7) // 2 rows * 3 controls + 1 add
+    for (const hook of ['.repeater-up', '.repeater-down', '.repeater-remove']) {
+      const els = w.findAll(hook)
+      expect(els.length).toBeGreaterThan(0)
+      els.forEach((el) => expect(el.attributes('data-slot')).toBe('button'))
+    }
+    expect(w.get('.repeater-add').attributes('data-slot')).toBe('button')
     expect(w.find('.p-button').exists()).toBe(false)
   })
 
   // Mounted with a non-empty model so the row buttons actually exist — a disabled assertion over
-  // an empty list would pass vacuously without ever touching a real button.
+  // an empty list would pass vacuously without ever touching a real button. Each list gets its own
+  // length assertion before the forEach, so a selector that silently matched nothing (e.g. a class
+  // rename) fails loudly instead of iterating zero times and passing vacuously.
   it('genuinely disables every row control and the add button', () => {
     const w = mount(RepeaterField, {
       props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }], disabled: true },
@@ -143,10 +161,27 @@ describe('RepeaterField', () => {
     const downs = w.findAll('.repeater-down')
     const removes = w.findAll('.repeater-remove')
     expect(ups).toHaveLength(2)
+    expect(downs).toHaveLength(2)
+    expect(removes).toHaveLength(2)
     ups.forEach((b) => expect(b.attributes('disabled')).toBe(''))
     downs.forEach((b) => expect(b.attributes('disabled')).toBe(''))
     removes.forEach((b) => expect(b.attributes('disabled')).toBe(''))
     expect(w.get('.repeater-add').attributes('disabled')).toBe('')
+  })
+
+  // Native <button> defaults to type="submit". RepeaterField is dispatched inside ItemForm.vue's
+  // <form @submit.prevent>, whose only other submit control lives outside <ItemForm> entirely —
+  // so before this component carried any button at all, the form had no submit control, and an
+  // untyped button here would make every row click a real, accidental form submission (and, for a
+  // Revisions-enabled collection, a real revision) instead of a local array edit.
+  it('gives every row control and the add button an explicit type="button"', () => {
+    const w = mount(RepeaterField, { props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }] }, ...opts })
+    for (const hook of ['.repeater-up', '.repeater-down', '.repeater-remove']) {
+      const els = w.findAll(hook)
+      expect(els.length).toBeGreaterThan(0)
+      els.forEach((el) => expect(el.attributes('type')).toBe('button'))
+    }
+    expect(w.get('.repeater-add').attributes('type')).toBe('button')
   })
 
   // A post-mount prop change is the only assertion that distinguishes a prop-driven control from

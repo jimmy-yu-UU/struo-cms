@@ -77,8 +77,14 @@ function setSub(i: number, name: string, v: unknown): void {
           />
         </div>
       </div>
+      <!-- type="button" on every control below is load-bearing: a native <button> defaults to
+           type="submit", and this component is dispatched inside ItemForm.vue's
+           <form @submit.prevent> — an untyped button here would submit (and, for a
+           Revisions-enabled collection, snapshot) the whole record on every row click instead of
+           just updating this field's local array. -->
       <div class="repeater-row__controls flex flex-col gap-1">
         <Button
+          type="button"
           class="repeater-up"
           variant="ghost"
           size="icon"
@@ -89,6 +95,7 @@ function setSub(i: number, name: string, v: unknown): void {
           <ArrowUp class="size-4" />
         </Button>
         <Button
+          type="button"
           class="repeater-down"
           variant="ghost"
           size="icon"
@@ -99,6 +106,7 @@ function setSub(i: number, name: string, v: unknown): void {
           <ArrowDown class="size-4" />
         </Button>
         <Button
+          type="button"
           class="repeater-remove"
           variant="ghost"
           size="icon"
@@ -110,12 +118,15 @@ function setSub(i: number, name: string, v: unknown): void {
         </Button>
       </div>
     </div>
-    <p v-if="!rows.length" class="repeater-field__empty text-sm italic text-muted-foreground">No items</p>
+    <p v-if="!rows.length" class="repeater-field__empty text-sm italic text-muted-foreground">{{ t('fields.noItems') }}</p>
+    <!-- Same type="button" reasoning as the row controls above. No aria-label: the button's own
+         visible text already gives it an accessible name, so a label repeating that text would be
+         pure duplication rather than an improvement. -->
     <Button
+      type="button"
       class="repeater-add"
       variant="outline"
       size="sm"
-      :aria-label="t('fields.add')"
       :disabled="disabled"
       @click="add"
     >
