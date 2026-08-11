@@ -218,6 +218,7 @@ export default {
     notPermitted: 'Admin role required',
   },
   fields: {
+    add: 'Add',
     noFileSelected: 'No file selected',
     selectFile: 'Select',
     clear: 'Clear',
