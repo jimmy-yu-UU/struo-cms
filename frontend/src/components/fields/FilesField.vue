@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import OrderList from 'primevue/orderlist'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { X } from '@lucide/vue'
+import SortableList from '@/components/form/SortableList.vue'
 import MediaGrid from '../media/MediaGrid.vue'
 import FileThumbnail, { type FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -121,67 +122,78 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
 </script>
 
 <template>
-  <div class="files-field">
-    <OrderList
+  <div class="files-field flex flex-col items-start gap-3">
+    <SortableList
       v-if="rows.length"
       :model-value="rows"
-      data-key="id"
+      :item-key="(r: Row) => r.id"
       :disabled="disabled"
       @update:model-value="(v: Row[]) => onReorder(v)"
     >
       <template #item="{ item, index }">
-        <div class="files-row">
-          <FileThumbnail v-if="!item.missing" :file="item" />
-          <span class="files-row__name">{{ item.missing ? item.id : item.fileName }}</span>
-          <Button class="files-remove" icon="pi pi-times" text :disabled="disabled" @click="removeAt(index)" />
+        <div class="files-row flex w-full items-center gap-2">
+          <FileThumbnail v-if="!item.missing" :file="item" class="files-row__thumb" />
+          <span class="files-row__name min-w-0 flex-1 truncate">{{ item.missing ? item.id : item.fileName }}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            :disabled="disabled"
+            :aria-label="t('common.delete')"
+            @click="removeAt(index)"
+          >
+            <X class="size-4" />
+          </Button>
         </div>
       </template>
-    </OrderList>
-    <p v-else class="files-field__empty">{{ t('fields.noFilesSelected') }}</p>
+    </SortableList>
+    <p v-else class="files-field__empty italic text-muted-foreground">{{ t('fields.noFilesSelected') }}</p>
 
-    <Button class="files-add" :label="t('fields.selectFiles')" severity="secondary" outlined size="small" :disabled="disabled" @click="openDialog" />
+    <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="openDialog">{{ t('fields.selectFiles') }}</Button>
 
-    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectFiles')" :style="{ width: 'min(78vw, 1300px)' }" :breakpoints="{ '960px': '95vw' }">
-      <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
-      <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="files-field__search" />
-      <MediaGrid :files="options" multiple :selected-ids="currentIds()" @toggle="toggle" />
-      <template #footer>
-        <Button :label="t('fields.done')" @click="dialogOpen = false" />
-      </template>
+    <Dialog v-model:open="dialogOpen">
+      <!--
+        DialogScrollContent, not DialogContent: openDialog requests up to 50 files, and reka's
+        DialogRoot locks body scroll while open, so a fixed-position, viewport-centered box (plain
+        DialogContent) leaves no scroll container for overflow at all -- rows above and below the
+        viewport become permanently unreachable. DialogScrollContent's overlay carries its own
+        overflow-y-auto and holds the content box in normal flow instead of fixed-centered, so the
+        overlay itself scrolls once the box is taller than the viewport.
+
+        Its own width class is a bare max-w-lg (no sm: modifier, unlike plain DialogContent), so the
+        override below re-supplies no modifier either -- tailwind-merge keys on (modifier set, class
+        group), and a bare max-w-lg only loses to another bare max-w-* class. max-[960px]:max-w-[95vw]
+        restores the old PrimeVue Dialog's breakpoint widening on medium viewports.
+      -->
+      <DialogScrollContent class="max-w-[min(78vw,1300px)] max-[960px]:max-w-[95vw]">
+        <DialogHeader>
+          <DialogTitle>{{ t('fields.selectFiles') }}</DialogTitle>
+        </DialogHeader>
+        <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
+        <Input v-model="search" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" />
+        <MediaGrid :files="options" multiple :selected-ids="currentIds()" @toggle="toggle" />
+        <DialogFooter>
+          <Button type="button" @click="dialogOpen = false">{{ t('fields.done') }}</Button>
+        </DialogFooter>
+      </DialogScrollContent>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-.files-field {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: flex-start;
-}
-.files-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-.files-row :deep(.file-thumb) {
+/*
+ * FileThumbnail's own scoped .file-thumb rule sets width:100%/height:120px for its default
+ * grid-tile use (MediaGrid). That rule compiles to `.file-thumb[data-v-<FileThumbnail's id>]`,
+ * so a bare Tailwind utility class passed from here (specificity: one class) can never win
+ * against it (specificity: one class + one attribute selector) -- passing e.g. `class="size-12"`
+ * would silently keep the 120px tile height. Matching .file-thumb here compiles to
+ * `.file-thumb.files-row__thumb[data-v-<this file's id>]`, which is strictly higher specificity
+ * (two classes + one attribute) than FileThumbnail's own rule, so it wins regardless of which
+ * style block Vite happens to emit later in the bundle.
+ */
+.file-thumb.files-row__thumb {
   width: 48px;
   height: 48px;
   flex: none;
-}
-.files-row__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.files-field__empty {
-  color: var(--legacy-muted);
-  font-style: italic;
-}
-.files-field__search {
-  display: block;
-  margin: 8px 0 12px;
-  width: 100%;
 }
 </style>
