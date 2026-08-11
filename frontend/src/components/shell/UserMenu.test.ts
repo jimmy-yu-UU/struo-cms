@@ -9,10 +9,8 @@ const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 function mountMenu() {
-  // reka-ui's DropdownMenu portal wrapper is itself named "Teleport" (same hazard as
-  // ConfirmHost's AlertDialog) — vue-test-utils' default teleport stub only special-cases
-  // Vue's own built-in Teleport, so match it by name here and keep the default slot so the
-  // dropdown content stays inside the wrapper's own tree instead of vanishing.
+  // reka-ui's DropdownMenu portal is itself named "Teleport" -- see vitest.setup.ts for why
+  // this stub configuration is required.
   return mount(UserMenu, {
     global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
@@ -65,8 +63,6 @@ describe('UserMenu', () => {
     expect(wrapper.find('button').text()).toContain('a@b.c')
   })
 
-  // Replaces the old assertions against `defineExpose({ menuModel })`, which no longer exists:
-  // drive the real rendered trigger and menu item instead of the internal model shape.
   it('the logout menu item logs out and routes to login', async () => {
     const auth = useAuthStore()
     auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }

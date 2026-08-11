@@ -54,8 +54,6 @@ describe('TheSidebar', () => {
     expect(text).toContain(en.nav.settings)
   })
 
-  // Relocated from TheTopbar's old suite: the brand button lived in the topbar before Task 8
-  // moved it into SidebarHeader, but its own two behavioural assertions never moved with it.
   it('the brand button routes to the dashboard', async () => {
     const w = mountSidebar()
     const brandButton = w.find(`[aria-label="${en.shell.brandHome}"]`)
@@ -91,9 +89,6 @@ describe('TheSidebar', () => {
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'page' } })
   })
 
-  // The old suite's navigation test clicked a grouped item; the rewrite's replacement
-  // only clicked the ungrouped one, so SidebarMenuSubButton — the component that
-  // actually changed in this task — lost its only click coverage.
   it('navigates to a grouped collection when its sub-item is activated', async () => {
     const w = mountSidebar()
     const button = w.findAll('[data-sidebar="menu-sub-button"]').find((b) => b.text().includes('Articles'))
@@ -164,15 +159,9 @@ describe('TheSidebar', () => {
     expect(w.text()).toContain('Articles')
   })
 
-  // Regression guard for the sidebar's horizontal-scrollbar fix: ui/separator/Separator.vue's
-  // `data-[orientation=horizontal]:w-full` beats ui/sidebar/SidebarSeparator.vue's own `w-auto`
-  // override on CSS specificity (twMerge doesn't dedupe classes carrying different modifiers,
-  // so both reach the DOM and the attribute-selector variant wins regardless of source order).
-  // TheSidebar.vue compensates by re-supplying the same modifier
-  // (`data-[orientation=horizontal]:w-auto`) on its one <SidebarSeparator /> — this only asserts
-  // the emitted class list, not layout (jsdom does no CSS layout), but it does fail if that
-  // compensating class is ever removed or edited to a mismatched modifier: with the fix reverted,
-  // `data-[orientation=horizontal]:w-full` is present and this assertion catches it.
+  // Regression guard for TheSidebar.vue's SidebarSeparator comment (see there for why the
+  // compensating class is needed): only asserts the emitted class list, not layout (jsdom does
+  // no CSS layout), but fails if that class is ever removed or edited to a mismatched modifier.
   it('never lets the vendored separator keep its w-full variant', () => {
     const w = mountSidebar()
     const separator = w.get('[data-slot="sidebar-separator"]')

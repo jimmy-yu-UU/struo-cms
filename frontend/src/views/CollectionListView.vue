@@ -1,4 +1,6 @@
 <!-- frontend/src/views/CollectionListView.vue -->
+<!-- No route-params watcher: AppShell's keyed <router-view> remounts this view on a collection
+     switch (see AppShell.vue's :key="route.path" comment). -->
 <script setup lang="ts">
 import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -119,9 +121,8 @@ function actionButtons(row: Row) {
 }
 
 // TanStack columns, rebuilt from selectListColumns' picks plus the trash-only deletedAt column
-// and the row-actions column. formatCell/cellValue/tagSeverity are unchanged from the PrimeVue
-// version -- only how their result reaches the DOM (a `cell` render function instead of a
-// <Column #body> slot) is new.
+// and the row-actions column; formatCell/cellValue/tagSeverity supply each cell's rendered value
+// via a `cell` render function.
 const tableColumns = computed<DataTableColumn<Row>[]>(() => {
   const cols: DataTableColumn<Row>[] = columns.value.map((c: ListColumn) => ({
     id: c.field,

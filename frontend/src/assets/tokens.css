@@ -1,6 +1,5 @@
-/* StruoCMS design tokens — shadcn semantic contract.
-   Source of truth for values: docs/_archive-local/frontend-design/struocms-admin-prototype.html
-   (:root and .app-dark blocks). brand-spec.md's dark table is stale; the prototype wins.
+/* StruoCMS design tokens — shadcn semantic contract. The values declared below (:root and
+   .app-dark) are the source of truth; there is no separate design document to defer to.
 
    NAMING TRAP: shadcn's --accent is the hover / focus / active SURFACE, not the brand
    colour. Brand sky is --primary. Binding sky to --accent turns every hover surface blue. */
@@ -25,7 +24,7 @@
   --secondary: #f4f4f5;           /* zinc-100 */
   --secondary-foreground: #111827;
   --muted: #f4f4f5;               /* subtle SURFACE */
-  --muted-foreground: #64748b;    /* subdued TEXT — brand-spec's --muted */
+  --muted-foreground: #64748b;    /* subdued TEXT */
   --accent: color-mix(in oklab, #111827, transparent 95%);  /* hover surface */
   --accent-foreground: #111827;
   --destructive: #dc2626;
@@ -44,11 +43,11 @@
   --sidebar-ring: #0284c7;
   --radius: 0.625rem;
   /* Legacy bridge, NOT part of the shadcn output contract below (@theme inline has no
-     --color-surface-2 and never should): a sunken/hover rung one step darker than --surface,
-     for the unmigrated screens still on theme.css's --bg/--surface/--fg family. It has to live
-     here rather than in theme.css because it resolves to --muted, and tests/legacyTokens.test.ts
-     forbids every file except this one from writing `var(--muted)` — this file is the one
-     allowed to, since it's the one that owns --muted. See theme.css's --surface-2 comment. */
+     --color-surface-2 and never should): a sunken/hover rung one step darker than --surface, for
+     the unmigrated screens still on theme.css's --bg/--surface/--fg family. Must live here, not
+     in theme.css, because it resolves to --muted and only this file may write `var(--muted)` —
+     see frontend/tests/legacyTokens.test.ts's own header for why. Leaves together with theme.css's
+     --legacy-* block, once the last such screen is migrated. */
   --surface-2: var(--muted);
   color-scheme: light;
 }

@@ -28,10 +28,8 @@ const RowDataTable = DataTable<Row>
 function mountTable(overrides: Record<string, unknown> = {}) {
   return mount(RowDataTable, {
     props: { columns, rows, total: 2, state, ...overrides },
-    // reka-ui's dropdown-menu portal wrapper is itself named "Teleport" (see UserMenu.test.ts) --
-    // vue-test-utils' default teleport stub only special-cases Vue's own built-in Teleport, so
-    // match it by name and keep the default slot so the column-visibility menu content stays in
-    // the mounted tree instead of vanishing.
+    // reka-ui's dropdown-menu portal is itself named "Teleport" -- see vitest.setup.ts for why
+    // this stub configuration is required.
     global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
 }
@@ -76,9 +74,6 @@ describe('DataTable', () => {
     expect(mountTable({ rows: [], total: 0, emptyMessage: 'Nothing here' }).text()).toContain('Nothing here')
   })
 
-  // The PrimeVue DataTable this replaced rendered a spinner overlay for the same `loading` prop;
-  // this component only wired it to aria-busy, which is invisible without assistive tech. A
-  // loading affordance must actually render something a sighted user can see.
   it('renders a visible loading indicator when loading is true', () => {
     expect(mountTable({ loading: true }).find('[role="status"]').exists()).toBe(true)
   })
@@ -137,14 +132,8 @@ describe('DataTable', () => {
 })
 
 describe('DataTable column visibility', () => {
-  // The sabotage-provable case: this is the one test that goes red if
-  // `columnVisibilityFeature` is removed from DataTable.vue's `tableFeatures({...})` call --
-  // without it, column.getIsVisible() always returns true (table-core's
-  // columnVisibilityFeature.utils.js: "if (!columnVisibility) return true") and
-  // column.toggleVisibility() doesn't exist on the resolved column object at all
-  // (assignColumnPrototype never runs), so the click below would throw instead of hiding
-  // anything. Confirmed by literally commenting the feature out and re-running this file --
-  // see the task report for the exact before/after.
+  // Goes red if `columnVisibilityFeature` is removed from DataTable.vue's `tableFeatures({...})`
+  // call -- see that file's `features` comment for why registering it is required.
   it('hiding a column removes it from both the header row and every body row (not just one side)', async () => {
     const w = mountTable()
     await openColumnMenu(w)
@@ -211,14 +200,9 @@ describe('DataTable column visibility', () => {
     expect(w.text()).toContain('published')
   })
 
-  // Review finding (Important 1): `columnVisibility` is TanStack's own state, keyed by column
-  // id, and DataTable is never remounted across a column-SET change (CollectionListView switches
-  // collection or flips active/trash mode on the same mounted instance, no `:key`). Column ids
-  // collide by design across those contexts (field names repeat; literal ids like
-  // 'actions'/'deletedAt' are shared everywhere). The guard above only ever reasons about the
-  // CURRENT set, so two hides that were individually safe in a 3-column set can zero out a
-  // 2-column set that reuses two of those same ids -- exactly CollectionListView's trash-mode
-  // [name, deletedAt, actions] -> active-mode [name, actions] transition.
+  // Guards the id-set-change reset in DataTable.vue (see its `columnIdsSignature` comment):
+  // CollectionListView's trash-mode [name, deletedAt, actions] -> active-mode [name, actions]
+  // transition must not zero out or leak stale hides across the switch.
   it('resets visibility on an id-set change, so hides from one column set cannot zero out (or silently carry into) an unrelated set', async () => {
     const wide = [
       { id: 'name', accessorKey: 'title', header: 'Name' },

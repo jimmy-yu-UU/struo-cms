@@ -39,8 +39,8 @@ describe('SidebarNavItem', () => {
     expect(mountItem({ label: 'A' }).find('svg').exists()).toBe(true)
   })
 
-  // brand-spec §5 gives sub-items their own geometry (h-7 / px-2 + guide rail); that lives
-  // in SidebarMenuSubButton, not SidebarMenuButton.
+  // Sub-items need their own geometry (h-7 / px-2 + guide rail); that lives in
+  // SidebarMenuSubButton, not SidebarMenuButton.
   it('renders a sub-level button when sub is set', () => {
     const top = mountItem({ label: 'A' })
     const sub = mountItem({ label: 'A', sub: true })

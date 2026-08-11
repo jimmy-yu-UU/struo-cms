@@ -19,8 +19,8 @@ function onChange(value: unknown): void {
 </script>
 
 <template>
-  <!-- Hidden on the narrowest viewports, same as the old `.topbar .lang-switcher` rule —
-       but expressed as a utility on the element instead of a specificity fight in theme.css. -->
+  <!-- Hidden on the narrowest viewports via a Tailwind utility on the trigger itself, not a
+       specificity fight in theme.css. -->
   <Select :model-value="uiLocale.locale" @update:model-value="onChange">
     <SelectTrigger class="w-36 max-[520px]:hidden" :aria-label="t('lang.label')">
       <SelectValue />

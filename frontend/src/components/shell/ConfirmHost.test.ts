@@ -9,10 +9,8 @@ import { useConfirmStore } from '@/stores/confirmStore'
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
 function mountHost() {
-  // reka-ui's own portal wrapper component is itself named "Teleport" (it renders the real
-  // <Teleport> only after mount). vue-test-utils' default `teleport` stub only special-cases
-  // Vue's built-in Teleport; matching reka-ui's wrapper by name instead goes through the
-  // generic stub path, which drops the default slot unless renderStubDefaultSlot is set.
+  // reka-ui's portal wrapper is itself named "Teleport" -- see vitest.setup.ts for why this
+  // stub configuration is required.
   return mount(ConfirmHost, {
     global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
@@ -55,7 +53,7 @@ describe('ConfirmHost', () => {
     await expect(p).resolves.toBe(false)
   })
 
-  // This is the acceptance criterion the earlier round shipped without: driving the actual
+  // This is the acceptance criterion that catches a real regression: driving the actual
   // rendered button, not just asserting on text or synthesising update:open. reka's
   // AlertDialogAction is a DialogClose that fires its own onOpenChange(false) synchronously
   // ahead of a plain @click handler (mergeProps puts the component's own listener first),

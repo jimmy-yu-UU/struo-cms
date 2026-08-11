@@ -6,42 +6,12 @@ import {
 } from '@tanstack/vue-table'
 import type { SortEntry } from './SortableHeader.vue'
 
-// Three features. Filtering is server-side and lives in FilterBuilder, which speaks the
-// backend's flat filter[field][op]=value DSL directly — routing it through TanStack's
-// ColumnFiltersState would buy nothing and cost a translation layer (see the spec deviation
-// note at the top of this plan).
-//
-// sortedRowModel/paginatedRowModel ARE registered (unlike a read-only table) precisely so that
-// manualSorting/manualPagination are load-bearing: table-core's row-model pipeline only
-// consults `options.manualSorting` when a `sortedRowModel` factory exists at all — with no
-// factory registered, dropping the flag would be silently inert instead of visibly wrong.
-// Registering the factories AND setting manual=true is what makes "drop the flag" an actual,
-// catchable regression rather than a no-op.
-//
-// columnVisibilityFeature needs no row-model factory (hiding a column isn't a row-model stage),
-// but it is NOT a no-op to omit — the same "registering matters" trap, one level down. Read
-// straight from the vendored source (node_modules/@tanstack/table-core, table-core@9.1.2):
-//   - constructTable.js: `table.initialState` is the fold of every registered feature's
-//     `getInitialState`, and `table.atoms[key]` is only created for keys that appear in
-//     `table.initialState`. columnVisibilityFeature.getInitialState seeds `columnVisibility: {}`
-//     — miss the registration and `table.atoms.columnVisibility` never exists.
-//   - columnVisibilityFeature.utils.js `column_getIsVisible`: "const columnVisibility =
-//     column.table.atoms.columnVisibility?.get(); if (!columnVisibility) return true;" — with no
-//     atom, EVERY column reads back visible, permanently, no matter what state you try to write.
-//   - utils.js `setStateSlice`: "const onChange = instance.options[onChangeKey]; if (!onChange)
-//     return;" — `onColumnVisibilityChange` only exists because
-//     columnVisibilityFeature.getDefaultTableOptions supplies it at construction time
-//     (constructTable.js folds `feature.getDefaultTableOptions?.(table)` over the registered
-//     features list). Miss the registration and a hide request is silently swallowed here too —
-//     the exact same "silent no-op" shape as the manualSorting/manualPagination trap above, not
-//     a variant of it.
-//   - assignColumnPrototype/assignRowPrototype (columnVisibilityFeature.js) are what actually put
-//     `getIsVisible`/`toggleVisibility`/`getCanHide` on every column and `getVisibleCells` on
-//     every row. Without registration these methods don't exist on the resolved objects at all —
-//     calling them throws, rather than quietly doing nothing.
-// Proven by sabotage: commenting `columnVisibilityFeature` out of this call and re-running
-// DataTable.test.ts's "hides a column" test turns it red (columns stay visible; the template's
-// `column.toggleVisibility` call throws) — see the task report for the exact before/after run.
+// Three features: rowSortingFeature/rowPaginationFeature back the manual* flags below;
+// columnVisibilityFeature backs the column-hide menu. Filtering is server-side, handled by
+// FilterBuilder's own filter[field][op]=value DSL directly, so no filter feature is registered.
+// Every feature here MUST be registered: TanStack only initializes a feature's own state, getters
+// and setters for features present in this list, so omitting one is a silent no-op (the state
+// never exists) or a hard throw (the method doesn't exist), never a visible functional change.
 const features = tableFeatures({
   rowSortingFeature,
   rowPaginationFeature,
@@ -51,8 +21,8 @@ const features = tableFeatures({
 })
 
 // `features` above has no useful name a consumer could otherwise spell out, so this alias is
-// what callers building a `columns` array (Task 14's CollectionListView, RelatedList,
-// MediaLibraryView) actually declare against.
+// what callers building a `columns` array (CollectionListView, RelatedList, MediaLibraryView)
+// actually declare against.
 export type DataTableColumn<TRow extends Record<string, unknown>> = TanstackColumnDef<typeof features, TRow, unknown>
 
 // The backend's `sort` query param (lib/buildListQuery.ts) takes one field, `'title'` for
@@ -147,18 +117,11 @@ function isLastVisible(column: ReturnType<typeof table.getAllLeafColumns>[number
   return column.getIsVisible() && table.getVisibleLeafColumns().length <= 1
 }
 
-// The guard above only ever reasons about the CURRENT column set -- but `columnVisibility` is
-// TanStack's own state, keyed by column id, and it survives every column-set change: DataTable is
-// never remounted when CollectionListView switches collection or flips active/trash mode (no
-// `:key`), and column ids collide by design across those contexts (field names repeat across
-// collections; literal ids like 'actions'/'deletedAt' are shared by every collection and both
-// modes). Hiding two of three columns while a third stays visible is honoured correctly by the
-// guard in THAT column set, but if the next column set drops the one column that happened to stay
-// visible, the two stale hides can zero it out -- and even short of zero, a hide from one
-// collection would silently carry over and hide the same-named column in a completely unrelated
-// one. Watching a signature of the resolved id set (not `props.columns` by reference, which
-// churns on every unrelated recompute) and resetting to "all visible" whenever that set actually
-// changes closes both: the pathological zero-column case and the everyday cross-collection leak.
+// columnVisibility is keyed by column id and survives every column-set change: DataTable is never
+// remounted when CollectionListView switches collection or flips active/trash mode, and ids like
+// 'actions'/'deletedAt' repeat across both. Reset to all-visible whenever the resolved id set
+// (not `props.columns` by reference, which churns on every unrelated recompute) actually changes,
+// so a hide from one set can't zero out or leak into an unrelated one.
 const columnIdsSignature = computed(() => table.getAllLeafColumns().map((c) => c.id).sort().join(' '))
 watch(columnIdsSignature, () => {
   table.setColumnVisibility({})
@@ -172,8 +135,8 @@ watch(columnIdsSignature, () => {
         <DropdownMenuTrigger as-child>
           <!--
             size="default" (h-9/36px), NOT "sm" (h-8/32px) -- this sits directly above
-            DataTablePagination's page-size NativeSelect, which is h-9. A "sm" trigger here made
-            the two brand-spec "control height 36px" controls two different heights.
+            DataTablePagination's page-size NativeSelect, which is also h-9. A "sm" trigger here
+            made the two controls two different heights.
           -->
           <Button variant="outline" data-testid="column-visibility-trigger">
             <Columns3 class="size-4" aria-hidden="true" />
@@ -209,12 +172,6 @@ watch(columnIdsSignature, () => {
       class="relative overflow-x-auto rounded-md border shadow-sm dark:shadow-none"
       :aria-busy="props.loading ? 'true' : 'false'"
     >
-      <!--
-        The PrimeVue DataTable this replaced showed a spinner overlay for the same `loading` prop;
-        aria-busy alone is invisible without assistive tech, so a sighted user pressing Search or
-        changing page saw stale rows with no feedback until they swapped. A dimmed body plus a
-        status overlay restores that affordance for every consumer, not just this one screen.
-      -->
       <div
         v-if="props.loading"
         role="status"
@@ -225,7 +182,7 @@ watch(columnIdsSignature, () => {
       </div>
       <Table :class="props.loading ? 'opacity-50' : undefined">
         <TableHeader>
-          <!-- brand-spec: header row carries no hover fill of its own (that's a body-row cue) -->
+          <!-- Header row carries no hover fill of its own -- that's a body-row-only cue. -->
           <TableRow class="hover:bg-transparent">
             <!--
               Iterate table-resolved headers, not raw `props.columns`. TanStack derives a column id
@@ -269,13 +226,10 @@ watch(columnIdsSignature, () => {
             class="transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-foreground/[0.04]"
           >
             <!--
-              getVisibleCells(), not getAllCells(): now that columnVisibilityFeature is registered
-              (see the `features` comment up top), getVisibleCells() exists and is what keeps a
-              hidden column's cells out of the body in lockstep with its header being gone above —
-              getAllCells() would render an orphan <td> with no matching <th>. An earlier round of
-              this table found getVisibleCells() didn't exist at all (assignRowPrototype never ran)
-              before the feature was registered; it's the same "registering matters" fact as the
-              header comment, from the row side.
+              getVisibleCells(), not getAllCells(): keeps a hidden column's cells out of the body
+              in lockstep with its header being gone above -- getAllCells() would render an orphan
+              <td> with no matching <th>. Only exists because columnVisibilityFeature is
+              registered (see the `features` comment up top).
             -->
             <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="px-4 py-3">
               <FlexRender :cell="cell" />

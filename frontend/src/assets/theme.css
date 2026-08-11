@@ -1,10 +1,8 @@
-/* StruoCMS design tokens — source of truth: brand-spec.md (OKLch core) + prototype palette. */
-/* --surface-2 (a sunken/hover rung one step darker than --surface, inside a card — already
-   referenced with an inline fallback by ItemForm.vue before it was ever declared anywhere) is
-   declared in tokens.css, not here: it resolves to shadcn's --muted, and
-   tests/legacyTokens.test.ts's "no file outside tokens.css consumes the renamed names" guard
-   forbids any file OTHER than tokens.css — theme.css included — from consuming --muted via a
-   var() reference. tokens.css is the one file that owns and may reference --muted directly. */
+/* StruoCMS legacy design tokens — transitional. The screens not yet migrated to Tailwind/shadcn
+   (tokens.css) still read these; delete this file once every such screen is migrated. */
+/* --surface-2 is declared in tokens.css, not here — see that file's comment on --surface-2
+   (frontend/tests/legacyTokens.test.ts's header explains why only tokens.css may reference
+   --muted). */
 :root {
   --bg: oklch(0.984 0.003 247.9);
   --surface: oklch(1 0 0);
@@ -15,8 +13,8 @@
      now and means something different by each (subtle surface / hover surface / a 10px base
      that derives the 6px+8px scale / a derived large radius). These four carry the
      PRE-migration meaning — subdued text, brand sky, and literal 8px/12px corners — for the
-     views not yet on Tailwind utilities. Delete this block in S9 together with the last
-     PrimeVue-era screen. */
+     views not yet on Tailwind utilities. Delete this block together with the last PrimeVue-era
+     screen. */
   --legacy-muted: oklch(0.554 0.046 257.4);
   --legacy-accent: oklch(0.588 0.158 241.9);
   --legacy-radius: 8px;
@@ -31,54 +29,23 @@
   color-scheme: light;
 }
 .app-dark {
-  /* --bg/--surface/--fg were hand-picked OKLch approximations that carry a small blue chroma
-     (hue ~265, slate's hue family), while the shadcn shell that now surrounds these 11
-     unmigrated screens is achromatic zinc (#18181b). Side by side in dark mode that read as
-     "cards are slate-blue, not zinc" — the reported defect. Re-pointing to the shadcn tokens
-     (tokens.css's --card/--background/--foreground, already zinc in .app-dark) makes every
-     screen still consuming --bg/--surface/--fg inherit the same palette as the migrated shell,
-     with no per-file changes. Light mode was not reported broken (light --surface already equals
-     shadcn's light --card exactly — pure white either way) and light --bg's faint cool-white tint
-     against a pure-white card is a pre-existing, working depth cue, not this bug — left alone.
-
-     --bg plays TWO roles pre-migration: the page backdrop (LoginView's .login-wrap, which is the
-     only caller left pointed at --bg) AND a sunken/hover rung meant to read as darker than
-     --surface inside a card. tokens.css's dark --background and --card are the SAME value
-     (#18181b) — pointing both legacy roles at --bg here would make that second role a no-op and
-     silently delete hover feedback on every row/menu-item that used it. The seven call sites
-     that were using --bg for that second role (MediaFileList, RichTextTableMenu, RichTextInput,
-     FileThumbnail, MediaDetailDialog, RevisionSnapshotView, MediaUploadDropzone) were moved onto
-     --surface-2 instead (declared in tokens.css — see the
-     comment above :root) — it points at shadcn's --muted, which already carries exactly this
-     rung (#27272a dark / #f4f4f5 light), one step above the card in both themes. --bg keeps the
-     backdrop role only. */
+  /* Re-point to the shadcn tokens (already zinc in .app-dark) rather than keeping the hand-picked
+     OKLch approximations: --bg/--surface/--fg carried a small blue chroma that read as
+     "slate, not zinc" next to the migrated shell. --bg keeps the page-backdrop role only (still
+     LoginView's .login-wrap) — its other pre-migration role, a sunken/hover rung darker than
+     --surface, now lives on --surface-2 (tokens.css) instead, since --background and --card
+     collapse to the same value here and would otherwise make that rung a no-op. */
   --bg: var(--background);
   --surface: var(--card);
   --fg: var(--foreground);
-  /* --legacy-muted/--legacy-accent keep the pre-migration MEANING (subdued text / brand sky) but
-     were separately hand-approximated OKLch values rather than references — re-pointing them to
-     the tokens that already carry those exact meanings in tokens.css removes the duplicate
-     source of truth. In light mode this is a no-op: tokens.css's --muted-foreground (#64748b) is
-     slate-500, exactly what --legacy-muted's light OKLch was already tuned to. In DARK mode it
-     is a deliberate hue shift, not a no-op: tokens.css's dark --muted-foreground is #a1a1aa —
-     zinc-400, not slate-400 (#94a3b8) — so subdued text on these 11 screens de-blues in dark
-     mode along with --surface/--bg/--fg above, which is the point of this whole change.
-     --legacy-accent -> --primary, NOT --accent: tokens.css's own top-of-file comment warns
-     --accent is the hover/focus SURFACE color, not the brand colour; binding legacy-accent to it
-     would swap "brand sky" for a near-invisible hover tint, breaking every caller (e.g.
-     RichTextInput's active-toolbar-button state) that expects a visible brand-coloured accent. */
+  /* --legacy-accent maps to --primary, NOT --accent: tokens.css's own NAMING TRAP comment warns
+     --accent is a hover/focus SURFACE colour, not the brand colour — binding here would swap
+     every caller's visible brand-sky accent (e.g. RichTextInput's active-toolbar-button state)
+     for a near-invisible hover tint. */
   --legacy-muted: var(--muted-foreground);
   --legacy-accent: var(--primary);
-  /* --legacy-radius/--legacy-radius-lg are untouched: they don't vary by theme (same 8px/12px in
-     both :root and .app-dark already, per the comment above), so there is no light/dark clash to
-     fix here, and shadcn's own radius scale has no exact 12px rung to map to (--radius-lg is
-     10px, --radius-xl is 14px) — remapping would shift corner radii on all 11 screens for a
-     defect that was never about shape. */
   --legacy-radius: 8px;
   --legacy-radius-lg: 12px;
-  /* --warn/--danger are deliberately brighter in dark mode (amber-400/red-400 vs the light-mode
-     amber-600/red-600) for contrast against a dark background; they are plain hex, not OKLch, and
-     were never blue-tinted, so they aren't part of the slate-vs-zinc defect — left alone. */
   --warn: #fbbf24;
   --danger: #f87171;
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45);
@@ -101,5 +68,6 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
 
 .app-breadcrumb { margin-bottom: 14px; background: transparent; border: none; padding: 0; }
 
-/* .caption still styles PageHeader/LoginView captions on unmigrated screens — leave for S9. */
+/* .caption still styles PageHeader/LoginView captions on unmigrated screens — remove alongside
+   this file (see the header comment above). */
 .caption { font-size: .8rem; font-weight: 500; color: var(--legacy-muted); }

@@ -9,7 +9,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <!-- brand-spec §3: 56px bar, SidebarTrigger leftmost, no brand — the brand button lives in
+  <!-- 56px bar, SidebarTrigger leftmost, no brand — the brand button lives in
        SidebarHeader now, and the breadcrumb sits in the content area, not here.
        sticky top-0: SidebarInset (vendored, read-only) is min-h-svh not h-svh — a floor, not a
        cap — so on content taller than the viewport the column grows and the document scrolls
