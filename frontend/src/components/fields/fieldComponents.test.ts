@@ -89,8 +89,26 @@ describe('field components (simple inputs)', () => {
   })
 
   it('BooleanField renders a checkbox and is disabled when asked', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true, disabled: true }, ...opts })
-    expect(w.find('input[type="checkbox"]').exists()).toBe(true)
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false, disabled: true }, ...opts })
+    const box = w.get('[role="checkbox"]')
+    // reka uses the aria form for disabled state on some primitives and the native attribute on
+    // others; accept either rather than pinning a vendored implementation detail.
+    expect(box.attributes('aria-disabled') ?? box.attributes('disabled')).toBeDefined()
+  })
+
+  // Constraint 9: reka components bind their own onClick, so the emit path is only proven by
+  // actually clicking. A rendering-only assertion here would have passed even when broken.
+  it('BooleanField emits true when clicked from false', async () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    await w.get('[role="checkbox"]').trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([true])
+  })
+
+  // The migration's own assertion: the vendored composition's real data-slot hook must be present
+  // (see standing-constraints's test-assertion pattern).
+  it('BooleanField renders the vendored checkbox data-slot hook', () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    expect(w.find('[data-slot="checkbox"]').exists()).toBe(true)
   })
 
   it('DateField sets time-only for time and show-time for dateTime', () => {
