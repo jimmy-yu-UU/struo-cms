@@ -19,6 +19,16 @@ const selectedOptions = computed(() =>
   selected.value.map((v) => ({ value: v, label: options.value.find((o) => o.value === v)?.label ?? v })),
 )
 
+// The trigger's `aria-label` overrides accessible-name-from-contents entirely, so the visible
+// summary text ("N selected") would otherwise never reach a screen reader — folding the count into
+// the label itself is the only way an AT user learns whether anything is selected without opening
+// the popup.
+const triggerAccessibleName = computed(() =>
+  selected.value.length
+    ? `${props.field.label}, ${t('fields.selectedCount', { n: selected.value.length })}`
+    : props.field.label,
+)
+
 // PrimeVue's MultiSelect owned both the chip display and the array arithmetic. The combobox owns
 // neither, so both live here. Emit a new array every time — this repo's immutability convention,
 // and the parent must receive a distinct array rather than the one it passed in.
@@ -53,7 +63,7 @@ function toggleValue(value: string): void {
     <Combobox :model-value="selected" multiple :disabled="disabled">
       <ComboboxAnchor class="w-full">
         <ComboboxTrigger
-          :aria-label="field.label"
+          :aria-label="triggerAccessibleName"
           class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span :class="selected.length ? '' : 'text-muted-foreground'">
