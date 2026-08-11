@@ -60,8 +60,8 @@ describe('field components (simple inputs)', () => {
   })
 
   // The migration's own assertion: this field must no longer resolve a PrimeVue component, and the
-  // vendored composition's real data-slot hook must be present (see standing-constraints's
-  // test-assertion pattern — a negative assertion alone also passes for a hand-rolled <input>).
+  // vendored composition's real data-slot hook must be present — a negative assertion alone also
+  // passes for a hand-rolled <input>, so a positive one is required too.
   it('NumberField renders the vendored number-field input, not PrimeVue InputNumber', () => {
     const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 }, ...opts })
     expect(w.findComponent({ name: 'InputNumber' }).exists()).toBe(false)
@@ -74,8 +74,8 @@ describe('field components (simple inputs)', () => {
   })
 
   // reka's NumberFieldRoot models a cleared field as `undefined` on `update:modelValue` (confirmed
-  // by direct observation of the vendored component — see task-4-report.md's Step 1 findings), not
-  // `null` and not a bare NaN. The CMS model wants null: a nullable numeric column legitimately
+  // by direct observation of the vendored component), not `null` and not a bare NaN. The CMS
+  // model wants null: a nullable numeric column legitimately
   // clears, and a NaN would survive into buildItemPayload and poison any arithmetic on the way.
   // NumberField.vue normalises undefined/NaN -> null at this boundary so nothing downstream has to
   // know reka's convention.
@@ -119,8 +119,8 @@ describe('field components (simple inputs)', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
   })
 
-  // The migration's own assertion: the vendored composition's real data-slot hook must be present
-  // (see standing-constraints's test-assertion pattern).
+  // The migration's own assertion: the vendored composition's real data-slot hook must be present,
+  // not just a negative assertion that the old PrimeVue component is gone.
   it('BooleanField renders the vendored checkbox data-slot hook', () => {
     const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
     expect(w.find('[data-slot="checkbox"]').exists()).toBe(true)
@@ -143,18 +143,43 @@ describe('field components (simple inputs)', () => {
     expect(dt.find('input[type="time"]').exists()).toBe(true)
   })
 
+  // Positive assertion alongside the render check above: the time control really is the vendored
+  // composition (data-slot="input" is ui/input's own hook), not a hand-rolled <input> that happens
+  // to have type="time".
+  it('DateField renders the vendored input for the time control', () => {
+    const w = mount(DateField, { props: { field: field({ interface: 'time' }), modelValue: null }, ...dateOpts })
+    expect(w.find('input[type="time"][data-slot="input"]').exists()).toBe(true)
+  })
+
+  // The fixture date deliberately cannot be "today": onTime's fallback path (`current.value ??
+  // new Date()`) exists for the no-incoming-value case, and a fixture that happened to equal the
+  // real clock's current date would pass even if that fallback fired instead of `current.value`.
   it('DateField merges a typed time into the existing date without losing the date', async () => {
     const w = mount(DateField, {
-      props: { field: field({ interface: 'dateTime' }), modelValue: new Date(2026, 7, 11, 0, 0, 0) },
+      props: { field: field({ interface: 'dateTime' }), modelValue: new Date(2020, 5, 15, 0, 0, 0) },
       ...dateOpts,
     })
     await w.get('input[type="time"]').setValue('14:30')
     const emitted = w.emitted('update:modelValue')?.at(-1)?.[0] as Date
-    expect(emitted.getFullYear()).toBe(2026)
-    expect(emitted.getMonth()).toBe(7)
-    expect(emitted.getDate()).toBe(11)
+    expect(emitted.getFullYear()).toBe(2020)
+    expect(emitted.getMonth()).toBe(5)
+    expect(emitted.getDate()).toBe(15)
     expect(emitted.getHours()).toBe(14)
     expect(emitted.getMinutes()).toBe(30)
+  })
+
+  // registry.ts's def() default `empty` is '' for date/time/dateTime, but a value already loaded
+  // from the API's raw JSON is a string that failed to parse (a malformed or truncated value) just
+  // as plausibly as it is a well-formed one; this must degrade to no value, not throw. Asserted
+  // through DatePicker's own modelValue prop rather than the time input's DOM value: a native
+  // <input type="time"> silently sanitises an invalid string back to '' on its own, which would
+  // make this assertion pass even if `current`'s Number.isNaN guard were removed entirely.
+  it('DateField treats an unparseable string model as no value rather than throwing', () => {
+    const w = mount(DateField, {
+      props: { field: field({ interface: 'dateTime' }), modelValue: 'not-a-real-date' },
+      ...dateOpts,
+    })
+    expect(w.findComponent({ name: 'DatePicker' }).props('modelValue')).toBeNull()
   })
 
   // The reverse direction: DatePicker carries the incoming time-of-day forward on its own, but
@@ -226,12 +251,16 @@ describe('field components (simple inputs)', () => {
       ...dateOpts,
     })
     expect(w.findComponent({ name: 'DatePicker' }).props('disabled')).toBe(true)
+    // The prop boundary alone would still pass if DatePicker stopped forwarding it to its own
+    // trigger; assert the rendered button too, the way the other migrated fields assert their own
+    // native control rather than stopping at the prop.
+    expect(w.get('button').attributes('disabled')).toBeDefined()
     expect(w.get('input[type="time"]').attributes('disabled')).toBe('')
   })
 
-  // Standing constraint: an inbound assertion made only at initial render cannot distinguish
-  // controlled binding from local state seeded once and never revisited; the prop must change
-  // after mount and the controls must follow.
+  // An inbound assertion made only at initial render cannot distinguish controlled binding from
+  // local state seeded once and never revisited; the prop must change after mount and the
+  // controls must follow.
   it('DateField reflects a model value changed after mount', async () => {
     const w = mount(DateField, { props: { field: field({ interface: 'dateTime' }), modelValue: null }, ...dateOpts })
     expect((w.get('input[type="time"]').element as HTMLInputElement).value).toBe('')
@@ -241,14 +270,16 @@ describe('field components (simple inputs)', () => {
   })
 
   // Two controls in one dateTime field must not share an accessible name, or a screen reader
-  // announces both as the same control once a value exists.
+  // announces both as the same control once a value exists. Asserted against the resolved locale
+  // message (not a literal string) so a change to fields.timePart's wording cannot silently
+  // desync the test from what the component actually renders.
   it('DateField gives the time input an accessible name distinct from the calendar trigger', () => {
     const w = mount(DateField, {
       props: { field: field({ interface: 'dateTime', label: 'Published at' }), modelValue: null },
       ...dateOpts,
     })
     expect(w.findComponent({ name: 'DatePicker' }).props('label')).toBe('Published at')
-    expect(w.get('input[type="time"]').attributes('aria-label')).toBe('Published at time')
+    expect(w.get('input[type="time"]').attributes('aria-label')).toBe(`Published at ${en.fields.timePart}`)
   })
 
   // The migration's own assertion: this field must no longer resolve a PrimeVue component.
@@ -268,8 +299,9 @@ describe('field components (simple inputs)', () => {
 describe('field components (choice + structural)', () => {
   // The migration's own assertion: the vendored Select composition has no options prop (options
   // are SelectItem children), so the only thing worth pinning is what the trigger actually shows.
-  // This is the inbound-direction assertion (standing-constraints's Task-5 rule): it proves the
-  // control reflects a non-default incoming model, not just that something renders.
+  // This is the inbound-direction assertion: mounting with a non-default incoming model and
+  // asserting the control reflects it, which proves the binding is real rather than just that
+  // something renders.
   it('SelectField shows the current option label on the trigger', async () => {
     const w = mount(SelectField, {
       props: {
@@ -281,8 +313,8 @@ describe('field components (choice + structural)', () => {
     // SelectContent teleports its (closed) items into an off-DOM DocumentFragment so SelectValue
     // can resolve the selected item's label from the collection even while unopened; that
     // registration lands one tick after the initial synchronous mount, so this needs a real
-    // await before the trigger reflects it — see task-6-report.md for why the brief's un-awaited
-    // version of this assertion does not hold.
+    // await before the trigger reflects it; an un-awaited assertion here would pass only because
+    // it runs before the trigger has caught up, not because the binding is correct.
     await w.vm.$nextTick()
     // The trigger is all that renders before the listbox opens; SelectValue reflects the selected
     // item's text. Asserting text, not classes (constraint 5).
@@ -383,8 +415,8 @@ describe('field components (choice + structural)', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['b'])
   })
 
-  // Inbound direction (standing-constraints Task-5 rule): mount with a non-default model and assert
-  // the matching option reflects checked state via reka's real data-state hook, never a class.
+  // Inbound direction: mount with a non-default model and assert the matching option reflects
+  // checked state via reka's real data-state hook, never a class.
   it('RadioField reflects a non-default model on the matching radio', () => {
     const w = mount(RadioField, {
       props: {
