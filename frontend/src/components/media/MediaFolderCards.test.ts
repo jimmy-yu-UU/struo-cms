@@ -79,4 +79,26 @@ describe('MediaFolderCards', () => {
     await buttons[1].trigger('keydown.enter')
     expect(w.emitted('open')).toBeUndefined()
   })
+
+  // findAllComponents({ name: 'Button' }) above matches PrimeVue's Button and the vendored
+  // ui/button by name equally, so it cannot tell which is mounted. These assertions target what
+  // the shadcn-vue migration actually changed: lucide icon identity (PrimeVue rendered `<i
+  // class="pi pi-folder">` etc., not an SVG) and an explicit type="button" on both action buttons.
+  it('renders the folder icon as a lucide icon, not a PrimeVue pi icon', () => {
+    const w = mountCards(false)
+    expect(w.find('.lucide-folder').exists()).toBe(true)
+    expect(w.find('.pi').exists()).toBe(false)
+  })
+
+  it('renders the rename/delete actions as lucide icons with an explicit type="button"', () => {
+    const w = mountCards(true)
+    const firstCard = w.findAll('.folder-card')[0]
+    expect(firstCard.find('.lucide-pencil').exists()).toBe(true)
+    expect(firstCard.find('.lucide-trash-2').exists()).toBe(true)
+    expect(firstCard.find('.pi').exists()).toBe(false)
+
+    const buttons = firstCard.findAllComponents({ name: 'Button' })
+    expect(buttons[0].attributes('type')).toBe('button')
+    expect(buttons[1].attributes('type')).toBe('button')
+  })
 })
