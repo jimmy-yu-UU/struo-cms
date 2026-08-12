@@ -14,8 +14,8 @@ import type { FolderRow } from '../lib/folderTree'
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const { confirmRequire, toastAdd } = vi.hoisted(() => ({ confirmRequire: vi.fn(), toastAdd: vi.fn() }))
-vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
-vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -40,7 +40,6 @@ const rows = [{ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1, 
 const stubs = {
   PageHeader: { name: 'PageHeader', template: '<div><slot name="actions" /></div>' },
   ListToolbar: { name: 'ListToolbar', template: '<div><slot name="filters" /></div>', props: ['searchValue', 'searchPlaceholder'] },
-  ConfirmDialog: { name: 'ConfirmDialog', template: '<div />', props: ['group'] },
   MediaDetailDialog: { name: 'MediaDetailDialog', template: '<div />', props: ['file', 'canWrite', 'canDelete'] },
   // reka's own portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
   // slot content of every floating control on the page (the two Selects' option lists).
@@ -73,7 +72,7 @@ describe('MediaLibraryView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
-    confirmRequire.mockReset()
+    confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
     toastAdd.mockReset()
   })
 
@@ -534,23 +533,22 @@ describe('MediaLibraryView', () => {
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
   })
 
-  it('delete-permanently in trash view confirms on the media-file group, then calls filesApi.remove(id,{purge:true}) and reloads', async () => {
+  it('delete-permanently in trash view asks with a top-level danger severity, then calls filesApi.remove(id,{purge:true}) and reloads', async () => {
     seedUser({ delete: true })
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    confirmRequire.mockResolvedValueOnce(true)
     const w = mountView()
     await flushPromises()
     await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
     await flushPromises()
     const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
-    ;(w.vm as unknown as { onPurge: (id: string) => void }).onPurge('f1')
-    // Regression guard: MediaDetailDialog also mounts a bare default-group ConfirmDialog, so the
-    // purge confirm MUST target its own named group -- otherwise both dialogs would stack when a
-    // file is deleted from the (active-view) detail dialog.
-    expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ group: 'media-file' }))
-    const accept = confirmRequire.mock.calls.at(-1)?.[0].accept as () => Promise<void>
-    await accept()
+    await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
     await flushPromises()
+    // The one deliberate behaviour change of this task: purgeConfirm(t) now carries a top-level
+    // severity so this screen matches CollectionListView's already-migrated onPurge -- PrimeVue's
+    // purge dialog had no acceptProps at all.
+    expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
     expect(remove).toHaveBeenCalledWith('f1', { purge: true })
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
   })
@@ -572,13 +570,12 @@ describe('MediaLibraryView', () => {
     seedUser({ delete: true })
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     vi.spyOn(filesApi, 'remove').mockRejectedValue(new Error('nope'))
+    confirmRequire.mockResolvedValueOnce(true)
     const w = mountView()
     await flushPromises()
     await (w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
     await flushPromises()
-    ;(w.vm as unknown as { onPurge: (id: string) => void }).onPurge('f1')
-    const accept = confirmRequire.mock.calls.at(-1)?.[0].accept as () => Promise<void>
-    await accept()
+    await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
     await flushPromises()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'nope' }))
   })
@@ -650,14 +647,68 @@ describe('MediaLibraryView', () => {
     const target: FolderRow = { id: 'a', name: 'A', parentId: null }
     makeListMock([{ data: rows, total: 1 }], [target])
     vi.spyOn(itemsApi, 'remove').mockRejectedValue(new ApiError(409, 'conflict', 'CONFLICT'))
+    confirmRequire.mockResolvedValueOnce(true)
     const w = mountView()
     await flushPromises()
-    ;(w.vm as unknown as { onRemoveFolder: (f: FolderRow) => void }).onRemoveFolder(target)
-    expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ group: 'media-folder' }))
-    const accept = confirmRequire.mock.calls[0][0].accept as () => Promise<void>
-    await accept()
+    await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(target)
     await flushPromises()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn', summary: 'Folder is not empty' }))
+  })
+
+  it('purges a file when the confirmation resolves true', async () => {
+    makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    confirmRequire.mockResolvedValueOnce(true)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
+    await flushPromises()
+    expect(remove).toHaveBeenCalledWith('f1', { purge: true })
+  })
+
+  it('does not purge when the confirmation resolves false', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    confirmRequire.mockResolvedValueOnce(false)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
+    await flushPromises()
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('asks for folder deletion with a top-level danger severity', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    confirmRequire.mockResolvedValueOnce(false)
+    const w = mountView()
+    await flushPromises()
+    const folder: FolderRow = { id: 'd1', name: 'Alpha', parentId: null }
+    await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(folder)
+    // PrimeVue nested this under acceptProps; ConfirmRequest carries it at the top level, and
+    // ConfirmHost reads request.severity to pick the destructive button variant.
+    expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
+    expect(confirmRequire.mock.calls[0][0].group).toBeUndefined()
+  })
+
+  it('does not remove the folder when the confirmation resolves false', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const remove = vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined as never)
+    confirmRequire.mockResolvedValueOnce(false)
+    const w = mountView()
+    await flushPromises()
+    const folder: FolderRow = { id: 'd1', name: 'Alpha', parentId: null }
+    await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(folder)
+    await flushPromises()
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('mounts no per-group ConfirmDialog of its own', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    // One store-backed ConfirmHost is mounted once in AppShell; a second dialog here is what used
+    // to make a parent and child fire the same confirmation twice.
+    expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
   })
 
   it('combines the type filter and folder filter when both apply', async () => {
