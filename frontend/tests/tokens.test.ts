@@ -54,8 +54,11 @@ describe('tokens.css', () => {
     expect(dark).toContain('--border: #3f3f46')      // zinc-700, NOT #27272a
   })
 
-  // Against #18181b, :root's --destructive/--warning fall to 3.67:1 — below WCAG AA's 4.5:1
-  // for text. .app-dark must use lighter tints, not repeat the :root values verbatim.
+  // Against #18181b, :root's --destructive (#dc2626) measures 3.67:1 — below WCAG AA's
+  // 4.5:1 for text. --warning (#d97706) already clears AA here (5.56:1) on its own; its
+  // lighter dark value matches theme.css's dark --warn instead, for border/future-text
+  // headroom, not because :root's value failed anything. Either way .app-dark must not
+  // repeat the :root values verbatim.
   it('lightens --destructive and --warning for dark-surface contrast, unlike :root', () => {
     const light = block(':root')
     const dark = block('.app-dark')
