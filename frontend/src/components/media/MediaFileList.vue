@@ -18,12 +18,12 @@ function uploaded(f: FileRow): string {
   <table class="media-list">
     <thead>
       <tr>
-        <th class="media-list__thumb-col" aria-hidden="true"></th>
-        <th>{{ $t('media.colName') }}</th>
-        <th>{{ $t('media.colType') }}</th>
-        <th>{{ $t('media.colSize') }}</th>
-        <th>{{ $t('media.colDimensions') }}</th>
-        <th>{{ $t('media.colUploaded') }}</th>
+        <th class="media-list__thumb-col text-muted-foreground" aria-hidden="true"></th>
+        <th class="text-muted-foreground">{{ $t('media.colName') }}</th>
+        <th class="text-muted-foreground">{{ $t('media.colType') }}</th>
+        <th class="text-muted-foreground">{{ $t('media.colSize') }}</th>
+        <th class="text-muted-foreground">{{ $t('media.colDimensions') }}</th>
+        <th class="text-muted-foreground">{{ $t('media.colUploaded') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -42,7 +42,11 @@ function uploaded(f: FileRow): string {
       >
         <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
         <td class="media-list__name">
-          <button type="button" class="media-list__open" @click.stop="emit('open', f.id)">
+          <button
+            type="button"
+            class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            @click.stop="emit('open', f.id)"
+          >
             {{ f.fileName }}
           </button>
         </td>
@@ -64,7 +68,6 @@ function uploaded(f: FileRow): string {
 .media-list th {
   text-align: left;
   padding: 8px 12px;
-  color: var(--legacy-muted);
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
@@ -94,9 +97,5 @@ function uploaded(f: FileRow): string {
   color: inherit;
   text-align: left;
   cursor: pointer;
-}
-.media-list__open:focus-visible {
-  outline: 2px solid var(--legacy-accent);
-  outline-offset: -2px;
 }
 </style>

@@ -44,8 +44,8 @@ defineExpose({ uploadFiles })
 
 <template>
   <div
-    class="dropzone"
-    :class="{ 'is-dragging': dragging }"
+    class="dropzone rounded-md"
+    :class="{ 'is-dragging border-primary': dragging }"
     @dragover.prevent="dragging = true"
     @dragleave.prevent="dragging = false"
     @drop.prevent="onDrop"
@@ -55,7 +55,7 @@ defineExpose({ uploadFiles })
       <input type="file" multiple class="dropzone__input" @change="onInput" />
     </label>
     <ul v-if="rows.length" class="dropzone__rows">
-      <li v-for="(r, i) in rows" :key="i" :class="r.state">
+      <li v-for="(r, i) in rows" :key="i" :class="[r.state, { 'text-muted-foreground': r.state === 'uploading' }]">
         {{ r.name }}<template v-if="r.error"> — {{ r.error }}</template>
       </li>
     </ul>
@@ -70,7 +70,6 @@ defineExpose({ uploadFiles })
      overflows shorter viewports. Width is driven by the dialog (~78vw). */
   min-height: min(68vh, 680px);
   border: 2px dashed var(--border);
-  border-radius: var(--legacy-radius, 8px);
   padding: 24px;
   text-align: center;
   background: var(--surface);
@@ -78,7 +77,6 @@ defineExpose({ uploadFiles })
 }
 
 .dropzone.is-dragging {
-  border-color: var(--legacy-accent);
   background: var(--surface-2);
 }
 
@@ -102,10 +100,6 @@ defineExpose({ uploadFiles })
   margin: 12px 0 0;
   padding: 0;
   text-align: left;
-}
-
-.dropzone__rows li.uploading {
-  color: var(--legacy-muted);
 }
 
 .dropzone__rows li.error {

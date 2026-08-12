@@ -211,8 +211,8 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
       </DialogHeader>
 
       <div v-if="file" class="md-grid">
-        <div class="md-preview">
-          <img v-if="isImage" :src="previewSrc" :alt="file.fileName" />
+        <div class="md-preview rounded-xl">
+          <img v-if="isImage" :src="previewSrc" :alt="file.fileName" class="rounded-md" />
           <FileThumbnail v-else :file="file" />
         </div>
         <div class="md-fields">
@@ -229,7 +229,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
           </ToggleGroup>
 
           <label class="md-field">
-            <span>{{ $t('media.fieldTitle') }}</span>
+            <span class="text-muted-foreground">{{ $t('media.fieldTitle') }}</span>
             <Input
               :model-value="(activeValues.title as string) ?? ''"
               :disabled="!canWrite || loading"
@@ -237,7 +237,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
             />
           </label>
           <label class="md-field">
-            <span>{{ $t('media.fieldAlt') }}</span>
+            <span class="text-muted-foreground">{{ $t('media.fieldAlt') }}</span>
             <Input
               :model-value="(activeValues.alt as string) ?? ''"
               :disabled="!canWrite || loading"
@@ -245,7 +245,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
             />
           </label>
           <label class="md-field">
-            <span>{{ $t('media.folderField') }}</span>
+            <span class="text-muted-foreground">{{ $t('media.folderField') }}</span>
             <TreeSelect
               :model-value="folderId ?? UNFILED"
               :nodes="folderNodes"
@@ -255,13 +255,13 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
             />
           </label>
 
-          <div class="md-kv"><span>{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>
-          <div class="md-kv"><span>{{ $t('media.colSize') }}</span><b>{{ sizeText }}</b></div>
-          <div class="md-kv"><span>{{ $t('media.colUploaded') }}</span><b>{{ uploadedText }}</b></div>
-          <div class="md-kv"><span>{{ $t('media.status') }}</span><b>{{ statusText }}</b></div>
+          <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>
+          <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.colSize') }}</span><b>{{ sizeText }}</b></div>
+          <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.colUploaded') }}</span><b>{{ uploadedText }}</b></div>
+          <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.status') }}</span><b>{{ statusText }}</b></div>
 
           <label class="md-field">
-            <span>{{ $t('media.fileUrl') }}</span>
+            <span class="text-muted-foreground">{{ $t('media.fileUrl') }}</span>
             <div class="md-url">
               <Input :model-value="fileUrl" readonly />
               <Button
@@ -297,16 +297,15 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 <style scoped>
 .md-grid { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 .md-preview {
-  border: 1px solid var(--border); border-radius: var(--legacy-radius-lg, 12px);
+  border: 1px solid var(--border);
   background: var(--surface-2); padding: 10px; display: flex; align-items: center; justify-content: center;
   min-height: 200px; overflow: hidden;
 }
-.md-preview img { max-width: 100%; max-height: 260px; object-fit: contain; border-radius: var(--legacy-radius, 8px); }
+.md-preview img { max-width: 100%; max-height: 260px; object-fit: contain; }
 .md-fields { display: grid; gap: 12px; align-content: start; }
 .md-field { display: grid; gap: 4px; }
-.md-field > span { font-size: .8rem; color: var(--legacy-muted); font-weight: 500; }
+.md-field > span { font-size: .8rem; font-weight: 500; }
 .md-kv { display: flex; justify-content: space-between; gap: 12px; font-size: .85rem; }
-.md-kv span { color: var(--legacy-muted); }
 .md-kv b { color: var(--fg); font-weight: 600; }
 .md-url { display: flex; gap: 6px; align-items: center; }
 .md-conflict { margin: 0; color: var(--warn); font-size: .85rem; }

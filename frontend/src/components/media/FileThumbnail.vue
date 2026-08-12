@@ -30,10 +30,10 @@ const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
 
 <template>
   <div class="file-thumb" :data-size="size">
-    <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" @error="broken = true" />
-    <div v-else class="file-chip">
+    <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" class="rounded-md" @error="broken = true" />
+    <div v-else class="file-chip rounded-md">
       <component :is="typeIcon" class="file-chip__icon size-8 text-muted-foreground" aria-hidden="true" />
-      <span class="file-chip__meta">{{ typeDisplay.label }}</span>
+      <span class="file-chip__meta text-muted-foreground">{{ typeDisplay.label }}</span>
     </div>
   </div>
 </template>
@@ -45,7 +45,6 @@ const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--legacy-radius, 8px);
 }
 .file-chip {
   width: 100%;
@@ -56,7 +55,6 @@ const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
   justify-content: center;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--legacy-radius, 8px);
   background: var(--surface-2);
   padding: 8px;
   overflow: hidden;
@@ -65,6 +63,5 @@ const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .04em;
-  color: var(--legacy-muted);
 }
 </style>
