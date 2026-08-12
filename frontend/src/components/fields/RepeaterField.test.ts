@@ -196,4 +196,35 @@ describe('RepeaterField', () => {
     const inputs = w.findAll('.repeater-row input')
     expect((inputs[0].element as HTMLInputElement).value).toBe('q2')
   })
+
+  // `.repeater-subfield__label` has never had a `for`, and its control is a sibling <component>,
+  // not something it wraps — so the pairing has to be explicit. Asserted non-empty AND equal so the
+  // check cannot pass with both sides blanked out, and across two rows so a row-agnostic id (e.g.
+  // keyed only by sub.name) would still be caught: both rows render the identical sub-field schema,
+  // so an id that omits the row index would make every row's label resolve to row zero's input.
+  it('associates each sub-field label with its own row\'s control via explicit for/id', () => {
+    const w = mount(RepeaterField, {
+      props: { field: repeater, modelValue: [{ question: 'q1', answer: 'a1' }, { question: 'q2', answer: 'a2' }] },
+      ...opts,
+    })
+    const rows = w.findAll('.repeater-row')
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      const labels = row.findAll('.repeater-subfield__label')
+      const inputs = row.findAll('input')
+      expect(labels).toHaveLength(2)
+      expect(inputs).toHaveLength(2)
+      labels.forEach((label, i) => {
+        const forAttr = label.attributes('for')
+        expect(forAttr).toBeTruthy()
+        expect(forAttr).toBe(inputs[i].attributes('id'))
+      })
+    }
+    // Same sub-field schema (question/answer), rendered once per row: an id keyed only by
+    // sub.name would collide across rows and this would fail.
+    const rowZeroIds = rows[0].findAll('input').map((el) => el.attributes('id'))
+    const rowOneIds = rows[1].findAll('input').map((el) => el.attributes('id'))
+    expect(rowZeroIds[0]).not.toBe(rowOneIds[0])
+    expect(rowZeroIds[1]).not.toBe(rowOneIds[1])
+  })
 })

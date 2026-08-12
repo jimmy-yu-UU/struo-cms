@@ -260,4 +260,14 @@ describe('RichTextInput', () => {
     expect(merged).toContain('data-[active=true]:hover:text-primary-foreground')
     expect(merged).toContain('dark:data-[active=true]:hover:bg-primary')
   })
+
+  // A placeholder is not an accessible name: it disappears the instant the user types into the
+  // box, and some screen readers never announce it in the first place.
+  it('gives the image-dialog search box an accessible name, not just a placeholder', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="image"]').trigger('click')
+    await flushPromises()
+    expect(w.get('input').attributes('aria-label')).toBe('Search files…')
+  })
 })

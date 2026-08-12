@@ -156,7 +156,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
             @update:model-value="onFolderChange"
           />
         </div>
-        <Input v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
+        <Input v-model="search" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" class="file-picker__search" />
         <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
       </DialogScrollContent>
     </Dialog>

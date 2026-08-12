@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { ArrowDown, ArrowUp, Plus, X } from '@lucide/vue'
@@ -60,6 +60,13 @@ function moveDown(i: number): void {
 function setSub(i: number, name: string, v: unknown): void {
   commit(rows.value.map((r, idx) => (idx === i ? { ...r, [name]: v } : r)))
 }
+
+// Instance- AND row-scoped: this same sub-field schema renders once per row, so an id keyed only
+// by the sub-field's name would repeat identically across rows, making every row's <label for>
+// resolve to row zero's control. useId() additionally keeps two RepeaterField instances (or a
+// repeater nested as another repeater's sub-field) from colliding with each other.
+const uid = useId()
+function subFieldId(rowIndex: number, name: string): string { return `${uid}-${rowIndex}-${name}` }
 </script>
 
 <template>
@@ -67,9 +74,10 @@ function setSub(i: number, name: string, v: unknown): void {
     <div v-for="(row, i) in rows" :key="i" class="repeater-row flex w-full gap-3 rounded-md border p-3">
       <div class="repeater-row__fields flex flex-1 flex-col gap-2">
         <div v-for="sub in subFields()" :key="sub.name" class="repeater-subfield flex flex-col gap-1">
-          <label class="repeater-subfield__label text-xs text-muted-foreground">{{ sub.label }}</label>
+          <label class="repeater-subfield__label text-xs text-muted-foreground" :for="subFieldId(i, sub.name)">{{ sub.label }}</label>
           <component
             :is="getFieldType(sub.interface).component"
+            :id="subFieldId(i, sub.name)"
             :field="sub"
             :model-value="row[sub.name]"
             :disabled="disabled || sub.readOnly"

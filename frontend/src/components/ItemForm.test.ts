@@ -36,7 +36,7 @@ const model: FormModel = { shared: { status: 'draft' }, translations: { en: { ti
 // below that exercise the v-model binding and the mount/unmount behaviour do so by actually
 // triggering reka's activation event, not merely by mounting the real component.
 const stubs = {
-  FieldInput: { props: ['field', 'modelValue', 'disabled'], template: '<div class="field-input" :data-name="field.name" />' },
+  FieldInput: { props: ['field', 'modelValue', 'disabled', 'id'], template: '<div class="field-input" :id="id" :data-name="field.name" />' },
 }
 
 describe('ItemForm', () => {
@@ -139,5 +139,53 @@ describe('ItemForm', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
     expect(w.findComponent({ name: 'TabPanel' }).exists()).toBe(false)
     expect(w.findAll('[role="tab"]')).toHaveLength(2)
+  })
+
+  // Every FieldLabel here has always dangled: `for="f.name"` in the shared branch pointed at
+  // nothing (no element ever carried that literal id), and the translatable/relations branches
+  // carried no `for` at all. Asserted non-empty AND equal so the check cannot pass with both sides
+  // blanked out — a prior draft of this fix could satisfy "the two attributes are equal" with
+  // `for=""` next to a control with no id attribute at all.
+  describe('field label association', () => {
+    it('associates the shared field label with its control via explicit for/id', () => {
+      const w = mountForm({ meta, model, locales, errors: {} })
+      const control = w.get('.field .field-input[data-name="status"]')
+      const fieldEl = control.element.closest('.field') as HTMLElement
+      const label = fieldEl.querySelector('label') as HTMLLabelElement
+      expect(label).toBeTruthy()
+      const forAttr = label.getAttribute('for')
+      expect(forAttr).toBeTruthy()
+      expect(forAttr).toBe(control.attributes('id'))
+    })
+
+    // The translatable branch renders one control per locale (gated by the active-tab v-if), so
+    // switching locales re-renders a DIFFERENT physical control under the same field name. If the
+    // id were keyed only on the field name, both locales would resolve to the identical id.
+    it('gives each locale of a translatable field its own distinct id', async () => {
+      const w = mountForm({ meta, model, locales, errors: {} })
+      const enId = w.get('.field .field-input[data-name="title"]').attributes('id')
+      expect(enId).toBeTruthy()
+
+      ;(w.vm as unknown as { activeLocale: string }).activeLocale = 'zh-TW'
+      await flushPromises()
+      const zhId = w.get('.field .field-input[data-name="title"]').attributes('id')
+      expect(zhId).toBeTruthy()
+      expect(zhId).not.toBe(enId)
+    })
+
+    it('associates the relation field label with its control via explicit for/id', () => {
+      const relMeta: CollectionMeta = {
+        name: 'article', label: 'Article', defaultDisplayField: null,
+        fields: [field('status', { sort: 1 })],
+        relations: [{ name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false }],
+      }
+      const relModel: FormModel = { shared: { status: 'draft' }, translations: {}, relations: { category: null } }
+      const w = mountForm({ meta: relMeta, model: relModel, locales: [], errors: {} }, { RelationInput: true })
+      const label = w.get('.relations .field label')
+      const control = w.findComponent(RelationInput)
+      const forAttr = label.attributes('for')
+      expect(forAttr).toBeTruthy()
+      expect(forAttr).toBe(control.attributes('id'))
+    })
   })
 })

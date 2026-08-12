@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
@@ -37,6 +37,18 @@ function dotLabel(code: string): string {
   return t(localeFilled(code) ? 'itemForm.localeComplete' : 'itemForm.localeIncomplete')
 }
 
+// Keyed on useId() rather than the bare field name: a schema's field names repeat across every
+// item form for that collection, and nothing stops two ItemForm instances (e.g. a list's inline
+// edit dialog opened while another item's form is still mounted) from coexisting in the same
+// document. A name-only id would make both instances' <label for> resolve to whichever instance's
+// control happens to come first in the DOM. The translatable variant folds in the locale code too:
+// this field renders once per locale (guarded by the active-tab v-if below), and a label pointing
+// at an id that omits the locale would keep resolving to whichever locale rendered it first.
+const uid = useId()
+function sharedFieldId(name: string): string { return `${uid}-shared-${name}` }
+function translatableFieldId(name: string, locale: string): string { return `${uid}-translatable-${name}-${locale}` }
+function relationFieldId(name: string): string { return `${uid}-relation-${name}` }
+
 // Surface default-locale validation errors even if the user is on another locale's tab.
 watch(() => props.errors, (e) => {
   if (Object.keys(e).length > 0) activeLocale.value = defaultCode.value
@@ -66,10 +78,10 @@ defineExpose({ activeLocale })
         <template v-if="loc.code === activeLocale">
           <Field v-for="f in fields.translatable" :key="f.name" class="field">
             <div class="lbl-row flex items-center gap-2">
-              <FieldLabel>{{ f.label }}<span v-if="f.required && loc.isDefault" class="text-destructive ml-0.5">*</span></FieldLabel>
+              <FieldLabel :for="translatableFieldId(f.name, loc.code)">{{ f.label }}<span v-if="f.required && loc.isDefault" class="text-destructive ml-0.5">*</span></FieldLabel>
               <Badge variant="secondary" class="tr-badge">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
-            <FieldInput :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
+            <FieldInput :id="translatableFieldId(f.name, loc.code)" :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
             <FieldError v-if="loc.isDefault && errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
           </Field>
         </template>
@@ -77,8 +89,8 @@ defineExpose({ activeLocale })
     </Tabs>
 
     <Field v-for="f in fields.shared" :key="f.name" class="field">
-      <FieldLabel :for="f.name">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
-      <FieldInput :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
+      <FieldLabel :for="sharedFieldId(f.name)">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
+      <FieldInput :id="sharedFieldId(f.name)" :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
       <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
       <FieldError v-if="errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
     </Field>
@@ -86,8 +98,9 @@ defineExpose({ activeLocale })
     <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
       <h3 class="m-0 text-lg text-foreground">{{ t('itemForm.relations') }}</h3>
       <Field v-for="rel in meta.relations" :key="rel.name" class="field">
-        <FieldLabel>{{ rel.label }}</FieldLabel>
+        <FieldLabel :for="relationFieldId(rel.name)">{{ rel.label }}</FieldLabel>
         <RelationInput
+          :id="relationFieldId(rel.name)"
           :relation="rel"
           v-model="model.relations[rel.name]"
           :disabled="disabled"

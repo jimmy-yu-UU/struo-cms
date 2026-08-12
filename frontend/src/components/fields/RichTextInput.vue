@@ -255,7 +255,7 @@ defineExpose({ editor, insertImage })
           <DialogTitle>{{ t('fields.richtext.insertImageTitle') }}</DialogTitle>
         </DialogHeader>
         <p v-if="imageError" class="text-destructive" role="alert">{{ imageError }}</p>
-        <Input v-model="imageSearch" :placeholder="t('fields.searchFiles')" class="my-1" @update:model-value="debouncedLoadImages" />
+        <Input v-model="imageSearch" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" class="my-1" @update:model-value="debouncedLoadImages" />
         <MediaGrid :files="files" selectable @select="onImageSelected" />
       </DialogScrollContent>
     </Dialog>
