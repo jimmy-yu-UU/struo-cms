@@ -350,5 +350,22 @@ describe('FilePicker', () => {
       // half only shows when modelValue is null, which FilePicker's folderSel never is.
       expect(tree.get('button').attributes('aria-label')).toBe(`${zhMessages.media.folderField}: ${zhMessages.media.folderAll}`)
     })
+
+    // A placeholder is not an accessible name: it disappears the instant the user types into the
+    // box, and some screen readers never announce it in the first place. Asserted under zh-TW, not
+    // English, so a hardcoded string that happens to read back the same as the English pack can't
+    // pass this by accident.
+    it('gives the dialog search box an accessible name, not just a placeholder', async () => {
+      setupStores()
+      mockList()
+      const w = mount(FilePicker, {
+        props: { modelValue: null },
+        global: { plugins: [i18nZh], stubs: { Button: true, MediaGrid: true, teleport: true }, renderStubDefaultSlot: true },
+      })
+      await (w.vm as unknown as { openDialog: () => Promise<void> }).openDialog()
+      await flushPromises()
+      const search = w.get('.file-picker__search')
+      expect(search.attributes('aria-label')).toBe(zhMessages.fields.searchFiles)
+    })
   })
 })
