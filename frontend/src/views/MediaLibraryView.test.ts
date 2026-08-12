@@ -84,10 +84,14 @@ describe('MediaLibraryView', () => {
     seedUser({ write: true, delete: true })
     const w = mountView()
     await flushPromises()
-    // Two Selects (type, sort) and two ToggleGroups (Active/Trash, grid/list).
+    // Two Selects (type, sort) and two ToggleGroups (Active/Trash, grid/list). No `SelectButton`
+    // is imported or stubbed by this file any more, and `global.plugins` above carries no
+    // `PrimeVue` plugin -- a reverted PrimeVue `Select`/`SelectButton`/`Button` crashes at mount
+    // reading `$primevue.config` (see this task's RED run) rather than rendering something wrong,
+    // so the mount succeeding at all, combined with these two data-slot counts actually being 2,
+    // is the real signature that PrimeVue's widgets are gone from this view.
     expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(2)
     expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
-    expect(w.findComponent({ name: 'SelectButton' }).exists()).toBe(false)
   })
 
   it('shows the current type filter on the Select trigger, and follows it after mount', async () => {
@@ -106,13 +110,37 @@ describe('MediaLibraryView', () => {
     expect(w.findAll('[data-slot="select-trigger"]')[0].text()).toContain('Images')
   })
 
-  it('reloads with the image filter when the type Select emits a new value', async () => {
+  it('shows the current sort filter on the Select trigger, and follows it after mount', async () => {
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    // Inbound direction: `sort` starts at 'newest', whose label is 'Newest'.
+    expect(w.findAll('[data-slot="select-trigger"]')[1].text()).toContain('Newest')
+    // Change the value after mount through the same path a real re-render would take (the
+    // view's own onSort handler) and confirm the trigger followed it.
+    await (w.vm as unknown as { onSort: (s: string) => void }).onSort('name')
+    await flushPromises()
+    expect(w.findAll('[data-slot="select-trigger"]')[1].text()).toContain('By name')
+  })
+
+  it('reloads with the image filter when the type Select is opened and Images is picked', async () => {
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
     await flushPromises()
-    // jsdom cannot dispatch reka's pointerdown/pointerup, but emitting from the vendored child
-    // runs this view's real @update:model-value listener — which is the binding under test.
-    await w.findAllComponents({ name: 'Select' })[0].vm.$emit('update:modelValue', 'image')
+    // jsdom CAN dispatch reka's pointerdown/pointerup (see vitest.setup.ts and
+    // UiLanguageSwitcher.test.ts) -- drive the real interaction instead of emitting from the
+    // vendored child, which never renders SelectContent/SelectItem at all and so cannot catch a
+    // wrong :value, a missing SelectContent, or a broken option list. Two Select comboboxes share
+    // this page (type, sort), so scope the option lookup to this trigger's own aria-controls
+    // target instead of searching the whole page for a matching option text, which would also
+    // match the sort Select's options if a label ever collided across the two lists.
+    const trigger = w.findAll('[data-slot="select-trigger"]')[0]
+    await trigger.trigger('pointerdown')
+    await flushPromises()
+    const content = w.find(`#${trigger.attributes('aria-controls')}`)
+    const option = content.findAll('[role="option"]').find((o) => o.text() === 'Images')
+    expect(option).toBeDefined()
+    await option!.trigger('pointerup')
     await flushPromises()
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
       filter: { contentType: { op: '_starts_with', value: 'image/' }, folderId: { op: '_null', value: 'true' } },
@@ -132,6 +160,133 @@ describe('MediaLibraryView', () => {
     vm.onModeToggle(undefined)
     await flushPromises()
     expect(vm.mode).toBe('trash')
+  })
+
+  it('reflects the trash-switch ToggleGroup\'s real DOM state, and follows a mode change after mount', async () => {
+    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    seedUser({ delete: true })
+    const w = mountView()
+    await flushPromises()
+    const activeItem = () => w.find('[data-slot="toggle-group-item"][value="active"]')
+    const trashItem = () => w.find('[data-slot="toggle-group-item"][value="trash"]')
+    // Inbound direction: `mode` starts at 'active', so the Active item must report pressed and
+    // the Trash item must not -- through reka's own state attributes, not a Tailwind class.
+    expect(activeItem().attributes('data-state')).toBe('on')
+    expect(activeItem().attributes('aria-pressed')).toBe('true')
+    expect(trashItem().attributes('data-state')).toBe('off')
+
+    // A real click on this exact item cannot distinguish a controlled ToggleGroup from an
+    // uncontrolled one: reka updates its own pressed-state locally on click regardless of
+    // whether `model-value` or `default-value` drives it. Go through `setMode` instead --
+    // the same production path `onModeToggle` runs when the emit fires -- to change `mode`
+    // through the actual reactive source and confirm the DOM (not just the app-level `mode`
+    // ref) followed it. If the trash switch silently stopped tracking `mode`, a user looking
+    // at the trash would still see "Active" lit.
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    expect(trashItem().attributes('data-state')).toBe('on')
+    expect(activeItem().attributes('data-state')).toBe('off')
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ deleted: 'only' }))
+
+    // And the reverse really is wired the other way: a real click on the DOM drives `mode`
+    // back out through the toggle's own emit.
+    await activeItem().trigger('click')
+    await flushPromises()
+    expect((w.vm as unknown as { mode: string }).mode).toBe('active')
+  })
+
+  it('reflects the view ToggleGroup\'s real DOM state, and follows a view change after mount', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    const gridItem = () => w.find('[data-slot="toggle-group-item"][value="grid"]')
+    const listItem = () => w.find('[data-slot="toggle-group-item"][value="list"]')
+    // Inbound direction: `view` starts at 'grid'.
+    expect(gridItem().attributes('data-state')).toBe('on')
+    expect(listItem().attributes('data-state')).toBe('off')
+    expect(w.findComponent({ name: 'MediaFileList' }).exists()).toBe(false)
+
+    // As above: a real click on this item can't tell controlled from uncontrolled, since reka
+    // updates its own pressed-state on click either way. Go through `onViewToggle` -- the exact
+    // handler the toggle's own emit runs -- to change `view` through the real reactive source
+    // and confirm the DOM followed.
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    await flushPromises()
+    expect(listItem().attributes('data-state')).toBe('on')
+    expect(gridItem().attributes('data-state')).toBe('off')
+    expect(w.findComponent({ name: 'MediaFileList' }).exists()).toBe(true)
+
+    // And a real click really does drive `view` back out through onViewToggle.
+    await gridItem().trigger('click')
+    await flushPromises()
+    expect((w.vm as unknown as { view: string }).view).toBe('grid')
+  })
+
+  it('renders the migrated icons as distinct lucide icons in every slot the migration touched', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    // seedUser only ever sets ONE collection's permissions (it replaces auth.user wholesale) --
+    // both the New-folder button (mediafolder write) and the Upload button (file write) must be
+    // visible at once here, so set both collections directly in one assignment.
+    const auth = useAuthStore()
+    auth.user = {
+      id: 'u1', isSuperAdmin: false,
+      permissions: {
+        file: { read: true, write: true, delete: true },
+        mediafolder: { read: true, write: true, delete: false },
+      },
+    } as CurrentUser
+    await flushPromises()
+
+    // PageHeader actions: New folder (FolderPlus) and Upload (Upload) are two different icons.
+    const newFolderButton = w.findAllComponents({ name: 'Button' }).find((b) => b.text().includes('New folder'))
+    const uploadButton = w.findAllComponents({ name: 'Button' }).find((b) => b.text().includes('Upload'))
+    expect(newFolderButton?.find('.lucide-folder-plus').exists()).toBe(true)
+    expect(uploadButton?.find('.lucide-upload').exists()).toBe(true)
+
+    // View-toggle icons must be two DIFFERENT icons -- it's an icon-only control, so if both were
+    // the same component the two buttons would be visually indistinguishable.
+    expect(w.find('[data-slot="toggle-group-item"][value="grid"] .lucide-layout-grid').exists()).toBe(true)
+    expect(w.find('[data-slot="toggle-group-item"][value="grid"] .lucide-list').exists()).toBe(false)
+    expect(w.find('[data-slot="toggle-group-item"][value="list"] .lucide-list').exists()).toBe(true)
+    expect(w.find('[data-slot="toggle-group-item"][value="list"] .lucide-layout-grid').exists()).toBe(false)
+
+    // Breadcrumb separator (ChevronRight), reachable once a folder is entered.
+    await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
+    await flushPromises()
+    expect(w.find('.media-crumb .lucide-chevron-right').exists()).toBe(true)
+
+    // Trash banner icon (Trash2), and the two trash-row action icons -- restore (Undo2) must be
+    // different from purge (Trash2), not both Trash2.
+    ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
+    await flushPromises()
+    expect(w.find('.trash-banner .lucide-trash-2').exists()).toBe(true)
+    const rowButtons = w.findAll('.media-trash-list__actions button')
+    expect(rowButtons[0].find('.lucide-undo-2').exists()).toBe(true)
+    expect(rowButtons[0].find('.lucide-trash-2').exists()).toBe(false)
+    expect(rowButtons[1].find('.lucide-trash-2').exists()).toBe(true)
+  })
+
+  it('gives the Selects, view toggle, and trash-row actions real accessible names', async () => {
+    seedUser({ delete: true })
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    // The two Selects previously had no accessible name at all under PrimeVue either --
+    // media.typeFilter/media.sortFilter exist specifically to give reka's role="combobox"
+    // trigger one.
+    const triggers = w.findAll('[data-slot="select-trigger"]')
+    expect(triggers[0].attributes('aria-label')).toBe('File type')
+    expect(triggers[1].attributes('aria-label')).toBe('Sort order')
+    expect(w.find('[data-slot="toggle-group-item"][value="grid"]').attributes('aria-label')).toBe('Grid view')
+    expect(w.find('[data-slot="toggle-group-item"][value="list"]').attributes('aria-label')).toBe('List view')
+
+    ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
+    await flushPromises()
+    const rowButtons = w.findAll('.media-trash-list__actions button')
+    expect(rowButtons[0].attributes('aria-label')).toBe('Restore')
+    expect(rowButtons[1].attributes('aria-label')).toBe('Delete permanently')
   })
 
   it('gives every trash-list row action an explicit type="button"', async () => {
@@ -242,8 +397,20 @@ describe('MediaLibraryView', () => {
     const w = mountView()
     seedUser({ write: false })
     await flushPromises()
-    const labels = w.findAllComponents({ name: 'Button' }).map((b) => b.props('label'))
-    expect(labels).not.toContain('Upload')
+    // The vendored `ui/button` has no `label` prop -- it renders its text through the default
+    // slot -- so `b.props('label')` is always `undefined` and this assertion was structurally
+    // unfailable regardless of whether Upload actually rendered. Check the rendered text instead.
+    const buttonTexts = w.findAllComponents({ name: 'Button' }).map((b) => b.text())
+    expect(buttonTexts.some((text) => text.includes('Upload'))).toBe(false)
+  })
+
+  it('shows Upload for a user with write on file', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    seedUser({ write: true })
+    const w = mountView()
+    await flushPromises()
+    const buttonTexts = w.findAllComponents({ name: 'Button' }).map((b) => b.text())
+    expect(buttonTexts.some((text) => text.includes('Upload'))).toBe(true)
   })
 
   it('defaults to the active view: no deleted param on the initial load', async () => {
