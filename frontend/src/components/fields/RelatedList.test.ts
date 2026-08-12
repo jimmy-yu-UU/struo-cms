@@ -153,8 +153,8 @@ describe('RelatedList', () => {
   })
 
   // The migration's whole point is this button: DataTable has no row-click event, so the label
-  // cell itself must carry navigation. Mounting the real (plan-1) DataTable, rather than stubbing
-  // it, exercises the actual cell render function and the actual DOM click through Button's
+  // cell itself must carry navigation. Mounting the real DataTable, rather than stubbing it,
+  // exercises the actual cell render function and the actual DOM click through Button's
   // real onClick -- a reordered h() prop, a renamed handler, or a dropped .original would show up
   // here even though every other test in this file stubs DataTable out.
   it('clicking the row label button navigates to the target record', async () => {

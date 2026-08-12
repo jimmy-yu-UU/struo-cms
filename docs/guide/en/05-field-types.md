@@ -33,7 +33,7 @@ the CLR collection automatically.
 
 | Interface | Purpose | CLR type expected | Resulting column | Admin editor |
 |---|---|---|---|---|
-| `Text` | Short plain string | `string` | (a) `varchar(255)` | `TextField` (PrimeVue `InputText`) |
+| `Text` | Short plain string | `string` | (a) `varchar(255)` | `TextField` (vendored `ui/input`) |
 | `Textarea` | Multi-line plain string | `string` | (b) `text` | `TextareaField` |
 | `RichText` | Sanitized HTML | `string` | (b) `text` | `RichTextField` (TipTap) |
 | `Markdown` | Markdown source text | `string` | (b) `text` | `TextareaField` — plain textarea, no live preview or toolbar |
@@ -44,7 +44,7 @@ the CLR collection automatically.
 | `Password` | Secret value | `string` | (a) `varchar(255)` | `TextField` — plain (unmasked) input; excluded from the GraphQL schema entirely |
 | `Color` | Color value | `string` | (a) `varchar(255)` | `TextField` — plain text input, no swatch picker |
 | `Phone` | Phone number | `string` | (a) `varchar(255)` | `TextField` |
-| `Number` | Numeric value | `int`/`long`/`decimal`/`double`/etc. | (a) whatever SqlSugar maps that numeric CLR type to | `NumberField` (PrimeVue `InputNumber`) |
+| `Number` | Numeric value | `int`/`long`/`decimal`/`double`/etc. | (a) whatever SqlSugar maps that numeric CLR type to | `NumberField` (vendored `ui/number-field`) |
 | `Slider` | Numeric value | numeric | (a) as above | `NumberField` — same component as `Number`, no slider widget |
 | `Rating` | Numeric value | numeric | (a) as above | `NumberField` — same component as `Number`, no star widget |
 | `Boolean` | True/false | `bool` | (a) boolean | `BooleanField` |
@@ -97,7 +97,7 @@ client) resolves as:
 3. Otherwise, `null` (unlimited) — every content-bearing interface (`Textarea`, `RichText`, `Markdown`,
    `Code`, `Json`) and every non-`string` field.
 
-The admin SPA's `TextField.vue` passes `field.maxLength` straight through to PrimeVue `InputText`'s
+The admin SPA's `TextField.vue` passes `field.maxLength` straight through to the vendored `ui/input`'s
 native `maxlength` attribute, so this default of `255` is enforced client-side as a hard input cap even
 when no `[CmsField]` ever set it explicitly. It has no bearing on the database column's actual width —
 the two mechanisms only happen to agree on the number `255` because SqlSugar's own CodeFirst default for

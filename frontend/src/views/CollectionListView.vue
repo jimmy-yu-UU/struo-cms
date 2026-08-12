@@ -94,7 +94,11 @@ const filterFields = computed<FilterField[]>(() => {
   const listedNames = new Set(listed.map((f) => f.name))
   const searchableOnly = (meta.value?.fields ?? [])
     .filter((f) => f.searchable && !f.hidden && !f.isSystem && !listedNames.has(f.name))
-    .map((f) => ({ name: f.name, label: f.label, options: undefined }))
+    .map((f) => ({
+      name: f.name,
+      label: f.label,
+      options: isSelectField(f.name) ? (f.options as { label: string; value: string }[] | undefined) : undefined,
+    }))
   return [...listed, ...searchableOnly]
 })
 

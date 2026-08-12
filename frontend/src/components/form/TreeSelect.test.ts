@@ -50,20 +50,6 @@ describe('TreeSelect', () => {
     expect(w.get('button').text()).toContain('gone')
   })
 
-  it('emits the selected key', async () => {
-    const w = mount(TreeSelect, { props: { modelValue: null, nodes: NODES }, ...opts })
-    ;(w.vm as unknown as { select: (k: string | null) => void }).select('child')
-    await w.vm.$nextTick()
-    expect(w.emitted('update:modelValue')?.[0]).toEqual(['child'])
-  })
-
-  it('emits null when the selection is cleared', async () => {
-    const w = mount(TreeSelect, { props: { modelValue: 'child', nodes: NODES }, ...opts })
-    ;(w.vm as unknown as { select: (k: string | null) => void }).select(null)
-    await w.vm.$nextTick()
-    expect(w.emitted('update:modelValue')?.[0]).toEqual([null])
-  })
-
   it('disables the trigger', () => {
     const w = mount(TreeSelect, { props: { modelValue: null, nodes: NODES, disabled: true }, ...opts })
     expect(w.get('button').attributes('disabled')).toBeDefined()
@@ -103,9 +89,8 @@ describe('TreeSelect', () => {
     expect(w.get('button').text()).toContain(en.fields.selectAnItem)
   })
 
-  // The exposed select() above is real production surface (the same function a rendered node's
-  // click runs), not a test-only escape hatch — this proves the click path itself, not just the
-  // method it happens to share.
+  // reka's TreeItem selects via its own @select handler, not a plain DOM click event a test could
+  // trigger.click() its way past, so this drives the actual node element to prove the real path.
   it('emits the selected key from a real click on a rendered node', async () => {
     const w = mount(TreeSelect, { props: { modelValue: null, nodes: NODES }, ...opts })
     await open(w)

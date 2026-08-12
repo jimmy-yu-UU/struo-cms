@@ -12,7 +12,7 @@ defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 // reka's NumberFieldRoot emits `undefined` on `update:modelValue` when the input is cleared and
-// blurred (confirmed by direct observation, not assumed — see task-4-report.md Step 1). The CMS
+// blurred (confirmed by direct observation, not assumed). The CMS
 // model wants null: a nullable numeric column legitimately clears, and a NaN would survive into
 // buildItemPayload and poison any arithmetic on the way. Normalise at this boundary so no
 // downstream code has to know reka's convention.

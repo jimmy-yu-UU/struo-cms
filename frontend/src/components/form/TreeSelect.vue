@@ -77,14 +77,15 @@ const selectedNode = computed(() => (
 // placeholder — or picking a value would make the announcement forget which field it came from.
 const accessibleName = computed(() => (props.label ? `${props.label}: ${triggerLabel.value}` : triggerLabel.value))
 
-// The one path both a real click on a rendered node and any other caller drive selection
-// through — not a test-only surface. Selection stays one-way: this emits and lets modelValue flow
-// back through the prop; it never keeps its own record of "the current node".
+// Selection stays one-way: this emits and lets modelValue flow back through the prop; it never
+// keeps its own record of "the current node". The template's node click below is its only caller,
+// and always passes a real key — the `| null` half of the parameter and emit type exists only to
+// match `modelValue`'s own type, which callers like FilePicker's onFolderChange(key: string | null)
+// need for their own "nothing selected" state; this component never produces null itself.
 function select(key: string | null): void {
   emit('update:modelValue', key)
   open.value = false
 }
-defineExpose({ select })
 </script>
 
 <template>

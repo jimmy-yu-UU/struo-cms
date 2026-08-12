@@ -159,9 +159,9 @@ describe('MultiSelectField', () => {
   })
 
   // Native <button> defaults to type="submit". This chip button is a hand-rolled <button>, not the
-  // vendored ui/button/reka trigger primitives that inject their own type — so it needs the
-  // attribute stated directly. It sits inside ItemForm.vue's <form @submit.prevent>, so an untyped
-  // button here would submit the whole record on a click that should only remove one chip.
+  // vendored reka trigger primitives that inject their own type — so it needs the attribute stated
+  // directly. It sits inside ItemForm.vue's <form @submit.prevent>, so an untyped button here would
+  // submit the whole record on a click that should only remove one chip.
   it('gives each chip remove button an explicit type="button"', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a', 'b'] }, ...comboOpts })
     const removeButtons = w.findAll('button[aria-label^="Remove "]')
@@ -184,7 +184,7 @@ describe('CheckboxGroupField', () => {
   })
 
   // The whole behaviour of this field is array arithmetic, so it must be driven by real clicks:
-  // asserting a synthesised $emit would test the test, not the component (constraint 9).
+  // asserting a synthesised $emit would test the test, not the component.
   it('appends the clicked option immutably', async () => {
     const before = ['a']
     const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: before }, ...opts })
@@ -206,9 +206,9 @@ describe('CheckboxGroupField', () => {
     expect(w.findAll('[role="checkbox"][aria-checked="true"]')).toHaveLength(0)
   })
 
-  // Inbound direction (standing-constraints "Inbound direction must be pinned"): mount with a
-  // non-default model and assert the matching checkbox, not just the emit, reflects it. A prop
-  // change after mount is asserted too, not only the initial render: reka's Checkbox computes
+  // Inbound direction: mount with a non-default model and assert the matching checkbox, not just
+  // the emit, reflects it. A prop change after mount is asserted too, not only the initial
+  // render: reka's Checkbox computes
   // `passive: props.modelValue === void 0` once at setup, so an `undefined`-fed `:model-value` paired
   // with a same-valued `:default-value` would render identically on the very first paint and only
   // diverge once the model changes again without a remount — exactly what ItemFormView.vue's

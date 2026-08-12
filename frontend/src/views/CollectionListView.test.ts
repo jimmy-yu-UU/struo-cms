@@ -656,4 +656,40 @@ describe('CollectionListView', () => {
     // The display columns still come first, in their existing order.
     expect(names[0]).toBe('status')
   })
+
+  // A select field cut by the 6-column display limit still needs its choices carried into
+  // FilterBuilder, or the user gets a free-text Input and types the option LABEL while the
+  // backend only matches the stored value -- a filter that silently returns zero rows.
+  it('carries options for a searchable select field that missed the display-column cut', async () => {
+    const filler = (n: number) => ({
+      name: `filler${n}`, label: `Filler ${n}`, interface: 'text', required: false, searchable: false,
+      sortable: false, readOnly: false, hidden: false, translatable: false, sort: n, isSystem: false,
+    })
+    const article = {
+      name: 'article',
+      label: 'Article',
+      defaultDisplayField: null,
+      fields: [
+        ...Array.from({ length: 6 }, (_, i) => filler(i)),
+        { name: 'status', label: 'Status', interface: 'select', required: false, searchable: true,
+          sortable: false, readOnly: false, hidden: false, translatable: false, sort: 6, isSystem: false,
+          options: [{ value: 'draft', label: 'Draft' }, { value: 'published', label: 'Published' }] },
+      ],
+      relations: [],
+    }
+    const schema = useSchemaStore()
+    schema.collections = [article]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+
+    const w = mountView()
+    await flushPromises()
+
+    const fields = w.findComponent(FilterBuilder).props('fields') as { name: string; options?: unknown }[]
+    const status = fields.find((f) => f.name === 'status')
+    expect(status).toBeTruthy()
+    expect(status!.options).toEqual([{ value: 'draft', label: 'Draft' }, { value: 'published', label: 'Published' }])
+  })
 })
