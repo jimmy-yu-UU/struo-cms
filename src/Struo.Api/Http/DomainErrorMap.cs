@@ -28,6 +28,7 @@ public static class DomainErrorMap
             PermissionDeniedException when !authenticated => (ErrorCodes.Unauthorized, exception.Message),
             PermissionDeniedException => (ErrorCodes.Forbidden, exception.Message),
             CollectionNotFoundException => (ErrorCodes.NotFound, exception.Message),
+            FileBlobNotFoundException => (ErrorCodes.NotFound, exception.Message),
             ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),

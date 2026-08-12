@@ -1,4 +1,5 @@
 using Struo.Application.Files;
+using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Files;
 
@@ -31,8 +32,22 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
         await content.CopyToAsync(fs, ct);
     }
 
-    public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) =>
-        Task.FromResult<Stream>(new FileStream(FullPath(key), FileMode.Open, FileAccess.Read, FileShare.Read));
+    public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
+    {
+        try
+        {
+            return Task.FromResult<Stream>(
+                new FileStream(FullPath(key), FileMode.Open, FileAccess.Read, FileShare.Read));
+        }
+        // A missing blob is an expected condition (DB/storage drift), not a bug: the file's own
+        // FileNotFoundException, and DirectoryNotFoundException when an intermediate year/month
+        // folder is absent too, both mean the same thing here — translate both to the shared
+        // domain exception so the API layer can turn it into a clean 404.
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new FileBlobNotFoundException(key);
+        }
+    }
 
     public Task DeleteAsync(string key, CancellationToken ct = default)
     {
