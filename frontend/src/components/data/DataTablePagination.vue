@@ -23,8 +23,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:page': [number]; 'update:pageSize': [number] }>()
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
-// Humans count from 1; the backend offsets from 0. Reuse collectionList.range so the wording
-// stays identical to the TableFooter this replaces.
+// Humans count from 1; the backend offsets from 0. Reuse collectionList.range so the range
+// wording is identical wherever a paged list renders.
 const from = computed(() => (props.total === 0 ? 0 : props.page * props.pageSize + 1))
 const to = computed(() => Math.min((props.page + 1) * props.pageSize, props.total))
 

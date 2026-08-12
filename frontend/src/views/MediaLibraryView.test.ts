@@ -357,7 +357,10 @@ describe('MediaLibraryView', () => {
   })
 
   it('passes the media page size through and reloads on a page change', async () => {
-    const list = makeListMock([{ data: rows, total: 100 }, { data: rows, total: 100 }])
+    // The second load returns a different total (55, not 100) specifically so the total-prop
+    // assertion below can distinguish a real binding from a hardcoded `:total="100"` -- both
+    // would look identical on the very first render.
+    const list = makeListMock([{ data: rows, total: 100 }, { data: rows, total: 55 }])
     const w = mountView()
     await flushPromises()
     const pager = w.findComponent({ name: 'DataTablePagination' })
@@ -374,6 +377,10 @@ describe('MediaLibraryView', () => {
     // it never reads the prop back from the pager. Assert the pager's own `page` prop followed the
     // resulting state change too, closing that gap.
     expect(pager.props('page')).toBe(2)
+    // Same gap for `:total` -- it changes across loads in production (the clamping tests below
+    // drive it 73 -> 30) and feeds both the range text and the next-button disabled state, so a
+    // hardcoded literal would silently freeze both.
+    expect(pager.props('total')).toBe(55)
   })
 
   it('returns to the first page when the page size changes', async () => {
@@ -387,6 +394,30 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     // An offset computed against the old page size is meaningless against the new one.
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 0, rows: 48 }))
+    // Inbound direction for `:page-size`: the API-call assertion above only proves
+    // onPageSizeChange's own argument reached the load call, which stays true even if the
+    // template's `:page-size` binding were hardcoded to a literal -- it never reads the prop back
+    // from the pager. The rows-per-page <select> would otherwise keep showing 24 while the API is
+    // already serving 48.
+    expect(pager.props('pageSize')).toBe(48)
+  })
+
+  it('renders the pager for a single page of results', async () => {
+    // The intentional behaviour change of this task: the v-if moved from `total > perPage` to
+    // `total > 0` because DataTablePagination also carries the range text and rows-per-page
+    // selector, both useful even when everything fits on one page. total (5) is well under the
+    // media library's pageSize (24), so the old `total > perPage` condition would have hidden it.
+    makeListMock([{ data: rows, total: 5 }])
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTablePagination' }).exists()).toBe(true)
+  })
+
+  it('hides the pager when there are no results', async () => {
+    makeListMock([{ data: [], total: 0 }])
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTablePagination' }).exists()).toBe(false)
   })
 
   it('stays on the current page after a delete when it is still in range', async () => {
