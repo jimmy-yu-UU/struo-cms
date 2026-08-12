@@ -9,13 +9,13 @@ const i18n = createI18n({
   messages: { en: { media: { uploadTitle: 'Upload files', dropzone: 'Drop files here or click to upload' } } },
 })
 
-// Stub PrimeVue Dialog to a passthrough so the slot renders without teleport.
-const DialogStub = { name: 'Dialog', template: '<div><slot /></div>' }
-
+// reka's own portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
+// dialog body; stubbing `teleport` with renderStubDefaultSlot keeps the content in the wrapper's
+// own tree. No assertion here needs the content to reach document.body.
 function mountDialog() {
   return mount(MediaUploadDialog, {
     props: { visible: true },
-    global: { plugins: [i18n], stubs: { Dialog: DialogStub } },
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
 }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
+import { Folder, Pencil, Trash2 } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import type { FolderRow } from '../../lib/folderTree'
 
 defineProps<{ folders: FolderRow[]; canManage: boolean }>()
@@ -14,13 +15,19 @@ const emit = defineEmits<{
   <div v-if="folders.length" class="folder-grid">
     <div v-for="f in folders" :key="f.id" class="folder-card" role="button" tabindex="0"
          @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)">
-      <i class="pi pi-folder folder-card__icon" aria-hidden="true" />
+      <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
       <span class="folder-card__name">{{ f.name }}</span>
-      <span v-if="canManage" class="folder-card__actions">
-        <Button icon="pi pi-pencil" text size="small" :aria-label="$t('media.folderRename')"
-                @click.stop="emit('rename', f)" />
-        <Button icon="pi pi-trash" text size="small" severity="danger" :aria-label="$t('media.folderDelete')"
-                @click.stop="emit('remove', f)" />
+      <span v-if="canManage" class="folder-card__actions flex">
+        <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
+                @click.stop="emit('rename', f)">
+          <Pencil aria-hidden="true" />
+        </Button>
+        <Button type="button" variant="ghost" size="icon-sm"
+                class="text-destructive hover:text-destructive"
+                :aria-label="$t('media.folderDelete')"
+                @click.stop="emit('remove', f)">
+          <Trash2 aria-hidden="true" />
+        </Button>
       </span>
     </div>
   </div>
@@ -34,7 +41,5 @@ const emit = defineEmits<{
   transition: border-color var(--speed, .15s), box-shadow var(--speed, .15s);
 }
 .folder-card:hover { border-color: var(--legacy-accent); box-shadow: var(--shadow-1); }
-.folder-card__icon { color: var(--legacy-accent); font-size: 1.1rem; }
 .folder-card__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
-.folder-card__actions { display: flex; }
 </style>
