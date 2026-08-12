@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Button from 'primevue/button'
-import Select from 'primevue/select'
-import SelectButton from 'primevue/selectbutton'
+import { FolderPlus, Upload, Trash2, Undo2, ChevronRight, LayoutGrid, List } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import Paginator from 'primevue/paginator'
 import PageHeader from '../components/common/PageHeader.vue'
 import ListToolbar from '../components/common/ListToolbar.vue'
@@ -52,13 +53,9 @@ const mode = ref<'active' | 'trash'>('active')
 
 const canWrite = computed(() => auth.canWrite('file'))
 const canDelete = computed(() => auth.canDelete('file'))
-// Trash toggle mirrors CollectionListView's Active/Trash SelectButton: only meaningful to
+// Trash toggle mirrors CollectionListView's Active/Trash ToggleGroup: only meaningful to
 // a user who can actually restore/purge, so gate it on canDelete rather than always showing it.
 const showTrashSwitch = computed(() => canDelete.value)
-const modeOptions = computed(() => [
-  { label: t('collectionList.active'), value: 'active' as const },
-  { label: t('collectionList.trash'), value: 'trash' as const },
-])
 
 // Folder navigation state (Drive-style).
 const folders = ref<FolderRow[]>([])
@@ -85,8 +82,8 @@ const sortOptions = computed(() => [
   { label: t('media.sortName'), value: 'name' as const },
 ])
 const viewOptions = computed(() => [
-  { label: t('media.viewGrid'), value: 'grid' as const, icon: 'pi pi-th-large' },
-  { label: t('media.viewList'), value: 'list' as const, icon: 'pi pi-bars' },
+  { label: t('media.viewGrid'), value: 'grid' as const, icon: LayoutGrid },
+  { label: t('media.viewList'), value: 'list' as const, icon: List },
 ])
 
 const mediaLoad = createLatestWins()
@@ -131,6 +128,14 @@ function onSearchInput(value: string): void {
   debouncedSearch()
 }
 function setMode(m: 'active' | 'trash'): void { mode.value = m; reload() }
+function onModeToggle(value: unknown): void {
+  // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again
+  // (deselect) -- the trash switch has no "neither" state, so ignore that.
+  if (value === 'active' || value === 'trash') setMode(value)
+}
+function onViewToggle(value: unknown): void {
+  if (value === 'grid' || value === 'list') view.value = value
+}
 function onType(value: MediaType): void { type.value = value; reload() }
 function onSort(value: MediaSort): void { sort.value = value; reload() }
 function onPage(e: { page: number; rows: number }): void {
@@ -245,42 +250,81 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
   files, total, loading, error, canWrite, canDelete, selected,
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
   goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
-  mode, setMode, showTrashSwitch, onRestore, onPurge })
+  mode, setMode, onModeToggle, onViewToggle, view, showTrashSwitch, onRestore, onPurge })
 </script>
 
 <template>
   <section class="media-library">
     <PageHeader :title="t('media.title')" :caption="t('media.count', { n: total })">
       <template #actions>
-        <Button v-if="canManageFolders" :label="t('media.folderNew')" icon="pi pi-folder-plus"
-                severity="secondary" outlined @click="createOpen = true" />
-        <Button v-if="canWrite" :label="t('media.upload')" icon="pi pi-upload" @click="uploadOpen = true" />
+        <Button v-if="canManageFolders" type="button" variant="outline" @click="createOpen = true">
+          <FolderPlus aria-hidden="true" />
+          {{ t('media.folderNew') }}
+        </Button>
+        <Button v-if="canWrite" type="button" @click="uploadOpen = true">
+          <Upload aria-hidden="true" />
+          {{ t('media.upload') }}
+        </Button>
       </template>
     </PageHeader>
 
     <ListToolbar :search-value="search" :search-placeholder="t('media.searchPlaceholder')" @search="onSearchInput">
       <template #filters>
-        <SelectButton v-if="showTrashSwitch" :model-value="mode" :options="modeOptions" option-label="label"
-                      option-value="value" :allow-empty="false" @update:model-value="setMode($event)" />
-        <Select :model-value="type" :options="typeOptions" option-label="label" option-value="value"
-                @update:model-value="onType" />
-        <Select :model-value="sort" :options="sortOptions" option-label="label" option-value="value"
-                @update:model-value="onSort" />
-        <SelectButton v-model="view" :options="viewOptions" option-label="label" option-value="value"
-                      :allow-empty="false">
-          <template #option="{ option }"><i :class="option.icon" :aria-label="option.label" /></template>
-        </SelectButton>
+        <ToggleGroup
+          v-if="showTrashSwitch"
+          type="single"
+          :model-value="mode"
+          variant="outline"
+          @update:model-value="onModeToggle"
+        >
+          <ToggleGroupItem value="active">{{ t('collectionList.active') }}</ToggleGroupItem>
+          <ToggleGroupItem value="trash">{{ t('collectionList.trash') }}</ToggleGroupItem>
+        </ToggleGroup>
+
+        <Select :model-value="type" @update:model-value="(v) => onType(v as MediaType)">
+          <SelectTrigger class="w-40" :aria-label="t('media.typeFilter')">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="o in typeOptions" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select :model-value="sort" @update:model-value="(v) => onSort(v as MediaSort)">
+          <SelectTrigger class="w-40" :aria-label="t('media.sortFilter')">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <ToggleGroup
+          type="single"
+          :model-value="view"
+          variant="outline"
+          @update:model-value="onViewToggle"
+        >
+          <ToggleGroupItem v-for="o in viewOptions" :key="o.value" :value="o.value" :aria-label="o.label">
+            <component :is="o.icon" class="size-4" aria-hidden="true" />
+          </ToggleGroupItem>
+        </ToggleGroup>
       </template>
     </ListToolbar>
 
-    <p v-if="mode === 'trash'" class="trash-banner" role="status">
-      <i class="pi pi-trash" aria-hidden="true" /> {{ t('collectionList.trashNotice') }}
+    <p
+      v-if="mode === 'trash'"
+      role="status"
+      class="trash-banner mb-3 flex items-center gap-2 rounded-md border border-warning bg-warning/10 px-3.5 py-2.5 text-sm"
+    >
+      <Trash2 class="size-4" aria-hidden="true" />
+      {{ t('collectionList.trashNotice') }}
     </p>
 
     <nav v-if="mode === 'active' && !searchActive && (breadcrumb.length || folders.length)" class="media-crumb" :aria-label="t('media.title')">
       <button type="button" class="media-crumb__link" @click="goToBreadcrumb(null)">{{ t('media.breadcrumbRoot') }}</button>
       <template v-for="c in breadcrumb" :key="c.id">
-        <i class="pi pi-angle-right media-crumb__sep" aria-hidden="true" />
+        <ChevronRight class="media-crumb__sep size-3 text-muted-foreground" aria-hidden="true" />
         <button v-if="c.id !== currentFolderId" type="button" class="media-crumb__link" @click="goToBreadcrumb(c.id)">{{ c.name }}</button>
         <span v-else class="media-crumb__current">{{ c.name }}</span>
       </template>
@@ -308,12 +352,21 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
           <td class="media-trash-list__thumb"><FileThumbnail :file="f" /></td>
           <td>{{ f.fileName }}</td>
           <td class="media-trash-list__actions">
-            <Button icon="pi pi-undo" text rounded size="small"
-                    :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
-                    @click="onRestore(f.id)" />
-            <Button icon="pi pi-trash" severity="danger" text rounded size="small"
-                    :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
-                    @click="onPurge(f.id)" />
+            <Button
+              type="button" variant="ghost" size="icon-sm"
+              :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+              @click="onRestore(f.id)"
+            >
+              <Undo2 aria-hidden="true" />
+            </Button>
+            <Button
+              type="button" variant="ghost" size="icon-sm"
+              class="text-destructive hover:text-destructive"
+              :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+              @click="onPurge(f.id)"
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
           </td>
         </tr>
       </tbody>
@@ -349,14 +402,7 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
 .media-crumb { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; flex-wrap: wrap; }
 .media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; color: var(--legacy-accent); font: inherit; border-radius: var(--legacy-radius, 8px); }
 .media-crumb__link:hover { text-decoration: underline; }
-.media-crumb__sep { color: var(--legacy-muted); font-size: .75rem; }
 .media-crumb__current { color: var(--fg); font-weight: 600; padding: 2px 4px; }
-.trash-banner {
-  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
-  padding: 10px 14px; border: 1px solid var(--warn, #d97706);
-  background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
-  border-radius: var(--legacy-radius, 8px); color: var(--fg); font-size: .9rem;
-}
 .media-trash-list { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .media-trash-list th {
   text-align: left; padding: 8px 12px; color: var(--legacy-muted); font-weight: 600;
