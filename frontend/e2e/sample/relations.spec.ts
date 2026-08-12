@@ -72,10 +72,10 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 // loads its options asynchronously (onMounted loadOptions() -> API), which makes two things race:
 //   1. The overlay can pop open before any option exists — worst in edit mode, where the form is
 //      interactable the instant it loads (create mode hides the race behind the time spent filling
-//      Status/Title/Body). Verified live: the Category <Select> / Tags <MultiSelect> render 19/13
-//      options once the fetch resolves; the only failure mode is interacting before it does.
+//      Status/Title/Body). Verified live: the Category picker (single) / Tags picker (multiple)
+//      render 19/13 options once the fetch resolves; the only failure mode is interacting before it does.
 //   2. When the options DO arrive the list re-renders and the overlay repositions, so a click on a
-//      pre-captured <li> hits a detached/moving element ("element is not stable" / "detached").
+//      pre-captured option hits a detached/moving element ("element is not stable" / "detached").
 // So open (or re-open) AND read-label AND click as one retried unit, re-grabbing the option each
 // attempt. Options are scoped to THIS picker's own overlay type — never page-wide getByRole('option')
 // — because a fast preceding interaction (e.g. chooseStatus's Select) can leave another overlay
@@ -83,15 +83,18 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
 async function pickFirstFromPicker(
   page: Page,
   field: ReturnType<typeof fieldByLabel>,
-  multiple: boolean,
 ): Promise<string> {
-  // MultiSelect's role="combobox" is a HIDDEN input behind the visible label/dropdown container
-  // (which intercepts pointer events); click the visible `.p-multiselect` root instead. The plain
-  // Select's combobox trigger is directly clickable (same idiom as chooseStatus).
-  const trigger = multiple ? field.locator('.p-multiselect') : field.getByRole('combobox')
-  const overlay = multiple ? '.p-multiselect-overlay' : '.p-select-overlay'
-  // Dismiss any stray overlay so only the target picker's overlay contributes options (PrimeVue
-  // removes a closed overlay from the DOM, so a scoped query then only ever sees the open one).
+  // RelationPicker.vue's single- and multi-select branches both render the same vendored
+  // ComboboxTrigger button (data-slot="combobox-trigger") — its accessible name changes with the
+  // current selection (a plain label when empty, "<label>: <value>" or a selected-count string once
+  // something is picked), so the stable data-slot hook is used instead of getByRole name matching.
+  // The options list is a ComboboxContent teleported to document.body via ComboboxPortal, tagged
+  // data-slot="combobox-list"; its items keep role="option" (reka's underlying ListboxItem sets it
+  // regardless of single/multi mode), same as the plain Select's overlay.
+  const trigger = field.locator('[data-slot="combobox-trigger"]')
+  const overlay = '[data-slot="combobox-list"]'
+  // Dismiss any stray overlay so only the target picker's overlay contributes options (a closed
+  // ComboboxContent unmounts from the DOM, so a scoped query then only ever sees the open one).
   await page.keyboard.press('Escape')
   let label = ''
   await expect(async () => {
@@ -109,20 +112,21 @@ async function pickFirstFromPicker(
   return label
 }
 
-// Article.Category is [CmsRelation(Interface = RelationInterface.Dropdown)] -> RelationPicker's plain
-// (non-multiple) <Select>. The exact seeded category name isn't known to this spec (see top-of-file
-// seeding note), so pick by position and capture the chosen category's label (DisplayTemplate =
-// "{Name}") — the RelatedList assertion opens THIS category rather than guessing a "first row"
-// (dropdown option order and category list row order need not agree in a populated DB).
+// Article.Category is [CmsRelation(Interface = RelationInterface.Dropdown)] -> RelationPicker's
+// single-select Combobox branch. The exact seeded category name isn't known to this spec (see
+// top-of-file seeding note), so pick by position and capture the chosen category's label
+// (DisplayTemplate = "{Name}") — the RelatedList assertion opens THIS category rather than
+// guessing a "first row" (dropdown option order and category list row order need not agree in a
+// populated DB).
 async function pickFirstCategory(page: Page): Promise<string> {
-  return pickFirstFromPicker(page, fieldByLabel(page, 'Category'), false)
+  return pickFirstFromPicker(page, fieldByLabel(page, 'Category'))
 }
 
 // Article.Tags is [CmsRelation(Interface = RelationInterface.TagSelect)] -> RelationPicker's
-// `multiple` <MultiSelect>. Selecting an option does NOT close the overlay (multi-select semantics),
-// so press Escape afterwards to close it and commit the selection, as a real user would.
+// `multiple` Combobox branch. Selecting an option does NOT close the overlay (multi-select
+// semantics), so press Escape afterwards to close it and commit the selection, as a real user would.
 async function pickFirstTag(page: Page): Promise<void> {
-  await pickFirstFromPicker(page, fieldByLabel(page, 'Tags'), true)
+  await pickFirstFromPicker(page, fieldByLabel(page, 'Tags'))
   await page.keyboard.press('Escape')
 }
 
