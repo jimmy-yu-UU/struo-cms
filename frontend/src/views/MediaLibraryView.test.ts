@@ -22,6 +22,7 @@ const i18n = createI18n({
   messages: { en: { media: {
     title: 'Media Library', count: '{n} files', upload: 'Upload', searchPlaceholder: 'Search files…',
     typeAll: 'All types', typeImage: 'Images', typeVideo: 'Video', sortNewest: 'Newest', sortName: 'By name',
+    typeFilter: 'File type', sortFilter: 'Sort order',
     viewGrid: 'Grid view', viewList: 'List view', empty: 'No media files', loadFailed: 'Failed to load media',
     folderNew: 'New folder', folderName: 'Folder name', folderConfirm: 'OK',
     folderRename: 'Rename folder', folderDelete: 'Delete folder',
@@ -41,11 +42,11 @@ const stubs = {
   ListToolbar: { name: 'ListToolbar', template: '<div><slot name="filters" /></div>', props: ['searchValue', 'searchPlaceholder'] },
   TableFooter: { name: 'TableFooter', template: '<div />', props: ['first', 'rows', 'total'] },
   Paginator: { name: 'Paginator', template: '<div />' },
-  Select: { name: 'Select', template: '<div />' },
-  SelectButton: { name: 'SelectButton', template: '<div />' },
-  Button: { name: 'Button', template: '<button @click="$emit(\'click\')"><slot /></button>', props: ['label', 'disabled'] },
   ConfirmDialog: { name: 'ConfirmDialog', template: '<div />', props: ['group'] },
   MediaDetailDialog: { name: 'MediaDetailDialog', template: '<div />', props: ['file', 'canWrite', 'canDelete'] },
+  // reka's own portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
+  // slot content of every floating control on the page (the two Selects' option lists).
+  teleport: true,
 }
 
 function seedUser(perms: Partial<Record<'read' | 'write' | 'delete', boolean>>, collection = 'file'): void {
@@ -54,7 +55,7 @@ function seedUser(perms: Partial<Record<'read' | 'write' | 'delete', boolean>>, 
 }
 
 function mountView() {
-  return mount(MediaLibraryView, { global: { plugins: [i18n], stubs } })
+  return mount(MediaLibraryView, { global: { plugins: [i18n], stubs, renderStubDefaultSlot: true } })
 }
 
 /** Routes itemsApi.list by collection: 'mediafolder' always resolves to `folders`; 'file' calls
@@ -76,6 +77,73 @@ describe('MediaLibraryView', () => {
     vi.restoreAllMocks()
     confirmRequire.mockReset()
     toastAdd.mockReset()
+  })
+
+  it('renders the vendored controls, not PrimeVue ones', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    seedUser({ write: true, delete: true })
+    const w = mountView()
+    await flushPromises()
+    // Two Selects (type, sort) and two ToggleGroups (Active/Trash, grid/list).
+    expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(2)
+    expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
+    expect(w.findComponent({ name: 'SelectButton' }).exists()).toBe(false)
+  })
+
+  it('shows the current type filter on the Select trigger, and follows it after mount', async () => {
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    // Inbound direction: the trigger must render the option matching the stored value, not a
+    // placeholder. `type` starts at 'all', whose label is 'All types'.
+    expect(w.findAll('[data-slot="select-trigger"]')[0].text()).toContain('All types')
+    // The initial-render assertion above cannot distinguish a controlled Select from a
+    // `default-value` one (both render the same on the first paint) -- also change the value
+    // AFTER mount, through the same path a real re-render would take, and confirm the trigger
+    // followed it.
+    await (w.vm as unknown as { onType: (t: string) => void }).onType('image')
+    await flushPromises()
+    expect(w.findAll('[data-slot="select-trigger"]')[0].text()).toContain('Images')
+  })
+
+  it('reloads with the image filter when the type Select emits a new value', async () => {
+    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    // jsdom cannot dispatch reka's pointerdown/pointerup, but emitting from the vendored child
+    // runs this view's real @update:model-value listener — which is the binding under test.
+    await w.findAllComponents({ name: 'Select' })[0].vm.$emit('update:modelValue', 'image')
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
+      filter: { contentType: { op: '_starts_with', value: 'image/' }, folderId: { op: '_null', value: 'true' } },
+    }))
+  })
+
+  it('ignores the ToggleGroup deselect emit so the trash switch has no "neither" state', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    seedUser({ delete: true })
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as { mode: string; onModeToggle: (v: unknown) => void }
+    vm.onModeToggle('trash')
+    await flushPromises()
+    expect(vm.mode).toBe('trash')
+    // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again.
+    vm.onModeToggle(undefined)
+    await flushPromises()
+    expect(vm.mode).toBe('trash')
+  })
+
+  it('gives every trash-list row action an explicit type="button"', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    seedUser({ delete: true })
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
+    await flushPromises()
+    const actions = w.findAll('.media-trash-list__actions button')
+    expect(actions.length).toBeGreaterThan(0)
+    actions.forEach((b) => expect(b.attributes('type')).toBe('button'))
   })
 
   it('loads files into the grid on mount', async () => {
