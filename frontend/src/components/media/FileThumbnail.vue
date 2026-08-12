@@ -16,16 +16,15 @@ export type FileRow = {
 }
 
 // `tile` is the media-grid square; `sm` is the inline row thumbnail every list-shaped consumer
-// (FilePicker's current value, FilesField's rows, MediaFileList, the trash table) needs. Before
-// this prop each of those out-specified the tile height with its own compound selector, which only
-// worked as long as the two scoped rules stayed at the exact specificities they happened to have.
+// (FilePicker's current value, FilesField's rows, MediaFileList, the trash table) needs. A class
+// passed in by a consumer can never out-specify this component's own scoped rule, which is why
+// sizing is a prop instead of a class override.
 const props = withDefaults(defineProps<{ file: FileRow; size?: 'tile' | 'sm' }>(), { size: 'tile' })
 const broken = ref(false)
 const isImage = computed(() => props.file.contentType.startsWith('image/') && !broken.value)
 const src = computed(() => filesApi.contentUrl(props.file.id))
 const typeDisplay = computed(() => fileTypeDisplay(props.file.contentType, props.file.fileName))
-// lib/fileTypeDisplay returns PrimeIcons tokens because it predates the icon migration and lib/ is
-// frozen; resolveIcon maps every token it can emit to a lucide component.
+// fileTypeDisplay returns PrimeIcons token strings, and resolveIcon maps them to lucide components.
 const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
 </script>
 
