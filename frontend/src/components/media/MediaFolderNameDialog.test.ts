@@ -10,50 +10,55 @@ const i18n = createI18n({
   messages: { en: { media: { folderName: 'Folder name', folderConfirm: 'OK' } } },
 })
 
-// Stub PrimeVue Dialog/InputText/Button to plain passthroughs (no teleport / no $primevue plugin
-// instance needed), matching the pattern used elsewhere for dialog-hosting components (e.g.
-// MediaUploadDialog.test.ts, MediaDetailDialog.test.ts).
-const stubs = {
-  Dialog: { name: 'Dialog', template: '<div v-if="visible"><slot /><slot name="footer" /></div>', props: ['visible'] },
-  InputText: { name: 'InputText', template: '<input />', props: ['modelValue'] },
-  Button: { name: 'Button', template: '<button><slot /></button>', props: ['label', 'disabled'] },
-}
-
+// reka's own portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
+// dialog body; stubbing `teleport` with renderStubDefaultSlot keeps the content in the wrapper's
+// own tree. No assertion here needs the content to reach document.body.
 function mountDialog(props: { visible: boolean; header: string; initialName?: string }) {
-  return mount(MediaFolderNameDialog, { props, global: { plugins: [i18n], stubs } })
+  return mount(MediaFolderNameDialog, {
+    props,
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+  })
 }
 
 describe('MediaFolderNameDialog', () => {
+  it('renders the vendored dialog and input, not PrimeVue ones', () => {
+    const w = mountDialog({ visible: true, header: 'New folder' })
+    expect(w.find('[data-slot="dialog-content"]').exists()).toBe(true)
+    expect(w.find('[data-slot="input"]').exists()).toBe(true)
+  })
+
   it('shows the input prefilled with initialName when visible', () => {
     const w = mountDialog({ visible: true, header: 'Rename folder', initialName: 'Alpha' })
-    const input = w.findComponent({ name: 'InputText' })
-    expect(input.props('modelValue')).toBe('Alpha')
+    expect((w.get('input').element as HTMLInputElement).value).toBe('Alpha')
   })
 
   it('emits submit with the trimmed name and update:visible(false) on confirm', async () => {
     const w = mountDialog({ visible: true, header: 'New folder' })
-    const input = w.findComponent({ name: 'InputText' })
-    await input.vm.$emit('update:modelValue', '  New Name  ')
-    const confirmBtn = w.findComponent({ name: 'Button' })
-    await confirmBtn.trigger('click')
+    await w.get('input').setValue('  New Name  ')
+    await w.get('[data-test="folder-name-confirm"]').trigger('click')
     expect(w.emitted('submit')).toEqual([['New Name']])
     expect(w.emitted('update:visible')).toEqual([[false]])
   })
 
   it('disables the confirm button when the name is blank', async () => {
     const w = mountDialog({ visible: true, header: 'New folder' })
-    const confirmBtn = w.findComponent({ name: 'Button' })
-    expect(confirmBtn.props('disabled')).toBe(true)
-    const input = w.findComponent({ name: 'InputText' })
-    await input.vm.$emit('update:modelValue', 'x')
-    expect(w.findComponent({ name: 'Button' }).props('disabled')).toBe(false)
+    expect(w.get('[data-test="folder-name-confirm"]').attributes('disabled')).toBeDefined()
+    await w.get('input').setValue('x')
+    expect(w.get('[data-test="folder-name-confirm"]').attributes('disabled')).toBeUndefined()
+  })
+
+  // ui/button renders a bare <button> through reka's Primitive and injects no type, so HTML's own
+  // type="submit" default applies. This dialog is not inside a <form> today, but the assertion
+  // costs nothing and pins the convention if it ever is.
+  it('gives the confirm button an explicit type="button"', () => {
+    const w = mountDialog({ visible: true, header: 'New folder' })
+    expect(w.get('[data-test="folder-name-confirm"]').attributes('type')).toBe('button')
   })
 
   it('resets to blank when reopened without an initialName', async () => {
     const w = mountDialog({ visible: true, header: 'New folder', initialName: 'Alpha' })
     await w.setProps({ visible: false })
     await w.setProps({ visible: true, initialName: undefined })
-    const input = w.findComponent({ name: 'InputText' })
-    expect(input.props('modelValue')).toBe('')
+    expect((w.get('input').element as HTMLInputElement).value).toBe('')
   })
 })
