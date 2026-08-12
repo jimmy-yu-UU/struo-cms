@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 
-const image: FileRow = { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 10 }
-const pdf: FileRow = { id: 'f2', fileName: 'a.pdf', contentType: 'application/pdf', size: 10 }
+const image: FileRow = { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }
+const pdf: FileRow = { id: 'f2', fileName: 'a.pdf', contentType: 'application/pdf', size: 2048 }
 
 describe('FileThumbnail', () => {
   it('defaults to the tile size', () => {
@@ -26,28 +26,35 @@ describe('FileThumbnail', () => {
     expect(w.get('.file-thumb').attributes('data-size')).toBe('sm')
   })
 
-  it('renders an <img> for an image content type', () => {
-    expect(mount(FileThumbnail, { props: { file: image } }).find('img').exists()).toBe(true)
-  })
-
-  it('falls back to a chip with a resolved lucide glyph when the image fails to load', async () => {
+  it('renders an img for image content types, wired to the real content URL', () => {
     const w = mount(FileThumbnail, { props: { file: image } })
-    await w.find('img').trigger('error')
-    expect(w.find('img').exists()).toBe(false)
-    expect(w.find('.file-chip').exists()).toBe(true)
-    expect(w.find('.lucide-image').exists()).toBe(true)
-    expect(w.find('.pi').exists()).toBe(false)
-    expect(w.find('.file-chip__meta').text()).toBe('PNG')
+    const el = w.find('img')
+    expect(el.exists()).toBe(true)
+    expect(el.attributes('src')).toMatch(/\/files\/f1\/content$/)
   })
 
-  it('renders a resolved lucide glyph for a non-previewable type, not a primeicons class', () => {
+  it('renders a chip (no img) for non-image types: a resolved lucide glyph + short label, not the raw MIME, filename, or a primeicons class', () => {
     const w = mount(FileThumbnail, { props: { file: pdf } })
-    expect(w.find('.file-chip').exists()).toBe(true)
+    expect(w.find('img').exists()).toBe(false)
     // lib/fileTypeDisplay maps application/pdf to the pi-file-pdf token, which ICON_MAP resolves
     // to lucide's FileType. Asserting the resolved icon proves the token went through resolveIcon
     // rather than being rendered as a primeicons font class.
-    expect(w.find('.lucide-file-type').exists()).toBe(true)
+    expect(w.find('.file-chip__icon.lucide-file-type').exists()).toBe(true)
     expect(w.find('.pi').exists()).toBe(false)
-    expect(w.text()).toContain('PDF')
+    expect(w.find('.file-chip__meta').text()).toBe('PDF')
+    // the long/ugly MIME string and the filename must NOT appear (the tile caption shows the name)
+    expect(w.text()).not.toContain('application/pdf')
+    expect(w.text()).not.toContain('a.pdf')
+  })
+
+  it('falls back to chip with a resolved lucide glyph when the image fails to load', async () => {
+    const w = mount(FileThumbnail, { props: { file: image } })
+    await w.find('img').trigger('error')
+    expect(w.find('img').exists()).toBe(false)
+    expect(w.find('.file-chip__icon.lucide-image').exists()).toBe(true)
+    expect(w.find('.pi').exists()).toBe(false)
+    expect(w.find('.file-chip__meta').text()).toBe('PNG')
+    expect(w.text()).not.toContain('image/png')
+    expect(w.text()).not.toContain('a.png')
   })
 })
