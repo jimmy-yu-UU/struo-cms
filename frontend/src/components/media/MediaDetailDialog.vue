@@ -316,7 +316,6 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 .md-kv span { color: var(--legacy-muted); }
 .md-kv b { color: var(--fg); font-weight: 600; }
 .md-url { display: flex; gap: 6px; align-items: center; }
-.md-url :deep(input) { flex: 1; }
 .md-conflict { margin: 0; color: var(--warn); font-size: .85rem; }
 .md-error { margin: 0; color: var(--danger); font-size: .85rem; }
 @media (max-width: 640px) { .md-grid { grid-template-columns: 1fr; } }
