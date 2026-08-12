@@ -9,6 +9,13 @@ public interface IFileStorage
     /// the type is served correctly on download. Backends that stream through the API (local) ignore it.
     /// </summary>
     Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default);
+
+    /// <summary>
+    /// Opens the blob for <paramref name="key"/>. Throws
+    /// <see cref="Struo.Domain.Query.FileBlobNotFoundException"/> — never a backend-native I/O or
+    /// SDK exception — when the key does not exist, so every caller sees the same contract
+    /// regardless of which backend is configured.
+    /// </summary>
     Task<Stream> OpenReadAsync(string key, CancellationToken ct = default);
     Task DeleteAsync(string key, CancellationToken ct = default);
 

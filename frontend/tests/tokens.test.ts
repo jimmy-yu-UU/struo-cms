@@ -48,10 +48,38 @@ describe('tokens.css', () => {
     expect(block('.app-dark')).not.toContain('--accent: #38bdf8')
   })
 
+  // --accent used to be a 5% colour-mix wash of the foreground colour — nearly invisible as a
+  // hover surface. Pin it to the same opaque value as --muted so a future edit can't silently
+  // drift it back toward transparency.
+  it('makes --accent an opaque surface matching --muted, not a translucent wash', () => {
+    // --sidebar-accent is intentionally out of scope and still a color-mix wash, so this checks
+    // the --accent declaration itself rather than the whole block for the string "color-mix".
+    expect(block(':root')).toContain('--accent: #f4f4f5')
+    expect(block('.app-dark')).toContain('--accent: #27272a')
+    expect(block(':root')).not.toMatch(/--accent:\s*color-mix/)
+    expect(block('.app-dark')).not.toMatch(/--accent:\s*color-mix/)
+  })
+
   it('uses the intended dark zinc values, not a lighter/darker alternate', () => {
     const dark = block('.app-dark')
     expect(dark).toContain('--background: #18181b')  // zinc-900, NOT #09090b
     expect(dark).toContain('--border: #3f3f46')      // zinc-700, NOT #27272a
+  })
+
+  // Against #18181b, :root's --destructive (#dc2626) measures 3.67:1 — below WCAG AA's
+  // 4.5:1 for text. --warning (#d97706) already clears AA here (5.56:1) on its own; its
+  // lighter dark value matches theme.css's dark --warn instead, for border/future-text
+  // headroom, not because :root's value failed anything. Either way .app-dark must not
+  // repeat the :root values verbatim.
+  it('lightens --destructive and --warning for dark-surface contrast, unlike :root', () => {
+    const light = block(':root')
+    const dark = block('.app-dark')
+    expect(light).toContain('--destructive: #dc2626')
+    expect(light).toContain('--warning: #d97706')
+    expect(dark).toContain('--destructive: #f87171')
+    expect(dark).toContain('--warning: #fbbf24')
+    expect(light).not.toContain('--destructive: #f87171')
+    expect(light).not.toContain('--warning: #fbbf24')
   })
 
   it('drives dark mode off .app-dark, not shadcn default .dark', () => {

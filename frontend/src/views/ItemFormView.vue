@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
+import { useConfirm } from '@/composables/useConfirm'
+import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
-import ConfirmDialog from 'primevue/confirmdialog'
-import Button from 'primevue/button'
+import { ChevronLeft, History } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import ItemForm from '../components/ItemForm.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import RevisionHistoryDrawer from '../components/revisions/RevisionHistoryDrawer.vue'
@@ -72,6 +72,9 @@ const errors = ref<Record<string, string>>({})
 const serverError = ref('')
 const loading = ref(true)
 const submitting = ref(false)
+// ui/button has no `loading` prop (unlike the PrimeVue Button it replaces), so the in-flight
+// Save state is surfaced through this label swap plus :disabled="submitting" on the button below.
+const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
 const notFound = ref(false)
 const conflict = ref(false)
 const showHistory = ref(false)
@@ -274,23 +277,20 @@ async function onReverted(): Promise<void> {
   }
 }
 
-function onDelete(): void {
+async function onDelete(): Promise<void> {
   const { header, message } = deleteConfirm(t, deleteKindFor(meta.value))
-  confirm.require({
-    header,
-    message,
-    accept: async () => {
-      try {
-        await itemsApi.remove(name.value, id.value!)
-        // Editing the Language collection changes which locale tabs every other form shows.
-        if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
-        captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
-        router.push({ name: 'collection-list', params: { name: name.value } })
-      } catch (e) {
-        serverError.value = e instanceof Error ? e.message : t('common.deleteFailed')
-      }
-    },
-  })
+  // severity 'danger' is the confirmStore vocabulary (not the toast one) and drives the
+  // destructive variant on ConfirmHost's accept button.
+  if (!(await confirm.require({ header, message, severity: 'danger' }))) return
+  try {
+    await itemsApi.remove(name.value, id.value!)
+    // Editing the Language collection changes which locale tabs every other form shows.
+    if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
+    captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
+    router.push({ name: 'collection-list', params: { name: name.value } })
+  } catch (e) {
+    serverError.value = e instanceof Error ? e.message : t('common.deleteFailed')
+  }
 }
 
 function onCancel(): void {
@@ -307,19 +307,10 @@ function guardLeave(): Promise<boolean> {
   // sequentially on the same navigation.
   if (!(isDirty(baseline.value, model) || (matrix.value?.dirty ?? false))) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
-  return new Promise<boolean>((resolve) => {
-    confirm.require({
-      header,
-      message,
-      accept: () => resolve(true),
-      reject: () => resolve(false),
-      // Esc / backdrop / X dismiss fires NEITHER accept nor reject, which would leave
-      // this promise (and the router navigation awaiting it) pending forever. onHide always fires on
-      // dismissal, so resolve(false) — treat a dismiss as "cancel navigation, stay here". If accept/
-      // reject already resolved, this second resolve is a harmless no-op (a Promise settles once).
-      onHide: () => resolve(false),
-    })
-  })
+  // Cancel and dismiss (Esc / backdrop / X) are the same outcome here by design: confirmStore
+  // guarantees every request settles its Promise exactly once, so there is no third "closed
+  // without answering" state that would otherwise leave this navigation awaiting forever.
+  return confirm.require({ header, message })
 }
 onBeforeRouteLeave(() => guardLeave())
 // A same-route-record, params-only navigation (RelatedList row click, create -> edit) does
@@ -348,29 +339,36 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
 </script>
 
 <template>
-  <section class="item-form-view">
-    <ConfirmDialog />
-    <p v-if="loading" class="notice">{{ t('itemForm.loading') }}</p>
-    <p v-else-if="!meta" class="notice">{{ t('itemForm.collectionNotFound') }}</p>
-    <p v-else-if="notFound" class="notice">{{ t('itemForm.itemNotFound') }}</p>
-    <p v-else-if="isCreate && !canWrite" class="notice">{{ t('itemForm.noCreatePermission') }}</p>
+  <section class="item-form-view grid gap-1">
+    <p v-if="loading" class="text-muted-foreground">{{ t('itemForm.loading') }}</p>
+    <p v-else-if="!meta" class="text-muted-foreground">{{ t('itemForm.collectionNotFound') }}</p>
+    <p v-else-if="notFound" class="text-muted-foreground">{{ t('itemForm.itemNotFound') }}</p>
+    <p v-else-if="isCreate && !canWrite" class="text-muted-foreground">{{ t('itemForm.noCreatePermission') }}</p>
     <template v-else>
       <PageHeader :title="isCreate ? t('itemForm.new', { label: meta.label }) : t('itemForm.edit', { label: meta.label })">
         <template #lead>
-          <Button text severity="secondary" icon="pi pi-chevron-left"
-                  :aria-label="t('itemForm.back')" @click="onCancel" />
+          <Button type="button" variant="ghost" size="icon" :aria-label="t('itemForm.back')" @click="onCancel">
+            <ChevronLeft class="size-4" />
+          </Button>
         </template>
         <template #actions>
-          <Button v-if="!isCreate && meta.revisions" :label="t('revisions.open')" icon="pi pi-history"
-                  severity="secondary" text @click="showHistory = true" />
-          <Button v-if="!isCreate && canDelete" :label="t('itemForm.delete')" severity="danger" @click="onDelete" />
-          <Button v-if="canWrite" :label="t('itemForm.save')" :loading="submitting" @click="onSubmit" />
+          <Button v-if="!isCreate && meta.revisions" type="button" variant="ghost" @click="showHistory = true">
+            <History class="size-4" />{{ t('revisions.open') }}
+          </Button>
+          <Button v-if="!isCreate && canDelete" type="button" variant="destructive" @click="onDelete">
+            {{ t('itemForm.delete') }}
+          </Button>
+          <Button v-if="canWrite" type="button" :disabled="submitting" @click="onSubmit">{{ saveLabel }}</Button>
         </template>
       </PageHeader>
 
-      <div v-if="conflict" class="conflict-banner" role="alert">
-        <span class="conflict-text">{{ t('itemForm.conflictText') }}</span>
-        <Button :label="t('itemForm.reloadLatest')" severity="secondary" size="small" @click="reloadLatest" />
+      <div
+        v-if="conflict"
+        class="conflict-banner mb-4 flex items-center gap-4 rounded-md border border-warning bg-warning/10 px-4 py-3 text-foreground"
+        role="alert"
+      >
+        <span class="conflict-text flex-1">{{ t('itemForm.conflictText') }}</span>
+        <Button type="button" variant="outline" size="sm" @click="reloadLatest">{{ t('itemForm.reloadLatest') }}</Button>
       </div>
 
       <ItemForm
@@ -404,20 +402,3 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
     </template>
   </section>
 </template>
-
-<style scoped>
-.item-form-view { display: grid; gap: 4px; }
-.notice { color: var(--legacy-muted); }
-.conflict-banner {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--warn, #d97706);
-  background: color-mix(in srgb, var(--warn, #d97706) 10%, var(--surface));
-  border-radius: var(--legacy-radius, 8px);
-  color: var(--fg);
-}
-.conflict-text { flex: 1; }
-</style>

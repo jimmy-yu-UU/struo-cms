@@ -42,7 +42,7 @@ onMounted(() => { schema.load() })
 
     <!-- The app's global outlets, mounted exactly once. Toast (PrimeVue) stays alongside
          Toaster (shadcn/vue-sonner) until the last `primevue/usetoast` call site migrates —
-         six views/components still call it, and ToastService.add() emits on
+         five views/components still call it, and ToastService.add() emits on
          ToastEventBus with no host subscribed (silently, no error) if this is removed. -->
     <Toast position="top-right" />
     <Toaster position="top-right" />

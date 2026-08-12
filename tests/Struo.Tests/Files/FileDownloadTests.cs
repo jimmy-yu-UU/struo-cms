@@ -141,4 +141,29 @@ public class FileDownloadTests(ApiFactory factory)
         (await c.DeleteAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await c.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Missing_blob_on_disk_is_a_clean_404_not_a_500()
+    {
+        // Storage/DB drift: the row survives (upload succeeded, it's still "published") but its
+        // blob is gone from the backend — a restored DB dump, a manual delete from disk/bucket, or
+        // a switched storage backend. This must be a clean 404 with the normal error envelope, not
+        // an unhandled I/O exception bubbling up as a 500.
+        // The shared ApiFactory's FilesRoot accumulates blobs from every other test in this
+        // collection, so isolate this upload's own blob via a before/after diff rather than
+        // assuming it is the only file on disk.
+        var before = Directory.GetFiles(_factory.FilesRoot, "*", SearchOption.AllDirectories).ToHashSet();
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = await Upload(c, "payload");
+        await Publish(c, id);
+
+        var blobPath = Directory.GetFiles(_factory.FilesRoot, "*", SearchOption.AllDirectories)
+            .Except(before).Single();
+        System.IO.File.Delete(blobPath);
+
+        var resp = await c.GetAsync($"/api/files/{id}/content");
+        resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("NOT_FOUND");
+    }
 }

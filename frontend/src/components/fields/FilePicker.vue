@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import TreeSelect from 'primevue/treeselect'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import TreeSelect from '@/components/form/TreeSelect.vue'
 import MediaGrid from '../media/MediaGrid.vue'
 import FileThumbnail, { type FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -41,10 +41,8 @@ const folderNodes = computed<TreeNode[]>(() => [
   { key: UNFILED, label: t('media.folderUncategorized'), data: UNFILED, children: [] },
   ...buildRelationTree(folders.value.map((f) => ({ id: f.id, label: f.name, parentId: f.parentId })), 'parentId'),
 ])
-// TreeSelect single-selection binds { [key]: true } (same mapping as RelationPicker/MediaDetailDialog).
-const folderValue = computed(() => ({ [folderSel.value]: true }))
-function onFolderChange(selection: Record<string, boolean>): void {
-  folderSel.value = Object.keys(selection)[0] ?? ALL
+function onFolderChange(key: string | null): void {
+  folderSel.value = key ?? ALL
   void loadOptions()
 }
 function pickerFolderFilter(): ReturnType<typeof mediaFolderFilter> | undefined {
@@ -117,29 +115,50 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 <template>
   <div class="file-picker">
     <div v-if="current" class="file-picker__current">
-      <FileThumbnail v-if="image" :file="current" />
+      <FileThumbnail v-if="image" :file="current" class="file-picker__thumb" />
       <span>{{ current.fileName }}</span>
     </div>
-    <span v-else-if="missingId" class="file-picker__missing">{{ missingId }}</span>
-    <span v-else class="file-picker__empty">{{ t('fields.noFileSelected') }}</span>
+    <span v-else-if="missingId" class="file-picker__missing italic text-muted-foreground">{{ missingId }}</span>
+    <span v-else class="file-picker__empty italic text-muted-foreground">{{ t('fields.noFileSelected') }}</span>
 
     <div class="file-picker__actions">
-      <Button :label="t('fields.selectFile')" severity="secondary" outlined size="small" :disabled="disabled" @click="openDialog" />
-      <Button v-if="modelValue" :label="t('fields.clear')" size="small" text :disabled="disabled" @click="clear" />
+      <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="openDialog">{{ t('fields.selectFile') }}</Button>
+      <Button v-if="modelValue" type="button" variant="ghost" size="sm" :disabled="disabled" @click="clear">{{ t('fields.clear') }}</Button>
     </div>
 
-    <Dialog v-model:visible="dialogOpen" modal :header="t('fields.selectAFile')" :style="{ width: 'min(78vw, 1300px)' }" :breakpoints="{ '960px': '95vw' }">
-      <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
-      <TreeSelect
-        v-if="folders.length"
-        class="file-picker__folder"
-        :model-value="folderValue"
-        :options="folderNodes"
-        selection-mode="single"
-        @update:model-value="onFolderChange"
-      />
-      <InputText v-model="search" :placeholder="t('fields.searchFiles')" class="file-picker__search" />
-      <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
+    <Dialog v-model:open="dialogOpen">
+      <!--
+        DialogScrollContent, not DialogContent: the file grid can run to several rows (openDialog
+        requests up to 50 files), and reka's DialogRoot locks body scroll while open, so a
+        fixed-position, viewport-centered box (plain DialogContent) leaves no scroll container for
+        overflow at all — rows above and below the viewport become permanently unreachable.
+        DialogScrollContent's overlay carries its own overflow-y-auto and holds the content box in
+        normal flow (relative + vertical margin) instead of fixed-centered, so the overlay itself
+        scrolls once the box is taller than the viewport.
+
+        Its own width class is an unprefixed max-w-lg (no sm: modifier, unlike plain DialogContent),
+        so the override below re-supplies no modifier either — tailwind-merge keys on (modifier
+        set, class group), and a bare max-w-lg only loses to another bare max-w-* class.
+        max-[960px]:max-w-[95vw] restores the old PrimeVue Dialog's `:breakpoints="{ '960px':
+        '95vw' }"`, which widened the dialog on medium viewports rather than keeping the 78vw cap.
+      -->
+      <DialogScrollContent class="max-w-[min(78vw,1300px)] max-[960px]:max-w-[95vw]">
+        <DialogHeader>
+          <DialogTitle>{{ t('fields.selectAFile') }}</DialogTitle>
+        </DialogHeader>
+        <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
+        <div v-if="folders.length" class="file-picker__folder">
+          <TreeSelect
+            :model-value="folderSel"
+            :nodes="folderNodes"
+            :label="t('media.folderField')"
+            :placeholder="t('fields.selectAFolder')"
+            @update:model-value="onFolderChange"
+          />
+        </div>
+        <Input v-model="search" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" class="file-picker__search" />
+        <MediaGrid :files="files" selectable :selected-id="modelValue" @select="onSelect" />
+      </DialogScrollContent>
     </Dialog>
   </div>
 </template>
@@ -158,16 +177,18 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
   gap: 8px;
 }
 
-.file-picker__current :deep(.file-thumb) {
+/*
+ * FileThumbnail's own scoped .file-thumb rule and this one carry equal specificity (one class +
+ * one scoped-id attribute each — the div is this component's own scope AND FileThumbnail's,
+ * because a child's root node picks up both when the parent passes it a class), so which wins
+ * would otherwise depend on which style block Vite happens to emit later in the bundle. Matching
+ * both classes in one compound selector adds a second class to the specificity count, which wins
+ * regardless of source order.
+ */
+.file-thumb.file-picker__thumb {
   width: 48px;
   height: 48px;
   flex: none;
-}
-
-.file-picker__missing,
-.file-picker__empty {
-  color: var(--legacy-muted);
-  font-style: italic;
 }
 
 .file-picker__actions {
@@ -175,15 +196,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
   gap: 8px;
 }
 
-.file-picker__folder {
-  display: block;
-  margin: 8px 0 0;
-  width: 100%;
-}
-
-.file-picker__search {
-  display: block;
-  margin: 8px 0 12px;
-  width: 100%;
-}
+/* No margin here: DialogScrollContent's content box is itself `grid gap-4`, which already spaces
+   every direct child (DialogHeader, the error text, this folder filter, the search input,
+   MediaGrid) — an added margin would stack on top of that gap instead of replacing it. */
 </style>

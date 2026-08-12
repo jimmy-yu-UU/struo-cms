@@ -10,8 +10,13 @@ import TextAlign from '@tiptap/extension-text-align'
 import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
-import Dialog from 'primevue/dialog'
-import InputText from 'primevue/inputtext'
+import {
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
+  Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
+} from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
@@ -125,6 +130,7 @@ type Level = 2 | 3
 const alignKey = {
   left: 'alignLeft', center: 'alignCenter', right: 'alignRight', justify: 'alignJustify',
 } as const
+const alignIcon = { left: AlignLeft, center: AlignCenter, right: AlignRight, justify: AlignJustify } as const
 
 function setLink(): void {
   if (!editor.value) return
@@ -157,73 +163,109 @@ defineExpose({ editor, insertImage })
 </script>
 
 <template>
-  <div class="rich-text">
-    <div v-if="editor" class="rich-text__toolbar">
-      <button type="button" data-cmd="bold" :class="{ active: editor.isActive('bold') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.bold')" :title="t('fields.richtext.bold')" @click="editor!.chain().focus().toggleBold().run()"><b>B</b></button>
-      <button type="button" data-cmd="italic" :class="{ active: editor.isActive('italic') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.italic')" :title="t('fields.richtext.italic')" @click="editor!.chain().focus().toggleItalic().run()"><i>I</i></button>
-      <button type="button" data-cmd="strike" :class="{ active: editor.isActive('strike') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.strikethrough')" :title="t('fields.richtext.strikethrough')" @click="editor!.chain().focus().toggleStrike().run()"><s>S</s></button>
-      <button v-for="al in (['left', 'center', 'right', 'justify'] as const)" :key="al" type="button"
+  <div class="rich-text rounded-md border">
+    <div v-if="editor" class="rich-text__toolbar flex flex-wrap gap-1 border-b p-1.5">
+      <!--
+        Every active-state toolbar button below re-supplies data-[active=true]:hover:bg-primary
+        (and its dark:-prefixed form) alongside the plain data-[active=true]:bg-primary. The ghost
+        variant's own hover:bg-accent hover:text-accent-foreground carries just one modifier
+        (hover), so an override written with just one modifier (data-[active=true]) ties it on CSS
+        specificity and the winner is whichever rule the stylesheet happens to emit later — not a
+        reliable outcome. Stacking data-[active=true] AND hover onto the override selector adds an
+        attribute-selector component that the plain hover rule lacks, so it wins on specificity
+        regardless of emission order. Dark mode needs a second, dark:-prefixed copy of the
+        background rule because the vendored ghost variant carries a dark:hover:bg-accent/50
+        override of its own: that selector's :is()-wrapped dark-mode wrapper is itself a
+        specificity component, so only a same-shape dark:-prefixed override outweighs it — the
+        undecorated data-[active=true]:hover:bg-primary rule would tie it, not beat it. The text
+        pairing has no such dark-only competitor (ghost never overrides hover text colour for
+        dark), so one undecorated override rule already wins in both colour schemes.
+      -->
+      <Button type="button" variant="ghost" size="icon" data-cmd="bold" :data-active="editor.isActive('bold')"
+        :disabled="disabled" :aria-label="t('fields.richtext.bold')" :title="t('fields.richtext.bold')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleBold().run()"><b>B</b></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="italic" :data-active="editor.isActive('italic')"
+        :disabled="disabled" :aria-label="t('fields.richtext.italic')" :title="t('fields.richtext.italic')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleItalic().run()"><i>I</i></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="strike" :data-active="editor.isActive('strike')"
+        :disabled="disabled" :aria-label="t('fields.richtext.strikethrough')" :title="t('fields.richtext.strikethrough')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleStrike().run()"><s>S</s></Button>
+      <Button v-for="al in (['left', 'center', 'right', 'justify'] as const)" :key="al" type="button" variant="ghost" size="icon"
         :data-cmd="`align${al.charAt(0).toUpperCase()}${al.slice(1)}`"
-        :class="{ active: editor.isActive({ textAlign: al }) }" :disabled="disabled"
+        :data-active="editor.isActive({ textAlign: al })" :disabled="disabled"
         :aria-label="t('fields.richtext.' + alignKey[al])" :title="t('fields.richtext.' + alignKey[al])"
-        @click="editor!.chain().focus().setTextAlign(al).run()"><i :class="`pi pi-align-${al}`" /></button>
-      <button v-for="lvl in ([2, 3] as Level[])" :key="lvl" type="button" :data-cmd="`h${lvl}`"
-        :class="{ active: editor.isActive('heading', { level: lvl }) }" :disabled="disabled"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
+        @click="editor!.chain().focus().setTextAlign(al).run()"><component :is="alignIcon[al]" /></Button>
+      <Button v-for="lvl in ([2, 3] as Level[])" :key="lvl" type="button" variant="ghost" size="icon" :data-cmd="`h${lvl}`"
+        :data-active="editor.isActive('heading', { level: lvl })" :disabled="disabled"
         :aria-label="t(lvl === 2 ? 'fields.richtext.heading2' : 'fields.richtext.heading3')"
         :title="t(lvl === 2 ? 'fields.richtext.heading2' : 'fields.richtext.heading3')"
-        @click="editor!.chain().focus().toggleHeading({ level: lvl }).run()">H{{ lvl }}</button>
-      <button type="button" data-cmd="subscript" :class="{ active: editor.isActive('subscript') }"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
+        @click="editor!.chain().focus().toggleHeading({ level: lvl }).run()">H{{ lvl }}</Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="subscript" :data-active="editor.isActive('subscript')"
         :disabled="disabled" :aria-label="t('fields.richtext.subscript')" :title="t('fields.richtext.subscript')"
-        @click="editor!.chain().focus().toggleSubscript().run()">x₂</button>
-      <button type="button" data-cmd="superscript" :class="{ active: editor.isActive('superscript') }"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleSubscript().run()">x₂</Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="superscript" :data-active="editor.isActive('superscript')"
         :disabled="disabled" :aria-label="t('fields.richtext.superscript')" :title="t('fields.richtext.superscript')"
-        @click="editor!.chain().focus().toggleSuperscript().run()">x²</button>
-      <button type="button" data-cmd="bulletList" :class="{ active: editor.isActive('bulletList') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.bulletList')" :title="t('fields.richtext.bulletList')" @click="editor!.chain().focus().toggleBulletList().run()"><i class="pi pi-list" /></button>
-      <button type="button" data-cmd="orderedList" :class="{ active: editor.isActive('orderedList') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.numberedList')" :title="t('fields.richtext.numberedList')" @click="editor!.chain().focus().toggleOrderedList().run()"><i class="pi pi-sort-numeric-down" /></button>
-      <button type="button" data-cmd="blockquote" :class="{ active: editor.isActive('blockquote') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.blockquote')" :title="t('fields.richtext.blockquote')" @click="editor!.chain().focus().toggleBlockquote().run()">&#10077;</button>
-      <button type="button" data-cmd="codeBlock" :class="{ active: editor.isActive('codeBlock') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.codeBlock')" :title="t('fields.richtext.codeBlock')" @click="editor!.chain().focus().toggleCodeBlock().run()">{ }</button>
-      <button type="button" data-cmd="link" :class="{ active: editor.isActive('link') }"
-        :disabled="disabled" :aria-label="t('fields.richtext.link')" :title="t('fields.richtext.link')" @click="setLink">&#128279;</button>
-      <button type="button" data-cmd="hr" :disabled="disabled"
-        :aria-label="t('fields.richtext.horizontalRule')" :title="t('fields.richtext.horizontalRule')" @click="editor!.chain().focus().setHorizontalRule().run()">&#8213;</button>
-      <button type="button" data-cmd="image" :disabled="disabled"
-        :aria-label="t('fields.richtext.insertImage')" :title="t('fields.richtext.insertImage')" @click="openImageDialog">🖼️</button>
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleSuperscript().run()">x²</Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="bulletList" :data-active="editor.isActive('bulletList')"
+        :disabled="disabled" :aria-label="t('fields.richtext.bulletList')" :title="t('fields.richtext.bulletList')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleBulletList().run()"><List /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="orderedList" :data-active="editor.isActive('orderedList')"
+        :disabled="disabled" :aria-label="t('fields.richtext.numberedList')" :title="t('fields.richtext.numberedList')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleOrderedList().run()"><ListOrdered /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="blockquote" :data-active="editor.isActive('blockquote')"
+        :disabled="disabled" :aria-label="t('fields.richtext.blockquote')" :title="t('fields.richtext.blockquote')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleBlockquote().run()"><Quote /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="codeBlock" :data-active="editor.isActive('codeBlock')"
+        :disabled="disabled" :aria-label="t('fields.richtext.codeBlock')" :title="t('fields.richtext.codeBlock')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleCodeBlock().run()"><Code2 /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="link" :data-active="editor.isActive('link')"
+        :disabled="disabled" :aria-label="t('fields.richtext.link')" :title="t('fields.richtext.link')"
+        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="setLink"><LinkIcon /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="hr" :disabled="disabled"
+        :aria-label="t('fields.richtext.horizontalRule')" :title="t('fields.richtext.horizontalRule')" @click="editor!.chain().focus().setHorizontalRule().run()"><Minus /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="image" :disabled="disabled"
+        :aria-label="t('fields.richtext.insertImage')" :title="t('fields.richtext.insertImage')" @click="openImageDialog"><ImageIcon /></Button>
       <RichTextColorMenu :disabled="disabled"
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
       <RichTextTableMenu :disabled="disabled" :in-table="editor.isActive('table')" @action="onTableAction" />
-      <button type="button" data-cmd="undo" :disabled="disabled"
-        :aria-label="t('fields.richtext.undo')" :title="t('fields.richtext.undo')" @click="editor!.chain().focus().undo().run()">&#8630;</button>
-      <button type="button" data-cmd="redo" :disabled="disabled"
-        :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()">&#8631;</button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="undo" :disabled="disabled"
+        :aria-label="t('fields.richtext.undo')" :title="t('fields.richtext.undo')" @click="editor!.chain().focus().undo().run()"><Undo2 /></Button>
+      <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"
+        :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
     </div>
-    <EditorContent class="rich-text__content" :editor="editor" />
-    <Dialog v-model:visible="imageDialogOpen" modal :header="t('fields.richtext.insertImageTitle')" :style="{ width: '60rem' }">
-      <p v-if="imageError" class="error" role="alert">{{ imageError }}</p>
-      <InputText v-model="imageSearch" :placeholder="t('fields.searchFiles')" class="rich-text__search" @update:model-value="debouncedLoadImages" />
-      <MediaGrid :files="files" selectable @select="onImageSelected" />
+    <EditorContent class="rich-text__content min-h-32 p-2.5 [&_th]:bg-muted" :editor="editor" />
+    <!--
+      DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
+      can run to several rows, reka's DialogRoot locks body scroll while open, and plain
+      DialogContent is fixed-position/viewport-centered with no scroll container of its own, so
+      rows above and below the viewport become unreachable. DialogScrollContent's overlay carries
+      its own overflow-y-auto and keeps the content box in normal flow instead.
+
+      Its own width class is an unprefixed max-w-lg (no sm: modifier, unlike plain DialogContent),
+      so max-w-4xl below is unprefixed too — matching modifiers is what makes tailwind-merge drop
+      the vendored default instead of leaving both classes to fight on source order.
+    -->
+    <Dialog v-model:open="imageDialogOpen">
+      <DialogScrollContent class="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{{ t('fields.richtext.insertImageTitle') }}</DialogTitle>
+        </DialogHeader>
+        <p v-if="imageError" class="text-destructive" role="alert">{{ imageError }}</p>
+        <Input v-model="imageSearch" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" class="my-1" @update:model-value="debouncedLoadImages" />
+        <MediaGrid :files="files" selectable @select="onImageSelected" />
+      </DialogScrollContent>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-.rich-text { border: 1px solid var(--border); border-radius: 6px; }
-.rich-text__toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border); }
-.rich-text__toolbar button { min-width: 30px; padding: 2px 6px; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: 4px; }
-.rich-text__toolbar button.active { background: var(--legacy-accent); color: var(--surface); }
-.rich-text__toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
-.rich-text__content { padding: 10px; min-height: 8rem; }
+/* TipTap's own generated DOM, not a vendored ui/ component — styling it here is legitimate. */
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
 .rich-text__content :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; }
 .rich-text__content :deep(th), .rich-text__content :deep(td) { border: 1px solid var(--border); padding: 4px 8px; }
-.rich-text__content :deep(th) { background: var(--surface-2); text-align: left; }
-.rich-text__search { display: block; margin: 8px 0 12px; width: 100%; }
+.rich-text__content :deep(th) { text-align: left; }
 </style>

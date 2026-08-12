@@ -242,10 +242,10 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 
 | `RelationInterface` | 管理後台元件 | 行為 |
 |---|---|---|
-| `Dropdown` | `RelationPicker` (PrimeVue `Select`) | 單值 picker;在使用者輸入時，對目標集合做去抖動 (debounce) 的 `search=`。 |
-| `TagSelect` | `RelationPicker` (PrimeVue `MultiSelect`) | 適用於 many-to-many 關聯的多值 picker，搜尋行為相同。 |
-| `TreeSelect` | `RelationPicker` (PrimeVue `TreeSelect`) | 建立在一棵樹狀結構上的單值 picker，該樹由一個自我參照 many-to-one 的目標資料列建構而成。 |
-| `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | 目標集合的唯讀、分頁、延遲載入清單，依關聯的反向外鍵過濾;點擊一列會導向該列自己的項目編輯頁面。只有在父項已經儲存之後才會顯示 (一個全新、尚未儲存的父項，還沒有 id 可以拿來過濾)。 |
+| `Dropdown` | `RelationPicker` (vendored `ui/combobox`) | 單值 picker;在使用者輸入時，對目標集合做去抖動 (debounce) 的 `search=`。 |
+| `TagSelect` | `RelationPicker` (vendored `ui/combobox`) | 適用於 many-to-many 關聯的多值 picker，搜尋行為相同。 |
+| `TreeSelect` | `RelationPicker` (`form/TreeSelect`) | 建立在一棵樹狀結構上的單值 picker，該樹由一個自我參照 many-to-one 的目標資料列建構而成。 |
+| `RelatedList` | `RelatedList` (vendored `data/DataTable`) | 目標集合的唯讀、分頁、延遲載入清單，依關聯的反向外鍵過濾;點擊一列會導向該列自己的項目編輯頁面。只有在父項已經儲存之後才會顯示 (一個全新、尚未儲存的父項，還沒有 id 可以拿來過濾)。 |
 
 `relationInputKind.ts` 仍然保留一個無條件的 fallback，用於它的對應表不認得的介面:一個單純的
 <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span>，而不是一個輸入元素，

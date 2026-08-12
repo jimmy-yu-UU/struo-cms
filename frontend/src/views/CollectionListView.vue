@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import DataTable, { type DataTableColumn, type DataTableState, toSortParam } from '@/components/data/DataTable.vue'
 import DataTablePagination from '@/components/data/DataTablePagination.vue'
-import FilterBuilder from '@/components/data/FilterBuilder.vue'
+import FilterBuilder, { type FilterField } from '@/components/data/FilterBuilder.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
@@ -78,16 +78,29 @@ function formatDeletedAt(v: unknown): string {
   return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString()
 }
 
-// Fields FilterBuilder can offer, derived from the same columns the table itself shows —
-// an enum (select) field surfaces its options so FilterBuilder renders a Select instead of
-// a free-text Input for it.
-const filterFields = computed(() =>
-  columns.value.map((c: ListColumn) => {
+// Fields FilterBuilder can offer: the display columns first, then every searchable field that did
+// not make the ≤6-column display cut. selectListColumns filters by DISPLAY eligibility (a RichText
+// body or a 7th-ranked slug never appears), while Searchable is what the backend's `search=`
+// honours and what the manual tells collection authors governs free-text search — so without this
+// second group those fields are unreachable from the list. Hidden fields are excluded because
+// QueryValidator refuses to filter them at all. An enum (select) field surfaces its options so
+// FilterBuilder renders a Select instead of a free-text Input for it.
+const filterFields = computed<FilterField[]>(() => {
+  const listed = columns.value.map((c: ListColumn) => {
     const field = fieldOf(c.field)
     const choices = (field?.options as { label: string; value: string }[] | undefined)
     return { name: c.field, label: c.header, options: isSelectField(c.field) ? choices : undefined }
-  }),
-)
+  })
+  const listedNames = new Set(listed.map((f) => f.name))
+  const searchableOnly = (meta.value?.fields ?? [])
+    .filter((f) => f.searchable && !f.hidden && !f.isSystem && !listedNames.has(f.name))
+    .map((f) => ({
+      name: f.name,
+      label: f.label,
+      options: isSelectField(f.name) ? (f.options as { label: string; value: string }[] | undefined) : undefined,
+    }))
+  return [...listed, ...searchableOnly]
+})
 
 function actionButtons(row: Row) {
   const buttons = []

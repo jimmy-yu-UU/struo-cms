@@ -119,9 +119,9 @@ test('create, edit, then delete an article', async ({ page }) => {
   // Delete it.
   await openByTitle(page, title)
   await page.getByRole('button', { name: 'Delete' }).click()
-  // PrimeVue's default locale (@primevue/core config) sets acceptLabel = "Yes";
-  // ItemFormView.vue's confirm.require() doesn't override it.
-  await page.getByRole('button', { name: 'Yes' }).click()
+  // ItemFormView.vue's onDelete() resolves through the local confirmStore/ConfirmHost, which
+  // defaults its accept button to common.confirm ("Confirm"); deleteConfirm() doesn't override it.
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
   await searchByField(page, 'Title', title)
   // Count-settle (trash.spec.ts idiom): the filtered search transitions the tbody from the
