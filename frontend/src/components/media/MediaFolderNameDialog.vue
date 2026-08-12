@@ -26,13 +26,14 @@ function onSubmit(): void {
        binds it with v-model:visible), so the two are bridged here rather than renaming the prop. -->
   <Dialog :open="visible" @update:open="(v: boolean) => emit('update:visible', v)">
     <!--
-      The width override must re-supply the `sm:` modifier: DialogContent's own class list carries
-      sm:max-w-lg (512px), and tailwind-merge keys conflicts on (modifier set, class group), so a
-      bare max-w-* would leave both classes alive and the vendored one would win from 640px up.
-      max-w-[90vw] handles narrower viewports, where sm:max-w-[420px] does not apply at all.
-      Together they reproduce the old `min(90vw, 420px)`.
+      Two copies of the same min(90vw, 420px) value are needed because tailwind-merge keys
+      conflicts on (modifier set, class group): the bare max-w-[min(90vw,420px)] displaces
+      DialogContent's own bare max-w-[calc(100%-2rem)], and the sm:-prefixed copy separately
+      displaces its sm:max-w-lg (512px) -- a bare override alone would leave sm:max-w-lg alive
+      and winning from the sm breakpoint (640px) up, since a bare and an sm:-scoped class in the
+      same group don't conflict with each other.
     -->
-    <DialogContent class="max-w-[90vw] sm:max-w-[420px]">
+    <DialogContent class="max-w-[min(90vw,420px)] sm:max-w-[min(90vw,420px)]">
       <DialogHeader>
         <DialogTitle>{{ header }}</DialogTitle>
       </DialogHeader>

@@ -55,6 +55,16 @@ describe('MediaFolderNameDialog', () => {
     expect(w.get('[data-test="folder-name-confirm"]').attributes('type')).toBe('button')
   })
 
+  // The visible<->open bridge's CLOSE direction (@update:open -> emit('update:visible', ...))
+  // is untested by every other case here, which only drive the OPEN direction via props. Without
+  // this handler the dialog can never be dismissed by Escape, the overlay, or this X, because
+  // MediaLibraryView relies solely on update:visible(false) to clear its own state.
+  it('emits update:visible(false) when the vendored close button (the X) is clicked', async () => {
+    const w = mountDialog({ visible: true, header: 'New folder' })
+    await w.get('[data-slot="dialog-close"]').trigger('click')
+    expect(w.emitted('update:visible')).toEqual([[false]])
+  })
+
   it('resets to blank when reopened without an initialName', async () => {
     const w = mountDialog({ visible: true, header: 'New folder', initialName: 'Alpha' })
     await w.setProps({ visible: false })
