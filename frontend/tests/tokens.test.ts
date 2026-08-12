@@ -54,6 +54,19 @@ describe('tokens.css', () => {
     expect(dark).toContain('--border: #3f3f46')      // zinc-700, NOT #27272a
   })
 
+  // Against #18181b, :root's --destructive/--warning fall to 3.67:1 — below WCAG AA's 4.5:1
+  // for text. .app-dark must use lighter tints, not repeat the :root values verbatim.
+  it('lightens --destructive and --warning for dark-surface contrast, unlike :root', () => {
+    const light = block(':root')
+    const dark = block('.app-dark')
+    expect(light).toContain('--destructive: #dc2626')
+    expect(light).toContain('--warning: #d97706')
+    expect(dark).toContain('--destructive: #f87171')
+    expect(dark).toContain('--warning: #fbbf24')
+    expect(light).not.toContain('--destructive: #f87171')
+    expect(light).not.toContain('--warning: #fbbf24')
+  })
+
   it('drives dark mode off .app-dark, not shadcn default .dark', () => {
     expect(css).toContain('@custom-variant dark (&:is(.app-dark *))')
   })
