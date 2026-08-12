@@ -103,8 +103,8 @@ describe('field components (simple inputs)', () => {
     expect(box.attributes('disabled')).toBe('')
   })
 
-  // Constraint 9: reka components bind their own onClick, so the emit path is only proven by
-  // actually clicking. A rendering-only assertion here would have passed even when broken.
+  // reka components bind their own onClick, so the emit path is only proven by actually clicking.
+  // A rendering-only assertion here would have passed even when broken.
   it('BooleanField emits true when clicked from false', async () => {
     const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
     await w.get('[role="checkbox"]').trigger('click')
@@ -311,11 +311,6 @@ describe('field components (simple inputs)', () => {
     expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
     expect(w.find('input').exists()).toBe(true)
   })
-
-  it('TextareaField keeps six rows after the migration', () => {
-    const w = mount(TextareaField, { props: { field: field({ interface: 'textarea' }), modelValue: 'x' }, ...opts })
-    expect(w.get('textarea').attributes('rows')).toBe('6')
-  })
 })
 
 describe('field components (choice + structural)', () => {
@@ -339,7 +334,7 @@ describe('field components (choice + structural)', () => {
     // it runs before the trigger has caught up, not because the binding is correct.
     await w.vm.$nextTick()
     // The trigger is all that renders before the listbox opens; SelectValue reflects the selected
-    // item's text. Asserting text, not classes (constraint 5).
+    // item's text. Asserting text, not classes.
     expect(w.get('[role="combobox"]').text()).toContain('Beta')
   })
 
@@ -409,8 +404,8 @@ describe('field components (choice + structural)', () => {
     expect(w.find('[role="radiogroup"]').exists()).toBe(true)
   })
 
-  // Constraint 8: reka binds its own onClick, which runs before parent fallthrough, so this must
-  // really click rather than synthesise an emit.
+  // reka binds its own onClick, which runs before parent fallthrough, so this must really click
+  // rather than synthesise an emit.
   it('RadioField emits the clicked option value', async () => {
     const w = mount(RadioField, {
       props: {

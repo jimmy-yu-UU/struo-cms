@@ -60,7 +60,7 @@ describe('AppShell', () => {
     expect(w.find('.stub-confirm').exists()).toBe(true)
   })
 
-  // Six production components (SettingsView, MediaLibraryView, ItemFormView, PermissionMatrix,
+  // Five production components (SettingsView, MediaLibraryView, PermissionMatrix,
   // RevisionHistoryDrawer, MediaDetailDialog) still call primevue/usetoast and mock that call in
   // their own tests, so none of them notices a missing <Toast> host -- see AppShell.vue's Toast
   // comment for why it must stay mounted. This test is what actually catches that regression.

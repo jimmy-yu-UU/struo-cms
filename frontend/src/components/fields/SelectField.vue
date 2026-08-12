@@ -13,7 +13,7 @@ const options = computed(() => props.field.options ?? [])
 // unexpected caller. Coercing through `?? ''` keeps the value a plain string in every case, so
 // reka's SelectRoot never sees `undefined` and never flips into its non-reactive `passive`
 // (uncontrolled) mode, which production never exercises. (The null-means-nothing-selected
-// convention belongs to the relation picker's own field, task 21 — not to this one.)
+// convention belongs to the relation picker's own field, not to this one.)
 const current = computed(() => String(props.modelValue ?? ''))
 </script>
 

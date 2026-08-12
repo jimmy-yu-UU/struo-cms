@@ -30,7 +30,7 @@ JSON 文字的一般 `string` 屬性，之所以被加寬到 `text`，純粹是�
 
 | 介面 | 用途 | 預期的 CLR 型別 | 產生的欄位 | 管理後台編輯器 |
 |---|---|---|---|---|
-| `Text` | 簡短純文字字串 | `string` | (a) `varchar(255)` | `TextField` (PrimeVue `InputText`) |
+| `Text` | 簡短純文字字串 | `string` | (a) `varchar(255)` | `TextField` (vendored `ui/input`) |
 | `Textarea` | 多行純文字字串 | `string` | (b) `text` | `TextareaField` |
 | `RichText` | 已清理 (sanitize) 的 HTML | `string` | (b) `text` | `RichTextField` (TipTap) |
 | `Markdown` | Markdown 原始文字 | `string` | (b) `text` | `TextareaField`——純文字區域，沒有即時預覽或工具列 |
@@ -41,7 +41,7 @@ JSON 文字的一般 `string` 屬性，之所以被加寬到 `text`，純粹是�
 | `Password` | 機密值 | `string` | (a) `varchar(255)` | `TextField`——一般 (未遮罩) 的輸入欄位;完全排除在 GraphQL schema 之外 |
 | `Color` | 顏色值 | `string` | (a) `varchar(255)` | `TextField`——一般文字輸入欄位，沒有色票選擇器 |
 | `Phone` | 電話號碼 | `string` | (a) `varchar(255)` | `TextField` |
-| `Number` | 數值 | `int`/`long`/`decimal`/`double`/等 | (a) 依 SqlSugar 對該數值 CLR 型別的對應而定 | `NumberField` (PrimeVue `InputNumber`) |
+| `Number` | 數值 | `int`/`long`/`decimal`/`double`/等 | (a) 依 SqlSugar 對該數值 CLR 型別的對應而定 | `NumberField` (vendored `ui/number-field`) |
 | `Slider` | 數值 | numeric | (a) 同上 | `NumberField`——與 `Number` 相同的元件，沒有滑桿 (slider) 元件 |
 | `Rating` | 數值 | numeric | (a) 同上 | `NumberField`——與 `Number` 相同的元件，沒有星級 (star) 元件 |
 | `Boolean` | 真/假 | `bool` | (a) boolean | `BooleanField` |
@@ -93,7 +93,7 @@ Repeater 的子欄位被限制在一份較小、僅限純量 (scalar) 型別的�
 3. 否則為 `null` (無限制)——每一個承載內容的介面 (`Textarea`、`RichText`、`Markdown`、`Code`、
    `Json`) 以及每一個非 `string` 欄位皆是如此。
 
-管理後台 SPA 的 `TextField.vue` 會把 `field.maxLength` 直接傳給 PrimeVue `InputText` 原生的
+管理後台 SPA 的 `TextField.vue` 會把 `field.maxLength` 直接傳給 vendored `ui/input` 原生的
 `maxlength` 屬性，所以即使從未有任何 `[CmsField]` 明確設定過它，這個預設值 `255` 仍會在 client 端
 被強制執行為一個硬性的輸入上限。它與資料庫欄位的實際寬度毫無關係——這兩個機制之所以剛好都用 `255`
 這個數字，只是因為 SqlSugar 自己對於未加寬 `string` 欄位的 CodeFirst 預設值也剛好是
