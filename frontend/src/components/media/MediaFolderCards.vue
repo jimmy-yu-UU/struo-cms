@@ -13,7 +13,7 @@ const emit = defineEmits<{
 
 <template>
   <div v-if="folders.length" class="folder-grid">
-    <div v-for="f in folders" :key="f.id" class="folder-card" role="button" tabindex="0"
+    <div v-for="f in folders" :key="f.id" class="folder-card rounded-xl hover:border-primary" role="button" tabindex="0"
          @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)">
       <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
       <span class="folder-card__name">{{ f.name }}</span>
@@ -37,9 +37,9 @@ const emit = defineEmits<{
 .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .folder-card {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: var(--legacy-radius-lg, 12px); background: var(--surface);
+  border: 1px solid var(--border); background: var(--surface);
   transition: border-color var(--speed, .15s), box-shadow var(--speed, .15s);
 }
-.folder-card:hover { border-color: var(--legacy-accent); box-shadow: var(--shadow-1); }
+.folder-card:hover { box-shadow: var(--shadow-1); }
 .folder-card__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
 </style>

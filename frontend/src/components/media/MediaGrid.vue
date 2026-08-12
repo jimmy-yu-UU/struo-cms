@@ -32,8 +32,8 @@ function isSelected(id: string): boolean {
       v-for="f in files"
       :key="f.id"
       type="button"
-      class="media-tile"
-      :class="{ 'is-selected': isSelected(f.id) }"
+      class="media-tile rounded-xl hover:border-primary"
+      :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
       @click="onClick(f.id)"
     >
       <FileThumbnail :file="f" />
@@ -54,7 +54,6 @@ function isSelected(id: string): boolean {
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: var(--legacy-radius-lg, 12px);
   background: var(--surface);
   cursor: pointer;
   font: inherit;
@@ -63,8 +62,7 @@ function isSelected(id: string): boolean {
   overflow: hidden;
   transition: border-color var(--speed, .15s), box-shadow var(--speed, .15s);
 }
-.media-tile:hover { border-color: var(--legacy-accent); box-shadow: var(--shadow-1); }
-.media-tile.is-selected { outline: 2px solid var(--legacy-accent); outline-offset: -1px; }
+.media-tile:hover { box-shadow: var(--shadow-1); }
 .media-tile__name {
   font-size: 13px;
   color: var(--fg);

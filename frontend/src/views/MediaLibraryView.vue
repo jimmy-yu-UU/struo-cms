@@ -320,10 +320,10 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     </p>
 
     <nav v-if="mode === 'active' && !searchActive && (breadcrumb.length || folders.length)" class="media-crumb" :aria-label="t('media.title')">
-      <button type="button" class="media-crumb__link" @click="goToBreadcrumb(null)">{{ t('media.breadcrumbRoot') }}</button>
+      <button type="button" class="media-crumb__link text-primary rounded-md" @click="goToBreadcrumb(null)">{{ t('media.breadcrumbRoot') }}</button>
       <template v-for="c in breadcrumb" :key="c.id">
         <ChevronRight class="media-crumb__sep size-3 text-muted-foreground" aria-hidden="true" />
-        <button v-if="c.id !== currentFolderId" type="button" class="media-crumb__link" @click="goToBreadcrumb(c.id)">{{ c.name }}</button>
+        <button v-if="c.id !== currentFolderId" type="button" class="media-crumb__link text-primary rounded-md" @click="goToBreadcrumb(c.id)">{{ c.name }}</button>
         <span v-else class="media-crumb__current">{{ c.name }}</span>
       </template>
     </nav>
@@ -340,9 +340,9 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <table v-else class="media-trash-list">
       <thead>
         <tr>
-          <th class="media-trash-list__thumb-col" aria-hidden="true"></th>
-          <th>{{ t('media.colName') }}</th>
-          <th class="media-trash-list__actions-col"></th>
+          <th class="media-trash-list__thumb-col text-muted-foreground" aria-hidden="true"></th>
+          <th class="text-muted-foreground">{{ t('media.colName') }}</th>
+          <th class="media-trash-list__actions-col text-muted-foreground"></th>
         </tr>
       </thead>
       <tbody>
@@ -369,7 +369,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
         </tr>
       </tbody>
     </table>
-    <p v-if="!loading && !files.length && !visibleFolders.length" class="empty">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
+    <p v-if="!loading && !files.length && !visibleFolders.length" class="empty text-muted-foreground">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
 
     <DataTablePagination
       v-if="total > 0"
@@ -395,14 +395,14 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 <style scoped>
 .media-library { display: block; }
 .error { color: var(--danger); font-size: 0.9rem; margin: 0 0 12px; }
-.empty { color: var(--legacy-muted); text-align: center; padding: 40px 0; }
+.empty { text-align: center; padding: 40px 0; }
 .media-crumb { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; flex-wrap: wrap; }
-.media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; color: var(--legacy-accent); font: inherit; border-radius: var(--legacy-radius, 8px); }
+.media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; font: inherit; }
 .media-crumb__link:hover { text-decoration: underline; }
 .media-crumb__current { color: var(--fg); font-weight: 600; padding: 2px 4px; }
 .media-trash-list { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .media-trash-list th {
-  text-align: left; padding: 8px 12px; color: var(--legacy-muted); font-weight: 600;
+  text-align: left; padding: 8px 12px; font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
 .media-trash-list td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--fg); vertical-align: middle; }
