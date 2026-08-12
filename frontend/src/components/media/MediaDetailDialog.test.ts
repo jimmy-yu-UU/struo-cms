@@ -19,7 +19,7 @@ const i18n = createI18n({
   messages: { en: { media: {
     detailTitle: 'File details', fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
     copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL', status: 'Status',
-    save: 'Save', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
+    save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     folderField: 'Folder', folderUncategorized: 'Uncategorized',
   }, confirm: {
@@ -27,8 +27,6 @@ const i18n = createI18n({
     hardDeleteHeader: 'Confirm delete', hardDeleteMessage: 'Delete this item? This cannot be undone.',
   } } },
 })
-
-const DialogStub = { name: 'Dialog', template: '<div v-if="visible"><slot /><slot name="footer" /></div>', props: ['visible'] }
 
 const fileMeta = {
   name: 'file', label: 'File',
@@ -67,14 +65,13 @@ const folderRows = [
 function mountDialog() {
   return mount(MediaDetailDialog, {
     props: { file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }, canWrite: true, canDelete: true },
-    global: { plugins: [i18n], stubs: {
-      Dialog: DialogStub,
-      InputText: { name: 'InputText', template: '<input />' },
-      Button: { name: 'Button', template: '<button><slot /></button>', props: ['label'] },
-      SelectButton: { name: 'SelectButton', template: '<div />' },
-      ConfirmDialog: { name: 'ConfirmDialog', template: '<div />' },
-      TreeSelect: { name: 'TreeSelect', template: '<div />', props: ['modelValue', 'options', 'disabled'] },
-    } },
+    global: {
+      plugins: [i18n],
+      // reka's portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
+      // whole dialog body. Nothing here asserts against document.body, so the in-tree render is fine.
+      stubs: { teleport: true, TreeSelect: { name: 'TreeSelect', template: '<div />', props: ['modelValue', 'options', 'disabled'] } },
+      renderStubDefaultSlot: true,
+    },
   })
 }
 
@@ -232,14 +229,100 @@ describe('MediaDetailDialog', () => {
     const w = mountDialog()
     // Synchronous portion of load() (up to its first await) has already run as part of mount, so
     // the initial render reflects loading === true before we resolve the pending itemsApi.get.
-    const inputs = w.findAllComponents({ name: 'InputText' })
-    // The two per-locale text inputs (title, alt) are the first two InputText instances rendered.
-    // Vue renders a `true` boolean attribute as the empty string (`disabled=""`), so assert
-    // presence rather than truthiness.
+    const inputs = w.findAll('input[data-slot="input"]')
+    // The two per-locale text inputs (title, alt) are the first two vendored Input instances
+    // rendered. Vue renders a `true` boolean attribute as the empty string (`disabled=""`), so
+    // assert presence rather than truthiness.
     expect(inputs[0].attributes('disabled')).toBe('')
     resolveGet(item)
     await flushPromises()
-    expect(w.findAllComponents({ name: 'InputText' })[0].attributes('disabled')).toBeFalsy()
+    expect(w.findAll('input[data-slot="input"]')[0].attributes('disabled')).toBeFalsy()
+  })
+
+  it('renders the vendored dialog and inputs, not PrimeVue ones', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.find('[data-slot="dialog-title"]').exists()).toBe(true)
+    // Title, Alt and the read-only File URL.
+    expect(w.findAll('[data-slot="input"]')).toHaveLength(3)
+    expect(w.findComponent({ name: 'SelectButton' }).exists()).toBe(false)
+  })
+
+  it('switches locale through a ToggleGroup and ignores its deselect emit', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.find('[data-slot="toggle-group"]').exists()).toBe(true)
+    const items = () => w.findAll('[data-slot="toggle-group-item"]')
+    // 'en' is the default locale, so it starts pressed; 'zh-TW' does not.
+    expect(items()[0].attributes('data-state')).toBe('on')
+    expect(items()[1].attributes('data-state')).toBe('off')
+
+    const vm = w.vm as unknown as { activeLocale: string; onLocaleToggle: (v: unknown) => void }
+    vm.onLocaleToggle('zh-TW')
+    await flushPromises()
+    expect(vm.activeLocale).toBe('zh-TW')
+    // The ToggleGroup's :model-value must actually be wired to activeLocale, not just the exposed
+    // ref changing underneath a control that stopped tracking it.
+    expect(items()[0].attributes('data-state')).toBe('off')
+    expect(items()[1].attributes('data-state')).toBe('on')
+
+    // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again, and a
+    // locale switcher has no "no locale" state to fall into.
+    vm.onLocaleToggle(undefined)
+    await flushPromises()
+    expect(vm.activeLocale).toBe('zh-TW')
+    expect(items()[1].attributes('data-state')).toBe('on')
+  })
+
+  it('reflects the stored Title, including a model replacement after mount', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const titleInput = () => w.findAll('input[data-slot="input"]')[0].element as HTMLInputElement
+    expect(titleInput().value).toBe('Hello')
+    // ItemFormView-style recovery replaces the whole model; an uncontrolled input would keep its
+    // own stale state through that and the next save would write the stale value.
+    ;(w.vm as unknown as { setField: (n: 'title' | 'alt', v: string) => void }).setField('title', 'Replaced')
+    await flushPromises()
+    expect(titleInput().value).toBe('Replaced')
+  })
+
+  it('swaps the Save label while saving, since ui/button has no loading prop', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect((w.vm as unknown as { saveLabel: string }).saveLabel).toBe('Save')
+    let release!: () => void
+    vi.spyOn(itemsApi, 'update').mockReturnValue(new Promise((r) => { release = () => r(item as never) }) as never)
+    const pending = (w.vm as unknown as { onSave: () => Promise<void> }).onSave()
+    await flushPromises()
+    expect((w.vm as unknown as { saveLabel: string }).saveLabel).toBe('Saving…')
+    release()
+    await pending
+  })
+
+  it('gives every dialog button an explicit type="button"', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const buttons = w.findAll('button')
+    expect(buttons.length).toBeGreaterThan(0)
+    buttons.forEach((b) => expect(b.attributes('type')).toBe('button'))
+  })
+
+  it('renders distinct lucide icons for delete and copy-url, not swapped', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const buttons = w.findAll('button')
+    const deleteButton = buttons.find((b) => b.text().includes('Delete file'))
+    const copyButton = buttons.find((b) => b.attributes('aria-label') === 'Copy URL')
+    expect(deleteButton?.find('.lucide-trash-2').exists()).toBe(true)
+    expect(deleteButton?.find('.lucide-copy').exists()).toBe(false)
+    expect(copyButton?.find('.lucide-copy').exists()).toBe(true)
+    expect(copyButton?.find('.lucide-trash-2').exists()).toBe(false)
   })
 
   it('confirms with soft-delete copy, deletes via filesApi.remove (trash, no purge) after accept, and emits deleted', async () => {

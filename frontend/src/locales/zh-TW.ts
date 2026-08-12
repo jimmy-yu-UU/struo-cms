@@ -145,6 +145,7 @@ export default {
     copyFailed: '無法複製 URL',
     status: '狀態',
     save: '儲存',
+    saving: '儲存中…',
     delete: '刪除檔案',
     saveConflict: '此檔案已被他人變更,請重新開啟以取得最新版本。',
     dropzone: '拖放檔案到這裡,或點擊上傳',

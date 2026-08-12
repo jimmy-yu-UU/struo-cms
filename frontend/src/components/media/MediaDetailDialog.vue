@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import SelectButton from 'primevue/selectbutton'
 import TreeSelect from 'primevue/treeselect'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
+import { Copy, Trash2 } from '@lucide/vue'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { filesApi } from '../../api/filesApi'
@@ -87,6 +88,16 @@ const activeValues = computed<Record<string, unknown>>({
 function setField(name: 'title' | 'alt', value: string): void {
   activeValues.value = { ...activeValues.value, [name]: value }
 }
+
+function onLocaleToggle(value: unknown): void {
+  // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again, and a
+  // locale switcher has no "no locale" state to fall into.
+  if (typeof value === 'string' && value.length > 0) activeLocale.value = value
+}
+
+// ui/button has no `loading` prop (unlike the PrimeVue Button it replaces), so the in-flight save
+// state is surfaced through this label swap plus :disabled on the button.
+const saveLabel = computed(() => (saving.value ? t('media.saving') : t('media.save')))
 
 async function load(): Promise<void> {
   if (!props.file) return
@@ -187,86 +198,106 @@ async function onCopyUrl(): Promise<void> {
 
 watch(() => props.file?.id, (id) => { if (id) void load() }, { immediate: true })
 
-defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, folderId, onFolderChange, error })
+defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, folderId, onFolderChange, error, saveLabel, onLocaleToggle })
 </script>
 
 <template>
-  <Dialog
-    :visible="visible"
-    modal
-    :header="$t('media.detailTitle')"
-    :style="{ width: 'min(78vw, 1100px)' }"
-    :breakpoints="{ '960px': '95vw' }"
-    :dismissable-mask="true"
-    @update:visible="(v: boolean) => { if (!v) emit('close') }"
-  >
-    <ConfirmDialog />
-    <div v-if="file" class="md-grid">
-      <div class="md-preview">
-        <img v-if="isImage" :src="previewSrc" :alt="file.fileName" />
-        <FileThumbnail v-else :file="file" />
-      </div>
-      <div class="md-fields">
-        <SelectButton
-          v-if="localeOptions.length > 1"
-          v-model="activeLocale"
-          :options="localeOptions"
-          option-label="label"
-          option-value="value"
-          :allow-empty="false"
-        />
-        <label class="md-field">
-          <span>{{ $t('media.fieldTitle') }}</span>
-          <InputText :model-value="(activeValues.title as string) ?? ''" @update:model-value="setField('title', $event ?? '')" :disabled="!canWrite || loading" />
-        </label>
-        <label class="md-field">
-          <span>{{ $t('media.fieldAlt') }}</span>
-          <InputText :model-value="(activeValues.alt as string) ?? ''" @update:model-value="setField('alt', $event ?? '')" :disabled="!canWrite || loading" />
-        </label>
-        <label class="md-field">
-          <span>{{ $t('media.folderField') }}</span>
-          <TreeSelect
-            :model-value="folderValue"
-            :options="folderNodes"
-            selection-mode="single"
-            :disabled="!canWrite || loading"
-            @update:model-value="onFolderChange"
-          />
-        </label>
+  <Dialog :open="visible" @update:open="(v: boolean) => { if (!v) emit('close') }">
+    <!--
+      DialogScrollContent, not DialogContent: the preview image plus the field column can exceed the
+      viewport, and reka's DialogRoot locks body scroll while open, leaving a fixed-position centered
+      box with no scroll container at all. Its own width class is a BARE max-w-lg (DialogContent's
+      is sm:max-w-lg), so this override supplies no modifier either -- tailwind-merge keys on
+      (modifier set, class group), and a bare max-w-* only loses to another bare max-w-*.
+      max-[960px]:max-w-[95vw] reproduces the old :breakpoints="{ '960px': '95vw' }".
+    -->
+    <DialogScrollContent class="max-w-[min(78vw,1100px)] max-[960px]:max-w-[95vw]">
+      <ConfirmDialog />
+      <DialogHeader>
+        <DialogTitle>{{ $t('media.detailTitle') }}</DialogTitle>
+      </DialogHeader>
 
-        <div class="md-kv"><span>{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>
-        <div class="md-kv"><span>{{ $t('media.colSize') }}</span><b>{{ sizeText }}</b></div>
-        <div class="md-kv"><span>{{ $t('media.colUploaded') }}</span><b>{{ uploadedText }}</b></div>
-        <div class="md-kv"><span>{{ $t('media.status') }}</span><b>{{ statusText }}</b></div>
+      <div v-if="file" class="md-grid">
+        <div class="md-preview">
+          <img v-if="isImage" :src="previewSrc" :alt="file.fileName" />
+          <FileThumbnail v-else :file="file" />
+        </div>
+        <div class="md-fields">
+          <ToggleGroup
+            v-if="localeOptions.length > 1"
+            type="single"
+            variant="outline"
+            :model-value="activeLocale"
+            @update:model-value="onLocaleToggle"
+          >
+            <ToggleGroupItem v-for="o in localeOptions" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </ToggleGroupItem>
+          </ToggleGroup>
 
-        <label class="md-field">
-          <span>{{ $t('media.fileUrl') }}</span>
-          <div class="md-url">
-            <InputText :model-value="fileUrl" readonly />
-            <Button icon="pi pi-copy" text :aria-label="$t('media.copyUrl')" @click="onCopyUrl" />
-          </div>
-        </label>
+          <label class="md-field">
+            <span>{{ $t('media.fieldTitle') }}</span>
+            <Input
+              :model-value="(activeValues.title as string) ?? ''"
+              :disabled="!canWrite || loading"
+              @update:model-value="setField('title', String($event ?? ''))"
+            />
+          </label>
+          <label class="md-field">
+            <span>{{ $t('media.fieldAlt') }}</span>
+            <Input
+              :model-value="(activeValues.alt as string) ?? ''"
+              :disabled="!canWrite || loading"
+              @update:model-value="setField('alt', String($event ?? ''))"
+            />
+          </label>
+          <label class="md-field">
+            <span>{{ $t('media.folderField') }}</span>
+            <TreeSelect
+              :model-value="folderValue"
+              :options="folderNodes"
+              selection-mode="single"
+              :disabled="!canWrite || loading"
+              @update:model-value="onFolderChange"
+            />
+          </label>
 
-        <p v-if="conflict" class="md-conflict" role="alert">{{ $t('media.saveConflict') }}</p>
-        <p v-if="error" class="md-error" role="alert">{{ error }}</p>
-      </div>
-    </div>
+          <div class="md-kv"><span>{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>
+          <div class="md-kv"><span>{{ $t('media.colSize') }}</span><b>{{ sizeText }}</b></div>
+          <div class="md-kv"><span>{{ $t('media.colUploaded') }}</span><b>{{ uploadedText }}</b></div>
+          <div class="md-kv"><span>{{ $t('media.status') }}</span><b>{{ statusText }}</b></div>
 
-    <template #footer>
-      <div class="md-foot">
-        <Button
-          v-if="canDelete"
-          :label="$t('media.delete')"
-          icon="pi pi-trash"
-          text
-          severity="danger"
-          @click="onDelete"
-        />
-        <div class="md-foot__right">
-          <Button v-if="canWrite" :label="$t('media.save')" :loading="saving" @click="onSave" />
+          <label class="md-field">
+            <span>{{ $t('media.fileUrl') }}</span>
+            <div class="md-url">
+              <Input :model-value="fileUrl" readonly />
+              <Button
+                type="button" variant="ghost" size="icon"
+                :aria-label="$t('media.copyUrl')" @click="onCopyUrl"
+              >
+                <Copy aria-hidden="true" />
+              </Button>
+            </div>
+          </label>
+
+          <p v-if="conflict" class="md-conflict" role="alert">{{ $t('media.saveConflict') }}</p>
+          <p v-if="error" class="md-error" role="alert">{{ error }}</p>
         </div>
       </div>
-    </template>
+
+      <DialogFooter class="md-foot">
+        <Button
+          v-if="canDelete"
+          type="button" variant="ghost"
+          class="mr-auto text-destructive hover:text-destructive"
+          @click="onDelete"
+        >
+          <Trash2 aria-hidden="true" />
+          {{ $t('media.delete') }}
+        </Button>
+        <Button v-if="canWrite" type="button" :disabled="saving" @click="onSave">{{ saveLabel }}</Button>
+      </DialogFooter>
+    </DialogScrollContent>
   </Dialog>
 </template>
 
@@ -288,7 +319,5 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 .md-url :deep(input) { flex: 1; }
 .md-conflict { margin: 0; color: var(--warn); font-size: .85rem; }
 .md-error { margin: 0; color: var(--danger); font-size: .85rem; }
-.md-foot { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px; }
-.md-foot__right { display: flex; gap: 10px; align-items: center; margin-left: auto; }
 @media (max-width: 640px) { .md-grid { grid-template-columns: 1fr; } }
 </style>
