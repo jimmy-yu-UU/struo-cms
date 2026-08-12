@@ -4,6 +4,8 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import RichTextInput from './RichTextInput.vue'
 import { fileContentPath } from '../../lib/richTextImages'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -236,5 +238,26 @@ describe('RichTextInput', () => {
     expect(buttons.length).toBeGreaterThan(20)
     buttons.forEach((el) => expect(el.attributes('type'), el.attributes('data-cmd')).toBe('button'))
     expect(w.get('[data-cmd="colorFree"]').attributes('type')).toBe('color')
+  })
+
+  // jsdom does not run Tailwind, so no test here can observe which rule actually paints. What it
+  // CAN observe is exactly what Button.vue computes at render time — cn(buttonVariants(...),
+  // props.class) — which is the twMerge step that decides whether the vendored hover classes
+  // survive alongside the toolbar's active-hover override or get de-duplicated away. Both survive
+  // here because data-[active=true]:hover:… and dark:data-[active=true]:hover:… are each a
+  // different modifier set than the vendored hover:… and dark:hover:…, so twMerge does not treat
+  // them as conflicts in the same group; the win is then a CSS-specificity question (see the
+  // toolbar's own comment) rather than a class-list question, which is why this test only pins
+  // "both present", not "which one applies".
+  it('keeps the active-hover override classes alongside the vendored ghost hover classes after cn()', () => {
+    const overrideClass = 'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground '
+      + 'data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground '
+      + 'dark:data-[active=true]:hover:bg-primary'
+    const merged = cn(buttonVariants({ variant: 'ghost', size: 'icon' }), overrideClass)
+    expect(merged).toContain('hover:bg-accent')
+    expect(merged).toContain('dark:hover:bg-accent/50')
+    expect(merged).toContain('data-[active=true]:hover:bg-primary')
+    expect(merged).toContain('data-[active=true]:hover:text-primary-foreground')
+    expect(merged).toContain('dark:data-[active=true]:hover:bg-primary')
   })
 })

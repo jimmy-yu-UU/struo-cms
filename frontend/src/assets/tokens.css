@@ -25,7 +25,9 @@
   --secondary-foreground: #111827;
   --muted: #f4f4f5;               /* subtle SURFACE */
   --muted-foreground: #64748b;    /* subdued TEXT */
-  --accent: color-mix(in oklab, #111827, transparent 95%);  /* hover surface */
+  --accent: #f4f4f5;              /* hover surface — same literal as --muted, kept as its own hex
+                                      so the two stay independently adjustable rather than reused
+                                      via var(--muted) */
   --accent-foreground: #111827;
   --destructive: #dc2626;
   --border: #e5e7eb;
@@ -65,7 +67,8 @@
   --secondary-foreground: #fafafa;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
-  --accent: color-mix(in oklab, #fafafa, transparent 95%);
+  --accent: #27272a;              /* hover surface — same literal as --muted's dark value, see
+                                      the :root --accent comment for why it isn't var(--muted) */
   --accent-foreground: #fafafa;
   /* Lighter than :root's shades, for two different reasons. --destructive: against this
      surface (#18181b), :root's #dc2626 measures 3.67:1, below WCAG AA's 4.5:1 text contrast;

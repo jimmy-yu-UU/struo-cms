@@ -48,6 +48,18 @@ describe('tokens.css', () => {
     expect(block('.app-dark')).not.toContain('--accent: #38bdf8')
   })
 
+  // --accent used to be a 5% colour-mix wash of the foreground colour — nearly invisible as a
+  // hover surface. Pin it to the same opaque value as --muted so a future edit can't silently
+  // drift it back toward transparency.
+  it('makes --accent an opaque surface matching --muted, not a translucent wash', () => {
+    // --sidebar-accent is intentionally out of scope and still a color-mix wash, so this checks
+    // the --accent declaration itself rather than the whole block for the string "color-mix".
+    expect(block(':root')).toContain('--accent: #f4f4f5')
+    expect(block('.app-dark')).toContain('--accent: #27272a')
+    expect(block(':root')).not.toMatch(/--accent:\s*color-mix/)
+    expect(block('.app-dark')).not.toMatch(/--accent:\s*color-mix/)
+  })
+
   it('uses the intended dark zinc values, not a lighter/darker alternate', () => {
     const dark = block('.app-dark')
     expect(dark).toContain('--background: #18181b')  // zinc-900, NOT #09090b
