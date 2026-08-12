@@ -62,9 +62,16 @@ const folderRows = [
   { id: 'b', name: 'Child B', parentId: 'a' },
 ]
 
-function mountDialog() {
+type MountFile = { id: string; fileName: string; contentType: string; size: number } | null
+
+function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelete?: boolean } = {}) {
   return mount(MediaDetailDialog, {
-    props: { file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }, canWrite: true, canDelete: true },
+    props: {
+      file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 },
+      canWrite: true,
+      canDelete: true,
+      ...overrides,
+    },
     global: {
       plugins: [i18n],
       // reka's portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
@@ -241,12 +248,29 @@ describe('MediaDetailDialog', () => {
 
   it('renders the vendored dialog and inputs, not PrimeVue ones', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
-    const w = mountDialog()
+    // MediaLibraryView mounts this dialog unconditionally with :file="selected", and `selected`
+    // starts null -- taking that same null-then-real transition here (instead of a prop that is
+    // already non-null at setup) matches the real initial-mount path.
+    const w = mountDialog({ file: null })
+    await flushPromises()
+    await w.setProps({ file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 } })
     await flushPromises()
     expect(w.find('[data-slot="dialog-title"]').exists()).toBe(true)
     // Title, Alt and the read-only File URL.
-    expect(w.findAll('[data-slot="input"]')).toHaveLength(3)
+    const inputs = () => w.findAll('[data-slot="input"]')
+    expect(inputs()).toHaveLength(3)
     expect(w.findComponent({ name: 'SelectButton' }).exists()).toBe(false)
+    const fileUrlInput = () => inputs()[2].element as HTMLInputElement
+    expect(fileUrlInput().value).toContain('f1')
+    expect(inputs()[2].attributes('readonly')).toBe('')
+
+    // The dialog stays open across this second file (both props.file values are non-null, so
+    // reka's Presence never unmounts/remounts DialogScrollContent) -- a `defaultValue`-only
+    // binding would leave the URL box showing 'f1' forever once the user switches files without
+    // closing the dialog in between.
+    await w.setProps({ file: { id: 'f2', fileName: 'b.png', contentType: 'image/png', size: 2048 } })
+    await flushPromises()
+    expect(fileUrlInput().value).toContain('f2')
   })
 
   it('switches locale through a ToggleGroup and ignores its deselect emit', async () => {
@@ -276,29 +300,40 @@ describe('MediaDetailDialog', () => {
     expect(items()[1].attributes('data-state')).toBe('on')
   })
 
-  it('reflects the stored Title, including a model replacement after mount', async () => {
+  it('reflects the stored Title and Alt, including a model replacement after mount', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
     const titleInput = () => w.findAll('input[data-slot="input"]')[0].element as HTMLInputElement
+    const altInput = () => w.findAll('input[data-slot="input"]')[1].element as HTMLInputElement
     expect(titleInput().value).toBe('Hello')
+    expect(altInput().value).toBe('An image')
     // ItemFormView-style recovery replaces the whole model; an uncontrolled input would keep its
     // own stale state through that and the next save would write the stale value.
-    ;(w.vm as unknown as { setField: (n: 'title' | 'alt', v: string) => void }).setField('title', 'Replaced')
+    const vm = w.vm as unknown as { setField: (n: 'title' | 'alt', v: string) => void }
+    vm.setField('title', 'Replaced')
+    vm.setField('alt', 'Replaced alt')
     await flushPromises()
     expect(titleInput().value).toBe('Replaced')
+    expect(altInput().value).toBe('Replaced alt')
   })
 
-  it('swaps the Save label while saving, since ui/button has no loading prop', async () => {
+  it('swaps the Save label while saving, since ui/button has no loading prop, and disables the button too', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
+    const saveButton = () => w.findAll('button').find((b) => b.text() === 'Save' || b.text() === 'Saving…')
     expect((w.vm as unknown as { saveLabel: string }).saveLabel).toBe('Save')
+    expect(saveButton()?.attributes('disabled')).toBeFalsy()
     let release!: () => void
     vi.spyOn(itemsApi, 'update').mockReturnValue(new Promise((r) => { release = () => r(item as never) }) as never)
     const pending = (w.vm as unknown as { onSave: () => Promise<void> }).onSave()
     await flushPromises()
     expect((w.vm as unknown as { saveLabel: string }).saveLabel).toBe('Saving…')
+    // ui/button has no `loading` prop, so double-submit protection on this versioned write comes
+    // entirely from :disabled -- without it a second click re-enters onSave with the same version
+    // and produces a spurious conflict.
+    expect(saveButton()?.attributes('disabled')).toBe('')
     release()
     await pending
   })
