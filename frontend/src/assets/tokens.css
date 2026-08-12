@@ -67,8 +67,12 @@
   --muted-foreground: #a1a1aa;
   --accent: color-mix(in oklab, #fafafa, transparent 95%);
   --accent-foreground: #fafafa;
-  /* Lighter than :root's shades: against this surface (#18181b), :root's --destructive and
-     --warning both fall below WCAG AA's 4.5:1 text contrast. These are the AA-passing tints. */
+  /* Lighter than :root's shades, for two different reasons. --destructive: against this
+     surface (#18181b), :root's #dc2626 measures 3.67:1, below WCAG AA's 4.5:1 text contrast;
+     #f87171 clears it. --warning has no text consumer, and :root's #d97706 already clears AA
+     text contrast here (5.56:1) on its own — this value instead matches theme.css's dark
+     --warn, so the border this token draws reaches the same contrast (10.61:1) as the
+     legacy conflict-banner border, giving any future text-warning use AA headroom too. */
   --destructive: #f87171;
   --warning: #fbbf24;
   --border: #3f3f46;
