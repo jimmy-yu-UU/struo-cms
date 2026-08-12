@@ -44,7 +44,7 @@ defineExpose({ uploadFiles })
 
 <template>
   <div
-    class="dropzone rounded-md"
+    class="dropzone rounded-md border-2 border-dashed border-border"
     :class="{ 'is-dragging border-primary': dragging }"
     @dragover.prevent="dragging = true"
     @dragleave.prevent="dragging = false"
@@ -69,7 +69,6 @@ defineExpose({ uploadFiles })
   /* Large, roughly-square drop target so files are easy to drag in; capped so it never
      overflows shorter viewports. Width is driven by the dialog (~78vw). */
   min-height: min(68vh, 680px);
-  border: 2px dashed var(--border);
   padding: 24px;
   text-align: center;
   background: var(--surface);
