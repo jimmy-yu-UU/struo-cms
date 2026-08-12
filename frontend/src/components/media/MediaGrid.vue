@@ -32,7 +32,7 @@ function isSelected(id: string): boolean {
       v-for="f in files"
       :key="f.id"
       type="button"
-      class="media-tile rounded-xl hover:border-primary"
+      class="media-tile rounded-xl border border-border hover:border-primary"
       :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
       @click="onClick(f.id)"
     >
@@ -53,7 +53,6 @@ function isSelected(id: string): boolean {
   flex-direction: column;
   gap: 8px;
   padding: 8px;
-  border: 1px solid var(--border);
   background: var(--surface);
   cursor: pointer;
   font: inherit;
