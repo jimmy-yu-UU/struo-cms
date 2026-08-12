@@ -67,12 +67,14 @@
   --muted-foreground: #a1a1aa;
   --accent: color-mix(in oklab, #fafafa, transparent 95%);
   --accent-foreground: #fafafa;
-  --destructive: #dc2626;
+  /* Lighter than :root's shades: against this surface (#18181b), :root's --destructive and
+     --warning both fall below WCAG AA's 4.5:1 text contrast. These are the AA-passing tints. */
+  --destructive: #f87171;
+  --warning: #fbbf24;
   --border: #3f3f46;
   --input: #3f3f46;
   --ring: #38bdf8;
   --success: #16a34a;
-  --warning: #d97706;
   --sidebar: color-mix(in oklab, #fafafa 3%, #18181b);
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #38bdf8;
