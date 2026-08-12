@@ -90,7 +90,9 @@ async function trashFromDetailDialog(page: Page): Promise<void> {
   await detailDialog(page).getByRole('button', { name: 'Delete file', exact: true }).click()
   const trashConfirm = page.getByRole('alertdialog', { name: 'Move to trash' })
   await expect(trashConfirm).toHaveCount(1)
-  await trashConfirm.getByRole('button', { name: 'Confirm' }).click()
+  // Targets MediaDetailDialog's own PrimeVue ConfirmDialog, not ConfirmHost -- its accept label is
+  // still PrimeVue's default ("Yes"). Task 6.7 migrates MediaDetailDialog and flips this to "Confirm".
+  await trashConfirm.getByRole('button', { name: 'Yes' }).click()
   await expect(detailDialog(page)).toHaveCount(0)
 }
 
