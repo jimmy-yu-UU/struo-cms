@@ -84,12 +84,13 @@ describe('MediaLibraryView', () => {
     seedUser({ write: true, delete: true })
     const w = mountView()
     await flushPromises()
-    // Two Selects (type, sort) and two ToggleGroups (Active/Trash, grid/list). No `SelectButton`
-    // is imported or stubbed by this file any more, and `global.plugins` above carries no
-    // `PrimeVue` plugin -- a reverted PrimeVue `Select`/`SelectButton`/`Button` crashes at mount
-    // reading `$primevue.config` (see this task's RED run) rather than rendering something wrong,
-    // so the mount succeeding at all, combined with these two data-slot counts actually being 2,
-    // is the real signature that PrimeVue's widgets are gone from this view.
+    // Two Selects (type, sort) and two ToggleGroups (Active/Trash, grid/list). `global.plugins`
+    // above carries no `PrimeVue` plugin, so a reverted PrimeVue `Select` crashes at mount reading
+    // `$primevue.config` -- it alone extends PrimeVue's `BaseInput`, which reads that during
+    // render. PrimeVue's `Button` and `SelectButton` mount fine with no plugin at all, so those two
+    // are guarded by other assertions instead: a reverted `Button` is caught by the icon-identity
+    // test below (it would render no `.lucide-folder-plus`/`.lucide-upload`), and a reverted
+    // `SelectButton` would drop this test's own `[data-slot="toggle-group"]` count from 2 to 1.
     expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(2)
     expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
   })
