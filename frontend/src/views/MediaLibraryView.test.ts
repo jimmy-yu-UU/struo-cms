@@ -536,7 +536,7 @@ describe('MediaLibraryView', () => {
   it('delete-permanently in trash view asks with a top-level danger severity, then calls filesApi.remove(id,{purge:true}) and reloads', async () => {
     seedUser({ delete: true })
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
     confirmRequire.mockResolvedValueOnce(true)
     const w = mountView()
     await flushPromises()
@@ -545,9 +545,7 @@ describe('MediaLibraryView', () => {
     const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
     await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
     await flushPromises()
-    // The one deliberate behaviour change of this task: purgeConfirm(t) now carries a top-level
-    // severity so this screen matches CollectionListView's already-migrated onPurge -- PrimeVue's
-    // purge dialog had no acceptProps at all.
+    // purgeConfirm(t) carries a top-level severity, matching CollectionListView's onPurge.
     expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
     expect(remove).toHaveBeenCalledWith('f1', { purge: true })
     expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
@@ -657,7 +655,7 @@ describe('MediaLibraryView', () => {
 
   it('purges a file when the confirmation resolves true', async () => {
     makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
     confirmRequire.mockResolvedValueOnce(true)
     const w = mountView()
     await flushPromises()
@@ -668,7 +666,7 @@ describe('MediaLibraryView', () => {
 
   it('does not purge when the confirmation resolves false', async () => {
     makeListMock([{ data: rows, total: 1 }])
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
     confirmRequire.mockResolvedValueOnce(false)
     const w = mountView()
     await flushPromises()
@@ -692,7 +690,7 @@ describe('MediaLibraryView', () => {
 
   it('does not remove the folder when the confirmation resolves false', async () => {
     makeListMock([{ data: rows, total: 1 }])
-    const remove = vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined as never)
+    const remove = vi.spyOn(itemsApi, 'remove').mockResolvedValue()
     confirmRequire.mockResolvedValueOnce(false)
     const w = mountView()
     await flushPromises()

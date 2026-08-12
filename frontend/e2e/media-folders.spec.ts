@@ -148,10 +148,10 @@ async function saveDetail(page: Page): Promise<void> {
 }
 
 // Clicks a folder card's Delete action and confirms via the store-backed ConfirmHost's alertdialog.
-// Its accept label is common.confirm ("Confirm") -- lib/deleteAction.ts passes no explicit
-// acceptLabel, so the host's default applies. Returns the DELETE request's status so callers can
-// assert 204 (empty, succeeds) vs 409 (non-empty, rejected) deterministically instead of only
-// polling the UI.
+// onRemoveFolder builds this request inline and passes no acceptLabel, so ConfirmHost's default
+// applies: common.confirm ("Confirm"). Returns the DELETE request's status so callers can assert
+// 204 (empty, succeeds) vs 409 (non-empty, rejected) deterministically instead of only polling the
+// UI.
 async function attemptDeleteFolder(page: Page, name: string): Promise<number> {
   const del = page.waitForResponse(
     (r) => r.request().method() === 'DELETE' && /\/api\/items\/mediafolder\//.test(r.url()),
