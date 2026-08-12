@@ -9,10 +9,10 @@ import { ApiError } from '../../api/apiClient'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 
-const confirmRequire = vi.fn()
-vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+const confirmRequire = vi.fn<(req: unknown) => Promise<boolean>>(() => Promise.resolve(true))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
 const toastAdd = vi.fn()
-vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -25,6 +25,8 @@ const i18n = createI18n({
   }, confirm: {
     softDeleteHeader: 'Move to trash', softDeleteMessage: 'Move this item to trash? You can restore it later.',
     hardDeleteHeader: 'Confirm delete', hardDeleteMessage: 'Delete this item? This cannot be undone.',
+  }, fields: {
+    selectAnItem: 'Select an item',
   } } },
 })
 
@@ -76,7 +78,7 @@ function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelet
       plugins: [i18n],
       // reka's portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
       // whole dialog body. Nothing here asserts against document.body, so the in-tree render is fine.
-      stubs: { teleport: true, TreeSelect: { name: 'TreeSelect', template: '<div />', props: ['modelValue', 'options', 'disabled'] } },
+      stubs: { teleport: true },
       renderStubDefaultSlot: true,
     },
   })
@@ -86,7 +88,8 @@ describe('MediaDetailDialog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
-    confirmRequire.mockClear(); toastAdd.mockClear()
+    confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
+    toastAdd.mockClear()
     seedStores()
     // Default: no mediafolder rows unless a test overrides. Component load() is only expected
     // to call itemsApi.list('mediafolder', ...) — never itemsApi.list for anything else.
@@ -360,24 +363,43 @@ describe('MediaDetailDialog', () => {
     expect(copyButton?.find('.lucide-trash-2').exists()).toBe(false)
   })
 
-  it('confirms with soft-delete copy, deletes via filesApi.remove (trash, no purge) after accept, and emits deleted', async () => {
+  it('deletes only when the confirmation resolves true', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    confirmRequire.mockResolvedValueOnce(false)
     const w = mountDialog()
     await flushPromises()
-    ;(w.vm as unknown as { onDelete: () => void }).onDelete()
-    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    await (w.vm as unknown as { onDelete: () => Promise<void> }).onDelete()
+    expect(remove).not.toHaveBeenCalled()
+    confirmRequire.mockResolvedValueOnce(true)
+    await (w.vm as unknown as { onDelete: () => Promise<void> }).onDelete()
+    await flushPromises()
+    expect(remove).toHaveBeenCalledWith('f1')
+    expect(w.emitted('deleted')).toBeTruthy()
+  })
+
+  it('requests the soft-delete confirm copy before trashing', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    const w = mountDialog()
+    await flushPromises()
+    await (w.vm as unknown as { onDelete: () => Promise<void> }).onDelete()
+    await flushPromises()
     // The dialog's delete action trashes (filesApi.remove defaults to soft-delete), so its confirm
     // copy must match -- not the hard-delete "cannot be undone" copy.
     expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({
       header: 'Move to trash',
       message: 'Move this item to trash? You can restore it later.',
     }))
-    const accept = confirmRequire.mock.calls[0][0].accept as () => Promise<void>
-    await accept()
+  })
+
+  it('mounts no ConfirmDialog of its own', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
     await flushPromises()
-    expect(remove).toHaveBeenCalledWith('f1')
-    expect(w.emitted('deleted')).toBeTruthy()
+    // A child dialog next to MediaLibraryView's own is exactly what used to fire one confirmation
+    // twice; the store-backed host in AppShell is the only one now.
+    expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
   })
 
   it('does not render an "open in full editor" link: no such button, no vue-router import', async () => {
@@ -416,13 +438,66 @@ describe('MediaDetailDialog', () => {
     expect(vm.folderId).toBeNull()
   })
 
+  it('passes the current folder key to TreeSelect as a plain key, not a keyed object', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b' } } as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('b')
+  })
+
+  it('passes the Uncategorized key when the file is unfiled', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('__unfiled')
+  })
+
+  it('stores a folder pick emitted by the real TreeSelect child', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    // Emitting from the vendored child runs this component's real @update:model-value listener,
+    // which is the binding under test; a defineExpose call would bypass it entirely.
+    await w.findComponent({ name: 'TreeSelect' }).vm.$emit('update:modelValue', 'b')
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('b')
+    expect((w.vm as unknown as { folderId: string | null }).folderId).toBe('b')
+  })
+
+  it('maps the Uncategorized pick back to a null folderId', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b' } } as never)
+    const w = mountDialog()
+    await flushPromises()
+    await w.findComponent({ name: 'TreeSelect' }).vm.$emit('update:modelValue', '__unfiled')
+    await flushPromises()
+    expect((w.vm as unknown as { folderId: string | null }).folderId).toBeNull()
+  })
+
+  // Constraint: an inbound prop-driven binding must be proven while the dialog stays open, not
+  // only across a fresh mount -- reka's DialogRoot defaults `unmountOnHide: true`, so a
+  // null -> real file transition (used elsewhere in this suite) destroys and recreates the whole
+  // subtree, including TreeSelect, and would test only its first-open path.
+  it('follows a new file prop to a different folder while the dialog stays open', async () => {
+    vi.spyOn(itemsApi, 'get').mockImplementation((_collection, id) =>
+      Promise.resolve(
+        id === 'f1' ? { ...item, folder: { id: 'a' } } : { ...item, id: 'f2', folder: { id: 'b' } },
+      ) as never,
+    )
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('a')
+    await w.setProps({ file: { id: 'f2', fileName: 'b.png', contentType: 'image/png', size: 2048 } })
+    await flushPromises()
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe('b')
+  })
+
   it('sends the selected folder id in the update payload on save', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: null } as never)
     const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
     const w = mountDialog()
     await flushPromises()
-    const vm = w.vm as unknown as { onFolderChange: (s: Record<string, boolean>) => void; onSave: () => Promise<void> }
-    vm.onFolderChange({ b: true })
+    const vm = w.vm as unknown as { onFolderChange: (key: string | null) => void; onSave: () => Promise<void> }
+    vm.onFolderChange('b')
     await vm.onSave()
     await flushPromises()
     expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: 'b' }))
@@ -433,8 +508,8 @@ describe('MediaDetailDialog', () => {
     const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
     const w = mountDialog()
     await flushPromises()
-    const vm = w.vm as unknown as { onFolderChange: (s: Record<string, boolean>) => void; onSave: () => Promise<void> }
-    vm.onFolderChange({ __unfiled: true })
+    const vm = w.vm as unknown as { onFolderChange: (key: string | null) => void; onSave: () => Promise<void> }
+    vm.onFolderChange('__unfiled')
     await vm.onSave()
     await flushPromises()
     expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: null }))

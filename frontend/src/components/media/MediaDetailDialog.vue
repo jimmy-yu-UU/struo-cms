@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import TreeSelect from 'primevue/treeselect'
-import ConfirmDialog from 'primevue/confirmdialog'
-import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
+import TreeSelect from '@/components/form/TreeSelect.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import { Copy, Trash2 } from '@lucide/vue'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -73,10 +72,9 @@ const folderNodes = computed<TreeNode[]>(() => [
   { key: UNFILED, label: t('media.folderUncategorized'), data: UNFILED, children: [] },
   ...buildRelationTree(folders.value.map((f) => ({ id: f.id, label: f.name, parentId: f.parentId })), 'parentId'),
 ])
-// TreeSelect single-selection binds { [key]: true } (same mapping as RelationPicker's tree mode).
-const folderValue = computed(() => ({ [folderId.value ?? UNFILED]: true }))
-function onFolderChange(selection: Record<string, boolean>): void {
-  const key = Object.keys(selection)[0]
+// form/TreeSelect takes and emits a plain key; the '__unfiled' sentinel is this dialog's own
+// representation of "no folder", which the API models as a null folderId.
+function onFolderChange(key: string | null): void {
   folderId.value = !key || key === UNFILED ? null : key
 }
 
@@ -168,21 +166,17 @@ async function recoverFromConflict(): Promise<void> {
   }
 }
 
-function onDelete(): void {
+async function onDelete(): Promise<void> {
   if (!props.file) return
   const id = props.file.id
-  confirm.require({
-    ...deleteConfirm(t, 'soft'),
-    accept: async () => {
-      try {
-        await filesApi.remove(id)
-        emit('deleted')
-        emit('close')
-      } catch (e) {
-        error.value = e instanceof Error ? e.message : t('media.deleteFailed')
-      }
-    },
-  })
+  if (!(await confirm.require(deleteConfirm(t, 'soft')))) return
+  try {
+    await filesApi.remove(id)
+    emit('deleted')
+    emit('close')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : t('media.deleteFailed')
+  }
 }
 
 async function onCopyUrl(): Promise<void> {
@@ -212,7 +206,6 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
       max-[960px]:max-w-[95vw] reproduces the old :breakpoints="{ '960px': '95vw' }".
     -->
     <DialogScrollContent class="max-w-[min(78vw,1100px)] max-[960px]:max-w-[95vw]">
-      <ConfirmDialog />
       <DialogHeader>
         <DialogTitle>{{ $t('media.detailTitle') }}</DialogTitle>
       </DialogHeader>
@@ -254,9 +247,9 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
           <label class="md-field">
             <span>{{ $t('media.folderField') }}</span>
             <TreeSelect
-              :model-value="folderValue"
-              :options="folderNodes"
-              selection-mode="single"
+              :model-value="folderId ?? UNFILED"
+              :nodes="folderNodes"
+              :label="$t('media.folderField')"
               :disabled="!canWrite || loading"
               @update:model-value="onFolderChange"
             />
