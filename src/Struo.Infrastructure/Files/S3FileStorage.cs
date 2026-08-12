@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Struo.Application.Files;
+using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Files;
 
@@ -54,8 +55,19 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
 
     public async Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
     {
-        var resp = await _client.GetObjectAsync(_bucket, key, ct);
-        return resp.ResponseStream;
+        try
+        {
+            var resp = await _client.GetObjectAsync(_bucket, key, ct);
+            return resp.ResponseStream;
+        }
+        // Only the missing-key case (row exists, blob doesn't — DB/storage drift) becomes a 404.
+        // Matched on ErrorCode rather than the HTTP status alone: a missing bucket also reports 404
+        // ("NoSuchBucket") but is a real misconfiguration, and every other S3 fault (network,
+        // permissions, ...) must keep surfacing as a 500 instead of being hidden as a false 404.
+        catch (AmazonS3Exception ex) when (ex.ErrorCode == "NoSuchKey")
+        {
+            throw new FileBlobNotFoundException(key);
+        }
     }
 
     public async Task DeleteAsync(string key, CancellationToken ct = default) =>
