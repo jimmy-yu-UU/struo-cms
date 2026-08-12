@@ -90,7 +90,7 @@ async function trashFromDetailDialog(page: Page): Promise<void> {
   await detailDialog(page).getByRole('button', { name: 'Delete file', exact: true }).click()
   const trashConfirm = page.getByRole('alertdialog', { name: 'Move to trash' })
   await expect(trashConfirm).toHaveCount(1)
-  await trashConfirm.getByRole('button', { name: 'Yes' }).click()
+  await trashConfirm.getByRole('button', { name: 'Confirm' }).click()
   await expect(detailDialog(page)).toHaveCount(0)
 }
 
@@ -157,7 +157,7 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
   await expect(trashRow(page, fileName)).toBeVisible()
   await trashRow(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
   await expect(page.getByRole('alertdialog', { name: 'Delete permanently' })).toHaveCount(1)
-  await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Yes' }).click()
+  await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Confirm' }).click()
   await expect(trashRow(page, fileName)).toHaveCount(0)
 
   // Purged: gone from Trash and content stays 404 (not merely "excluded from reads" but truly gone).

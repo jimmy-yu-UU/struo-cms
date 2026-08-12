@@ -25,9 +25,8 @@ import { mediaTypeFilter, mediaFolderFilter, mediaSort, type MediaType, type Med
 import { toFileRows } from '../lib/toFileRow'
 import { toFolderRows, childFolders, folderPath, type FolderRow } from '../lib/folderTree'
 import { purgeConfirm } from '../lib/deleteAction'
-import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
-import ConfirmDialog from 'primevue/confirmdialog'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import { ApiError } from '../api/apiClient'
 
 const { t } = useI18n()
@@ -175,19 +174,14 @@ async function onRestore(id: string): Promise<void> {
   }
 }
 
-function onPurge(id: string): void {
-  confirm.require({
-    ...purgeConfirm(t),
-    group: 'media-file',
-    accept: async () => {
-      try {
-        await filesApi.remove(id, { purge: true })
-        await loadClampingToLastValidPage()
-      } catch (e) {
-        toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
-      }
-    },
-  })
+async function onPurge(id: string): Promise<void> {
+  if (!(await confirm.require({ ...purgeConfirm(t), severity: 'danger' }))) return
+  try {
+    await filesApi.remove(id, { purge: true })
+    await loadClampingToLastValidPage()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
+  }
 }
 
 async function loadFolders(): Promise<void> {
@@ -227,26 +221,24 @@ async function onRenameFolder(name: string): Promise<void> {
   }
 }
 
-function onRemoveFolder(folder: FolderRow): void {
-  confirm.require({
-    group: 'media-folder',
+async function onRemoveFolder(folder: FolderRow): Promise<void> {
+  const accepted = await confirm.require({
     header: t('media.folderDelete'),
     message: t('media.folderDeleteConfirm', { name: folder.name }),
-    acceptProps: { severity: 'danger' },
-    accept: async () => {
-      try {
-        await itemsApi.remove('mediafolder', folder.id)
-        if (currentFolderId.value === folder.id) currentFolderId.value = folder.parentId
-        await loadFolders()
-        await load()
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 409)
-          toast.add({ severity: 'warn', summary: t('media.folderNotEmpty'), life: 4000 })
-        else
-          toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.folderSaveFailed'), life: 3500 })
-      }
-    },
+    severity: 'danger',
   })
+  if (!accepted) return
+  try {
+    await itemsApi.remove('mediafolder', folder.id)
+    if (currentFolderId.value === folder.id) currentFolderId.value = folder.parentId
+    await loadFolders()
+    await load()
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409)
+      toast.add({ severity: 'warn', summary: t('media.folderNotEmpty'), life: 4000 })
+    else
+      toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.folderSaveFailed'), life: 3500 })
+  }
 }
 
 onMounted(() => { loadFolders(); load() })
@@ -397,8 +389,6 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <MediaFolderNameDialog :visible="renameTarget !== null" :header="t('media.folderRename')"
                            :initial-name="renameTarget?.name" @update:visible="(v: boolean) => { if (!v) renameTarget = null }"
                            @submit="onRenameFolder" />
-    <ConfirmDialog group="media-folder" />
-    <ConfirmDialog group="media-file" />
   </section>
 </template>
 

@@ -147,16 +147,18 @@ async function saveDetail(page: Page): Promise<void> {
   await expect(detailDialog(page)).toHaveCount(0)
 }
 
-// Clicks a folder card's Delete action, confirms via the PrimeVue alertdialog ("Yes" -- PrimeVue's
-// default acceptLabel), and returns the DELETE request's status so callers can assert 204 (empty,
-// succeeds) vs 409 (non-empty, rejected) deterministically instead of only polling the UI.
+// Clicks a folder card's Delete action and confirms via the store-backed ConfirmHost's alertdialog.
+// Its accept label is common.confirm ("Confirm") -- lib/deleteAction.ts passes no explicit
+// acceptLabel, so the host's default applies. Returns the DELETE request's status so callers can
+// assert 204 (empty, succeeds) vs 409 (non-empty, rejected) deterministically instead of only
+// polling the UI.
 async function attemptDeleteFolder(page: Page, name: string): Promise<number> {
   const del = page.waitForResponse(
     (r) => r.request().method() === 'DELETE' && /\/api\/items\/mediafolder\//.test(r.url()),
   )
   await folderCard(page, name).getByRole('button', { name: 'Delete folder' }).click()
   await expect(folderDeleteConfirmDialog(page)).toBeVisible()
-  await folderDeleteConfirmDialog(page).getByRole('button', { name: 'Yes' }).click()
+  await folderDeleteConfirmDialog(page).getByRole('button', { name: 'Confirm' }).click()
   const res = await del
   return res.status()
 }
