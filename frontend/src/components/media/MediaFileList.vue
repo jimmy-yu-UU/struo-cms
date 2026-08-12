@@ -40,7 +40,7 @@ function uploaded(f: FileRow): string {
         class="media-list__row"
         @click="emit('open', f.id)"
       >
-        <td class="media-list__thumb"><FileThumbnail :file="f" /></td>
+        <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
         <td class="media-list__name">
           <button type="button" class="media-list__open" @click.stop="emit('open', f.id)">
             {{ f.fileName }}
@@ -81,7 +81,6 @@ function uploaded(f: FileRow): string {
 }
 .media-list__thumb-col { width: 64px; }
 .media-list__thumb { width: 56px; }
-.media-list__thumb :deep(.file-thumb) { height: 44px; width: 56px; }
 .media-list__name { font-weight: 500; padding: 0; }
 .media-list__open {
   display: block;

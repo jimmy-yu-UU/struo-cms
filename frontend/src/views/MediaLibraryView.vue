@@ -347,7 +347,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       </thead>
       <tbody>
         <tr v-for="f in files" :key="f.id">
-          <td class="media-trash-list__thumb"><FileThumbnail :file="f" /></td>
+          <td class="media-trash-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
           <td>{{ f.fileName }}</td>
           <td class="media-trash-list__actions">
             <Button
@@ -408,7 +408,6 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 .media-trash-list td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--fg); vertical-align: middle; }
 .media-trash-list__thumb-col { width: 64px; }
 .media-trash-list__thumb { width: 56px; }
-.media-trash-list__thumb :deep(.file-thumb) { height: 44px; width: 56px; }
 .media-trash-list__actions-col { width: 6rem; }
 .media-trash-list__actions { display: flex; gap: 4px; justify-content: flex-end; }
 </style>

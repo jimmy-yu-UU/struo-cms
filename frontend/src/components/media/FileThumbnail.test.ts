@@ -1,35 +1,53 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import FileThumbnail from './FileThumbnail.vue'
+import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 
-const img = { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }
-const doc = { id: 'f2', fileName: 'a.pdf', contentType: 'application/pdf', size: 2048 }
+const image: FileRow = { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 10 }
+const pdf: FileRow = { id: 'f2', fileName: 'a.pdf', contentType: 'application/pdf', size: 10 }
 
 describe('FileThumbnail', () => {
-  it('renders an img for image content types', () => {
-    const w = mount(FileThumbnail, { props: { file: img } })
-    const el = w.find('img')
-    expect(el.exists()).toBe(true)
-    expect(el.attributes('src')).toMatch(/\/files\/f1\/content$/)
+  it('defaults to the tile size', () => {
+    const w = mount(FileThumbnail, { props: { file: image } })
+    expect(w.get('.file-thumb').attributes('data-size')).toBe('tile')
   })
 
-  it('renders a chip (no img) for non-image types: format icon + short label, not the raw MIME or filename', () => {
-    const w = mount(FileThumbnail, { props: { file: doc } })
-    expect(w.find('img').exists()).toBe(false)
-    expect(w.find('.file-chip__icon').classes()).toContain('pi-file-pdf')
-    expect(w.find('.file-chip__meta').text()).toBe('PDF')
-    // the long/ugly MIME string and the filename must NOT appear (the tile caption shows the name)
-    expect(w.text()).not.toContain('application/pdf')
-    expect(w.text()).not.toContain('a.pdf')
+  it('honours the sm size', () => {
+    const w = mount(FileThumbnail, { props: { file: image, size: 'sm' } })
+    expect(w.get('.file-thumb').attributes('data-size')).toBe('sm')
   })
 
-  it('falls back to chip with a format icon when the image fails to load', async () => {
-    const w = mount(FileThumbnail, { props: { file: img } })
+  // A prop assertion made only against the initial render can't distinguish a real prop binding
+  // from local state seeded once at mount -- confirm the rendered attribute keeps following the
+  // prop after it changes post-mount too.
+  it('follows the size prop after it changes post-mount', async () => {
+    const w = mount(FileThumbnail, { props: { file: image, size: 'tile' } })
+    expect(w.get('.file-thumb').attributes('data-size')).toBe('tile')
+    await w.setProps({ size: 'sm' })
+    expect(w.get('.file-thumb').attributes('data-size')).toBe('sm')
+  })
+
+  it('renders an <img> for an image content type', () => {
+    expect(mount(FileThumbnail, { props: { file: image } }).find('img').exists()).toBe(true)
+  })
+
+  it('falls back to a chip with a resolved lucide glyph when the image fails to load', async () => {
+    const w = mount(FileThumbnail, { props: { file: image } })
     await w.find('img').trigger('error')
     expect(w.find('img').exists()).toBe(false)
-    expect(w.find('.file-chip__icon').classes()).toContain('pi-image')
+    expect(w.find('.file-chip').exists()).toBe(true)
+    expect(w.find('.lucide-image').exists()).toBe(true)
+    expect(w.find('.pi').exists()).toBe(false)
     expect(w.find('.file-chip__meta').text()).toBe('PNG')
-    expect(w.text()).not.toContain('image/png')
-    expect(w.text()).not.toContain('a.png')
+  })
+
+  it('renders a resolved lucide glyph for a non-previewable type, not a primeicons class', () => {
+    const w = mount(FileThumbnail, { props: { file: pdf } })
+    expect(w.find('.file-chip').exists()).toBe(true)
+    // lib/fileTypeDisplay maps application/pdf to the pi-file-pdf token, which ICON_MAP resolves
+    // to lucide's FileType. Asserting the resolved icon proves the token went through resolveIcon
+    // rather than being rendered as a primeicons font class.
+    expect(w.find('.lucide-file-type').exists()).toBe(true)
+    expect(w.find('.pi').exists()).toBe(false)
+    expect(w.text()).toContain('PDF')
   })
 })

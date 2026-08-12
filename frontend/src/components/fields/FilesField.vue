@@ -132,7 +132,7 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
     >
       <template #item="{ item, index }">
         <div class="files-row flex w-full items-center gap-2">
-          <FileThumbnail v-if="!item.missing" :file="item" class="files-row__thumb" />
+          <FileThumbnail v-if="!item.missing" :file="item" size="sm" />
           <span class="files-row__name min-w-0 flex-1 truncate">{{ item.missing ? item.id : item.fileName }}</span>
           <Button
             type="button"
@@ -180,20 +180,3 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
   </div>
 </template>
 
-<style scoped>
-/*
- * FileThumbnail's own scoped .file-thumb rule sets width:100%/height:120px for its default
- * grid-tile use (MediaGrid). That rule compiles to `.file-thumb[data-v-<FileThumbnail's id>]`,
- * so a bare Tailwind utility class passed from here (specificity: one class) can never win
- * against it (specificity: one class + one attribute selector) -- passing e.g. `class="size-12"`
- * would silently keep the 120px tile height. Matching .file-thumb here compiles to
- * `.file-thumb.files-row__thumb[data-v-<this file's id>]`, which is strictly higher specificity
- * (two classes + one attribute) than FileThumbnail's own rule, so it wins regardless of which
- * style block Vite happens to emit later in the bundle.
- */
-.file-thumb.files-row__thumb {
-  width: 48px;
-  height: 48px;
-  flex: none;
-}
-</style>
