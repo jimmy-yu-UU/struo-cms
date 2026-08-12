@@ -418,6 +418,30 @@ describe('MediaDetailDialog', () => {
     expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(true)
   })
 
+  it('passes the loaded folder tree to TreeSelect, not an empty array', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    // A regression that starves the picker (e.g. an empty array) would still render a TreeSelect
+    // and still let the user pick Uncategorized, so the existence check above cannot catch it --
+    // only the loaded rows actually reaching the child can.
+    const nodes = w.findComponent({ name: 'TreeSelect' }).props('nodes') as { label: string; children?: { label: string }[] }[]
+    const rootA = nodes.find((n) => n.label === 'Root A')
+    expect(rootA).toBeTruthy()
+    expect(rootA?.children?.[0]).toMatchObject({ label: 'Child B' })
+  })
+
+  it('gives the folder picker trigger an accessible name that includes the field label', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    // form/TreeSelect's aria-label overrides the trigger's visible text rather than supplementing
+    // it, building it as "<label>: <value>" -- without the label prop it would announce only the
+    // current value ("Uncategorized"), forgetting which field it belongs to.
+    const trigger = w.findAll('button').find((b) => (b.attributes('aria-label') ?? '').startsWith('Folder:'))
+    expect(trigger?.attributes('aria-label')).toBe('Folder: Uncategorized')
+  })
+
   // The items API never returns a flat `folderId` column -- [CmsRelation] FKs only appear once
   // `deep=folder` expands the relation, nested as `folder: { id, ... }` under the nav-property
   // name. These cases mock that real response shape; a regression back to reading item.folderId
@@ -473,10 +497,9 @@ describe('MediaDetailDialog', () => {
     expect((w.vm as unknown as { folderId: string | null }).folderId).toBeNull()
   })
 
-  // Constraint: an inbound prop-driven binding must be proven while the dialog stays open, not
-  // only across a fresh mount -- reka's DialogRoot defaults `unmountOnHide: true`, so a
-  // null -> real file transition (used elsewhere in this suite) destroys and recreates the whole
-  // subtree, including TreeSelect, and would test only its first-open path.
+  // Same file:A -> file:B transition as the vendored-dialog-and-inputs test above (both values
+  // non-null, so the dialog itself never unmounts/remounts) -- here proving the same thing for
+  // TreeSelect's folder binding instead of the File URL input.
   it('follows a new file prop to a different folder while the dialog stays open', async () => {
     vi.spyOn(itemsApi, 'get').mockImplementation((_collection, id) =>
       Promise.resolve(
