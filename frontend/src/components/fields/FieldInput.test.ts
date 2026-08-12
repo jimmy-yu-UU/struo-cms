@@ -22,13 +22,13 @@ function field(over: Partial<FieldMeta> = {}): FieldMeta {
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over }
 }
 const stubs = {
-  InputText: { template: '<input class="stub-text" />' },
+  Input: { template: '<input class="stub-text" />' },
   Textarea: { template: '<textarea class="stub-textarea" />' },
-  InputNumber: { template: '<input class="stub-number" />' },
+  NumberField: { template: '<input class="stub-number" />' },
   Checkbox: { template: '<input class="stub-checkbox" />' },
   DatePicker: { template: '<input class="stub-date" />' },
-  Select: { template: '<select class="stub-select" />' },
-  RadioButton: { template: '<input class="stub-radio" />' },
+  Select: { template: '<div class="stub-select" role="combobox" />' },
+  RadioGroup: { template: '<div class="stub-radio" />' },
 }
 
 describe('FieldInput', () => {
@@ -48,6 +48,20 @@ describe('FieldInput', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-select').exists()).toBe(true)
   })
+  // This stub key matches components/form/DatePicker.vue's inferred component name (Vue infers it
+  // from the filename), so it intercepts DateField's child the same way regardless of which
+  // component that name resolves to.
+  it('renders DatePicker for date interface', () => {
+    // DateField itself (unlike the DatePicker child this stub key intercepts) is not stubbed, and
+    // it calls useI18n() unconditionally in setup, so this mount needs a real i18n plugin present
+    // even though the date interface never renders the time input whose label uses it.
+    const w = mount(FieldInput, {
+      props: { field: field({ interface: 'date' }), modelValue: null },
+      global: { plugins: [i18n], stubs },
+    })
+    expect(w.find('.stub-date').exists()).toBe(true)
+  })
+
   it('renders read-only display for unsupported interface', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'somethingNew' }), modelValue: '{}' }, global: { stubs } })
     expect(w.find('.readonly-field').exists()).toBe(true)
@@ -70,6 +84,13 @@ describe('FieldInput', () => {
     expect(w2.get('textarea').attributes('maxlength')).toBeUndefined()
   })
 
+  // ItemForm.vue generates a unique id per rendered control and needs it forwarded onto whatever
+  // FieldInput dispatches to, so its <FieldLabel for> has something to actually point at.
+  it('forwards the id prop onto the dispatched field component', () => {
+    const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '', id: 'my-id' }, global: { stubs } })
+    expect(w.get('.stub-text').attributes('id')).toBe('my-id')
+  })
+
   it('renders FilePicker for image interface and relays the value', async () => {
     setActivePinia(createPinia())
     const lang = useLanguageStore()
@@ -84,5 +105,52 @@ describe('FieldInput', () => {
     expect(picker.exists()).toBe(true)
     picker.vm.$emit('update:modelValue', 'f1')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['f1'])
+  })
+
+  // The dispatch-layer id lands in genuinely different places depending on the interface's
+  // component: sometimes the real, focusable, labelable control (an association a screen reader
+  // honours), sometimes only a wrapper div (legal HTML, but a `for` pointing at it never
+  // associates with anything — that field keeps relying on its own aria-label instead). Verified
+  // against the real vendored atoms, not stubs, since the earlier stub-based test only proves the
+  // id is forwarded, not where it physically lands once it reaches reka's internals.
+  describe('where the forwarded id actually lands (real atoms, not stubs)', () => {
+    it('lands on the native <input> for a text field', () => {
+      const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '', id: 'my-id' } })
+      expect(w.get('input').attributes('id')).toBe('my-id')
+    })
+
+    it('lands on the native <textarea> for a textarea field', () => {
+      const w = mount(FieldInput, { props: { field: field({ interface: 'textarea' }), modelValue: '', id: 'my-id' } })
+      expect(w.get('textarea').attributes('id')).toBe('my-id')
+    })
+
+    it('lands on the real checkbox button, not a wrapper, for a boolean field', () => {
+      const w = mount(FieldInput, { props: { field: field({ interface: 'boolean' }), modelValue: false, id: 'my-id' } })
+      expect(w.get('[role="checkbox"]').attributes('id')).toBe('my-id')
+    })
+
+    // reka's NumberFieldRoot declares `id` as its own prop (consuming it rather than letting it
+    // fall through as a plain attribute) and threads it through internal context to
+    // NumberFieldInput's real <input role="spinbutton">, not onto the root wrapper div it renders
+    // itself — confirmed here rather than assumed from reading reka's source.
+    it('lands on the real spinbutton input, not the outer wrapper, for a number field', () => {
+      const w = mount(FieldInput, { props: { field: field({ interface: 'number' }), modelValue: 1, id: 'my-id' } })
+      const byId = w.find('#my-id')
+      expect(byId.exists()).toBe(true)
+      expect(byId.attributes('role')).toBe('spinbutton')
+    })
+
+    // DateField's root is a plain <div> wrapping two separate controls (a date trigger button and
+    // a time <input>); the id lands on that div, which is not itself a labelable element — the
+    // for/id pairing is inert here, which is exactly why DateField carries its own aria-label.
+    it('lands only on a non-labelable wrapper for a date field', () => {
+      const w = mount(FieldInput, {
+        props: { field: field({ interface: 'date' }), modelValue: null, id: 'my-id' },
+        global: { plugins: [i18n] },
+      })
+      const byId = w.find('#my-id')
+      expect(byId.exists()).toBe(true)
+      expect(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']).not.toContain(byId.element.tagName)
+    })
   })
 })

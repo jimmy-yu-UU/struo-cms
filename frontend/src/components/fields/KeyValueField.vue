@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import InputText from 'primevue/inputtext'
-import Button from 'primevue/button'
+import { useI18n } from 'vue-i18n'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Plus, X } from '@lucide/vue'
 import type { FieldMeta } from '../../types/schema'
 
 type Row = { key: string; value: string }
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: Record<string, string>): void }>()
+const { t } = useI18n()
 
 function toRows(v: unknown): Row[] {
   if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -50,14 +53,41 @@ function setValue(i: number, value: string) {
 }
 </script>
 <template>
-  <div class="key-value-field">
-    <div v-for="(r, i) in rows" :key="i" class="kv-row">
-      <InputText :model-value="r.key" :disabled="disabled" placeholder="key"
-        @update:model-value="(v: string | undefined) => setKey(i, v ?? '')" />
-      <InputText :model-value="r.value" :disabled="disabled" placeholder="value"
-        @update:model-value="(v: string | undefined) => setValue(i, v ?? '')" />
-      <Button class="kv-remove" icon="pi pi-times" text :disabled="disabled" @click="remove(i)" />
+  <div class="key-value-field flex flex-col items-start gap-2">
+    <div v-for="(r, i) in rows" :key="i" class="kv-row flex w-full items-center gap-2">
+      <Input
+        :model-value="r.key"
+        :disabled="disabled"
+        :placeholder="t('fields.keyValueKey')"
+        :aria-label="t('fields.keyValueKey')"
+        @update:model-value="(v) => setKey(i, String(v ?? ''))"
+      />
+      <Input
+        :model-value="r.value"
+        :disabled="disabled"
+        :placeholder="t('fields.keyValueValue')"
+        :aria-label="t('fields.keyValueValue')"
+        @update:model-value="(v) => setValue(i, String(v ?? ''))"
+      />
+      <!-- type="button" is load-bearing: a native <button> defaults to type="submit", and this
+           component is dispatched inside ItemForm.vue's <form @submit.prevent> — an untyped
+           button here would submit (and, for a Revisions-enabled collection, snapshot) the whole
+           record on every click instead of just editing this field's local array. -->
+      <Button
+        type="button"
+        class="kv-remove"
+        variant="ghost"
+        size="icon"
+        :disabled="disabled"
+        :aria-label="t('common.delete')"
+        @click="remove(i)"
+      >
+        <X class="size-4" />
+      </Button>
     </div>
-    <Button class="kv-add" icon="pi pi-plus" label="Add" text :disabled="disabled" @click="add" />
+    <Button type="button" class="kv-add" variant="ghost" size="sm" :disabled="disabled" @click="add">
+      <Plus class="size-4" />
+      {{ t('fields.add') }}
+    </Button>
   </div>
 </template>

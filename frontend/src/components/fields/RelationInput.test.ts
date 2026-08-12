@@ -12,7 +12,7 @@ import type { RelationMeta, CollectionMeta } from '../../types/schema'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.' } } },
+  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.', noRelatedItems: 'No related items.' } } },
 })
 
 const push = vi.fn()
@@ -47,11 +47,10 @@ function rel(overrides: Partial<RelationMeta> = {}): RelationMeta {
 }
 
 const stubs = {
-  Select: true,
-  MultiSelect: true,
+  Combobox: true,
   TreeSelect: true,
   DataTable: true,
-  Column: true,
+  DataTablePagination: true,
 }
 
 function setupStores() {

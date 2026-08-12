@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
-import ConfirmationService from 'primevue/confirmationservice'
 import ItemFormView from './ItemFormView.vue'
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
@@ -15,9 +15,13 @@ import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { languagesApi } from '../api/languagesApi'
 import { rbacApi } from '../api/rbacApi'
+import type { ConfirmRequest } from '@/composables/useConfirm'
 
 // PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
 // so the reload/existence assertions below exercise the actual components; stub only their API.
+// PermissionMatrix still imports its Button/Checkbox/useToast from primevue (unmigrated), so the
+// PrimeVue + ToastService plugins stay registered for its sake even though ItemFormView itself no
+// longer touches primevue.
 vi.mock('../api/rbacApi', () => ({
   rbacApi: {
     getRolePermissions: vi.fn(),
@@ -40,12 +44,16 @@ vi.mock('vue-router', () => ({
   onBeforeRouteLeave: (guard: () => Promise<boolean> | boolean) => { leaveGuard = guard },
   onBeforeRouteUpdate: (guard: (to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) => { updateGuard = guard },
 }))
-const confirmRequire = vi.fn()
-vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+// The local confirm resolves a Promise instead of taking callbacks, so the mock has to be a
+// promise-returning spy whose resolution each test controls. Returning a bare vi.fn() would
+// resolve undefined, which reads as "rejected" and would make every accept-path test pass for
+// the wrong reason.
+const confirmRequire = vi.fn<(req: ConfirmRequest) => Promise<boolean>>(() => Promise.resolve(true))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
 // Capture toast.add calls so the "grants save failed after create" warning can be
 // asserted directly, same way confirm.require is captured above.
 const toastAdd = vi.fn()
-vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const meta = { name: 'article', label: 'Article', fields: [
   { name: 'status', label: 'Status', interface: 'text', required: true, searchable: false, sortable: false,
@@ -54,14 +62,17 @@ const meta = { name: 'article', label: 'Article', fields: [
   { name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false },
   { name: 'comments', label: 'Comments', kind: 'oneToMany', targetCollection: 'comment', interface: 'relatedList', foreignKey: 'ArticleId', displayTemplate: '{Body}', editable: false, selfReferencing: false },
 ]}
-const stubs = { ItemForm: true, Button: true, ConfirmDialog: true, RevisionHistoryDrawer: true }
+// ConfirmDialog no longer mounts here (the single app-wide ConfirmHost lives in AppShell), so it is
+// no longer part of this stub map. renderStubDefaultSlot lets the Save/History Button stubs render
+// their label text so the button-migration assertions below can read it.
+const stubs = { ItemForm: true, Button: true, RevisionHistoryDrawer: true }
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
     loading: 'Loading…', collectionNotFound: 'Collection not found', itemNotFound: 'Item not found',
     noCreatePermission: "You don't have permission to create items here",
-    new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', back: 'Back to list',
+    new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', saving: 'Saving…', back: 'Back to list',
     relations: 'Relations', translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
   },
@@ -96,7 +107,7 @@ const i18n = createI18n({
 })
 function mountView() {
   return mount(ItemFormView, {
-    global: { plugins: [i18n, PrimeVue, ToastService, ConfirmationService], stubs },
+    global: { plugins: [i18n, PrimeVue, ToastService], stubs, renderStubDefaultSlot: true },
   })
 }
 
@@ -116,7 +127,7 @@ describe('ItemFormView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     push.mockClear()
-    confirmRequire.mockClear()
+    confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
     toastAdd.mockClear()
     vi.mocked(rbacApi.getRolePermissions).mockClear()
     vi.mocked(rbacApi.putRolePermissions).mockClear()
@@ -393,10 +404,10 @@ describe('ItemFormView', () => {
     const rm = vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
     const w = mountView()
     await w.vm.init()
-    ;(w.vm as any).onDelete()
+    confirmRequire.mockResolvedValueOnce(true)
+    await (w.vm as any).onDelete()
+    await flushPromises()
     expect(confirmRequire).toHaveBeenCalled()
-    // invoke the accept callback the component passed to confirm.require
-    await confirmRequire.mock.calls[0][0].accept()
     expect(rm).toHaveBeenCalledWith('article', '5')
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
   })
@@ -406,9 +417,11 @@ describe('ItemFormView', () => {
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue({ ...meta, softDelete: true })
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
     const w = mountView()
     await w.vm.init()
-    ;(w.vm as any).onDelete()
+    await (w.vm as any).onDelete()
+    await flushPromises()
     expect(confirmRequire.mock.calls[0][0].message).toContain('restore')
   })
 
@@ -416,10 +429,89 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores() // meta has no softDelete
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
     const w = mountView()
     await w.vm.init()
-    ;(w.vm as any).onDelete()
+    await (w.vm as any).onDelete()
+    await flushPromises()
     expect(confirmRequire.mock.calls[0][0].message).toContain('cannot be undone')
+    // 'danger' is the confirmStore severity vocabulary (primary | danger), not the toast one
+    // (success | info | warn | error) — it drives ConfirmHost's destructive accept-button styling.
+    expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
+  })
+
+  it('cancelling the delete confirm skips the delete entirely', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const rm = vi.spyOn(itemsApi, 'remove').mockResolvedValue(undefined)
+    confirmRequire.mockResolvedValueOnce(false)
+    const w = mountView()
+    await w.vm.init()
+    await (w.vm as any).onDelete()
+    await flushPromises()
+    expect(rm).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
+  })
+
+  // ---- ui/button migration: every PageHeader button carries its variant/size and a native
+  // type="button", so a click inside the form can never fall through to an implicit submit. ----
+
+  it('renders the back/history/delete/save buttons on ui/button with the right variant, size, and type', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue({ ...meta, revisions: true })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+
+    const buttons = w.findAllComponents({ name: 'Button' })
+    expect(buttons).toHaveLength(4) // back, history, delete, save
+
+    const [back, history, del, save] = buttons
+    expect(back.props('variant')).toBe('ghost')
+    expect(back.props('size')).toBe('icon')
+    expect(back.attributes('type')).toBe('button')
+    expect(back.attributes('aria-label')).toBe('Back to list')
+
+    expect(history.props('variant')).toBe('ghost')
+    expect(history.attributes('type')).toBe('button')
+    expect(history.text()).toContain('History')
+
+    expect(del.props('variant')).toBe('destructive')
+    expect(del.attributes('type')).toBe('button')
+
+    expect(save.attributes('type')).toBe('button')
+  })
+
+  it('Save disables and swaps its label to "Saving…" while a submit is in flight, then reverts', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+    // ui/button has no `loading` prop (unlike the PrimeVue Button this replaces), so the in-flight
+    // state has to be proven through `disabled` + a label swap instead — hold the update pending so
+    // both the mid-flight and settled DOM states can be observed.
+    let resolveUpdate!: (v: Record<string, unknown>) => void
+    vi.spyOn(itemsApi, 'update').mockImplementation(
+      () => new Promise((resolve) => { resolveUpdate = resolve }),
+    )
+    const w = mountView()
+    await w.vm.init()
+    const saveButton = () =>
+      w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Save' || b.text() === 'Saving…')!
+
+    expect(saveButton().text()).toBe('Save')
+    expect(saveButton().attributes('disabled')).toBe('false')
+
+    const submitted = (w.vm as any).onSubmit()
+    await nextTick()
+    expect(saveButton().text()).toBe('Saving…')
+    expect(saveButton().attributes('disabled')).toBe('true')
+
+    resolveUpdate({ id: '5' })
+    await submitted
+    expect(saveButton().text()).toBe('Save')
+    expect(saveButton().attributes('disabled')).toBe('false')
   })
 
   // ---- dirty-state leave guard --------------------------------------
@@ -450,15 +542,15 @@ describe('ItemFormView', () => {
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited'
 
-    const accepted = Promise.resolve(leaveGuard!())
+    confirmRequire.mockResolvedValueOnce(true)
+    const accepted = leaveGuard!()
     expect(confirmRequire).toHaveBeenCalledTimes(1)
     expect(confirmRequire.mock.calls[0][0].header).toBe('Unsaved changes')
-    confirmRequire.mock.calls[0][0].accept()
     await expect(accepted).resolves.toBe(true)
 
-    const rejected = Promise.resolve(leaveGuard!())
+    confirmRequire.mockResolvedValueOnce(false)
+    const rejected = leaveGuard!()
     expect(confirmRequire).toHaveBeenCalledTimes(2)
-    confirmRequire.mock.calls[1][0].reject()
     await expect(rejected).resolves.toBe(false)
   })
 
@@ -503,16 +595,23 @@ describe('ItemFormView', () => {
     const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'my-edit' // dirty before delete
-    ;(w.vm as any).onDelete()
-    await confirmRequire.mock.calls[0][0].accept() // delete confirm -> remove + re-baseline + push
+    await (w.vm as any).onDelete() // delete confirm accepted (default mock) -> remove + re-baseline + push
+    await flushPromises()
     confirmRequire.mockClear() // ignore the delete confirm; assert only the leave guard below
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
-  // ---- Esc/X dismiss must settle the leave-guard promise ------
+  // ---- Esc/backdrop/X dismiss must settle the leave-guard promise ------
 
-  it('leave guard: dismiss via onHide (Esc/backdrop/X) resolves the promise false', async () => {
+  // The local confirm has no onHide callback distinct from reject: confirmStore.ask() hands back a
+  // single Promise per request and settles it exactly once, from whichever of ConfirmHost's Cancel
+  // button or its AlertDialog's Escape/outside-click handler fires first — both end up calling
+  // store.reject(). So from guardLeave()'s point of view, a dismiss and an explicit Cancel are the
+  // SAME observable outcome: confirm.require(...) resolves false. This is by design (there is no
+  // third "closed without answering" state to model separately), not a gap left by the migration —
+  // it is what guarantees the router's awaited navigation can never hang on an unanswered dialog.
+  it('leave guard: dismiss (Esc/backdrop/X) resolves false — indistinguishable from an explicit reject', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
@@ -520,18 +619,8 @@ describe('ItemFormView', () => {
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // dirty
 
-    const p = Promise.resolve(leaveGuard!())
-    expect(confirmRequire).toHaveBeenCalledTimes(1)
-    const opts = confirmRequire.mock.calls[0][0]
-    expect(typeof opts.onHide).toBe('function')
-    // Dismissing fires neither accept nor reject; only onHide. The promise must still settle so the
-    // router is not left awaiting forever. Assert via a timeout race: onHide -> resolves(false).
-    opts.onHide()
-    const settled = await Promise.race([
-      p,
-      new Promise((resolve) => setTimeout(() => resolve('PENDING'), 50)),
-    ])
-    expect(settled).toBe(false)
+    confirmRequire.mockResolvedValueOnce(false)
+    await expect(leaveGuard!()).resolves.toBe(false)
   })
 
   // ---- same-record (params-only) navigation dirty guard -------------
@@ -552,12 +641,12 @@ describe('ItemFormView', () => {
     await w.vm.init()
     ;(w.vm as any).model.shared.status = 'edited' // dirty
 
+    confirmRequire.mockResolvedValueOnce(false)
     const to = { params: { name: 'article', id: '6' } }
     const from = { params: { name: 'article', id: '5' } }
-    const p = Promise.resolve(updateGuard!(to, from))
+    const p = updateGuard!(to, from)
     expect(confirmRequire).toHaveBeenCalledTimes(1)
     expect(confirmRequire.mock.calls[0][0].header).toBe('Unsaved changes')
-    confirmRequire.mock.calls[0][0].reject()
     await expect(p).resolves.toBe(false)
   })
 
@@ -639,6 +728,11 @@ describe('ItemFormView', () => {
     get.mockResolvedValueOnce({ id: '5', status: 'x', translations: {}, version: 9 })
     await (w.vm as any).onSubmit()
     expect(w.get('.conflict-banner').text()).toContain('changed by someone else')
+    // "Reload latest" also moved onto ui/button — same variant/size/type contract as the header buttons.
+    const reloadBtn = w.get('.conflict-banner').findComponent({ name: 'Button' })
+    expect(reloadBtn.props('variant')).toBe('outline')
+    expect(reloadBtn.props('size')).toBe('sm')
+    expect(reloadBtn.attributes('type')).toBe('button')
   })
 
   // ---- Revision history drawer --------------------------------------
@@ -744,8 +838,7 @@ describe('ItemFormView', () => {
     const w = mountView()
     await w.vm.init()
     const callsBefore = vi.mocked(languagesApi.getEnabled).mock.calls.length
-    ;(w.vm as any).onDelete()
-    await confirmRequire.mock.calls[0][0].accept()
+    await (w.vm as any).onDelete()
     await flushPromises()
     expect(vi.mocked(languagesApi.getEnabled).mock.calls.length).toBeGreaterThan(callsBefore)
   })
@@ -837,9 +930,9 @@ describe('ItemFormView', () => {
     matrixVm.toggle('article', 'write', true)
     expect(matrixVm.dirty).toBe(true)
 
-    const p = Promise.resolve((w.vm as any).guardLeave())
+    confirmRequire.mockResolvedValueOnce(true)
+    const p = (w.vm as any).guardLeave()
     expect(confirmRequire).toHaveBeenCalledTimes(1) // ONE dialog, not two
-    confirmRequire.mock.calls[0][0].accept()
     await expect(p).resolves.toBe(true)
   })
 

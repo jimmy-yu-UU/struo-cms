@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import Textarea from 'primevue/textarea'
-import type { FieldMeta } from '../../types/schema'
+import { Textarea } from '@/components/ui/textarea'
+import type { FieldMeta } from '@/types/schema'
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 </script>
 <template>
-  <Textarea :model-value="(modelValue as string)" :disabled="disabled" :rows="6"
+  <Textarea :model-value="(modelValue as string)" :disabled="disabled" class="min-h-36"
     :maxlength="field.maxLength ?? undefined"
     @update:model-value="$emit('update:modelValue', $event)" />
 </template>

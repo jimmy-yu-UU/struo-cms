@@ -254,10 +254,10 @@ shipped admin SPA wires every one of them to a real input
 
 | `RelationInterface` | Admin component | Behavior |
 |---|---|---|
-| `Dropdown` | `RelationPicker` (PrimeVue `Select`) | Single-value picker; debounced `search=` against the target collection as the user types. |
-| `TagSelect` | `RelationPicker` (PrimeVue `MultiSelect`) | Multi-value picker for many-to-many relations, same search behavior. |
-| `TreeSelect` | `RelationPicker` (PrimeVue `TreeSelect`) | Single-value picker over a tree built from a self-referencing many-to-one's target rows. |
-| `RelatedList` | `RelatedList` (PrimeVue `DataTable`) | Read-only, paginated, lazy-loaded list of the target collection filtered by the relation's reverse FK; clicking a row navigates to that row's own item-edit page. Shows only after the parent has been saved (a brand-new, unsaved parent has no id to filter by yet). |
+| `Dropdown` | `RelationPicker` (vendored `ui/combobox`) | Single-value picker; debounced `search=` against the target collection as the user types. |
+| `TagSelect` | `RelationPicker` (vendored `ui/combobox`) | Multi-value picker for many-to-many relations, same search behavior. |
+| `TreeSelect` | `RelationPicker` (`form/TreeSelect`) | Single-value picker over a tree built from a self-referencing many-to-one's target rows. |
+| `RelatedList` | `RelatedList` (vendored `data/DataTable`) | Read-only, paginated, lazy-loaded list of the target collection filtered by the relation's reverse FK; clicking a row navigates to that row's own item-edit page. Shows only after the parent has been saved (a brand-new, unsaved parent has no id to filter by yet). |
 
 `relationInputKind.ts` still has a final, unconditional fallback for an interface its map does not
 recognize — a bare <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span> rather
