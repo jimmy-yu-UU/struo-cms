@@ -5,10 +5,9 @@ import { FolderPlus, Upload, Trash2, Undo2, ChevronRight, LayoutGrid, List } fro
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import Paginator from 'primevue/paginator'
+import DataTablePagination from '@/components/data/DataTablePagination.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import ListToolbar from '../components/common/ListToolbar.vue'
-import TableFooter from '../components/common/TableFooter.vue'
 import MediaGrid from '../components/media/MediaGrid.vue'
 import MediaFileList from '../components/media/MediaFileList.vue'
 import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
@@ -138,9 +137,16 @@ function onViewToggle(value: unknown): void {
 }
 function onType(value: MediaType): void { type.value = value; reload() }
 function onSort(value: MediaSort): void { sort.value = value; reload() }
-function onPage(e: { page: number; rows: number }): void {
-  page.value = e.page
-  perPage.value = e.rows
+function onPageChange(nextPage: number): void {
+  page.value = nextPage
+  load()
+}
+function onPageSizeChange(nextSize: number): void {
+  // An offset computed against the OLD page size is meaningless against the new one (page 2 at
+  // 24/page starts at row 48; at 96/page that is off the end of the result set) -- always return
+  // to the first page when the size changes.
+  page.value = 0
+  perPage.value = nextSize
   load()
 }
 function openDetail(id: string): void {
@@ -246,7 +252,7 @@ function onRemoveFolder(folder: FolderRow): void {
 onMounted(() => { loadFolders(); load() })
 onUnmounted(() => debouncedSearch.cancel())
 
-defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, onDeleted,
+defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onSearchInput, openDetail, onDeleted,
   files, total, loading, error, canWrite, canDelete, selected,
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
   goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
@@ -373,10 +379,15 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
     </table>
     <p v-if="!loading && !files.length && !visibleFolders.length" class="empty">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
 
-    <div v-if="total > perPage" class="media-foot">
-      <TableFooter :first="page * perPage" :rows="perPage" :total="total" />
-      <Paginator :rows="perPage" :total-records="total" :first="page * perPage" @page="onPage" />
-    </div>
+    <DataTablePagination
+      v-if="total > 0"
+      :page="page"
+      :page-size="perPage"
+      :total="total"
+      :page-size-options="[24, 48, 96]"
+      @update:page="onPageChange"
+      @update:page-size="onPageSizeChange"
+    />
 
     <MediaUploadDialog v-model:visible="uploadOpen" :folder-id="searchActive ? null : currentFolderId" @done="reload" />
     <MediaDetailDialog :file="selected" :can-write="canWrite" :can-delete="canDelete"
@@ -395,10 +406,6 @@ defineExpose({ load, reload, onType, onSort, onPage, onSearchInput, openDetail, 
 .media-library { display: block; }
 .error { color: var(--danger); font-size: 0.9rem; margin: 0 0 12px; }
 .empty { color: var(--legacy-muted); text-align: center; padding: 40px 0; }
-.media-foot {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin-top: 16px; flex-wrap: wrap;
-}
 .media-crumb { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; flex-wrap: wrap; }
 .media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; color: var(--legacy-accent); font: inherit; border-radius: var(--legacy-radius, 8px); }
 .media-crumb__link:hover { text-decoration: underline; }

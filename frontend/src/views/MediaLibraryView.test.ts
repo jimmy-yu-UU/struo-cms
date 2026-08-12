@@ -40,8 +40,6 @@ const rows = [{ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1, 
 const stubs = {
   PageHeader: { name: 'PageHeader', template: '<div><slot name="actions" /></div>' },
   ListToolbar: { name: 'ListToolbar', template: '<div><slot name="filters" /></div>', props: ['searchValue', 'searchPlaceholder'] },
-  TableFooter: { name: 'TableFooter', template: '<div />', props: ['first', 'rows', 'total'] },
-  Paginator: { name: 'Paginator', template: '<div />' },
   ConfirmDialog: { name: 'ConfirmDialog', template: '<div />', props: ['group'] },
   MediaDetailDialog: { name: 'MediaDetailDialog', template: '<div />', props: ['file', 'canWrite', 'canDelete'] },
   // reka's own portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
@@ -349,15 +347,57 @@ describe('MediaLibraryView', () => {
     expect(fileCalls()).toBe(2)
   })
 
+  it('renders DataTablePagination instead of a Paginator plus TableFooter', async () => {
+    makeListMock([{ data: rows, total: 100 }])
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTablePagination' }).exists()).toBe(true)
+    expect(w.findComponent({ name: 'TableFooter' }).exists()).toBe(false)
+    expect(w.findComponent({ name: 'Paginator' }).exists()).toBe(false)
+  })
+
+  it('passes the media page size through and reloads on a page change', async () => {
+    const list = makeListMock([{ data: rows, total: 100 }, { data: rows, total: 100 }])
+    const w = mountView()
+    await flushPromises()
+    const pager = w.findComponent({ name: 'DataTablePagination' })
+    // 24 is the media library's own page size and is not in DataTablePagination's default
+    // pageSizeOptions ([10, 25, 50, 100]) -- a native <select> whose value matches no option
+    // renders with selectedIndex === -1, so the override must be supplied.
+    expect(pager.props('pageSize')).toBe(24)
+    expect(pager.props('pageSizeOptions')).toContain(24)
+    await pager.vm.$emit('update:page', 2)
+    await flushPromises()
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 2, rows: 24 }))
+    // Inbound direction: the emit above only proves onPageChange's own argument reached the API
+    // call, which stays true even if the template's `:page` binding were hardcoded to a literal --
+    // it never reads the prop back from the pager. Assert the pager's own `page` prop followed the
+    // resulting state change too, closing that gap.
+    expect(pager.props('page')).toBe(2)
+  })
+
+  it('returns to the first page when the page size changes', async () => {
+    const list = makeListMock([{ data: rows, total: 100 }, { data: rows, total: 100 }, { data: rows, total: 100 }])
+    const w = mountView()
+    await flushPromises()
+    const pager = w.findComponent({ name: 'DataTablePagination' })
+    await pager.vm.$emit('update:page', 2)
+    await flushPromises()
+    await pager.vm.$emit('update:pageSize', 48)
+    await flushPromises()
+    // An offset computed against the old page size is meaningless against the new one.
+    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 0, rows: 48 }))
+  })
+
   it('stays on the current page after a delete when it is still in range', async () => {
     const list = makeListMock([
       { data: rows, total: 100 }, // mount (page 0)
-      { data: rows, total: 100 }, // onPage(1)
+      { data: rows, total: 100 }, // onPageChange(1)
       { data: rows, total: 100 }, // onDeleted's refresh at page 1
     ])
     const w = mountView()
     await flushPromises()
-    await (w.vm as unknown as { onPage: (e: { page: number; rows: number }) => void }).onPage({ page: 1, rows: 24 })
+    await (w.vm as unknown as { onPageChange: (page: number) => void }).onPageChange(1)
     await flushPromises()
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
     await (w.vm as unknown as { onDeleted: () => void }).onDeleted()
@@ -365,7 +405,7 @@ describe('MediaLibraryView', () => {
     // total (100) still covers page 1 (24 rows/page -> 5 pages, indices 0-4), so the delete
     // refresh must not reset the user back to page 0.
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 1 }))
-    // Exactly one reload for the delete -- mount (1) + onPage (2) + onDeleted's single
+    // Exactly one reload for the delete -- mount (1) + onPageChange (2) + onDeleted's single
     // refresh (3) file-scoped calls. (A separate 'mediafolder' call also fires at mount.)
     expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(3)
   })
@@ -373,13 +413,13 @@ describe('MediaLibraryView', () => {
   it('clamps to the last valid page after a delete strands the current page out of range', async () => {
     const list = makeListMock([
       { data: rows, total: 1 },  // mount (page 0)
-      { data: rows, total: 73 }, // onPage(2) -- page 2 valid (3 pages)
+      { data: rows, total: 73 }, // onPageChange(2) -- page 2 valid (3 pages)
       { data: [], total: 30 },   // onDeleted's refresh at page 2 -- now out of range (2 pages left)
       { data: rows, total: 30 }, // clamped reload at page 1 (last valid page)
     ])
     const w = mountView()
     await flushPromises()
-    await (w.vm as unknown as { onPage: (e: { page: number; rows: number }) => void }).onPage({ page: 2, rows: 24 })
+    await (w.vm as unknown as { onPageChange: (page: number) => void }).onPageChange(2)
     await flushPromises()
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ page: 2 }))
     await (w.vm as unknown as { onDeleted: () => void }).onDeleted()
