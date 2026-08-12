@@ -145,6 +145,7 @@ export default {
     copyFailed: 'Could not copy URL',
     status: 'Status',
     save: 'Save',
+    saving: 'Saving…',
     delete: 'Delete file',
     saveConflict: 'This file was changed elsewhere — reopen to get the latest.',
     dropzone: 'Drop files here or click to upload',
