@@ -24,6 +24,12 @@ describe('MediaFileList', () => {
     const w = mountList()
     expect(w.findAll('.media-list__row')).toHaveLength(2)
   })
+  it('gives each row thumbnail the sm size', () => {
+    const w = mountList()
+    const thumbs = w.findAll('.file-thumb')
+    expect(thumbs.length).toBeGreaterThan(0)
+    for (const thumb of thumbs) expect(thumb.attributes('data-size')).toBe('sm')
+  })
   it('shows a human-readable size', () => {
     const w = mountList()
     expect(w.text()).toContain('1.0 KB')

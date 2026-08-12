@@ -299,6 +299,21 @@ describe('MediaLibraryView', () => {
     actions.forEach((b) => expect(b.attributes('type')).toBe('button'))
   })
 
+  // FileThumbnail renders for real in this view (it is not among the stubs above) -- asserting
+  // the rendered `data-size` attribute rather than a prop read fails if the trash table's
+  // size="sm" binding is ever dropped.
+  it('gives the trash-list thumbnail the sm size', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    seedUser({ delete: true })
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
+    await flushPromises()
+    const thumbs = w.findAll('.media-trash-list__thumb .file-thumb')
+    expect(thumbs.length).toBeGreaterThan(0)
+    for (const thumb of thumbs) expect(thumb.attributes('data-size')).toBe('sm')
+  })
+
   it('loads files into the grid on mount', async () => {
     makeListMock([{ data: rows, total: 1 }])
     const w = mountView()

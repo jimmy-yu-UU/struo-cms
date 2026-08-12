@@ -80,6 +80,18 @@ describe('FilePicker', () => {
     expect(w.text()).toContain('a.png')
   })
 
+  // FileThumbnail renders for real here (the shared `stubs` doesn't stub it) -- this asserts
+  // the rendered `data-size` attribute rather than a prop read, so it fails if the size="sm"
+  // binding is ever dropped from the template even though FileThumbnail itself still defaults
+  // to "tile".
+  it('shows the current value at the sm thumbnail size', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
+    const w = mount(FilePicker, { props: { modelValue: 'f1', image: true }, global: { plugins: [i18n], stubs } })
+    await flushPromises()
+    expect(w.get('.file-thumb').attributes('data-size')).toBe('sm')
+  })
+
   it('clear emits null', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })

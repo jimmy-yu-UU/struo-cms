@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { filesApi } from '../../api/filesApi'
 import { fileTypeDisplay } from '../../lib/fileTypeDisplay'
+import { resolveIcon } from '../../lib/icons'
 
 export type FileRow = {
   id: string
@@ -14,29 +15,33 @@ export type FileRow = {
   createdAt?: string
 }
 
-const props = defineProps<{ file: FileRow }>()
+// `tile` is the media-grid square; `sm` is the inline row thumbnail every list-shaped consumer
+// (FilePicker's current value, FilesField's rows, MediaFileList, the trash table) needs. Before
+// this prop each of those out-specified the tile height with its own compound selector, which only
+// worked as long as the two scoped rules stayed at the exact specificities they happened to have.
+const props = withDefaults(defineProps<{ file: FileRow; size?: 'tile' | 'sm' }>(), { size: 'tile' })
 const broken = ref(false)
 const isImage = computed(() => props.file.contentType.startsWith('image/') && !broken.value)
 const src = computed(() => filesApi.contentUrl(props.file.id))
 const typeDisplay = computed(() => fileTypeDisplay(props.file.contentType, props.file.fileName))
+// lib/fileTypeDisplay returns PrimeIcons tokens because it predates the icon migration and lib/ is
+// frozen; resolveIcon maps every token it can emit to a lucide component.
+const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
 </script>
 
 <template>
-  <div class="file-thumb">
+  <div class="file-thumb" :data-size="size">
     <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" @error="broken = true" />
     <div v-else class="file-chip">
-      <i class="pi file-chip__icon" :class="typeDisplay.icon" aria-hidden="true" />
+      <component :is="typeIcon" class="file-chip__icon size-8 text-muted-foreground" aria-hidden="true" />
       <span class="file-chip__meta">{{ typeDisplay.label }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-.file-thumb {
-  width: 100%;
-  height: 120px;
-  display: flex;
-}
+.file-thumb { display: flex; width: 100%; height: 120px; }
+.file-thumb[data-size='sm'] { width: 56px; height: 44px; flex: none; }
 .file-thumb img {
   width: 100%;
   height: 100%;
@@ -57,7 +62,6 @@ const typeDisplay = computed(() => fileTypeDisplay(props.file.contentType, props
   padding: 8px;
   overflow: hidden;
 }
-.file-chip__icon { font-size: 32px; color: var(--legacy-muted); }
 .file-chip__meta {
   font-size: 11px;
   font-weight: 700;
