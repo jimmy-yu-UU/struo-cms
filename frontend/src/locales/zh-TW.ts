@@ -69,6 +69,7 @@ export default {
     email: '電子郵件',
     password: '密碼',
     submit: '登入',
+    submitting: '登入中…',
     or: '或',
     ssoMicrosoft: '使用 Microsoft 365 登入',
     failed: '登入失敗,請稍後再試。',
