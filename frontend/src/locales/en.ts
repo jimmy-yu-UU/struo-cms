@@ -252,6 +252,10 @@ export default {
     searchOptions: 'Search options…',
     pickADate: 'Pick a date',
     timePart: 'time',
+    // Joins a field label to its current value inside an aria-label. Separate keys because CJK
+    // wants fullwidth punctuation, which is copy rather than formatting.
+    namePairSeparator: ': ',
+    nameListSeparator: ', ',
     selectAFolder: 'Select a folder',
     selectAnItem: 'Select an item',
     noRelatedItems: 'No related items.',

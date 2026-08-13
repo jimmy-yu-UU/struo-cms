@@ -16,12 +16,24 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { fields: {
     noOptions: 'No options', selectedCount: '{n} selected', removeOption: 'Remove {label}', searchOptions: 'Search options…',
+    namePairSeparator: ': ', nameListSeparator: ', ',
+  } } },
+})
+// A separate instance locked to zh-TW, mirroring the real pack's separators — the only way to prove
+// the joiner comes from i18n rather than from a hardcoded template literal that happens to read back
+// identically for English.
+const i18nZh = createI18n({
+  legacy: false, locale: 'zh-TW', fallbackLocale: 'zh-TW',
+  messages: { 'zh-TW': { fields: {
+    noOptions: '沒有選項', selectedCount: '已選 {n} 項', removeOption: '移除 {label}', searchOptions: '搜尋選項…',
+    namePairSeparator: '：', nameListSeparator: '，',
   } } },
 })
 
 describe('MultiSelectField', () => {
   const options = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]
   const comboOpts = { global: { plugins: [PrimeVue, i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+  const comboOptsZh = { global: { plugins: [PrimeVue, i18nZh], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
   it('renders a chip per selected value', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
@@ -71,6 +83,11 @@ describe('MultiSelectField', () => {
   it('folds the selection count into the trigger\'s accessible name once something is selected', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: 'Regions', options }), modelValue: ['a'] }, ...comboOpts })
     expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe('Regions, 1 selected')
+  })
+
+  it('uses the CJK separator in zh-TW', () => {
+    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', label: '地區', options }), modelValue: ['a'] }, ...comboOptsZh })
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe('地區，已選 1 項')
   })
 
   it('shows a placeholder when empty and a count once something is selected', () => {

@@ -157,8 +157,9 @@ describe('SettingsView', () => {
     const w = mountView()
     await flushPromises()
     await w.get('input[data-slot="input"]').setValue('changed')
-    // require() resolves false on cancel AND on Escape/backdrop dismissal, so a single mock
-    // resolution covers both outcomes.
+    // require() resolves false on cancel and on Escape — an AlertDialog is not backdrop-dismissible
+    // (reka hard-prevents pointerDownOutside/interactOutside), so those are its only two paths to
+    // false, and a single mock resolution covers both.
     confirmRequire.mockResolvedValueOnce(false)
     await expect(leaveGuard!()).resolves.toBe(false)
     expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ header: 'Unsaved changes' }))

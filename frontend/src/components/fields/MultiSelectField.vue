@@ -25,7 +25,7 @@ const selectedOptions = computed(() =>
 // the popup.
 const triggerAccessibleName = computed(() =>
   selected.value.length
-    ? `${props.field.label}, ${t('fields.selectedCount', { n: selected.value.length })}`
+    ? `${props.field.label}${t('fields.nameListSeparator')}${t('fields.selectedCount', { n: selected.value.length })}`
     : props.field.label,
 )
 

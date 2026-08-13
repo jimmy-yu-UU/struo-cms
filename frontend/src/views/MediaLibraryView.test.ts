@@ -271,9 +271,8 @@ describe('MediaLibraryView', () => {
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
     await flushPromises()
-    // The two Selects previously had no accessible name at all under PrimeVue either --
-    // media.typeFilter/media.sortFilter exist specifically to give reka's role="combobox"
-    // trigger one.
+    // reka's role="combobox" trigger has no accessible name of its own; media.typeFilter/
+    // media.sortFilter exist specifically to give it one.
     const triggers = w.findAll('[data-slot="select-trigger"]')
     expect(triggers[0].attributes('aria-label')).toBe('File type')
     expect(triggers[1].attributes('aria-label')).toBe('Sort order')
