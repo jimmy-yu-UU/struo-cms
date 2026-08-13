@@ -200,7 +200,10 @@ test('media folders: create, upload with title autofill, folder survives a save,
 
   // 3. Regression guard: the Folder TreeSelect must already show the REAL folder (not
   // "Uncategorized") on this very first load, before any Save has happened.
-  await expect(mdField(page, 'Folder').getByRole('combobox')).toHaveAccessibleName(`Folder ${folderName}`)
+  // TreeSelect.vue renders its trigger as a plain Button (role="button", per selectFolder() below)
+  // whose aria-label is `${label}: ${triggerLabel}` -- not a "combobox" and not label-then-value
+  // without a separator. See TreeSelect.vue's `accessibleName` computed.
+  await expect(mdField(page, 'Folder').getByRole('button')).toHaveAccessibleName(`Folder: ${folderName}`)
 
   // Edit Alt text and Save -- a save that never touches the Folder field is exactly the scenario
   // that used to silently unfile the item.
@@ -214,7 +217,7 @@ test('media folders: create, upload with title autofill, folder survives a save,
   // Reopen for a FRESH GET (not trusting in-memory form state) and confirm the folder truly
   // persisted server-side, not just in the form.
   await openDetail(page, fileName)
-  await expect(mdField(page, 'Folder').getByRole('combobox')).toHaveAccessibleName(`Folder ${folderName}`)
+  await expect(mdField(page, 'Folder').getByRole('button')).toHaveAccessibleName(`Folder: ${folderName}`)
   await expect(mdField(page, 'Alt text').locator('input')).toHaveValue(alt)
 
   // 5. No "open in full editor" escape hatch anywhere in the detail dialog.
@@ -237,7 +240,11 @@ test('media folders: create, upload with title autofill, folder survives a save,
 
   const rejectedStatus = await attemptDeleteFolder(page, folderName)
   expect(rejectedStatus).toBe(409)
-  await expect(page.getByRole('alert').filter({ hasText: 'Folder is not empty' })).toBeVisible()
+  // useToast() (see composables/useToast.ts) bridges to vue-sonner, not PrimeVue's <Toast>: the
+  // visible toast is a plain styled <li> with no role, and sonner's accessibility announcement is
+  // a separate off-screen `<section aria-live="polite">` -- neither carries role="alert", so this
+  // must match on visible text rather than the alert role.
+  await expect(page.getByText('Folder is not empty', { exact: false })).toBeVisible()
   await expect(folderCard(page, folderName)).toBeVisible()
 
   // 7. Empty the folder, then delete succeeds and the card disappears. The file is currently
