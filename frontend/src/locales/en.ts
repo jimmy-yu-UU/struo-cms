@@ -199,6 +199,7 @@ export default {
     colWrite: 'Write',
     colDelete: 'Delete',
     save: 'Save permissions',
+    saving: 'Saving permissions…',
     saved: 'Permissions saved',
     loadFailed: 'Failed to load permissions',
     saveFailed: 'Failed to save permissions',

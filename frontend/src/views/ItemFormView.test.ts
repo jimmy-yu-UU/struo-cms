@@ -3,8 +3,6 @@ import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import PrimeVue from 'primevue/config'
-import ToastService from 'primevue/toastservice'
 import ItemFormView from './ItemFormView.vue'
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
@@ -19,9 +17,6 @@ import type { ConfirmRequest } from '@/composables/useConfirm'
 
 // PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
 // so the reload/existence assertions below exercise the actual components; stub only their API.
-// PermissionMatrix still imports its Button/Checkbox/useToast from primevue (unmigrated), so the
-// PrimeVue + ToastService plugins stay registered for its sake even though ItemFormView itself no
-// longer touches primevue.
 vi.mock('../api/rbacApi', () => ({
   rbacApi: {
     getRolePermissions: vi.fn(),
@@ -107,7 +102,7 @@ const i18n = createI18n({
 })
 function mountView() {
   return mount(ItemFormView, {
-    global: { plugins: [i18n, PrimeVue, ToastService], stubs, renderStubDefaultSlot: true },
+    global: { plugins: [i18n], stubs, renderStubDefaultSlot: true },
   })
 }
 
