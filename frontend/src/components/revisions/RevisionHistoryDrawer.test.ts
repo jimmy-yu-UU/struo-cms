@@ -206,11 +206,9 @@ describe('RevisionHistoryDrawer', () => {
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
   })
 
-  // Closes the gap task 8.1 left open: task 8.1's reviewer replaced the drawer's own
-  // `@revert="onRevert"` binding with a no-op and this directory stayed fully green, because every
-  // revert test above calls `onRevert` directly on the exposed vm rather than driving it through
-  // RevisionSnapshotView's real emit. This drives the actual child emit instead, so deleting the
-  // binding in the template fails this test specifically.
+  // Every revert test above calls `onRevert` directly on the exposed vm, which cannot detect a
+  // severed `@revert` binding in the template. This drives the actual child emit instead, so
+  // deleting the binding in the template fails this test specifically.
   it('wires RevisionSnapshotView\'s real revert emit to onRevert', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     const detail = { ...rows[0], snapshot: { status: 'draft' } }
@@ -232,8 +230,8 @@ describe('RevisionHistoryDrawer', () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     const w = mountDrawer()
     await flushPromises()
-    // This drawer's own ConfirmDialog next to ItemFormView's is what used to fire one confirmation
-    // twice; the store-backed host in AppShell is the only one now.
+    // The store-backed host in AppShell is the only confirmation host in the app, so this
+    // component must not mount its own.
     expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
   })
 
