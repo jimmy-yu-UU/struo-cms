@@ -123,8 +123,8 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
   <section class="permission-matrix">
     <h2 class="matrix-title">{{ t('rbac.matrixTitle') }}</h2>
 
-    <p v-if="isSuperAdminRole" class="notice">{{ t('rbac.superAdminAll') }}</p>
-    <p v-else-if="loadFailed" class="notice">{{ t('rbac.loadFailed') }}</p>
+    <p v-if="isSuperAdminRole" class="notice text-muted-foreground">{{ t('rbac.superAdminAll') }}</p>
+    <p v-else-if="loadFailed" class="notice text-muted-foreground">{{ t('rbac.loadFailed') }}</p>
     <template v-else-if="!loading">
       <div class="matrix-scroll">
         <table class="matrix-table">
@@ -168,7 +168,6 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
 <style scoped>
 .permission-matrix { display: grid; gap: 12px; margin-top: 24px; }
 .matrix-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.notice { color: var(--legacy-muted); margin: 0; }
 .matrix-scroll { overflow-x: auto; }
 .matrix-table { border-collapse: collapse; min-width: 480px; }
 .matrix-table th, .matrix-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }

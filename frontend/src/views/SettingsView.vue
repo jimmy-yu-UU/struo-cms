@@ -95,7 +95,7 @@ defineExpose({ save, guardLeave, dirty })
 </script>
 
 <template>
-  <div v-if="!isAdmin" class="settings-denied" role="alert">{{ t('settings.notPermitted') }}</div>
+  <div v-if="!isAdmin" class="settings-denied text-muted-foreground p-6" role="alert">{{ t('settings.notPermitted') }}</div>
   <template v-else>
     <PageHeader :title="t('settings.title')" />
     <section class="settings-section">
@@ -123,5 +123,4 @@ defineExpose({ save, guardLeave, dirty })
 .settings-section { max-width: 640px; display: flex; flex-direction: column; gap: 20px; }
 .settings-field { display: flex; flex-direction: column; gap: 8px; }
 .settings-actions { margin-top: 8px; }
-.settings-denied { padding: 24px; color: var(--legacy-muted); }
 </style>
