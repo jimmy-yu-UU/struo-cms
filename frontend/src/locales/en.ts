@@ -69,6 +69,7 @@ export default {
     email: 'Email',
     password: 'Password',
     submit: 'Sign in',
+    submitting: 'Signing in…',
     or: 'or',
     ssoMicrosoft: 'Sign in with Microsoft 365',
     failed: 'Login failed. Please try again.',
