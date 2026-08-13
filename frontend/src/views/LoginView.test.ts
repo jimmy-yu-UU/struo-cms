@@ -73,6 +73,18 @@ describe('LoginView', () => {
     // Two native inputs, both from ui/input: the email field and PasswordInput's inner control.
     expect(w.findAll('[data-slot="input"]')).toHaveLength(2)
     expect(w.findComponent({ name: 'PasswordInput' }).exists()).toBe(true)
+    // Without OIDC: submit + the PasswordInput toggle are both ui/button. `data-slot="button"` is
+    // ui/button's own hook (its underlying reka Primitive renders it unconditionally), so this
+    // count is blind to which library rendered the *text* but not to which rendered the *element* —
+    // it fails if either button reverts to a PrimeVue Button, which renders no such attribute.
+    expect(w.findAll('[data-slot="button"]')).toHaveLength(2)
+  })
+
+  it('renders three data-slot="button" hooks when the SSO button also mounts', () => {
+    useAppConfigStore().oidcEnabled = true
+    const w = mountLogin()
+    // submit + SSO + the PasswordInput toggle.
+    expect(w.findAll('[data-slot="button"]')).toHaveLength(3)
   })
 
   it('keeps the label associations and forwards id/autocomplete/required through PasswordInput', () => {
@@ -90,10 +102,15 @@ describe('LoginView', () => {
     const w = mountLogin()
     const toggle = w.findComponent({ name: 'PasswordInput' }).get('button')
     expect(toggle.attributes('type')).toBe('button')
+    // .lucide-* is one of the two legal Tailwind-adjacent migration proofs in this project (the
+    // other is data-slot); pin both icon identities, not just the functional type flip.
+    expect(toggle.find('svg').classes()).toContain('lucide-eye')
     await toggle.trigger('click')
     expect(w.find('input[type="text"]').exists()).toBe(true)
+    expect(toggle.find('svg').classes()).toContain('lucide-eye-off')
     await toggle.trigger('click')
     expect(w.find('input[type="password"]').exists()).toBe(true)
+    expect(toggle.find('svg').classes()).toContain('lucide-eye')
   })
 
   it('types every in-form button so only the submit button submits', () => {
