@@ -60,10 +60,10 @@ describe('AppShell', () => {
     expect(w.find('.stub-confirm').exists()).toBe(true)
   })
 
-  // Five production components (SettingsView, MediaLibraryView, PermissionMatrix,
-  // RevisionHistoryDrawer, MediaDetailDialog) still call primevue/usetoast and mock that call in
-  // their own tests, so none of them notices a missing <Toast> host -- see AppShell.vue's Toast
-  // comment for why it must stay mounted. This test is what actually catches that regression.
+  // No production component calls primevue/usetoast anymore, so nothing left in the tree would
+  // notice a missing <Toast> host -- see AppShell.vue's Toast comment: it stays mounted only
+  // because main.ts still registers ToastService, not because any caller still needs it. This
+  // test is what actually catches that regression.
   it('mounts the PrimeVue Toast host alongside the shadcn Toaster', () => {
     const schema = useSchemaStore()
     vi.spyOn(schema, 'load').mockResolvedValue()

@@ -220,6 +220,7 @@ export default {
     uploadLogo: 'Upload new logo',
     removeLogo: 'Remove logo',
     save: 'Save changes',
+    saving: 'Saving…',
     saved: 'Settings saved',
     saveFailed: 'Save failed',
     nameRequired: 'Site name is required',

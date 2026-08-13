@@ -220,6 +220,7 @@ export default {
     uploadLogo: '上傳新 Logo',
     removeLogo: '移除 Logo',
     save: '儲存變更',
+    saving: '儲存中…',
     saved: '設定已儲存',
     saveFailed: '儲存失敗',
     nameRequired: '網站名稱為必填',
