@@ -184,6 +184,7 @@ export default {
     system: '系統',
     snapshot: '快照',
     revert: '還原至此版',
+    reverting: '還原中…',
     revertConfirmHeader: '確認還原',
     revertConfirmMessage: '將把此項目還原至版本 {n},並覆蓋目前尚未儲存的編輯。此動作會新增一筆還原紀錄。',
     reverted: '已還原至版本 {n}',
