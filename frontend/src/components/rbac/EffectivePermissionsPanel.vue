@@ -56,7 +56,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="effective-permissions">
     <h2 class="panel-title">{{ t('rbac.effectiveTitle') }}</h2>
-    <p v-if="props.roleIds !== undefined" class="hint text-muted-foreground">{{ t('rbac.effectivePreviewHint') }}</p>
+    <p v-if="props.roleIds !== undefined" class="hint text-muted-foreground text-[0.9rem]">{{ t('rbac.effectivePreviewHint') }}</p>
 
     <p v-if="loadFailed" class="notice text-muted-foreground">{{ t('rbac.effectiveLoadFailed') }}</p>
     <p v-else-if="eff?.isSuperAdmin" class="notice text-muted-foreground">{{ t('rbac.effectiveSuperAdmin') }}</p>
