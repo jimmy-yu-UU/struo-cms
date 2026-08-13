@@ -117,11 +117,8 @@ function revisionRow(page: Page, n: number) {
 function revertButton(page: Page) {
   return page.getByRole('button', { name: 'Revert to this revision' })
 }
-// RevisionHistoryDrawer still renders its own PrimeVue <ConfirmDialog group="revisions"> (its own
-// migration is a later slice). ItemFormView no longer mounts an unscoped <ConfirmDialog> of its
-// own — that confirm now goes through the app-wide ConfirmHost instead — so this group scoping no
-// longer prevents a double-fire against anything on this page; it is simply this dialog's own
-// PrimeVue instance, independent of ConfirmHost.
+// The revert confirmation now routes through the app-wide ConfirmHost (store-backed
+// AlertDialog), the same single host every other confirmation on this page uses.
 function revertConfirmDialog(page: Page) {
   return page.getByRole('alertdialog').filter({ hasText: 'Confirm revert' })
 }
@@ -157,9 +154,9 @@ test('reverting to an earlier revision restores its Title in the form and on the
   await expect(revertButton(page)).toBeVisible()
   await revertButton(page).click()
   await expect(revertConfirmDialog(page)).toBeVisible()
-  // Targets RevisionHistoryDrawer's own PrimeVue ConfirmDialog, not ConfirmHost — its accept
-  // label is still PrimeVue's default ("Yes"), unrelated to ItemFormView's confirm.require().
-  await revertConfirmDialog(page).getByRole('button', { name: 'Yes' }).click()
+  // The revert confirmation is the store-backed ConfirmHost; its accept label is the host's
+  // default, common.confirm ("Confirm"), since onRevert passes no explicit acceptLabel.
+  await revertConfirmDialog(page).getByRole('button', { name: 'Confirm' }).click()
 
   // onReverted() re-fetches the full item (NOT the bare /revert response) and re-populates the form:
   // the Title field must show the ORIGINAL value again, proving the revert (and the re-fetch) worked.
