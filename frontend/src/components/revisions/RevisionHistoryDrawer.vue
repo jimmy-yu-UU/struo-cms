@@ -128,7 +128,18 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
           <p v-if="listLoading" class="rev-notice">{{ t('revisions.loading') }}</p>
           <div v-else-if="listError" class="rev-notice rev-error" role="alert">
             <span>{{ listError }}</span>
-            <Button type="button" variant="ghost" size="sm" data-test="rev-retry" @click="load">
+            <!-- variant="ghost" declares no base text colour, so without this it would inherit
+                 .rev-error's danger red at rest and jump to hover:text-accent-foreground on
+                 hover; text-foreground makes the rest state deliberate and matches every other
+                 ghost button's hover, unmodified. -->
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="text-foreground"
+              data-test="rev-retry"
+              @click="load"
+            >
               {{ t('revisions.retry') }}
             </Button>
           </div>
