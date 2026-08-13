@@ -184,6 +184,7 @@ export default {
     system: 'System',
     snapshot: 'Snapshot',
     revert: 'Revert to this revision',
+    reverting: 'Reverting…',
     revertConfirmHeader: 'Confirm revert',
     revertConfirmMessage: 'This reverts the item to revision {n} and overwrites your current unsaved edits. A new revision will be recorded.',
     reverted: 'Reverted to revision {n}',

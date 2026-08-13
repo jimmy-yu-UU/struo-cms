@@ -8,22 +8,20 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { revisions: {
     opUpdate: 'Updated', opUnknown: 'Changed', system: 'System', snapshot: 'Snapshot',
-    revert: 'Revert to this revision', selectHint: 'Select a revision', loading: 'Loading…',
+    revert: 'Revert to this revision', reverting: 'Reverting…',
+    selectHint: 'Select a revision', loading: 'Loading…', colWhen: 'Time', colWho: 'By',
   } } },
 })
-const stubs = {
-  Button: {
-    props: ['loading', 'disabled', 'label', 'icon', 'severity'],
-    emits: ['click'],
-    template: '<button class="stub-btn" :disabled="disabled" @click="$emit(\'click\')"><slot/>{{ label }}</button>',
-  },
-}
+
 const detail = { revisionNumber: 3, operation: 'update', createdAt: '2026-07-21T10:00:00Z', createdBy: 'user-1', snapshot: { status: 'draft' } }
 
 type ViewProps = { detail: RevisionDetail | null; loading: boolean; error: string; canRevert: boolean; reverting?: boolean }
 
+// No Button stub here: a name-keyed stub would blind this suite to which Button
+// mounted (PrimeVue and the vendored component share the name), and this file's
+// whole purpose is pinning that the vendored one actually rendered.
 function mountView(props: ViewProps) {
-  return mount(RevisionSnapshotView, { props, global: { plugins: [i18n], stubs } })
+  return mount(RevisionSnapshotView, { props, global: { plugins: [i18n] } })
 }
 
 describe('RevisionSnapshotView', () => {
@@ -46,8 +44,8 @@ describe('RevisionSnapshotView', () => {
 
   it('emits revert with the revision number when the button is clicked', async () => {
     const w = mountView({ detail, loading: false, error: '', canRevert: true })
-    await w.find('.rev-revert-btn').trigger('click')
-    expect(w.emitted('revert')?.[0]).toEqual([3])
+    await w.get('.rev-revert-btn').trigger('click')
+    expect(w.emitted('revert')).toEqual([[3]])
   })
 
   it('shows the error message when error is set', () => {
@@ -68,12 +66,24 @@ describe('RevisionSnapshotView', () => {
     expect(w.text()).not.toContain('null')
   })
 
-  it('shows the revert button as disabled/loading while reverting', () => {
+  it('renders a lucide revert glyph, not a primeicons class', () => {
+    const w = mountView({ detail, loading: false, error: '', canRevert: true })
+    expect(w.find('.lucide-rotate-ccw').exists()).toBe(true)
+    expect(w.find('.pi').exists()).toBe(false)
+  })
+
+  it('types the revert button so it can never submit a surrounding form', () => {
+    expect(mountView({ detail, loading: false, error: '', canRevert: true }).get('.rev-revert-btn').attributes('type')).toBe('button')
+  })
+
+  it('disables the revert button and swaps its label while reverting', () => {
     const reverting = mountView({ detail, loading: false, error: '', canRevert: true, reverting: true })
-    expect(reverting.find('.rev-revert-btn').exists()).toBe(true)
-    expect(reverting.find('.rev-revert-btn').attributes('disabled')).toBeDefined()
+    expect(reverting.get('.rev-revert-btn').attributes('disabled')).toBeDefined()
+    // ui/button has no loading prop, so the in-flight state is a label swap.
+    expect(reverting.get('.rev-revert-btn').text()).toContain('Reverting…')
 
     const notReverting = mountView({ detail, loading: false, error: '', canRevert: true, reverting: false })
-    expect(notReverting.find('.rev-revert-btn').attributes('disabled')).toBeUndefined()
+    expect(notReverting.get('.rev-revert-btn').attributes('disabled')).toBeUndefined()
+    expect(notReverting.get('.rev-revert-btn').text()).toContain('Revert to this revision')
   })
 })

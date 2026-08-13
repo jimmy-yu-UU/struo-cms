@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Button from 'primevue/button'
+import { RotateCcw } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import { useI18n } from 'vue-i18n'
 import { revisionOperationKey } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
@@ -23,6 +24,7 @@ const whenText = computed(() =>
   props.detail ? formatRevisionTime(props.detail.createdAt) : '',
 )
 const whoText = computed(() => props.detail?.createdBy ?? t('revisions.system'))
+const revertLabel = computed(() => (props.reverting ? t('revisions.reverting') : t('revisions.revert')))
 const prettyJson = computed(() => {
   if (!props.detail) return ''
   try {
@@ -54,15 +56,18 @@ const prettyJson = computed(() => {
         <pre class="rev-json">{{ prettyJson }}</pre>
       </section>
       <div v-if="canRevert" class="rev-actions">
+        <!-- PrimeVue's severity="warn" has no vendored equivalent; outline plus the warning token
+             matches the warning-banner idiom already used on the collection list. -->
         <Button
-          class="rev-revert-btn"
-          :label="t('revisions.revert')"
-          icon="pi pi-replay"
-          severity="warn"
-          :loading="reverting"
+          type="button"
+          variant="outline"
+          class="rev-revert-btn border-warning text-warning hover:bg-warning/10"
           :disabled="reverting"
           @click="emit('revert', detail.revisionNumber)"
-        />
+        >
+          <RotateCcw aria-hidden="true" />
+          {{ revertLabel }}
+        </Button>
       </div>
     </template>
   </div>
