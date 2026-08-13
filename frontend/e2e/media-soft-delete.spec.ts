@@ -2,10 +2,9 @@ import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
 // File soft-delete live gate. Covers the critical path this feature adds to the media
-// library: trashing a file from its DETAIL DIALOG (the active-view path — this is the one where a
-// duplicate-ConfirmDialog bug was previously fixed by scoping MediaDetailDialog's ConfirmDialog to
-// its own unnamed group, separate from MediaLibraryView's `media-folder`/`media-file` groups), then
-// restore, re-trash, and permanent purge from the Trash view. Also asserts the server-side effect
+// library: trashing a file from its DETAIL DIALOG (the active-view path, distinct from the
+// list-row trash action MediaLibraryView also exposes), then restore, re-trash, and permanent
+// purge from the Trash view. Also asserts the server-side effect
 // (GET /api/files/{id}/content 404 while trashed, 200 once restored) so this isn't just a UI-state
 // check — it proves FileService's soft-delete query filter actually excludes the row.
 //

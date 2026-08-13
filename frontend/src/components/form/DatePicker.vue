@@ -29,7 +29,9 @@ const displayText = computed(() =>
 // must carry everything the sighted trigger text shows (the field label AND the current value or
 // placeholder) — a fixed label would hide the stored value and, on a form with several date
 // fields, make every trigger announce identically.
-const accessibleName = computed(() => (props.label ? `${props.label}: ${displayText.value}` : displayText.value))
+const accessibleName = computed(() => (
+  props.label ? `${props.label}${t('fields.namePairSeparator')}${displayText.value}` : displayText.value
+))
 
 // ui/calendar speaks @internationalized/date's DateValue: year/month/day only, month 1-based, no
 // time and no time zone. The conversion to and from the CMS's plain JS Date lives entirely here.

@@ -266,6 +266,16 @@ with `init` properties and non-destructive `with` updates over mutable classes w
 for anything that flows through the metadata cache or the query pipeline (both are shared, longer-lived
 state where an accidental in-place mutation would be visible to every subsequent caller).
 
+## Overlay stacking (frontend)
+
+Every component under `frontend/src/components/ui/` shares one `z-50` for its floating layer (Popover,
+Select, Dialog, Sheet, dropdown, tooltip, combobox, alert-dialog, ...), and nothing in `ui/` goes higher.
+`ConfirmHost` (`frontend/src/components/shell/ConfirmHost.vue`) is the one exception: it is a
+Pinia-backed singleton that can open while another vendored overlay is already on screen, and at equal
+`z-50` a fixed-position element's stacking falls to DOM order rather than intent, so its
+`AlertDialogContent` is raised to `z-[60]`. A new floating layer must stay under that ceiling —
+`z-[60]` is reserved for this one singleton, not a scale to build on.
+
 ## Tests per layer
 
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests build a fresh SQLite

@@ -26,7 +26,7 @@ import zhTW from '../../locales/zh-TW'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 // A separate instance locked to zh-TW: fields.timePart resolves to different text in each pack
-// ('time' vs '時間'), which is the only way to prove DateField's time-input label is actually
+// ('time' vs '時刻'), which is the only way to prove DateField's time-input label is actually
 // running through t() rather than a hardcoded English word that happens to read back identical
 // to en.fields.timePart's current value.
 const zhI18n = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'zh-TW', messages: { 'zh-TW': zhTW } })
@@ -293,14 +293,14 @@ describe('field components (simple inputs)', () => {
   // call apart from a hardcoded English literal that happens to read 'time' — en.fields.timePart
   // IS the English word 'time'. Mounting under zh-TW is the only way the two diverge: a hardcoded
   // `${field.label} time` suffix would still read back with the English word even here, while a
-  // real t('fields.timePart') call resolves to zh-TW's '時間'.
+  // real t('fields.timePart') call resolves to zh-TW's '時刻'.
   it('DateField resolves the time-input accessible-name suffix through the active locale, not a hardcoded English word', () => {
     const w = mount(DateField, {
       props: { field: field({ interface: 'dateTime', label: 'Published at' }), modelValue: null },
       ...dateOptsZhTW,
     })
     const label = w.get('input[type="time"]').attributes('aria-label')
-    expect(label).toContain('時間')
+    expect(label).toContain('時刻')
     expect(label).not.toContain('time')
   })
 

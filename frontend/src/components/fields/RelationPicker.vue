@@ -147,11 +147,13 @@ const multipleSelectedOptions = computed(() => (
 // relation's own label AND the current value/count, matching the pattern MultiSelectField.vue and
 // DatePicker.vue settled on — a static label alone would make every pick announce identically.
 const singleAccessibleName = computed(() => (
-  singleSelectedOption.value ? `${props.relation.label}: ${singleSelectedOption.value.label}` : props.relation.label
+  singleSelectedOption.value
+    ? `${props.relation.label}${t('fields.namePairSeparator')}${singleSelectedOption.value.label}`
+    : props.relation.label
 ))
 const multipleAccessibleName = computed(() => (
   multipleSelected.value.length
-    ? `${props.relation.label}, ${t('fields.selectedCount', { n: multipleSelected.value.length })}`
+    ? `${props.relation.label}${t('fields.nameListSeparator')}${t('fields.selectedCount', { n: multipleSelected.value.length })}`
     : props.relation.label
 ))
 

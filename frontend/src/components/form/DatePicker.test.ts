@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
-import { createI18n } from 'vue-i18n'
 import DatePicker from './DatePicker.vue'
 import en from '@/locales/en'
+import zhTW from '@/locales/zh-TW'
+import { i18n } from '@/i18n'
 
-const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 // reka's own portal wrapper is itself named Teleport, so it collides with VTU's teleport stub and
 // drops slot content unless renderStubDefaultSlot is on.
 const opts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
@@ -22,6 +22,15 @@ function iso(d: Date): string {
 }
 
 describe('DatePicker', () => {
+  // The shared singleton's initial locale comes from resolveInitialUiLocale(), not a fixed
+  // default, so every test needs 'en' pinned going in, not just restored afterward.
+  beforeEach(() => {
+    i18n.global.locale.value = 'en'
+  })
+  afterEach(() => {
+    i18n.global.locale.value = 'en'
+  })
+
   it('shows the placeholder when there is no value', () => {
     const w = mount(DatePicker, { props: { modelValue: null }, ...opts })
     expect(w.get('button').text()).toContain(en.fields.pickADate)
@@ -53,6 +62,17 @@ describe('DatePicker', () => {
   it('falls back to the value or placeholder alone as the accessible name when no field label is given', () => {
     const w = mount(DatePicker, { props: { modelValue: null, placeholder: 'Custom placeholder' }, ...opts })
     expect(w.get('button').attributes('aria-label')).toBe('Custom placeholder')
+  })
+
+  it('joins the label and the current date through the locale separator', () => {
+    const w = mount(DatePicker, { props: { modelValue: null, label: 'Published' }, ...opts })
+    expect(w.get('button').attributes('aria-label')).toBe(`Published${en.fields.namePairSeparator}${en.fields.pickADate}`)
+  })
+
+  it('uses the CJK separator in zh-TW', () => {
+    i18n.global.locale.value = 'zh-TW'
+    const w = mount(DatePicker, { props: { modelValue: null, label: '發布日期' }, ...opts })
+    expect(w.get('button').attributes('aria-label')).toBe(`發布日期${zhTW.fields.namePairSeparator}${zhTW.fields.pickADate}`)
   })
 
   it('disables the trigger', () => {

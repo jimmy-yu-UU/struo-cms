@@ -397,8 +397,8 @@ describe('MediaDetailDialog', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    // A child dialog next to MediaLibraryView's own is exactly what used to fire one confirmation
-    // twice; the store-backed host in AppShell is the only one now.
+    // A local ConfirmDialog nested inside MediaLibraryView's own would fire one confirmation
+    // twice; AppShell's store-backed ConfirmHost is the only confirmation surface in the app.
     expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
   })
 

@@ -208,7 +208,7 @@ test('Escape dismisses the guard (user stays); a later navigation re-triggers it
   await navSidebar(page, 'Category')
   await expect(guardDialog(page)).toBeVisible()
   // Clean up navigation state by accepting. ConfirmHost's accept button defaults to
-  // common.confirm ("Confirm") — not PrimeVue's "Yes" this dialog no longer uses.
+  // common.confirm ("Confirm").
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/category$/)
 })
