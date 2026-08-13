@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import PrimeVue from 'primevue/config'
-import ToastService from 'primevue/toastservice'
-import ConfirmationService from 'primevue/confirmationservice'
 import { createI18n } from 'vue-i18n'
 import en from '../../locales/en'
 import PermissionMatrix from './PermissionMatrix.vue'
 import { useSchemaStore } from '../../stores/schemaStore'
-import { rbacApi } from '../../api/rbacApi'
+import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 
 vi.mock('../../api/rbacApi', () => ({
   rbacApi: { getRolePermissions: vi.fn(), putRolePermissions: vi.fn() },
 }))
+
+const toastAdd = vi.fn()
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
@@ -23,7 +23,7 @@ function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean; creat
       isSuperAdminRole: props.isSuperAdminRole ?? false,
       createMode: props.createMode ?? false,
     },
-    global: { plugins: [PrimeVue, ToastService, ConfirmationService, i18n] },
+    global: { plugins: [i18n] },
   })
 }
 
@@ -38,6 +38,7 @@ describe('PermissionMatrix', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    toastAdd.mockClear()
     vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([
       { collection: 'article', canRead: true, canWrite: false, canDelete: false },
     ])
@@ -52,15 +53,85 @@ describe('PermissionMatrix', () => {
     expect(rbacApi.getRolePermissions).toHaveBeenCalledWith('r1')
   })
 
-  it('disables write/delete checkboxes for adminOnly collections', async () => {
+  it('renders vendored checkboxes, not PrimeVue ones', async () => {
     seedSchema()
     const w = mountMatrix()
     await flushPromises()
-    const userRow = w.findAll('tbody tr').find((tr) => tr.text().includes('User'))!
-    const boxes = userRow.findAllComponents({ name: 'Checkbox' })
-    expect(boxes[0].props('disabled')).toBeFalsy() // read stays grantable
-    expect(boxes[1].props('disabled')).toBe(true)
-    expect(boxes[2].props('disabled')).toBe(true)
+    // Two collections x read/write/delete.
+    expect(w.findAll('[data-slot="checkbox"]')).toHaveLength(6)
+  })
+
+  it('labels every checkbox with its collection and column, so a screen reader hears a distinct name', async () => {
+    // Rows sort by group then label: article (Content) first, user (System) second.
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes[0].attributes('aria-label')).toBe('Article — Read')
+    expect(boxes[1].attributes('aria-label')).toBe('Article — Write')
+    expect(boxes[2].attributes('aria-label')).toBe('Article — Delete')
+    expect(boxes[3].attributes('aria-label')).toBe('User — Read')
+    expect(boxes[4].attributes('aria-label')).toBe('User — Write')
+    expect(boxes[5].attributes('aria-label')).toBe('User — Delete')
+  })
+
+  it('reflects the loaded grants, including a reload after mount', async () => {
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    const articleRead = () => w.findAll('[data-slot="checkbox"]')[0]
+    // beforeEach seeds article read=true.
+    expect(articleRead().attributes('data-state')).toBe('checked')
+    expect(articleRead().attributes('aria-checked')).toBe('true')
+    // ItemFormView's create-then-flush path and a plain reload both replace the whole grants
+    // record.
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([
+      { collection: 'article', canRead: false, canWrite: true, canDelete: false },
+    ])
+    await (w.vm as unknown as { load: () => Promise<void> }).load()
+    await flushPromises()
+    expect(articleRead().attributes('data-state')).toBe('unchecked')
+    expect(w.findAll('[data-slot="checkbox"]')[1].attributes('data-state')).toBe('checked')
+  })
+
+  // `load()` toggles the `loading` flag around the whole table, which unmounts and remounts every
+  // row (the table sits behind `v-else-if="!loading"`) — a fresh mount re-seeds an uncontrolled
+  // control from its current `default-value`, so the test above cannot tell a controlled checkbox
+  // from an uncontrolled one. `toggle()` is the exact handler wired to each checkbox's own
+  // `@update:model-value`, and it mutates `grants` alone (never `loading`), so calling it directly
+  // changes the prop feeding an ALREADY-MOUNTED checkbox without remounting anything.
+  it('the read checkbox stays governed by the grants record after mount, not just at its initial render', async () => {
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    const articleRead = () => w.findAll('[data-slot="checkbox"]')[0]
+    expect(articleRead().attributes('data-state')).toBe('checked') // beforeEach seeds read=true
+    ;(w.vm as unknown as { toggle: (c: string, k: string, v: boolean) => void }).toggle('article', 'read', false)
+    await flushPromises()
+    expect(articleRead().attributes('data-state')).toBe('unchecked')
+    expect(articleRead().attributes('aria-checked')).toBe('false')
+  })
+
+  it('stores a grant emitted by the real Checkbox child on a real click', async () => {
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    // reka's CheckboxRoot toggles on a real click, so drive that rather than emitting from the
+    // child — a real click also proves the control is reachable and not pointer-events-none.
+    await w.findAll('[data-slot="checkbox"]')[2].trigger('click')
+    await flushPromises()
+    expect(w.findAll('[data-slot="checkbox"]')[2].attributes('data-state')).toBe('checked')
+    expect((w.vm as unknown as { dirty: boolean }).dirty).toBe(true)
+  })
+
+  it('disables write and delete on an adminOnly collection but keeps read grantable', async () => {
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes[3].attributes('disabled')).toBeUndefined()
+    expect(boxes[4].attributes('disabled')).toBeDefined()
+    expect(boxes[5].attributes('disabled')).toBeDefined()
   })
 
   it('super-admin role shows a notice instead of the matrix', async () => {
@@ -91,8 +162,9 @@ describe('PermissionMatrix', () => {
 
   // PermissionMatrix no longer owns a route-leave guard — ItemFormView owns the ONE guard
   // and folds in this component's `dirty` state instead. save() must report success/failure so the
-  // parent form's Save can flush the matrix and know whether to keep the user on the page.
-  it('save resolves true on success and false on failure', async () => {
+  // parent form's Save can flush the matrix and know whether to keep the user on the page. The
+  // toast composable is now the vendored/sonner one, mocked at module level, not PrimeVue's.
+  it('save resolves true on success and false on failure, and toasts success/failure accordingly', async () => {
     seedSchema()
     vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
     const w = mountMatrix()
@@ -100,9 +172,38 @@ describe('PermissionMatrix', () => {
     const vm: any = w.vm
     vm.toggle('article', 'write', true)
     await expect(vm.save()).resolves.toBe(true)
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success' }))
+    toastAdd.mockClear()
     vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new Error('boom'))
     vm.toggle('article', 'delete', true)
     await expect(vm.save()).resolves.toBe(false)
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
+  })
+
+  it('the save button carries the vendored identity, a native type="button", :disabled tracking dirty/saving, and a saving label swap', async () => {
+    seedSchema()
+    let resolvePut!: (v: RolePermissionEntry[]) => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+      () => new Promise((resolve) => { resolvePut = resolve }),
+    )
+    const w = mountMatrix()
+    await flushPromises()
+    const btn = () => w.get('[data-slot="button"]')
+
+    expect(btn().attributes('type')).toBe('button')
+    expect(btn().text()).toBe('Save permissions')
+    expect(btn().attributes('disabled')).toBeDefined() // clean -> disabled
+
+    await w.findAll('[data-slot="checkbox"]')[1].trigger('click') // dirty the matrix
+    expect(btn().attributes('disabled')).toBeUndefined() // dirty -> enabled
+
+    await btn().trigger('click')
+    expect(btn().text()).toBe('Saving permissions…')
+    expect(btn().attributes('disabled')).toBeDefined() // saving -> disabled even though dirty
+
+    resolvePut([{ collection: 'article', canRead: true, canWrite: true, canDelete: false }])
+    await flushPromises()
+    expect(btn().text()).toBe('Save permissions')
   })
 
   // ---- create-mode buffer (no GET, no own Save button, currentEntries()) ----
@@ -113,7 +214,7 @@ describe('PermissionMatrix', () => {
     await flushPromises()
     expect(w.find('table').exists()).toBe(true)
     expect(rbacApi.getRolePermissions).not.toHaveBeenCalled()
-    expect(w.findComponent({ name: 'Button' }).exists()).toBe(false)
+    expect(w.find('[data-slot="button"]').exists()).toBe(false)
   })
 
   it('currentEntries() returns only non-all-false rows after toggles, in create mode', async () => {

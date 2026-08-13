@@ -199,6 +199,7 @@ export default {
     colWrite: '寫入',
     colDelete: '刪除',
     save: '儲存權限',
+    saving: '權限儲存中…',
     saved: '權限已儲存',
     loadFailed: '權限載入失敗',
     saveFailed: '權限儲存失敗',
