@@ -69,8 +69,8 @@ describe('SettingsView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-slot="input"]').exists()).toBe(true)
-    // data-slot is the real migration guard: PrimeVue's own Button/InputText also render a plain
-    // type="button" <input>/<button>, so that attribute alone cannot distinguish the two.
+    // data-slot is the real migration guard: PrimeVue's own Button also renders a plain
+    // type="button" <button>, so that attribute alone cannot distinguish the two.
     expect(w.get('[data-test="save"]').attributes('data-slot')).toBe('button')
     expect(w.get('[data-test="save"]').attributes('type')).toBe('button')
   })
@@ -129,6 +129,9 @@ describe('SettingsView', () => {
     const pending = (w.vm as unknown as { save: () => Promise<void> }).save()
     await flushPromises()
     expect(w.get('[data-test="save"]').text()).toBe('Saving…')
+    // :disabled is what actually stops a re-entrant save() on a double-click mid-save; the label
+    // swap alone is cosmetic.
+    expect(w.get('[data-test="save"]').attributes('disabled')).toBeDefined()
     release()
     await pending
   })
@@ -154,10 +157,11 @@ describe('SettingsView', () => {
     const w = mountView()
     await flushPromises()
     await w.get('input[data-slot="input"]').setValue('changed')
-    // require() resolves false on cancel AND on Escape/backdrop dismissal, so the old three-callback
-    // wrapper (accept / reject / onHide) has nothing left to do.
+    // require() resolves false on cancel AND on Escape/backdrop dismissal, so a single mock
+    // resolution covers both outcomes.
     confirmRequire.mockResolvedValueOnce(false)
     await expect(leaveGuard!()).resolves.toBe(false)
+    expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ header: 'Unsaved changes' }))
   })
 
   it('allows navigation when the confirmation is accepted', async () => {
@@ -167,6 +171,7 @@ describe('SettingsView', () => {
     await w.get('input[data-slot="input"]').setValue('changed')
     confirmRequire.mockResolvedValueOnce(true)
     await expect(leaveGuard!()).resolves.toBe(true)
+    expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ header: 'Unsaved changes' }))
   })
 
   it('a successful save re-baselines so leaving afterward does not prompt', async () => {

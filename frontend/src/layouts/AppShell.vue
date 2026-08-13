@@ -42,9 +42,8 @@ onMounted(() => { schema.load() })
 
     <!-- The app's global outlets, mounted exactly once. Toast (PrimeVue) stays alongside
          Toaster (shadcn/vue-sonner) even though no production code calls `primevue/usetoast`
-         anymore: `main.ts` still registers ToastService, and ToastService.add() emits on
-         ToastEventBus with no host subscribed (silently, no error) if this host is removed
-         before that registration goes too. -->
+         anymore: `main.ts` still registers ToastService, and this host and that registration
+         are removed together. -->
     <Toast position="top-right" />
     <Toaster position="top-right" />
     <ConfirmHost />
