@@ -130,7 +130,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
       <div class="rev-layout">
         <aside class="rev-list">
           <p v-if="listLoading" class="rev-notice text-muted-foreground">{{ t('revisions.loading') }}</p>
-          <div v-else-if="listError" class="rev-notice rev-error text-muted-foreground" role="alert">
+          <div v-else-if="listError" class="rev-notice rev-error" role="alert">
             <span>{{ listError }}</span>
             <!-- variant="ghost" declares no base text colour, so without this it would inherit
                  .rev-error's danger red at rest and jump to hover:text-accent-foreground on

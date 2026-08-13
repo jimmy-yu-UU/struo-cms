@@ -38,7 +38,7 @@ const prettyJson = computed(() => {
 <template>
   <div class="rev-detail">
     <p v-if="loading" class="rev-notice text-muted-foreground">{{ t('revisions.loading') }}</p>
-    <p v-else-if="error" class="rev-notice rev-error text-muted-foreground" role="alert">{{ error }}</p>
+    <p v-else-if="error" class="rev-notice rev-error" role="alert">{{ error }}</p>
     <p v-else-if="!detail" class="rev-notice text-muted-foreground">{{ t('revisions.selectHint') }}</p>
     <template v-else>
       <header class="rev-summary">
