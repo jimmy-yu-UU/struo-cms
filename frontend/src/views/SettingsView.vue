@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { useConfirm } from 'primevue/useconfirm'
+import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from 'vue-i18n'
-import { useToast } from 'primevue/usetoast'
-import Button from 'primevue/button'
-import ConfirmDialog from 'primevue/confirmdialog'
-import InputText from 'primevue/inputtext'
+import { useToast } from '@/composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import PageHeader from '../components/common/PageHeader.vue'
 import FilePicker from '../components/fields/FilePicker.vue'
 import MediaUploadDropzone from '../components/media/MediaUploadDropzone.vue'
@@ -26,6 +25,7 @@ const isAdmin = computed(() => auth.user?.isSuperAdmin === true)
 const brandName = ref('')
 const logoFileId = ref<string | null>(null)
 const saving = ref(false)
+const saveLabel = computed(() => (saving.value ? t('settings.saving') : t('settings.save')))
 
 // Baseline snapshot of the editable fields, captured on load and re-captured on every successful
 // save; the leave guard below compares against it (mirrors ItemFormView's
@@ -69,23 +69,13 @@ async function save(): Promise<void> {
   }
 }
 
-// Mirrors ItemFormView's guardLeave: warn before navigating away (SPA route change) with
-// unsaved edits, only while an admin (the only role that can actually edit these fields). Reuses
-// the same unsavedConfirm() copy as the item form rather than duplicating an i18n key.
-function guardLeave(): Promise<boolean> {
-  if (!isAdmin.value || !dirty.value) return Promise.resolve(true)
-  const { header, message } = unsavedConfirm(t)
-  return new Promise<boolean>((resolve) => {
-    confirm.require({
-      header,
-      message,
-      accept: () => resolve(true),
-      reject: () => resolve(false),
-      // Esc / backdrop / X dismiss fires neither accept nor reject; onHide always fires on
-      // dismissal, so treat it as "cancel navigation, stay here" (see ItemFormView's guardLeave).
-      onHide: () => resolve(false),
-    })
-  })
+// Mirrors ItemFormView's guardLeave: warn before navigating away (SPA route change) with unsaved
+// edits, only while an admin (the only role that can actually edit these fields). Reuses the same
+// unsavedConfirm() copy as the item form rather than duplicating an i18n key. require() resolves
+// false on cancel and on dismissal alike, which is the "stay here" outcome either way.
+async function guardLeave(): Promise<boolean> {
+  if (!isAdmin.value || !dirty.value) return true
+  return confirm.require(unsavedConfirm(t))
 }
 onBeforeRouteLeave(() => guardLeave())
 
@@ -100,10 +90,11 @@ function onBeforeUnload(e: BeforeUnloadEvent): void {
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+
+defineExpose({ save, guardLeave, dirty })
 </script>
 
 <template>
-  <ConfirmDialog />
   <div v-if="!isAdmin" class="settings-denied" role="alert">{{ t('settings.notPermitted') }}</div>
   <template v-else>
     <PageHeader :title="t('settings.title')" />
@@ -112,7 +103,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
 
       <label class="settings-field">
         <span>{{ t('settings.brandName') }}</span>
-        <InputText v-model="brandName" maxlength="100" />
+        <Input v-model="brandName" maxlength="100" />
       </label>
 
       <div class="settings-field">
@@ -122,7 +113,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
       </div>
 
       <div class="settings-actions">
-        <Button data-test="save" :label="t('settings.save')" :loading="saving" @click="save" />
+        <Button type="button" data-test="save" :disabled="saving" @click="save">{{ saveLabel }}</Button>
       </div>
     </section>
   </template>
