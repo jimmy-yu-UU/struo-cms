@@ -201,8 +201,9 @@ test('media folders: create, upload with title autofill, folder survives a save,
   // 3. Regression guard: the Folder TreeSelect must already show the REAL folder (not
   // "Uncategorized") on this very first load, before any Save has happened.
   // TreeSelect.vue renders its trigger as a plain Button (role="button", per selectFolder() below)
-  // whose aria-label is `${label}: ${triggerLabel}` -- not a "combobox" and not label-then-value
-  // without a separator. See TreeSelect.vue's `accessibleName` computed.
+  // whose aria-label joins the field label to the current value through fields.namePairSeparator
+  // (': ' under this suite's fixtures.ts-pinned 'en' locale) -- not a "combobox" and not
+  // label-then-value without a separator. See TreeSelect.vue's `accessibleName` computed.
   await expect(mdField(page, 'Folder').getByRole('button')).toHaveAccessibleName(`Folder: ${folderName}`)
 
   // Edit Alt text and Save -- a save that never touches the Folder field is exactly the scenario

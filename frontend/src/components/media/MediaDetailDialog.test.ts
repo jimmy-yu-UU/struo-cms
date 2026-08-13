@@ -26,7 +26,7 @@ const i18n = createI18n({
     softDeleteHeader: 'Move to trash', softDeleteMessage: 'Move this item to trash? You can restore it later.',
     hardDeleteHeader: 'Confirm delete', hardDeleteMessage: 'Delete this item? This cannot be undone.',
   }, fields: {
-    selectAnItem: 'Select an item',
+    selectAnItem: 'Select an item', namePairSeparator: ': ',
   } } },
 })
 

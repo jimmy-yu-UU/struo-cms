@@ -16,9 +16,10 @@ function optStr(v: unknown): string | undefined {
 }
 
 /**
- * Converts an untyped `/items/file` API row into a `FileRow`. Coerces each field defensively so a
- * malformed/missing value degrades to a safe default rather than propagating `unknown` through
- * the UI unchecked.
+ * The sanctioned conversion from an untyped `/items/file` API row into a `FileRow` — do not cast
+ * directly (`row as unknown as FileRow`) at a call site instead. Coerces each field defensively
+ * so a malformed/missing value degrades to a safe default rather than propagating `unknown`
+ * through the UI unchecked, which a direct cast would skip entirely.
  */
 export function toFileRow(raw: Record<string, unknown>): FileRow {
   return {

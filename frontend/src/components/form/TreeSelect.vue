@@ -75,7 +75,9 @@ const selectedNode = computed(() => (
 // aria-label overrides the trigger's visible contents rather than supplementing them, so it has to
 // carry everything the sighted trigger text shows — the field label AND the current value or
 // placeholder — or picking a value would make the announcement forget which field it came from.
-const accessibleName = computed(() => (props.label ? `${props.label}: ${triggerLabel.value}` : triggerLabel.value))
+const accessibleName = computed(() => (
+  props.label ? `${props.label}${t('fields.namePairSeparator')}${triggerLabel.value}` : triggerLabel.value
+))
 
 // Selection stays one-way: this emits and lets modelValue flow back through the prop; it never
 // keeps its own record of "the current node". The template's node click below is its only caller,
