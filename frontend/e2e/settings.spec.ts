@@ -127,7 +127,7 @@ test('navigating away with an unsaved edit prompts the guard; reject keeps the e
   await expect(guardDialog(page)).toBeVisible()
 
   // Reject -> stays on /settings, edit preserved, no navigation happened. ConfirmHost renders
-  // the reject button with the shared common.cancel label ("Cancel"), not PrimeVue's Yes/No.
+  // the reject button with the shared common.cancel label ("Cancel").
   await guardDialog(page).getByRole('button', { name: 'Cancel' }).click()
   await expect(guardDialog(page)).toHaveCount(0)
   await expect(page).toHaveURL(/\/settings$/)
