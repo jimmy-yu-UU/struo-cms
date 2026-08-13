@@ -37,6 +37,10 @@ const reverting = ref(false)
 
 const isEmpty = computed(() => !listLoading.value && !listError.value && revisions.value.length === 0)
 
+function isActiveRev(rev: RevisionInfo): boolean {
+  return selected.value?.revisionNumber === rev.revisionNumber
+}
+
 const detailLoad = createLatestWins()
 
 function opLabel(op: string): string {
@@ -125,8 +129,8 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
       </SheetHeader>
       <div class="rev-layout">
         <aside class="rev-list">
-          <p v-if="listLoading" class="rev-notice">{{ t('revisions.loading') }}</p>
-          <div v-else-if="listError" class="rev-notice rev-error" role="alert">
+          <p v-if="listLoading" class="rev-notice text-muted-foreground">{{ t('revisions.loading') }}</p>
+          <div v-else-if="listError" class="rev-notice rev-error text-muted-foreground" role="alert">
             <span>{{ listError }}</span>
             <!-- variant="ghost" declares no base text colour, so without this it would inherit
                  .rev-error's danger red at rest and jump to hover:text-accent-foreground on
@@ -143,18 +147,18 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
               {{ t('revisions.retry') }}
             </Button>
           </div>
-          <p v-else-if="isEmpty" class="rev-notice">{{ t('revisions.empty') }}</p>
+          <p v-else-if="isEmpty" class="rev-notice text-muted-foreground">{{ t('revisions.empty') }}</p>
           <ul v-else class="rev-items">
             <li v-for="rev in revisions" :key="rev.revisionNumber">
               <button
                 type="button"
-                class="rev-item"
-                :class="{ 'rev-item--active': selected?.revisionNumber === rev.revisionNumber }"
+                class="rev-item rounded-md"
+                :class="{ 'rev-item--active': isActiveRev(rev), 'bg-primary/10': isActiveRev(rev) }"
                 @click="select(rev)"
               >
                 <span class="rev-item__num">#{{ rev.revisionNumber }}</span>
                 <span class="rev-item__op">{{ opLabel(rev.operation) }}</span>
-                <span class="rev-item__when">{{ whenLabel(rev.createdAt) }}</span>
+                <span class="rev-item__when text-muted-foreground">{{ whenLabel(rev.createdAt) }}</span>
               </button>
             </li>
           </ul>
@@ -176,19 +180,18 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
 <style scoped>
 .rev-layout { display: grid; grid-template-columns: 16rem 1fr; gap: 20px; flex: 1; min-height: 0; padding: 0 1.5rem 1.5rem; }
 .rev-list { border-right: 1px solid var(--border); padding-right: 12px; overflow: auto; }
-.rev-notice { color: var(--legacy-muted); margin: 0; display: flex; align-items: center; gap: 8px; }
+.rev-notice { margin: 0; display: flex; align-items: center; gap: 8px; }
 .rev-error { color: var(--danger); }
 .rev-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .rev-item {
   width: 100%; text-align: left; display: grid; gap: 2px; cursor: pointer;
-  padding: 8px 10px; border: 1px solid transparent; border-radius: var(--legacy-radius, 8px);
-  background: transparent; color: var(--fg);
+  padding: 8px 10px; border: 1px solid transparent; color: var(--fg);
 }
 .rev-item:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
-.rev-item--active { border-color: var(--border); background: color-mix(in srgb, var(--legacy-accent) 10%, transparent); }
+.rev-item--active { border-color: var(--border); }
 .rev-item__num { font-weight: 700; font-variant-numeric: tabular-nums; }
 .rev-item__op { font-size: .85rem; }
-.rev-item__when { font-size: .75rem; color: var(--legacy-muted); }
+.rev-item__when { font-size: .75rem; }
 .rev-pane { min-width: 0; overflow: auto; }
 @media (max-width: 640px) { .rev-layout { grid-template-columns: 1fr; } }
 </style>
