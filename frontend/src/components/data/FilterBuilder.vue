@@ -111,10 +111,6 @@ function clear(): void { draft.value = []; emit('apply', {}) }
 // filter was applied) — draft can reach `fields.length` while a real field is still free. Ask
 // the same predicate the field picker itself uses.
 const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
-
-// Exposed for the unit tests: the reka-ui Select does not expose a DOM-driven way to pick an
-// option under jsdom, so the tests drive the draft through these instead of faking clicks.
-defineExpose({ setDraftField, setDraftOperator, setDraftValue, fieldOptionsFor })
 </script>
 
 <template>
