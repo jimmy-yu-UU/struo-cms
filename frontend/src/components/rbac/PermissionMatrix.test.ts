@@ -99,17 +99,33 @@ describe('PermissionMatrix', () => {
   // control from its current `default-value`, so the test above cannot tell a controlled checkbox
   // from an uncontrolled one. `toggle()` is the exact handler wired to each checkbox's own
   // `@update:model-value`, and it mutates `grants` alone (never `loading`), so calling it directly
-  // changes the prop feeding an ALREADY-MOUNTED checkbox without remounting anything.
-  it('the read checkbox stays governed by the grants record after mount, not just at its initial render', async () => {
+  // changes the prop feeding an ALREADY-MOUNTED checkbox without remounting anything. `save()`
+  // reassigns `grants` from the PUT response the same way — no `loading` toggle either — so this is
+  // also the only thing that would catch a server-normalised grant leaving a cell stale.
+  // All three columns are driven, not just read: `write` and `delete` sit behind an identical
+  // `:model-value` binding and are equally capable of silently going uncontrolled on their own.
+  it('every column stays governed by the grants record after mount, not just at its initial render', async () => {
     seedSchema()
     const w = mountMatrix()
     await flushPromises()
-    const articleRead = () => w.findAll('[data-slot="checkbox"]')[0]
+    const cell = (i: number) => () => w.findAll('[data-slot="checkbox"]')[i]
+    const [articleRead, articleWrite, articleDelete] = [cell(0), cell(1), cell(2)]
     expect(articleRead().attributes('data-state')).toBe('checked') // beforeEach seeds read=true
-    ;(w.vm as unknown as { toggle: (c: string, k: string, v: boolean) => void }).toggle('article', 'read', false)
+    expect(articleWrite().attributes('data-state')).toBe('unchecked')
+    expect(articleDelete().attributes('data-state')).toBe('unchecked')
+
+    const vm = w.vm as unknown as { toggle: (c: string, k: string, v: boolean) => void }
+    vm.toggle('article', 'read', false)
+    vm.toggle('article', 'write', true)
+    vm.toggle('article', 'delete', true)
     await flushPromises()
+
     expect(articleRead().attributes('data-state')).toBe('unchecked')
     expect(articleRead().attributes('aria-checked')).toBe('false')
+    expect(articleWrite().attributes('data-state')).toBe('checked')
+    expect(articleWrite().attributes('aria-checked')).toBe('true')
+    expect(articleDelete().attributes('data-state')).toBe('checked')
+    expect(articleDelete().attributes('aria-checked')).toBe('true')
   })
 
   it('stores a grant emitted by the real Checkbox child on a real click', async () => {
@@ -163,7 +179,7 @@ describe('PermissionMatrix', () => {
   // PermissionMatrix no longer owns a route-leave guard — ItemFormView owns the ONE guard
   // and folds in this component's `dirty` state instead. save() must report success/failure so the
   // parent form's Save can flush the matrix and know whether to keep the user on the page. The
-  // toast composable is now the vendored/sonner one, mocked at module level, not PrimeVue's.
+  // toast composable is the vendored/sonner one, mocked at module level.
   it('save resolves true on success and false on failure, and toasts success/failure accordingly', async () => {
     seedSchema()
     vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
