@@ -163,6 +163,11 @@ describe('TreeSelect', () => {
     expect(w.get('button').attributes('aria-label')).toBe('Child')
   })
 
+  it('joins the label and the current value through the CJK pair separator in zh-TW', () => {
+    const w = mount(TreeSelect, { props: { modelValue: 'child', nodes: NODES, label: '資料夾' }, ...optsZh })
+    expect(w.get('button').attributes('aria-label')).toBe(`資料夾${zhTW.fields.namePairSeparator}Child`)
+  })
+
   // Asserted under zh-TW specifically: comparing against the English string cannot distinguish a
   // localised value from a hardcoded one.
   it('uses the localized default placeholder as the accessible name under zh-TW', () => {

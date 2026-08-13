@@ -25,6 +25,7 @@ const enMessages = {
   fields: {
     noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
     searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.', selectAFolder: 'Select a folder',
+    namePairSeparator: ': ',
   },
   media: { folderAll: 'All files', folderUncategorized: 'Uncategorized', folderField: 'Folder' },
 }
@@ -36,6 +37,7 @@ const zhMessages = {
   fields: {
     noFileSelected: '未選擇檔案', selectFile: '選擇', clear: '清除', selectAFile: '選擇檔案',
     searchFiles: '搜尋檔案…', loadFilesFailed: '檔案載入失敗。', selectAFolder: '選擇資料夾',
+    namePairSeparator: '：',
   },
   media: { folderAll: '全部檔案', folderUncategorized: '未分類', folderField: '資料夾' },
 }
@@ -360,7 +362,8 @@ describe('FilePicker', () => {
       // folderSel defaults to '__all', which resolves to the "All files" node label — this is the
       // reachable half of TreeSelect's accessible name (label + current value); the placeholder
       // half only shows when modelValue is null, which FilePicker's folderSel never is.
-      expect(tree.get('button').attributes('aria-label')).toBe(`${zhMessages.media.folderField}: ${zhMessages.media.folderAll}`)
+      expect(tree.get('button').attributes('aria-label'))
+        .toBe(`${zhMessages.media.folderField}${zhMessages.fields.namePairSeparator}${zhMessages.media.folderAll}`)
     })
 
     // A placeholder is not an accessible name: it disappears the instant the user types into the
