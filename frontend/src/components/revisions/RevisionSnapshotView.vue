@@ -56,12 +56,12 @@ const prettyJson = computed(() => {
         <pre class="rev-json">{{ prettyJson }}</pre>
       </section>
       <div v-if="canRevert" class="rev-actions">
-        <!-- PrimeVue's severity="warn" has no vendored equivalent; outline plus the warning token
-             matches the warning-banner idiom already used on the collection list. -->
+        <!-- Outline plus the warning border matches the warning-banner idiom already used on the
+             collection list, which keeps the default foreground colour rather than tinting the text. -->
         <Button
           type="button"
           variant="outline"
-          class="rev-revert-btn border-warning text-warning hover:bg-warning/10"
+          class="rev-revert-btn border-warning hover:bg-warning/10"
           :disabled="reverting"
           @click="emit('revert', detail.revisionNumber)"
         >
