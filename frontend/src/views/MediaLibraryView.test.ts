@@ -949,6 +949,25 @@ describe('MediaLibraryView', () => {
     }))
   })
 
+  // Blocker 1 (final review): search mode drops the folder filter (a listed file can live in any
+  // folder), so a move initiated from a search result (context menu "Move to…" or the move
+  // dialog, both reachable while searching) into the folder currentFolderId happens to point at
+  // is NOT a no-op the way it would be while browsing normally -- it must still issue the write.
+  it('moves into currentFolderId while a search is active, instead of silently no-opping', async () => {
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onSearchInput: (v: string) => void }).onSearchInput('logo')
+    await new Promise((resolve) => setTimeout(resolve, 320))
+    await flushPromises()
+    // currentFolderId is null (root) and we never navigated, so the target below matches it --
+    // the exact shape the old guard treated as a no-op regardless of search state.
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn(null, { files: ['f1'], folders: [] })
+    await flushPromises()
+    expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: null })
+  })
+
   it('does nothing on a drop with an empty payload', async () => {
     const w = mountView()
     await flushPromises()
@@ -1236,6 +1255,9 @@ describe('MediaLibraryView', () => {
       makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
       const w = mountView()
       await flushPromises()
+      // Default view is grid: MediaGrid's own trashMode binding must be pinned here too, not just
+      // MediaFileList's -- see the Task 5 review finding this test failed to catch.
+      expect(w.findComponent(MediaGrid).props('trashMode')).toBe(false)
       ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
       await flushPromises()
       expect(w.findComponent(MediaGrid).exists()).toBe(false)
@@ -1243,6 +1265,9 @@ describe('MediaLibraryView', () => {
       ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
       await flushPromises()
       expect(w.findComponent(MediaFileList).props('trashMode')).toBe(true)
+      ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('grid')
+      await flushPromises()
+      expect(w.findComponent(MediaGrid).props('trashMode')).toBe(true)
     })
 
     // Empty-space menu: right-clicking the library body (not an item) offers New folder/Upload,
@@ -1458,6 +1483,21 @@ describe('MediaLibraryView', () => {
       ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
       await flushPromises()
       ;(w.vm as unknown as { onPageSizeChange: (n: number) => void }).onPageSizeChange(48)
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    // Blocker 2 (final review): MediaUploadDialog's `done` handler resets `page` to 0 via
+    // reload() exactly like search/page/mode/type/sort already do, yet it was the one
+    // listing-changing path with no clearSelection() call. Select on page >= 2, upload, and
+    // "Move to..." would silently act on items no longer on screen.
+    it('clears the selection when the upload dialog finishes', async () => {
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      w.findComponent(MediaUploadDialog).vm.$emit('done')
       await flushPromises()
       expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
     })

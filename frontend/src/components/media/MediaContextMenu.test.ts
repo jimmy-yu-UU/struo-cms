@@ -70,6 +70,23 @@ describe('MediaContextMenu', () => {
     expect(w.find('[data-test="menu-delete"]').classes()).toContain('text-destructive')
   })
 
+  // Blocker 3 (final review): Delete lost its red on hover/focus because the vendored
+  // ContextMenuItem's own base classes carry `focus:text-accent-foreground`, and the call site's
+  // plain `text-destructive` (no `focus:` variant) never conflicted with it in twMerge's eyes, so
+  // both survived cn()'s merge with the base's later in source order -- winning the cascade.
+  // jsdom does not run Tailwind (see RichTextInput.test.ts's own comment on this), so no test here
+  // can observe the painted colour; what CAN be observed is the actual rendered class attribute,
+  // which is exactly what `cn()`'s twMerge decided to keep. `focus:text-accent-foreground` must be
+  // GONE (twMerge treats it and the added `focus:text-destructive` as the same modifier+property
+  // group and drops the earlier one), and `focus:text-destructive` must be present.
+  it('drops the vendored focus:text-accent-foreground in favour of focus:text-destructive after cn()\'s merge', async () => {
+    const w = mountMenu({ kind: 'file', canDelete: true })
+    await openMenu(w)
+    const classes = w.find('[data-test="menu-delete"]').classes()
+    expect(classes).toContain('focus:text-destructive')
+    expect(classes).not.toContain('focus:text-accent-foreground')
+  })
+
   it('shows Rename for a folder only when canRename is true', async () => {
     const withGrant = mountMenu({ kind: 'folder', canRename: true })
     await openMenu(withGrant)

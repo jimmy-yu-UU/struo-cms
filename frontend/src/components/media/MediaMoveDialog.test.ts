@@ -60,6 +60,15 @@ describe('MediaMoveDialog', () => {
     expect(w.get('[data-test="move-option"][data-folder-id="__root__"]').attributes('disabled')).toBeUndefined()
   })
 
+  // Task 9 made multi-folder batch selections reachable: the docblock promises an option is
+  // disabled when moving ANY of the dragged folders there would create a cycle, not just the
+  // first one. 'a' and 'd' are both selected; 'a' -> 'b' is a cycle even though 'd' alone would
+  // not make 'b' cyclic, so 'b' must still come out disabled.
+  it('disables a folder that would form a cycle with any of several dragged folders', () => {
+    const w = mountDialog({ files: [], folders: ['a', 'd'] })
+    expect(w.get('[data-test="move-option"][data-folder-id="b"]').attributes('disabled')).toBeDefined()
+  })
+
   it('does not disable anything for a files-only payload', () => {
     const w = mountDialog({ files: ['f1'], folders: [] })
     const options = w.findAll('[data-test="move-option"]')

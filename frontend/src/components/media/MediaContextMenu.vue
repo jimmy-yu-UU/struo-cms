@@ -69,7 +69,7 @@ defineExpose({ onMove, onRename, onRemove })
         `text-destructive-foreground` rule to lose a specificity contest against, so a plain
         (non-important) override is sufficient here.
       -->
-      <ContextMenuItem v-if="canDelete" data-test="menu-delete" variant="destructive" class="text-destructive" @select="onRemove">
+      <ContextMenuItem v-if="canDelete" data-test="menu-delete" variant="destructive" class="text-destructive focus:text-destructive" @select="onRemove">
         {{ t('media.menuDelete') }}
       </ContextMenuItem>
     </ContextMenuContent>
