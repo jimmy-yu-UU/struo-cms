@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { useSlots } from 'vue'
 import { Folder, Pencil, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
@@ -23,10 +23,21 @@ const emit = defineEmits<{
 const slots = useSlots()
 // The actions column exists when the caller supplied its own #actions slot (trash mode's
 // restore/purge) OR when there are folder rows to show manage buttons for. Both the header
-// <th> and every body <td> read this SAME computed so the column count can never diverge
+// <th> and every body <td> call this SAME function so the column count can never diverge
 // between <thead> and <tbody>.
-const showActionsColumn = computed(() =>
-  !!slots.actions || (props.folders.length > 0 && props.canManageFolders))
+//
+// This MUST stay a plain function, not a computed. `useSlots()` returns `instance.slots`, a
+// plain object Vue mutates in place (via `updateSlots()`) rather than a reactive source --
+// reading `slots.actions` inside a `computed` cannot be tracked, so the computed would only
+// re-evaluate when one of its OTHER, genuinely-reactive deps (`props.folders`/
+// `props.canManageFolders`) changes. This component survives an active<->trash mode toggle
+// (it's only `v-else`'d on `view`, not on `mode`), so a `computed` version would go stale the
+// moment the parent ever hands it a stable `folders` array identity across that toggle --
+// the restore/purge actions would silently vanish with no change to the column count. Calling
+// a plain function on every render reads `slots.actions` fresh every time and has no such trap.
+function showActionsColumn(): boolean {
+  return !!slots.actions || (props.folders.length > 0 && props.canManageFolders)
+}
 
 function dims(f: FileRow): string {
   return f.width && f.height ? `${f.width}×${f.height}` : '—'
@@ -46,7 +57,7 @@ function uploaded(f: FileRow): string {
         <th class="text-muted-foreground">{{ $t('media.colSize') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colDimensions') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colUploaded') }}</th>
-        <th v-if="showActionsColumn" class="media-list__actions-col text-muted-foreground"></th>
+        <th v-if="showActionsColumn()" class="media-list__actions-col text-muted-foreground"></th>
       </tr>
     </thead>
     <tbody>
@@ -67,7 +78,7 @@ function uploaded(f: FileRow): string {
         <td>—</td>
         <td>—</td>
         <td>—</td>
-        <td v-if="showActionsColumn" class="media-list__actions">
+        <td v-if="showActionsColumn()" class="media-list__actions">
           <template v-if="canManageFolders">
             <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
                     @click.stop="emit('renameFolder', d)">
@@ -107,7 +118,7 @@ function uploaded(f: FileRow): string {
         <td>{{ formatFileSize(f.size) }}</td>
         <td>{{ dims(f) }}</td>
         <td>{{ uploaded(f) }}</td>
-        <td v-if="showActionsColumn" class="media-list__actions">
+        <td v-if="showActionsColumn()" class="media-list__actions">
           <slot name="actions" :file="f" />
         </td>
       </tr>
