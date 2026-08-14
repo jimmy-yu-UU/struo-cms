@@ -170,6 +170,9 @@ export default {
     moveFailed: 'Move failed',
     moveSkippedCycle: '{n} folder(s) skipped: a folder cannot be moved into itself',
     moved: 'Moved {n} item(s)',
+    moveTo: 'Move to…',
+    moveRoot: 'Root',
+    moveSubmit: 'Move',
   },
   revisions: {
     title: 'Revision history',

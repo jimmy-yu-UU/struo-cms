@@ -7,13 +7,14 @@ import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import MediaGrid from '../components/media/MediaGrid.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import MediaFileList from '../components/media/MediaFileList.vue'
+import MediaMoveDialog from '../components/media/MediaMoveDialog.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
 import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import type { CurrentUser } from '../stores/authStore'
 import type { FolderRow } from '../lib/folderTree'
-import { DRAG_MIME, serializeMovePayload } from '../lib/mediaMove'
+import { DRAG_MIME, serializeMovePayload, type MovePayload } from '../lib/mediaMove'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
@@ -34,7 +35,7 @@ const i18n = createI18n({
     folderLoadFailed: 'Failed to load folders', folderSaveFailed: 'Folder operation failed',
     breadcrumbRoot: 'Media Library',
     moveFailed: 'Move failed', moveSkippedCycle: '{n} folder(s) skipped: a folder cannot be moved into itself',
-    moved: 'Moved {n} item(s)',
+    moved: 'Moved {n} item(s)', moveTo: 'Move to…', moveRoot: 'Root', moveSubmit: 'Move',
   }, collectionList: {
     range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
     restore: 'Restore', purge: 'Delete permanently', trashNotice: 'You are viewing the trash.',
@@ -1072,5 +1073,20 @@ describe('MediaLibraryView', () => {
     document.dispatchEvent(new Event('dragend'))
     await flushPromises()
     expect(rootCrumb.attributes('data-dropping')).toBeUndefined()
+  })
+
+  // Task 7 only builds and wires the move-to dialog; nothing in the UI opens it yet (Task 8's
+  // context menu and Task 9's selection toolbar do that later). Exercise the wiring directly
+  // through the exposed state, the same way createOpen/renameTarget are driven elsewhere here.
+  it('routes the move-to dialog\'s submit into the existing move path', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { movePayload: MovePayload }).movePayload = { files: ['f1'], folders: [] }
+    await flushPromises()
+    w.findComponent(MediaMoveDialog).vm.$emit('submit', 'a')
+    await flushPromises()
+    expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
   })
 })

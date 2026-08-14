@@ -170,6 +170,9 @@ export default {
     moveFailed: '移動失敗',
     moveSkippedCycle: '已略過 {n} 個資料夾:資料夾不能移動到自己底下',
     moved: '已移動 {n} 個項目',
+    moveTo: '移動至…',
+    moveRoot: '根目錄',
+    moveSubmit: '移動',
   },
   revisions: {
     title: '修訂紀錄',
