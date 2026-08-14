@@ -68,7 +68,7 @@ const i18n = createI18n({
     loading: 'Loading…', collectionNotFound: 'Collection not found', itemNotFound: 'Item not found',
     noCreatePermission: "You don't have permission to create items here",
     new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', saving: 'Saving…', back: 'Back to list',
-    relations: 'Relations', translatableBadge: 'Translatable',
+    translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
   },
     revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}' },
