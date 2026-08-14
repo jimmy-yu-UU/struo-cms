@@ -45,4 +45,11 @@ describe('performMove', () => {
     update.mockRejectedValueOnce(new Error('boom'))
     await expect(performMove({ files: ['f1'], folders: [] }, 'd', folders)).rejects.toThrow('boom')
   })
+
+  it('issues every write even when one rejects', async () => {
+    update.mockRejectedValueOnce(new Error('boom'))
+    await expect(performMove({ files: ['f1', 'f2'], folders: [] }, 'd', folders)).rejects.toThrow('boom')
+    expect(update).toHaveBeenCalledTimes(2)
+    expect(update).toHaveBeenCalledWith('file', 'f2', { folderId: 'd' })
+  })
 })
