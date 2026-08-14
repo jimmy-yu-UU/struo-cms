@@ -487,12 +487,17 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     </p>
 
     <nav v-if="mode === 'active' && !searchActive && (breadcrumb.length || folders.length)" class="media-crumb" :aria-label="t('media.title')">
-      <button type="button" class="media-crumb__link text-primary rounded-md"
+      <!-- At the root, navigating "to the root" is a no-op that looks broken -- render it as
+           inert text instead (the same treatment given below to the current folder's own
+           crumb), and it stops being a drop target too: dropping onto the root while already
+           viewing the root is a no-op the move path rejects anyway. -->
+      <button v-if="currentFolderId !== null" type="button" class="media-crumb__link text-primary rounded-md"
               :data-dropping="crumbDropping === 'root' ? 'true' : undefined"
               @click="goToBreadcrumb(null)"
               @dragover.prevent="crumbDropping = 'root'"
               @dragleave="crumbDropping = null"
               @drop.prevent="onCrumbDrop($event, null)">{{ t('media.breadcrumbRoot') }}</button>
+      <span v-else class="media-crumb__current">{{ t('media.breadcrumbRoot') }}</span>
       <template v-for="c in breadcrumb" :key="c.id">
         <ChevronRight class="media-crumb__sep size-3 text-muted-foreground" aria-hidden="true" />
         <!-- The current folder's crumb renders as a <span>, not a button, and is deliberately
@@ -526,7 +531,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       surface to right-click.
     -->
     <ContextMenu>
-      <ContextMenuTrigger as="div" class="media-body rounded-xl border border-border bg-card p-4 min-h-80">
+      <ContextMenuTrigger as="div" class="media-body rounded-xl border border-border bg-muted p-4 min-h-80">
         <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
                           :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
                           :can-rename="canManageFolders" :can-delete="canDeleteFolders"
