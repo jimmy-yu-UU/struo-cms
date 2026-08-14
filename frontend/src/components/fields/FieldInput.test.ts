@@ -25,7 +25,6 @@ const stubs = {
   Input: { template: '<input class="stub-text" />' },
   Textarea: { template: '<textarea class="stub-textarea" />' },
   NumberField: { template: '<input class="stub-number" />' },
-  Checkbox: { template: '<input class="stub-checkbox" />' },
   Switch: { template: '<button role="switch" class="stub-switch" />' },
   DatePicker: { template: '<input class="stub-date" />' },
   Select: { template: '<div class="stub-select" role="combobox" />' },
