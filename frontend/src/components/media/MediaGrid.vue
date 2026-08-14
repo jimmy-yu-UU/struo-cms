@@ -28,7 +28,13 @@ function isSelected(id: string): boolean {
 }
 // Tiles are drag sources only -- a file is not a drop target, so there is no dragover/drop
 // handling here (unlike MediaFolderCards).
+//
+// The `draggable` attribute on the wrapper is NOT sufficient to gate this on its own: a child
+// <img> (FileThumbnail) is draggable by default in every browser, and its native dragstart
+// bubbles up to this same handler regardless of the wrapper's own attribute. Refuse here too,
+// so the permission check cannot be bypassed by dragging the thumbnail image itself.
 function onDragStart(ev: DragEvent, f: FileRow): void {
+  if (!props.canMove) return
   setDragPayload(ev, { files: [f.id], folders: [] })
 }
 </script>

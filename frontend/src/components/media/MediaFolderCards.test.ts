@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import MediaFolderCards from './MediaFolderCards.vue'
@@ -143,5 +143,29 @@ describe('MediaFolderCards', () => {
   it('is draggable when canMove is true', () => {
     const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: true }, global: { plugins: [i18n] } })
     expect(w.find('.folder-card').attributes('draggable')).toBe('true')
+  })
+
+  // Same bypass risk as MediaGrid: a text-selection drag started inside a non-draggable card can
+  // still bubble a `dragstart` up to it. `onDragStart` itself must refuse to write a payload when
+  // canMove is false rather than relying solely on the `draggable` attribute.
+  it('does not write a drag payload on dragstart when canMove is false', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: false }, global: { plugins: [i18n] } })
+    const setData = vi.fn()
+    await w.find('.folder-card').trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).not.toHaveBeenCalled()
+  })
+
+  // dragleave bubbles: moving the pointer from the card onto its own text/icon children must not
+  // clear the drop-highlight -- only actually leaving the card should.
+  it('does not clear the drop-highlight when dragleave bubbles from a child element', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const card = w.find('.folder-card')
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await card.trigger('dragover', { dataTransfer })
+    expect(card.attributes('data-dropping')).toBe('true')
+    await card.find('.folder-card__name').trigger('dragleave')
+    expect(card.attributes('data-dropping')).toBe('true')
+    await card.trigger('dragleave')
+    expect(card.attributes('data-dropping')).toBeUndefined()
   })
 })

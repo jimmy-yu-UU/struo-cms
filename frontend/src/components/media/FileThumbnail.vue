@@ -30,7 +30,7 @@ const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
 
 <template>
   <div class="file-thumb" :data-size="size">
-    <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" class="rounded-md" @error="broken = true" />
+    <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" class="rounded-md" draggable="false" @error="broken = true" />
     <div v-else class="file-chip rounded-md">
       <component :is="typeIcon" class="file-chip__icon size-8 text-muted-foreground" aria-hidden="true" />
       <span class="file-chip__meta text-muted-foreground">{{ typeDisplay.label }}</span>
