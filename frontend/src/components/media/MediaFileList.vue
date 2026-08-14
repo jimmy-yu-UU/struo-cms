@@ -24,6 +24,7 @@ function uploaded(f: FileRow): string {
         <th class="text-muted-foreground">{{ $t('media.colSize') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colDimensions') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colUploaded') }}</th>
+        <th v-if="$slots.actions" class="media-list__actions-col text-muted-foreground"></th>
       </tr>
     </thead>
     <tbody>
@@ -54,6 +55,9 @@ function uploaded(f: FileRow): string {
         <td>{{ formatFileSize(f.size) }}</td>
         <td>{{ dims(f) }}</td>
         <td>{{ uploaded(f) }}</td>
+        <td v-if="$slots.actions" class="media-list__actions">
+          <slot name="actions" :file="f" />
+        </td>
       </tr>
     </tbody>
   </table>
@@ -98,4 +102,6 @@ function uploaded(f: FileRow): string {
   text-align: left;
   cursor: pointer;
 }
+.media-list__actions-col { width: 6rem; }
+.media-list__actions { display: flex; gap: 4px; justify-content: flex-end; }
 </style>
