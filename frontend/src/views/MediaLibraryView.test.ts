@@ -1098,6 +1098,37 @@ describe('MediaLibraryView', () => {
     expect(rootCrumb.attributes('data-dropping')).toBeUndefined()
   })
 
+  // The root crumb navigating to the root you're already viewing is a no-op that looks broken --
+  // at the root it must render as inert text (the same treatment already given to the current
+  // folder's own crumb), not as a clickable button.
+  it('renders the root crumb as static text, not a link, when already at the root', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    const rootCrumb = w.find('.media-crumb__current')
+    expect(rootCrumb.exists()).toBe(true)
+    expect(rootCrumb.element.tagName).toBe('SPAN')
+    expect(rootCrumb.text()).toBe('Media Library')
+    expect(w.find('.media-crumb__link').exists()).toBe(false)
+  })
+
+  // Once inside a folder, the root crumb is the way back up and stays a real button.
+  it('keeps the root crumb as a clickable link that returns to the root when inside a folder', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
+    await flushPromises()
+    const rootCrumb = w.find('.media-crumb__link')
+    expect(rootCrumb.exists()).toBe(true)
+    expect(rootCrumb.element.tagName).toBe('BUTTON')
+    await rootCrumb.trigger('click')
+    await flushPromises()
+    expect((w.vm as unknown as { currentFolderId: string | null }).currentFolderId).toBe(null)
+  })
+
   // Task 7 only builds and wires the move-to dialog; nothing in the UI opens it yet (Task 8's
   // context menu and Task 9's selection toolbar do that later). Exercise the wiring directly
   // through the exposed state, the same way createOpen/renameTarget are driven elsewhere here.
@@ -1347,7 +1378,7 @@ describe('MediaLibraryView', () => {
       expect(trigger.exists()).toBe(true)
       expect(trigger.classes()).toContain('media-body')
       expect(trigger.classes()).toEqual(
-        expect.arrayContaining(['rounded-xl', 'border', 'border-border', 'bg-card']))
+        expect.arrayContaining(['rounded-xl', 'border', 'border-border', 'bg-muted']))
     })
   })
 
