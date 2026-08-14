@@ -629,6 +629,35 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenCalledWith('mediafolder', expect.objectContaining({ deep: ['parent'] }))
   })
 
+  it('shows folder cards in grid view and folder rows in list view', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('grid')
+    await flushPromises()
+    expect(w.find('.folder-grid').exists()).toBe(true)
+
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    await flushPromises()
+    expect(w.find('.folder-grid').exists()).toBe(false)
+    expect(w.find('.media-list').text()).toContain('A')
+  })
+
+  // The "no results" message reads `files` and `visibleFolders`; list view renders folders as
+  // rows inside MediaFileList rather than as MediaFolderCards, so an empty `files` array must not
+  // trigger the empty-state message while folder rows are still showing in the table.
+  it('does not show the empty-state message when list view has folder rows but no files', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: [], total: 0 }, { data: [], total: 0 }], folders)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    await flushPromises()
+    expect(w.find('.media-list').text()).toContain('A')
+    expect(w.find('.empty').exists()).toBe(false)
+  })
+
   it('enters a folder: scopes the file filter, shows the breadcrumb, and lists child folders', async () => {
     const folders: FolderRow[] = [
       { id: 'a', name: 'A', parentId: null },

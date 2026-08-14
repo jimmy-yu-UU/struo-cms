@@ -338,7 +338,8 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <MediaFolderCards v-if="mode === 'active'" :folders="visibleFolders" :can-manage="canManageFolders || canDeleteFolders"
+    <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
+                      :can-manage="canManageFolders || canDeleteFolders"
                       @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder" />
 
     <MediaGrid v-if="view === 'grid'" :files="files" @open="openDetail">
@@ -360,7 +361,16 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
         </Button>
       </template>
     </MediaGrid>
-    <MediaFileList v-else :files="files" @open="openDetail">
+    <MediaFileList
+      v-else
+      :files="files"
+      :folders="mode === 'active' ? visibleFolders : []"
+      :can-manage-folders="canManageFolders || canDeleteFolders"
+      @open="openDetail"
+      @open-folder="enterFolder"
+      @rename-folder="renameTarget = $event"
+      @remove-folder="onRemoveFolder"
+    >
       <template v-if="mode === 'trash'" #actions="{ file }">
         <Button
           type="button" variant="ghost" size="icon-sm"
@@ -379,6 +389,12 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
         </Button>
       </template>
     </MediaFileList>
+    <!--
+      `visibleFolders` already forces [] for search/trash (see its own definition above), so this
+      condition needs no view-specific branch: list view now renders those same folders as rows
+      inside MediaFileList (not MediaFolderCards), and this check must stay just as blind to which
+      of the two components is rendering them as it already is to grid vs. list for files.
+    -->
     <p v-if="!loading && !files.length && !visibleFolders.length" class="empty text-muted-foreground">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
 
     <DataTablePagination

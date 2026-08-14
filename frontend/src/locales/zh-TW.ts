@@ -136,6 +136,7 @@ export default {
     colSize: '大小',
     colDimensions: '尺寸',
     colUploaded: '上傳於',
+    colTypeFolder: '資料夾',
     detailTitle: '檔案詳情',
     fieldTitle: '標題',
     fieldAlt: '替代文字 (alt)',

@@ -136,6 +136,7 @@ export default {
     colSize: 'Size',
     colDimensions: 'Dimensions',
     colUploaded: 'Uploaded',
+    colTypeFolder: 'Folder',
     detailTitle: 'File details',
     fieldTitle: 'Title',
     fieldAlt: 'Alt text',
