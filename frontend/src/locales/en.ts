@@ -179,6 +179,9 @@ export default {
     menuDelete: 'Delete',
     menuNewFolder: 'New folder',
     menuUpload: 'Upload',
+    selectionCount: '{n} selected',
+    selectionClear: 'Clear selection',
+    selectItem: 'Select',
   },
   revisions: {
     title: 'Revision history',

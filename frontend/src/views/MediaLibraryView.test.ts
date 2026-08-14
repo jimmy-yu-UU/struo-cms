@@ -8,6 +8,7 @@ import MediaGrid from '../components/media/MediaGrid.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import MediaFileList from '../components/media/MediaFileList.vue'
 import MediaMoveDialog from '../components/media/MediaMoveDialog.vue'
+import MediaSelectionToolbar from '../components/media/MediaSelectionToolbar.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
 import { ApiError } from '../api/apiClient'
@@ -38,6 +39,7 @@ const i18n = createI18n({
     moved: 'Moved {n} item(s)', moveTo: 'Move to…', moveRoot: 'Root', moveSubmit: 'Move',
     menuOpen: 'Open', menuMove: 'Move to…', menuRename: 'Rename', menuDelete: 'Delete',
     menuNewFolder: 'New folder', menuUpload: 'Upload',
+    selectionCount: '{n} selected', selectionClear: 'Clear selection',
   }, collectionList: {
     range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
     restore: 'Restore', purge: 'Delete permanently', trashNotice: 'You are viewing the trash.',
@@ -1303,6 +1305,177 @@ describe('MediaLibraryView', () => {
       await w.find('.media-tile').trigger('contextmenu')
       await flushPromises()
       expect(w.find('[data-test="menu-new-folder"]').exists()).toBe(false)
+    })
+  })
+
+  // Task 9: batch selection wiring and the clear-on-listing-change requirement. A selection that
+  // survives a listing change would let a later batch move act on items the user can no longer
+  // see -- and canMoveFolder (mediaMove.ts) returns true for a source id absent from its folders
+  // list, so a stale selection assembled before a reload could pass the cycle guard on a folder
+  // that no longer exists in the loaded set. Clearing on every listing change keeps that
+  // unreachable.
+  describe('batch selection', () => {
+    it('wires MediaGrid\'s toggleSelect emit into the shared selection', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      w.findComponent(MediaGrid).vm.$emit('toggleSelect', 'file', 'f1')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['f1'], folders: [] })
+    })
+
+    it('wires MediaFolderCards\' toggleSelect emit into the shared selection', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      w.findComponent(MediaFolderCards).vm.$emit('toggleSelect', 'folder', 'a')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: ['a'] })
+    })
+
+    it('wires MediaFileList\'s toggleSelect emit into the shared selection', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+      await flushPromises()
+      w.findComponent(MediaFileList).vm.$emit('toggleSelect', 'file', 'f1')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['f1'], folders: [] })
+    })
+
+    it('shows the selection toolbar once the selection is non-empty, and hides it when empty', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      // MediaSelectionToolbar is mounted regardless (its own root `v-if="count > 0"` governs
+      // whether it renders anything), so findComponent always "exists" -- assert its rendered DOM.
+      expect(w.find('.media-selection-toolbar').exists()).toBe(false)
+      w.findComponent(MediaGrid).vm.$emit('toggleSelect', 'file', 'f1')
+      await flushPromises()
+      expect(w.find('.media-selection-toolbar').exists()).toBe(true)
+      expect(w.findComponent(MediaSelectionToolbar).props('selection')).toEqual({ files: ['f1'], folders: [] })
+    })
+
+    it('opens the move dialog with the whole selection when the toolbar requests a move', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      w.findComponent(MediaSelectionToolbar).vm.$emit('requestMove', { files: ['f1'], folders: [] })
+      await flushPromises()
+      expect((w.vm as unknown as { movePayload: MovePayload }).movePayload).toEqual({ files: ['f1'], folders: [] })
+      expect((w.vm as unknown as { moveDialogOpen: boolean }).moveDialogOpen).toBe(true)
+    })
+
+    it('clears the selection when the toolbar\'s clear button fires', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      w.findComponent(MediaSelectionToolbar).vm.$emit('clear')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    it('passes canWrite(file)/canWrite(mediafolder) through to the toolbar', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      seedUser({ write: true }, 'file')
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      const toolbar = w.findComponent(MediaSelectionToolbar)
+      expect(toolbar.props('canMoveFiles')).toBe(true)
+      expect(toolbar.props('canMoveFolders')).toBe(false)
+    })
+
+    it('clears the selection when entering a folder', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    it('clears the selection when navigating via a breadcrumb', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { goToBreadcrumb: (id: string | null) => void }).goToBreadcrumb(null)
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    it('clears the selection when switching mode', async () => {
+      seedUser({ delete: true })
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    it('clears the selection when searching', async () => {
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      ;(w.vm as unknown as { onSearchInput: (v: string) => void }).onSearchInput('logo')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    it('clears the selection when the page changes', async () => {
+      makeListMock([{ data: rows, total: 100 }, { data: rows, total: 100 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      ;(w.vm as unknown as { onPageChange: (page: number) => void }).onPageChange(1)
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    it('clears the selection when the page size changes', async () => {
+      makeListMock([{ data: rows, total: 100 }, { data: rows, total: 100 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      ;(w.vm as unknown as { onPageSizeChange: (n: number) => void }).onPageSizeChange(48)
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+    })
+
+    // Trash mode: a batch move on soft-deleted items is nonsensical, and MediaMoveDialog is
+    // mounted unconditionally regardless of mode -- refuse at the true source (the toggle
+    // handler itself) rather than relying only on the toolbar never appearing in practice
+    // because `mode` switches always clear the selection first.
+    it('refuses to add to the selection while browsing the trash', async () => {
+      seedUser({ delete: true })
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+      await flushPromises()
+      w.findComponent(MediaGrid).vm.$emit('toggleSelect', 'file', 'f1')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
     })
   })
 })

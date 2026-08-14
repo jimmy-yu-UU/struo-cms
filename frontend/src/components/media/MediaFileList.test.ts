@@ -4,7 +4,7 @@ import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFileList from './MediaFileList.vue'
 import MediaContextMenu from './MediaContextMenu.vue'
-import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
+import { DRAG_MIME, serializeMovePayload, type MovePayload } from '../../lib/mediaMove'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -404,6 +404,138 @@ describe('MediaFileList', () => {
         w.unmount()
       }
       expect(spy).not.toHaveBeenCalled()
+    })
+  })
+
+  // Task 9: batch selection, both row kinds.
+  describe('batch selection', () => {
+    const empty: MovePayload = { files: [], folders: [] }
+
+    it('renders no checkbox while the selection is empty', () => {
+      const w = mountList({ folders, canMoveFiles: true, canMoveFolders: true, selection: empty })
+      expect(w.find('[role="checkbox"]').exists()).toBe(false)
+    })
+
+    it('shows a checkbox on every row once the selection is non-empty', () => {
+      const w = mountList({ folders, canMoveFiles: true, canMoveFolders: true, selection: { files: ['f1'], folders: [] } })
+      expect(w.findAll('[role="checkbox"]')).toHaveLength(folders.length + files.length)
+    })
+
+    it('checks the box for a selected file row and leaves an unselected one unchecked', () => {
+      // No folders here so the checkbox indices map 1:1 onto files (f1, f2) with no ambiguity
+      // about whether a folder-row checkbox also rendered ahead of them.
+      const w = mountList({ folders: [], canMoveFiles: true, selection: { files: ['f2'], folders: [] } })
+      const boxes = w.findAll('[role="checkbox"]')
+      expect(boxes[0].attributes('aria-checked')).toBe('false')
+      expect(boxes[1].attributes('aria-checked')).toBe('true')
+    })
+
+    it('checks the box for a selected folder row', () => {
+      const w = mountList({ folders, canMoveFolders: true, selection: { files: [], folders: ['d1'] } })
+      expect(w.findAll('[role="checkbox"]')[0].attributes('aria-checked')).toBe('true')
+    })
+
+    it('does not show a file-row checkbox when canMoveFiles is false, even with a non-empty selection', () => {
+      const w = mountList({ files: [files[0]], folders: [], canMoveFiles: false, selection: { files: ['f1'], folders: [] } })
+      expect(w.find('[role="checkbox"]').exists()).toBe(false)
+    })
+
+    it('does not show a folder-row checkbox when canMoveFolders is false, even with a non-empty selection', () => {
+      const w = mountList({ files: [], folders, canMoveFolders: false, selection: { files: [], folders: ['d1'] } })
+      expect(w.find('[role="checkbox"]').exists()).toBe(false)
+    })
+
+    it('emits toggleSelect(file, id) when a file checkbox is toggled, and does not also open', async () => {
+      const w = mountList({ folders: [], canMoveFiles: true, selection: { files: ['f2'], folders: [] } })
+      const boxes = w.findAll('[role="checkbox"]')
+      await boxes[0].trigger('click')
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['file', 'f1'])
+      expect(w.emitted('open')).toBeUndefined()
+    })
+
+    it('emits toggleSelect(folder, id) when a folder checkbox is toggled, and does not also open', async () => {
+      // A non-empty selection (an unrelated file) is what makes the checkbox render at all --
+      // d1 itself stays unselected/unchecked here.
+      const w = mountList({ files: [], folders, canMoveFolders: true, selection: { files: ['other'], folders: [] } })
+      await w.findAll('[role="checkbox"]')[0].trigger('click')
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['folder', 'd1'])
+      expect(w.emitted('openFolder')).toBeUndefined()
+    })
+
+    it('a plain click still opens the file row, even while a selection exists', async () => {
+      const w = mountList({ folders, canMoveFiles: true, selection: { files: ['f2'], folders: [] } })
+      await w.findAll('tbody tr')[folders.length].trigger('click')
+      expect(w.emitted('open')?.[0]).toEqual(['f1'])
+      expect(w.emitted('toggleSelect')).toBeUndefined()
+    })
+
+    it('a plain click still opens the folder row, even while a selection exists', async () => {
+      const w = mountList({ folders, canMoveFolders: true, selection: { files: ['f2'], folders: [] } })
+      await w.findAll('tbody tr')[0].trigger('click')
+      expect(w.emitted('openFolder')?.[0]).toEqual(['d1'])
+      expect(w.emitted('toggleSelect')).toBeUndefined()
+    })
+
+    it('a ctrl-click on a file row toggles selection instead of opening', async () => {
+      const w = mountList({ folders, canMoveFiles: true, selection: empty })
+      await w.findAll('tbody tr')[folders.length].trigger('click', { ctrlKey: true })
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['file', 'f1'])
+      expect(w.emitted('open')).toBeUndefined()
+    })
+
+    it('a shift-click on a folder row toggles selection instead of opening', async () => {
+      const w = mountList({ folders, canMoveFolders: true, selection: empty })
+      await w.findAll('tbody tr')[0].trigger('click', { shiftKey: true })
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['folder', 'd1'])
+      expect(w.emitted('openFolder')).toBeUndefined()
+    })
+
+    // Same reasoning as MediaGrid/MediaFolderCards: reach the exposed handlers directly, with the
+    // grants off, to prove the refusal is this component's own doing.
+    it('refuses to emit toggleSelect for a file via its own handler when canMoveFiles is false', () => {
+      const w = mountList({ folders, canMoveFiles: false, selection: empty })
+      ;(w.vm as unknown as { toggleFileSelect: (id: string) => void }).toggleFileSelect('f1')
+      expect(w.emitted('toggleSelect')).toBeUndefined()
+    })
+
+    it('refuses to emit toggleSelect for a folder via its own handler when canMoveFolders is false', () => {
+      const w = mountList({ folders, canMoveFolders: false, selection: empty })
+      ;(w.vm as unknown as { toggleFolderSelect: (id: string) => void }).toggleFolderSelect('d1')
+      expect(w.emitted('toggleSelect')).toBeUndefined()
+    })
+
+    it('drags only the clicked file when it is not part of the current selection', async () => {
+      const w = mountList({ folders, canMoveFiles: true, selection: { files: ['f2'], folders: [] } })
+      const row = w.findAll('tbody tr')[folders.length]
+      const setData = vi.fn()
+      await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+      expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: ['f1'], folders: [] }))
+    })
+
+    it('drags the whole selection when the dragged file is already selected', async () => {
+      const selection = { files: ['f1', 'f2'], folders: ['d9'] }
+      const w = mountList({ folders, canMoveFiles: true, selection })
+      const row = w.findAll('tbody tr')[folders.length]
+      const setData = vi.fn()
+      await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+      expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload(selection))
+    })
+
+    it('drags only the clicked folder when it is not part of the current selection', async () => {
+      const w = mountList({ folders, canMoveFolders: true, selection: { files: [], folders: ['other'] } })
+      const row = w.findAll('tbody tr')[0]
+      const setData = vi.fn()
+      await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+      expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: [], folders: ['d1'] }))
+    })
+
+    it('drags the whole selection when the dragged folder is already selected', async () => {
+      const selection = { files: ['f9'], folders: ['d1'] }
+      const w = mountList({ folders, canMoveFolders: true, selection })
+      const row = w.findAll('tbody tr')[0]
+      const setData = vi.fn()
+      await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+      expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload(selection))
     })
   })
 })

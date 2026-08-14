@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import MediaGrid from './MediaGrid.vue'
 import MediaContextMenu from './MediaContextMenu.vue'
-import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
+import { DRAG_MIME, serializeMovePayload, type MovePayload } from '../../lib/mediaMove'
 
 // MediaGrid now renders MediaContextMenu per tile, which calls useI18n() unconditionally in
 // setup() -- every mount needs the i18n plugin from here on, not just the context-menu tests.
@@ -219,6 +219,96 @@ describe('MediaGrid', () => {
         w.unmount()
       }
       expect(spy).not.toHaveBeenCalled()
+    })
+  })
+
+  // Task 9: batch selection. Ctrl/Cmd/Shift-click toggle selection instead of opening; a plain
+  // click keeps opening as before. Checkboxes only appear once the shared selection is non-empty.
+  describe('batch selection', () => {
+    const empty: MovePayload = { files: [], folders: [] }
+
+    it('renders no checkbox at all while the selection is empty', () => {
+      const w = mountGrid({ canMove: true, selection: empty })
+      expect(w.find('[role="checkbox"]').exists()).toBe(false)
+    })
+
+    it('shows a checkbox on every tile once the selection is non-empty', () => {
+      const w = mountGrid({ canMove: true, selection: { files: ['f2'], folders: [] } })
+      expect(w.findAll('[role="checkbox"]')).toHaveLength(2)
+    })
+
+    it('checks the box for a selected tile and leaves others unchecked', () => {
+      const w = mountGrid({ canMove: true, selection: { files: ['f2'], folders: [] } })
+      const boxes = w.findAll('[role="checkbox"]')
+      expect(boxes[0].attributes('aria-checked')).toBe('false')
+      expect(boxes[1].attributes('aria-checked')).toBe('true')
+    })
+
+    it('does not show a checkbox when canMove is false, even with a non-empty selection', () => {
+      const w = mountGrid({ canMove: false, selection: { files: ['f1'], folders: [] } })
+      expect(w.find('[role="checkbox"]').exists()).toBe(false)
+    })
+
+    it('emits toggleSelect(file, id) when the checkbox is toggled, and does not also open', async () => {
+      const w = mountGrid({ canMove: true, selection: { files: ['f2'], folders: [] } })
+      await w.findAll('[role="checkbox"]')[0].trigger('click')
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['file', 'f1'])
+      expect(w.emitted('open')).toBeUndefined()
+    })
+
+    it('a plain click still opens the file, even while a selection exists', async () => {
+      const w = mountGrid({ canMove: true, selection: { files: ['f2'], folders: [] } })
+      await w.findAll('.media-tile')[0].trigger('click')
+      expect(w.emitted('open')?.[0]).toEqual(['f1'])
+      expect(w.emitted('toggleSelect')).toBeUndefined()
+    })
+
+    it('a ctrl-click toggles selection instead of opening', async () => {
+      const w = mountGrid({ canMove: true, selection: empty })
+      await w.findAll('.media-tile')[0].trigger('click', { ctrlKey: true })
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['file', 'f1'])
+      expect(w.emitted('open')).toBeUndefined()
+    })
+
+    it('a meta-click (Cmd) toggles selection instead of opening', async () => {
+      const w = mountGrid({ canMove: true, selection: empty })
+      await w.findAll('.media-tile')[0].trigger('click', { metaKey: true })
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['file', 'f1'])
+      expect(w.emitted('open')).toBeUndefined()
+    })
+
+    it('a shift-click toggles selection instead of opening', async () => {
+      const w = mountGrid({ canMove: true, selection: empty })
+      await w.findAll('.media-tile')[0].trigger('click', { shiftKey: true })
+      expect(w.emitted('toggleSelect')?.[0]).toEqual(['file', 'f1'])
+      expect(w.emitted('open')).toBeUndefined()
+    })
+
+    // The real guard: reachable from both the checkbox and the ctrl/shift-click path, so neither
+    // can add a file to the batch selection without the same file-write grant that already gates
+    // dragging it. A checkbox is never rendered at all when canMove is false (see above), so a
+    // real click can't reach this either way -- call the exposed handler directly, the same way
+    // MediaContextMenu's own guard tests do, to prove the refusal is the handler's own doing and
+    // not just an absent checkbox.
+    it('refuses to emit toggleSelect via its own handler when canMove is false', () => {
+      const w = mountGrid({ canMove: false, selection: empty })
+      ;(w.vm as unknown as { toggleBatchSelect: (id: string) => void }).toggleBatchSelect('f1')
+      expect(w.emitted('toggleSelect')).toBeUndefined()
+    })
+
+    it('drags only the clicked file when it is not part of the current selection', async () => {
+      const w = mountGrid({ canMove: true, selection: { files: ['f2'], folders: [] } })
+      const setData = vi.fn()
+      await w.findAll('.media-tile-wrap')[0].trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+      expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: ['f1'], folders: [] }))
+    })
+
+    it('drags the whole selection when the dragged file is already selected', async () => {
+      const selection = { files: ['f1', 'f2'], folders: ['d9'] }
+      const w = mountGrid({ canMove: true, selection })
+      const setData = vi.fn()
+      await w.findAll('.media-tile-wrap')[0].trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+      expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload(selection))
     })
   })
 })
