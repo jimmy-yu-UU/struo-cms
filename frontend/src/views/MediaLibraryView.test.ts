@@ -1019,4 +1019,25 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     expect(itemsApi.update).not.toHaveBeenCalled()
   })
+
+  // A drag can end without ever reaching a drop (Esc, or a drop somewhere that isn't a
+  // registered target) -- nothing else resets the breadcrumb highlight in that case, and the
+  // drag may have started on a different component's element (a MediaGrid tile or a
+  // MediaFolderCards card), so this must be caught at the document level, not scoped to the
+  // crumb's own listeners (crumb buttons are never drag sources themselves).
+  it('clears the breadcrumb drop-highlight when a drag ends anywhere (abandoned drag)', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
+    await flushPromises()
+    const rootCrumb = w.find('.media-crumb__link')
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await rootCrumb.trigger('dragover', { dataTransfer })
+    expect(rootCrumb.attributes('data-dropping')).toBe('true')
+    document.dispatchEvent(new Event('dragend'))
+    await flushPromises()
+    expect(rootCrumb.attributes('data-dropping')).toBeUndefined()
+  })
 })

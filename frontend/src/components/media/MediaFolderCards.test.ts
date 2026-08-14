@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFolderCards from './MediaFolderCards.vue'
 import type { FolderRow } from '../../lib/folderTree'
@@ -155,17 +156,51 @@ describe('MediaFolderCards', () => {
     expect(setData).not.toHaveBeenCalled()
   })
 
-  // dragleave bubbles: moving the pointer from the card onto its own text/icon children must not
-  // clear the drop-highlight -- only actually leaving the card should.
-  it('does not clear the drop-highlight when dragleave bubbles from a child element', async () => {
+  // dragleave follows the mouseout model: it fires on every boundary crossing, not only as a
+  // bubbled child event, so it must be discriminated by relatedTarget rather than by `.self` or
+  // by "did this fire on a child". Two directions, covered separately so a regression in either
+  // one is caught on its own:
+
+  // Crossing FROM the card's own area ONTO a child (icon/name) targets the CARD itself
+  // (target === currentTarget) with relatedTarget = the child -- still inside the card, so the
+  // highlight must survive. A naive `.self`-style guard passes this event through and clears the
+  // highlight, which is wrong.
+  it('keeps the drop-highlight when dragleave targets the card itself but relatedTarget is still inside it', async () => {
     const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
     const card = w.find('.folder-card')
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await card.trigger('dragover', { dataTransfer })
     expect(card.attributes('data-dropping')).toBe('true')
-    await card.find('.folder-card__name').trigger('dragleave')
+    await card.trigger('dragleave', { relatedTarget: card.find('.folder-card__name').element })
     expect(card.attributes('data-dropping')).toBe('true')
-    await card.trigger('dragleave')
+  })
+
+  // Leaving the card entirely FROM OVER a child fires dragleave AT the child (it bubbles up), with
+  // relatedTarget outside the card -- the highlight must clear. A `.self` guard filters this event
+  // out entirely (target !== currentTarget), leaving a stale highlight forever.
+  it('clears the drop-highlight when dragleave bubbles from a child with relatedTarget outside the card', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const card = w.find('.folder-card')
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await card.trigger('dragover', { dataTransfer })
+    expect(card.attributes('data-dropping')).toBe('true')
+    await card.find('.folder-card__name').trigger('dragleave', { relatedTarget: null })
+    expect(card.attributes('data-dropping')).toBeUndefined()
+  })
+
+  // A drag can end without ever reaching a drop (Esc, or dropping somewhere that isn't a
+  // registered target) -- nothing else would reset the highlight in that case, and it would sit
+  // stale on a card the pointer has long left. `dragend` may fire on a DIFFERENT component's
+  // element entirely (a MediaGrid file tile started the drag), so this must be caught at the
+  // document level, not scoped to this card's own listeners.
+  it('clears the drop-highlight when a drag ends anywhere (abandoned drag, not just a drop on this card)', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const card = w.find('.folder-card')
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await card.trigger('dragover', { dataTransfer })
+    expect(card.attributes('data-dropping')).toBe('true')
+    document.dispatchEvent(new Event('dragend'))
+    await nextTick()
     expect(card.attributes('data-dropping')).toBeUndefined()
   })
 })
