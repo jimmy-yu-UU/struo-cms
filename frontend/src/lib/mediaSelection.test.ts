@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toggleSelection, selectionCount } from './mediaSelection'
+import { toggleSelection, selectionCount, removeFromSelection } from './mediaSelection'
 import type { MovePayload } from './mediaMove'
 
 describe('toggleSelection', () => {
@@ -61,6 +61,41 @@ describe('toggleSelection', () => {
     // per the repository's immutability rule ("new arrays and a new object every call").
     expect(next.folders).not.toBe(folders)
     expect(next.folders).toEqual([])
+  })
+})
+
+describe('removeFromSelection', () => {
+  it('removes an id from the file bucket, leaving folders untouched', () => {
+    const sel: MovePayload = { files: ['f1', 'f2'], folders: ['d1'] }
+    expect(removeFromSelection(sel, 'file', 'f1')).toEqual({ files: ['f2'], folders: ['d1'] })
+  })
+
+  it('removes an id from the folder bucket, leaving files untouched', () => {
+    const sel: MovePayload = { files: ['f1'], folders: ['d1', 'd2'] }
+    expect(removeFromSelection(sel, 'folder', 'd1')).toEqual({ files: ['f1'], folders: ['d2'] })
+  })
+
+  it('is a no-op when the id is not present in that bucket', () => {
+    const sel: MovePayload = { files: ['f1'], folders: [] }
+    expect(removeFromSelection(sel, 'file', 'nope')).toEqual({ files: ['f1'], folders: [] })
+  })
+
+  it('does not remove a same-valued id from the OTHER bucket', () => {
+    const sel: MovePayload = { files: ['shared'], folders: ['shared'] }
+    expect(removeFromSelection(sel, 'file', 'shared')).toEqual({ files: [], folders: ['shared'] })
+  })
+
+  it('does not mutate the input object or either of its arrays', () => {
+    const files = ['f1']
+    const folders = ['d1']
+    const sel: MovePayload = { files, folders }
+    const next = removeFromSelection(sel, 'file', 'f1')
+    expect(sel).toEqual({ files: ['f1'], folders: ['d1'] })
+    expect(sel.files).toBe(files)
+    expect(sel.folders).toBe(folders)
+    expect(next).not.toBe(sel)
+    expect(next.files).not.toBe(sel.files)
+    expect(next.folders).not.toBe(sel.folders)
   })
 })
 

@@ -20,6 +20,21 @@ function toggled(ids: string[], id: string): string[] {
   return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
 }
 
+/**
+ * Removes `id` from the `kind` bucket of `sel` if present, returning a NEW MovePayload -- a
+ * no-op (still a fresh object/arrays) if `id` isn't there. Unlike `toggleSelection`, this never
+ * ADDS: it is the surgical counterpart used when an item is deleted/purged/restored out from
+ * under an active selection, where the correct outcome is dropping just that id, not clearing
+ * the user's other, still-valid selected items.
+ *
+ * Never mutates `sel` or either of its arrays, for the same reason as `toggleSelection`.
+ */
+export function removeFromSelection(sel: MovePayload, kind: 'file' | 'folder', id: string): MovePayload {
+  const files = kind === 'file' ? sel.files.filter((x) => x !== id) : [...sel.files]
+  const folders = kind === 'folder' ? sel.folders.filter((x) => x !== id) : [...sel.folders]
+  return { files, folders }
+}
+
 /** Total number of selected items across both buckets. */
 export function selectionCount(sel: MovePayload): number {
   return sel.files.length + sel.folders.length

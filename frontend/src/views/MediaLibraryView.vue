@@ -34,7 +34,7 @@ import { ApiError } from '../api/apiClient'
 import { performMove } from '../lib/mediaMoveActions'
 import { isNoOpMove, type MovePayload } from '../lib/mediaMove'
 import { readDragPayload } from '../lib/mediaDnd'
-import { toggleSelection } from '../lib/mediaSelection'
+import { toggleSelection, removeFromSelection } from '../lib/mediaSelection'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -162,8 +162,12 @@ function onModeToggle(value: unknown): void {
 function onViewToggle(value: unknown): void {
   if (value === 'grid' || value === 'list') view.value = value
 }
-function onType(value: MediaType): void { type.value = value; reload() }
-function onSort(value: MediaSort): void { sort.value = value; reload() }
+// Review fix (Finding 1): these two reload `files.value` exactly like search/page/mode already
+// do, so a stale selection surviving one of them is not just staleness -- it is a SILENT SUCCESS
+// hazard: the toolbar would keep reading "N selected" after a filter change hides all of them,
+// and Move to… would then move items the user can no longer see with no error at all.
+function onType(value: MediaType): void { clearSelection(); type.value = value; reload() }
+function onSort(value: MediaSort): void { clearSelection(); sort.value = value; reload() }
 function onPageChange(nextPage: number): void {
   clearSelection()
   page.value = nextPage
@@ -201,11 +205,23 @@ async function loadClampingToLastValidPage(): Promise<void> {
     await load()
   }
 }
-function onDeleted(): void { selected.value = null; loadClampingToLastValidPage() }
+// Review fix (Finding 3): removes just the ONE affected id from `selection` rather than clearing
+// it wholesale -- the user's other selected items are still perfectly valid. This matters because
+// a ghost id (one deleted/purged/removed out from under an active selection) makes performMove
+// throw AFTER its sibling writes have already settled (mediaMoveActions.ts's Promise.allSettled +
+// "first rejection wins" re-throw), so a later batch move on a selection containing that ghost id
+// would report "Move failed" even though every OTHER file in the same batch was actually moved --
+// and, without this, the batch would stay stuck failing forever since nothing ever removed it.
+function onDeleted(): void {
+  if (selected.value) selection.value = removeFromSelection(selection.value, 'file', selected.value.id)
+  selected.value = null
+  loadClampingToLastValidPage()
+}
 
 async function onRestore(id: string): Promise<void> {
   try {
     await filesApi.restore(id)
+    selection.value = removeFromSelection(selection.value, 'file', id)
     await loadClampingToLastValidPage()
   } catch (e) {
     toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
@@ -216,6 +232,7 @@ async function onPurge(id: string): Promise<void> {
   if (!(await confirm.require({ ...purgeConfirm(t), severity: 'danger' }))) return
   try {
     await filesApi.remove(id, { purge: true })
+    selection.value = removeFromSelection(selection.value, 'file', id)
     await loadClampingToLastValidPage()
   } catch (e) {
     toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
@@ -268,6 +285,7 @@ async function onRemoveFolder(folder: FolderRow): Promise<void> {
   if (!accepted) return
   try {
     await itemsApi.remove('mediafolder', folder.id)
+    selection.value = removeFromSelection(selection.value, 'folder', folder.id)
     if (currentFolderId.value === folder.id) currentFolderId.value = folder.parentId
     await loadFolders()
     await load()
@@ -309,7 +327,15 @@ async function onDropOn(targetFolderId: string | null, payload: MovePayload): Pr
 
 // Routes the move-to dialog's choice through the same perform/toast/reload path as a drag-drop,
 // rather than duplicating any of that here.
+//
+// Review fix (Finding 2): clearing lives HERE, not inside onDropOn's own finally. onDropOn also
+// serves plain drags and context-menu moves that never touch `selection` at all, and clearing an
+// unrelated in-progress selection there would be a surprising side effect of an unconnected move.
+// onMoveSubmit is specifically the move-DIALOG path -- both the toolbar's batch move and a
+// single-item context-menu move funnel through it -- and after either one, the current
+// `selection`'s ids may no longer be in the listing once the dialog's move settles and reloads.
 function onMoveSubmit(targetFolderId: string | null): void {
+  clearSelection()
   void onDropOn(targetFolderId, movePayload.value)
 }
 
@@ -327,6 +353,7 @@ async function onRemoveFile(id: string): Promise<void> {
   if (!(await confirm.require(deleteConfirm(t, 'soft')))) return
   try {
     await filesApi.remove(id)
+    selection.value = removeFromSelection(selection.value, 'file', id)
     // The detail dialog may be open on the very file just deleted (e.g. deleted from the grid
     // while its own dialog is still up in another interaction) -- close it so Save/Delete can't
     // be pressed on a file that no longer exists.

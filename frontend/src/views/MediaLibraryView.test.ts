@@ -1477,5 +1477,135 @@ describe('MediaLibraryView', () => {
       await flushPromises()
       expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
     })
+
+    // Review fix (Finding 1): onType/onSort also reload `files.value` just like search/page/mode
+    // do -- a selection surviving one of those is a SILENT SUCCESS hazard, not just staleness:
+    // "3 selected" would still show after switching the type filter to something that hides all
+    // three, and Move to… would then move items the user can no longer see without any error at
+    // all. Both must clear the same way the other four listing-change triggers already do.
+    it('clears the selection when the type filter changes', async () => {
+      const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { onType: (t: string) => void }).onType('image')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+      // onType still does its own job -- clearing must not have replaced or skipped the reload.
+      expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
+        filter: { contentType: { op: '_starts_with', value: 'image/' }, folderId: { op: '_null', value: 'true' } },
+      }))
+    })
+
+    it('clears the selection when the sort order changes', async () => {
+      const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { onSort: (s: string) => void }).onSort('name')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+      expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ sort: 'fileName' }))
+    })
+
+    // Review fix (Finding 2): onMoveSubmit is the move-DIALOG path (both the toolbar's batch
+    // move and a single-item context-menu move funnel through it) as distinct from onDropOn's
+    // raw drag-and-drop path. After a submitted move, the selection's ids may no longer be in
+    // the current listing (they were just moved elsewhere) -- clear here specifically, not inside
+    // onDropOn's own finally (which also serves plain drags/context-menu moves where clearing an
+    // unrelated selection would be wrong).
+    it('clears the selection when the move dialog is submitted', async () => {
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: [] }
+      ;(w.vm as unknown as { movePayload: MovePayload }).movePayload = { files: ['f1'], folders: [] }
+      await flushPromises()
+      ;(w.vm as unknown as { onMoveSubmit: (t: string | null) => void }).onMoveSubmit('a')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
+      expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
+    })
+
+    // Review fix (Finding 3): a ghost id (one just deleted/purged/removed) makes performMove
+    // throw AFTER its sibling writes have already settled (mediaMoveActions.ts's
+    // Promise.allSettled + "first rejection wins" re-throw), so a later batch move on a selection
+    // containing that ghost id would report "Move failed" even though every other file in the
+    // same batch was actually moved -- and, worse, the batch would stay stuck failing forever
+    // since nothing removed the ghost id. Surgical removal (not a wholesale clearSelection()) is
+    // used here because the user's OTHER selected items are still perfectly valid -- each test
+    // below asserts a sibling id survives, not just that the acted-upon id is gone.
+    it('removes just the deleted file from the selection when onDeleted fires (a sibling id survives)', async () => {
+      makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+      const w = mountView()
+      await flushPromises()
+      // Opens the detail dialog on f1, which is what sets `selected.value` that onDeleted reads.
+      await w.find('.media-tile').trigger('click')
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1', 'other'], folders: [] }
+      await flushPromises()
+      ;(w.vm as unknown as { onDeleted: () => void }).onDeleted()
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['other'], folders: [] })
+    })
+
+    it('removes just the restored file from the selection when onRestore succeeds (a sibling id survives)', async () => {
+      seedUser({ delete: true })
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: [], total: 0 }])
+      vi.spyOn(filesApi, 'restore').mockResolvedValue()
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+      await flushPromises()
+      // Seeded directly (bypassing the normal toggle path, which already refuses additions in
+      // trash mode) so this test isolates onRestore's own removal behaviour.
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1', 'other'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { onRestore: (id: string) => Promise<void> }).onRestore('f1')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['other'], folders: [] })
+    })
+
+    it('removes just the purged file from the selection when onPurge succeeds (a sibling id survives)', async () => {
+      seedUser({ delete: true })
+      makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+      vi.spyOn(filesApi, 'remove').mockResolvedValue()
+      confirmRequire.mockResolvedValueOnce(true)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1', 'other'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['other'], folders: [] })
+    })
+
+    it('removes just the removed folder from the selection when onRemoveFolder succeeds (a sibling id survives)', async () => {
+      const target: FolderRow = { id: 'a', name: 'A', parentId: null }
+      makeListMock([{ data: rows, total: 1 }], [target])
+      vi.spyOn(itemsApi, 'remove').mockResolvedValue()
+      confirmRequire.mockResolvedValueOnce(true)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1'], folders: ['a', 'other'] }
+      await flushPromises()
+      await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(target)
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['f1'], folders: ['other'] })
+    })
+
+    it('removes just the removed file from the selection when onRemoveFile succeeds (a sibling id survives)', async () => {
+      makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+      vi.spyOn(filesApi, 'remove').mockResolvedValue()
+      confirmRequire.mockResolvedValueOnce(true)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { selection: MovePayload }).selection = { files: ['f1', 'other'], folders: [] }
+      await flushPromises()
+      await (w.vm as unknown as { onRemoveFile: (id: string) => Promise<void> }).onRemoveFile('f1')
+      await flushPromises()
+      expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: ['other'], folders: [] })
+    })
   })
 })
