@@ -173,5 +173,52 @@ describe('MediaGrid', () => {
       expect(w.emitted('requestMove')).toBeUndefined()
       expect(w.emitted('remove')).toBeUndefined()
     })
+
+    // Fix for review finding 1: MediaGrid has three other callers besides MediaLibraryView --
+    // FilePicker (selectable), FilesField (multiple) and RichTextInput (selectable) -- none of
+    // which listens for `open`, and a menu there would both do nothing on select AND eat the
+    // native browser context menu (reka's trigger calls preventDefault as soon as it opens).
+    it('renders no context-menu trigger at all when selectable is set (picker mode)', async () => {
+      const w = mountGrid({ selectable: true })
+      expect(w.findComponent(MediaContextMenu).exists()).toBe(false)
+      // The plain (unwrapped) tile must still exist and still be clickable -- gating the menu
+      // must not regress the picker's own select behaviour.
+      await w.findAll('.media-tile')[0].trigger('contextmenu')
+      await flushPromises()
+      expect(w.find('[data-test="menu-open"]').exists()).toBe(false)
+      await w.findAll('.media-tile')[0].trigger('click')
+      expect(w.emitted('select')?.[0]).toEqual(['f1'])
+    })
+
+    it('renders no context-menu trigger at all when multiple is set (picker mode)', async () => {
+      const w = mountGrid({ multiple: true, selectedIds: [] })
+      expect(w.findComponent(MediaContextMenu).exists()).toBe(false)
+      await w.findAll('.media-tile')[0].trigger('click')
+      expect(w.emitted('toggle')?.[0]).toEqual(['f1'])
+    })
+
+    // Fix for review finding 2: reka's ContextMenuTrigger also opens on a still touch/pen press,
+    // armed by its OWN @pointerdown listener (reka-ui/src/ContextMenu/ContextMenuTrigger.vue:70-79,
+    // bound at line 115) -- not a `contextmenu` event, so `@contextmenu.stop` alone never sees
+    // that path. Without an equivalent `.stop` on pointerdown, a long press on a tile would arm
+    // the timer on the tile's own trigger AND bubble to open the outer empty-space trigger too.
+    //
+    // A default `mount()` attaches to a detached fragment, not `document` -- a dispatched event
+    // bubbles to the top of THAT fragment and stops there regardless of whether `.stop` is
+    // present, so a `document`-level listener would never fire either way and the assertion
+    // would be unfalsifiable. `attachTo: document.body` puts the mounted tree in the real
+    // document so bubbling (or its absence) is actually observable.
+    it('stops pointerdown from bubbling past the tile (reka\'s long-press path listens on pointerdown, not contextmenu)', async () => {
+      const w = mountGrid({}, { attachTo: document.body })
+      const spy = vi.fn()
+      document.addEventListener('pointerdown', spy)
+      try {
+        await w.findAll('.media-tile')[0].trigger('pointerdown', { pointerType: 'touch' })
+      } finally {
+        document.removeEventListener('pointerdown', spy)
+        w.unmount()
+      }
+      expect(spy).not.toHaveBeenCalled()
+    })
   })
 })

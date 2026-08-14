@@ -55,7 +55,21 @@ defineExpose({ onMove, onRename, onRemove })
       <ContextMenuItem v-if="canMove" data-test="menu-move" @select="onMove">
         {{ t('media.menuMove') }}
       </ContextMenuItem>
-      <ContextMenuItem v-if="canDelete" data-test="menu-delete" variant="destructive" @select="onRemove">
+      <!--
+        `variant="destructive"` alone resolves to `data-[variant=destructive]:text-destructive-
+        foreground`, and tokens.css deliberately leaves `--color-destructive-foreground` out of
+        its `@theme` (see that file's own comment). Verified against the actual build output
+        (`pnpm build` then grepped dist/assets/index-*.css): with no matching `--color-*` theme
+        token, Tailwind v4 never emits ANY CSS rule for `text-destructive-foreground` at all --
+        zero occurrences of "destructive-foreground" anywhere in the compiled stylesheet, scoped
+        or not -- so Delete silently keeps the popover's ordinary foreground instead of red.
+        `ui/**` is generated and must not be hand-edited, so restore the actual red text at this
+        call site instead: `.text-destructive{color:var(--destructive)}` already exists as a
+        plain global rule (confirmed in the same build output) and there is no competing
+        `text-destructive-foreground` rule to lose a specificity contest against, so a plain
+        (non-important) override is sufficient here.
+      -->
+      <ContextMenuItem v-if="canDelete" data-test="menu-delete" variant="destructive" class="text-destructive" @select="onRemove">
         {{ t('media.menuDelete') }}
       </ContextMenuItem>
     </ContextMenuContent>

@@ -278,5 +278,33 @@ describe('MediaFolderCards', () => {
       expect(w.emitted('rename')).toBeUndefined()
       expect(w.emitted('remove')).toBeUndefined()
     })
+
+    // Fix for review finding 2: reka's ContextMenuTrigger also opens on a still touch/pen press,
+    // armed by its OWN @pointerdown listener (reka-ui/src/ContextMenu/ContextMenuTrigger.vue:70-79,
+    // bound at line 115) -- not a `contextmenu` event, so `@contextmenu.stop` alone never sees
+    // that path. Without an equivalent `.stop` on pointerdown, a long press on a card would arm
+    // the timer on the card's own trigger AND bubble to open the outer empty-space trigger too.
+    //
+    // A default `mount()` attaches to a detached fragment, not `document` -- a dispatched event
+    // bubbles to the top of THAT fragment and stops there regardless of whether `.stop` is
+    // present, so a `document`-level listener would never fire either way and the assertion
+    // would be unfalsifiable. `attachTo: document.body` puts the mounted tree in the real
+    // document so bubbling (or its absence) is actually observable.
+    it('stops pointerdown from bubbling past the card (reka\'s long-press path listens on pointerdown, not contextmenu)', async () => {
+      const w = mount(MediaFolderCards, {
+        props: { folders, canManage: false },
+        global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+        attachTo: document.body,
+      })
+      const spy = vi.fn()
+      document.addEventListener('pointerdown', spy)
+      try {
+        await w.find('.folder-card').trigger('pointerdown', { pointerType: 'touch' })
+      } finally {
+        document.removeEventListener('pointerdown', spy)
+        w.unmount()
+      }
+      expect(spy).not.toHaveBeenCalled()
+    })
   })
 })

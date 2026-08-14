@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 import MediaContextMenu from './MediaContextMenu.vue'
 import { setDragPayload } from '../../lib/mediaDnd'
@@ -47,6 +48,14 @@ function onDragStart(ev: DragEvent, f: FileRow): void {
   if (!props.canMove) return
   setDragPayload(ev, { files: [f.id], folders: [] })
 }
+
+// MediaGrid has three other callers besides MediaLibraryView -- FilePicker (selectable),
+// FilesField (multiple) and RichTextInput (selectable) -- none of which listens for `open`, and
+// "Open" is meaningless in picker mode anyway (a click there means select/toggle, not navigate).
+// Rendering the context menu unconditionally in those dialogs would silently do nothing on
+// select AND eat the native browser context menu (reka's own trigger calls
+// event.preventDefault() as soon as it opens) -- so the menu only exists in plain browse mode.
+const showContextMenu = computed(() => !props.selectable && !props.multiple)
 </script>
 
 <template>
@@ -55,6 +64,7 @@ function onDragStart(ev: DragEvent, f: FileRow): void {
          :draggable="canMove ? 'true' : undefined"
          @dragstart="onDragStart($event, f)">
       <MediaContextMenu
+        v-if="showContextMenu"
         kind="file" :can-move="canMove" :can-delete="canDelete" :disabled="trashMode"
         @open="emit('open', f.id)"
         @move="emit('requestMove', { files: [f.id], folders: [] })"
@@ -66,11 +76,22 @@ function onDragStart(ev: DragEvent, f: FileRow): void {
           :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
           @click="onClick(f.id)"
           @contextmenu.stop
+          @pointerdown.stop
         >
           <FileThumbnail :file="f" />
           <span class="media-tile__name">{{ f.fileName }}</span>
         </button>
       </MediaContextMenu>
+      <button
+        v-else
+        type="button"
+        class="media-tile w-full rounded-xl border border-border hover:border-primary"
+        :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
+        @click="onClick(f.id)"
+      >
+        <FileThumbnail :file="f" />
+        <span class="media-tile__name">{{ f.fileName }}</span>
+      </button>
       <div v-if="$slots.actions" class="media-tile__actions absolute right-1 top-1 flex gap-1">
         <slot name="actions" :file="f" />
       </div>

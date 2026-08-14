@@ -57,6 +57,19 @@ describe('MediaContextMenu', () => {
     expect(w.find('[data-test="menu-rename"]').exists()).toBe(false)
   })
 
+  // Fix for review finding 3: `variant="destructive"` alone resolves to
+  // `data-[variant=destructive]:text-destructive-foreground`, and tokens.css deliberately leaves
+  // `--color-destructive-foreground` undeclared -- verified against the actual `pnpm build`
+  // output that Tailwind v4 never emits ANY rule for that utility (zero occurrences of
+  // "destructive-foreground" anywhere in the compiled stylesheet), so Delete rendered in the
+  // ordinary popover foreground instead of red. `text-destructive` is the real, always-declared
+  // token this call site restores explicitly.
+  it('gives the Delete entry an explicit text-destructive class (variant="destructive" alone is a no-op)', async () => {
+    const w = mountMenu({ kind: 'file', canDelete: true })
+    await openMenu(w)
+    expect(w.find('[data-test="menu-delete"]').classes()).toContain('text-destructive')
+  })
+
   it('shows Rename for a folder only when canRename is true', async () => {
     const withGrant = mountMenu({ kind: 'folder', canRename: true })
     await openMenu(withGrant)

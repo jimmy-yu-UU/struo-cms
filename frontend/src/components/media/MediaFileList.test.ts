@@ -22,10 +22,11 @@ const files = [
 
 const folders = [{ id: 'd1', name: 'Docs', parentId: null }]
 
-function mountList(props: Record<string, unknown> = {}) {
+function mountList(props: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) {
   return mount(MediaFileList, {
     props: { files, ...props },
     global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    ...extra,
   })
 }
 
@@ -366,6 +367,43 @@ describe('MediaFileList', () => {
       expect(w.emitted('requestMove')).toBeUndefined()
       expect(w.emitted('renameFolder')).toBeUndefined()
       expect(w.emitted('removeFolder')).toBeUndefined()
+    })
+
+    // Fix for review finding 2: reka's ContextMenuTrigger also opens on a still touch/pen press,
+    // armed by its OWN @pointerdown listener (reka-ui/src/ContextMenu/ContextMenuTrigger.vue:70-79,
+    // bound at line 115) -- not a `contextmenu` event, so `@contextmenu.stop` alone never sees
+    // that path. Without an equivalent `.stop` on pointerdown, a long press on a row would arm the
+    // timer on the row's own trigger AND bubble to open the outer empty-space trigger too.
+    //
+    // A default `mount()` attaches to a detached fragment, not `document` -- a dispatched event
+    // bubbles to the top of THAT fragment and stops there regardless of whether `.stop` is
+    // present, so a `document`-level listener would never fire either way and the assertion
+    // would be unfalsifiable. `attachTo: document.body` puts the mounted tree in the real
+    // document so bubbling (or its absence) is actually observable.
+    it('stops pointerdown from bubbling past a folder row', async () => {
+      const w = mountList({ folders }, { attachTo: document.body })
+      const spy = vi.fn()
+      document.addEventListener('pointerdown', spy)
+      try {
+        await w.findAll('tbody tr')[0].trigger('pointerdown', { pointerType: 'touch' })
+      } finally {
+        document.removeEventListener('pointerdown', spy)
+        w.unmount()
+      }
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('stops pointerdown from bubbling past a file row', async () => {
+      const w = mountList({ folders }, { attachTo: document.body })
+      const spy = vi.fn()
+      document.addEventListener('pointerdown', spy)
+      try {
+        await w.findAll('tbody tr')[folders.length].trigger('pointerdown', { pointerType: 'touch' })
+      } finally {
+        document.removeEventListener('pointerdown', spy)
+        w.unmount()
+      }
+      expect(spy).not.toHaveBeenCalled()
     })
   })
 })
