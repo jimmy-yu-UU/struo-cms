@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import TreeSelect from '@/components/form/TreeSelect.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
@@ -20,14 +19,10 @@ import { buildItemPayload } from '../../lib/buildItemPayload'
 import { deleteConfirm } from '../../lib/deleteAction'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
-import { buildRelationTree, type TreeNode } from '../../lib/buildRelationTree'
-import { toFolderRows, type FolderRow } from '../../lib/folderTree'
 import type { FormModel } from '../../types/itemForm'
 
 const props = defineProps<{ file: FileRow | null; canWrite: boolean; canDelete: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void; (e: 'deleted'): void }>()
-
-const UNFILED = '__unfiled'
 
 const confirm = useConfirm()
 const toast = useToast()
@@ -43,8 +38,6 @@ const loading = ref(false)
 const saving = ref(false)
 const conflict = ref(false)
 const error = ref('')
-const folders = ref<FolderRow[]>([])
-const folderId = ref<string | null>(null)
 
 const fileMeta = computed(() => schema.get('file'))
 const locales = computed(() => langStore.languages)
@@ -67,16 +60,6 @@ const uploadedText = computed(() =>
 )
 const statusText = computed(() => (raw.value?.status as string | undefined) ?? '—')
 const fileUrl = computed(() => (props.file ? filesApi.contentUrl(props.file.id) : ''))
-
-const folderNodes = computed<TreeNode[]>(() => [
-  { key: UNFILED, label: t('media.folderUncategorized'), data: UNFILED, children: [] },
-  ...buildRelationTree(folders.value.map((f) => ({ id: f.id, label: f.name, parentId: f.parentId })), 'parentId'),
-])
-// form/TreeSelect takes and emits a plain key; the '__unfiled' sentinel is this dialog's own
-// representation of "no folder", which the API models as a null folderId.
-function onFolderChange(key: string | null): void {
-  folderId.value = !key || key === UNFILED ? null : key
-}
 
 const activeValues = computed<Record<string, unknown>>({
   get: () => model.value.translations[activeLocale.value] ?? {},
@@ -105,22 +88,13 @@ async function load(): Promise<void> {
   try {
     await Promise.all([schema.load(), langStore.load()])
     activeLocale.value = langStore.defaultCode
-    // The items API only projects M2O relation FKs under `deep` expansion, nested as
-    // `folder: { id, ... }` under the relation's nav-property name -- it never returns a flat
-    // `folderId` column. Without `deep`, item.folderId is always undefined, so every save from
-    // this dialog would silently send folderId: null and unfile the file.
-    const item = await itemsApi.get('file', props.file.id, { deep: ['folder'] })
+    // This dialog no longer edits folder assignment (that moved to the media library's
+    // drag-and-drop / "Move to…" context menu / batch move), so there is no need for `deep:
+    // ['folder']` here -- the items API only projects that relation FK under `deep` expansion, and
+    // nothing in this component reads item.folder or item.folderId any more.
+    const item = await itemsApi.get('file', props.file.id)
     raw.value = item
     if (fileMeta.value) model.value = parseItemToForm(fileMeta.value, item, locales.value)
-    folderId.value = (item.folder as { id?: string } | undefined)?.id ?? null
-    try {
-      const res = await itemsApi.list('mediafolder', { page: 0, rows: 500, sort: 'name', deep: ['parent'] })
-      folders.value = toFolderRows(res.data)
-    } catch {
-      // Folder loading is a progressive enhancement: if it fails, degrade to a flat "Uncategorized
-      // only" picker rather than blocking the whole detail dialog.
-      folders.value = []
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
   } finally {
@@ -134,7 +108,7 @@ async function onSave(): Promise<void> {
   conflict.value = false
   error.value = ''
   try {
-    const payload = { ...buildItemPayload(fileMeta.value, model.value, locales.value, 'update'), folderId: folderId.value }
+    const payload = buildItemPayload(fileMeta.value, model.value, locales.value, 'update')
     await itemsApi.update('file', props.file.id, payload)
     emit('saved')
     emit('close')
@@ -192,7 +166,7 @@ async function onCopyUrl(): Promise<void> {
 
 watch(() => props.file?.id, (id) => { if (id) void load() }, { immediate: true })
 
-defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, folderId, onFolderChange, error, saveLabel, onLocaleToggle })
+defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, error, saveLabel, onLocaleToggle })
 </script>
 
 <template>
@@ -244,17 +218,6 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
               @update:model-value="setField('alt', String($event ?? ''))"
             />
           </label>
-          <label class="md-field">
-            <span class="text-muted-foreground">{{ $t('media.folderField') }}</span>
-            <TreeSelect
-              :model-value="folderId ?? UNFILED"
-              :nodes="folderNodes"
-              :label="$t('media.folderField')"
-              :disabled="!canWrite || loading"
-              @update:model-value="onFolderChange"
-            />
-          </label>
-
           <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.colDimensions') }}</span><b>{{ dimensions }}</b></div>
           <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.colSize') }}</span><b>{{ sizeText }}</b></div>
           <div class="md-kv"><span class="text-muted-foreground">{{ $t('media.colUploaded') }}</span><b>{{ uploadedText }}</b></div>
