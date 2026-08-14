@@ -110,7 +110,6 @@ export default {
     save: 'Save',
     saving: 'Saving…',
     back: 'Back to list',
-    relations: 'Relations',
     translatableBadge: 'Translatable',
     localeComplete: 'Has content',
     localeIncomplete: 'No content yet',
