@@ -134,7 +134,8 @@ watch(columnIdsSignature, () => {
         <DropdownMenuTrigger as-child>
           <!--
             size="default" (h-9/36px), NOT "sm" (h-8/32px) -- this sits directly above
-            DataTablePagination's page-size NativeSelect, which is also h-9. A "sm" trigger here
+            DataTablePagination's page-size Select, whose SelectTrigger also defaults to h-9
+            (components/ui/select/SelectTrigger.vue: data-[size=default]:h-9). A "sm" trigger here
             made the two controls two different heights.
           -->
           <Button variant="outline" data-testid="column-visibility-trigger">

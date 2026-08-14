@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed } from 'vue'
 import { ChevronLeft, ChevronRight } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // Props in, events out, no table instance.
 const props = withDefaults(defineProps<{
@@ -10,8 +10,13 @@ const props = withDefaults(defineProps<{
   pageSize: number
   total: number
   /**
-   * Override, don't hardcode: `props.pageSize` must be one of these or the native <select>
-   * renders with no option selected (selectedIndex === -1).
+   * Override, don't hardcode: `props.pageSize` must be one of these or reka's Select renders with
+   * no option selected. Confirmed empirically (mounting Select with a model-value no SelectItem
+   * offers): SelectValue's option lookup (rootContext.optionsSet vs. modelValue) finds nothing, so
+   * the trigger shows a blank label -- same as its `:placeholder` would, since neither is set here
+   * -- and no SelectItem in the open list renders aria-selected/data-state=checked. Unlike a
+   * native <select>'s selectedIndex === -1, there is no browser-chosen fallback item; it's just
+   * silently blank.
    */
   pageSizeOptions?: number[]
   /** Hides the rows-per-page control. */
@@ -31,44 +36,33 @@ const to = computed(() => Math.min((props.page + 1) * props.pageSize, props.tota
 const isFirst = computed(() => props.page <= 0)
 const isLast = computed(() => props.page >= pageCount.value - 1)
 
-// useId(), not a literal string: a future screen (RelatedList inside an ItemForm, say) can mount
-// more than one DataTablePagination per page, and a duplicate id would break the label's `for`
-// association for every instance after the first.
-const pageSizeId = useId()
-
-// A plain `@change`, not `@update:model-value`: NativeSelect's own `defineEmits<{
-// "update:modelValue": AcceptableValue }>()` (src/components/ui/native-select/NativeSelect.vue,
-// vendored/read-only) types that payload as a bare value rather than a tuple, which vue-tsc then
-// widens the listener's inferred prop type to `() => any` (zero args) -- an
-// `(value: unknown) => void` handler fails `pnpm build`'s type check against that. The vendored
-// Calendar.vue component hits the exact same NativeSelect and works around it the same way: read
-// the native DOM event instead of the v-model payload.
-//
-// Native <select> values are always strings (HTMLOptionElement.value coerces on read); the
-// pageSize contract everywhere else (DataTableState, buildListQuery) is a number, so the
-// boundary conversion happens once, here.
-function onPageSizeChange(e: Event): void {
-  emit('update:pageSize', Number((e.target as HTMLSelectElement).value))
+// reka's SelectRoot models its value as a plain string -- both the `model-value` bound on <Select>
+// and each SelectItem's own `value` are strings below -- never the underlying number; the pageSize
+// contract everywhere else (DataTableState, buildListQuery) is a number, so the boundary
+// conversion still happens once, here. `value: unknown`, not a typed payload: matches
+// UiLanguageSwitcher's same-shaped handler (src/components/shell/UiLanguageSwitcher.vue), which
+// takes the same `@update:model-value` from this vendored Select.
+function onPageSizeChange(value: unknown): void {
+  emit('update:pageSize', Number(value))
 }
 </script>
 
 <template>
   <div class="flex flex-wrap items-center justify-between gap-4 pt-3">
     <div v-if="props.showPageSizeSelector" class="flex items-center gap-2">
-      <label :for="pageSizeId" class="text-sm text-muted-foreground">
+      <span class="text-sm text-muted-foreground">
         {{ $t('common.rowsPerPage') }}
-      </label>
-      <NativeSelect
-        :id="pageSizeId"
-        data-testid="page-size-select"
-        :model-value="String(props.pageSize)"
-        class="h-9 w-20"
-        @change="onPageSizeChange"
-      >
-        <NativeSelectOption v-for="size in props.pageSizeOptions" :key="size" :value="String(size)">
-          {{ size }}
-        </NativeSelectOption>
-      </NativeSelect>
+      </span>
+      <Select :model-value="String(props.pageSize)" @update:model-value="onPageSizeChange">
+        <SelectTrigger data-testid="page-size-select" class="w-20" :aria-label="$t('common.rowsPerPage')">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="size in props.pageSizeOptions" :key="size" :value="String(size)">
+            {{ size }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
     </div>
     <span class="text-sm text-muted-foreground">
       {{ $t('collectionList.range', { from, to, total: props.total }) }}
