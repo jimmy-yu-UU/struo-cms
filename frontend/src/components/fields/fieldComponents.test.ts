@@ -118,6 +118,27 @@ describe('field components (simple inputs)', () => {
     expect(w.find('[role="switch"]').attributes('disabled')).toBeDefined()
   })
 
+  // ui/field's vertical orientation applies `[&>*]:w-full` to every DIRECT child of a <Field>. If
+  // BooleanField's root element were the switch itself, that rule would stretch the switch across
+  // the whole form width. The wrapper div absorbs the rule instead, so the switch keeps its natural
+  // size. This must fail if the wrapper is ever "cleaned up" as pointless markup.
+  //
+  // Note: Vue 3.4+ mounts every test-utils component under an outer `<div data-v-app>` container,
+  // so `wrapper.element` is always that container div regardless of what the component itself
+  // renders — asserting against it directly would prove nothing. Instead this walks the
+  // container's own direct child (BooleanField's real rendered root) and asserts THAT isn't the
+  // switch itself.
+  it('keeps the switch nested inside a wrapper element, not as its own root', () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    const sw = w.find('[role="switch"]')
+    expect(sw.exists()).toBe(true)
+    const componentRoot = w.element.firstElementChild as HTMLElement
+    expect(componentRoot).toBeTruthy()
+    expect(componentRoot).not.toBe(sw.element)
+    expect(componentRoot.getAttribute('role')).not.toBe('switch')
+    expect(componentRoot.contains(sw.element)).toBe(true)
+  })
+
   // The three interfaces this one component serves render three different control sets, because
   // ui/calendar has no time part: date -> calendar only, time -> a time input only, dateTime ->
   // both.

@@ -2,14 +2,13 @@
 import { ref, computed, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Field, FieldContent, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import FieldInput from './fields/FieldInput.vue'
 import RelationInput from './fields/RelationInput.vue'
 import { splitFields } from '../lib/splitFields'
 import { hasLocaleContent } from '../lib/localeCompleteness'
-import { getFieldType } from '../lib/fieldTypes/registry'
-import type { CollectionMeta, FieldMeta, LanguageInfo } from '../types/schema'
+import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
 const props = defineProps<{
@@ -49,7 +48,6 @@ const uid = useId()
 function sharedFieldId(name: string): string { return `${uid}-shared-${name}` }
 function translatableFieldId(name: string, locale: string): string { return `${uid}-translatable-${name}-${locale}` }
 function relationFieldId(name: string): string { return `${uid}-relation-${name}` }
-function isInline(f: FieldMeta): boolean { return getFieldType(f.interface).inline === true }
 
 // Surface default-locale validation errors even if the user is on another locale's tab.
 watch(() => props.errors, (e) => {
@@ -90,22 +88,12 @@ defineExpose({ activeLocale })
       </TabsContent>
     </Tabs>
 
-    <template v-for="f in fields.shared" :key="f.name">
-      <Field v-if="isInline(f)" orientation="horizontal" class="field">
-        <FieldContent>
-          <FieldLabel :for="sharedFieldId(f.name)">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
-          <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
-          <FieldError v-if="errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
-        </FieldContent>
-        <FieldInput :id="sharedFieldId(f.name)" :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
-      </Field>
-      <Field v-else class="field">
-        <FieldLabel :for="sharedFieldId(f.name)">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
-        <FieldInput :id="sharedFieldId(f.name)" :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
-        <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
-        <FieldError v-if="errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
-      </Field>
-    </template>
+    <Field v-for="f in fields.shared" :key="f.name" class="field">
+      <FieldLabel :for="sharedFieldId(f.name)">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
+      <FieldInput :id="sharedFieldId(f.name)" :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
+      <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
+      <FieldError v-if="errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
+    </Field>
 
     <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
       <Field v-for="rel in meta.relations" :key="rel.name" class="field">
