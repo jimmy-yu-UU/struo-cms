@@ -94,7 +94,16 @@ async function load(): Promise<void> {
     // nothing in this component reads item.folder or item.folderId any more.
     const item = await itemsApi.get('file', props.file.id)
     raw.value = item
-    if (fileMeta.value) model.value = parseItemToForm(fileMeta.value, item, locales.value)
+    // relations: {} is deliberate, not an oversight: this dialog no longer edits any relation, but
+    // `file`'s schema still declares the `folder` (manyToOne/treeSelect) relation, and
+    // parseItemToForm populates `relations` by iterating meta.relations dynamically -- it would set
+    // `relations.folder = null` from this non-deep response regardless (item.folder is simply
+    // undefined here). buildItemPayload only skips a relation's FK when its key is ABSENT from
+    // `model.relations` ("untouched -> partial update"); once parseItemToForm put the key there,
+    // buildItemPayload would emit `folderId: null` on every save and silently unfile the file.
+    // Forcing `relations: {}` keeps that key out entirely, so the "untouched" branch actually
+    // fires. Do not "simplify" this back to spreading parseItemToForm's own `relations` output.
+    if (fileMeta.value) model.value = { ...parseItemToForm(fileMeta.value, item, locales.value), relations: {} }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
   } finally {

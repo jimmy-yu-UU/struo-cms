@@ -40,7 +40,16 @@ const fileMeta = {
     { name: 'title', label: 'Title', interface: 'text', required: false, searchable: true, sortable: false, readOnly: false, hidden: false, translatable: true, sort: 1, isSystem: false },
     { name: 'alt', label: 'Alt', interface: 'text', required: false, searchable: false, sortable: false, readOnly: false, hidden: false, translatable: true, sort: 2, isSystem: false },
   ],
-  relations: [],
+  // The real `file` collection DOES declare this relation (verified against
+  // src/Struo.Infrastructure/Files/File.cs, the metadata scanner, and /api/schema) -- an empty
+  // `relations: []` fixture here would make buildItemPayload's relations loop never execute at
+  // all, silently hiding the exact bug this dialog's folder-removal introduced: parseItemToForm
+  // reads `item[rel.name]` dynamically off `meta.relations`, so with this relation present and no
+  // `deep` expansion on the GET, it would populate `model.relations.folder = null` regardless of
+  // the removed widget, and buildItemPayload would then emit `folderId: null` on every save.
+  relations: [
+    { name: 'folder', label: 'Folder', kind: 'manyToOne', targetCollection: 'mediafolder', interface: 'treeSelect', foreignKey: 'folderId', displayTemplate: null, editable: true, selfReferencing: false },
+  ],
 }
 
 function seedStores() {
@@ -406,15 +415,22 @@ describe('MediaDetailDialog', () => {
     const w = mountDialog()
     await flushPromises()
     expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(false)
-    expect(w.text()).not.toContain('Folder')
+    // Asserted against the picker specifically (the exact remaining field labels), not a blanket
+    // "'Folder' appears nowhere in the dialog" check -- that would also fail on unrelated future
+    // copy that happens to contain the word.
+    const fieldLabels = w.findAll('.md-field > span').map((s) => s.text())
+    expect(fieldLabels).toEqual(['Title', 'Alt text', 'File URL'])
   })
 
   it('never calls itemsApi.list (no mediafolder fetch left to drive a picker that no longer exists)', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    // Rejects immediately instead of falling through to a real API layer -- a regression that
+    // reintroduces a list() call should fail loudly here, not silently succeed against whatever
+    // itemsApi.list happens to resolve to when unmocked.
     const list = vi.spyOn(itemsApi, 'list')
-    const w = mountDialog()
+      .mockImplementation(() => Promise.reject(new Error('itemsApi.list should not be called by MediaDetailDialog')))
+    mountDialog()
     await flushPromises()
-    void w
     expect(list).not.toHaveBeenCalled()
   })
 
@@ -423,6 +439,11 @@ describe('MediaDetailDialog', () => {
   // `folderId` again (even as `null`) it would silently unfile the item on every save from this
   // dialog. Asserting the key is entirely ABSENT -- not merely falsy -- is what actually catches a
   // `folderId: null` regression; `expect(payload.folderId).toBeFalsy()` would pass right through it.
+  //
+  // This is only a meaningful guard because `fileMeta.relations` above declares the REAL `folder`
+  // relation (matching the live schema) -- an empty `relations: []` fixture would make
+  // buildItemPayload's relations loop never execute, making this assertion pass vacuously
+  // regardless of whether the dialog's own `relations: {}` override is present.
   it('sends no folderId key at all in the update payload', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
@@ -432,6 +453,23 @@ describe('MediaDetailDialog', () => {
     await vm.onSave()
     await flushPromises()
     expect(update).toHaveBeenCalledTimes(1)
+    const payload = update.mock.calls[0][2] as Record<string, unknown>
+    expect('folderId' in payload).toBe(false)
+  })
+
+  // Restores the data-loss regression guard the pre-removal dialog carried (there under the name
+  // "preserves a filed file's folder on save") in the form that now fits: even if the GET response
+  // happens to carry a `folder` object (e.g. some other change reintroduces `deep` without
+  // reintroducing this dialog's own folder-editing UI), `relations: {}` must still neutralise it --
+  // the dialog no longer has a UI path to express a folder choice, so it must never derive one.
+  it('sends no folderId even when the GET response happens to include folder data (data-loss regression guard)', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { onSave: () => Promise<void> }
+    await vm.onSave()
+    await flushPromises()
     const payload = update.mock.calls[0][2] as Record<string, unknown>
     expect('folderId' in payload).toBe(false)
   })
