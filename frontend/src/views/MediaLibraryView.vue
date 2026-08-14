@@ -437,10 +437,13 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       :files="files"
       :folders="mode === 'active' ? visibleFolders : []"
       :can-manage-folders="canManageFolders || canDeleteFolders"
+      :can-move-files="canWrite"
+      :can-move-folders="canManageFolders"
       @open="openDetail"
       @open-folder="enterFolder"
       @rename-folder="renameTarget = $event"
       @remove-folder="onRemoveFolder"
+      @drop-on="onDropOn"
     >
       <template v-if="mode === 'trash'" #actions="{ file }">
         <Button

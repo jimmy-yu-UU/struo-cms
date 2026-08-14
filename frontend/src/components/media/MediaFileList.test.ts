@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFileList from './MediaFileList.vue'
+import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -106,5 +108,129 @@ describe('MediaFileList', () => {
   it('renders no folder rows when none are passed', () => {
     const w = mount(MediaFileList, { props: { files }, global: { plugins: [i18n] } })
     expect(w.findAll('tbody tr')).toHaveLength(files.length)
+  })
+
+  it('emits dropOn when a media drag is dropped on a folder row', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const payload = { files: ['f1'], folders: [] }
+    const dataTransfer = {
+      types: [DRAG_MIME],
+      getData: (t: string) => (t === DRAG_MIME ? serializeMovePayload(payload) : ''),
+      dropEffect: '',
+    }
+    await w.findAll('tbody tr')[0].trigger('drop', { dataTransfer })
+    expect(w.emitted('dropOn')?.[0]).toEqual(['d1', payload])
+  })
+
+  it('does not make file rows drop targets', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const dataTransfer = {
+      types: [DRAG_MIME],
+      getData: () => serializeMovePayload({ files: ['f1'], folders: [] }),
+      dropEffect: '',
+    }
+    await w.findAll('tbody tr')[folders.length].trigger('drop', { dataTransfer })
+    expect(w.emitted('dropOn')).toBeUndefined()
+  })
+
+  it('ignores a drop carrying no media payload', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const dataTransfer = { types: ['text/plain'], getData: () => 'hello', dropEffect: '' }
+    await w.findAll('tbody tr')[0].trigger('drop', { dataTransfer })
+    expect(w.emitted('dropOn')).toBeUndefined()
+  })
+
+  // Permissions: folder moves require canWrite('mediafolder') -- without that grant the row must
+  // not be a drag source at all, regardless of canManageFolders (which also covers delete-only
+  // users who should still see rename/delete but not drag folders around).
+  it('is not draggable when canMoveFolders is false or unset', () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    expect(w.findAll('tbody tr')[0].attributes('draggable')).toBeUndefined()
+  })
+
+  it('is draggable and writes the folder payload on dragstart when canMoveFolders is true', async () => {
+    const w = mount(MediaFileList, {
+      props: { files, folders, canManageFolders: true, canMoveFolders: true },
+      global: { plugins: [i18n] },
+    })
+    const row = w.findAll('tbody tr')[0]
+    expect(row.attributes('draggable')).toBe('true')
+    const setData = vi.fn()
+    await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: [], folders: ['d1'] }))
+  })
+
+  // Same bypass risk as MediaFolderCards/MediaGrid: `draggable` alone is not the gate. A bubbled
+  // dragstart from inside a non-draggable row must still be refused by the handler itself.
+  it('does not write a drag payload on dragstart when canMoveFolders is false (bubbled drag)', async () => {
+    const w = mount(MediaFileList, {
+      props: { files, folders, canManageFolders: true, canMoveFolders: false },
+      global: { plugins: [i18n] },
+    })
+    const row = w.findAll('tbody tr')[0]
+    const setData = vi.fn()
+    await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).not.toHaveBeenCalled()
+  })
+
+  // Permissions: file moves require canWrite('file') -- same reasoning, file rows.
+  it('is not draggable when canMoveFiles is false or unset', () => {
+    const w = mount(MediaFileList, { props: { files, folders }, global: { plugins: [i18n] } })
+    expect(w.findAll('tbody tr')[folders.length].attributes('draggable')).toBeUndefined()
+  })
+
+  it('is draggable and writes the file payload on dragstart when canMoveFiles is true', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canMoveFiles: true }, global: { plugins: [i18n] } })
+    const row = w.findAll('tbody tr')[folders.length]
+    expect(row.attributes('draggable')).toBe('true')
+    const setData = vi.fn()
+    await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: ['f1'], folders: [] }))
+  })
+
+  it('does not write a drag payload on dragstart when canMoveFiles is false (bubbled drag from the thumbnail)', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canMoveFiles: false }, global: { plugins: [i18n] } })
+    const row = w.findAll('tbody tr')[folders.length]
+    const setData = vi.fn()
+    await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).not.toHaveBeenCalled()
+  })
+
+  // dragleave follows the mouseout model (see MediaFolderCards): a row -> own-child crossing
+  // targets the ROW itself with relatedTarget still inside it, and the highlight must survive
+  // that; only a crossing whose relatedTarget has left the row entirely should clear it.
+  it('keeps the drop-highlight when dragleave targets the row itself but relatedTarget is still inside it', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const row = w.findAll('tbody tr')[0]
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await row.trigger('dragover', { dataTransfer })
+    expect(row.attributes('data-dropping')).toBe('true')
+    await row.trigger('dragleave', { relatedTarget: row.find('td').element })
+    expect(row.attributes('data-dropping')).toBe('true')
+  })
+
+  it('clears the drop-highlight when dragleave bubbles from a child with relatedTarget outside the row', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const row = w.findAll('tbody tr')[0]
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await row.trigger('dragover', { dataTransfer })
+    expect(row.attributes('data-dropping')).toBe('true')
+    await row.find('td').trigger('dragleave', { relatedTarget: null })
+    expect(row.attributes('data-dropping')).toBeUndefined()
+  })
+
+  // A drag can end without ever reaching a drop (Esc, or a drop on a non-target) -- nothing else
+  // resets the highlight in that case. `dragend` fires on the drag SOURCE, which may be a
+  // different component entirely (a MediaGrid tile, or a MediaFolderCards card), so this must be
+  // caught at the document level, not scoped to this row's own listeners.
+  it('clears the drop-highlight when a drag ends anywhere (abandoned drag)', async () => {
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const row = w.findAll('tbody tr')[0]
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await row.trigger('dragover', { dataTransfer })
+    expect(row.attributes('data-dropping')).toBe('true')
+    document.dispatchEvent(new Event('dragend'))
+    await nextTick()
+    expect(row.attributes('data-dropping')).toBeUndefined()
   })
 })

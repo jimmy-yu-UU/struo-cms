@@ -1,24 +1,78 @@
 <script setup lang="ts">
-import { useSlots } from 'vue'
+import { ref, useSlots, onMounted, onUnmounted } from 'vue'
 import { Folder, Pencil, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
 import type { FolderRow } from '../../lib/folderTree'
+import { setDragPayload, isMediaDrag, readDragPayload } from '../../lib/mediaDnd'
+import type { MovePayload } from '../../lib/mediaMove'
 
 const props = withDefaults(defineProps<{
   files: FileRow[]
   folders?: FolderRow[]
   canManageFolders?: boolean
-}>(), { folders: () => [], canManageFolders: false })
+  canMoveFiles?: boolean
+  canMoveFolders?: boolean
+}>(), { folders: () => [], canManageFolders: false, canMoveFiles: false, canMoveFolders: false })
 
 const emit = defineEmits<{
   (e: 'open', id: string): void
   (e: 'openFolder', id: string): void
   (e: 'renameFolder', folder: FolderRow): void
   (e: 'removeFolder', folder: FolderRow): void
+  (e: 'dropOn', targetFolderId: string, payload: MovePayload): void
 }>()
+
+// Folder rows are both drag sources (of the folder itself) and drop targets (for files/folders
+// dropped onto them); file rows are drag sources only -- a file is never a drop target, mirroring
+// MediaGrid. This mirrors MediaFolderCards' drag/drop plumbing onto <tr>s instead of cards.
+const droppingId = ref<string | null>(null)
+
+// `draggable` alone does not gate this: FileThumbnail renders an <img>, which is draggable by
+// default in every browser, and its dragstart bubbles up to this row handler regardless of the
+// row's own attribute. Refuse here too, so the permission check cannot be bypassed that way.
+function onFileDragStart(ev: DragEvent, f: FileRow): void {
+  if (!props.canMoveFiles) return
+  setDragPayload(ev, { files: [f.id], folders: [] })
+}
+// Same bypass risk for folder rows (a bubbled drag from inside the row).
+function onFolderDragStart(ev: DragEvent, f: FolderRow): void {
+  if (!props.canMoveFolders) return
+  setDragPayload(ev, { files: [], folders: [f.id] })
+}
+// dragover fires continuously while a drag hovers -- only check the cheap `isMediaDrag`, never
+// canMoveFolder (it rebuilds an internal Map per call). Validation happens at drop time inside
+// performMove, in the parent view.
+function onDragOver(ev: DragEvent, id: string): void {
+  if (!isMediaDrag(ev)) return
+  droppingId.value = id
+}
+function onDrop(ev: DragEvent, id: string): void {
+  droppingId.value = null
+  const payload = readDragPayload(ev)
+  if (payload) emit('dropOn', id, payload)
+}
+// dragleave follows the mouseout model: it fires on every boundary crossing, not only as a
+// bubbled child event. A row -> own-child crossing (an inner <td>) targets the ROW itself
+// (target === currentTarget) with relatedTarget still inside it -- the highlight must survive
+// that. A child -> outside crossing fires AT the child and bubbles up, with relatedTarget outside
+// the row -- that one must clear it. Neither `.self` nor "did this fire on a child" can express
+// that distinction; only checking whether relatedTarget is still contained in the row can.
+function onDragLeave(ev: DragEvent): void {
+  const next = ev.relatedTarget
+  if (next instanceof Node && (ev.currentTarget as Node).contains(next)) return
+  droppingId.value = null
+}
+// A drag can end without ever reaching a drop (Esc, or a drop somewhere that isn't a registered
+// target) -- nothing else resets the highlight in that case. The drag may have started on a
+// DIFFERENT component's element entirely (a MediaGrid file tile or a MediaFolderCards card), so
+// this listens at the document level rather than on this row's own elements, and clears
+// regardless of where the drag began.
+function clearDropping(): void { droppingId.value = null }
+onMounted(() => document.addEventListener('dragend', clearDropping))
+onUnmounted(() => document.removeEventListener('dragend', clearDropping))
 
 const slots = useSlots()
 // The actions column exists when the caller supplied its own #actions slot (trash mode's
@@ -61,7 +115,14 @@ function uploaded(f: FileRow): string {
       </tr>
     </thead>
     <tbody>
-      <tr v-for="d in folders" :key="`folder-${d.id}`" class="media-list__row" @click="emit('openFolder', d.id)">
+      <tr v-for="d in folders" :key="`folder-${d.id}`" class="media-list__row"
+          :draggable="canMoveFolders ? 'true' : undefined"
+          :data-dropping="droppingId === d.id ? 'true' : undefined"
+          @click="emit('openFolder', d.id)"
+          @dragstart="onFolderDragStart($event, d)"
+          @dragover.prevent="onDragOver($event, d.id)"
+          @dragleave="onDragLeave"
+          @drop.prevent="onDrop($event, d.id)">
         <td class="media-list__thumb">
           <Folder class="size-5 text-primary" aria-hidden="true" />
         </td>
@@ -102,7 +163,9 @@ function uploaded(f: FileRow): string {
         v-for="f in files"
         :key="f.id"
         class="media-list__row"
+        :draggable="canMoveFiles ? 'true' : undefined"
         @click="emit('open', f.id)"
+        @dragstart="onFileDragStart($event, f)"
       >
         <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
         <td class="media-list__name">
@@ -167,4 +230,5 @@ function uploaded(f: FileRow): string {
 }
 .media-list__actions-col { width: 6rem; }
 .media-list__actions { display: flex; gap: 4px; justify-content: flex-end; }
+.media-list__row[data-dropping='true'] td { box-shadow: inset 0 0 0 1px var(--primary); }
 </style>
