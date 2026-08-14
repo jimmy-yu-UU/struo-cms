@@ -26,12 +26,13 @@ function isCycle(folderId: string): boolean {
  * if it descended from something not shown there -- indentation only communicates parentage
  * when row order matches tree order too.
  *
- * A folder is placed under exactly one parent bucket (its own `parentId`), so ordinary
- * recursion here cannot revisit a node from two different parents. The one shape that can still
- * recurse forever is a folder listed as its own parent (`f.parentId === f.id`); `visited` guards
- * against replaying that id from within its own child bucket. A folder unreachable from the root
- * (an orphan pointing at a missing/cyclic ancestor chain) is appended at the end in its original
- * order instead of being dropped, so the full `folders` list still renders.
+ * A folder is placed under exactly one parent bucket (its own `parentId`), so a given id can
+ * only ever be pushed into `ordered` from one place -- `visited` guards against that id somehow
+ * appearing in two buckets (malformed input) rather than against any real recursion cycle: a
+ * true parent cycle (including a folder listed as its own parent) has no path from `null`, so
+ * `visit` never reaches it in the first place. A folder unreachable from the root (an orphan
+ * pointing at a missing/cyclic ancestor chain) is appended at the end in its original order
+ * instead of being dropped, so the full `folders` list still renders.
  */
 function orderIdsByTree(folders: FolderRow[]): string[] {
   const byParent = new Map<string | null, string[]>()

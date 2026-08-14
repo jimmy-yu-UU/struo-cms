@@ -82,12 +82,10 @@ describe('MediaMoveDialog', () => {
   })
 
   // Catches a `disabled` attribute rendered without a corresponding guard in the click handler.
-  // This can't be exercised through a DOM click at all: @vue/test-utils' own trigger('click')
-  // checks the element's disabled state itself and refuses to dispatch when it's set (see
-  // isDisabled() in its source), and jsdom separately suppresses a disabled native <button>'s
-  // click activation even for a raw dispatchEvent(new MouseEvent('click')). Both routes are
-  // dead ends, so this calls the exposed handler directly with a disabled option -- a legitimate
-  // unit test of the guard itself, and the only way to actually reach it here.
+  // @vue/test-utils' own trigger('click') checks the element's disabled state itself
+  // (isDisabled()) and refuses to dispatch when it's set, so the template path can't reach the
+  // handler in a test. Calling the exposed choose() directly with a disabled option is a
+  // deliberate unit test of the guard.
   it('emits nothing when a disabled option is activated', () => {
     const w = mountDialog({ files: [], folders: ['a'] })
     const disabledOption = { id: 'a', label: 'A', depth: 0, disabled: true }
