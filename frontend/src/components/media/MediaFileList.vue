@@ -113,10 +113,11 @@ function onDragLeave(ev: DragEvent): void {
   droppingId.value = null
 }
 // A drag can end without ever reaching a drop (Esc, or a drop somewhere that isn't a registered
-// target) -- nothing else resets the highlight in that case. The drag may have started on a
-// DIFFERENT component's element entirely (a MediaGrid file tile or a MediaFolderCards card), so
-// this listens at the document level rather than on this row's own elements, and clears
-// regardless of where the drag began.
+// target) -- nothing else resets the highlight in that case. Listening at the document level,
+// rather than on this row's own elements, means the highlight clears regardless of which row in
+// this list started the drag, with no per-row cleanup handler to keep in sync. (MediaGrid and
+// MediaFolderCards are never mounted alongside this component -- they render only in grid view,
+// this one only in list view -- so a cross-component drag origin is not the concern here.)
 function clearDropping(): void { droppingId.value = null }
 onMounted(() => document.addEventListener('dragend', clearDropping))
 onUnmounted(() => document.removeEventListener('dragend', clearDropping))

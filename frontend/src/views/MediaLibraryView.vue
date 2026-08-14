@@ -73,11 +73,15 @@ const moveDialogOpen = ref(false)
 const movePayload = ref<MovePayload>({ files: [], folders: [] })
 
 // Task 9 batch selection: one MovePayload shared (as a prop) across all four media surfaces
-// (MediaGrid, MediaFolderCards, MediaFileList's two row kinds). Cleared on every listing change
-// (folder navigation, mode switch, search, page change) below -- a selection that survived one
-// would let a later batch move act on items the user can no longer see, and canMoveFolder
-// (mediaMove.ts) returns true for a source id absent from its folders list, so a stale selection
-// assembled before a reload could pass its cycle guard on a folder no longer in the loaded set.
+// (MediaGrid, MediaFolderCards, MediaFileList's two row kinds). Invariant: a selection must not
+// outlive the listing it was built against, so every handler below that reloads `files.value`
+// also calls clearSelection() on its way in (see :165-168 for the reasoning at one such call
+// site). Drop that invariant and the failure mode is a SILENT SUCCESS on files, not a
+// canMoveFolder guard bypass: the toolbar keeps reporting "N selected" for ids the user can no
+// longer see, and a later batch move would act on them with no error at all. (loadFolders() only
+// runs on mount and after create/rename/delete/move -- never from a navigation trigger -- so the
+// analogous folder-side risk through canMoveFolder's own "source absent from folders" refusal is
+// not reachable from these call sites.)
 const selection = ref<MovePayload>({ files: [], folders: [] })
 function clearSelection(): void { selection.value = { files: [], folders: [] } }
 // The real guard against building a selection while browsing the trash (a batch move on
@@ -297,20 +301,25 @@ async function onRemoveFolder(folder: FolderRow): Promise<void> {
   }
 }
 
-// Drag and drop: files onto folder cards, folders onto folder cards, either onto a breadcrumb
-// segment. Grid tiles and folder cards are gated on canWrite/canManageFolders (see the template);
-// this handler itself stays permission-blind and lets performMove's own writes fail/succeed
-// through the normal RBAC-enforced API instead of duplicating the check here.
+// Drag and drop: files onto folder cards/rows, folders onto folder cards/rows, either onto a
+// breadcrumb segment. Grid tiles, folder cards, and MediaFileList's folder/file rows are each
+// gated on canWrite/canManageFolders in their own template; this handler itself stays
+// permission-blind and lets performMove's own writes fail/succeed through the normal
+// RBAC-enforced API instead of duplicating the check here.
 async function onDropOn(targetFolderId: string | null, payload: MovePayload): Promise<void> {
   if (!payload.files.length && !payload.folders.length) return
   // Everything visible outside search mode lives in currentFolderId, so a drop onto that same
-  // folder is a no-op. Search mode has no drop targets at all (visibleFolders is [] and the
-  // breadcrumb <nav> is v-if-ed on !searchActive), so no search-specific guard is needed here.
+  // folder is a no-op there. Drags have no target to reach this with while searching
+  // (visibleFolders is [] and the breadcrumb <nav> is v-if-ed on !searchActive), but the context
+  // menu's "Move to..." and the move dialog are NOT gated on searchActive, and search drops the
+  // folder filter entirely -- so a listed search result can genuinely live in any folder,
+  // including the one currentFolderId happens to point at. Skip the no-op guard in that case
+  // rather than silently discarding a real move.
   // Normalise falsy parent ids to null before comparing -- folderTree.ts's toFolderRows can in
   // principle produce parentId: '' from an M2O relation whose id happens to be an empty string,
   // and isNoOpMove's === check would otherwise treat '' and null as different roots.
   const target = targetFolderId || null
-  if (isNoOpMove(currentFolderId.value || null, target)) return
+  if (!searchActive.value && isNoOpMove(currentFolderId.value || null, target)) return
   try {
     const { moved, skipped } = await performMove(payload, target, folders.value)
     if (skipped > 0)
@@ -613,7 +622,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       @update:page-size="onPageSizeChange"
     />
 
-    <MediaUploadDialog v-model:visible="uploadOpen" :folder-id="searchActive ? null : currentFolderId" @done="reload" />
+    <MediaUploadDialog v-model:visible="uploadOpen" :folder-id="searchActive ? null : currentFolderId" @done="() => { clearSelection(); reload() }" />
     <MediaDetailDialog :file="selected" :can-write="canWrite" :can-delete="canDelete"
                        @close="selected = null" @saved="load" @deleted="onDeleted" />
 
