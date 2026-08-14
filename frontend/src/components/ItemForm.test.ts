@@ -141,6 +141,26 @@ describe('ItemForm', () => {
     expect(w.findAll('[role="tab"]')).toHaveLength(2)
   })
 
+  it('lays a boolean field out horizontally so its control keeps its natural width', () => {
+    const boolMeta: CollectionMeta = { ...meta, fields: [
+      ...meta.fields,
+      field('isActive', { label: 'Active', interface: 'boolean', sort: 9 }),
+    ] }
+    const boolModel: FormModel = { ...model, shared: { ...model.shared, isActive: true } }
+    const w = mountForm({ meta: boolMeta, model: boolModel, locales, errors: {} })
+
+    const field2 = w.findAll('[data-slot="field"]').find((f) => f.text().includes('Active'))!
+    expect(field2.attributes('data-orientation')).toBe('horizontal')
+    expect(field2.find('[data-slot="field-content"]').exists()).toBe(true)
+  })
+
+  it('leaves non-boolean fields on the default vertical layout', () => {
+    const w = mountForm({ meta, model, locales, errors: {} })
+    const field2 = w.findAll('[data-slot="field"]').find((f) => f.text().includes('status'))!
+    expect(field2.attributes('data-orientation')).toBeUndefined()
+    expect(field2.find('[data-slot="field-content"]').exists()).toBe(false)
+  })
+
   // Every FieldLabel here has always dangled: `for="f.name"` in the shared branch pointed at
   // nothing (no element ever carried that literal id), and the translatable/relations branches
   // carried no `for` at all. Asserted non-empty AND equal so the check cannot pass with both sides

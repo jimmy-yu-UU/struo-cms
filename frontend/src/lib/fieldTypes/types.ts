@@ -34,6 +34,9 @@ export interface FieldTypeDef {
   parse(raw: unknown, field: FieldMeta): unknown
   serialize(value: unknown, field: FieldMeta): unknown
   listColumn: { format(value: unknown, field: FieldMeta): string } | null
+  /** Renders as a compact control that must not be stretched by ui/field's vertical
+   *  `[&>*]:w-full`. ItemForm lays these out with `orientation="horizontal"`. */
+  inline?: boolean
   validate?(value: unknown, field: FieldMeta): string | null
 }
 
