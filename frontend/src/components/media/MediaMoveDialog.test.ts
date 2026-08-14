@@ -81,13 +81,38 @@ describe('MediaMoveDialog', () => {
     expect(w.emitted('update:visible')).toEqual([[false]])
   })
 
-  // Catches a `disabled` attribute rendered without a corresponding guard in the click handler --
-  // VTU's trigger('click') dispatches the event directly and does not respect a native disabled
-  // button the way a real user click would, so the handler itself must refuse to act.
-  it('emits nothing when a disabled option is activated', async () => {
+  // Catches a `disabled` attribute rendered without a corresponding guard in the click handler.
+  // This can't be exercised through a DOM click at all: @vue/test-utils' own trigger('click')
+  // checks the element's disabled state itself and refuses to dispatch when it's set (see
+  // isDisabled() in its source), and jsdom separately suppresses a disabled native <button>'s
+  // click activation even for a raw dispatchEvent(new MouseEvent('click')). Both routes are
+  // dead ends, so this calls the exposed handler directly with a disabled option -- a legitimate
+  // unit test of the guard itself, and the only way to actually reach it here.
+  it('emits nothing when a disabled option is activated', () => {
     const w = mountDialog({ files: [], folders: ['a'] })
-    await w.get('[data-test="move-option"][data-folder-id="a"]').trigger('click')
+    const disabledOption = { id: 'a', label: 'A', depth: 0, disabled: true }
+    ;(w.vm as unknown as { choose: (o: typeof disabledOption) => void }).choose(disabledOption)
     expect(w.emitted('submit')).toBeUndefined()
     expect(w.emitted('update:visible')).toBeUndefined()
+  })
+
+  // The view loads folders sorted by name, not in tree order, so rendering raw `folders` order
+  // would let a child (here 'c', child of 'b') appear above unrelated root folders while its
+  // indentation still claims it descends from something -- indentation only tells the truth
+  // when row order also follows the hierarchy. Feed the dialog a deliberately scrambled input
+  // order and assert the rendered sequence is depth-first tree order regardless.
+  it('orders options by tree structure, not by the input array order', () => {
+    const scrambled: FolderRow[] = [
+      { id: 'c', name: 'C', parentId: 'b' },
+      { id: 'a', name: 'A', parentId: null },
+      { id: 'd', name: 'D', parentId: null },
+      { id: 'b', name: 'B', parentId: 'a' },
+    ]
+    const w = mount(MediaMoveDialog, {
+      props: { visible: true, folders: scrambled, payload: { files: [], folders: [] } },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    const ids = w.findAll('[data-test="move-option"]').map((o) => o.attributes('data-folder-id'))
+    expect(ids).toEqual(['__root__', 'a', 'b', 'c', 'd'])
   })
 })

@@ -19,27 +19,78 @@ function isCycle(folderId: string): boolean {
   return props.payload.folders.some((sourceId) => !canMoveFolder(props.folders, sourceId, folderId))
 }
 
-const options = computed<MoveOption[]>(() => [
-  { id: null, label: t('media.moveRoot'), depth: 0, disabled: false },
-  ...props.folders.map((f) => ({
-    id: f.id,
-    label: f.name,
-    // folderPath is root-first and always ends with `f` itself, so its length minus one is the
-    // folder's depth (a root folder's own path has length 1, i.e. depth 0). Reusing folderPath
-    // here avoids a second tree walk.
-    depth: folderPath(props.folders, f.id).length - 1,
-    disabled: isCycle(f.id),
-  })),
-])
+/**
+ * Folder ids in depth-first tree order (each parent immediately followed by its own subtree),
+ * NOT the order `folders` happens to arrive in (the view loads them sorted by name). Rendering
+ * raw `folders` order would let a child appear above unrelated root folders while indented as
+ * if it descended from something not shown there -- indentation only communicates parentage
+ * when row order matches tree order too.
+ *
+ * A folder is placed under exactly one parent bucket (its own `parentId`), so ordinary
+ * recursion here cannot revisit a node from two different parents. The one shape that can still
+ * recurse forever is a folder listed as its own parent (`f.parentId === f.id`); `visited` guards
+ * against replaying that id from within its own child bucket. A folder unreachable from the root
+ * (an orphan pointing at a missing/cyclic ancestor chain) is appended at the end in its original
+ * order instead of being dropped, so the full `folders` list still renders.
+ */
+function orderIdsByTree(folders: FolderRow[]): string[] {
+  const byParent = new Map<string | null, string[]>()
+  for (const f of folders) {
+    const siblings = byParent.get(f.parentId)
+    if (siblings) siblings.push(f.id)
+    else byParent.set(f.parentId, [f.id])
+  }
+  const visited = new Set<string>()
+  const ordered: string[] = []
+  function visit(parentId: string | null): void {
+    for (const id of byParent.get(parentId) ?? []) {
+      if (visited.has(id)) continue
+      visited.add(id)
+      ordered.push(id)
+      visit(id)
+    }
+  }
+  visit(null)
+  for (const f of folders) {
+    if (!visited.has(f.id)) ordered.push(f.id)
+  }
+  return ordered
+}
+
+const options = computed<MoveOption[]>(() => {
+  const byId = new Map(props.folders.map((f) => [f.id, f]))
+  return [
+    { id: null, label: t('media.moveRoot'), depth: 0, disabled: false },
+    ...orderIdsByTree(props.folders).map((id) => {
+      const f = byId.get(id)!
+      return {
+        id: f.id,
+        label: f.name,
+        // folderPath is root-first and always ends with `f` itself, so its length minus one is
+        // the folder's depth (a root folder's own path has length 1, i.e. depth 0). Reusing
+        // folderPath here avoids a second tree walk just to compute depth.
+        depth: folderPath(props.folders, f.id).length - 1,
+        disabled: isCycle(f.id),
+      }
+    }),
+  ]
+})
 
 function choose(option: MoveOption): void {
-  // Guarded here too, not only via the button's `disabled` attribute: a disabled native <button>
-  // suppresses a real user click, but a programmatic click (including @vue/test-utils'
-  // trigger('click')) does not respect that state, so the handler must refuse on its own.
+  // This guard is the real protection against a disabled option acting -- it is NOT redundant
+  // with the button's `disabled` attribute. A real user click on a disabled native <button> never
+  // reaches this handler (the browser suppresses it), and neither does @vue/test-utils'
+  // trigger('click') (it checks the element's disabled state itself and refuses to dispatch), so
+  // today the attribute alone would already be enough. But a later refactor -- swapping this
+  // Button for a non-native element, moving @click to the wrapping <li>, or replacing `disabled`
+  // with `aria-disabled` + CSS -- would silently stop that suppression, and a disabled option
+  // would start emitting `submit`. This check is what actually prevents that outcome.
   if (option.disabled) return
   emit('submit', option.id)
   emit('update:visible', false)
 }
+
+defineExpose({ choose })
 </script>
 
 <template>
