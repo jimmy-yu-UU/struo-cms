@@ -96,6 +96,7 @@ function def(opts: {
   empty?: unknown
   serialize?: (v: unknown, f: FieldMeta) => unknown
   listColumn?: ListColumn
+  inline?: boolean
 }): FieldTypeDef {
   const empty = 'empty' in opts ? opts.empty : ''
   return {
@@ -104,6 +105,7 @@ function def(opts: {
     parse: (raw) => raw ?? empty,
     serialize: opts.serialize ?? ((v) => v),
     listColumn: opts.listColumn ?? null,
+    inline: opts.inline ?? false,
   }
 }
 
@@ -198,8 +200,8 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   number: def({ component: NumberField, listColumn: asString }),
   slider: def({ component: NumberField, listColumn: asString }),
   rating: def({ component: NumberField, listColumn: asString }),
-  boolean: def({ component: BooleanField, listColumn: asYesNo }),
-  checkbox: def({ component: BooleanField, listColumn: asYesNo }),
+  boolean: def({ component: BooleanField, listColumn: asYesNo, inline: true }),
+  checkbox: def({ component: BooleanField, listColumn: asYesNo, inline: true }),
   date: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
   time: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
   dateTime: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
