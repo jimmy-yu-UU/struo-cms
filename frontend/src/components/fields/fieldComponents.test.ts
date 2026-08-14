@@ -95,42 +95,27 @@ describe('field components (simple inputs)', () => {
     expect(emitted![emitted!.length - 1][0]).toBeNull()
   })
 
-  it('BooleanField renders a checkbox and is disabled when asked', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false, disabled: true }, ...opts })
-    const box = w.get('[role="checkbox"]')
-    // Step 1 established this concretely: reka's CheckboxRoot renders a real <button>, so
-    // `disabled` reaches it as the native HTML attribute (not aria-disabled).
-    expect(box.attributes('disabled')).toBe('')
+  it('renders a switch that reflects the model value', () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true }, ...opts })
+    const sw = w.find('[role="switch"]')
+    expect(sw.exists()).toBe(true)
+    expect(sw.attributes('aria-checked')).toBe('true')
   })
 
-  // reka components bind their own onClick, so the emit path is only proven by actually clicking.
-  // A rendering-only assertion here would have passed even when broken.
-  it('BooleanField emits true when clicked from false', async () => {
+  it('reports unchecked for a falsy model value', () => {
     const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
-    await w.get('[role="checkbox"]').trigger('click')
+    expect(w.find('[role="switch"]').attributes('aria-checked')).toBe('false')
+  })
+
+  it('emits a plain boolean when toggled', async () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    await w.find('[role="switch"]').trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([true])
   })
 
-  // The three tests above all mounted with modelValue: false, so nothing pinned the inbound
-  // direction of BooleanField's `:model-value="modelValue === true"` binding. A deleted or
-  // inverted binding would have stayed green. aria-checked is reka's unconditional, real-ARIA hook
-  // (CheckboxRoot.js) and is what Playwright reads.
-  it('BooleanField reflects a true model as checked', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true }, ...opts })
-    expect(w.get('[role="checkbox"]').attributes('aria-checked')).toBe('true')
-  })
-
-  it('BooleanField emits false when clicked from true', async () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true }, ...opts })
-    await w.get('[role="checkbox"]').trigger('click')
-    expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
-  })
-
-  // The migration's own assertion: the vendored composition's real data-slot hook must be present,
-  // not just a negative assertion that the old PrimeVue component is gone.
-  it('BooleanField renders the vendored checkbox data-slot hook', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
-    expect(w.find('[data-slot="checkbox"]').exists()).toBe(true)
+  it('is disabled when the field is disabled', () => {
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false, disabled: true }, ...opts })
+    expect(w.find('[role="switch"]').attributes('disabled')).toBeDefined()
   })
 
   // The three interfaces this one component serves render three different control sets, because

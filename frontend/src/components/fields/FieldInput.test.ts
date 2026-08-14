@@ -26,6 +26,7 @@ const stubs = {
   Textarea: { template: '<textarea class="stub-textarea" />' },
   NumberField: { template: '<input class="stub-number" />' },
   Checkbox: { template: '<input class="stub-checkbox" />' },
+  Switch: { template: '<button role="switch" class="stub-switch" />' },
   DatePicker: { template: '<input class="stub-date" />' },
   Select: { template: '<div class="stub-select" role="combobox" />' },
   RadioGroup: { template: '<div class="stub-radio" />' },
@@ -124,9 +125,9 @@ describe('FieldInput', () => {
       expect(w.get('textarea').attributes('id')).toBe('my-id')
     })
 
-    it('lands on the real checkbox button, not a wrapper, for a boolean field', () => {
+    it('lands on the real switch button, not a wrapper, for a boolean field', () => {
       const w = mount(FieldInput, { props: { field: field({ interface: 'boolean' }), modelValue: false, id: 'my-id' } })
-      expect(w.get('[role="checkbox"]').attributes('id')).toBe('my-id')
+      expect(w.find('#my-id').attributes('role')).toBe('switch')
     })
 
     // reka's NumberFieldRoot declares `id` as its own prop (consuming it rather than letting it
