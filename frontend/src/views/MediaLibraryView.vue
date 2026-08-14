@@ -148,7 +148,15 @@ function onPageSizeChange(nextSize: number): void {
   perPage.value = nextSize
   load()
 }
+// Trash rows are soft-deleted files: the old bespoke trash table had no click-to-open path at
+// all, and opening MediaDetailDialog on a deleted row would let a user press Save or Delete on
+// it, which is nonsensical for something already in the trash. Now that trash mode renders
+// through the same MediaGrid/MediaFileList as the active list -- whose whole tile/row IS
+// clickable and both bind @open unconditionally -- that protection has to live here instead of
+// there being no handler wired up. Do not "simplify" this guard away: it looks redundant next to
+// an unconditional @open, but removing it re-opens (literally) the trash-item hazard.
 function openDetail(id: string): void {
+  if (mode.value === 'trash') return
   selected.value = files.value.find((f) => f.id === id) ?? null
 }
 // Preserve the user's page position on delete instead of always resetting to page 0.
