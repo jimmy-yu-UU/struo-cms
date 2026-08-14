@@ -6,6 +6,7 @@ import MediaLibraryView from './MediaLibraryView.vue'
 import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import MediaGrid from '../components/media/MediaGrid.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
+import MediaFileList from '../components/media/MediaFileList.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
 import { ApiError } from '../api/apiClient'
@@ -981,6 +982,38 @@ describe('MediaLibraryView', () => {
     const w = mountView()
     await flushPromises()
     w.findComponent(MediaFolderCards).vm.$emit('dropOn', 'a', { files: ['f1'], folders: [] })
+    await flushPromises()
+    expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
+  })
+
+  // List view's MediaFileList must be gated the same way as the grid's MediaGrid/MediaFolderCards
+  // -- same permissions, same components, just a different presentation.
+  it('gates MediaFileList row dragging on write permission (files and folders separately)', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    await flushPromises()
+    expect(w.findComponent(MediaFileList).props('canMoveFiles')).toBe(false)
+    expect(w.findComponent(MediaFileList).props('canMoveFolders')).toBe(false)
+    seedUser({ write: true })
+    await flushPromises()
+    expect(w.findComponent(MediaFileList).props('canMoveFiles')).toBe(true)
+    expect(w.findComponent(MediaFileList).props('canMoveFolders')).toBe(false)
+    seedUser({ write: true }, 'mediafolder')
+    await flushPromises()
+    expect(w.findComponent(MediaFileList).props('canMoveFolders')).toBe(true)
+  })
+
+  it('wires MediaFileList\'s dropOn emit to onDropOn', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    await flushPromises()
+    w.findComponent(MediaFileList).vm.$emit('dropOn', 'a', { files: ['f1'], folders: [] })
     await flushPromises()
     expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
   })
