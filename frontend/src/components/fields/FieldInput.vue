@@ -12,7 +12,7 @@ const isDisabled = computed(() => props.disabled === true || props.field.readOnl
 
 <template>
   <!-- `id` is forwarded, never generated here: a field interface whose rendered component root IS
-       its native control (e.g. TextField's Input, BooleanField's Checkbox) carries this straight
+       its native control (e.g. TextField's Input, BooleanField's Switch) carries this straight
        onto that control, genuinely pairing it with the caller's <label for>. A component whose root
        is a wrapper div (TagsField, DateField, …) just receives it there instead — harmless, but no
        association is created; those already carry their own aria-label/per-option labelling. -->
