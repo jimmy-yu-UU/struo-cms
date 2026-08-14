@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFileList from './MediaFileList.vue'
+import MediaContextMenu from './MediaContextMenu.vue'
 import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
 
 const i18n = createI18n({
@@ -10,6 +11,7 @@ const i18n = createI18n({
   messages: { en: { media: {
     colName: 'Name', colType: 'Type', colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     colTypeFolder: 'Folder', folderRename: 'Rename folder', folderDelete: 'Delete folder',
+    menuOpen: 'Open', menuMove: 'Move to…', menuRename: 'Rename', menuDelete: 'Delete',
   } } },
 })
 
@@ -20,8 +22,16 @@ const files = [
 
 const folders = [{ id: 'd1', name: 'Docs', parentId: null }]
 
-function mountList() {
-  return mount(MediaFileList, { props: { files }, global: { plugins: [i18n] } })
+function mountList(props: Record<string, unknown> = {}) {
+  return mount(MediaFileList, {
+    props: { files, ...props },
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+  })
+}
+
+async function openRowMenu(w: ReturnType<typeof mountList>, index: number) {
+  await w.findAll('tbody tr')[index].trigger('contextmenu')
+  await flushPromises()
 }
 
 describe('MediaFileList', () => {
@@ -86,13 +96,13 @@ describe('MediaFileList', () => {
     const w = mount(MediaFileList, {
       props: { files },
       slots: { actions: '<button class="act">{{ params.file.id }}</button>' },
-      global: { plugins: [i18n] },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     expect(w.findAll('.act')).toHaveLength(files.length)
   })
 
   it('renders folder rows ahead of file rows', () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const rows = w.findAll('tbody tr')
     expect(rows).toHaveLength(folders.length + files.length)
     expect(rows[0].text()).toContain('Docs')
@@ -100,18 +110,18 @@ describe('MediaFileList', () => {
   })
 
   it('emits openFolder when a folder row name is activated', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     await w.find('tbody tr .media-list__open').trigger('click')
     expect(w.emitted('openFolder')?.[0]).toEqual(['d1'])
   })
 
   it('renders no folder rows when none are passed', () => {
-    const w = mount(MediaFileList, { props: { files }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     expect(w.findAll('tbody tr')).toHaveLength(files.length)
   })
 
   it('emits dropOn when a media drag is dropped on a folder row', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const payload = { files: ['f1'], folders: [] }
     const dataTransfer = {
       types: [DRAG_MIME],
@@ -123,7 +133,7 @@ describe('MediaFileList', () => {
   })
 
   it('does not make file rows drop targets', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const dataTransfer = {
       types: [DRAG_MIME],
       getData: () => serializeMovePayload({ files: ['f1'], folders: [] }),
@@ -134,7 +144,7 @@ describe('MediaFileList', () => {
   })
 
   it('ignores a drop carrying no media payload', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const dataTransfer = { types: ['text/plain'], getData: () => 'hello', dropEffect: '' }
     await w.findAll('tbody tr')[0].trigger('drop', { dataTransfer })
     expect(w.emitted('dropOn')).toBeUndefined()
@@ -144,14 +154,14 @@ describe('MediaFileList', () => {
   // not be a drag source at all, regardless of canManageFolders (which also covers delete-only
   // users who should still see rename/delete but not drag folders around).
   it('is not draggable when canMoveFolders is false or unset', () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     expect(w.findAll('tbody tr')[0].attributes('draggable')).toBeUndefined()
   })
 
   it('is draggable and writes the folder payload on dragstart when canMoveFolders is true', async () => {
     const w = mount(MediaFileList, {
       props: { files, folders, canManageFolders: true, canMoveFolders: true },
-      global: { plugins: [i18n] },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     const row = w.findAll('tbody tr')[0]
     expect(row.attributes('draggable')).toBe('true')
@@ -165,7 +175,7 @@ describe('MediaFileList', () => {
   it('does not write a drag payload on dragstart when canMoveFolders is false (bubbled drag)', async () => {
     const w = mount(MediaFileList, {
       props: { files, folders, canManageFolders: true, canMoveFolders: false },
-      global: { plugins: [i18n] },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     const row = w.findAll('tbody tr')[0]
     const setData = vi.fn()
@@ -175,12 +185,12 @@ describe('MediaFileList', () => {
 
   // Permissions: file moves require canWrite('file') -- same reasoning, file rows.
   it('is not draggable when canMoveFiles is false or unset', () => {
-    const w = mount(MediaFileList, { props: { files, folders }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     expect(w.findAll('tbody tr')[folders.length].attributes('draggable')).toBeUndefined()
   })
 
   it('is draggable and writes the file payload on dragstart when canMoveFiles is true', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canMoveFiles: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canMoveFiles: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const row = w.findAll('tbody tr')[folders.length]
     expect(row.attributes('draggable')).toBe('true')
     const setData = vi.fn()
@@ -189,7 +199,7 @@ describe('MediaFileList', () => {
   })
 
   it('does not write a drag payload on dragstart when canMoveFiles is false (bubbled drag from the thumbnail)', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canMoveFiles: false }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canMoveFiles: false }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const row = w.findAll('tbody tr')[folders.length]
     const setData = vi.fn()
     await row.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
@@ -200,7 +210,7 @@ describe('MediaFileList', () => {
   // targets the ROW itself with relatedTarget still inside it, and the highlight must survive
   // that; only a crossing whose relatedTarget has left the row entirely should clear it.
   it('keeps the drop-highlight when dragleave targets the row itself but relatedTarget is still inside it', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const row = w.findAll('tbody tr')[0]
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await row.trigger('dragover', { dataTransfer })
@@ -210,7 +220,7 @@ describe('MediaFileList', () => {
   })
 
   it('clears the drop-highlight when dragleave bubbles from a child with relatedTarget outside the row', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const row = w.findAll('tbody tr')[0]
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await row.trigger('dragover', { dataTransfer })
@@ -224,7 +234,7 @@ describe('MediaFileList', () => {
   // different component entirely (a MediaGrid tile, or a MediaFolderCards card), so this must be
   // caught at the document level, not scoped to this row's own listeners.
   it('clears the drop-highlight when a drag ends anywhere (abandoned drag)', async () => {
-    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFileList, { props: { files, folders, canManageFolders: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const row = w.findAll('tbody tr')[0]
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await row.trigger('dragover', { dataTransfer })
@@ -232,5 +242,130 @@ describe('MediaFileList', () => {
     document.dispatchEvent(new Event('dragend'))
     await nextTick()
     expect(row.attributes('data-dropping')).toBeUndefined()
+  })
+
+  // Right-click context menu (Task 8): folder rows get Open/Rename/Move/Delete, file rows get
+  // Open/Move/Delete, and trash mode suppresses the file-row menu entirely (mirrors MediaGrid).
+  describe('context menu', () => {
+    it('always offers Open on a file row, regardless of grants', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, folders.length)
+      expect(w.find('[data-test="menu-open"]').exists()).toBe(true)
+    })
+
+    it('hides Move/Delete on a file row without the matching grant', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, folders.length)
+      expect(w.find('[data-test="menu-move"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-delete"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-rename"]').exists()).toBe(false)
+    })
+
+    it('shows Move/Delete on a file row when canMoveFiles/canDeleteFiles are true', async () => {
+      const w = mountList({ folders, canMoveFiles: true, canDeleteFiles: true })
+      await openRowMenu(w, folders.length)
+      expect(w.find('[data-test="menu-move"]').exists()).toBe(true)
+      expect(w.find('[data-test="menu-delete"]').exists()).toBe(true)
+    })
+
+    it('emits open with the file id when Open is selected on a file row', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, folders.length + 1)
+      await w.find('[data-test="menu-open"]').trigger('click')
+      expect(w.emitted('open')?.[0]).toEqual(['f2'])
+    })
+
+    it('emits requestMove with a single-file payload when Move is selected on a file row', async () => {
+      const w = mountList({ folders, canMoveFiles: true })
+      await openRowMenu(w, folders.length + 1)
+      await w.find('[data-test="menu-move"]').trigger('click')
+      expect(w.emitted('requestMove')?.[0]).toEqual([{ files: ['f2'], folders: [] }])
+    })
+
+    it('emits remove with the file id when Delete is selected on a file row', async () => {
+      const w = mountList({ folders, canDeleteFiles: true })
+      await openRowMenu(w, folders.length + 1)
+      await w.find('[data-test="menu-delete"]').trigger('click')
+      expect(w.emitted('remove')?.[0]).toEqual(['f2'])
+    })
+
+    it('does not open a file-row menu at all when trashMode is true', async () => {
+      const w = mountList({ folders, canMoveFiles: true, canDeleteFiles: true, trashMode: true })
+      await openRowMenu(w, folders.length)
+      expect(w.find('[data-test="menu-open"]').exists()).toBe(false)
+    })
+
+    it('always offers Open on a folder row, regardless of grants', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, 0)
+      expect(w.find('[data-test="menu-open"]').exists()).toBe(true)
+    })
+
+    it('hides Rename/Move/Delete on a folder row without the matching grants', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, 0)
+      expect(w.find('[data-test="menu-rename"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-move"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-delete"]').exists()).toBe(false)
+    })
+
+    it('shows Rename/Move/Delete on a folder row when their grants are true', async () => {
+      const w = mountList({ folders, canRenameFolders: true, canMoveFolders: true, canDeleteFolders: true })
+      await openRowMenu(w, 0)
+      expect(w.find('[data-test="menu-rename"]').exists()).toBe(true)
+      expect(w.find('[data-test="menu-move"]').exists()).toBe(true)
+      expect(w.find('[data-test="menu-delete"]').exists()).toBe(true)
+    })
+
+    it('emits openFolder with the folder id when Open is selected on a folder row', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, 0)
+      await w.find('[data-test="menu-open"]').trigger('click')
+      expect(w.emitted('openFolder')?.[0]).toEqual(['d1'])
+    })
+
+    it('emits renameFolder with the folder object when Rename is selected on a folder row', async () => {
+      const w = mountList({ folders, canRenameFolders: true })
+      await openRowMenu(w, 0)
+      await w.find('[data-test="menu-rename"]').trigger('click')
+      expect(w.emitted('renameFolder')).toEqual([[folders[0]]])
+    })
+
+    it('emits requestMove with a single-folder payload when Move is selected on a folder row', async () => {
+      const w = mountList({ folders, canMoveFolders: true })
+      await openRowMenu(w, 0)
+      await w.find('[data-test="menu-move"]').trigger('click')
+      expect(w.emitted('requestMove')?.[0]).toEqual([{ files: [], folders: ['d1'] }])
+    })
+
+    it('emits removeFolder with the folder object when Delete is selected on a folder row', async () => {
+      const w = mountList({ folders, canDeleteFolders: true })
+      await openRowMenu(w, 0)
+      await w.find('[data-test="menu-delete"]').trigger('click')
+      expect(w.emitted('removeFolder')).toEqual([[folders[0]]])
+    })
+
+    // Same reasoning as MediaGrid/MediaFolderCards: reach the shared menu's own exposed handlers
+    // directly, with the grants off, to prove the refusal is this component's own wiring.
+    it('refuses to emit requestMove/remove via the file-row menu\'s own handlers when the grants are false', async () => {
+      const w = mountList({ folders, canMoveFiles: false, canDeleteFiles: false })
+      await openRowMenu(w, folders.length)
+      const menu = w.findAllComponents(MediaContextMenu)[folders.length]
+      const vm = menu.vm as unknown as { onMove: () => void; onRemove: () => void }
+      vm.onMove(); vm.onRemove()
+      expect(w.emitted('requestMove')).toBeUndefined()
+      expect(w.emitted('remove')).toBeUndefined()
+    })
+
+    it('refuses to emit requestMove/renameFolder/removeFolder via the folder-row menu\'s own handlers when the grants are false', async () => {
+      const w = mountList({ folders })
+      await openRowMenu(w, 0)
+      const menu = w.findAllComponents(MediaContextMenu)[0]
+      const vm = menu.vm as unknown as { onMove: () => void; onRename: () => void; onRemove: () => void }
+      vm.onMove(); vm.onRename(); vm.onRemove()
+      expect(w.emitted('requestMove')).toBeUndefined()
+      expect(w.emitted('renameFolder')).toBeUndefined()
+      expect(w.emitted('removeFolder')).toBeUndefined()
+    })
   })
 })

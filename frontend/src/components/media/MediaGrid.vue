@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
+import MediaContextMenu from './MediaContextMenu.vue'
 import { setDragPayload } from '../../lib/mediaDnd'
+import type { MovePayload } from '../../lib/mediaMove'
 
 const props = defineProps<{
   files: FileRow[]
@@ -9,11 +11,19 @@ const props = defineProps<{
   multiple?: boolean
   selectedIds?: string[]
   canMove?: boolean
+  canDelete?: boolean
+  // Trash tiles already carry restore/purge as slot actions -- the right-click menu must not
+  // duplicate that (or worse, offer Open, which MediaLibraryView deliberately refuses in trash
+  // mode). true forwards straight to reka's own ContextMenuTrigger `disabled`, which also
+  // restores the native browser menu.
+  trashMode?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'select', id: string): void
   (e: 'toggle', id: string): void
   (e: 'open', id: string): void
+  (e: 'requestMove', payload: MovePayload): void
+  (e: 'remove', id: string): void
 }>()
 
 function onClick(id: string): void {
@@ -44,15 +54,23 @@ function onDragStart(ev: DragEvent, f: FileRow): void {
     <div v-for="f in files" :key="f.id" class="media-tile-wrap relative"
          :draggable="canMove ? 'true' : undefined"
          @dragstart="onDragStart($event, f)">
-      <button
-        type="button"
-        class="media-tile w-full rounded-xl border border-border hover:border-primary"
-        :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
-        @click="onClick(f.id)"
+      <MediaContextMenu
+        kind="file" :can-move="canMove" :can-delete="canDelete" :disabled="trashMode"
+        @open="emit('open', f.id)"
+        @move="emit('requestMove', { files: [f.id], folders: [] })"
+        @remove="emit('remove', f.id)"
       >
-        <FileThumbnail :file="f" />
-        <span class="media-tile__name">{{ f.fileName }}</span>
-      </button>
+        <button
+          type="button"
+          class="media-tile w-full rounded-xl border border-border hover:border-primary"
+          :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
+          @click="onClick(f.id)"
+          @contextmenu.stop
+        >
+          <FileThumbnail :file="f" />
+          <span class="media-tile__name">{{ f.fileName }}</span>
+        </button>
+      </MediaContextMenu>
       <div v-if="$slots.actions" class="media-tile__actions absolute right-1 top-1 flex gap-1">
         <slot name="actions" :file="f" />
       </div>

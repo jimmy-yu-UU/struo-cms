@@ -5,6 +5,7 @@ import { FolderPlus, Upload, Trash2, Undo2, ChevronRight, LayoutGrid, List } fro
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import DataTablePagination from '@/components/data/DataTablePagination.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import ListToolbar from '../components/common/ListToolbar.vue'
@@ -25,7 +26,7 @@ import { createLatestWins } from '../lib/latestWins'
 import { mediaTypeFilter, mediaFolderFilter, mediaSort, type MediaType, type MediaSort } from '../lib/mediaQuery'
 import { toFileRows } from '../lib/toFileRow'
 import { toFolderRows, childFolders, folderPath, type FolderRow } from '../lib/folderTree'
-import { purgeConfirm } from '../lib/deleteAction'
+import { purgeConfirm, deleteConfirm } from '../lib/deleteAction'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { ApiError } from '../api/apiClient'
@@ -64,8 +65,8 @@ const folders = ref<FolderRow[]>([])
 const currentFolderId = ref<string | null>(null)
 const createOpen = ref(false)
 const renameTarget = ref<FolderRow | null>(null)
-// Move-to dialog: reachable from later tasks (context menu, selection toolbar) that set
-// movePayload and flip moveDialogOpen -- this task only builds and wires the dialog itself.
+// Move-to dialog: opened via onRequestMove (the context menu's "Move to…" entry) and, later, the
+// Task 9 selection toolbar -- both just set movePayload and flip moveDialogOpen.
 const moveDialogOpen = ref(false)
 const movePayload = ref<MovePayload>({ files: [], folders: [] })
 
@@ -291,6 +292,30 @@ function onMoveSubmit(targetFolderId: string | null): void {
   void onDropOn(targetFolderId, movePayload.value)
 }
 
+// The context menu's "Move to…" entry (Task 8) is the first real UI trigger for the move dialog
+// Task 7 only wired internally -- both single-file and single-folder payloads land here.
+function onRequestMove(payload: MovePayload): void {
+  movePayload.value = payload
+  moveDialogOpen.value = true
+}
+
+// Single-file delete from the context menu. Files had no per-item delete path outside
+// MediaDetailDialog before this task -- mirrors that dialog's own onDelete (soft-delete confirm,
+// then filesApi.remove, matching MediaDetailDialog.vue) rather than duplicating its logic.
+async function onRemoveFile(id: string): Promise<void> {
+  if (!(await confirm.require(deleteConfirm(t, 'soft')))) return
+  try {
+    await filesApi.remove(id)
+    // The detail dialog may be open on the very file just deleted (e.g. deleted from the grid
+    // while its own dialog is still up in another interaction) -- close it so Save/Delete can't
+    // be pressed on a file that no longer exists.
+    if (selected.value?.id === id) selected.value = null
+    await loadClampingToLastValidPage()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.deleteFailed'), life: 3500 })
+  }
+}
+
 const crumbDropping = ref<string | null>(null)
 
 function onCrumbDrop(ev: DragEvent, targetFolderId: string | null): void {
@@ -320,7 +345,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
   goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
   mode, setMode, onModeToggle, onViewToggle, view, showTrashSwitch, onRestore, onPurge,
-  onDropOn, moveDialogOpen, movePayload, onMoveSubmit })
+  onDropOn, moveDialogOpen, movePayload, onMoveSubmit, onRequestMove, onRemoveFile })
 </script>
 
 <template>
@@ -415,72 +440,103 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
-                      :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
-                      @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder"
-                      @drop-on="onDropOn" />
-
-    <!-- canMove is not additionally gated on mode !== 'trash': trashed tiles being draggable is
-         harmless because trash mode renders neither MediaFolderCards nor the breadcrumb nav
-         (both v-if-ed on mode === 'active'), so there is never a drop target to receive one --
-         same reasoning as why search mode needs no special-casing here either. -->
-    <MediaGrid v-if="view === 'grid'" :files="files" :can-move="canWrite" @open="openDetail">
-      <template v-if="mode === 'trash'" #actions="{ file }">
-        <Button
-          type="button" variant="ghost" size="icon-sm"
-          :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
-          @click.stop="onRestore(file.id)"
-        >
-          <Undo2 aria-hidden="true" />
-        </Button>
-        <Button
-          type="button" variant="ghost" size="icon-sm"
-          class="text-destructive hover:text-destructive"
-          :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
-          @click.stop="onPurge(file.id)"
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      </template>
-    </MediaGrid>
-    <MediaFileList
-      v-else
-      :files="files"
-      :folders="mode === 'active' ? visibleFolders : []"
-      :can-manage-folders="canManageFolders || canDeleteFolders"
-      :can-move-files="canWrite"
-      :can-move-folders="canManageFolders"
-      @open="openDetail"
-      @open-folder="enterFolder"
-      @rename-folder="renameTarget = $event"
-      @remove-folder="onRemoveFolder"
-      @drop-on="onDropOn"
-    >
-      <template v-if="mode === 'trash'" #actions="{ file }">
-        <Button
-          type="button" variant="ghost" size="icon-sm"
-          :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
-          @click.stop="onRestore(file.id)"
-        >
-          <Undo2 aria-hidden="true" />
-        </Button>
-        <Button
-          type="button" variant="ghost" size="icon-sm"
-          class="text-destructive hover:text-destructive"
-          :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
-          @click.stop="onPurge(file.id)"
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      </template>
-    </MediaFileList>
     <!--
-      `visibleFolders` already forces [] for search/trash (see its own definition above), so this
-      condition needs no view-specific branch: list view now renders those same folders as rows
-      inside MediaFileList (not MediaFolderCards), and this check must stay just as blind to which
-      of the two components is rendering them as it already is to grid vs. list for files.
+      Right-click empty space (Task 8): New folder / Upload, gated the same as the header's own
+      buttons above (not additionally restricted by mode/search -- matching those buttons, which
+      also aren't). Each item-level context menu (MediaFolderCards/MediaGrid/MediaFileList) stops
+      contextmenu propagation on its own tile/card/row specifically so a right-click ON an item
+      does not ALSO bubble up and open this one underneath it.
     -->
-    <p v-if="!loading && !files.length && !visibleFolders.length" class="empty text-muted-foreground">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
+    <ContextMenu>
+      <ContextMenuTrigger as="div" class="media-body">
+        <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
+                          :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
+                          :can-rename="canManageFolders" :can-delete="canDeleteFolders"
+                          @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder"
+                          @drop-on="onDropOn" @request-move="onRequestMove" />
+
+        <!-- canMove is not additionally gated on mode !== 'trash': trashed tiles being draggable is
+             harmless because trash mode renders neither MediaFolderCards nor the breadcrumb nav
+             (both v-if-ed on mode === 'active'), so there is never a drop target to receive one --
+             same reasoning as why search mode needs no special-casing here either. -->
+        <MediaGrid
+          v-if="view === 'grid'" :files="files" :can-move="canWrite" :can-delete="canDelete"
+          :trash-mode="mode === 'trash'"
+          @open="openDetail" @request-move="onRequestMove" @remove="onRemoveFile"
+        >
+          <template v-if="mode === 'trash'" #actions="{ file }">
+            <Button
+              type="button" variant="ghost" size="icon-sm"
+              :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+              @click.stop="onRestore(file.id)"
+            >
+              <Undo2 aria-hidden="true" />
+            </Button>
+            <Button
+              type="button" variant="ghost" size="icon-sm"
+              class="text-destructive hover:text-destructive"
+              :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+              @click.stop="onPurge(file.id)"
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </template>
+        </MediaGrid>
+        <MediaFileList
+          v-else
+          :files="files"
+          :folders="mode === 'active' ? visibleFolders : []"
+          :can-manage-folders="canManageFolders || canDeleteFolders"
+          :can-move-files="canWrite"
+          :can-move-folders="canManageFolders"
+          :can-rename-folders="canManageFolders"
+          :can-delete-folders="canDeleteFolders"
+          :can-delete-files="canDelete"
+          :trash-mode="mode === 'trash'"
+          @open="openDetail"
+          @open-folder="enterFolder"
+          @rename-folder="renameTarget = $event"
+          @remove-folder="onRemoveFolder"
+          @drop-on="onDropOn"
+          @request-move="onRequestMove"
+          @remove="onRemoveFile"
+        >
+          <template v-if="mode === 'trash'" #actions="{ file }">
+            <Button
+              type="button" variant="ghost" size="icon-sm"
+              :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+              @click.stop="onRestore(file.id)"
+            >
+              <Undo2 aria-hidden="true" />
+            </Button>
+            <Button
+              type="button" variant="ghost" size="icon-sm"
+              class="text-destructive hover:text-destructive"
+              :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+              @click.stop="onPurge(file.id)"
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </template>
+        </MediaFileList>
+        <!--
+          `visibleFolders` already forces [] for search/trash (see its own definition above), so
+          this condition needs no view-specific branch: list view now renders those same folders as
+          rows inside MediaFileList (not MediaFolderCards), and this check must stay just as blind
+          to which of the two components is rendering them as it already is to grid vs. list for
+          files.
+        -->
+        <p v-if="!loading && !files.length && !visibleFolders.length" class="empty text-muted-foreground">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem v-if="canManageFolders" data-test="menu-new-folder" @select="createOpen = true">
+          {{ t('media.menuNewFolder') }}
+        </ContextMenuItem>
+        <ContextMenuItem v-if="canWrite" data-test="menu-upload" @select="uploadOpen = true">
+          {{ t('media.menuUpload') }}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
 
     <DataTablePagination
       v-if="total > 0"
@@ -500,8 +556,8 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <MediaFolderNameDialog :visible="renameTarget !== null" :header="t('media.folderRename')"
                            :initial-name="renameTarget?.name" @update:visible="(v: boolean) => { if (!v) renameTarget = null }"
                            @submit="onRenameFolder" />
-    <!-- Not yet reachable from the UI: Task 8 (context menu) and Task 9 (selection toolbar) wire
-         moveDialogOpen/movePayload to a user trigger. -->
+    <!-- Reachable via the context menu's "Move to…" entry (onRequestMove); Task 9's selection
+         toolbar will be a second trigger onto the same moveDialogOpen/movePayload state. -->
     <MediaMoveDialog v-model:visible="moveDialogOpen" :folders="folders" :payload="movePayload" @submit="onMoveSubmit" />
   </section>
 </template>
