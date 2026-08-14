@@ -516,9 +516,17 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       also aren't). Each item-level context menu (MediaFolderCards/MediaGrid/MediaFileList) stops
       contextmenu propagation on its own tile/card/row specifically so a right-click ON an item
       does not ALSO bubble up and open this one underneath it.
+
+      The card outline below is deliberately drawn on this exact element -- the ContextMenuTrigger
+      itself, not a wrapper around it -- because it exists to show the user where the right-click
+      menu above actually works. If the styling ever moved onto a different element than the
+      trigger, the outline would start claiming an area where right-click does nothing; see this
+      view's own test for the assertion that pins the two together. min-h-80 (not just padding)
+      matters here too: a folder with few or no items would otherwise leave almost no empty
+      surface to right-click.
     -->
     <ContextMenu>
-      <ContextMenuTrigger as="div" class="media-body">
+      <ContextMenuTrigger as="div" class="media-body rounded-xl border border-border bg-card p-4 min-h-80">
         <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
                           :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
                           :can-rename="canManageFolders" :can-delete="canDeleteFolders"

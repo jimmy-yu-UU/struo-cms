@@ -1331,6 +1331,24 @@ describe('MediaLibraryView', () => {
       await flushPromises()
       expect(w.find('[data-test="menu-new-folder"]').exists()).toBe(false)
     })
+
+    // The maintainer's whole point in adding the card outline was so the user can SEE where the
+    // right-click menu above actually works -- so the outline must land on the exact DOM node that
+    // is the context-menu trigger, not a wrapper or sibling around it. `[data-slot="context-menu-
+    // trigger"]` is stamped by the vendored ContextMenuTrigger itself (see ui/context-menu/
+    // ContextMenuTrigger.vue) onto its own root element, so querying by that selector and reading
+    // classes off the SAME element pins identity rather than merely checking the two facts
+    // separately (which would stay green even if the card styling drifted onto some other node).
+    it('draws the card styling on the exact element that is the context-menu trigger', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      const trigger = w.find('[data-slot="context-menu-trigger"]')
+      expect(trigger.exists()).toBe(true)
+      expect(trigger.classes()).toContain('media-body')
+      expect(trigger.classes()).toEqual(
+        expect.arrayContaining(['rounded-xl', 'border', 'border-border', 'bg-card']))
+    })
   })
 
   // Task 9: batch selection wiring and the clear-on-listing-change requirement. A selection that
