@@ -134,6 +134,19 @@ async function openDetail(page: Page, fileName: string): Promise<void> {
   await loaded
 }
 
+// Server-truth check for the folder-untouched-save regression guard: the UI-level "the tile is
+// still visible in the current listing" assertion cannot actually prove the file wasn't unfiled,
+// because the grid's post-save reload (MediaDetailDialog's `@saved="load"` on MediaLibraryView) is
+// never awaited by saveDetail() -- it can pass on stale, pre-reload DOM either way. A fresh
+// `deep=folder` GET straight to the API is server truth and cannot race the UI.
+async function assertServerFolder(page: Page, fileId: string, expectedFolderId: string | null): Promise<void> {
+  const res = await page.request.get(`${API}/api/items/file/${fileId}?deep=folder`)
+  expect(res.ok(), `GET file ${fileId} -> ${res.status()}`).toBeTruthy()
+  const body = await res.json()
+  const folder = body.data.folder as { id?: string } | null | undefined
+  expect(folder?.id ?? null).toBe(expectedFolderId)
+}
+
 // Saves the detail dialog, waiting for the real PUT /api/items/file/{id} to resolve and the dialog
 // to close (MediaDetailDialog emits 'saved' + 'close' only after the request succeeds).
 async function saveDetail(page: Page): Promise<void> {
@@ -213,12 +226,14 @@ test('media folders: create, upload with title autofill, a folder-untouched save
   await expect(mdField(page, 'Title').locator('input')).toHaveValue(fileBase)
 
   // 3. Edit Alt text and Save -- a save that never touches folder assignment (the dialog has no
-  // way to touch it any more) is exactly the scenario that used to silently unfile the item.
-  // Confirm end to end that the file is still browsable inside the SAME folder afterwards.
+  // way to touch it any more) is exactly the scenario that used to silently unfile the item. The
+  // tile-still-visible check is a cheap UI-level sanity check only; the real proof is the server
+  // GET below, which cannot race the grid's own post-save reload the way a DOM assertion can.
   const alt = `Alt ${STAMP}`
   await mdField(page, 'Alt text').locator('input').fill(alt)
   await saveDetail(page)
   await expect(fileTile(page, fileName)).toBeVisible()
+  await assertServerFolder(page, uploadedFileId!, createdFolderId!)
 
   // Reopen for a FRESH GET (not trusting in-memory form state) and confirm Alt truly persisted
   // server-side, then confirm there is no "open in full editor" escape hatch anywhere in the
