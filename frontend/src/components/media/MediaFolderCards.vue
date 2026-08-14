@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Folder, Pencil, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import type { FolderRow } from '../../lib/folderTree'
@@ -32,6 +32,25 @@ function onDrop(ev: DragEvent, id: string): void {
   const payload = readDragPayload(ev)
   if (payload) emit('dropOn', id, payload)
 }
+// dragleave follows the mouseout model: it fires on every boundary crossing, not only as a
+// bubbled child event. A card -> own-child crossing (icon/name) targets the CARD itself with
+// relatedTarget still inside it -- the highlight must survive that. A child -> outside crossing
+// fires AT the child and bubbles up, with relatedTarget outside the card -- that one must clear
+// it. Neither `.self` nor "did this fire on a child" can express that distinction; only checking
+// whether relatedTarget is still contained in the card can.
+function onDragLeave(ev: DragEvent): void {
+  const next = ev.relatedTarget
+  if (next instanceof Node && (ev.currentTarget as Node).contains(next)) return
+  droppingId.value = null
+}
+// A drag can end without ever reaching a drop (Esc, or a drop somewhere that isn't a registered
+// target) -- nothing else resets the highlight in that case, and it would sit stale on a card the
+// pointer has long left. The drag may have started on a DIFFERENT component's element entirely
+// (a MediaGrid file tile), so this listens at the document level rather than on this card's own
+// elements, and clears regardless of where the drag began.
+function clearDropping(): void { droppingId.value = null }
+onMounted(() => document.addEventListener('dragend', clearDropping))
+onUnmounted(() => document.removeEventListener('dragend', clearDropping))
 </script>
 
 <template>
@@ -42,7 +61,7 @@ function onDrop(ev: DragEvent, id: string): void {
          @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)"
          @dragstart="onDragStart($event, f)"
          @dragover.prevent="onDragOver($event, f.id)"
-         @dragleave.self="droppingId = null"
+         @dragleave="onDragLeave"
          @drop.prevent="onDrop($event, f.id)">
       <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
       <span class="folder-card__name">{{ f.name }}</span>

@@ -287,9 +287,22 @@ function onCrumbDrop(ev: DragEvent, targetFolderId: string | null): void {
   const payload = readDragPayload(ev)
   if (payload) void onDropOn(targetFolderId, payload)
 }
+// A drag can end without ever reaching a drop (Esc, or a drop somewhere that isn't a registered
+// target) -- nothing else resets the breadcrumb highlight in that case. Crumb buttons are never
+// drag sources themselves (they only accept drops), and the drag may have started on a MediaGrid
+// tile or a MediaFolderCards card -- listen at the document level so it clears regardless of
+// where the drag began, same reasoning as MediaFolderCards' own dropping highlight.
+function clearCrumbDropping(): void { crumbDropping.value = null }
 
-onMounted(() => { loadFolders(); load() })
-onUnmounted(() => debouncedSearch.cancel())
+onMounted(() => {
+  loadFolders()
+  load()
+  document.addEventListener('dragend', clearCrumbDropping)
+})
+onUnmounted(() => {
+  debouncedSearch.cancel()
+  document.removeEventListener('dragend', clearCrumbDropping)
+})
 
 defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onSearchInput, openDetail, onDeleted,
   files, total, loading, error, canWrite, canDelete, selected,
