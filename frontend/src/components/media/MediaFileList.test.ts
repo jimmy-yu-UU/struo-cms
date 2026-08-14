@@ -76,4 +76,13 @@ describe('MediaFileList', () => {
     await btn.trigger('click')
     expect(w.emitted('open')).toEqual([['f1']])
   })
+
+  it('renders the actions slot once per file', () => {
+    const w = mount(MediaFileList, {
+      props: { files },
+      slots: { actions: '<button class="act">{{ params.file.id }}</button>' },
+      global: { plugins: [i18n] },
+    })
+    expect(w.findAll('.act')).toHaveLength(files.length)
+  })
 })

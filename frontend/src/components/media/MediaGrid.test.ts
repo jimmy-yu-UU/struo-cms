@@ -44,4 +44,12 @@ describe('MediaGrid', () => {
     expect(w.emitted('select')).toBeUndefined()
     expect(w.emitted('toggle')).toBeUndefined()
   })
+
+  it('renders the actions slot once per file', () => {
+    const w = mount(MediaGrid, {
+      props: { files },
+      slots: { actions: '<button class="act">{{ params.file.id }}</button>' },
+    })
+    expect(w.findAll('.act')).toHaveLength(files.length)
+  })
 })

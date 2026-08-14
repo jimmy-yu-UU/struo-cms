@@ -28,17 +28,20 @@ function isSelected(id: string): boolean {
 
 <template>
   <div class="media-grid">
-    <button
-      v-for="f in files"
-      :key="f.id"
-      type="button"
-      class="media-tile rounded-xl border border-border hover:border-primary"
-      :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
-      @click="onClick(f.id)"
-    >
-      <FileThumbnail :file="f" />
-      <span class="media-tile__name">{{ f.fileName }}</span>
-    </button>
+    <div v-for="f in files" :key="f.id" class="media-tile-wrap relative">
+      <button
+        type="button"
+        class="media-tile w-full rounded-xl border border-border hover:border-primary"
+        :class="{ 'is-selected outline-2 -outline-offset-1 outline-primary': isSelected(f.id) }"
+        @click="onClick(f.id)"
+      >
+        <FileThumbnail :file="f" />
+        <span class="media-tile__name">{{ f.fileName }}</span>
+      </button>
+      <div v-if="$slots.actions" class="media-tile__actions absolute right-1 top-1 flex gap-1">
+        <slot name="actions" :file="f" />
+      </div>
+    </div>
   </div>
 </template>
 

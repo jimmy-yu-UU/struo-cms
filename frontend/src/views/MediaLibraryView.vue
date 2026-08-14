@@ -14,7 +14,7 @@ import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import MediaDetailDialog from '../components/media/MediaDetailDialog.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import MediaFolderNameDialog from '../components/media/MediaFolderNameDialog.vue'
-import FileThumbnail, { type FileRow } from '../components/media/FileThumbnail.vue'
+import type { FileRow } from '../components/media/FileThumbnail.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
 import { useAuthStore } from '../stores/authStore'
@@ -333,42 +333,44 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <MediaFolderCards v-if="mode === 'active'" :folders="visibleFolders" :can-manage="canManageFolders || canDeleteFolders"
                       @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder" />
 
-    <template v-if="mode === 'active'">
-      <MediaGrid v-if="view === 'grid'" :files="files" @open="openDetail" />
-      <MediaFileList v-else :files="files" @open="openDetail" />
-    </template>
-    <table v-else class="media-trash-list">
-      <thead>
-        <tr>
-          <th class="media-trash-list__thumb-col text-muted-foreground" aria-hidden="true"></th>
-          <th class="text-muted-foreground">{{ t('media.colName') }}</th>
-          <th class="media-trash-list__actions-col text-muted-foreground"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="f in files" :key="f.id">
-          <td class="media-trash-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
-          <td>{{ f.fileName }}</td>
-          <td class="media-trash-list__actions">
-            <Button
-              type="button" variant="ghost" size="icon-sm"
-              :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
-              @click="onRestore(f.id)"
-            >
-              <Undo2 aria-hidden="true" />
-            </Button>
-            <Button
-              type="button" variant="ghost" size="icon-sm"
-              class="text-destructive hover:text-destructive"
-              :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
-              @click="onPurge(f.id)"
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <MediaGrid v-if="view === 'grid'" :files="files" @open="openDetail">
+      <template v-if="mode === 'trash'" #actions="{ file }">
+        <Button
+          type="button" variant="ghost" size="icon-sm"
+          :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+          @click.stop="onRestore(file.id)"
+        >
+          <Undo2 aria-hidden="true" />
+        </Button>
+        <Button
+          type="button" variant="ghost" size="icon-sm"
+          class="text-destructive hover:text-destructive"
+          :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+          @click.stop="onPurge(file.id)"
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </template>
+    </MediaGrid>
+    <MediaFileList v-else :files="files" @open="openDetail">
+      <template v-if="mode === 'trash'" #actions="{ file }">
+        <Button
+          type="button" variant="ghost" size="icon-sm"
+          :title="t('collectionList.restore')" :aria-label="t('collectionList.restore')"
+          @click.stop="onRestore(file.id)"
+        >
+          <Undo2 aria-hidden="true" />
+        </Button>
+        <Button
+          type="button" variant="ghost" size="icon-sm"
+          class="text-destructive hover:text-destructive"
+          :title="t('collectionList.purge')" :aria-label="t('collectionList.purge')"
+          @click.stop="onPurge(file.id)"
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </template>
+    </MediaFileList>
     <p v-if="!loading && !files.length && !visibleFolders.length" class="empty text-muted-foreground">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
 
     <DataTablePagination
@@ -400,14 +402,4 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 .media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; font: inherit; }
 .media-crumb__link:hover { text-decoration: underline; }
 .media-crumb__current { color: var(--fg); font-weight: 600; padding: 2px 4px; }
-.media-trash-list { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-.media-trash-list th {
-  text-align: left; padding: 8px 12px; font-weight: 600;
-  border-bottom: 1px solid var(--border);
-}
-.media-trash-list td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--fg); vertical-align: middle; }
-.media-trash-list__thumb-col { width: 64px; }
-.media-trash-list__thumb { width: 56px; }
-.media-trash-list__actions-col { width: 6rem; }
-.media-trash-list__actions { display: flex; gap: 4px; justify-content: flex-end; }
 </style>

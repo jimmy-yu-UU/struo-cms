@@ -260,7 +260,7 @@ describe('MediaLibraryView', () => {
     ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
     await flushPromises()
     expect(w.find('.trash-banner .lucide-trash-2').exists()).toBe(true)
-    const rowButtons = w.findAll('.media-trash-list__actions button')
+    const rowButtons = w.findAll('.media-tile__actions button')
     expect(rowButtons[0].find('.lucide-undo-2').exists()).toBe(true)
     expect(rowButtons[0].find('.lucide-trash-2').exists()).toBe(false)
     expect(rowButtons[1].find('.lucide-trash-2').exists()).toBe(true)
@@ -282,7 +282,7 @@ describe('MediaLibraryView', () => {
 
     ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
     await flushPromises()
-    const rowButtons = w.findAll('.media-trash-list__actions button')
+    const rowButtons = w.findAll('.media-tile__actions button')
     expect(rowButtons[0].attributes('aria-label')).toBe('Restore')
     expect(rowButtons[1].attributes('aria-label')).toBe('Delete permanently')
   })
@@ -294,22 +294,24 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
     await flushPromises()
-    const actions = w.findAll('.media-trash-list__actions button')
+    const actions = w.findAll('.media-tile__actions button')
     expect(actions.length).toBeGreaterThan(0)
     actions.forEach((b) => expect(b.attributes('type')).toBe('button'))
   })
 
   // FileThumbnail renders for real in this view (it is not among the stubs above) -- asserting
-  // the rendered `data-size` attribute rather than a prop read fails if the trash table's
-  // size="sm" binding is ever dropped.
+  // the rendered `data-size` attribute rather than a prop read fails if the list's size="sm"
+  // binding is ever dropped. The trash is now rendered through the same MediaFileList as the
+  // active list, so the sm-sizing behaviour is exercised through the list view.
   it('gives the trash-list thumbnail the sm size', async () => {
     makeListMock([{ data: rows, total: 1 }])
     seedUser({ delete: true })
     const w = mountView()
     await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
     ;(w.vm as unknown as { setMode: (m: string) => void }).setMode('trash')
     await flushPromises()
-    const thumbs = w.findAll('.media-trash-list__thumb .file-thumb')
+    const thumbs = w.findAll('.media-list__thumb .file-thumb')
     expect(thumbs.length).toBeGreaterThan(0)
     for (const thumb of thumbs) expect(thumb.attributes('data-size')).toBe('sm')
   })
@@ -738,6 +740,28 @@ describe('MediaLibraryView', () => {
     expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
       filter: { contentType: { op: '_starts_with', value: 'image/' }, folderId: { op: '_eq', value: 'a' } },
     }))
+  })
+
+  it('renders the trash through the grid when the grid view is selected', async () => {
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('grid')
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    expect(w.find('.media-grid').exists()).toBe(true)
+    expect(w.find('.media-trash-list').exists()).toBe(false)
+  })
+
+  it('renders the trash through the list when the list view is selected', async () => {
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    expect(w.find('.media-list').exists()).toBe(true)
+    expect(w.find('.media-trash-list').exists()).toBe(false)
   })
 
   it('passes the current folder id to the upload dialog', async () => {
