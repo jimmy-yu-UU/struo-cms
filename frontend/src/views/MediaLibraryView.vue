@@ -16,6 +16,7 @@ import MediaDetailDialog from '../components/media/MediaDetailDialog.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import MediaFolderNameDialog from '../components/media/MediaFolderNameDialog.vue'
 import MediaMoveDialog from '../components/media/MediaMoveDialog.vue'
+import MediaSelectionToolbar from '../components/media/MediaSelectionToolbar.vue'
 import type { FileRow } from '../components/media/FileThumbnail.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
@@ -33,6 +34,7 @@ import { ApiError } from '../api/apiClient'
 import { performMove } from '../lib/mediaMoveActions'
 import { isNoOpMove, type MovePayload } from '../lib/mediaMove'
 import { readDragPayload } from '../lib/mediaDnd'
+import { toggleSelection } from '../lib/mediaSelection'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -69,6 +71,22 @@ const renameTarget = ref<FolderRow | null>(null)
 // Task 9 selection toolbar -- both just set movePayload and flip moveDialogOpen.
 const moveDialogOpen = ref(false)
 const movePayload = ref<MovePayload>({ files: [], folders: [] })
+
+// Task 9 batch selection: one MovePayload shared (as a prop) across all four media surfaces
+// (MediaGrid, MediaFolderCards, MediaFileList's two row kinds). Cleared on every listing change
+// (folder navigation, mode switch, search, page change) below -- a selection that survived one
+// would let a later batch move act on items the user can no longer see, and canMoveFolder
+// (mediaMove.ts) returns true for a source id absent from its folders list, so a stale selection
+// assembled before a reload could pass its cycle guard on a folder no longer in the loaded set.
+const selection = ref<MovePayload>({ files: [], folders: [] })
+function clearSelection(): void { selection.value = { files: [], folders: [] } }
+// The real guard against building a selection while browsing the trash (a batch move on
+// soft-deleted items is nonsensical, and MediaMoveDialog is mounted unconditionally regardless of
+// mode) -- not merely relying on `setMode` already clearing the selection on every switch.
+function onToggleSelect(kind: 'file' | 'folder', id: string): void {
+  if (mode.value !== 'active') return
+  selection.value = toggleSelection(selection.value, kind, id)
+}
 
 const canManageFolders = computed(() => auth.canWrite('mediafolder'))
 const canDeleteFolders = computed(() => auth.canDelete('mediafolder'))
@@ -131,10 +149,11 @@ function reload(): void {
 
 const debouncedSearch = debounce(() => { page.value = 0; load() }, 300)
 function onSearchInput(value: string): void {
+  clearSelection()
   search.value = value
   debouncedSearch()
 }
-function setMode(m: 'active' | 'trash'): void { mode.value = m; reload() }
+function setMode(m: 'active' | 'trash'): void { clearSelection(); mode.value = m; reload() }
 function onModeToggle(value: unknown): void {
   // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again
   // (deselect) -- the trash switch has no "neither" state, so ignore that.
@@ -146,6 +165,7 @@ function onViewToggle(value: unknown): void {
 function onType(value: MediaType): void { type.value = value; reload() }
 function onSort(value: MediaSort): void { sort.value = value; reload() }
 function onPageChange(nextPage: number): void {
+  clearSelection()
   page.value = nextPage
   load()
 }
@@ -153,6 +173,7 @@ function onPageSizeChange(nextSize: number): void {
   // An offset computed against the OLD page size is meaningless against the new one (page 2 at
   // 24/page starts at row 48; at 96/page that is off the end of the result set) -- always return
   // to the first page when the size changes.
+  clearSelection()
   page.value = 0
   perPage.value = nextSize
   load()
@@ -213,8 +234,8 @@ async function loadFolders(): Promise<void> {
   }
 }
 
-function enterFolder(id: string): void { currentFolderId.value = id; page.value = 0; load() }
-function goToBreadcrumb(id: string | null): void { currentFolderId.value = id; page.value = 0; load() }
+function enterFolder(id: string): void { clearSelection(); currentFolderId.value = id; page.value = 0; load() }
+function goToBreadcrumb(id: string | null): void { clearSelection(); currentFolderId.value = id; page.value = 0; load() }
 
 async function onCreateFolder(name: string): Promise<void> {
   try {
@@ -345,7 +366,8 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
   goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
   mode, setMode, onModeToggle, onViewToggle, view, showTrashSwitch, onRestore, onPurge,
-  onDropOn, moveDialogOpen, movePayload, onMoveSubmit, onRequestMove, onRemoveFile })
+  onDropOn, moveDialogOpen, movePayload, onMoveSubmit, onRequestMove, onRemoveFile,
+  selection, clearSelection, onToggleSelect })
 </script>
 
 <template>
@@ -407,6 +429,18 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       </template>
     </ListToolbar>
 
+    <!-- Task 9's selection toolbar: a second trigger onto the same moveDialogOpen/movePayload
+         state the context menu's "Move to…" entry (onRequestMove) already opens -- see that
+         handler's own comment. `mode === 'active'` is belt-and-braces here (the selection is
+         already guaranteed empty while browsing the trash by onToggleSelect's own refusal and by
+         setMode always clearing on the way in), matching this codebase's established
+         double-gating convention for permission-sensitive UI. -->
+    <MediaSelectionToolbar
+      v-if="mode === 'active'"
+      :selection="selection" :can-move-files="canWrite" :can-move-folders="canManageFolders"
+      @request-move="onRequestMove" @clear="clearSelection"
+    />
+
     <p
       v-if="mode === 'trash'"
       role="status"
@@ -452,8 +486,9 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
         <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
                           :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
                           :can-rename="canManageFolders" :can-delete="canDeleteFolders"
+                          :selection="selection"
                           @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder"
-                          @drop-on="onDropOn" @request-move="onRequestMove" />
+                          @drop-on="onDropOn" @request-move="onRequestMove" @toggle-select="onToggleSelect" />
 
         <!-- canMove is not additionally gated on mode !== 'trash': trashed tiles being draggable is
              harmless because trash mode renders neither MediaFolderCards nor the breadcrumb nav
@@ -461,8 +496,9 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
              same reasoning as why search mode needs no special-casing here either. -->
         <MediaGrid
           v-if="view === 'grid'" :files="files" :can-move="canWrite" :can-delete="canDelete"
-          :trash-mode="mode === 'trash'"
+          :trash-mode="mode === 'trash'" :selection="selection"
           @open="openDetail" @request-move="onRequestMove" @remove="onRemoveFile"
+          @toggle-select="onToggleSelect"
         >
           <template v-if="mode === 'trash'" #actions="{ file }">
             <Button
@@ -493,6 +529,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
           :can-delete-folders="canDeleteFolders"
           :can-delete-files="canDelete"
           :trash-mode="mode === 'trash'"
+          :selection="selection"
           @open="openDetail"
           @open-folder="enterFolder"
           @rename-folder="renameTarget = $event"
@@ -500,6 +537,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
           @drop-on="onDropOn"
           @request-move="onRequestMove"
           @remove="onRemoveFile"
+          @toggle-select="onToggleSelect"
         >
           <template v-if="mode === 'trash'" #actions="{ file }">
             <Button

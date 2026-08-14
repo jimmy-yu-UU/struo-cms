@@ -179,6 +179,9 @@ export default {
     menuDelete: '刪除',
     menuNewFolder: '新增資料夾',
     menuUpload: '上傳檔案',
+    selectionCount: '已選 {n} 項',
+    selectionClear: '清除選取',
+    selectItem: '選取',
   },
   revisions: {
     title: '修訂紀錄',

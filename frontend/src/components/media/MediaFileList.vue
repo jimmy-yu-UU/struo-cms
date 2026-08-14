@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, useSlots, onMounted, onUnmounted } from 'vue'
+import { computed, ref, useSlots, onMounted, onUnmounted } from 'vue'
 import { Folder, Pencil, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 import MediaContextMenu from './MediaContextMenu.vue'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
 import type { FolderRow } from '../../lib/folderTree'
 import { setDragPayload, isMediaDrag, readDragPayload } from '../../lib/mediaDnd'
+import { selectionCount } from '../../lib/mediaSelection'
 import type { MovePayload } from '../../lib/mediaMove'
 
 const props = withDefaults(defineProps<{
@@ -25,7 +27,12 @@ const props = withDefaults(defineProps<{
   // duplicate that. Folder rows never appear in trash mode (the view always passes an empty
   // folders array there), so this only needs to gate the file-row menu.
   trashMode?: boolean
-}>(), { folders: () => [], canManageFolders: false, canMoveFiles: false, canMoveFolders: false })
+  // Task 9 batch selection: the same MovePayload the view shares across all four media surfaces.
+  selection?: MovePayload
+}>(), {
+  folders: () => [], canManageFolders: false, canMoveFiles: false, canMoveFolders: false,
+  selection: () => ({ files: [], folders: [] }),
+})
 
 const emit = defineEmits<{
   (e: 'open', id: string): void
@@ -35,6 +42,7 @@ const emit = defineEmits<{
   (e: 'dropOn', targetFolderId: string, payload: MovePayload): void
   (e: 'requestMove', payload: MovePayload): void
   (e: 'remove', id: string): void
+  (e: 'toggleSelect', kind: 'file' | 'folder', id: string): void
 }>()
 
 // Folder rows are both drag sources (of the folder itself) and drop targets (for files/folders
@@ -42,17 +50,44 @@ const emit = defineEmits<{
 // MediaGrid. This mirrors MediaFolderCards' drag/drop plumbing onto <tr>s instead of cards.
 const droppingId = ref<string | null>(null)
 
+const hasSelection = computed(() => selectionCount(props.selection) > 0)
+function isPickedFile(id: string): boolean { return props.selection.files.includes(id) }
+function isPickedFolder(id: string): boolean { return props.selection.folders.includes(id) }
+// The real guards -- reachable from both the checkbox and the ctrl/shift-click row click below,
+// not just whichever one happens to be rendered. Same reasoning as MediaGrid/MediaFolderCards'
+// own toggleBatchSelect.
+function toggleFileSelect(id: string): void {
+  if (!props.canMoveFiles) return
+  emit('toggleSelect', 'file', id)
+}
+function toggleFolderSelect(id: string): void {
+  if (!props.canMoveFolders) return
+  emit('toggleSelect', 'folder', id)
+}
+function onFileRowClick(ev: MouseEvent, id: string): void {
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { toggleFileSelect(id); return }
+  emit('open', id)
+}
+function onFolderRowClick(ev: MouseEvent, id: string): void {
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { toggleFolderSelect(id); return }
+  emit('openFolder', id)
+}
+
 // `draggable` alone does not gate this: FileThumbnail renders an <img>, which is draggable by
 // default in every browser, and its dragstart bubbles up to this row handler regardless of the
 // row's own attribute. Refuse here too, so the permission check cannot be bypassed that way.
+//
+// Dragging a row that is already part of the batch selection carries the WHOLE selection (which
+// may include items picked from the other three surfaces too, since `selection` is the same
+// shared object); dragging an unselected row carries only that one item.
 function onFileDragStart(ev: DragEvent, f: FileRow): void {
   if (!props.canMoveFiles) return
-  setDragPayload(ev, { files: [f.id], folders: [] })
+  setDragPayload(ev, isPickedFile(f.id) ? props.selection : { files: [f.id], folders: [] })
 }
 // Same bypass risk for folder rows (a bubbled drag from inside the row).
 function onFolderDragStart(ev: DragEvent, f: FolderRow): void {
   if (!props.canMoveFolders) return
-  setDragPayload(ev, { files: [], folders: [f.id] })
+  setDragPayload(ev, isPickedFolder(f.id) ? props.selection : { files: [], folders: [f.id] })
 }
 // dragover fires continuously while a drag hovers -- only check the cheap `isMediaDrag`, never
 // canMoveFolder (it rebuilds an internal Map per call). Validation happens at drop time inside
@@ -111,12 +146,15 @@ function dims(f: FileRow): string {
 function uploaded(f: FileRow): string {
   return formatDateTime(f.createdAt ?? null)
 }
+
+defineExpose({ toggleFileSelect, toggleFolderSelect })
 </script>
 
 <template>
   <table class="media-list">
     <thead>
       <tr>
+        <th v-if="hasSelection" class="media-list__select-col" aria-hidden="true"></th>
         <th class="media-list__thumb-col text-muted-foreground" aria-hidden="true"></th>
         <th class="text-muted-foreground">{{ $t('media.colName') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colType') }}</th>
@@ -138,13 +176,22 @@ function uploaded(f: FileRow): string {
         <tr class="media-list__row"
             :draggable="canMoveFolders ? 'true' : undefined"
             :data-dropping="droppingId === d.id ? 'true' : undefined"
-            @click="emit('openFolder', d.id)"
+            @click="onFolderRowClick($event, d.id)"
             @contextmenu.stop
             @pointerdown.stop
             @dragstart="onFolderDragStart($event, d)"
             @dragover.prevent="onDragOver($event, d.id)"
             @dragleave="onDragLeave"
             @drop.prevent="onDrop($event, d.id)">
+          <td v-if="hasSelection" class="media-list__select">
+            <Checkbox
+              v-if="canMoveFolders"
+              :model-value="isPickedFolder(d.id)"
+              :aria-label="`${d.name}${$t('fields.namePairSeparator')}${$t('media.selectItem')}`"
+              @click.stop
+              @update:model-value="toggleFolderSelect(d.id)"
+            />
+          </td>
           <td class="media-list__thumb">
             <Folder class="size-5 text-primary" aria-hidden="true" />
           </td>
@@ -152,7 +199,7 @@ function uploaded(f: FileRow): string {
             <button
               type="button"
               class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-              @click.stop="emit('openFolder', d.id)"
+              @click.stop="onFolderRowClick($event, d.id)"
             >
               {{ d.name }}
             </button>
@@ -192,17 +239,26 @@ function uploaded(f: FileRow): string {
         <tr
           class="media-list__row"
           :draggable="canMoveFiles ? 'true' : undefined"
-          @click="emit('open', f.id)"
+          @click="onFileRowClick($event, f.id)"
           @contextmenu.stop
           @pointerdown.stop
           @dragstart="onFileDragStart($event, f)"
         >
+          <td v-if="hasSelection" class="media-list__select">
+            <Checkbox
+              v-if="canMoveFiles"
+              :model-value="isPickedFile(f.id)"
+              :aria-label="`${f.fileName}${$t('fields.namePairSeparator')}${$t('media.selectItem')}`"
+              @click.stop
+              @update:model-value="toggleFileSelect(f.id)"
+            />
+          </td>
           <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
           <td class="media-list__name">
             <button
               type="button"
               class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-              @click.stop="emit('open', f.id)"
+              @click.stop="onFileRowClick($event, f.id)"
             >
               {{ f.fileName }}
             </button>
@@ -243,6 +299,8 @@ function uploaded(f: FileRow): string {
   color: var(--fg);
   vertical-align: middle;
 }
+.media-list__select-col { width: 40px; }
+.media-list__select { width: 40px; }
 .media-list__thumb-col { width: 64px; }
 .media-list__thumb { width: 56px; }
 .media-list__name { font-weight: 500; padding: 0; }
