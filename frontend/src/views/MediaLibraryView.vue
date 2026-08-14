@@ -14,6 +14,7 @@ import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import MediaDetailDialog from '../components/media/MediaDetailDialog.vue'
 import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import MediaFolderNameDialog from '../components/media/MediaFolderNameDialog.vue'
+import MediaMoveDialog from '../components/media/MediaMoveDialog.vue'
 import type { FileRow } from '../components/media/FileThumbnail.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
@@ -63,6 +64,10 @@ const folders = ref<FolderRow[]>([])
 const currentFolderId = ref<string | null>(null)
 const createOpen = ref(false)
 const renameTarget = ref<FolderRow | null>(null)
+// Move-to dialog: reachable from later tasks (context menu, selection toolbar) that set
+// movePayload and flip moveDialogOpen -- this task only builds and wires the dialog itself.
+const moveDialogOpen = ref(false)
+const movePayload = ref<MovePayload>({ files: [], folders: [] })
 
 const canManageFolders = computed(() => auth.canWrite('mediafolder'))
 const canDeleteFolders = computed(() => auth.canDelete('mediafolder'))
@@ -280,6 +285,12 @@ async function onDropOn(targetFolderId: string | null, payload: MovePayload): Pr
   }
 }
 
+// Routes the move-to dialog's choice through the same perform/toast/reload path as a drag-drop,
+// rather than duplicating any of that here.
+function onMoveSubmit(targetFolderId: string | null): void {
+  void onDropOn(targetFolderId, movePayload.value)
+}
+
 const crumbDropping = ref<string | null>(null)
 
 function onCrumbDrop(ev: DragEvent, targetFolderId: string | null): void {
@@ -309,7 +320,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
   goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
   mode, setMode, onModeToggle, onViewToggle, view, showTrashSwitch, onRestore, onPurge,
-  onDropOn })
+  onDropOn, moveDialogOpen, movePayload, onMoveSubmit })
 </script>
 
 <template>
@@ -489,6 +500,9 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <MediaFolderNameDialog :visible="renameTarget !== null" :header="t('media.folderRename')"
                            :initial-name="renameTarget?.name" @update:visible="(v: boolean) => { if (!v) renameTarget = null }"
                            @submit="onRenameFolder" />
+    <!-- Not yet reachable from the UI: Task 8 (context menu) and Task 9 (selection toolbar) wire
+         moveDialogOpen/movePayload to a user trigger. -->
+    <MediaMoveDialog v-model:visible="moveDialogOpen" :folders="folders" :payload="movePayload" @submit="onMoveSubmit" />
   </section>
 </template>
 
