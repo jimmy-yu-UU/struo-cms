@@ -9,7 +9,7 @@ import type { FormModel } from '../types/itemForm'
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
-    relations: 'Relations', translatableBadge: 'Translatable',
+    translatableBadge: 'Translatable',
     localeComplete: 'Has content', localeIncomplete: 'No content yet',
   } } },
 })
@@ -123,6 +123,17 @@ describe('ItemForm', () => {
     // shared- and translatable-field wrappers covered below) — pinned here rather than folded into
     // an aggregate count, since this is the only test that mounts a relation at all.
     expect(w.find('.relations .field').exists()).toBe(true)
+  })
+  it('renders relation fields without a section heading', () => {
+    const relMeta: CollectionMeta = {
+      name: 'article', label: 'Article', defaultDisplayField: null,
+      fields: [field('status', { sort: 1 })],
+      relations: [{ name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false }],
+    }
+    const relModel: FormModel = { shared: { status: 'draft' }, translations: {}, relations: { category: null } }
+    const w = mountForm({ meta: relMeta, model: relModel, locales: [], errors: {} }, { RelationInput: true })
+    expect(w.find('.relations .field').exists()).toBe(true)
+    expect(w.find('.relations h3').exists()).toBe(false)
   })
   it('keeps the .field wrapper class on each of the three call sites the e2e suite locates fields by', () => {
     const w = mountForm({ meta, model, locales, errors: {} })

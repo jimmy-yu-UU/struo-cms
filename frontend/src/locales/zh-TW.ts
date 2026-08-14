@@ -110,7 +110,6 @@ export default {
     save: '儲存',
     saving: '儲存中…',
     back: '返回列表',
-    relations: '關聯',
     translatableBadge: '可翻譯',
     localeComplete: '已有內容',
     localeIncomplete: '尚無內容',
