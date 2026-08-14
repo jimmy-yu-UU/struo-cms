@@ -834,6 +834,40 @@ describe('MediaLibraryView', () => {
     expect(restore).toHaveBeenCalledWith('f1')
   })
 
+  // Regression test for a stale-computed trap: `MediaFileList` is only `v-else`'d on `view`, not
+  // on `mode`, so toggling active<->trash does NOT remount it -- the SAME component instance must
+  // react to the trash `#actions` slot appearing across that toggle. The test above switches both
+  // `view` and `mode` in the same tick, before any flush, so its `MediaFileList` mounts fresh
+  // already in trash mode -- it can't catch a `showActionsColumn` that only re-reads
+  // `$slots.actions` when some OTHER, genuinely-reactive prop changes. This test switches to list
+  // view first and flushes, THEN toggles into trash on the persisting instance, exercising the
+  // exact transition such a stale read would miss.
+  it('keeps the actions column live when trash is entered after list view is already showing (persisting instance)', async () => {
+    seedUser({ delete: true })
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: rows, total: 1 }])
+    const restore = vi.spyOn(filesApi, 'restore').mockResolvedValue()
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    await flushPromises()
+    expect(w.findComponent({ name: 'MediaFileList' }).exists()).toBe(true)
+    // Active + list, no folders -> no actions column at all yet.
+    expect(w.find('.media-list__actions').exists()).toBe(false)
+
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    const actionsCell = w.find('.media-list__actions')
+    expect(actionsCell.exists()).toBe(true)
+    const restoreButton = actionsCell.find('[aria-label="Restore"]')
+    const purgeButton = actionsCell.find('[aria-label="Delete permanently"]')
+    expect(restoreButton.exists()).toBe(true)
+    expect(purgeButton.exists()).toBe(true)
+
+    await restoreButton.trigger('click')
+    await flushPromises()
+    expect(restore).toHaveBeenCalledWith('f1')
+  })
+
   it('passes the current folder id to the upload dialog', async () => {
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], [{ id: 'a', name: 'A', parentId: null }])
     const w = mountView()
