@@ -1,10 +1,32 @@
 <script setup lang="ts">
+import { computed, useSlots } from 'vue'
+import { Folder, Pencil, Trash2 } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
+import type { FolderRow } from '../../lib/folderTree'
 
-defineProps<{ files: FileRow[] }>()
-const emit = defineEmits<{ (e: 'open', id: string): void }>()
+const props = withDefaults(defineProps<{
+  files: FileRow[]
+  folders?: FolderRow[]
+  canManageFolders?: boolean
+}>(), { folders: () => [], canManageFolders: false })
+
+const emit = defineEmits<{
+  (e: 'open', id: string): void
+  (e: 'openFolder', id: string): void
+  (e: 'renameFolder', folder: FolderRow): void
+  (e: 'removeFolder', folder: FolderRow): void
+}>()
+
+const slots = useSlots()
+// The actions column exists when the caller supplied its own #actions slot (trash mode's
+// restore/purge) OR when there are folder rows to show manage buttons for. Both the header
+// <th> and every body <td> read this SAME computed so the column count can never diverge
+// between <thead> and <tbody>.
+const showActionsColumn = computed(() =>
+  !!slots.actions || (props.folders.length > 0 && props.canManageFolders))
 
 function dims(f: FileRow): string {
   return f.width && f.height ? `${f.width}×${f.height}` : '—'
@@ -24,10 +46,40 @@ function uploaded(f: FileRow): string {
         <th class="text-muted-foreground">{{ $t('media.colSize') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colDimensions') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colUploaded') }}</th>
-        <th v-if="$slots.actions" class="media-list__actions-col text-muted-foreground"></th>
+        <th v-if="showActionsColumn" class="media-list__actions-col text-muted-foreground"></th>
       </tr>
     </thead>
     <tbody>
+      <tr v-for="d in folders" :key="`folder-${d.id}`" class="media-list__row" @click="emit('openFolder', d.id)">
+        <td class="media-list__thumb">
+          <Folder class="size-5 text-primary" aria-hidden="true" />
+        </td>
+        <td class="media-list__name">
+          <button
+            type="button"
+            class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            @click.stop="emit('openFolder', d.id)"
+          >
+            {{ d.name }}
+          </button>
+        </td>
+        <td>{{ $t('media.colTypeFolder') }}</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td v-if="showActionsColumn" class="media-list__actions">
+          <template v-if="canManageFolders">
+            <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
+                    @click.stop="emit('renameFolder', d)">
+              <Pencil aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon-sm" class="text-destructive hover:text-destructive"
+                    :aria-label="$t('media.folderDelete')" @click.stop="emit('removeFolder', d)">
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </template>
+        </td>
+      </tr>
       <!--
         A table row is not a button, so it must not claim `role="button"` (that gave
         screen readers contradictory roles). Table semantics stay intact on the <tr>; the real,
@@ -55,7 +107,7 @@ function uploaded(f: FileRow): string {
         <td>{{ formatFileSize(f.size) }}</td>
         <td>{{ dims(f) }}</td>
         <td>{{ uploaded(f) }}</td>
-        <td v-if="$slots.actions" class="media-list__actions">
+        <td v-if="showActionsColumn" class="media-list__actions">
           <slot name="actions" :file="f" />
         </td>
       </tr>
