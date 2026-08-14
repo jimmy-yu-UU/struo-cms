@@ -352,6 +352,21 @@ describe('MediaLibraryView', () => {
     expect(w.findComponent({ name: 'MediaDetailDialog' }).props('file')).toEqual(rows[0])
   })
 
+  // The old bespoke trash table had no click-to-open path at all -- a soft-deleted file must stay
+  // unopenable so a user can't press Save/Delete on it in MediaDetailDialog. Now that trash mode
+  // renders through the same MediaGrid whose whole tile IS clickable in active mode, that
+  // protection has to be asserted explicitly instead of relying on there being no click handler.
+  it('does not open the detail dialog when a tile is activated in trash mode', async () => {
+    seedUser({ delete: true })
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    await w.find('.media-tile').trigger('click')
+    expect(w.findComponent({ name: 'MediaDetailDialog' }).props('file')).toBeNull()
+  })
+
   it('reloads once per upload batch (dialog done event)', async () => {
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
@@ -762,6 +777,32 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     expect(w.find('.media-list').exists()).toBe(true)
     expect(w.find('.media-trash-list').exists()).toBe(false)
+  })
+
+  // The grid branch's restore/purge coverage (icon, accessible-name, type="button" tests above)
+  // all default to the grid view and so only ever exercise MediaGrid's #actions copy. MediaGrid
+  // and MediaFileList carry two separately-authored `<template #actions>` blocks in this view (see
+  // the comment above them for why they aren't merged into one) -- guard the list branch the same
+  // way, including a real restore round-trip, so the two copies stay equivalently covered.
+  it('gives the list-view trash rows working restore and purge actions', async () => {
+    seedUser({ delete: true })
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }, { data: rows, total: 1 }])
+    const restore = vi.spyOn(filesApi, 'restore').mockResolvedValue()
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    const actionsCell = w.find('.media-list__actions')
+    expect(actionsCell.exists()).toBe(true)
+    const restoreButton = actionsCell.find('[aria-label="Restore"]')
+    const purgeButton = actionsCell.find('[aria-label="Delete permanently"]')
+    expect(restoreButton.exists()).toBe(true)
+    expect(purgeButton.exists()).toBe(true)
+
+    await restoreButton.trigger('click')
+    await flushPromises()
+    expect(restore).toHaveBeenCalledWith('f1')
   })
 
   it('passes the current folder id to the upload dialog', async () => {
