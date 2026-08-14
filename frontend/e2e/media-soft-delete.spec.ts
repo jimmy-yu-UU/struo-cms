@@ -70,7 +70,7 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
 }
 
 // Isolates the uploaded row by its unique stamped filename (server-side debounced search) and opens
-// its detail dialog, waiting for MediaDetailDialog's `deep=folder` GET so fields are populated.
+// its detail dialog, waiting for MediaDetailDialog's item GET so fields are populated.
 async function openDetailByName(page: Page, fileName: string): Promise<void> {
   await page.getByPlaceholder('Search files…').fill(fileName)
   const tile = fileTile(page, fileName)

@@ -2,12 +2,12 @@ import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
 // Media-library folders live gate. Covers folder browsing, filename -> Title autofill (already
-// implemented server-side by Struo.Infrastructure.Files.FileService.UploadAsync), the absence of
-// an "open in full editor" escape hatch on the file detail dialog, and a data-loss regression:
-// MediaDetailDialog.load() must fetch
-// the item with `deep=folder` so its Folder TreeSelect reflects the file's REAL folder before any
-// Save -- before that fix, `folderId` came back `undefined` on every load, so any Save (even one
-// that only touched Alt text) silently sent `folderId: null` and unfiled the file.
+// implemented server-side by Struo.Infrastructure.Files.FileService.UploadAsync), that a detail-
+// dialog save which never touches folder assignment does not unfile the item (MediaDetailDialog
+// dropped its own Folder field entirely in favour of the media library's drag-and-drop / right-
+// click "Move to…" / batch-move controls -- this spec drives folder moves through the grid tile's
+// context menu and the MediaMoveDialog it opens instead), the absence of an "open in full editor"
+// escape hatch on the file detail dialog, and the non-empty-folder delete guard.
 //
 // See media.spec.ts for the shared upload/login/mdField conventions this spec reuses verbatim.
 
@@ -22,6 +22,9 @@ const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAIAAAUAAen63NgAAAAASUVORK5CYII=',
   'base64',
 )
+
+// MediaMoveDialog.vue: each option's accessible name is "<label> — <moveSubmit>".
+const MOVE_SUBMIT = 'Move'
 
 let uploadedFileId: string | undefined
 let createdFolderId: string | undefined
@@ -41,6 +44,9 @@ function mdField(page: Page, label: string) {
 }
 function detailDialog(page: Page) {
   return page.getByRole('dialog', { name: 'File details' })
+}
+function moveDialog(page: Page) {
+  return page.getByRole('dialog', { name: 'Move to…' })
 }
 // MediaFolderCards.vue: `.folder-card` div (role="button") wrapping a `.folder-card__name` span.
 function folderCard(page: Page, name: string) {
@@ -115,8 +121,8 @@ async function goToBreadcrumbRoot(page: Page): Promise<void> {
   await loaded
 }
 
-// Opens a file's detail dialog and waits for its `deep=folder` GET to resolve (MediaDetailDialog's
-// load()) so fields -- including the Folder TreeSelect -- are populated before we assert on them.
+// Opens a file's detail dialog and waits for its item GET to resolve (MediaDetailDialog's load())
+// so fields are populated before we assert on them.
 async function openDetail(page: Page, fileName: string): Promise<void> {
   const tile = fileTile(page, fileName)
   await expect(tile).toBeVisible()
@@ -128,14 +134,6 @@ async function openDetail(page: Page, fileName: string): Promise<void> {
   await loaded
 }
 
-// Opens the Folder TreeSelect's overlay (its one visible button is the dropdown toggle -- no clear
-// icon is rendered here since the field is never empty, "Uncategorized" being a real option) and
-// picks the given node by its exact label.
-async function selectFolder(page: Page, label: string): Promise<void> {
-  await mdField(page, 'Folder').getByRole('button').click()
-  await page.getByRole('treeitem', { name: label, exact: true }).click()
-}
-
 // Saves the detail dialog, waiting for the real PUT /api/items/file/{id} to resolve and the dialog
 // to close (MediaDetailDialog emits 'saved' + 'close' only after the request succeeds).
 async function saveDetail(page: Page): Promise<void> {
@@ -145,6 +143,22 @@ async function saveDetail(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await saved
   await expect(detailDialog(page)).toHaveCount(0)
+}
+
+// Moves a file to `targetLabel` ("Root" for Uncategorized, or a folder's own name) through the
+// grid tile's right-click context menu and the MediaMoveDialog it opens -- the mechanism the
+// detail dialog's own Folder field was removed in favour of. Waits for the real
+// PUT /api/items/file/{id} that performMove issues (itemsApi.update('file', id, { folderId })).
+async function moveFileTo(page: Page, fileName: string, targetLabel: string): Promise<void> {
+  await fileTile(page, fileName).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Move to…' }).click()
+  await expect(moveDialog(page)).toBeVisible()
+  const moved = page.waitForResponse(
+    (r) => r.request().method() === 'PUT' && /\/api\/items\/file\//.test(r.url()),
+  )
+  await moveDialog(page).getByRole('button', { name: `${targetLabel} — ${MOVE_SUBMIT}`, exact: true }).click()
+  await moved
+  await expect(moveDialog(page)).toHaveCount(0)
 }
 
 // Clicks a folder card's Delete action and confirms via the store-backed ConfirmHost's alertdialog.
@@ -179,7 +193,7 @@ test.afterEach(async ({ page }) => {
   }
 })
 
-test('media folders: create, upload with title autofill, folder survives a save, move to Uncategorized, no full-editor escape hatch, and the non-empty delete guard', async ({ page }) => {
+test('media folders: create, upload with title autofill, a folder-untouched save does not unfile, move via context menu, no full-editor escape hatch, and the non-empty delete guard', async ({ page }) => {
   await login(page)
   await page.goto('/media')
   await expect(page).toHaveURL(/\/media$/)
@@ -198,46 +212,35 @@ test('media folders: create, upload with title autofill, folder survives a save,
   await openDetail(page, fileName)
   await expect(mdField(page, 'Title').locator('input')).toHaveValue(fileBase)
 
-  // 3. Regression guard: the Folder TreeSelect must already show the REAL folder (not
-  // "Uncategorized") on this very first load, before any Save has happened.
-  // TreeSelect.vue renders its trigger as a plain Button (role="button", per selectFolder() below)
-  // whose aria-label joins the field label to the current value through fields.namePairSeparator
-  // (': ' under this suite's fixtures.ts-pinned 'en' locale) -- not a "combobox" and not
-  // label-then-value without a separator. See TreeSelect.vue's `accessibleName` computed.
-  await expect(mdField(page, 'Folder').getByRole('button')).toHaveAccessibleName(`Folder: ${folderName}`)
-
-  // Edit Alt text and Save -- a save that never touches the Folder field is exactly the scenario
-  // that used to silently unfile the item.
+  // 3. Edit Alt text and Save -- a save that never touches folder assignment (the dialog has no
+  // way to touch it any more) is exactly the scenario that used to silently unfile the item.
+  // Confirm end to end that the file is still browsable inside the SAME folder afterwards.
   const alt = `Alt ${STAMP}`
   await mdField(page, 'Alt text').locator('input').fill(alt)
   await saveDetail(page)
-
-  // Still browsable inside the SAME folder after the save (not silently moved to Uncategorized).
   await expect(fileTile(page, fileName)).toBeVisible()
 
-  // Reopen for a FRESH GET (not trusting in-memory form state) and confirm the folder truly
-  // persisted server-side, not just in the form.
+  // Reopen for a FRESH GET (not trusting in-memory form state) and confirm Alt truly persisted
+  // server-side, then confirm there is no "open in full editor" escape hatch anywhere in the
+  // detail dialog, then close it so the grid underneath becomes interactive again.
   await openDetail(page, fileName)
-  await expect(mdField(page, 'Folder').getByRole('button')).toHaveAccessibleName(`Folder: ${folderName}`)
   await expect(mdField(page, 'Alt text').locator('input')).toHaveValue(alt)
-
-  // 5. No "open in full editor" escape hatch anywhere in the detail dialog.
   await expect(detailDialog(page).getByRole('button', { name: /full editor/i })).toHaveCount(0)
   await expect(detailDialog(page).getByRole('link', { name: /full editor/i })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(detailDialog(page)).toHaveCount(0)
 
-  // 4. Move to Uncategorized -> the file leaves the folder and becomes root-browsable.
-  await selectFolder(page, 'Uncategorized')
-  await saveDetail(page)
+  // 4. Move to root ("Uncategorized") via the grid tile's "Move to…" context menu -> the file
+  // leaves the folder and becomes root-browsable.
+  await moveFileTo(page, fileName, 'Root')
   await expect(page.getByText('No media files')).toBeVisible()
 
   await goToBreadcrumbRoot(page)
   await expect(fileTile(page, fileName)).toBeVisible()
 
-  // 6. Put the file back in the folder, then attempt to delete the (now non-empty) folder ->
+  // 5. Put the file back in the folder, then attempt to delete the (now non-empty) folder ->
   // rejected with a 409 + warning toast, and the folder card remains.
-  await openDetail(page, fileName)
-  await selectFolder(page, folderName)
-  await saveDetail(page)
+  await moveFileTo(page, fileName, folderName)
 
   const rejectedStatus = await attemptDeleteFolder(page, folderName)
   expect(rejectedStatus).toBe(409)
@@ -248,14 +251,12 @@ test('media folders: create, upload with title autofill, folder survives a save,
   await expect(page.getByText('Folder is not empty', { exact: false })).toBeVisible()
   await expect(folderCard(page, folderName)).toBeVisible()
 
-  // 7. Empty the folder, then delete succeeds and the card disappears. The file is currently
-  // filed under the folder (step 6 put it back), so the ROOT view (Uncategorized-only) no longer
-  // shows it -- enter the folder to reach it, then hop back up to root where the folder's own
-  // card renders (a folder never shows its own card while browsing inside it).
+  // 6. Empty the folder, then delete succeeds and the card disappears. The file is currently
+  // filed under the folder (step 5 put it back), so the ROOT view (Uncategorized-only) no longer
+  // shows it -- enter the folder to reach it, move it back to root, then hop back up to root where
+  // the folder's own card renders (a folder never shows its own card while browsing inside it).
   await enterFolder(page, folderName)
-  await openDetail(page, fileName)
-  await selectFolder(page, 'Uncategorized')
-  await saveDetail(page)
+  await moveFileTo(page, fileName, 'Root')
   await goToBreadcrumbRoot(page)
 
   const okStatus = await attemptDeleteFolder(page, folderName)
