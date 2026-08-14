@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import MediaFolderCards from './MediaFolderCards.vue'
 import type { FolderRow } from '../../lib/folderTree'
+import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
 
 const i18n = createI18n({
   legacy: false,
@@ -100,5 +101,47 @@ describe('MediaFolderCards', () => {
     const buttons = firstCard.findAllComponents({ name: 'Button' })
     expect(buttons[0].attributes('type')).toBe('button')
     expect(buttons[1].attributes('type')).toBe('button')
+  })
+
+  it('emits dropOn with the parsed payload when a media drag is dropped on a card', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const payload = { files: ['f1'], folders: [] }
+    const dataTransfer = {
+      types: [DRAG_MIME],
+      getData: (t: string) => (t === DRAG_MIME ? serializeMovePayload(payload) : ''),
+      dropEffect: '',
+    }
+    await w.find('.folder-card').trigger('drop', { dataTransfer })
+    expect(w.emitted('dropOn')?.[0]).toEqual([folders[0].id, payload])
+  })
+
+  it('ignores a drop carrying no media payload', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const dataTransfer = { types: ['text/plain'], getData: () => 'hello', dropEffect: '' }
+    await w.find('.folder-card').trigger('drop', { dataTransfer })
+    expect(w.emitted('dropOn')).toBeUndefined()
+  })
+
+  it('clears the drop-highlight on dragleave', async () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const card = w.find('.folder-card')
+    const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
+    await card.trigger('dragover', { dataTransfer })
+    expect(card.attributes('data-dropping')).toBe('true')
+    await card.trigger('dragleave')
+    expect(card.attributes('data-dropping')).toBeUndefined()
+  })
+
+  // Permissions: folder moves require canWrite('mediafolder') -- without that grant the card
+  // must not be a drag source at all, regardless of canManage (which also covers delete-only
+  // users who should still be able to see rename/delete but not drag folders around).
+  it('is not draggable when canMove is false or unset', () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    expect(w.find('.folder-card').attributes('draggable')).toBeUndefined()
+  })
+
+  it('is draggable when canMove is true', () => {
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: true }, global: { plugins: [i18n] } })
+    expect(w.find('.folder-card').attributes('draggable')).toBe('true')
   })
 })

@@ -28,6 +28,9 @@ import { purgeConfirm } from '../lib/deleteAction'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { ApiError } from '../api/apiClient'
+import { performMove } from '../lib/mediaMoveActions'
+import { isNoOpMove, type MovePayload } from '../lib/mediaMove'
+import { readDragPayload } from '../lib/mediaDnd'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -249,6 +252,42 @@ async function onRemoveFolder(folder: FolderRow): Promise<void> {
   }
 }
 
+// Drag and drop: files onto folder cards, folders onto folder cards, either onto a breadcrumb
+// segment. Grid tiles and folder cards are gated on canWrite/canManageFolders (see the template);
+// this handler itself stays permission-blind and lets performMove's own writes fail/succeed
+// through the normal RBAC-enforced API instead of duplicating the check here.
+async function onDropOn(targetFolderId: string | null, payload: MovePayload): Promise<void> {
+  if (!payload.files.length && !payload.folders.length) return
+  // Everything visible outside search mode lives in currentFolderId, so a drop onto that same
+  // folder is a no-op. Search mode has no drop targets at all (visibleFolders is [] and the
+  // breadcrumb <nav> is v-if-ed on !searchActive), so no search-specific guard is needed here.
+  // Normalise falsy parent ids to null before comparing -- folderTree.ts's toFolderRows can in
+  // principle produce parentId: '' from an M2O relation whose id happens to be an empty string,
+  // and isNoOpMove's === check would otherwise treat '' and null as different roots.
+  const target = targetFolderId || null
+  if (isNoOpMove(currentFolderId.value || null, target)) return
+  try {
+    const { moved, skipped } = await performMove(payload, target, folders.value)
+    if (skipped > 0)
+      toast.add({ severity: 'warn', summary: t('media.moveSkippedCycle', { n: skipped }), life: 4000 })
+    if (moved > 0)
+      toast.add({ severity: 'success', summary: t('media.moved', { n: moved }), life: 2500 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.moveFailed'), life: 3500 })
+  } finally {
+    await loadFolders()
+    await loadClampingToLastValidPage()
+  }
+}
+
+const crumbDropping = ref<string | null>(null)
+
+function onCrumbDrop(ev: DragEvent, targetFolderId: string | null): void {
+  crumbDropping.value = null
+  const payload = readDragPayload(ev)
+  if (payload) void onDropOn(targetFolderId, payload)
+}
+
 onMounted(() => { loadFolders(); load() })
 onUnmounted(() => debouncedSearch.cancel())
 
@@ -256,7 +295,8 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
   files, total, loading, error, canWrite, canDelete, selected,
   folders, currentFolderId, visibleFolders, breadcrumb, enterFolder,
   goToBreadcrumb, onCreateFolder, onRenameFolder, onRemoveFolder, createOpen, renameTarget,
-  mode, setMode, onModeToggle, onViewToggle, view, showTrashSwitch, onRestore, onPurge })
+  mode, setMode, onModeToggle, onViewToggle, view, showTrashSwitch, onRestore, onPurge,
+  onDropOn })
 </script>
 
 <template>
@@ -328,10 +368,23 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     </p>
 
     <nav v-if="mode === 'active' && !searchActive && (breadcrumb.length || folders.length)" class="media-crumb" :aria-label="t('media.title')">
-      <button type="button" class="media-crumb__link text-primary rounded-md" @click="goToBreadcrumb(null)">{{ t('media.breadcrumbRoot') }}</button>
+      <button type="button" class="media-crumb__link text-primary rounded-md"
+              :data-dropping="crumbDropping === 'root' ? 'true' : undefined"
+              @click="goToBreadcrumb(null)"
+              @dragover.prevent="crumbDropping = 'root'"
+              @dragleave="crumbDropping = null"
+              @drop.prevent="onCrumbDrop($event, null)">{{ t('media.breadcrumbRoot') }}</button>
       <template v-for="c in breadcrumb" :key="c.id">
         <ChevronRight class="media-crumb__sep size-3 text-muted-foreground" aria-hidden="true" />
-        <button v-if="c.id !== currentFolderId" type="button" class="media-crumb__link text-primary rounded-md" @click="goToBreadcrumb(c.id)">{{ c.name }}</button>
+        <!-- The current folder's crumb renders as a <span>, not a button, and is deliberately
+             not a drop target -- dropping onto the folder you are already in is the no-op
+             onDropOn already rejects. -->
+        <button v-if="c.id !== currentFolderId" type="button" class="media-crumb__link text-primary rounded-md"
+                :data-dropping="crumbDropping === c.id ? 'true' : undefined"
+                @click="goToBreadcrumb(c.id)"
+                @dragover.prevent="crumbDropping = c.id"
+                @dragleave="crumbDropping = null"
+                @drop.prevent="onCrumbDrop($event, c.id)">{{ c.name }}</button>
         <span v-else class="media-crumb__current">{{ c.name }}</span>
       </template>
     </nav>
@@ -339,10 +392,15 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
     <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
-                      :can-manage="canManageFolders || canDeleteFolders"
-                      @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder" />
+                      :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
+                      @open="enterFolder" @rename="renameTarget = $event" @remove="onRemoveFolder"
+                      @drop-on="onDropOn" />
 
-    <MediaGrid v-if="view === 'grid'" :files="files" @open="openDetail">
+    <!-- canMove is not additionally gated on mode !== 'trash': trashed tiles being draggable is
+         harmless because trash mode renders neither MediaFolderCards nor the breadcrumb nav
+         (both v-if-ed on mode === 'active'), so there is never a drop target to receive one --
+         same reasoning as why search mode needs no special-casing here either. -->
+    <MediaGrid v-if="view === 'grid'" :files="files" :can-move="canWrite" @open="openDetail">
       <template v-if="mode === 'trash'" #actions="{ file }">
         <Button
           type="button" variant="ghost" size="icon-sm"
@@ -425,5 +483,6 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 .media-crumb { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; flex-wrap: wrap; }
 .media-crumb__link { border: 0; background: none; padding: 2px 4px; cursor: pointer; font: inherit; }
 .media-crumb__link:hover { text-decoration: underline; }
+.media-crumb__link[data-dropping='true'] { outline: 2px solid var(--primary); outline-offset: 1px; }
 .media-crumb__current { color: var(--fg); font-weight: 600; padding: 2px 4px; }
 </style>

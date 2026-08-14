@@ -167,6 +167,9 @@ export default {
     folderAll: 'All files',
     folderUncategorized: 'Uncategorized',
     folderField: 'Folder',
+    moveFailed: 'Move failed',
+    moveSkippedCycle: '{n} folder(s) skipped: a folder cannot be moved into itself',
+    moved: 'Moved {n} item(s)',
   },
   revisions: {
     title: 'Revision history',

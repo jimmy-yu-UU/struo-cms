@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MediaGrid from './MediaGrid.vue'
+import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
 
 const files = [
   { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 },
@@ -51,5 +52,21 @@ describe('MediaGrid', () => {
       slots: { actions: '<button class="act">{{ params.file.id }}</button>' },
     })
     expect(w.findAll('.act')).toHaveLength(files.length)
+  })
+
+  // Permissions: file moves require canWrite('file') -- without that grant a tile must not be a
+  // drag source at all.
+  it('is not draggable when canMove is false or unset', () => {
+    const w = mount(MediaGrid, { props: { files } })
+    expect(w.find('.media-tile-wrap').attributes('draggable')).toBeUndefined()
+  })
+
+  it('is draggable and writes the file payload on dragstart when canMove is true', async () => {
+    const w = mount(MediaGrid, { props: { files, canMove: true } })
+    const wrap = w.find('.media-tile-wrap')
+    expect(wrap.attributes('draggable')).toBe('true')
+    const setData = vi.fn()
+    await wrap.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: ['f1'], folders: [] }))
   })
 })

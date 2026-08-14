@@ -4,12 +4,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import MediaLibraryView from './MediaLibraryView.vue'
 import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
+import MediaGrid from '../components/media/MediaGrid.vue'
+import MediaFolderCards from '../components/media/MediaFolderCards.vue'
 import { itemsApi } from '../api/itemsApi'
 import { filesApi } from '../api/filesApi'
 import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import type { CurrentUser } from '../stores/authStore'
 import type { FolderRow } from '../lib/folderTree'
+import { DRAG_MIME, serializeMovePayload } from '../lib/mediaMove'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
@@ -29,6 +32,8 @@ const i18n = createI18n({
     folderDeleteConfirm: 'Delete folder "{name}"?', folderNotEmpty: 'Folder is not empty',
     folderLoadFailed: 'Failed to load folders', folderSaveFailed: 'Folder operation failed',
     breadcrumbRoot: 'Media Library',
+    moveFailed: 'Move failed', moveSkippedCycle: '{n} folder(s) skipped: a folder cannot be moved into itself',
+    moved: 'Moved {n} item(s)',
   }, collectionList: {
     range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
     restore: 'Restore', purge: 'Delete permanently', trashNotice: 'You are viewing the trash.',
@@ -74,6 +79,7 @@ describe('MediaLibraryView', () => {
     vi.restoreAllMocks()
     confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
     toastAdd.mockReset()
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({})
   })
 
   it('renders the vendored controls, not PrimeVue ones', async () => {
@@ -875,5 +881,142 @@ describe('MediaLibraryView', () => {
     await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
     await flushPromises()
     expect(w.findComponent(MediaUploadDialog).props('folderId')).toBe('a')
+  })
+
+  it('moves the dropped payload into the target folder and reloads', async () => {
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn('d1', { files: ['f1'], folders: [] })
+    expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'd1' })
+  })
+
+  it('does nothing when the drop target is the folder already being viewed', async () => {
+    const folders: FolderRow[] = [{ id: 'd1', name: 'D1', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('d1')
+    await flushPromises()
+    vi.mocked(itemsApi.update).mockClear()
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn('d1', { files: ['f1'], folders: [] })
+    expect(itemsApi.update).not.toHaveBeenCalled()
+  })
+
+  it('shows a success toast after a real move and reloads the file list', async () => {
+    const list = makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+    const w = mountView()
+    await flushPromises()
+    const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn('d1', { files: ['f1'], folders: [] })
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: 'Moved 1 item(s)' }))
+    expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBeGreaterThan(fileCallsBefore)
+  })
+
+  it('surfaces a toast and still reloads when a move fails', async () => {
+    vi.mocked(itemsApi.update).mockRejectedValueOnce(new Error('boom'))
+    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn('d1', { files: ['f1'], folders: [] })
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'boom' }))
+    expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBeGreaterThan(fileCallsBefore)
+  })
+
+  it('warns with a skipped-cycle toast when a folder move is refused', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    // Moving 'a' onto itself would form a cycle -- canMoveFolder (via performMove) must refuse it.
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn('a', { files: [], folders: ['a'] })
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
+      severity: 'warn', summary: '1 folder(s) skipped: a folder cannot be moved into itself',
+    }))
+  })
+
+  it('does nothing on a drop with an empty payload', async () => {
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { onDropOn: (t: string | null, p: { files: string[]; folders: string[] }) => Promise<void> })
+      .onDropOn('d1', { files: [], folders: [] })
+    expect(itemsApi.update).not.toHaveBeenCalled()
+  })
+
+  // Permissions: file moves require canWrite('file'); folder moves require canWrite('mediafolder').
+  // Without the grant the item must not be draggable at all -- gated through each child's own
+  // canMove prop rather than something checked only at drop time.
+  it('gates MediaGrid dragging on file write permission', async () => {
+    makeListMock([{ data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(MediaGrid).props('canMove')).toBe(false)
+    seedUser({ write: true })
+    await flushPromises()
+    expect(w.findComponent(MediaGrid).props('canMove')).toBe(true)
+  })
+
+  it('gates MediaFolderCards dragging on mediafolder write permission', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(MediaFolderCards).props('canMove')).toBe(false)
+    seedUser({ write: true }, 'mediafolder')
+    await flushPromises()
+    expect(w.findComponent(MediaFolderCards).props('canMove')).toBe(true)
+  })
+
+  it('wires MediaFolderCards\' dropOn emit to onDropOn', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    w.findComponent(MediaFolderCards).vm.$emit('dropOn', 'a', { files: ['f1'], folders: [] })
+    await flushPromises()
+    expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
+  })
+
+  // Breadcrumb segments are drop targets too (Task 5's second half): dropping onto an ancestor
+  // crumb moves the payload there via the same onDropOn path, exercised here through a real DOM
+  // drop event rather than a $vm call, to also cover the template wiring itself.
+  it('drops a payload onto the root breadcrumb and moves it there', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
+    await flushPromises()
+    const dataTransfer = {
+      types: [DRAG_MIME],
+      getData: (t: string) => (t === DRAG_MIME ? serializeMovePayload({ files: ['f1'], folders: [] }) : ''),
+      dropEffect: '',
+    }
+    const rootCrumb = w.find('.media-crumb__link')
+    await rootCrumb.trigger('drop', { dataTransfer })
+    await flushPromises()
+    expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: null })
+  })
+
+  it('does not treat a foreign (non-media) drop on the breadcrumb as a move', async () => {
+    const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+    makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as unknown as { enterFolder: (id: string) => void }).enterFolder('a')
+    await flushPromises()
+    const dataTransfer = { types: ['text/plain'], getData: () => 'hello', dropEffect: '' }
+    const rootCrumb = w.find('.media-crumb__link')
+    await rootCrumb.trigger('drop', { dataTransfer })
+    await flushPromises()
+    expect(itemsApi.update).not.toHaveBeenCalled()
   })
 })

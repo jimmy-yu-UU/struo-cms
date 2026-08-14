@@ -13,6 +13,12 @@ export type MovePayload = { files: string[]; folders: string[] }
  * `folderPath` is cycle-safe on the read side, but nothing there stops the cycle being written in
  * the first place — that is this function's job. The walk is bounded by a seen-set so malformed
  * data that already contains a cycle terminates instead of hanging.
+ *
+ * This guard is only sound when `folders` is the COMPLETE folder list. If the walk reaches an
+ * ancestor id that isn't in `folders` at all (e.g. a caller passed a page of results, not
+ * everything), there is no way to tell whether that missing ancestor eventually leads back to
+ * `sourceId` -- treating a missing id as "reached the root" would let a real cycle through. So an
+ * incomplete chain refuses the move rather than guessing it is safe.
  */
 export function canMoveFolder(folders: FolderRow[], sourceId: string, targetId: string | null): boolean {
   if (targetId === null) return true
@@ -24,7 +30,9 @@ export function canMoveFolder(folders: FolderRow[], sourceId: string, targetId: 
   while (cur !== null && !seen.has(cur)) {
     if (cur === sourceId) return false
     seen.add(cur)
-    cur = byId.get(cur)?.parentId ?? null
+    const node = byId.get(cur)
+    if (node === undefined) return false
+    cur = node.parentId
   }
   return true
 }

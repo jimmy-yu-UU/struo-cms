@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
+import { setDragPayload } from '../../lib/mediaDnd'
 
 const props = defineProps<{
   files: FileRow[]
@@ -7,6 +8,7 @@ const props = defineProps<{
   selectedId?: string | null
   multiple?: boolean
   selectedIds?: string[]
+  canMove?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'select', id: string): void
@@ -24,11 +26,18 @@ function isSelected(id: string): boolean {
     ? !!props.selectedIds?.includes(id)
     : props.selectable === true && props.selectedId === id
 }
+// Tiles are drag sources only -- a file is not a drop target, so there is no dragover/drop
+// handling here (unlike MediaFolderCards).
+function onDragStart(ev: DragEvent, f: FileRow): void {
+  setDragPayload(ev, { files: [f.id], folders: [] })
+}
 </script>
 
 <template>
   <div class="media-grid">
-    <div v-for="f in files" :key="f.id" class="media-tile-wrap relative">
+    <div v-for="f in files" :key="f.id" class="media-tile-wrap relative"
+         :draggable="canMove ? 'true' : undefined"
+         @dragstart="onDragStart($event, f)">
       <button
         type="button"
         class="media-tile w-full rounded-xl border border-border hover:border-primary"

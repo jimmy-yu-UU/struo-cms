@@ -42,6 +42,17 @@ describe('canMoveFolder', () => {
   it('refuses an unknown target', () => {
     expect(canMoveFolder(folders, 'a', 'nope')).toBe(false)
   })
+
+  // A truncated folder list (e.g. an install with more folders than a single page of results)
+  // must not be silently treated as "the chain reached the root" -- that reads as a safe move
+  // when it is really an unknown. `e`'s parent `missing` is not present in the array at all.
+  it('refuses a move when an ancestor mid-chain is missing from the list (truncated pagination)', () => {
+    const truncated: FolderRow[] = [
+      { id: 'a', name: 'a', parentId: null },
+      { id: 'e', name: 'e', parentId: 'missing' },
+    ]
+    expect(canMoveFolder(truncated, 'a', 'e')).toBe(false)
+  })
 })
 
 describe('isNoOpMove', () => {
