@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFolderCards from './MediaFolderCards.vue'
+import MediaContextMenu from './MediaContextMenu.vue'
 import type { FolderRow } from '../../lib/folderTree'
 import { DRAG_MIME, serializeMovePayload } from '../../lib/mediaMove'
 
@@ -10,7 +11,10 @@ const i18n = createI18n({
   legacy: false,
   locale: 'en',
   fallbackLocale: 'en',
-  messages: { en: { media: { folderRename: 'Rename folder', folderDelete: 'Delete folder' } } },
+  messages: { en: { media: {
+    folderRename: 'Rename folder', folderDelete: 'Delete folder',
+    menuOpen: 'Open', menuMove: 'Move to…', menuRename: 'Rename', menuDelete: 'Delete',
+  } } },
 })
 
 const folders: FolderRow[] = [
@@ -18,11 +22,16 @@ const folders: FolderRow[] = [
   { id: 'b', name: 'Beta', parentId: null },
 ]
 
-function mountCards(canManage: boolean) {
+function mountCards(canManage: boolean, extraProps: Record<string, unknown> = {}) {
   return mount(MediaFolderCards, {
-    props: { folders, canManage },
-    global: { plugins: [i18n] },
+    props: { folders, canManage, ...extraProps },
+    global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
+}
+
+async function openCardMenu(w: ReturnType<typeof mountCards>, index = 0) {
+  await w.findAll('.folder-card')[index].trigger('contextmenu')
+  await flushPromises()
 }
 
 describe('MediaFolderCards', () => {
@@ -105,7 +114,7 @@ describe('MediaFolderCards', () => {
   })
 
   it('emits dropOn with the parsed payload when a media drag is dropped on a card', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const payload = { files: ['f1'], folders: [] }
     const dataTransfer = {
       types: [DRAG_MIME],
@@ -117,14 +126,14 @@ describe('MediaFolderCards', () => {
   })
 
   it('ignores a drop carrying no media payload', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const dataTransfer = { types: ['text/plain'], getData: () => 'hello', dropEffect: '' }
     await w.find('.folder-card').trigger('drop', { dataTransfer })
     expect(w.emitted('dropOn')).toBeUndefined()
   })
 
   it('clears the drop-highlight on dragleave', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const card = w.find('.folder-card')
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await card.trigger('dragover', { dataTransfer })
@@ -137,12 +146,12 @@ describe('MediaFolderCards', () => {
   // must not be a drag source at all, regardless of canManage (which also covers delete-only
   // users who should still be able to see rename/delete but not drag folders around).
   it('is not draggable when canMove is false or unset', () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     expect(w.find('.folder-card').attributes('draggable')).toBeUndefined()
   })
 
   it('is draggable when canMove is true', () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     expect(w.find('.folder-card').attributes('draggable')).toBe('true')
   })
 
@@ -150,7 +159,7 @@ describe('MediaFolderCards', () => {
   // still bubble a `dragstart` up to it. `onDragStart` itself must refuse to write a payload when
   // canMove is false rather than relying solely on the `draggable` attribute.
   it('does not write a drag payload on dragstart when canMove is false', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: false }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true, canMove: false }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const setData = vi.fn()
     await w.find('.folder-card').trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
     expect(setData).not.toHaveBeenCalled()
@@ -166,7 +175,7 @@ describe('MediaFolderCards', () => {
   // highlight must survive. A naive `.self`-style guard passes this event through and clears the
   // highlight, which is wrong.
   it('keeps the drop-highlight when dragleave targets the card itself but relatedTarget is still inside it', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const card = w.find('.folder-card')
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await card.trigger('dragover', { dataTransfer })
@@ -179,7 +188,7 @@ describe('MediaFolderCards', () => {
   // relatedTarget outside the card -- the highlight must clear. A `.self` guard filters this event
   // out entirely (target !== currentTarget), leaving a stale highlight forever.
   it('clears the drop-highlight when dragleave bubbles from a child with relatedTarget outside the card', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const card = w.find('.folder-card')
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await card.trigger('dragover', { dataTransfer })
@@ -194,7 +203,7 @@ describe('MediaFolderCards', () => {
   // element entirely (a MediaGrid file tile started the drag), so this must be caught at the
   // document level, not scoped to this card's own listeners.
   it('clears the drop-highlight when a drag ends anywhere (abandoned drag, not just a drop on this card)', async () => {
-    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n] } })
+    const w = mount(MediaFolderCards, { props: { folders, canManage: true }, global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } })
     const card = w.find('.folder-card')
     const dataTransfer = { types: [DRAG_MIME], getData: () => '', dropEffect: '' }
     await card.trigger('dragover', { dataTransfer })
@@ -202,5 +211,72 @@ describe('MediaFolderCards', () => {
     document.dispatchEvent(new Event('dragend'))
     await nextTick()
     expect(card.attributes('data-dropping')).toBeUndefined()
+  })
+
+  // Right-click context menu (Task 8): folder cards additionally offer Rename, gated separately
+  // from Move/Delete.
+  describe('context menu', () => {
+    it('always offers Open, regardless of grants', async () => {
+      const w = mountCards(false)
+      await openCardMenu(w)
+      expect(w.find('[data-test="menu-open"]').exists()).toBe(true)
+    })
+
+    it('hides Rename, Move and Delete without the matching grants', async () => {
+      const w = mountCards(false)
+      await openCardMenu(w)
+      expect(w.find('[data-test="menu-rename"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-move"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-delete"]').exists()).toBe(false)
+    })
+
+    it('shows Rename, Move and Delete when their grants are true', async () => {
+      const w = mountCards(false, { canRename: true, canMove: true, canDelete: true })
+      await openCardMenu(w)
+      expect(w.find('[data-test="menu-rename"]').exists()).toBe(true)
+      expect(w.find('[data-test="menu-move"]').exists()).toBe(true)
+      expect(w.find('[data-test="menu-delete"]').exists()).toBe(true)
+    })
+
+    it('emits open with the folder id when Open is selected', async () => {
+      const w = mountCards(false)
+      await openCardMenu(w, 1)
+      await w.find('[data-test="menu-open"]').trigger('click')
+      expect(w.emitted('open')).toEqual([['b']])
+    })
+
+    it('emits rename with the folder object when Rename is selected', async () => {
+      const w = mountCards(false, { canRename: true })
+      await openCardMenu(w, 1)
+      await w.find('[data-test="menu-rename"]').trigger('click')
+      expect(w.emitted('rename')).toEqual([[folders[1]]])
+    })
+
+    it('emits requestMove with a single-folder payload when Move is selected', async () => {
+      const w = mountCards(false, { canMove: true })
+      await openCardMenu(w, 1)
+      await w.find('[data-test="menu-move"]').trigger('click')
+      expect(w.emitted('requestMove')?.[0]).toEqual([{ files: [], folders: ['b'] }])
+    })
+
+    it('emits remove with the folder object when Delete is selected', async () => {
+      const w = mountCards(false, { canDelete: true })
+      await openCardMenu(w, 1)
+      await w.find('[data-test="menu-delete"]').trigger('click')
+      expect(w.emitted('remove')).toEqual([[folders[1]]])
+    })
+
+    // Same reasoning as MediaGrid's own guard test: reach the shared menu's own exposed handlers
+    // directly, with the grants off, to prove the refusal is this component's own wiring and not
+    // just an absent DOM entry.
+    it('refuses to emit rename/requestMove/remove via the menu\'s own handlers when the grants are false', () => {
+      const w = mountCards(false)
+      const menu = w.findComponent(MediaContextMenu)
+      const vm = menu.vm as unknown as { onMove: () => void; onRename: () => void; onRemove: () => void }
+      vm.onMove(); vm.onRename(); vm.onRemove()
+      expect(w.emitted('requestMove')).toBeUndefined()
+      expect(w.emitted('rename')).toBeUndefined()
+      expect(w.emitted('remove')).toBeUndefined()
+    })
   })
 })

@@ -36,6 +36,8 @@ const i18n = createI18n({
     breadcrumbRoot: 'Media Library',
     moveFailed: 'Move failed', moveSkippedCycle: '{n} folder(s) skipped: a folder cannot be moved into itself',
     moved: 'Moved {n} item(s)', moveTo: 'Move to…', moveRoot: 'Root', moveSubmit: 'Move',
+    menuOpen: 'Open', menuMove: 'Move to…', menuRename: 'Rename', menuDelete: 'Delete',
+    menuNewFolder: 'New folder', menuUpload: 'Upload',
   }, collectionList: {
     range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
     restore: 'Restore', purge: 'Delete permanently', trashNotice: 'You are viewing the trash.',
@@ -1088,5 +1090,219 @@ describe('MediaLibraryView', () => {
     w.findComponent(MediaMoveDialog).vm.$emit('submit', 'a')
     await flushPromises()
     expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
+  })
+
+  // Task 8: the context menu's "Move to…" entry is the first real UI trigger for the move
+  // dialog Task 7 only wired internally.
+  describe('context menu wiring', () => {
+    it('sets movePayload and opens the move dialog when onRequestMove runs', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { onRequestMove: (p: MovePayload) => void })
+        .onRequestMove({ files: ['f1'], folders: [] })
+      await flushPromises()
+      expect((w.vm as unknown as { movePayload: MovePayload }).movePayload).toEqual({ files: ['f1'], folders: [] })
+      expect((w.vm as unknown as { moveDialogOpen: boolean }).moveDialogOpen).toBe(true)
+    })
+
+    it('routes MediaGrid\'s requestMove emit into onRequestMove', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      w.findComponent(MediaGrid).vm.$emit('requestMove', { files: ['f1'], folders: [] })
+      await flushPromises()
+      expect((w.vm as unknown as { moveDialogOpen: boolean }).moveDialogOpen).toBe(true)
+    })
+
+    it('routes MediaFolderCards\' requestMove emit into onRequestMove', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      w.findComponent(MediaFolderCards).vm.$emit('requestMove', { files: [], folders: ['a'] })
+      await flushPromises()
+      expect((w.vm as unknown as { movePayload: MovePayload }).movePayload).toEqual({ files: [], folders: ['a'] })
+    })
+
+    it('routes MediaFileList\'s requestMove emit into onRequestMove', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+      await flushPromises()
+      w.findComponent(MediaFileList).vm.$emit('requestMove', { files: ['f1'], folders: [] })
+      await flushPromises()
+      expect((w.vm as unknown as { movePayload: MovePayload }).movePayload).toEqual({ files: ['f1'], folders: [] })
+    })
+
+    it('deletes a file when onRemoveFile is confirmed, then reloads', async () => {
+      const list = makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+      const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
+      confirmRequire.mockResolvedValueOnce(true)
+      const w = mountView()
+      await flushPromises()
+      const fileCallsBefore = list.mock.calls.filter((c) => c[0] === 'file').length
+      await (w.vm as unknown as { onRemoveFile: (id: string) => Promise<void> }).onRemoveFile('f1')
+      await flushPromises()
+      expect(remove).toHaveBeenCalledWith('f1')
+      expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
+    })
+
+    it('does not delete a file when the confirmation is declined', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
+      confirmRequire.mockResolvedValueOnce(false)
+      const w = mountView()
+      await flushPromises()
+      await (w.vm as unknown as { onRemoveFile: (id: string) => Promise<void> }).onRemoveFile('f1')
+      await flushPromises()
+      expect(remove).not.toHaveBeenCalled()
+    })
+
+    it('surfaces a toast when onRemoveFile fails instead of failing silently', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      vi.spyOn(filesApi, 'remove').mockRejectedValue(new Error('nope'))
+      confirmRequire.mockResolvedValueOnce(true)
+      const w = mountView()
+      await flushPromises()
+      await (w.vm as unknown as { onRemoveFile: (id: string) => Promise<void> }).onRemoveFile('f1')
+      await flushPromises()
+      expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: 'nope' }))
+    })
+
+    it('closes the detail dialog when the file being deleted is the one currently open', async () => {
+      makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
+      vi.spyOn(filesApi, 'remove').mockResolvedValue()
+      confirmRequire.mockResolvedValueOnce(true)
+      const w = mountView()
+      await flushPromises()
+      await w.find('.media-tile').trigger('click')
+      expect(w.findComponent({ name: 'MediaDetailDialog' }).props('file')).toEqual(rows[0])
+      await (w.vm as unknown as { onRemoveFile: (id: string) => Promise<void> }).onRemoveFile('f1')
+      await flushPromises()
+      expect(w.findComponent({ name: 'MediaDetailDialog' }).props('file')).toBeNull()
+    })
+
+    // Permissions: MediaGrid's Delete entry requires canDelete('file'); MediaFolderCards'/
+    // MediaFileList's Rename/Delete entries require canManageFolders/canDeleteFolders
+    // respectively -- same reasoning as the drag-and-drop canMove props already gated this way.
+    it('gates MediaGrid\'s Delete entry on file delete permission', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      expect(w.findComponent(MediaGrid).props('canDelete')).toBe(false)
+      seedUser({ delete: true })
+      await flushPromises()
+      expect(w.findComponent(MediaGrid).props('canDelete')).toBe(true)
+    })
+
+    it('gates MediaFolderCards\' Rename/Delete entries on their own mediafolder grants', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      expect(w.findComponent(MediaFolderCards).props('canRename')).toBe(false)
+      expect(w.findComponent(MediaFolderCards).props('canDelete')).toBe(false)
+      seedUser({ write: true }, 'mediafolder')
+      await flushPromises()
+      expect(w.findComponent(MediaFolderCards).props('canRename')).toBe(true)
+      expect(w.findComponent(MediaFolderCards).props('canDelete')).toBe(false)
+    })
+
+    it('gates MediaFileList\'s Rename/Delete entries (files and folders separately)', async () => {
+      const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
+      makeListMock([{ data: rows, total: 1 }], folders)
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+      await flushPromises()
+      expect(w.findComponent(MediaFileList).props('canDeleteFiles')).toBe(false)
+      expect(w.findComponent(MediaFileList).props('canRenameFolders')).toBe(false)
+      expect(w.findComponent(MediaFileList).props('canDeleteFolders')).toBe(false)
+      seedUser({ delete: true })
+      await flushPromises()
+      expect(w.findComponent(MediaFileList).props('canDeleteFiles')).toBe(true)
+    })
+
+    // Trash tiles already have restore/purge as slot actions -- the view must forward trashMode
+    // so MediaGrid/MediaFileList suppress their own context menu there (see each component's own
+    // "does not open a menu at all when trashMode is true" test for the actual suppression).
+    it('forwards trashMode to MediaGrid and MediaFileList only while browsing the trash', async () => {
+      seedUser({ delete: true })
+      makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
+      const w = mountView()
+      await flushPromises()
+      ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
+      await flushPromises()
+      expect(w.findComponent(MediaGrid).exists()).toBe(false)
+      expect(w.findComponent(MediaFileList).props('trashMode')).toBe(false)
+      ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+      await flushPromises()
+      expect(w.findComponent(MediaFileList).props('trashMode')).toBe(true)
+    })
+
+    // Empty-space menu: right-clicking the library body (not an item) offers New folder/Upload,
+    // gated the same way as the header's own buttons.
+    it('offers New folder and Upload from the empty-space menu when both grants are present', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const auth = useAuthStore()
+      auth.user = {
+        id: 'u1', isSuperAdmin: false,
+        permissions: { file: { read: true, write: true, delete: false }, mediafolder: { read: true, write: true, delete: false } },
+      } as CurrentUser
+      const w = mountView()
+      await flushPromises()
+      await w.find('.media-body').trigger('contextmenu')
+      await flushPromises()
+      expect(w.find('[data-test="menu-new-folder"]').exists()).toBe(true)
+      expect(w.find('[data-test="menu-upload"]').exists()).toBe(true)
+    })
+
+    it('hides New folder and Upload from the empty-space menu without their grants', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      const w = mountView()
+      seedUser({ write: false }, 'file')
+      await flushPromises()
+      await w.find('.media-body').trigger('contextmenu')
+      await flushPromises()
+      expect(w.find('[data-test="menu-new-folder"]').exists()).toBe(false)
+      expect(w.find('[data-test="menu-upload"]').exists()).toBe(false)
+    })
+
+    it('opens the create-folder dialog when New folder is selected from the empty-space menu', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      seedUser({ write: true }, 'mediafolder')
+      const w = mountView()
+      await flushPromises()
+      await w.find('.media-body').trigger('contextmenu')
+      await flushPromises()
+      await w.find('[data-test="menu-new-folder"]').trigger('click')
+      expect((w.vm as unknown as { createOpen: boolean }).createOpen).toBe(true)
+    })
+
+    it('opens the upload dialog when Upload is selected from the empty-space menu', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      seedUser({ write: true }, 'file')
+      const w = mountView()
+      await flushPromises()
+      await w.find('.media-body').trigger('contextmenu')
+      await flushPromises()
+      await w.find('[data-test="menu-upload"]').trigger('click')
+      expect(w.findComponent(MediaUploadDialog).props('visible')).toBe(true)
+    })
+
+    // A right-click that lands ON a tile must not ALSO open the empty-space menu underneath it --
+    // each item-level menu stops propagation precisely so the two don't stack.
+    it('does not also open the empty-space menu when a tile is right-clicked', async () => {
+      makeListMock([{ data: rows, total: 1 }])
+      seedUser({ write: true }, 'mediafolder')
+      const w = mountView()
+      await flushPromises()
+      await w.find('.media-tile').trigger('contextmenu')
+      await flushPromises()
+      expect(w.find('[data-test="menu-new-folder"]').exists()).toBe(false)
+    })
   })
 })

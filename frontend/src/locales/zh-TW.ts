@@ -173,6 +173,12 @@ export default {
     moveTo: '移動至…',
     moveRoot: '根目錄',
     moveSubmit: '移動',
+    menuOpen: '開啟',
+    menuMove: '移動至…',
+    menuRename: '重新命名',
+    menuDelete: '刪除',
+    menuNewFolder: '新增資料夾',
+    menuUpload: '上傳檔案',
   },
   revisions: {
     title: '修訂紀錄',

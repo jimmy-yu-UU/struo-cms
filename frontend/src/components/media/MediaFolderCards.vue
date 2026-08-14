@@ -2,16 +2,27 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { Folder, Pencil, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
+import MediaContextMenu from './MediaContextMenu.vue'
 import type { FolderRow } from '../../lib/folderTree'
 import { setDragPayload, isMediaDrag, readDragPayload } from '../../lib/mediaDnd'
 import type { MovePayload } from '../../lib/mediaMove'
 
-const props = defineProps<{ folders: FolderRow[]; canManage: boolean; canMove?: boolean }>()
+const props = defineProps<{
+  folders: FolderRow[]
+  canManage: boolean
+  canMove?: boolean
+  // Right-click menu grants -- kept separate from `canManage` (which gates the existing
+  // always-together rename+delete icon buttons) so the context menu can gate Rename and Delete
+  // independently, per their own RBAC grants.
+  canRename?: boolean
+  canDelete?: boolean
+}>()
 const emit = defineEmits<{
   (e: 'open', id: string): void
   (e: 'rename', folder: FolderRow): void
   (e: 'remove', folder: FolderRow): void
   (e: 'dropOn', targetFolderId: string, payload: MovePayload): void
+  (e: 'requestMove', payload: MovePayload): void
 }>()
 
 const droppingId = ref<string | null>(null)
@@ -55,29 +66,39 @@ onUnmounted(() => document.removeEventListener('dragend', clearDropping))
 
 <template>
   <div v-if="folders.length" class="folder-grid">
-    <div v-for="f in folders" :key="f.id" class="folder-card rounded-xl border border-border hover:border-primary" role="button" tabindex="0"
-         :draggable="canMove ? 'true' : undefined"
-         :data-dropping="droppingId === f.id ? 'true' : undefined"
-         @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)"
-         @dragstart="onDragStart($event, f)"
-         @dragover.prevent="onDragOver($event, f.id)"
-         @dragleave="onDragLeave"
-         @drop.prevent="onDrop($event, f.id)">
-      <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
-      <span class="folder-card__name">{{ f.name }}</span>
-      <span v-if="canManage" class="folder-card__actions flex">
-        <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
-                @click.stop="emit('rename', f)">
-          <Pencil aria-hidden="true" />
-        </Button>
-        <Button type="button" variant="ghost" size="icon-sm"
-                class="text-destructive hover:text-destructive"
-                :aria-label="$t('media.folderDelete')"
-                @click.stop="emit('remove', f)">
-          <Trash2 aria-hidden="true" />
-        </Button>
-      </span>
-    </div>
+    <MediaContextMenu
+      v-for="f in folders" :key="f.id"
+      kind="folder" :can-move="canMove" :can-delete="canDelete" :can-rename="canRename"
+      @open="emit('open', f.id)"
+      @rename="emit('rename', f)"
+      @move="emit('requestMove', { files: [], folders: [f.id] })"
+      @remove="emit('remove', f)"
+    >
+      <div class="folder-card rounded-xl border border-border hover:border-primary" role="button" tabindex="0"
+           :draggable="canMove ? 'true' : undefined"
+           :data-dropping="droppingId === f.id ? 'true' : undefined"
+           @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)"
+           @contextmenu.stop
+           @dragstart="onDragStart($event, f)"
+           @dragover.prevent="onDragOver($event, f.id)"
+           @dragleave="onDragLeave"
+           @drop.prevent="onDrop($event, f.id)">
+        <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span class="folder-card__name">{{ f.name }}</span>
+        <span v-if="canManage" class="folder-card__actions flex">
+          <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
+                  @click.stop="emit('rename', f)">
+            <Pencil aria-hidden="true" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon-sm"
+                  class="text-destructive hover:text-destructive"
+                  :aria-label="$t('media.folderDelete')"
+                  @click.stop="emit('remove', f)">
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </span>
+      </div>
+    </MediaContextMenu>
   </div>
 </template>
 

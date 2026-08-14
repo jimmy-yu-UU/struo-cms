@@ -173,6 +173,12 @@ export default {
     moveTo: 'Move to…',
     moveRoot: 'Root',
     moveSubmit: 'Move',
+    menuOpen: 'Open',
+    menuMove: 'Move to…',
+    menuRename: 'Rename',
+    menuDelete: 'Delete',
+    menuNewFolder: 'New folder',
+    menuUpload: 'Upload',
   },
   revisions: {
     title: 'Revision history',

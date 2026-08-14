@@ -3,6 +3,7 @@ import { ref, useSlots, onMounted, onUnmounted } from 'vue'
 import { Folder, Pencil, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import FileThumbnail, { type FileRow } from './FileThumbnail.vue'
+import MediaContextMenu from './MediaContextMenu.vue'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
 import type { FolderRow } from '../../lib/folderTree'
@@ -15,6 +16,15 @@ const props = withDefaults(defineProps<{
   canManageFolders?: boolean
   canMoveFiles?: boolean
   canMoveFolders?: boolean
+  // Right-click menu grants, kept separate from canManageFolders (which gates the existing
+  // always-together rename+delete icon buttons) so the menu can gate Rename/Delete independently.
+  canRenameFolders?: boolean
+  canDeleteFolders?: boolean
+  canDeleteFiles?: boolean
+  // Trash rows already carry restore/purge as slot actions -- the file-row menu must not
+  // duplicate that. Folder rows never appear in trash mode (the view always passes an empty
+  // folders array there), so this only needs to gate the file-row menu.
+  trashMode?: boolean
 }>(), { folders: () => [], canManageFolders: false, canMoveFiles: false, canMoveFolders: false })
 
 const emit = defineEmits<{
@@ -23,6 +33,8 @@ const emit = defineEmits<{
   (e: 'renameFolder', folder: FolderRow): void
   (e: 'removeFolder', folder: FolderRow): void
   (e: 'dropOn', targetFolderId: string, payload: MovePayload): void
+  (e: 'requestMove', payload: MovePayload): void
+  (e: 'remove', id: string): void
 }>()
 
 // Folder rows are both drag sources (of the folder itself) and drop targets (for files/folders
@@ -115,43 +127,53 @@ function uploaded(f: FileRow): string {
       </tr>
     </thead>
     <tbody>
-      <tr v-for="d in folders" :key="`folder-${d.id}`" class="media-list__row"
-          :draggable="canMoveFolders ? 'true' : undefined"
-          :data-dropping="droppingId === d.id ? 'true' : undefined"
-          @click="emit('openFolder', d.id)"
-          @dragstart="onFolderDragStart($event, d)"
-          @dragover.prevent="onDragOver($event, d.id)"
-          @dragleave="onDragLeave"
-          @drop.prevent="onDrop($event, d.id)">
-        <td class="media-list__thumb">
-          <Folder class="size-5 text-primary" aria-hidden="true" />
-        </td>
-        <td class="media-list__name">
-          <button
-            type="button"
-            class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-            @click.stop="emit('openFolder', d.id)"
-          >
-            {{ d.name }}
-          </button>
-        </td>
-        <td>{{ $t('media.colTypeFolder') }}</td>
-        <td>—</td>
-        <td>—</td>
-        <td>—</td>
-        <td v-if="showActionsColumn()" class="media-list__actions">
-          <template v-if="canManageFolders">
-            <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
-                    @click.stop="emit('renameFolder', d)">
-              <Pencil aria-hidden="true" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon-sm" class="text-destructive hover:text-destructive"
-                    :aria-label="$t('media.folderDelete')" @click.stop="emit('removeFolder', d)">
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </template>
-        </td>
-      </tr>
+      <MediaContextMenu
+        v-for="d in folders" :key="`folder-${d.id}`"
+        kind="folder" :can-move="canMoveFolders" :can-delete="canDeleteFolders" :can-rename="canRenameFolders"
+        @open="emit('openFolder', d.id)"
+        @rename="emit('renameFolder', d)"
+        @move="emit('requestMove', { files: [], folders: [d.id] })"
+        @remove="emit('removeFolder', d)"
+      >
+        <tr class="media-list__row"
+            :draggable="canMoveFolders ? 'true' : undefined"
+            :data-dropping="droppingId === d.id ? 'true' : undefined"
+            @click="emit('openFolder', d.id)"
+            @contextmenu.stop
+            @dragstart="onFolderDragStart($event, d)"
+            @dragover.prevent="onDragOver($event, d.id)"
+            @dragleave="onDragLeave"
+            @drop.prevent="onDrop($event, d.id)">
+          <td class="media-list__thumb">
+            <Folder class="size-5 text-primary" aria-hidden="true" />
+          </td>
+          <td class="media-list__name">
+            <button
+              type="button"
+              class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+              @click.stop="emit('openFolder', d.id)"
+            >
+              {{ d.name }}
+            </button>
+          </td>
+          <td>{{ $t('media.colTypeFolder') }}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td v-if="showActionsColumn()" class="media-list__actions">
+            <template v-if="canManageFolders">
+              <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
+                      @click.stop="emit('renameFolder', d)">
+                <Pencil aria-hidden="true" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" class="text-destructive hover:text-destructive"
+                      :aria-label="$t('media.folderDelete')" @click.stop="emit('removeFolder', d)">
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </template>
+          </td>
+        </tr>
+      </MediaContextMenu>
       <!--
         A table row is not a button, so it must not claim `role="button"` (that gave
         screen readers contradictory roles). Table semantics stay intact on the <tr>; the real,
@@ -159,32 +181,39 @@ function uploaded(f: FileRow): string {
         buttons) is the accessible primary action. The row keeps its own @click purely as a
         mouse convenience so clicking anywhere in the row still opens the item, same as before.
       -->
-      <tr
-        v-for="f in files"
-        :key="f.id"
-        class="media-list__row"
-        :draggable="canMoveFiles ? 'true' : undefined"
-        @click="emit('open', f.id)"
-        @dragstart="onFileDragStart($event, f)"
+      <MediaContextMenu
+        v-for="f in files" :key="f.id"
+        kind="file" :can-move="canMoveFiles" :can-delete="canDeleteFiles" :disabled="trashMode"
+        @open="emit('open', f.id)"
+        @move="emit('requestMove', { files: [f.id], folders: [] })"
+        @remove="emit('remove', f.id)"
       >
-        <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
-        <td class="media-list__name">
-          <button
-            type="button"
-            class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-            @click.stop="emit('open', f.id)"
-          >
-            {{ f.fileName }}
-          </button>
-        </td>
-        <td>{{ f.contentType }}</td>
-        <td>{{ formatFileSize(f.size) }}</td>
-        <td>{{ dims(f) }}</td>
-        <td>{{ uploaded(f) }}</td>
-        <td v-if="showActionsColumn()" class="media-list__actions">
-          <slot name="actions" :file="f" />
-        </td>
-      </tr>
+        <tr
+          class="media-list__row"
+          :draggable="canMoveFiles ? 'true' : undefined"
+          @click="emit('open', f.id)"
+          @contextmenu.stop
+          @dragstart="onFileDragStart($event, f)"
+        >
+          <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
+          <td class="media-list__name">
+            <button
+              type="button"
+              class="media-list__open focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+              @click.stop="emit('open', f.id)"
+            >
+              {{ f.fileName }}
+            </button>
+          </td>
+          <td>{{ f.contentType }}</td>
+          <td>{{ formatFileSize(f.size) }}</td>
+          <td>{{ dims(f) }}</td>
+          <td>{{ uploaded(f) }}</td>
+          <td v-if="showActionsColumn()" class="media-list__actions">
+            <slot name="actions" :file="f" />
+          </td>
+        </tr>
+      </MediaContextMenu>
     </tbody>
   </table>
 </template>
