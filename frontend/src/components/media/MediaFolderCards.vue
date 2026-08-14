@@ -6,7 +6,7 @@ import type { FolderRow } from '../../lib/folderTree'
 import { setDragPayload, isMediaDrag, readDragPayload } from '../../lib/mediaDnd'
 import type { MovePayload } from '../../lib/mediaMove'
 
-defineProps<{ folders: FolderRow[]; canManage: boolean; canMove?: boolean }>()
+const props = defineProps<{ folders: FolderRow[]; canManage: boolean; canMove?: boolean }>()
 const emit = defineEmits<{
   (e: 'open', id: string): void
   (e: 'rename', folder: FolderRow): void
@@ -16,7 +16,11 @@ const emit = defineEmits<{
 
 const droppingId = ref<string | null>(null)
 
+// The `draggable` attribute alone does not gate this: a text-selection drag started anywhere
+// inside a non-draggable card can still bubble a dragstart up to this handler. Refuse here too,
+// so the permission check cannot be bypassed that way.
 function onDragStart(ev: DragEvent, f: FolderRow): void {
+  if (!props.canMove) return
   setDragPayload(ev, { files: [], folders: [f.id] })
 }
 function onDragOver(ev: DragEvent, id: string): void {
@@ -38,7 +42,7 @@ function onDrop(ev: DragEvent, id: string): void {
          @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)"
          @dragstart="onDragStart($event, f)"
          @dragover.prevent="onDragOver($event, f.id)"
-         @dragleave="droppingId = null"
+         @dragleave.self="droppingId = null"
          @drop.prevent="onDrop($event, f.id)">
       <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
       <span class="folder-card__name">{{ f.name }}</span>

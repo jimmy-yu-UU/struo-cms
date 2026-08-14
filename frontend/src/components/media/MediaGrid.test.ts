@@ -69,4 +69,16 @@ describe('MediaGrid', () => {
     await wrap.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
     expect(setData).toHaveBeenCalledWith(DRAG_MIME, serializeMovePayload({ files: ['f1'], folders: [] }))
   })
+
+  // The wrapper's own `draggable` attribute is not the only way a `dragstart` can reach this
+  // handler -- a child <img> is draggable by default in every browser and `dragstart` bubbles, so
+  // gating only the attribute leaves the permission bypassable. `onDragStart` itself must refuse
+  // to write a payload when canMove is false, regardless of what fired the event.
+  it('does not write a drag payload on dragstart when canMove is false (bubbled drag from a child element)', async () => {
+    const w = mount(MediaGrid, { props: { files, canMove: false } })
+    const wrap = w.find('.media-tile-wrap')
+    const setData = vi.fn()
+    await wrap.trigger('dragstart', { dataTransfer: { setData, types: [], effectAllowed: '' } })
+    expect(setData).not.toHaveBeenCalled()
+  })
 })

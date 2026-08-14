@@ -33,6 +33,15 @@ describe('FileThumbnail', () => {
     expect(el.attributes('src')).toMatch(/\/files\/f1\/content$/)
   })
 
+  // Every browser makes an <img> draggable by default, and that native drag's `dragstart` bubbles
+  // up into any ancestor tile/card wired for media drag-and-drop (MediaGrid) -- an explicit
+  // draggable="false" stops the browser's own image-drag affordance so it can never fire, as
+  // defence in depth alongside the permission check in the ancestor's own dragstart handler.
+  it('marks the img non-draggable so it cannot originate its own native drag', () => {
+    const w = mount(FileThumbnail, { props: { file: image } })
+    expect(w.find('img').attributes('draggable')).toBe('false')
+  })
+
   it('renders a chip (no img) for non-image types: a resolved lucide glyph + short label, not the raw MIME, filename, or a primeicons class', () => {
     const w = mount(FileThumbnail, { props: { file: pdf } })
     expect(w.find('img').exists()).toBe(false)
