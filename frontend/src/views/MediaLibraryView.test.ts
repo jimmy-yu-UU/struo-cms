@@ -93,14 +93,17 @@ describe('MediaLibraryView', () => {
     seedUser({ write: true, delete: true })
     const w = mountView()
     await flushPromises()
-    // Two Selects (type, sort) and two ToggleGroups (Active/Trash, grid/list). `global.plugins`
-    // above carries no `PrimeVue` plugin, so a reverted PrimeVue `Select` crashes at mount reading
-    // `$primevue.config` -- it alone extends PrimeVue's `BaseInput`, which reads that during
-    // render. PrimeVue's `Button` and `SelectButton` mount fine with no plugin at all, so those two
-    // are guarded by other assertions instead: a reverted `Button` is caught by the icon-identity
-    // test below (it would render no `.lucide-folder-plus`/`.lucide-upload`), and a reverted
-    // `SelectButton` would drop this test's own `[data-slot="toggle-group"]` count from 2 to 1.
-    expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(2)
+    // Three Selects (type, sort, and DataTablePagination's own page-size control -- total:1 still
+    // renders the pager since the v-if is `total > 0`, not `total > perPage`, see the "renders the
+    // pager for a single page of results" test below) and two ToggleGroups (Active/Trash,
+    // grid/list). `global.plugins` above carries no `PrimeVue` plugin, so a reverted PrimeVue
+    // `Select` crashes at mount reading `$primevue.config` -- it alone extends PrimeVue's
+    // `BaseInput`, which reads that during render. PrimeVue's `Button` and `SelectButton` mount
+    // fine with no plugin at all, so those two are guarded by other assertions instead: a reverted
+    // `Button` is caught by the icon-identity test below (it would render no
+    // `.lucide-folder-plus`/`.lucide-upload`), and a reverted `SelectButton` would drop this test's
+    // own `[data-slot="toggle-group"]` count from 2 to 1.
+    expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(3)
     expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
   })
 
@@ -408,8 +411,9 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     const pager = w.findComponent({ name: 'DataTablePagination' })
     // 24 is the media library's own page size and is not in DataTablePagination's default
-    // pageSizeOptions ([10, 25, 50, 100]) -- a native <select> whose value matches no option
-    // renders with selectedIndex === -1, so the override must be supplied.
+    // pageSizeOptions ([10, 25, 50, 100]) -- reka's Select shows a blank trigger label when its
+    // model-value matches no SelectItem (see DataTablePagination.vue's pageSizeOptions JSDoc for
+    // how that was confirmed), so the override must be supplied.
     expect(pager.props('pageSize')).toBe(24)
     expect(pager.props('pageSizeOptions')).toContain(24)
     await pager.vm.$emit('update:page', 2)
