@@ -79,6 +79,7 @@ onUnmounted(() => document.removeEventListener('dragend', clearDropping))
            :data-dropping="droppingId === f.id ? 'true' : undefined"
            @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)"
            @contextmenu.stop
+           @pointerdown.stop
            @dragstart="onDragStart($event, f)"
            @dragover.prevent="onDragOver($event, f.id)"
            @dragleave="onDragLeave"

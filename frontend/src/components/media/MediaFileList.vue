@@ -140,6 +140,7 @@ function uploaded(f: FileRow): string {
             :data-dropping="droppingId === d.id ? 'true' : undefined"
             @click="emit('openFolder', d.id)"
             @contextmenu.stop
+            @pointerdown.stop
             @dragstart="onFolderDragStart($event, d)"
             @dragover.prevent="onDragOver($event, d.id)"
             @dragleave="onDragLeave"
@@ -193,6 +194,7 @@ function uploaded(f: FileRow): string {
           :draggable="canMoveFiles ? 'true' : undefined"
           @click="emit('open', f.id)"
           @contextmenu.stop
+          @pointerdown.stop
           @dragstart="onFileDragStart($event, f)"
         >
           <td class="media-list__thumb"><FileThumbnail :file="f" size="sm" /></td>
