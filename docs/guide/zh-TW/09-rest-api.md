@@ -324,7 +324,7 @@ Content-Length: 0
 | `PUT /api/items/{collection}/{id}` | — | JSON 物件，部分更新 (只有送出的鍵值會疊加——但請見上方 `Required` 欄位的但書) | `200` 已更新的項目，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool，預設 `false`) | — | `204`，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` 已還原的項目，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
-| `GET /api/items/{collection}/{id}/revisions` | — | — | `200`，`{ revisionNumber, operation, createdAt, createdBy }` 的陣列 (若該集合沒有 `Revisions=true`則為 `[]`) | 無 (同上) | `CanRead` |
+| `GET /api/items/{collection}/{id}/revisions` | — | — | `200`，`{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber }` 的陣列 (若該集合沒有 `Revisions=true`則為 `[]`) | 無 (同上) | `CanRead` |
 | `GET /api/items/{collection}/{id}/revisions/{n}` | — | — | `200`，上方那筆條目再加上 `snapshot` (隱藏欄位已遮蔽)，或 `404` | 無 (同上) | `CanRead` |
 | `POST /api/items/{collection}/{id}/revisions/{n}/revert` | — | — | `200` 還原後的項目 (以更新的形式重新套用該快照，並記錄成一筆新的 `"revert"` 版本紀錄)，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 

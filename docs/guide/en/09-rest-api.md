@@ -334,7 +334,7 @@ The generic CRUD surface over every `[CmsCollection]` — `language`, `permissio
 | `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` restored item, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
-| `GET /api/items/{collection}/{id}/revisions` | — | — | `200`, array of `{ revisionNumber, operation, createdAt, createdBy }` (`[]` when the collection has no `Revisions=true`) | none (same caveat) | `CanRead` |
+| `GET /api/items/{collection}/{id}/revisions` | — | — | `200`, array of `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber }` (`[]` when the collection has no `Revisions=true`) | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}/revisions/{n}` | — | — | `200`, the entry above plus `snapshot` (hidden fields redacted), or `404` | none (same caveat) | `CanRead` |
 | `POST /api/items/{collection}/{id}/revisions/{n}/revert` | — | — | `200` reverted item (re-applies the snapshot as an update, recorded as a new `"revert"` revision), or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 

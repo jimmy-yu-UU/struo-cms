@@ -327,7 +327,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 When a collection declares `Revisions = true`, `StruoTypeModule` adds two query fields
 (`{collection}Revisions(id: ID!): [Revision!]!`, `{collection}Revision(id: ID!, revisionNumber: Int!):
 Revision`) and one mutation (`revert{X}(id: ID!, revisionNumber: Int!): X`) — `RevisionResolvers.cs`. The
-shared `Revision` type is `{ revisionNumber, operation, createdAt, createdBy, snapshot }`; the list field
+shared `Revision` type is `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`; the list field
 returns `snapshot: null` on every entry (metadata only, mirroring REST's list endpoint), and the single
 field populates it, parsed into the `Any` scalar. **None of the seven live framework collections declares
 `Revisions = true`**, so none of these fields exist in this host's schema at all right now — confirmed

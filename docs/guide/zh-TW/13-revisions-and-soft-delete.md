@@ -75,7 +75,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-
 | 還原(回收桶) | 透過 `CaptureRevisionAsync`，於 `RestoreAsync` 之中，與那次原子性還原 UPDATE 位於同一個交易之中 | `"restore"` |
 | 還原(版本紀錄) | 透過 `UpdateCoreAsync` 以一般更新的形式重新套用該快照(見下方)，而這本身又會擷取一筆新的快照 | `"revert"` |
 
-一筆還原(revert)的紀錄還會額外帶有 `sourceRevisionNumber`——記錄的是哪一筆版本紀錄的快照被重新套用；
+一筆還原(版本紀錄)的紀錄還會額外帶有 `sourceRevisionNumber`——記錄的是哪一筆版本紀錄的快照被重新套用；
 其他每一種操作都會讓它保持 `null`。
 
 把擷取動作放進與該次寫入相同的交易之中，代表一筆版本紀錄絕不可能存在於一次本身已經回滾的寫入之下——而且
