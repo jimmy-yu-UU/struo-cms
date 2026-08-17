@@ -14,7 +14,7 @@ const i18n = createI18n({
   messages: { en: { revisions: {
     title: 'Revision history', loading: 'Loading…', loadError: 'Failed to load revisions',
     retry: 'Retry', empty: 'No revisions yet', colWhen: 'Time', colWho: 'By', snapshot: 'Snapshot',
-    opCreate: 'Created', opUpdate: 'Updated', opRevert: 'Reverted', opRevertFrom: 'Revert (from #{n})',
+    opCreate: 'Created', opUpdate: 'Updated', opRevert: 'Reverted', opRevertFrom: 'Reverted (from #{n})',
     opUnknown: 'Changed', system: 'System',
     revert: 'Revert to this revision', revertConfirmHeader: 'Confirm revert',
     revertConfirmMessage: 'Revert to {n}?', reverted: 'Reverted to {n}', revertFailed: 'Revert failed',
@@ -276,7 +276,7 @@ describe('RevisionHistoryDrawer', () => {
     const w = mountDrawer()
     await flushPromises()
     const items = w.findAll('.rev-item__op')
-    expect(items[0].text()).toBe('Revert (from #1)')
+    expect(items[0].text()).toBe('Reverted (from #1)')
     expect(items[1].text()).toBe('Updated')
   })
 
