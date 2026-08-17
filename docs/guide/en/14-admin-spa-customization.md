@@ -61,8 +61,9 @@ toggle class:
    `--shadow-*`, `--overlay`, `--font`, `--mono`) first-party scoped CSS reads, plus the `html`/`body`
    resets, the theme-transition rule, and `.app-breadcrumb`. It loads after `tokens.css`, and because
    none of its rules sit inside a Tailwind `@layer`, they outrank any utility class applied to the same
-   element regardless of specificity — an unlayered declaration always wins over a layered one, which
-   is the single most common way a hand-written CSS override silently does nothing.
+   element regardless of specificity — an unlayered declaration wins over a layered one (unless the
+   layered side carries `!important`, which inverts this), which is the single most common way a
+   hand-written CSS override silently does nothing.
 
 Both are imported once, in `frontend/src/main.ts`:
 
@@ -87,16 +88,26 @@ palette — the palette is a template default edited in source, not a per-deploy
 ## Restyling a vendored `ui/` component
 
 **`frontend/src/components/ui/` is vendored, read-only generated output — never edit it, and never
-`:deep()` into it.** A re-theme happens one layer up, in one of two places:
+`:deep()` into it.** A re-theme happens one layer up, in one of three places:
 
 - **The token layer** (`frontend/src/assets/tokens.css`), for anything already exposed as a semantic
   custom property — a color, a radius, a shadow. Every vendored component and Tailwind utility reads the
   same token, so one edit reaches every consumer at once.
-- **A wrapper component that sits outside `ui/`**, for anything a token can't express — a fixed width on
-  one specific usage, extra spacing, a one-off layout tweak. A wrapper's own `<style scoped>` block is
-  unlayered CSS, and because Tailwind v4 puts every utility class in `@layer utilities`, an unlayered
-  declaration on the same element always outranks a utility regardless of specificity — this is what
-  makes a wrapping component's scoped style the reliable place to put such an override.
+- **The `class` prop, at the point of use**, for anything expressible as a Tailwind utility class. Every
+  vendored `ui/` component merges its `class` prop through `cn()` (`frontend/src/components/ui/input/Input.vue`
+  shows the pattern), so passing utilities where the component is used restyles that one usage without
+  touching `ui/` — `frontend/src/components/fields/FilePicker.vue` and `FilesField.vue` both do this,
+  passing a `class` into `DialogScrollContent` to widen it on medium viewports.
+- **A wrapper component that sits outside `ui/`**, for anything neither of the above can express — a
+  fixed width on one specific usage, extra spacing, a one-off layout tweak. A wrapper's own `<style
+  scoped>` block is unlayered CSS, and because Tailwind v4 puts every utility class in `@layer utilities`,
+  an unlayered declaration on the same element outranks a utility regardless of specificity (unless the
+  utility carries `!important`, which inverts this) — this is what makes a wrapping component's scoped
+  style the reliable place to put such an override. Vue's scope id lands only on a child component's root
+  element, though, not on what it renders internally, so a wrapper's scoped style reaches its own root
+  but never a vendored component's inner nodes without the `:deep()` this section already rules out —
+  which is why the token layer and the `class` prop above, not wrapper CSS, are the two paths that
+  actually reach inside.
 
 Avoid reaching for `!important` here: it wins the immediate override but leaves the *next* override —
 yours or a fork's — fighting the same battle one level worse.
@@ -167,7 +178,7 @@ function onPick(e: Event): void {
 </script>
 
 <template>
-  <div class="color-swatch-field flex items-center gap-2">
+  <div class="flex items-center gap-2">
     <input
       type="color"
       :value="(modelValue as string) || '#000000'"

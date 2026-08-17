@@ -22,6 +22,13 @@ describe('LoginView', () => {
     useAppConfigStore().brandName = 'Acme Docs'
     const wrapper = mountLogin()
     expect(wrapper.text()).toContain('Acme Docs')
+    // jsdom never applies <style scoped>, so this is the only guard on the subtitle's font-weight:
+    // font-medium is what carries the 500 weight it needs. BrandMark also renders a <span> (its
+    // logoless fallback initial) as an earlier sibling inside .brand, so the subtitle is the last.
+    const brandSpans = wrapper.findAll('.brand span')
+    expect(brandSpans.at(-1)?.classes()).toEqual(
+      expect.arrayContaining(['text-xs', 'font-medium', 'text-muted-foreground']),
+    )
   })
 
   it('calls authStore.login and navigates on success', async () => {
