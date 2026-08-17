@@ -6,7 +6,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import RevisionSnapshotView from './RevisionSnapshotView.vue'
-import { revisionOperationKey } from '../../lib/revisionOperation'
+import { revisionOperationLabel } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import { createLatestWins } from '../../lib/latestWins'
 import { itemsApi, type RevisionInfo, type RevisionDetail } from '../../api/itemsApi'
@@ -43,13 +43,8 @@ function isActiveRev(rev: RevisionInfo): boolean {
 
 const detailLoad = createLatestWins()
 
-function opLabel(op: string): string {
-  return t(revisionOperationKey(op))
-}
 function nodeLabel(rev: RevisionInfo): string {
-  return rev.operation === 'revert' && typeof rev.sourceRevisionNumber === 'number'
-    ? t('revisions.opRevertFrom', { n: rev.sourceRevisionNumber })
-    : opLabel(rev.operation)
+  return revisionOperationLabel(rev.operation, rev.sourceRevisionNumber, t)
 }
 function whenLabel(iso: string): string {
   return formatRevisionTime(iso)

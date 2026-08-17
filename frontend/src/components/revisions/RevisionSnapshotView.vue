@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { RotateCcw } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { useI18n } from 'vue-i18n'
-import { revisionOperationKey } from '../../lib/revisionOperation'
+import { revisionOperationLabel } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import type { RevisionDetail } from '../../api/itemsApi'
 
@@ -18,7 +18,7 @@ const emit = defineEmits<{ (e: 'revert', revisionNumber: number): void }>()
 const { t } = useI18n()
 
 const operationLabel = computed(() =>
-  props.detail ? t(revisionOperationKey(props.detail.operation)) : '',
+  props.detail ? revisionOperationLabel(props.detail.operation, props.detail.sourceRevisionNumber, t) : '',
 )
 const whenText = computed(() =>
   props.detail ? formatRevisionTime(props.detail.createdAt) : '',
