@@ -10,7 +10,7 @@ defineProps<{ title: string; caption?: string }>()
     </div>
     <div class="titles">
       <h1>{{ title }}</h1>
-      <p v-if="caption" class="caption">{{ caption }}</p>
+      <p v-if="caption" class="text-sm font-medium text-muted-foreground">{{ caption }}</p>
     </div>
     <div class="head-actions">
       <slot name="actions" />
@@ -30,6 +30,5 @@ defineProps<{ title: string; caption?: string }>()
 .head-lead { display: flex; align-items: center; }
 .titles { display: grid; gap: 4px; flex: 1 1 auto; }
 .titles h1 { margin: 0; font-size: 1.5rem; color: var(--fg); }
-.caption { margin: 0; color: var(--legacy-muted); font-size: 0.875rem; }
 .head-actions { display: flex; gap: 10px; align-items: center; }
 </style>
