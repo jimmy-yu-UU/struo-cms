@@ -1,11 +1,7 @@
 import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
-import PrimeVue from 'primevue/config'
-import ConfirmationService from 'primevue/confirmationservice'
-import ToastService from 'primevue/toastservice'
-import 'primeicons/primeicons.css'
-// tokens.css first: it brings in Tailwind (including preflight). theme.css follows so the
-// remaining hand-written PrimeVue-era rules still win during the coexistence period.
+// tokens.css first: it brings in Tailwind (including preflight). theme.css follows so its
+// unlayered global rules resolve after preflight rather than being reset by it.
 import './assets/tokens.css'
 import './assets/theme.css'
 // vue-sonner's lib/index.js never imports its own stylesheet, so without this the toaster
@@ -15,7 +11,6 @@ import App from './App.vue'
 import router from './router'
 import { apiClient } from './api/apiClient'
 import { useAuthStore } from './stores/authStore'
-import { StruoPreset } from './theme/preset'
 import { i18n } from './i18n'
 import { useThemeStore } from './stores/themeStore'
 import { useUiLocaleStore } from './stores/uiLocaleStore'
@@ -25,10 +20,7 @@ import { useAppConfigStore } from './stores/appConfigStore'
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
-app.use(PrimeVue, { theme: { preset: StruoPreset, options: { darkModeSelector: '.app-dark' } } })
 app.use(i18n)
-app.use(ConfirmationService)
-app.use(ToastService)
 
 useThemeStore(pinia).apply()
 useUiLocaleStore(pinia).set(resolveInitialUiLocale())
