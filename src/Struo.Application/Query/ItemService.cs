@@ -138,7 +138,7 @@ public sealed class ItemService(
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
-                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct);
+                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct: ct);
             }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
@@ -223,7 +223,7 @@ public sealed class ItemService(
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
-                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot, ct);
+                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot, ct: ct);
             }
         }, ct);
         if (updated is null) return null;
@@ -368,7 +368,7 @@ public sealed class ItemService(
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return;
         var snapshot = await snapshotBuilder.BuildAsync(collection, entity, ct);
-        await revisions.CaptureAsync(collection, id, operation, snapshot, ct);
+        await revisions.CaptureAsync(collection, id, operation, snapshot, ct: ct);
     }
 
     /// <summary>
