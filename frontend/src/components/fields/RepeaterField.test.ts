@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import PrimeVue from 'primevue/config'
 import { createI18n } from 'vue-i18n'
 import RepeaterField from './RepeaterField.vue'
 import type { FieldMeta } from '../../types/schema'
@@ -23,8 +22,8 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 // resolve to different text in each pack, which is the only way to prove these labels run through
 // t() rather than a hardcoded English string that happens to read back identical to en's value.
 const zhI18n = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'zh-TW', messages: { 'zh-TW': zhTW } })
-const opts = { global: { plugins: [PrimeVue, i18n] } }
-const zhOpts = { global: { plugins: [PrimeVue, zhI18n] } }
+const opts = { global: { plugins: [i18n] } }
+const zhOpts = { global: { plugins: [zhI18n] } }
 
 describe('RepeaterField', () => {
   it('renders one card per row', () => {

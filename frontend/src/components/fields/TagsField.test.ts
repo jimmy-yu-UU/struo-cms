@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import PrimeVue from 'primevue/config'
 import { createI18n } from 'vue-i18n'
 import TagsField from './TagsField.vue'
 import type { FieldMeta } from '../../types/schema'
@@ -15,7 +14,7 @@ const i18n = createI18n({
     add: 'Add', tagValue: 'value', tagDisplayText: 'display text (optional)',
   } } },
 })
-const opts = { global: { plugins: [PrimeVue, i18n] } }
+const opts = { global: { plugins: [i18n] } }
 
 describe('TagsField', () => {
   it('renders one row per tag with value + label inputs', () => {

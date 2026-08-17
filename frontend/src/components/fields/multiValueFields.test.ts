@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
-import PrimeVue from 'primevue/config'
 import { createI18n } from 'vue-i18n'
 import MultiSelectField from './MultiSelectField.vue'
 import CheckboxGroupField from './CheckboxGroupField.vue'
@@ -11,7 +10,6 @@ function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over } as FieldMeta
 }
-const opts = { global: { plugins: [PrimeVue] } }
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { fields: {
@@ -32,8 +30,8 @@ const i18nZh = createI18n({
 
 describe('MultiSelectField', () => {
   const options = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]
-  const comboOpts = { global: { plugins: [PrimeVue, i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
-  const comboOptsZh = { global: { plugins: [PrimeVue, i18nZh], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+  const comboOpts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+  const comboOptsZh = { global: { plugins: [i18nZh], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
   it('renders a chip per selected value', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
@@ -191,12 +189,12 @@ describe('CheckboxGroupField', () => {
   const twoOptions = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]
 
   it('renders one checkbox per option', () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [] }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [] } })
     expect(w.findAll('[role="checkbox"]')).toHaveLength(2)
   })
 
   it('gives the group an accessible name since the label-for-field.name pairing in ItemForm.vue does not resolve to any of these checkboxes', () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions, label: 'Regions' }), modelValue: [] }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions, label: 'Regions' }), modelValue: [] } })
     expect(w.find('[role="group"][aria-label="Regions"]').exists()).toBe(true)
   })
 
@@ -204,7 +202,7 @@ describe('CheckboxGroupField', () => {
   // asserting a synthesised $emit would test the test, not the component.
   it('appends the clicked option immutably', async () => {
     const before = ['a']
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: before }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: before } })
     await w.findAll('[role="checkbox"]')[1].trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['a', 'b']])
     expect(before).toEqual(['a'])
@@ -212,14 +210,14 @@ describe('CheckboxGroupField', () => {
 
   it('removes an already-checked option immutably', async () => {
     const before = ['a', 'b']
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: before }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: before } })
     await w.findAll('[role="checkbox"]')[0].trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['b']])
     expect(before).toEqual(['a', 'b'])
   })
 
   it('treats a null model as an empty selection', () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: null }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: null } })
     expect(w.findAll('[role="checkbox"][aria-checked="true"]')).toHaveLength(0)
   })
 
@@ -231,7 +229,7 @@ describe('CheckboxGroupField', () => {
   // diverge once the model changes again without a remount — exactly what ItemFormView.vue's
   // 409-recovery reload and the revisions-drawer revert both do.
   it('reflects a non-default model on the matching checkbox, including after the model changes', async () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['b'] }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['b'] } })
     const boxes = w.findAll('[role="checkbox"]')
     expect(boxes[0].attributes('aria-checked')).toBe('false')
     expect(boxes[1].attributes('aria-checked')).toBe('true')
@@ -242,7 +240,7 @@ describe('CheckboxGroupField', () => {
   })
 
   it('propagates disabled to every checkbox, not just the first', () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [], disabled: true }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [], disabled: true } })
     const boxes = w.findAll('[role="checkbox"]')
     expect(boxes).toHaveLength(2)
     for (const box of boxes) expect(box.attributes('disabled')).toBe('')
@@ -252,7 +250,7 @@ describe('CheckboxGroupField', () => {
   // pinning the same @update:model-value listener the click-driven tests above exercise indirectly
   // through reka's CheckboxRoot handleClick.
   it('relays the toggled array when the vendored child emits, wiring the template listener itself', async () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['a'] }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: ['a'] } })
     await w.findAllComponents({ name: 'Checkbox' })[1].vm.$emit('update:modelValue', true)
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['a', 'b']])
   })
@@ -262,7 +260,7 @@ describe('CheckboxGroupField', () => {
   // on this explicit for/id pairing, not on DOM nesting (Checkbox and Label are siblings, not parent
   // and child). Asserting non-empty AND equal so the check cannot pass with both sides blanked out.
   it('associates each label with its checkbox via explicit for/id', () => {
-    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [] }, ...opts })
+    const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions }), modelValue: [] } })
     const labels = w.findAll('label')
     const boxes = w.findAll('[role="checkbox"]')
     expect(labels).toHaveLength(2)
@@ -283,7 +281,7 @@ describe('CheckboxGroupField', () => {
     const Host = defineComponent({
       render: () => h('div', [h(CheckboxGroupField, { field: f, modelValue: [] }), h(CheckboxGroupField, { field: f, modelValue: [] })]),
     })
-    const w = mount(Host, opts)
+    const w = mount(Host)
     const boxes = w.findAll('[role="checkbox"]')
     expect(boxes).toHaveLength(2)
     expect(boxes[0].attributes('id')).toBeTruthy()
