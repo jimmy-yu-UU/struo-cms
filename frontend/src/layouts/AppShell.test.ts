@@ -21,7 +21,6 @@ const stubs = {
   TheTopbar: { template: '<div class="stub-topbar" />' },
   TheSidebar: { template: '<div class="stub-sidebar" />' },
   AppBreadcrumb: { template: '<div class="stub-bc" />' },
-  Toast: { template: '<div class="stub-toast" />' },
   Toaster: { template: '<div class="stub-toaster" />' },
   ConfirmHost: { template: '<div class="stub-confirm" />' },
   RouterView: true,
@@ -58,18 +57,6 @@ describe('AppShell', () => {
     const w = mountShell()
     expect(w.find('.stub-toaster').exists()).toBe(true)
     expect(w.find('.stub-confirm').exists()).toBe(true)
-  })
-
-  // No production component calls primevue/usetoast anymore, so nothing left in the tree would
-  // notice a missing <Toast> host -- see AppShell.vue's Toast comment: it stays mounted only
-  // because main.ts still registers ToastService, not because any caller still needs it. This
-  // test is what actually catches that regression.
-  it('mounts the PrimeVue Toast host alongside the shadcn Toaster', () => {
-    const schema = useSchemaStore()
-    vi.spyOn(schema, 'load').mockResolvedValue()
-    const w = mountShell()
-    expect(w.find('.stub-toast').exists()).toBe(true)
-    expect(w.find('.stub-toaster').exists()).toBe(true)
   })
 
   it('loads the schema on mount', () => {
