@@ -195,6 +195,7 @@ export default {
     opCreate: 'Created',
     opUpdate: 'Updated',
     opRevert: 'Reverted',
+    opRevertFrom: 'Revert (from #{n})',
     opUnknown: 'Changed',
     system: 'System',
     snapshot: 'Snapshot',
