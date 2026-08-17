@@ -136,7 +136,7 @@ core。不過，單純執行 `rm -rf samples/` 仍會破壞 solution 層級的 `
 | 元件 | 版本 | 來源 |
 |---|---|---|
 | Vue | ^3.5.39 | `frontend/package.json` |
-| UI 元件庫 | PrimeVue ^4.5.5 (+ `@primeuix/themes` ^2.0.3) | `frontend/package.json` |
+| UI 元件庫 | Tailwind CSS ^4.3.3 + shadcn-vue 的供應商元件 (reka-ui ^2.10.3;toast 用 vue-sonner ^2.0.9) | `frontend/package.json` |
 | 富文本編輯器 | TipTap ^3.27.1 (starter-kit + extensions) | `frontend/package.json` |
 | 狀態管理 | Pinia ^3.0.4 | `frontend/package.json` |
 | 路由 | vue-router ^5.1.0 | `frontend/package.json` |
@@ -162,7 +162,7 @@ CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、
 | 查詢 DSL | Core | `filter`/`sort`/分頁，欄位與關聯路徑皆採白名單驗證 |
 | REST API | Core | ASP.NET Core Controllers，統一回應信封 (envelope) |
 | GraphQL API | Core | HotChocolate，schema 由相同的集合中介資料產生 |
-| 管理後台 SPA | Core | Vue 3 + PrimeVue + TipTap |
+| 管理後台 SPA | Core | Vue 3 + Tailwind v4 + shadcn-vue + TipTap |
 | Blog 範例 | Demo，預設不出貨 | `samples/Struo.Sample.Blog`;選用啟用、可刪除 |
 
 ## 接下來該去哪

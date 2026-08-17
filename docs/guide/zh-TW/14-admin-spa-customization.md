@@ -1,6 +1,6 @@
 # 14. 管理後台 SPA 客製化
 
-管理後台 SPA(`frontend/`)是一個 Vue 3 + PrimeVue + Pinia 應用程式，幾乎完全由 API 在
+管理後台 SPA(`frontend/`)是一個 Vue 3 + Tailwind v4 + shadcn-vue + Pinia 應用程式，幾乎完全由 API 在
 `GET /api/schema` 曝光出來的中介資料所驅動。本章談的是真正屬於程式碼、而非中介資料的那一部分：主題設計、
 i18n、欄位編輯器、品牌設定，以及開發伺服器如何連到 API——還有這些各自位於 `frontend/src` 之中的哪個
 位置。
@@ -31,8 +31,8 @@ i18n、欄位編輯器、品牌設定，以及開發伺服器如何連到 API—
 | 目錄 | 內容 |
 |---|---|
 | `api/` | 每個 REST 資源各有一個薄模組——`apiClient.ts` 是共用、能理解信封格式的 fetch 包裝器；`itemsApi.ts`、`schemaApi.ts`、`filesApi.ts`、`languagesApi.ts`、`rbacApi.ts`、`settingsApi.ts`、`appConfigApi.ts`——都是型別化呼叫，不含任何商業邏輯。 |
-| `assets/` | `theme.css`——OKLch 調色盤 token(外加少數 `--legacy-*` 前綴的 token)，供尚未遷移離開 PrimeVue 的畫面讀取；原本同一個檔案裡的 shell/版面 CSS(`.shell`、`.topbar`、`.sidebar`、`.nav-item`……)已經在那些畫面改用 Tailwind utility 之後被刪除。`tokens.css`——Tailwind v4 的進入點(`@import "tailwindcss"`)，以及已遷移畫面使用的 shadcn 語意 token 層(`--background`、`--primary`、`--radius`……)。 |
-| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`，以及 `ListToolbar`/`TableFooter`——`MediaLibraryView` 仍在使用，但 `CollectionListView` 已改用 `data/` 的基元)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`media/`、`revisions/`、`rbac/`。 |
+| `assets/` | `theme.css`——這個應用程式沒有分層 (unlayered) 的全域樣式層：第一方 scoped CSS 所讀取的頁面/表面/前景色以及狀態/陰影/遮罩/字型自訂屬性(`--bg`、`--surface`、`--fg`、`--warn`、`--danger`、`--shadow-*`、`--overlay`、`--font`、`--mono`……)，加上 `html`/`body` 重設、主題切換轉場規則，以及 `.app-breadcrumb`。`tokens.css`——Tailwind v4 的進入點(`@import "tailwindcss"`)，以及供應商 `ui/` 元件與 Tailwind utility 兩者共同讀取的 shadcn 語意 token 層(`--background`、`--primary`、`--radius`……)。 |
+| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`、`ListToolbar`——都是純 Tailwind/shadcn 元件；`MediaLibraryView` 使用 `ListToolbar` 作為搜尋框與篩選插槽，而 `CollectionListView` 則是建構在 `data/` 的基元之上)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`media/`、`revisions/`、`rbac/`。 |
 | `composables/` | 跨切面的響應式邏輯，例如 `useConfirm.ts`。 |
 | `i18n/` | `index.ts`——`vue-i18n` 執行個體(`legacy: false`)，接到 `locales/`。 |
 | `layouts/` | `AppShell.vue`——每個已驗證路由都渲染於其中的 topbar + 側邊欄 + 內容格線。 |
@@ -40,68 +40,57 @@ i18n、欄位編輯器、品牌設定，以及開發伺服器如何連到 API—
 | `locales/` | `en.ts` / `zh-TW.ts`——管理 UI 自身的訊息目錄，有別於內容語言(第 6 章)。 |
 | `router/` | `index.ts`(路由)、`guard.ts`(驗證/權限導覽守衛)。 |
 | `stores/` | Pinia store：`authStore`、`appConfigStore`、`schemaStore`、`themeStore`、`uiLocaleStore`、`sidebarStore`、`languageStore`。 |
-| `theme/` | `preset.ts`(自訂的 PrimeVue Aura preset)；`resolveInitialTheme.ts` / `resolveInitialUiLocale.ts`(首次繪製時的 `localStorage`/media-query 解析，在任何 store 存在之前就會被讀取)。 |
+| `theme/` | `resolveInitialTheme.ts` / `resolveInitialUiLocale.ts`——首次繪製時的 `localStorage`/media-query 解析，在任何 store 存在之前就會被讀取。 |
 | `types/` | `schema.ts`——後端 DTO 的 TypeScript 對應(`FieldMeta`、`CollectionMeta`、`RelationMeta`……)。 |
 | `views/` | 每個路由各一個元件：`DashboardView`、`CollectionListView`、`ItemFormView`、`MediaLibraryView`、`SettingsView`、`LoginView`。 |
 
 ## Design token 與佈景主題
 
-有兩層需要協同運作，而且必須同步變更才能讓一次重新換主題保持一致：
+有兩層需要協同運作，而且兩者都在同一個 `.app-dark` 切換 class 上翻轉——沒有任何東西需要另外手動
+保持同步：
 
-1. **`frontend/src/assets/theme.css`**——單純的 CSS 自訂屬性，核心調色盤(`--bg`、`--surface`、
-   `--fg`、`--muted`、`--border`、`--accent`)採用 OKLch，加上以純十六進位表示的
-   `--success`/`--warn`/`--danger`(淺色為 `#16a34a`/`#d97706`/`#dc2626`，深色為
-   `#4ade80`/`#fbbf24`/`#f87171`——不是 OKLch)，半徑、陰影、`--sidebar-w`，在 `:root` 上為淺色宣告
-   一次，並在 `.app-dark` 上為深色重新宣告一次。同一個檔案中所有的 shell/版面 CSS(`.shell`、
-   `.topbar`、`.sidebar`、`.nav-item`……)都讀取這些變數——絕不硬編碼任何顏色。
-2. **`frontend/src/theme/preset.ts`**——一個 PrimeVue `definePreset(Aura, …)`(`StruoPreset`)，把
-   PrimeVue 自身的語意 token(`primary`、`surface`，以及逐色彩配置的 `color`/`hoverColor`/
-   `activeColor`)對應到**同一組**調色盤上(主色用 `sky`，表面色用 `slate`)，這樣 PrimeVue 自己的
-   元件(按鈕、輸入框、對話框)就會與 `theme.css` 手工設計的 shell 保持一致，而不會與它產生落差——該
-   檔案自己的註解就明白說明了這一點(「與 assets/theme.css 相同的調色盤，讓兩層一起翻轉」)。
+1. **`frontend/src/assets/tokens.css`**——Tailwind v4 的進入點(`@import "tailwindcss"`)，以及 shadcn
+   的語意自訂屬性(`--background`、`--foreground`、`--primary`、`--radius`、`--sidebar-*`……)，在
+   `:root` 上為淺色宣告一次，並在 `.app-dark` 上為深色重新宣告一次。`@theme inline` 會把每一個屬性
+   對應到 `src/components/ui/` 與第一方元件共同使用的 Tailwind utility class(`bg-background`、
+   `text-primary`……)上。
+2. **`frontend/src/assets/theme.css`**——這個應用程式沒有分層 (unlayered) 的全域樣式層：第一方
+   scoped CSS 所讀取的頁面/表面/前景色以及狀態/陰影/遮罩/字型自訂屬性(`--bg`、`--surface`、`--fg`、
+   `--warn`、`--danger`、`--shadow-*`、`--overlay`、`--font`、`--mono`)，加上 `html`/`body` 重設、
+   主題切換轉場規則，以及 `.app-breadcrumb`。它會在 `tokens.css` 之後載入，而且其中沒有任何一條規則
+   位於 Tailwind 的 `@layer` 之中，因此它們會勝過套用在同一個元素上的任何 utility class，無論特異度
+   高低——沒有分層的宣告永遠會贏過有分層的宣告，這正是手寫 CSS 覆寫最常見的「靜默失效」原因。
 
-兩者都在 `frontend/src/main.ts` 中註冊一次：
+兩者都在 `frontend/src/main.ts` 中匯入一次：
 
 ```ts
-app.use(PrimeVue, { theme: { preset: StruoPreset, options: { darkModeSelector: '.app-dark' } } })
+import './assets/tokens.css'
+import './assets/theme.css'
 ```
 
-`darkModeSelector: '.app-dark'` 是這兩層之間的連結：`themeStore.apply()` 會在 `<html>` 上切換
-`.app-dark` 這個 class，同時翻轉 `theme.css` 的自訂屬性(一次單純的 CSS 選擇器比對)與 PrimeVue 自身
-的深色模式 token 集合(它自己的 `darkModeSelector` 機制)——一個 class，兩套系統，沒有任何東西需要
-另外手動保持同步。初始模式會在 Pinia/Vue 都還不存在之前，於 `theme/resolveInitialTheme.ts` 中解析：
-先看 `localStorage` 中有沒有已儲存的 `struo.theme`，否則看 `prefers-color-scheme`，否則使用淺色模式。
+`themeStore.apply()` 會在 `<html>` 上切換 `.app-dark` 這個 class，一次翻轉兩個檔案的自訂屬性(一次
+單純的 CSS 選擇器比對)——不需要另外通知任何東西模式已經改變。初始模式會在 Pinia/Vue 都還不存在之前，
+於 `theme/resolveInitialTheme.ts` 中解析：先看 `localStorage` 中有沒有已儲存的 `struo.theme`，否則
+看 `prefers-color-scheme`，否則使用淺色模式。
 
-要為一個仍在 PrimeVue 上的畫面重新換主題：編輯 `preset.ts` 中的 `struoPresetConfig` 語意 token(把
-`sky`/`slate` 換成不同的 PrimeVue 調色盤 token，或手寫 OKLch 值)，並同步編輯 `theme.css` 的
-`:root`/`.app-dark` 區塊中對應的自訂屬性。
-
-對於已經遷移到 Tailwind/shadcn 的畫面，要改編輯的 token 層是**`frontend/src/assets/tokens.css`**——
-shadcn 的語意自訂屬性(`--background`、`--foreground`、`--primary`、`--radius`……)，在 `:root` 上為淺色
-宣告一次，並在 `.app-dark`(與 `preset.ts`/`theme.css` 相同的切換 class)上為深色重新宣告一次。
-**`frontend/src/components/ui/` 是供應商生成的唯讀輸出**(不得編輯、也不得對它 `:deep()`)——重新換
-主題要改的是 token 層(`tokens.css`)，或是一個位於 `ui/` 之外、組合其原子元件的包裝元件，絕不是
-`ui/` 內部的檔案。
+要為整個 SPA 重新換主題，請編輯 `tokens.css` 中 `:root`/`.app-dark` 區塊裡的語意自訂屬性——這是每個
+供應商 `ui/` 元件與 Tailwind utility 都讀取的契約——如果這次變更也牽涉到側邊欄或麵包屑之類的第一方
+外框元素，就同時編輯 `theme.css` 中對應的屬性。
 
 第 3 章的 `Branding:Name`/`Branding:LogoUrl` 只會觸及產品名稱與 logo，永遠不會觸及色彩調色盤——調色盤
 是原始碼中的樣板預設值，而不是一個逐部署的設定鍵。
 
-## 覆寫 PrimeVue 內建的樣式
+## 重新設計供應商 `ui/` 元件的樣式
 
-**注意：** `theme.css` 中一條相同特異度 (specificity) 的規則，並不保證能穩定勝過 PrimeVue 元件自身於
-執行期注入的樣式。PrimeVue 是以它自己的樣式表出貨元件 CSS，而不是作為 `theme.css` 層疊的一部分——
-`theme.css` 中一條裸的 `.p-select { … }`，在特異度上與 PrimeVue 自己的 `.p-select` 規則打平，而誰
-勝出就取決於注入/來源順序，而不是意圖。
+**`frontend/src/components/ui/` 是供應商生成的唯讀輸出——絕不編輯它，也絕不對它 `:deep()`。** 重新換
+主題要往上一層做，有兩個地方：
 
-**這個技巧、這一節，都只適用於仍在 PrimeVue 上的畫面。** 一個已經遷移到 Tailwind/shadcn 的畫面，
-本來就沒有 PrimeVue class 可打；用純 Tailwind utility 或 `tokens.css` 來設計樣式即可。對於仍在
-PrimeVue 上的畫面，**用一個複合選擇器來拉高特異度**，而不是一個裸的 PrimeVue class——這個程式碼庫裡
-現在還活著的模式，是在一個 `<style scoped>` 區塊之中，把一個 component-scoped 的 `:deep()` 搭配一個
-真正的祖先 class：`frontend/src/components/ItemForm.vue` 的
-`.field :deep(.p-select), .field :deep(.p-multiselect), .field :deep(.p-treeselect) { width: 100%;
-max-width: 480px; }`，或是 `LoginView.vue` 的
-`.field :deep(.p-inputtext), .field :deep(.p-password) { … }`。`:deep()` 本身並不會拉高特異度——
-要把它搭配一個祖先 class 才行。
+- **Token 層**(`frontend/src/assets/tokens.css`)：適用於任何已經以語意自訂屬性形式公開的東西——顏色、
+  半徑、陰影。每個供應商元件與 Tailwind utility 都讀取同一個 token，所以改一次就能同時觸及所有使用者。
+- **一個位於 `ui/` 之外的包裝元件**：適用於任何 token 無法表達的東西——某個特定用法上的固定寬度、額外
+  間距、一次性的版面微調。包裝元件自己的 `<style scoped>` 區塊是沒有分層的 CSS，而由於 Tailwind v4 把
+  每一個 utility class 都放進 `@layer utilities` 之中，套用在同一個元素上的沒有分層宣告永遠會勝過
+  utility，無論特異度高低——這正是為什麼包裝元件的 scoped 樣式才是放這類覆寫的可靠位置。
 
 在這裡要避免使用 `!important`：它贏得了眼前這一次覆寫，卻讓*下一次*覆寫——不管是你自己的還是某個 fork
 的——在更糟的一層上打同一場仗。
@@ -121,7 +110,7 @@ max-width: 480px; }`，或是 `LoginView.vue` 的
 `'zh-TW'`)，接著在執行期由 `uiLocaleStore` 這個 Pinia store 擁有：`set(locale)` 會更新
 `i18n.global.locale.value`，設定 `<html lang>`，並把選擇持久化回 `localStorage`。
 `UiLanguageSwitcher.vue` 是唯一會呼叫它的地方，由 shadcn/reka-ui 的 `Select` 驅動
-(`@/components/ui/select`，不是 PrimeVue 的)，其兩個選項分別讀取
+(`@/components/ui/select`)，其兩個選項分別讀取
 `t('lang.zh-TW')` / `t('lang.en')`。
 
 **要新增一個 UI 語言**(例如日文)：
@@ -158,27 +147,28 @@ defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 ```vue
 <script setup lang="ts">
-import ColorPicker from 'primevue/colorpicker'
-import InputText from 'primevue/inputtext'
+import { Input } from '@/components/ui/input'
 import type { FieldMeta } from '../../types/schema'
 
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
-// PrimeVue's ColorPicker works in bare hex ("ff0000"); the stored/API value is "#ff0000".
-function onPick(hex: string): void {
-  emit('update:modelValue', `#${hex}`)
+// 原生 color input 使用「#rrggbb」格式；欄位仍為空值時回退到黑色。
+function onPick(e: Event): void {
+  emit('update:modelValue', (e.target as HTMLInputElement).value)
 }
 </script>
 
 <template>
-  <div class="color-swatch-field">
-    <ColorPicker
-      :model-value="(modelValue as string)?.replace(/^#/, '') ?? ''"
+  <div class="color-swatch-field flex items-center gap-2">
+    <input
+      type="color"
+      :value="(modelValue as string) || '#000000'"
       :disabled="disabled"
-      @update:model-value="onPick"
+      class="border-input h-9 w-12 shrink-0 cursor-pointer rounded-md border p-0.5"
+      @input="onPick"
     />
-    <InputText
+    <Input
       :model-value="(modelValue as string)"
       :disabled="disabled"
       :maxlength="field.maxLength ?? undefined"
@@ -186,10 +176,6 @@ function onPick(hex: string): void {
     />
   </div>
 </template>
-
-<style scoped>
-.color-swatch-field { display: flex; align-items: center; gap: 8px; }
-</style>
 ```
 
 **2. 註冊它**——在 `frontend/src/lib/fieldTypes/registry.ts` 中，替換 `color` 項目的元件。那筆項目
