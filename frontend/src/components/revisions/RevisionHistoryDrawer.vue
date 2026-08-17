@@ -46,6 +46,11 @@ const detailLoad = createLatestWins()
 function opLabel(op: string): string {
   return t(revisionOperationKey(op))
 }
+function nodeLabel(rev: RevisionInfo): string {
+  return rev.operation === 'revert' && typeof rev.sourceRevisionNumber === 'number'
+    ? t('revisions.opRevertFrom', { n: rev.sourceRevisionNumber })
+    : opLabel(rev.operation)
+}
 function whenLabel(iso: string): string {
   return formatRevisionTime(iso)
 }
@@ -157,7 +162,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
                 @click="select(rev)"
               >
                 <span class="rev-item__num">#{{ rev.revisionNumber }}</span>
-                <span class="rev-item__op">{{ opLabel(rev.operation) }}</span>
+                <span class="rev-item__op">{{ nodeLabel(rev) }}</span>
                 <span class="rev-item__when text-muted-foreground">{{ whenLabel(rev.createdAt) }}</span>
               </button>
             </li>

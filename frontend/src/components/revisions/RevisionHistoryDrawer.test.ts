@@ -14,7 +14,8 @@ const i18n = createI18n({
   messages: { en: { revisions: {
     title: 'Revision history', loading: 'Loading…', loadError: 'Failed to load revisions',
     retry: 'Retry', empty: 'No revisions yet', colWhen: 'Time', colWho: 'By', snapshot: 'Snapshot',
-    opCreate: 'Created', opUpdate: 'Updated', opRevert: 'Reverted', opUnknown: 'Changed', system: 'System',
+    opCreate: 'Created', opUpdate: 'Updated', opRevert: 'Reverted', opRevertFrom: 'Revert (from #{n})',
+    opUnknown: 'Changed', system: 'System',
     revert: 'Revert to this revision', revertConfirmHeader: 'Confirm revert',
     revertConfirmMessage: 'Revert to {n}?', reverted: 'Reverted to {n}', revertFailed: 'Revert failed',
     detailError: 'Failed to load this revision', selectHint: 'Select a revision', reverting: 'Reverting…',
@@ -40,6 +41,12 @@ const rows = [
   { revisionNumber: 2, operation: 'update', createdAt: '2026-07-21T02:00:00Z', createdBy: 'u1' },
   { revisionNumber: 1, operation: 'create', createdAt: '2026-07-21T01:00:00Z', createdBy: 'u1' },
 ]
+
+function mockRevisions(revisions: unknown[]) {
+  return vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(revisions as never)
+}
+
+const iso = '2026-07-21T02:00:00Z'
 
 describe('RevisionHistoryDrawer', () => {
   beforeEach(() => {
@@ -258,5 +265,28 @@ describe('RevisionHistoryDrawer', () => {
     await retryBtn.trigger('click')
     await flushPromises()
     expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('annotates a revert node with the revision it restored', async () => {
+    mockRevisions([
+      { revisionNumber: 3, operation: 'revert', createdAt: iso, createdBy: null, sourceRevisionNumber: 1 },
+      { revisionNumber: 2, operation: 'update', createdAt: iso, createdBy: null, sourceRevisionNumber: null },
+      { revisionNumber: 1, operation: 'create', createdAt: iso, createdBy: null, sourceRevisionNumber: null },
+    ])
+    const w = mountDrawer()
+    await flushPromises()
+    const items = w.findAll('.rev-item__op')
+    expect(items[0].text()).toBe('Revert (from #1)')
+    expect(items[1].text()).toBe('Updated')
+  })
+
+  it('falls back to the plain label for a revert with no recorded source', async () => {
+    mockRevisions([
+      { revisionNumber: 2, operation: 'revert', createdAt: iso, createdBy: null, sourceRevisionNumber: null },
+      { revisionNumber: 1, operation: 'create', createdAt: iso, createdBy: null, sourceRevisionNumber: null },
+    ])
+    const w = mountDrawer()
+    await flushPromises()
+    expect(w.findAll('.rev-item__op')[0].text()).toBe('Reverted')
   })
 })

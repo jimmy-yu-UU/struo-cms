@@ -195,6 +195,7 @@ export default {
     opCreate: '新建',
     opUpdate: '更新',
     opRevert: '還原',
+    opRevertFrom: '還原(自 #{n})',
     opUnknown: '變更',
     system: '系統',
     snapshot: '快照',
