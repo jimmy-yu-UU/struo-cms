@@ -164,4 +164,38 @@ public class GraphQlSchemaTests
         input.Fields.Any(f => f.Name == "parent" && f.Type.NamedType().Name == "CategoryFilterInput")
             .Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Revision_type_has_expected_field_shapes()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().Contain("type Revision");
+        sdl.Should().Contain("revisionNumber: Int!");
+        sdl.Should().Contain("operation: String!");
+        sdl.Should().Contain("createdAt: DateTime!");
+        sdl.Should().Contain("snapshot: Any");
+
+        // createdBy/sourceRevisionNumber are both nullable. A plain Contain("...: ID")/Contain("...: Int")
+        // would also pass if the field were wrongly declared "ID!"/"Int!", since "ID"/"Int" is a string
+        // prefix of "ID!"/"Int!" — so anchor on end-of-line (SchemaFormatter prints one field per line)
+        // to make the assertion actually discriminate nullable from non-null.
+        sdl.Should().MatchRegex(@"createdBy:\s*ID\r?\n");
+
+        // The public-API contract ruling this test exists to pin: sourceRevisionNumber is nullable
+        // Int — not Long, not Int! — so it lines up with the sibling revisionNumber: Int! field and
+        // the revisionNumber: Int! argument on the single-revision query field, letting a codegen'd
+        // client feed one straight into the other without a cast. Same end-of-line anchor as above:
+        // this must fail if the field is widened to Int!, narrowed/widened to Long, or removed.
+        sdl.Should().MatchRegex(@"sourceRevisionNumber:\s*Int\r?\n");
+    }
+
+    [Fact]
+    public async Task Query_exposes_per_collection_revision_fields_for_an_opted_in_collection()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().Contain("articleRevisions(id: ID!): [Revision!]!");
+        sdl.Should().Contain("articleRevision(id: ID!, revisionNumber: Int!): Revision");
+    }
 }
