@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import PrimeVue from 'primevue/config'
 import { createI18n } from 'vue-i18n'
 import KeyValueField from './KeyValueField.vue'
 import type { FieldMeta } from '../../types/schema'
@@ -16,8 +15,8 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 // each pack, which is the only way to prove these labels run through t() rather than a hardcoded
 // English string that happens to read back identical to en's current value.
 const zhI18n = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'zh-TW', messages: { 'zh-TW': zhTW } })
-const opts = { global: { plugins: [PrimeVue, i18n] } }
-const zhOpts = { global: { plugins: [PrimeVue, zhI18n] } }
+const opts = { global: { plugins: [i18n] } }
+const zhOpts = { global: { plugins: [zhI18n] } }
 
 describe('KeyValueField', () => {
   it('renders one row per entry', () => {

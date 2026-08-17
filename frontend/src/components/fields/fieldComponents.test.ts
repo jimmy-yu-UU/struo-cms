@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
-import PrimeVue from 'primevue/config'
 import TextField from './TextField.vue'
 import TextareaField from './TextareaField.vue'
 import NumberField from './NumberField.vue'
@@ -35,16 +34,15 @@ function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
     readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over } as FieldMeta
 }
-const opts = { global: { plugins: [PrimeVue] } }
 // form/DatePicker.vue calls useI18n() for its placeholder and trigger label, and its
 // PopoverContent is one of reka's floating components whose own portal is itself named Teleport,
 // which collides with VTU's stub unless slot rendering is switched back on.
-const dateOpts = { global: { plugins: [PrimeVue, i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
-const dateOptsZhTW = { global: { plugins: [PrimeVue, zhI18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+const dateOpts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
+const dateOptsZhTW = { global: { plugins: [zhI18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
 describe('field components (simple inputs)', () => {
   it('TextField renders an input, binds maxlength, and emits on input', async () => {
-    const w = mount(TextField, { props: { field: field({ interface: 'text', maxLength: 50 }), modelValue: '' }, ...opts })
+    const w = mount(TextField, { props: { field: field({ interface: 'text', maxLength: 50 }), modelValue: '' } })
     const input = w.get('input')
     expect(input.attributes('maxlength')).toBe('50')
     await input.setValue('hi')
@@ -52,17 +50,17 @@ describe('field components (simple inputs)', () => {
   })
 
   it('TextField omits maxlength when field has none', () => {
-    const w = mount(TextField, { props: { field: field({ interface: 'text', maxLength: null }), modelValue: '' }, ...opts })
+    const w = mount(TextField, { props: { field: field({ interface: 'text', maxLength: null }), modelValue: '' } })
     expect(w.get('input').attributes('maxlength')).toBeUndefined()
   })
 
   it('TextareaField renders a textarea and binds maxlength', () => {
-    const w = mount(TextareaField, { props: { field: field({ interface: 'textarea', maxLength: 20 }), modelValue: '' }, ...opts })
+    const w = mount(TextareaField, { props: { field: field({ interface: 'textarea', maxLength: 20 }), modelValue: '' } })
     expect(w.get('textarea').attributes('maxlength')).toBe('20')
   })
 
   it('NumberField renders a numeric input', () => {
-    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 }, ...opts })
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 } })
     expect(w.find('input').exists()).toBe(true)
   })
 
@@ -70,13 +68,13 @@ describe('field components (simple inputs)', () => {
   // vendored composition's real data-slot hook must be present — a negative assertion alone also
   // passes for a hand-rolled <input>, so a positive one is required too.
   it('NumberField renders the vendored number-field input, not PrimeVue InputNumber', () => {
-    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 }, ...opts })
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 } })
     expect(w.findComponent({ name: 'InputNumber' }).exists()).toBe(false)
     expect(w.find('[data-slot="input"]').exists()).toBe(true)
   })
 
   it('NumberField genuinely disables the vendored input control', () => {
-    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3, disabled: true }, ...opts })
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3, disabled: true } })
     expect(w.find('[data-slot="input"]').attributes('disabled')).toBe('')
   })
 
@@ -87,7 +85,7 @@ describe('field components (simple inputs)', () => {
   // NumberField.vue normalises undefined/NaN -> null at this boundary so nothing downstream has to
   // know reka's convention.
   it('NumberField normalises a cleared input to null', async () => {
-    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 }, ...opts })
+    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 } })
     await w.get('input').setValue('')
     await w.get('input').trigger('blur')
     const emitted = w.emitted('update:modelValue')
@@ -96,25 +94,25 @@ describe('field components (simple inputs)', () => {
   })
 
   it('renders a switch that reflects the model value', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true }, ...opts })
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: true } })
     const sw = w.find('[role="switch"]')
     expect(sw.exists()).toBe(true)
     expect(sw.attributes('aria-checked')).toBe('true')
   })
 
   it('reports unchecked for a falsy model value', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false } })
     expect(w.find('[role="switch"]').attributes('aria-checked')).toBe('false')
   })
 
   it('emits a plain boolean when toggled', async () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false } })
     await w.find('[role="switch"]').trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([true])
   })
 
   it('is disabled when the field is disabled', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false, disabled: true }, ...opts })
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false, disabled: true } })
     expect(w.find('[role="switch"]').attributes('disabled')).toBeDefined()
   })
 
@@ -129,7 +127,7 @@ describe('field components (simple inputs)', () => {
   // container's own direct child (BooleanField's real rendered root) and asserts THAT isn't the
   // switch itself.
   it('keeps the switch nested inside a wrapper element, not as its own root', () => {
-    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false }, ...opts })
+    const w = mount(BooleanField, { props: { field: field({ interface: 'boolean' }), modelValue: false } })
     const sw = w.find('[role="switch"]')
     expect(sw.exists()).toBe(true)
     const componentRoot = w.element.firstElementChild as HTMLElement
@@ -313,7 +311,7 @@ describe('field components (simple inputs)', () => {
   // The migration's own assertion: this field must no longer resolve a PrimeVue component.
   // findComponent({ name }) is the same lookup the pre-migration tests used for Select/DatePicker.
   it('TextField renders the vendored Input, not PrimeVue InputText', () => {
-    const w = mount(TextField, { props: { field: field({ interface: 'text' }), modelValue: 'x' }, ...opts })
+    const w = mount(TextField, { props: { field: field({ interface: 'text' }), modelValue: 'x' } })
     expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
     expect(w.find('input').exists()).toBe(true)
   })
@@ -331,7 +329,7 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
         modelValue: 'b',
       },
-      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     // SelectContent teleports its (closed) items into an off-DOM DocumentFragment so SelectValue
     // can resolve the selected item's label from the collection even while unopened; that
@@ -347,7 +345,7 @@ describe('field components (choice + structural)', () => {
   it('SelectField renders the vendored select-trigger data-slot hook', () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: 'a' },
-      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     expect(w.find('[data-slot="select-trigger"]').exists()).toBe(true)
   })
@@ -355,7 +353,7 @@ describe('field components (choice + structural)', () => {
   it('SelectField genuinely disables the vendored trigger', () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: 'a', disabled: true },
-      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     expect(w.get('[role="combobox"]').attributes('disabled')).toBe('')
   })
@@ -368,7 +366,7 @@ describe('field components (choice + structural)', () => {
   it('SelectField emits the chosen option value through its real listener', async () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: '' },
-      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     await w.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', 'a')
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['a'])
@@ -380,7 +378,7 @@ describe('field components (choice + structural)', () => {
   it('SelectField coerces a cleared emission to an empty string, never the string "undefined"', async () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: 'a' },
-      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     await w.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', undefined)
     expect(w.emitted('update:modelValue')?.[0]).toEqual([''])
@@ -393,7 +391,7 @@ describe('field components (choice + structural)', () => {
   it('SelectField gives its trigger an accessible name from the field label', () => {
     const w = mount(SelectField, {
       props: { field: field({ interface: 'select', label: 'Status', options: [{ value: 'a', label: 'Alpha' }] }), modelValue: '' },
-      global: { plugins: [PrimeVue], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
     })
     expect(w.get('[role="combobox"]').attributes('aria-label')).toBe('Status')
   })
@@ -404,7 +402,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
         modelValue: 'a',
       },
-      ...opts,
     })
     expect(w.findAll('[role="radio"]')).toHaveLength(2)
     expect(w.find('[role="radiogroup"]').exists()).toBe(true)
@@ -418,7 +415,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
         modelValue: 'a',
       },
-      ...opts,
     })
     await w.findAll('[role="radio"]')[1].trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['b'])
@@ -433,7 +429,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
         modelValue: 'a',
       },
-      ...opts,
     })
     await w.findComponent({ name: 'RadioGroup' }).vm.$emit('update:modelValue', 'b')
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['b'])
@@ -447,7 +442,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
         modelValue: 'b',
       },
-      ...opts,
     })
     const radios = w.findAll('[role="radio"]')
     expect(radios[0].attributes('data-state')).toBe('unchecked')
@@ -463,7 +457,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] }),
         modelValue: 'a',
       },
-      ...opts,
     })
     const labels = w.findAll('label')
     const radios = w.findAll('[role="radio"]')
@@ -487,7 +480,7 @@ describe('field components (choice + structural)', () => {
     const Host = defineComponent({
       render: () => h('div', [h(RadioField, { field: f, modelValue: 'a' }), h(RadioField, { field: f, modelValue: 'a' })]),
     })
-    const w = mount(Host, opts)
+    const w = mount(Host)
     const radios = w.findAll('[role="radio"]')
     expect(radios).toHaveLength(2)
     expect(radios[0].attributes('id')).toBeTruthy()
@@ -505,7 +498,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', label: 'Status', options: [{ value: 'a', label: 'Alpha' }] }),
         modelValue: 'a',
       },
-      ...opts,
     })
     expect(w.get('[role="radiogroup"]').attributes('aria-label')).toBe('Status')
   })
@@ -521,7 +513,6 @@ describe('field components (choice + structural)', () => {
         modelValue: 'a',
         disabled: true,
       },
-      ...opts,
     })
     const radios = w.findAll('[role="radio"]')
     expect(radios[0].attributes('disabled')).toBe('')
@@ -541,7 +532,6 @@ describe('field components (choice + structural)', () => {
         field: field({ interface: 'radio', options: [{ value: 'a', label: 'Alpha' }] }),
         modelValue: '',
       },
-      ...opts,
     })
     expect(w.findComponent({ name: 'RadioGroup' }).props('modelValue')).toBe('')
   })

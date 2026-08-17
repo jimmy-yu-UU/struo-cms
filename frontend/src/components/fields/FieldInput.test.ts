@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import PrimeVue from 'primevue/config'
 import FieldInput from './FieldInput.vue'
 import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -71,7 +70,6 @@ describe('FieldInput', () => {
   it('binds maxlength on text inputs when the field declares one', () => {
     const w = mount(FieldInput, {
       props: { field: field({ interface: 'text', maxLength: 100 }), modelValue: '' },
-      global: { plugins: [PrimeVue] },
     })
     expect(w.get('input').attributes('maxlength')).toBe('100')
   })
@@ -79,7 +77,6 @@ describe('FieldInput', () => {
   it('omits maxlength when the field has none', () => {
     const w2 = mount(FieldInput, {
       props: { field: field({ interface: 'textarea', maxLength: null }), modelValue: '' },
-      global: { plugins: [PrimeVue] },
     })
     expect(w2.get('textarea').attributes('maxlength')).toBeUndefined()
   })
