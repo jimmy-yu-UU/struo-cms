@@ -144,7 +144,7 @@ lockfile):
 | Component | Version | Source |
 |---|---|---|
 | Vue | ^3.5.39 | `frontend/package.json` |
-| UI library | PrimeVue ^4.5.5 (+ `@primeuix/themes` ^2.0.3) | `frontend/package.json` |
+| UI library | Tailwind CSS ^4.3.3 + shadcn-vue's vendored components (reka-ui ^2.10.3; vue-sonner ^2.0.9 for toasts) | `frontend/package.json` |
 | Rich text editor | TipTap ^3.27.1 (starter-kit + extensions) | `frontend/package.json` |
 | State management | Pinia ^3.0.4 | `frontend/package.json` |
 | Router | vue-router ^5.1.0 | `frontend/package.json` |
@@ -171,7 +171,7 @@ Toolchain versions pinned in CI (`.github/workflows/ci.yml`): .NET SDK `10.0.x`,
 | Query DSL | Core | filter/sort/pagination with whitelist-validated field and relation paths |
 | REST API | Core | ASP.NET Core Controllers, unified response envelope |
 | GraphQL API | Core | HotChocolate, schema generated from the same collection metadata |
-| Admin SPA | Core | Vue 3 + PrimeVue + TipTap |
+| Admin SPA | Core | Vue 3 + Tailwind v4 + shadcn-vue + TipTap |
 | Blog sample | Demo, not shipped by default | `samples/Struo.Sample.Blog`; opt-in, deletable |
 
 ## Where to go next
