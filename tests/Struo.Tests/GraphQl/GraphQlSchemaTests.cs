@@ -171,7 +171,13 @@ public class GraphQlSchemaTests
         var sdl = await BuildSdlAsync();
 
         sdl.Should().Contain("type Revision");
-        sdl.Should().Contain("revisionNumber: Int!");
+        // Anchored on end-of-line (not a plain Contain): the fixture change below also puts
+        // "revisionNumber: Int!" into the same SDL as the `revisionNumber` argument on
+        // `articleRevision(id: ID!, revisionNumber: Int!): Revision` — a plain Contain would keep
+        // passing off that argument occurrence even if the Revision.revisionNumber field itself
+        // were deleted or redeclared. The argument occurrence is followed by `)`, not a newline,
+        // so `\r?\n` disambiguates the field declaration from the argument.
+        sdl.Should().MatchRegex(@"revisionNumber:\s*Int!\r?\n");
         sdl.Should().Contain("operation: String!");
         sdl.Should().Contain("createdAt: DateTime!");
         sdl.Should().Contain("snapshot: Any");
