@@ -28,8 +28,10 @@ internal static class RevisionResolvers
         config.Fields.Add(CollectionSchemaBuilder.Field("createdBy", "ID",
             ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("createdBy")));
         // Nullable: only reverts populate this (the revision number they restored); every other
-        // operation stores NULL.
-        config.Fields.Add(CollectionSchemaBuilder.Field("sourceRevisionNumber", "Long",
+        // operation stores NULL. Int (not Long) to match the sibling `revisionNumber` field above
+        // and the `revisionNumber` argument on RevisionField, since this carries the same domain
+        // value — a revision number a caller feeds straight back into articleRevision(revisionNumber:).
+        config.Fields.Add(CollectionSchemaBuilder.Field("sourceRevisionNumber", "Int",
             ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("sourceRevisionNumber")));
         config.Fields.Add(CollectionSchemaBuilder.Field("snapshot", "Any",
             ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("snapshot")));
