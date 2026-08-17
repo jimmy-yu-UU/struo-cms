@@ -94,20 +94,23 @@ palette — the palette is a template default edited in source, not a per-deploy
   custom property — a color, a radius, a shadow. Every vendored component and Tailwind utility reads the
   same token, so one edit reaches every consumer at once.
 - **The `class` prop, at the point of use**, for anything expressible as a Tailwind utility class. Every
-  vendored `ui/` component merges its `class` prop through `cn()` (`frontend/src/components/ui/input/Input.vue`
-  shows the pattern), so passing utilities where the component is used restyles that one usage without
-  touching `ui/` — `frontend/src/components/fields/FilePicker.vue` and `FilesField.vue` both do this,
-  passing a `class` into `DialogScrollContent` to widen it on medium viewports.
+  vendored `ui/` component that renders styled markup merges its `class` prop through `cn()`
+  (`frontend/src/components/ui/input/Input.vue` shows the pattern), so passing utilities where the
+  component is used restyles that one usage without touching `ui/` —
+  `frontend/src/components/fields/FilePicker.vue` and `FilesField.vue` both do this, passing a `class`
+  into `DialogScrollContent` that widens it to `min(78vw,1300px)` and narrows that to `95vw` below a
+  960px viewport.
 - **A wrapper component that sits outside `ui/`**, for anything neither of the above can express — a
-  fixed width on one specific usage, extra spacing, a one-off layout tweak. A wrapper's own `<style
-  scoped>` block is unlayered CSS, and because Tailwind v4 puts every utility class in `@layer utilities`,
+  fixed width on one specific usage, extra spacing, a one-off layout tweak. A wrapper's own `<style scoped>`
+  block is unlayered CSS, and because Tailwind v4 puts every utility class in `@layer utilities`,
   an unlayered declaration on the same element outranks a utility regardless of specificity (unless the
   utility carries `!important`, which inverts this) — this is what makes a wrapping component's scoped
   style the reliable place to put such an override. Vue's scope id lands only on a child component's root
-  element, though, not on what it renders internally, so a wrapper's scoped style reaches its own root
-  but never a vendored component's inner nodes without the `:deep()` this section already rules out —
-  which is why the token layer and the `class` prop above, not wrapper CSS, are the two paths that
-  actually reach inside.
+  element, though, not on what it renders internally, so a wrapper's scoped style reaches the vendored
+  component's root element — the same node the `class` prop above lands on — and stops there; reaching
+  what the component renders inside that root still needs the `:deep()` this section already rules out.
+  That leaves the token layer as the one path that actually reaches inside, because the inner nodes read
+  those custom properties themselves.
 
 Avoid reaching for `!important` here: it wins the immediate override but leaves the *next* override —
 yours or a fork's — fighting the same battle one level worse.

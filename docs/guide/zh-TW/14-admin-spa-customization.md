@@ -88,19 +88,20 @@ import './assets/theme.css'
 
 - **Token 層**(`frontend/src/assets/tokens.css`)：適用於任何已經以語意自訂屬性形式公開的東西——顏色、
   半徑、陰影。每個供應商元件與 Tailwind utility 都讀取同一個 token，所以改一次就能同時觸及所有使用者。
-- **在使用處帶入 `class` prop**：適用於任何能表達為 Tailwind utility class 的東西。每個供應商 `ui/`
-  元件都會透過 `cn()` 合併它的 `class` prop(`frontend/src/components/ui/input/Input.vue` 展示了這個
-  模式)，因此在使用該元件的地方帶入 utility class，就能只重新設計那一個用法的樣式，而不需要碰
-  `ui/`——`frontend/src/components/fields/FilePicker.vue` 與 `FilesField.vue` 都是這樣做的，兩者都對
-  `DialogScrollContent` 帶入一個 `class`，讓對話框在中等寬度的螢幕上變寬。
+- **在使用處帶入 `class` prop**：適用於任何能表達為 Tailwind utility class 的東西。每個會渲染出樣式化
+  標記的供應商 `ui/` 元件都會透過 `cn()` 合併它的 `class` prop(`frontend/src/components/ui/input/Input.vue`
+  展示了這個模式)，因此在使用該元件的地方帶入 utility class，就能只重新設計那一個用法的樣式，而不需要
+  碰 `ui/`——`frontend/src/components/fields/FilePicker.vue` 與 `FilesField.vue` 都是這樣做的，兩者都對
+  `DialogScrollContent` 帶入一個 `class`，讓對話框寬度變成 `min(78vw,1300px)`，並在螢幕寬度低於 960px
+  時收窄為 `95vw`。
 - **一個位於 `ui/` 之外的包裝元件**：適用於以上兩者都無法表達的東西——某個特定用法上的固定寬度、額外
   間距、一次性的版面微調。包裝元件自己的 `<style scoped>` 區塊是沒有分層的 CSS，而由於 Tailwind v4 把
   每一個 utility class 都放進 `@layer utilities` 之中，套用在同一個元素上的沒有分層宣告會勝過
   utility，無論特異度高低(除非那個 utility 帶有 `!important`，那會反過來)——這正是為什麼包裝元件的
   scoped 樣式才是放這類覆寫的可靠位置。不過 Vue 的 scope id 只會落在子元件自己的根元素上，並不會落在
-  它內部渲染出來的東西上，因此包裝元件的 scoped 樣式只能觸及它自己的根元素，永遠無法在不使用本節已經
-  禁止的 `:deep()` 的情況下，觸及供應商元件內部的節點——這正是為什麼上面的 token 層與 `class` prop，
-  才是真正能觸及內部的兩條路徑，而不是包裝元件的 CSS。
+  它內部渲染出來的東西上，因此包裝元件的 scoped 樣式能觸及供應商元件的根元素——與上面 `class` prop 所
+  落點的同一個節點——但僅止於此；要觸及該元件在根元素內部渲染出來的節點，仍然需要本節已經禁止的
+  `:deep()`。真正能觸及內部的唯一路徑是 token 層，因為內部節點是自己讀取那些自訂屬性。
 
 在這裡要避免使用 `!important`：它贏得了眼前這一次覆寫，卻讓*下一次*覆寫——不管是你自己的還是某個 fork
 的——在更糟的一層上打同一場仗。
