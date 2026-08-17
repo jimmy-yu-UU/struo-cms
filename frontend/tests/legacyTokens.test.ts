@@ -25,7 +25,7 @@ const RENAMED = ['accent', 'muted', 'radius', 'radius-lg'] as const   // meaning
 const SURRENDERED = ['border', 'success'] as const        // meaning matches -> tokens.css owns it
 
 describe('legacy token collision', () => {
-  it('no file outside tokens.css consumes the renamed names', () => {
+  it('no file outside tokens.css or ui/ consumes the renamed names', () => {
     const pattern = new RegExp(RENAMED.map((n) => `var\\(--${n}[,)]`).join('|'))
     const offenders = files.filter((f) => pattern.test(readFileSync(f, 'utf8')))
     expect(offenders.map((f) => f.replace(SRC, ''))).toEqual([])
@@ -45,7 +45,7 @@ describe('legacy token collision', () => {
     expect(declarations.map((m) => m[0])).toEqual([])
   })
 
-  it('no file outside tokens.css consumes a --legacy-* token', () => {
+  it('no file outside tokens.css or ui/ consumes a --legacy-* token', () => {
     const consumers = files.filter((f) => /var\(--legacy-/.test(readFileSync(f, 'utf8')))
     expect(consumers.map((f) => f.replace(SRC, ''))).toEqual([])
   })
