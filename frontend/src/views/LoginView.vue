@@ -48,11 +48,7 @@ function onSso() {
       <div class="brand">
         <BrandMark />
         <b>{{ brandName }}</b>
-        <!-- text-xs/text-muted-foreground are dormant: theme.css's global, unlayered .caption rule
-             (imported after tokens.css in main.ts) sets the same font-size/color at equal
-             specificity and currently wins over these layered Tailwind utilities. They take effect
-             once that global rule stops setting them. -->
-        <span class="caption text-xs text-muted-foreground">{{ t('login.subtitle') }}</span>
+        <span class="text-xs font-medium text-muted-foreground">{{ t('login.subtitle') }}</span>
       </div>
 
       <form class="login-form" @submit.prevent="onSubmit">

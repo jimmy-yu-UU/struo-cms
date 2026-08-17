@@ -44,12 +44,11 @@
   --sidebar-border: #e5e7eb;
   --sidebar-ring: #0284c7;
   --radius: 0.625rem;
-  /* Legacy bridge, NOT part of the shadcn output contract below (@theme inline has no
-     --color-surface-2 and never should): a sunken/hover rung one step darker than --surface, for
-     the unmigrated screens still on theme.css's --bg/--surface/--fg family. Must live here, not
-     in theme.css, because it resolves to --muted and only this file may write `var(--muted)` —
-     see frontend/tests/legacyTokens.test.ts's own header for why. Leaves together with theme.css's
-     --legacy-* block, once the last such screen is migrated. */
+  /* First-party semantic token, deliberately outside the shadcn output contract below (@theme
+     inline has no --color-surface-2 and should not gain one): a sunken/hover surface one rung
+     darker than the card surface. Declared here rather than in theme.css because it resolves to
+     --muted and only this file may write `var(--muted)` — see
+     frontend/tests/legacyTokens.test.ts's own header for why. */
   --surface-2: var(--muted);
   color-scheme: light;
 }

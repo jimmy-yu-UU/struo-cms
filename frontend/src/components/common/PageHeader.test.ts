@@ -9,11 +9,11 @@ describe('PageHeader', () => {
   })
   it('renders the caption when provided', () => {
     const w = mount(PageHeader, { props: { title: 'Articles', caption: '128 items' } })
-    expect(w.get('.caption').text()).toBe('128 items')
+    expect(w.get('.titles p').text()).toBe('128 items')
   })
   it('omits the caption element when caption is absent', () => {
     const w = mount(PageHeader, { props: { title: 'Articles' } })
-    expect(w.find('.caption').exists()).toBe(false)
+    expect(w.find('.titles p').exists()).toBe(false)
   })
   it('renders the actions slot', () => {
     const w = mount(PageHeader, { props: { title: 'Articles' }, slots: { actions: '<button>New</button>' } })

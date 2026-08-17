@@ -21,7 +21,7 @@ const files = walk(SRC).filter((f) => !f.endsWith('tokens.css'))
 // — including --accent (which would render brand sky as every hover surface) and --radius
 // (which would make rounded-sm 4.8px instead of the contracted 6px). --radius-lg was measured
 // (Step 0) to also be emitted into :root by Tailwind v4's `@theme inline`, so it collides too.
-const RENAMED = ['accent', 'muted', 'radius', 'radius-lg'] as const   // meaning differs -> --legacy-*
+const RENAMED = ['accent', 'muted', 'radius', 'radius-lg'] as const   // meaning differs -> theme.css declares none of them
 const SURRENDERED = ['border', 'success'] as const        // meaning matches -> tokens.css owns it
 
 describe('legacy token collision', () => {
@@ -38,12 +38,10 @@ describe('legacy token collision', () => {
     }
   })
 
-  it('theme.css declares the renamed legacy tokens in both schemes', () => {
+  it('no --legacy-* token is declared or consumed anywhere', () => {
     const css = readFileSync(join(SRC, 'assets/theme.css'), 'utf8')
-    for (const name of RENAMED) {
-      // once in :root, once in .app-dark
-      expect([...css.matchAll(new RegExp(`--legacy-${name}:`, 'g'))].length,
-        `--legacy-${name} must be declared in both colour schemes`).toBe(2)
-    }
+    expect([...css.matchAll(/--legacy-[a-z-]+:/g)].map((m) => m[0])).toEqual([])
+    const consumers = files.filter((f) => /var\(--legacy-/.test(readFileSync(f, 'utf8')))
+    expect(consumers.map((f) => f.replace(SRC, ''))).toEqual([])
   })
 })
