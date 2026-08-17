@@ -146,9 +146,11 @@ public sealed class ItemService(
     }
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
-        => UpdateCoreAsync(collection, id, body, "update", ct);
+        => UpdateCoreAsync(collection, id, body, "update", ct: ct);
 
-    private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(string collection, string id, JsonElement body, string operation, CancellationToken ct)
+    private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(
+        string collection, string id, JsonElement body, string operation,
+        long? sourceRevisionNumber = null, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
@@ -223,7 +225,8 @@ public sealed class ItemService(
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
-                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot, ct: ct);
+                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot,
+                    sourceRevisionNumber, ct: ct);
             }
         }, ct);
         if (updated is null) return null;
@@ -393,7 +396,7 @@ public sealed class ItemService(
         using var src = JsonDocument.Parse(rec.Snapshot);
         using var doc = JsonDocument.Parse(
             JsonBodyUtil.StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
-        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
+        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, ct: ct);
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
