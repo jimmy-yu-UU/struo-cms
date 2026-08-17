@@ -273,6 +273,33 @@ public sealed class RevisionServiceTests
     }
 
     [Fact]
+    public async Task RevertAsync_records_the_reverted_from_revision_on_the_new_revision()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");                       // rev 1
+        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // rev 2
+
+        await h.Service.RevertAsync("article", id, 1, default);                     // rev 3, reverting to 1
+
+        var list = await h.Store.ListAsync("article", id, default);
+        var newest = list[0];                                                       // newest-first
+
+        Assert.Equal("revert", newest.Operation);
+        Assert.Equal(1, newest.SourceRevisionNumber);
+    }
+
+    [Fact]
+    public async Task A_plain_update_records_no_source_revision()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");
+        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default);
+
+        var list = await h.Store.ListAsync("article", id, default);
+        Assert.Null(list[0].SourceRevisionNumber);
+    }
+
+    [Fact]
     public async Task Revert_unknown_revision_returns_null()
     {
         using var h = RevisionServiceHarness.Create();
