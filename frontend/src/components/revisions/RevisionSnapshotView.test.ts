@@ -8,6 +8,7 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { revisions: {
     opUpdate: 'Updated', opUnknown: 'Changed', system: 'System', snapshot: 'Snapshot',
+    opRevert: 'Reverted', opRevertFrom: 'Reverted (from #{n})',
     revert: 'Revert to this revision', reverting: 'Reverting…',
     selectHint: 'Select a revision', loading: 'Loading…', colWhen: 'Time', colWho: 'By',
   } } },
@@ -83,6 +84,19 @@ describe('RevisionSnapshotView', () => {
     // neither the icon/label content nor the `type` attribute distinguishes the two — only
     // this data-slot hook, which only the vendored Primitive-based button emits, does.
     expect(mountView({ detail, loading: false, error: '', canRevert: true }).get('.rev-revert-btn').attributes('data-slot')).toBe('button')
+  })
+
+  it('renders the reverted-from annotation in the detail pane when the revision has a source', () => {
+    const revertDetail = { ...detail, operation: 'revert', sourceRevisionNumber: 1 }
+    const w = mountView({ detail: revertDetail, loading: false, error: '', canRevert: true })
+    expect(w.text()).toContain('Reverted (from #1)')
+  })
+
+  it('falls back to the plain reverted label in the detail pane when there is no recorded source', () => {
+    const revertDetail = { ...detail, operation: 'revert', sourceRevisionNumber: null }
+    const w = mountView({ detail: revertDetail, loading: false, error: '', canRevert: true })
+    expect(w.text()).toContain('Reverted')
+    expect(w.text()).not.toContain('Reverted (from')
   })
 
   it('disables the revert button and swaps its label while reverting', () => {
