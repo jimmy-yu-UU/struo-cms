@@ -1,4 +1,5 @@
 // tests/Struo.Tests/GraphQl/GraphQlRevisionTests.cs
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -71,6 +72,38 @@ public class GraphQlRevisionTests(ApiFactory factory)
         revisions2.GetArrayLength().Should().Be(3);
         revisions2[0].GetProperty("operation").GetString().Should().Be("revert");
         revisions2[0].GetProperty("revisionNumber").GetInt64().Should().Be(3);
+    }
+
+    /// <summary>Task 3: <c>sourceRevisionNumber</c> must round-trip through both the
+    /// <c>articleRevisions</c> list and the <c>articleRevision</c> single-node query, mirroring the
+    /// REST assertions in <see cref="Struo.Tests.Api.RevisionEndpointTests"/>.</summary>
+    [Fact]
+    public async Task ArticleRevisions_and_articleRevision_expose_sourceRevisionNumber_for_a_revert()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(client, "GqlRevisionSourceRoundTrip", status: "draft"); // rev 1
+
+        var update = await PostGraphQlAsync(client,
+            $"mutation {{ updateArticle(id: \"{id}\", input: {{ status: \"published\" }}) {{ status }} }}");
+        update.TryGetProperty("errors", out var updateErrors).Should().BeFalse($"unexpected errors: {updateErrors}");
+
+        var revert = await PostGraphQlAsync(client,
+            $"mutation {{ revertArticle(id: \"{id}\", revisionNumber: 1) {{ status }} }}");
+        revert.TryGetProperty("errors", out var revertErrors).Should().BeFalse($"unexpected errors: {revertErrors}");
+
+        var list = await PostGraphQlAsync(client,
+            $"{{ articleRevisions(id: \"{id}\") {{ revisionNumber operation sourceRevisionNumber }} }}");
+        var revisions = list.GetProperty("data").GetProperty("articleRevisions");
+        revisions[0].GetProperty("operation").GetString().Should().Be("revert");
+        revisions[0].GetProperty("sourceRevisionNumber").GetInt64().Should().Be(1);
+        revisions.EnumerateArray().Single(e => e.GetProperty("operation").GetString() == "update")
+            .GetProperty("sourceRevisionNumber").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var single = await PostGraphQlAsync(client,
+            $"{{ articleRevision(id: \"{id}\", revisionNumber: 3) {{ operation sourceRevisionNumber }} }}");
+        single.TryGetProperty("errors", out var singleErrors).Should().BeFalse($"unexpected errors: {singleErrors}");
+        single.GetProperty("data").GetProperty("articleRevision").GetProperty("sourceRevisionNumber").GetInt64()
+            .Should().Be(1);
     }
 
     [Fact]
