@@ -146,11 +146,11 @@ public sealed class ItemService(
     }
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
-        => UpdateCoreAsync(collection, id, body, "update", ct: ct);
+        => UpdateCoreAsync(collection, id, body, "update", sourceRevisionNumber: null, ct: ct);
 
     private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(
         string collection, string id, JsonElement body, string operation,
-        long? sourceRevisionNumber = null, CancellationToken ct = default)
+        long? sourceRevisionNumber, CancellationToken ct)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
