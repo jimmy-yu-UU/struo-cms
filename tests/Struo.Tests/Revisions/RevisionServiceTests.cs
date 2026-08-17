@@ -184,7 +184,8 @@ public sealed class RevisionServiceHarness : IDisposable
     /// prove the capture runs inside the same <c>InTransactionAsync</c> as the parent write.</summary>
     private sealed class ThrowingRevisionStore : IRevisionStore
     {
-        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default) =>
+        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson,
+            long? sourceRevisionNumber = null, CancellationToken ct = default) =>
             throw new InvalidOperationException("Simulated revision capture failure (test).");
         public Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default) =>
             throw new NotImplementedException("Not expected to be called in the roll-back test.");

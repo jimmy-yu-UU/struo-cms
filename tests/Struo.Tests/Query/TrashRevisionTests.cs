@@ -306,10 +306,11 @@ internal sealed class TrashRevisionHarness : IDisposable
     /// list/get delegate normally — so a row can be created first, then its trash-time capture fails.</summary>
     private sealed class ThrowingOnCaptureRevisionStore(IRevisionStore inner) : IRevisionStore
     {
-        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default) =>
+        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson,
+            long? sourceRevisionNumber = null, CancellationToken ct = default) =>
             operation is "delete" or "restore"
                 ? throw new InvalidOperationException("Simulated capture failure (test): revision capture failed.")
-                : inner.CaptureAsync(collection, itemId, operation, snapshotJson, ct);
+                : inner.CaptureAsync(collection, itemId, operation, snapshotJson, sourceRevisionNumber, ct);
         public Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default) =>
             inner.ListAsync(collection, itemId, ct);
         public Task<RevisionRecord?> GetAsync(string collection, string itemId, long revisionNumber, CancellationToken ct = default) =>
