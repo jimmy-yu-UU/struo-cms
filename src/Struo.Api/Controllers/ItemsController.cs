@@ -112,7 +112,7 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
     public async Task<IActionResult> Revisions(string collection, string id, CancellationToken ct)
     {
         var list = await items.ListRevisionsAsync(collection, id, ct);
-        return Ok(list);   // EnvelopeResultFilter wraps -> { success, data: [ { revisionNumber, operation, createdAt, createdBy } ] }
+        return Ok(list);   // EnvelopeResultFilter wraps -> { success, data: [ { revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber } ] }
     }
 
     [HttpGet("{id}/revisions/{revisionNumber:long}")]
@@ -128,6 +128,7 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
             rec.Operation,
             rec.CreatedAt,
             rec.CreatedBy,
+            rec.SourceRevisionNumber,
             snapshot = snapshotDoc.RootElement.Clone()   // Clone so the value survives the using-scope dispose
         });
     }

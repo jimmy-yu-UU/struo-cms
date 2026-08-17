@@ -27,6 +27,10 @@ internal static class RevisionResolvers
             ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("createdAt")));
         config.Fields.Add(CollectionSchemaBuilder.Field("createdBy", "ID",
             ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("createdBy")));
+        // Nullable: only reverts populate this (the revision number they restored); every other
+        // operation stores NULL.
+        config.Fields.Add(CollectionSchemaBuilder.Field("sourceRevisionNumber", "Long",
+            ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("sourceRevisionNumber")));
         config.Fields.Add(CollectionSchemaBuilder.Field("snapshot", "Any",
             ctx => ctx.Parent<IReadOnlyDictionary<string, object?>>().GetValueOrDefault("snapshot")));
         return ObjectType.CreateUnsafe(config);
@@ -63,6 +67,7 @@ internal static class RevisionResolvers
             ["operation"] = r.Operation,
             ["createdAt"] = r.CreatedAt,
             ["createdBy"] = r.CreatedBy,
+            ["sourceRevisionNumber"] = r.SourceRevisionNumber,
             ["snapshot"] = null,                 // list = metadata only
         }).ToList();
     }
@@ -82,6 +87,7 @@ internal static class RevisionResolvers
             ["operation"] = rec.Operation,
             ["createdAt"] = rec.CreatedAt,
             ["createdBy"] = rec.CreatedBy,
+            ["sourceRevisionNumber"] = rec.SourceRevisionNumber,
             ["snapshot"] = snapshot,
         };
     }
