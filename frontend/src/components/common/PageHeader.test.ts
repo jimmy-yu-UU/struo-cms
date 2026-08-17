@@ -9,7 +9,11 @@ describe('PageHeader', () => {
   })
   it('renders the caption when provided', () => {
     const w = mount(PageHeader, { props: { title: 'Articles', caption: '128 items' } })
-    expect(w.get('.titles p').text()).toBe('128 items')
+    const caption = w.get('.titles p')
+    expect(caption.text()).toBe('128 items')
+    // jsdom never applies <style scoped>, so this is the only place the caption's font-weight is
+    // guarded: font-medium is what carries the 500 weight the caption needs.
+    expect(caption.classes()).toEqual(expect.arrayContaining(['text-sm', 'font-medium', 'text-muted-foreground']))
   })
   it('omits the caption element when caption is absent', () => {
     const w = mount(PageHeader, { props: { title: 'Articles' } })

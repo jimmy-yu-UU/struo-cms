@@ -1,7 +1,10 @@
-/* StruoCMS's non-shadcn global layer: the page/surface/foreground and shadow/overlay/font custom
-   properties that first-party scoped CSS reads, plus the html/body resets and the theme-transition
-   rule below. It loads after tokens.css and every rule here is unlayered, so anything declared in
-   this file outranks every Tailwind utility applied to the same element.
+/* StruoCMS's non-shadcn global layer: the page/surface/foreground, --warn/--danger status, and
+   shadow/overlay/font custom properties that first-party scoped CSS reads, plus the html/body
+   resets, the theme-transition rule below, and .app-breadcrumb. Every rule here is unlayered, so it
+   outranks any Tailwind utility applied to the same element regardless of specificity — .app-breadcrumb's
+   unlayered background/border/padding below is the one live example of this in the file: a bg-* or
+   p-* utility on that element does nothing. Loading after tokens.css only matters for settling
+   collisions against tokens.css's own unlayered declarations, not for outranking Tailwind.
    --surface-2 is declared in tokens.css, not here — see that file's comment on --surface-2
    (frontend/tests/legacyTokens.test.ts's header explains why only tokens.css may reference
    --muted). */

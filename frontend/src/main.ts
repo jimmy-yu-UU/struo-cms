@@ -1,7 +1,7 @@
 import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
-// tokens.css first: it brings in Tailwind (including preflight). theme.css follows so its
-// unlayered global rules resolve after preflight rather than being reset by it.
+// tokens.css first: it brings Tailwind in. theme.css's rules are unlayered, so they outrank
+// every Tailwind layer on the same element whatever the import order.
 import './assets/tokens.css'
 import './assets/theme.css'
 // vue-sonner's lib/index.js never imports its own stylesheet, so without this the toaster
