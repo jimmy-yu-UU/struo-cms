@@ -155,8 +155,8 @@ defineExpose({ toggleFileSelect, toggleFolderSelect })
   <table class="media-list">
     <thead>
       <tr>
-        <th v-if="hasSelection" class="media-list__select-col" aria-hidden="true"></th>
-        <th class="media-list__thumb-col text-muted-foreground" aria-hidden="true"></th>
+        <th v-if="hasSelection" class="media-list__select-col"></th>
+        <th class="media-list__thumb-col text-muted-foreground"></th>
         <th class="text-muted-foreground">{{ $t('media.colName') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colType') }}</th>
         <th class="text-muted-foreground">{{ $t('media.colSize') }}</th>
