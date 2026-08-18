@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
-import InputText from 'primevue/inputtext'
-import Password from 'primevue/password'
-import Button from 'primevue/button'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import PasswordInput from '@/components/form/PasswordInput.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useAppConfigStore } from '../stores/appConfigStore'
 import { apiBaseUrl } from '../api/apiClient'
@@ -21,6 +21,8 @@ const router = useRouter()
 const { t } = useI18n()
 const appConfig = useAppConfigStore()
 const { brandName, oidcEnabled } = storeToRefs(appConfig)
+
+const submitLabel = computed(() => (submitting.value ? t('login.submitting') : t('login.submit')))
 
 async function onSubmit() {
   error.value = ''
@@ -42,17 +44,17 @@ function onSso() {
 
 <template>
   <div class="login-wrap">
-    <div class="login-card">
+    <div class="login-card rounded-xl">
       <div class="brand">
         <BrandMark />
         <b>{{ brandName }}</b>
-        <span class="caption">{{ t('login.subtitle') }}</span>
+        <span class="text-xs font-medium text-muted-foreground">{{ t('login.subtitle') }}</span>
       </div>
 
       <form class="login-form" @submit.prevent="onSubmit">
         <div class="field">
-          <label for="lg-email">{{ t('login.email') }}</label>
-          <InputText
+          <label for="lg-email" class="text-xs font-medium text-muted-foreground">{{ t('login.email') }}</label>
+          <Input
             id="lg-email"
             v-model="email"
             type="email"
@@ -63,31 +65,29 @@ function onSso() {
         </div>
 
         <div class="field">
-          <label for="lg-pw">{{ t('login.password') }}</label>
-          <Password
-            input-id="lg-pw"
+          <label for="lg-pw" class="text-xs font-medium text-muted-foreground">{{ t('login.password') }}</label>
+          <!-- No class here: PasswordInput has inheritAttrs: false, so a class would land on the
+               inner input rather than the wrapper the show/hide toggle positions against. The
+               wrapper is a block div in a grid cell and the vendored input is already w-full, so
+               nothing is needed. id/autocomplete/required do reach the native input via $attrs. -->
+          <PasswordInput
+            id="lg-pw"
             v-model="password"
-            :feedback="false"
-            toggle-mask
-            :input-props="{ autocomplete: 'current-password', required: true }"
+            autocomplete="current-password"
+            required
           />
         </div>
 
-        <Button
-          type="submit"
-          class="btn-block"
-          :loading="submitting"
-          :label="t('login.submit')"
-        />
+        <Button type="submit" class="w-full" :disabled="submitting">{{ submitLabel }}</Button>
 
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
         <template v-if="oidcEnabled">
-          <div class="divider" role="separator" :aria-label="t('login.or')">{{ t('login.or') }}</div>
+          <div class="divider text-muted-foreground" role="separator" :aria-label="t('login.or')">{{ t('login.or') }}</div>
           <Button
             type="button"
-            severity="secondary"
-            class="btn-block sso-btn"
+            variant="secondary"
+            class="sso-btn w-full"
             data-test="sso"
             @click="onSso"
           >
@@ -120,7 +120,6 @@ function onSso() {
   gap: 26px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--legacy-radius-lg);
   box-shadow: var(--shadow-2);
 }
 .brand {
@@ -134,10 +133,6 @@ function onSso() {
   letter-spacing: -0.01em;
   color: var(--fg);
 }
-.brand .caption {
-  font-size: 0.8rem;
-  color: var(--legacy-muted);
-}
 .login-form {
   display: grid;
   gap: 18px;
@@ -146,30 +141,10 @@ function onSso() {
   display: grid;
   gap: 6px;
 }
-.field label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--legacy-muted);
-}
-.field :deep(.p-inputtext),
-.field :deep(.p-password) {
-  width: 100%;
-}
-.field :deep(.p-password input) {
-  width: 100%;
-}
-.btn-block {
-  width: 100%;
-  justify-content: center;
-}
-.sso-btn {
-  gap: 8px;
-}
 .divider {
   display: flex;
   align-items: center;
   gap: 14px;
-  color: var(--legacy-muted);
   font-size: 0.8rem;
   white-space: nowrap;
 }

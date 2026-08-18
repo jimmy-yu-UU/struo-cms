@@ -61,11 +61,10 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
   // list to settle to exactly the one matching row before any inline row action.
   await expect(page.locator('tbody tr')).toHaveCount(1)
 
-  // Soft-delete from the Active list (inline action). CollectionListView's row actions go
-  // through the store-backed ConfirmHost, not PrimeVue's ConfirmDialog — its default accept label
-  // (no explicit acceptLabel passed by lib/deleteAction.ts) is common.confirm = "Confirm", not
-  // PrimeVue's "Yes". ItemFormView's own delete/unsaved-guard dialogs elsewhere in this suite
-  // still say "Yes"/"No".
+  // Soft-delete from the Active list (inline action). CollectionListView's row actions go through
+  // the store-backed ConfirmHost — its default accept label (no explicit acceptLabel passed by
+  // lib/deleteAction.ts) is common.confirm = "Confirm". Every confirmation in this suite uses that
+  // host and that label.
   await rowByTitle(page, title).getByRole('button', { name: 'Delete', exact: true }).click()
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)

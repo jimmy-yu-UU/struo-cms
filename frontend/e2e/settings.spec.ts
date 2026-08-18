@@ -126,8 +126,9 @@ test('navigating away with an unsaved edit prompts the guard; reject keeps the e
   await page.getByRole('navigation', { name: /breadcrumb/i }).getByText('Dashboard', { exact: true }).click()
   await expect(guardDialog(page)).toBeVisible()
 
-  // Reject -> stays on /settings, edit preserved, no navigation happened.
-  await guardDialog(page).getByRole('button', { name: 'No' }).click()
+  // Reject -> stays on /settings, edit preserved, no navigation happened. ConfirmHost renders
+  // the reject button with the shared common.cancel label ("Cancel").
+  await guardDialog(page).getByRole('button', { name: 'Cancel' }).click()
   await expect(guardDialog(page)).toHaveCount(0)
   await expect(page).toHaveURL(/\/settings$/)
   await expect(brandNameInput(page)).toHaveValue(edited)

@@ -86,10 +86,9 @@ describe('TheSidebar on mobile (isMobile forced true)', () => {
     expect(setOpenMobileSpy).toHaveBeenCalledWith(false)
   })
 
-  // The drawer-closes-on-navigation behaviour used to be "incidental" — only reachable via
-  // TheSidebar.go()'s own router.push call. Browser back/forward (and the OS back gesture) also
-  // change route.path but never go through go(), so nothing closed the drawer for those before
-  // this watcher existed.
+  // TheSidebar.go()'s router.push is not the only way route.path changes — browser back/forward
+  // (and the OS back gesture) change it too, without going through go(). This watcher closes the
+  // drawer for those paths as well, not just navigation initiated from inside the sidebar.
   it('closes the drawer when route.path changes without going through go() (e.g. browser back/forward)', async () => {
     const w = mountSidebar()
     setOpenMobileSpy.mockClear()

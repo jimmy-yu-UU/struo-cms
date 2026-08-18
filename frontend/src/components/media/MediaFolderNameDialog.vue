@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{ visible: boolean; header: string; initialName?: string }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'submit', name: string): void }>()
@@ -22,19 +22,35 @@ function onSubmit(): void {
 </script>
 
 <template>
-  <Dialog :visible="visible" modal :header="header" :style="{ width: 'min(90vw, 420px)' }"
-          @update:visible="emit('update:visible', $event)">
-    <label class="folder-name-field">
-      <span>{{ $t('media.folderName') }}</span>
-      <InputText v-model="name" autofocus @keydown.enter="onSubmit" />
-    </label>
-    <template #footer>
-      <Button :label="$t('media.folderConfirm')" :disabled="!valid" @click="onSubmit" />
-    </template>
+  <!-- reka names the open flag `open`; this component's published prop is `visible` (MediaLibraryView
+       binds it with v-model:visible), so the two are bridged here rather than renaming the prop. -->
+  <Dialog :open="visible" @update:open="(v: boolean) => emit('update:visible', v)">
+    <!--
+      Two copies of the same min(90vw, 420px) value are needed because tailwind-merge keys
+      conflicts on (modifier set, class group): the bare max-w-[min(90vw,420px)] displaces
+      DialogContent's own bare max-w-[calc(100%-2rem)], and the sm:-prefixed copy separately
+      displaces its sm:max-w-lg (512px) -- a bare override alone would leave sm:max-w-lg alive
+      and winning from the sm breakpoint (640px) up, since a bare and an sm:-scoped class in the
+      same group don't conflict with each other.
+    -->
+    <DialogContent class="max-w-[min(90vw,420px)] sm:max-w-[min(90vw,420px)]">
+      <DialogHeader>
+        <DialogTitle>{{ header }}</DialogTitle>
+      </DialogHeader>
+      <label class="folder-name-field grid gap-1">
+        <span class="text-xs font-medium text-muted-foreground">{{ $t('media.folderName') }}</span>
+        <Input v-model="name" autofocus @keydown.enter="onSubmit" />
+      </label>
+      <div class="flex justify-end">
+        <Button
+          type="button"
+          data-test="folder-name-confirm"
+          :disabled="!valid"
+          @click="onSubmit"
+        >
+          {{ $t('media.folderConfirm') }}
+        </Button>
+      </div>
+    </DialogContent>
   </Dialog>
 </template>
-
-<style scoped>
-.folder-name-field { display: grid; gap: 4px; }
-.folder-name-field > span { font-size: .8rem; color: var(--legacy-muted); font-weight: 500; }
-</style>

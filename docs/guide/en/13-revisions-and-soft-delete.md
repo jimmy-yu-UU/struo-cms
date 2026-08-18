@@ -59,10 +59,10 @@ $ curl -s -X POST http://localhost:5221/api/items/article -H "Content-Type: appl
       "internalNote": "secret-note-v1",
       "translations": { "en": { "title": "Original Title", "body": "Original body text.", "internalSlug": "original-slug-v1" } }
     }'
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":0,"status":"draft", ...}}
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":0,"status":"draft", ...}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1"
-{"success":true,"data":{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b","snapshot":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Original Title","body":"Original body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions/1"
+{"success":true,"data":{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null,"snapshot":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Original Title","body":"Original body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
 ```
 
 (Notice `internalNote` — set on the create request above — does not appear anywhere in this snapshot
@@ -79,6 +79,9 @@ below for why, and for proof the value was still captured.)
 | Trash (soft delete) | Via `CaptureRevisionAsync`, inside `DeleteAsync`'s trash branch, in the same transaction as the atomic trash UPDATE, only if it actually affected a row | `"delete"` |
 | Restore | Via `CaptureRevisionAsync`, inside `RestoreAsync`, in the same transaction as the atomic restore UPDATE | `"restore"` |
 | Revert | Re-applies the snapshot as a normal update through `UpdateCoreAsync` (see below), which itself captures a new snapshot | `"revert"` |
+
+A revert's row additionally carries `sourceRevisionNumber` — the revision number whose snapshot was
+re-applied; every other operation leaves it `null`.
 
 Committing capture inside the same transaction as the write means a revision row can never exist for a
 write that itself rolled back, and — for trash/restore specifically — the capture is conditioned on the
@@ -117,16 +120,16 @@ Updating the article above to different `internalNote`/`internalSlug` values, th
 just the newest:
 
 ```
-$ curl -s -X PUT http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27 \
+$ curl -s -X PUT http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35 \
     -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{
       "status": "published",
       "internalNote": "secret-note-v2-CHANGED",
       "translations": { "en": { "title": "Updated Title", "body": "Updated body text.", "internalSlug": "updated-slug-v2-CHANGED" } }
     }'
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":1,"status":"published", ...}}
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":1,"status":"published", ...}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/2"
-{"success":true,"data":{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b","snapshot":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":1,"status":"published","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Updated Title","body":"Updated body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions/2"
+{"success":true,"data":{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null,"snapshot":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":1,"status":"published","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Updated Title","body":"Updated body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
 ```
 
 Neither redacted snapshot shows `internalNote` or `translations.en.internalSlug` — but the values were
@@ -137,29 +140,31 @@ database, even though neither value is ever visible through any API response.
 ## Listing, viewing and reverting revisions
 
 **REST** (chapter 9, full endpoint table) — `GET /api/items/{collection}/{id}/revisions` (list,
-newest-first metadata only: `revisionNumber`, `operation`, `createdAt`, `createdBy`), `GET
-.../revisions/{n}` (one revision plus its redacted `snapshot`), `POST .../revisions/{n}/revert` (applies
-it). All three require the collection's ordinary `CanRead`/`CanWrite` grant respectively — there is no
-extra permission tier specific to revisions. Listing `article`'s two revisions so far (newest first):
+newest-first metadata only: `revisionNumber`, `operation`, `createdAt`, `createdBy`,
+`sourceRevisionNumber`), `GET .../revisions/{n}` (one revision plus its redacted `snapshot`), `POST
+.../revisions/{n}/revert` (applies it). All three require the collection's ordinary
+`CanRead`/`CanWrite` grant respectively — there is no extra permission tier specific to revisions.
+Listing `article`'s two revisions so far (newest first):
 
 ```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions"
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b"},{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b"}]}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions"
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
 ```
 
 **GraphQL** (chapter 10, `RevisionResolvers.cs`) — when a collection declares `Revisions = true`,
 `StruoTypeModule` adds `{collection}Revisions(id: ID!): [Revision!]!`, `{collection}Revision(id: ID!,
 revisionNumber: Int!): Revision`, and a `revert{X}(id: ID!, revisionNumber: Int!): X` mutation, all
 generated with no collection-specific GraphQL code required — the shared `Revision` type is `{
-revisionNumber, operation, createdAt, createdBy, snapshot }`. Confirmed by introspecting `article`'s own
-generated schema — `articleRevisions`/`articleRevision` on `Query`, `revertArticle` on `Mutation`,
-alongside the ordinary generated `article`/`articles`/`createArticle`/`updateArticle`/`deleteArticle`/
-`restoreArticle` — and by actually calling the generated query field:
+revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`. Confirmed by
+introspecting `article`'s own generated schema — `articleRevisions`/`articleRevision` on `Query`,
+`revertArticle` on `Mutation`, alongside the ordinary generated
+`article`/`articles`/`createArticle`/`updateArticle`/`deleteArticle`/`restoreArticle` — and by actually
+calling the generated query field:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
-    -d '{"query":"{ articleRevisions(id: \"019fad0e-8904-7ac7-a20e-796f1c50ea27\") { revisionNumber operation createdAt } }"}'
-{"data":{"articleRevisions":[{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141Z"},{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677Z"}]}}
+    -d '{"query":"{ articleRevisions(id: \"01a00d89-50c0-7655-af49-bbc4a9221a35\") { revisionNumber operation createdAt sourceRevisionNumber } }"}'
+{"data":{"articleRevisions":[{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709Z","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929Z","sourceRevisionNumber":null}]}}
 ```
 
 No collection-specific resolver code exists for any of this — it is generated purely from
@@ -182,15 +187,15 @@ Reverting `article` above to revision 1 (its original `create` snapshot) after t
 `status` to `"published"` and every field to its `"…-CHANGED"` value:
 
 ```
-$ curl -s -X POST http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1/revert \
+$ curl -s -X POST http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions/1/revert \
     -H "X-Struo-CSRF: 1" -b cookies.txt
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":2,"status":"draft", ...}}
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":2,"status":"draft", ...}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27"
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":2,"status":"draft", ...,"translations":{"en":{"title":"Original Title","body":"Original body text.", ...}}}}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35"
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":2,"status":"draft", ...,"translations":{"en":{"title":"Original Title","body":"Original body text.", ...}}}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions"
-{"success":true,"data":[{"revisionNumber":3,"operation":"revert","createdAt":"2026-07-29T08:47:59.288629", ...},{"revisionNumber":2,"operation":"update", ...},{"revisionNumber":1,"operation":"create", ...}]}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions"
+{"success":true,"data":[{"revisionNumber":3,"operation":"revert","createdAt":"2026-08-17T02:25:27.199963","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":1},{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
 ```
 
 `status` and `translations.en.title`/`body` are back to their revision-1 values, `version` moved forward
@@ -201,13 +206,13 @@ or nulled:
 
 ```
 $ docker exec struo-postgres psql -U struo -d struo -c \
-    "select status, internalnote from articles where id='019fad0e-8904-7ac7-a20e-796f1c50ea27';"
+    "select status, internalnote from articles where id='01a00d89-50c0-7655-af49-bbc4a9221a35';"
  status | internalnote
 --------+----------------
  draft  | secret-note-v1
 
 $ docker exec struo-postgres psql -U struo -d struo -c \
-    "select title, internalslug from article_translations where articleid='019fad0e-8904-7ac7-a20e-796f1c50ea27' and locale='en';"
+    "select title, internalslug from article_translations where articleid='01a00d89-50c0-7655-af49-bbc4a9221a35' and locale='en';"
       title      |   internalslug
 ------------------+-------------------
  Original Title   | original-slug-v1

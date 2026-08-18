@@ -3,8 +3,6 @@ import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import PrimeVue from 'primevue/config'
-import ToastService from 'primevue/toastservice'
 import ItemFormView from './ItemFormView.vue'
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
@@ -19,9 +17,6 @@ import type { ConfirmRequest } from '@/composables/useConfirm'
 
 // PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
 // so the reload/existence assertions below exercise the actual components; stub only their API.
-// PermissionMatrix still imports its Button/Checkbox/useToast from primevue (unmigrated), so the
-// PrimeVue + ToastService plugins stay registered for its sake even though ItemFormView itself no
-// longer touches primevue.
 vi.mock('../api/rbacApi', () => ({
   rbacApi: {
     getRolePermissions: vi.fn(),
@@ -62,9 +57,9 @@ const meta = { name: 'article', label: 'Article', fields: [
   { name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown', foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false },
   { name: 'comments', label: 'Comments', kind: 'oneToMany', targetCollection: 'comment', interface: 'relatedList', foreignKey: 'ArticleId', displayTemplate: '{Body}', editable: false, selfReferencing: false },
 ]}
-// ConfirmDialog no longer mounts here (the single app-wide ConfirmHost lives in AppShell), so it is
-// no longer part of this stub map. renderStubDefaultSlot lets the Save/History Button stubs render
-// their label text so the button-migration assertions below can read it.
+// The single app-wide ConfirmHost lives in AppShell, not here, so ConfirmDialog is not part of this
+// stub map. renderStubDefaultSlot lets the Save/History Button stubs render their label text so the
+// button assertions below can read it.
 const stubs = { ItemForm: true, Button: true, RevisionHistoryDrawer: true }
 
 const i18n = createI18n({
@@ -73,7 +68,7 @@ const i18n = createI18n({
     loading: 'Loading…', collectionNotFound: 'Collection not found', itemNotFound: 'Item not found',
     noCreatePermission: "You don't have permission to create items here",
     new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', saving: 'Saving…', back: 'Back to list',
-    relations: 'Relations', translatableBadge: 'Translatable',
+    translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
   },
     revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}' },
@@ -107,7 +102,7 @@ const i18n = createI18n({
 })
 function mountView() {
   return mount(ItemFormView, {
-    global: { plugins: [i18n, PrimeVue, ToastService], stubs, renderStubDefaultSlot: true },
+    global: { plugins: [i18n], stubs, renderStubDefaultSlot: true },
   })
 }
 
@@ -602,16 +597,18 @@ describe('ItemFormView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
-  // ---- Esc/backdrop/X dismiss must settle the leave-guard promise ------
+  // ---- Escape dismiss must settle the leave-guard promise ------
 
   // The local confirm has no onHide callback distinct from reject: confirmStore.ask() hands back a
   // single Promise per request and settles it exactly once, from whichever of ConfirmHost's Cancel
-  // button or its AlertDialog's Escape/outside-click handler fires first — both end up calling
-  // store.reject(). So from guardLeave()'s point of view, a dismiss and an explicit Cancel are the
-  // SAME observable outcome: confirm.require(...) resolves false. This is by design (there is no
-  // third "closed without answering" state to model separately), not a gap left by the migration —
-  // it is what guarantees the router's awaited navigation can never hang on an unanswered dialog.
-  it('leave guard: dismiss (Esc/backdrop/X) resolves false — indistinguishable from an explicit reject', async () => {
+  // button or its AlertDialog's Escape handler fires first — both end up calling store.reject().
+  // An AlertDialog is not backdrop-dismissible (reka hard-prevents pointerDownOutside and
+  // interactOutside) and ConfirmHost renders no close button, so Escape is the only non-button
+  // path to that outcome. From guardLeave()'s point of view, a dismiss and an explicit Cancel are
+  // therefore the SAME observable outcome: confirm.require(...) resolves false — by design, since
+  // there is no third "closed without answering" state to model separately, which is what
+  // guarantees the router's awaited navigation can never hang on an unanswered dialog.
+  it('leave guard: dismiss (Escape) resolves false — indistinguishable from an explicit reject', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })

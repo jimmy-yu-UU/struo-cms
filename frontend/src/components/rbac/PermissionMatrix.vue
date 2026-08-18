@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useToast } from 'primevue/usetoast'
-import Button from 'primevue/button'
-import Checkbox from 'primevue/checkbox'
+import { useToast } from '@/composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 
@@ -35,6 +35,7 @@ const rows = computed(() =>
 )
 
 const dirty = computed(() => JSON.stringify(grants.value) !== baseline.value)
+const saveLabel = computed(() => (saving.value ? t('rbac.saving') : t('rbac.save')))
 
 function grantFor(name: string): Grant {
   return grants.value[name] ?? { read: false, write: false, delete: false }
@@ -115,15 +116,15 @@ onMounted(() => {
 // No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently used to
 // fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
-defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })
+defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel })
 </script>
 
 <template>
   <section class="permission-matrix">
     <h2 class="matrix-title">{{ t('rbac.matrixTitle') }}</h2>
 
-    <p v-if="isSuperAdminRole" class="notice">{{ t('rbac.superAdminAll') }}</p>
-    <p v-else-if="loadFailed" class="notice">{{ t('rbac.loadFailed') }}</p>
+    <p v-if="isSuperAdminRole" class="notice text-muted-foreground">{{ t('rbac.superAdminAll') }}</p>
+    <p v-else-if="loadFailed" class="notice text-muted-foreground">{{ t('rbac.loadFailed') }}</p>
     <template v-else-if="!loading">
       <div class="matrix-scroll">
         <table class="matrix-table">
@@ -139,23 +140,26 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })
             <tr v-for="c in rows" :key="c.name">
               <td class="col-name">{{ c.label }}</td>
               <td>
-                <Checkbox :model-value="grantFor(c.name).read" binary
-                          @update:model-value="(v: boolean) => toggle(c.name, 'read', !!v)" />
+                <Checkbox :model-value="grantFor(c.name).read"
+                          :aria-label="`${c.label} — ${t('rbac.colRead')}`"
+                          @update:model-value="(v) => toggle(c.name, 'read', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).write" binary :disabled="!!c.adminOnly"
-                          @update:model-value="(v: boolean) => toggle(c.name, 'write', !!v)" />
+                <Checkbox :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly"
+                          :aria-label="`${c.label} — ${t('rbac.colWrite')}`"
+                          @update:model-value="(v) => toggle(c.name, 'write', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).delete" binary :disabled="!!c.adminOnly"
-                          @update:model-value="(v: boolean) => toggle(c.name, 'delete', !!v)" />
+                <Checkbox :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly"
+                          :aria-label="`${c.label} — ${t('rbac.colDelete')}`"
+                          @update:model-value="(v) => toggle(c.name, 'delete', !!v)" />
               </td>
             </tr>
           </tbody>
         </table>
       </div>
       <div v-if="!createMode" class="matrix-actions">
-        <Button :label="t('rbac.save')" :disabled="!dirty || saving" :loading="saving" @click="save" />
+        <Button type="button" :disabled="!dirty || saving" @click="save">{{ saveLabel }}</Button>
       </div>
     </template>
   </section>
@@ -164,7 +168,6 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed })
 <style scoped>
 .permission-matrix { display: grid; gap: 12px; margin-top: 24px; }
 .matrix-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.notice { color: var(--legacy-muted); margin: 0; }
 .matrix-scroll { overflow-x: auto; }
 .matrix-table { border-collapse: collapse; min-width: 480px; }
 .matrix-table th, .matrix-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }

@@ -363,6 +363,15 @@ describe('RelationPicker', () => {
     expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label')).toBe(`${relation.label}: Tech`)
   })
 
+  it('uses the CJK pair separator in zh-TW for the single-select accessible name', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'Tech' }], total: 1 })
+    const w = mountPicker({ modelValue: 'c1' }, liveZh)
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label'))
+      .toBe(`${relation.label}${zhTW.fields.namePairSeparator}Tech`)
+  })
+
   it('genuinely disables the single-select trigger and its clear button', () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
@@ -481,6 +490,17 @@ describe('RelationPicker', () => {
     await flushPromises()
     expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label'))
       .toBe(`${relation.label}, ${en.fields.selectedCount.replace('{n}', '2')}`)
+  })
+
+  it('uses the CJK list separator in zh-TW for the multi-select accessible name', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
+    })
+    const w = mountPicker({ multiple: true, modelValue: ['c1', 'c2'] }, liveZh)
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('aria-label'))
+      .toBe(`${relation.label}${zhTW.fields.nameListSeparator}${zhTW.fields.selectedCount.replace('{n}', '2')}`)
   })
 
   it('genuinely disables the multi-select trigger and every chip remove button', async () => {

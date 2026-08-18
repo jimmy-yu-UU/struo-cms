@@ -138,7 +138,7 @@ public sealed class ItemService(
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
-                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct);
+                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct: ct);
             }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
@@ -146,9 +146,11 @@ public sealed class ItemService(
     }
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
-        => UpdateCoreAsync(collection, id, body, "update", ct);
+        => UpdateCoreAsync(collection, id, body, "update", sourceRevisionNumber: null, ct: ct);
 
-    private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(string collection, string id, JsonElement body, string operation, CancellationToken ct)
+    private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(
+        string collection, string id, JsonElement body, string operation,
+        long? sourceRevisionNumber, CancellationToken ct)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
@@ -223,7 +225,8 @@ public sealed class ItemService(
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
-                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot, ct);
+                await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot,
+                    sourceRevisionNumber, ct: ct);
             }
         }, ct);
         if (updated is null) return null;
@@ -368,7 +371,7 @@ public sealed class ItemService(
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return;
         var snapshot = await snapshotBuilder.BuildAsync(collection, entity, ct);
-        await revisions.CaptureAsync(collection, id, operation, snapshot, ct);
+        await revisions.CaptureAsync(collection, id, operation, snapshot, ct: ct);
     }
 
     /// <summary>
@@ -393,7 +396,7 @@ public sealed class ItemService(
         using var src = JsonDocument.Parse(rec.Snapshot);
         using var doc = JsonDocument.Parse(
             JsonBodyUtil.StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
-        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", ct);
+        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, ct: ct);
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a

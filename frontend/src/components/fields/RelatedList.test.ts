@@ -133,7 +133,7 @@ describe('RelatedList', () => {
     )
   })
 
-  // update:page-size only ever fires from DataTablePagination's rows-per-page <select>, which the
+  // update:page-size only ever fires from DataTablePagination's rows-per-page control, which the
   // component keeps unrendered via :show-page-size-selector="false" -- unreachable from the real
   // UI today, but still a live listener on the emitted event, so it is worth pinning directly.
   it('turns a pagination page-size event into a reload, reset to page 0', async () => {

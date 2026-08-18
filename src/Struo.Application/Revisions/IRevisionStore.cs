@@ -1,10 +1,13 @@
 namespace Struo.Application.Revisions;
 
 /// <summary>Revision metadata (no snapshot payload) — for the newest-first history list.</summary>
-public sealed record RevisionInfo(long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy);
+public sealed record RevisionInfo(
+    long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy, long? SourceRevisionNumber);
 
 /// <summary>A single revision including its stored snapshot JSON.</summary>
-public sealed record RevisionRecord(long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy, string Snapshot);
+public sealed record RevisionRecord(
+    long RevisionNumber, string Operation, DateTime CreatedAt, Guid? CreatedBy, string Snapshot,
+    long? SourceRevisionNumber);
 
 /// <summary>
 /// Storage for per-item revision snapshots. Backed by the framework `revisions` table.
@@ -14,7 +17,10 @@ public sealed record RevisionRecord(long RevisionNumber, string Operation, DateT
 public interface IRevisionStore
 {
     /// Assigns the next per-(collection,itemId) RevisionNumber, stamps CreatedAt/By, inserts the snapshot.
-    Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default);
+    /// <paramref name="sourceRevisionNumber"/> is set only by the revert path, which records the
+    /// revision whose snapshot it re-applied; every other write path leaves it null.
+    Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson,
+        long? sourceRevisionNumber = null, CancellationToken ct = default);
 
     /// Newest-first metadata (no snapshot). Empty when the item has no revisions.
     Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default);

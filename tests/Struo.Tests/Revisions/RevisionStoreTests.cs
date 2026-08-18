@@ -40,9 +40,9 @@ public sealed class RevisionStoreTests
     public async Task Capture_assigns_monotonic_per_item_numbers()
     {
         using var h = RevisionStoreHarness.Create();
-        await h.Store.CaptureAsync("article", "itemA", "create", "{\"a\":1}", default);
-        await h.Store.CaptureAsync("article", "itemA", "update", "{\"a\":2}", default);
-        await h.Store.CaptureAsync("article", "itemB", "create", "{\"b\":1}", default); // separate item -> its own 1
+        await h.Store.CaptureAsync("article", "itemA", "create", "{\"a\":1}");
+        await h.Store.CaptureAsync("article", "itemA", "update", "{\"a\":2}");
+        await h.Store.CaptureAsync("article", "itemB", "create", "{\"b\":1}"); // separate item -> its own 1
 
         var a = await h.Store.ListAsync("article", "itemA", default);
         Assert.Equal([2L, 1L], a.Select(r => r.RevisionNumber).ToArray());   // newest-first
@@ -62,7 +62,7 @@ public sealed class RevisionStoreTests
     {
         using var h = RevisionStoreHarness.Create();
         var before = DateTime.UtcNow.AddSeconds(-1);
-        await h.Store.CaptureAsync("article", "meta-check", "create", "{\"large\":\"payload\"}", default);
+        await h.Store.CaptureAsync("article", "meta-check", "create", "{\"large\":\"payload\"}");
 
         var list = await h.Store.ListAsync("article", "meta-check", default);
         Assert.Single(list);
@@ -78,7 +78,7 @@ public sealed class RevisionStoreTests
     public async Task Get_returns_snapshot_with_cjk_intact()
     {
         using var h = RevisionStoreHarness.Create();
-        await h.Store.CaptureAsync("article", "x", "create", "{\"title\":\"人工智慧\"}", default);
+        await h.Store.CaptureAsync("article", "x", "create", "{\"title\":\"人工智慧\"}");
         var rec = await h.Store.GetAsync("article", "x", 1, default);
         Assert.NotNull(rec);
         Assert.Contains("人工智慧", rec!.Snapshot, StringComparison.Ordinal);
@@ -89,6 +89,43 @@ public sealed class RevisionStoreTests
     {
         using var h = RevisionStoreHarness.Create();
         Assert.Null(await h.Store.GetAsync("article", "nope", 99, default));
+    }
+
+    [Fact]
+    public async Task CaptureAsync_persists_the_source_revision_number_for_a_revert()
+    {
+        using var h = RevisionStoreHarness.Create();
+        await h.Store.CaptureAsync("post", "item-1", "create", "{}");
+        await h.Store.CaptureAsync("post", "item-1", "revert", "{}", sourceRevisionNumber: 1);
+
+        var list = await h.Store.ListAsync("post", "item-1");
+
+        var revert = list.Single(r => r.Operation == "revert");
+        Assert.Equal(1, revert.SourceRevisionNumber);
+    }
+
+    [Fact]
+    public async Task CaptureAsync_leaves_the_source_revision_number_null_for_every_other_operation()
+    {
+        using var h = RevisionStoreHarness.Create();
+        await h.Store.CaptureAsync("post", "item-2", "create", "{}");
+        await h.Store.CaptureAsync("post", "item-2", "update", "{}");
+
+        var list = await h.Store.ListAsync("post", "item-2");
+
+        Assert.All(list, r => Assert.Null(r.SourceRevisionNumber));
+    }
+
+    [Fact]
+    public async Task GetAsync_returns_the_source_revision_number()
+    {
+        using var h = RevisionStoreHarness.Create();
+        await h.Store.CaptureAsync("post", "item-3", "create", "{}");
+        await h.Store.CaptureAsync("post", "item-3", "revert", "{}", sourceRevisionNumber: 1);
+
+        var rec = await h.Store.GetAsync("post", "item-3", 2);
+
+        Assert.Equal(1, rec!.SourceRevisionNumber);
     }
 
     // The composite UNIQUE index (collectionname, itemid, revisionnumber) is a backstop.

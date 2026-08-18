@@ -96,7 +96,6 @@ defineExpose({ activeLocale })
     </Field>
 
     <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
-      <h3 class="m-0 text-lg text-foreground">{{ t('itemForm.relations') }}</h3>
       <Field v-for="rel in meta.relations" :key="rel.name" class="field">
         <FieldLabel :for="relationFieldId(rel.name)">{{ rel.label }}</FieldLabel>
         <RelationInput

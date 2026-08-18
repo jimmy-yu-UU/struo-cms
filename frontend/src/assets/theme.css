@@ -1,6 +1,11 @@
-/* StruoCMS legacy design tokens — transitional. The screens not yet migrated to Tailwind/shadcn
-   (tokens.css) still read these; delete this file once every such screen is migrated. */
-/* --surface-2 is declared in tokens.css, not here — see that file's comment on --surface-2
+/* StruoCMS's non-shadcn global layer: the page/surface/foreground, --warn/--danger status, and
+   shadow/overlay/font custom properties that first-party scoped CSS reads, plus the html/body
+   resets, the theme-transition rule below, and .app-breadcrumb. Every rule here is unlayered, so it
+   outranks any Tailwind utility applied to the same element regardless of specificity — .app-breadcrumb's
+   unlayered background/border/padding below is the one live example of this in the file: a bg-* or
+   p-* utility on that element does nothing. Loading after tokens.css only matters for settling
+   collisions against tokens.css's own unlayered declarations, not for outranking Tailwind.
+   --surface-2 is declared in tokens.css, not here — see that file's comment on --surface-2
    (frontend/tests/legacyTokens.test.ts's header explains why only tokens.css may reference
    --muted). */
 :root {
@@ -9,16 +14,6 @@
   --fg: oklch(0.208 0.042 265.8);
   --warn: #d97706;
   --danger: #dc2626;
-  /* Renamed off the shadcn contract: tokens.css owns --muted / --accent / --radius / --radius-lg
-     now and means something different by each (subtle surface / hover surface / a 10px base
-     that derives the 6px+8px scale / a derived large radius). These four carry the
-     PRE-migration meaning — subdued text, brand sky, and literal 8px/12px corners — for the
-     views not yet on Tailwind utilities. Delete this block together with the last PrimeVue-era
-     screen. */
-  --legacy-muted: oklch(0.554 0.046 257.4);
-  --legacy-accent: oklch(0.588 0.158 241.9);
-  --legacy-radius: 8px;
-  --legacy-radius-lg: 12px;
   --speed: .15s;
   --shadow-1: 0 1px 2px color-mix(in srgb, #020617 6%, transparent);
   --shadow-2: 0 6px 24px color-mix(in srgb, #020617 9%, transparent);
@@ -29,23 +24,15 @@
   color-scheme: light;
 }
 .app-dark {
-  /* Re-point to the shadcn tokens (already zinc in .app-dark) rather than keeping the hand-picked
-     OKLch approximations: --bg/--surface/--fg carried a small blue chroma that read as
-     "slate, not zinc" next to the migrated shell. --bg keeps the page-backdrop role only (still
-     LoginView's .login-wrap) — its other pre-migration role, a sunken/hover rung darker than
-     --surface, now lives on --surface-2 (tokens.css) instead, since --background and --card
-     collapse to the same value here and would otherwise make that rung a no-op. */
+  /* Re-point to the shadcn tokens (already zinc in .app-dark) rather than keeping hand-picked
+     OKLch approximations, which carried a small blue chroma that read as "slate, not zinc" next
+     to the shell. --bg holds the page-backdrop role only (e.g. LoginView's .login-wrap); the
+     sunken/hover rung darker than --surface is --surface-2 (tokens.css), kept as its own token
+     rather than derived from --bg here because --background and --card collapse to the same
+     value in this scheme and would otherwise make that rung a no-op. */
   --bg: var(--background);
   --surface: var(--card);
   --fg: var(--foreground);
-  /* --legacy-accent maps to --primary, NOT --accent: tokens.css's own NAMING TRAP comment warns
-     --accent is a hover/focus SURFACE colour, not the brand colour — binding here would swap
-     every caller's visible brand-sky accent (e.g. RichTextInput's active-toolbar-button state)
-     for a near-invisible hover tint. */
-  --legacy-muted: var(--muted-foreground);
-  --legacy-accent: var(--primary);
-  --legacy-radius: 8px;
-  --legacy-radius-lg: 12px;
   --warn: #fbbf24;
   --danger: #f87171;
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45);
@@ -67,7 +54,3 @@ body { margin: 0; } /* missing reset caused a permanent 16px overflow + page-lev
 }
 
 .app-breadcrumb { margin-bottom: 14px; background: transparent; border: none; padding: 0; }
-
-/* .caption still styles PageHeader/LoginView captions on unmigrated screens — remove alongside
-   this file (see the header comment above). */
-.caption { font-size: .8rem; font-weight: 500; color: var(--legacy-muted); }

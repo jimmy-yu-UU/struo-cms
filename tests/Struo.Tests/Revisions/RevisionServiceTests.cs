@@ -184,7 +184,8 @@ public sealed class RevisionServiceHarness : IDisposable
     /// prove the capture runs inside the same <c>InTransactionAsync</c> as the parent write.</summary>
     private sealed class ThrowingRevisionStore : IRevisionStore
     {
-        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default) =>
+        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson,
+            long? sourceRevisionNumber = null, CancellationToken ct = default) =>
             throw new InvalidOperationException("Simulated revision capture failure (test).");
         public Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default) =>
             throw new NotImplementedException("Not expected to be called in the roll-back test.");
@@ -269,6 +270,33 @@ public sealed class RevisionServiceTests
         Assert.Single(TagsOf(now!));                                                // M2M restored
         Assert.Equal(tag.ToString(), TagIdOf(now!, 0));
         Assert.Equal("T-zh", ZhTwTitleOf(now!));                                    // zh-TW translation restored
+    }
+
+    [Fact]
+    public async Task RevertAsync_records_the_reverted_from_revision_on_the_new_revision()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");                       // rev 1
+        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // rev 2
+
+        await h.Service.RevertAsync("article", id, 1, default);                     // rev 3, reverting to 1
+
+        var list = await h.Store.ListAsync("article", id, default);
+        var newest = list[0];                                                       // newest-first
+
+        Assert.Equal("revert", newest.Operation);
+        Assert.Equal(1, newest.SourceRevisionNumber);
+    }
+
+    [Fact]
+    public async Task A_plain_update_records_no_source_revision()
+    {
+        using var h = RevisionServiceHarness.Create();
+        var id = await h.CreateArticleAsync(status: "draft");
+        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default);
+
+        var list = await h.Store.ListAsync("article", id, default);
+        Assert.Null(list[0].SourceRevisionNumber);
     }
 
     [Fact]

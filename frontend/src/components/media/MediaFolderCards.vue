@@ -1,28 +1,139 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { Folder, Pencil, Trash2 } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import MediaContextMenu from './MediaContextMenu.vue'
 import type { FolderRow } from '../../lib/folderTree'
+import { setDragPayload, isMediaDrag, readDragPayload } from '../../lib/mediaDnd'
+import { selectionCount } from '../../lib/mediaSelection'
+import type { MovePayload } from '../../lib/mediaMove'
 
-defineProps<{ folders: FolderRow[]; canManage: boolean }>()
+const props = withDefaults(defineProps<{
+  folders: FolderRow[]
+  canManage: boolean
+  canMove?: boolean
+  // Right-click menu grants -- kept separate from `canManage` (which gates the existing
+  // always-together rename+delete icon buttons) so the context menu can gate Rename and Delete
+  // independently, per their own RBAC grants.
+  canRename?: boolean
+  canDelete?: boolean
+  // Task 9 batch selection: the same MovePayload the view shares across all four media surfaces.
+  selection?: MovePayload
+}>(), { selection: () => ({ files: [], folders: [] }) })
 const emit = defineEmits<{
   (e: 'open', id: string): void
   (e: 'rename', folder: FolderRow): void
   (e: 'remove', folder: FolderRow): void
+  (e: 'dropOn', targetFolderId: string, payload: MovePayload): void
+  (e: 'requestMove', payload: MovePayload): void
+  (e: 'toggleSelect', kind: 'file' | 'folder', id: string): void
 }>()
+
+const droppingId = ref<string | null>(null)
+
+function onCardClick(ev: MouseEvent, id: string): void {
+  // Ctrl/⌘-click and Shift-click enter/extend the batch selection instead of opening.
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { toggleBatchSelect(id); return }
+  emit('open', id)
+}
+function isPicked(id: string): boolean {
+  return props.selection.folders.includes(id)
+}
+const hasSelection = computed(() => selectionCount(props.selection) > 0)
+// The real guard -- reachable from both the checkbox and the ctrl/shift-click path above, not
+// just whichever one happens to be rendered. Same reasoning as MediaGrid's own toggleBatchSelect.
+function toggleBatchSelect(id: string): void {
+  if (!props.canMove) return
+  emit('toggleSelect', 'folder', id)
+}
+
+// The `draggable` attribute alone does not gate this: a text-selection drag started anywhere
+// inside a non-draggable card can still bubble a dragstart up to this handler. Refuse here too,
+// so the permission check cannot be bypassed that way.
+//
+// Dragging a card that is already part of the batch selection carries the WHOLE selection
+// (which may include files and folders picked from the other three surfaces too, since
+// `selection` is the same shared object); dragging an unselected card carries only that folder.
+function onDragStart(ev: DragEvent, f: FolderRow): void {
+  if (!props.canMove) return
+  setDragPayload(ev, isPicked(f.id) ? props.selection : { files: [], folders: [f.id] })
+}
+function onDragOver(ev: DragEvent, id: string): void {
+  if (!isMediaDrag(ev)) return
+  droppingId.value = id
+}
+function onDrop(ev: DragEvent, id: string): void {
+  droppingId.value = null
+  const payload = readDragPayload(ev)
+  if (payload) emit('dropOn', id, payload)
+}
+// dragleave follows the mouseout model: it fires on every boundary crossing, not only as a
+// bubbled child event. A card -> own-child crossing (icon/name) targets the CARD itself with
+// relatedTarget still inside it -- the highlight must survive that. A child -> outside crossing
+// fires AT the child and bubbles up, with relatedTarget outside the card -- that one must clear
+// it. Neither `.self` nor "did this fire on a child" can express that distinction; only checking
+// whether relatedTarget is still contained in the card can.
+function onDragLeave(ev: DragEvent): void {
+  const next = ev.relatedTarget
+  if (next instanceof Node && (ev.currentTarget as Node).contains(next)) return
+  droppingId.value = null
+}
+// A drag can end without ever reaching a drop (Esc, or a drop somewhere that isn't a registered
+// target) -- nothing else resets the highlight in that case, and it would sit stale on a card the
+// pointer has long left. The drag may have started on a DIFFERENT component's element entirely
+// (a MediaGrid file tile), so this listens at the document level rather than on this card's own
+// elements, and clears regardless of where the drag began.
+function clearDropping(): void { droppingId.value = null }
+onMounted(() => document.addEventListener('dragend', clearDropping))
+onUnmounted(() => document.removeEventListener('dragend', clearDropping))
+
+defineExpose({ toggleBatchSelect })
 </script>
 
 <template>
   <div v-if="folders.length" class="folder-grid">
-    <div v-for="f in folders" :key="f.id" class="folder-card" role="button" tabindex="0"
-         @click="emit('open', f.id)" @keydown.enter.self="emit('open', f.id)">
-      <i class="pi pi-folder folder-card__icon" aria-hidden="true" />
-      <span class="folder-card__name">{{ f.name }}</span>
-      <span v-if="canManage" class="folder-card__actions">
-        <Button icon="pi pi-pencil" text size="small" :aria-label="$t('media.folderRename')"
-                @click.stop="emit('rename', f)" />
-        <Button icon="pi pi-trash" text size="small" severity="danger" :aria-label="$t('media.folderDelete')"
-                @click.stop="emit('remove', f)" />
-      </span>
-    </div>
+    <MediaContextMenu
+      v-for="f in folders" :key="f.id"
+      kind="folder" :can-move="canMove" :can-delete="canDelete" :can-rename="canRename"
+      @open="emit('open', f.id)"
+      @rename="emit('rename', f)"
+      @move="emit('requestMove', { files: [], folders: [f.id] })"
+      @remove="emit('remove', f)"
+    >
+      <div class="folder-card rounded-xl border border-border hover:border-primary" role="button" tabindex="0"
+           :draggable="canMove ? 'true' : undefined"
+           :data-dropping="droppingId === f.id ? 'true' : undefined"
+           @click="onCardClick($event, f.id)" @keydown.enter.self="emit('open', f.id)"
+           @contextmenu.stop
+           @pointerdown.stop
+           @dragstart="onDragStart($event, f)"
+           @dragover.prevent="onDragOver($event, f.id)"
+           @dragleave="onDragLeave"
+           @drop.prevent="onDrop($event, f.id)">
+        <span v-if="hasSelection && canMove" @click.stop>
+          <Checkbox
+            :model-value="isPicked(f.id)"
+            :aria-label="`${f.name}${$t('fields.namePairSeparator')}${$t('media.selectItem')}`"
+            @update:model-value="toggleBatchSelect(f.id)"
+          />
+        </span>
+        <Folder class="folder-card__icon size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span class="folder-card__name">{{ f.name }}</span>
+        <span v-if="canManage" class="folder-card__actions flex">
+          <Button type="button" variant="ghost" size="icon-sm" :aria-label="$t('media.folderRename')"
+                  @click.stop="emit('rename', f)">
+            <Pencil aria-hidden="true" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon-sm"
+                  class="text-destructive hover:text-destructive"
+                  :aria-label="$t('media.folderDelete')"
+                  @click.stop="emit('remove', f)">
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </span>
+      </div>
+    </MediaContextMenu>
   </div>
 </template>
 
@@ -30,11 +141,10 @@ const emit = defineEmits<{
 .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .folder-card {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: var(--legacy-radius-lg, 12px); background: var(--surface);
+  background: var(--surface);
   transition: border-color var(--speed, .15s), box-shadow var(--speed, .15s);
 }
-.folder-card:hover { border-color: var(--legacy-accent); box-shadow: var(--shadow-1); }
-.folder-card__icon { color: var(--legacy-accent); font-size: 1.1rem; }
+.folder-card:hover { box-shadow: var(--shadow-1); }
 .folder-card__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
-.folder-card__actions { display: flex; }
+.folder-card[data-dropping='true'] { outline: 2px solid var(--primary); outline-offset: -2px; }
 </style>

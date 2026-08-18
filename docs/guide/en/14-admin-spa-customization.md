@@ -1,6 +1,6 @@
 # 14. Admin SPA Customization
 
-The admin SPA (`frontend/`) is a Vue 3 + PrimeVue + Pinia application driven almost entirely by the
+The admin SPA (`frontend/`) is a Vue 3 + Tailwind v4 + shadcn-vue + Pinia application driven almost entirely by the
 metadata the API exposes at `GET /api/schema`. This chapter is about the remaining part that is
 genuinely code, not metadata: theming, i18n, field editors, branding, and how the dev server reaches
 the API — and where in `frontend/src` each of those lives.
@@ -33,8 +33,8 @@ territory and needs no change under `frontend/src`.
 | Directory | Contents |
 |---|---|
 | `api/` | One thin module per REST resource — `apiClient.ts` is the shared envelope-aware fetch wrapper; `itemsApi.ts`, `schemaApi.ts`, `filesApi.ts`, `languagesApi.ts`, `rbacApi.ts`, `settingsApi.ts`, `appConfigApi.ts` — typed calls, no business logic. |
-| `assets/` | `theme.css` — the OKLch palette tokens (plus a handful of `--legacy-*`-prefixed ones) still read by the screens not yet migrated off PrimeVue; its old shell/layout CSS (`.shell`, `.topbar`, `.sidebar`, `.nav-item`, …) has been deleted as those screens moved to Tailwind utilities. `tokens.css` — the Tailwind v4 entry point (`@import "tailwindcss"`) and the shadcn semantic token layer (`--background`, `--primary`, `--radius`, …) the migrated screens use. |
-| `components/` | `ItemForm.vue` (the generated item form) directly under `components/`, plus `ui/` (vendored shadcn atoms — `button`, `table`, `select`, `dialog`, `sidebar`, … — generated output; **read-only**, no edits and no `:deep()` into it), `data/` (`DataTable`, `SortableHeader`, `DataTablePagination`, `FilterBuilder` — the TanStack-table-backed list primitives `CollectionListView` is built on), `fields/` (one editor component per field interface, chapter 5), `common/` (`PageHeader`, plus `ListToolbar`/`TableFooter`, which `MediaLibraryView` still uses — `CollectionListView` has moved to `data/`'s primitives instead), `shell/` (topbar, sidebar nav item, theme toggle, UI language switcher, brand mark), `media/`, `revisions/`, `rbac/`. |
+| `assets/` | `theme.css` — the app's unlayered global layer: the page/surface/foreground and status/shadow/overlay/font custom properties (`--bg`, `--surface`, `--fg`, `--warn`, `--danger`, `--shadow-*`, `--overlay`, `--font`, `--mono`, …) first-party scoped CSS reads, plus the `html`/`body` resets, the theme-transition rule, and `.app-breadcrumb`. `tokens.css` — the Tailwind v4 entry point (`@import "tailwindcss"`) plus the shadcn semantic token layer (`--background`, `--primary`, `--radius`, …) that the vendored `ui/` components and Tailwind utilities both read. |
+| `components/` | `ItemForm.vue` (the generated item form) directly under `components/`, plus `ui/` (vendored shadcn atoms — `button`, `table`, `select`, `dialog`, `sidebar`, … — generated output; **read-only**, no edits and no `:deep()` into it), `data/` (`DataTable`, `SortableHeader`, `DataTablePagination`, `FilterBuilder` — the TanStack-table-backed list primitives `CollectionListView` is built on), `fields/` (one editor component per field interface, chapter 5), `common/` (`PageHeader`, `ListToolbar` — plain Tailwind/shadcn components; `MediaLibraryView` uses `ListToolbar` for its search box and filter slot, while `CollectionListView` is built on `data/`'s primitives instead), `shell/` (topbar, sidebar nav item, theme toggle, UI language switcher, brand mark), `media/`, `revisions/`, `rbac/`. |
 | `composables/` | Cross-cutting reactive logic, e.g. `useConfirm.ts`. |
 | `i18n/` | `index.ts` — the `vue-i18n` instance (`legacy: false`), wired to `locales/`. |
 | `layouts/` | `AppShell.vue` — the topbar + sidebar + content grid every authenticated route renders inside. |
@@ -42,71 +42,75 @@ territory and needs no change under `frontend/src`.
 | `locales/` | `en.ts` / `zh-TW.ts` — the admin UI's own message catalogs, distinct from content languages (chapter 6). |
 | `router/` | `index.ts` (routes), `guard.ts` (the auth/permission navigation guard). |
 | `stores/` | Pinia stores: `authStore`, `appConfigStore`, `schemaStore`, `themeStore`, `uiLocaleStore`, `sidebarStore`, `languageStore`. |
-| `theme/` | `preset.ts` (the custom PrimeVue Aura preset); `resolveInitialTheme.ts` / `resolveInitialUiLocale.ts` (first-paint `localStorage`/media-query resolution, read before any store exists). |
+| `theme/` | `resolveInitialTheme.ts` / `resolveInitialUiLocale.ts` — first-paint `localStorage`/media-query resolution, read before any store exists. |
 | `types/` | `schema.ts` — TypeScript mirrors of the backend DTOs (`FieldMeta`, `CollectionMeta`, `RelationMeta`, …). |
 | `views/` | One component per route: `DashboardView`, `CollectionListView`, `ItemFormView`, `MediaLibraryView`, `SettingsView`, `LoginView`. |
 
 ## Design tokens and theming
 
-Two layers cooperate, and both must change together for a re-theme to stay consistent:
+Two layers cooperate, and there is nothing separate to keep in sync — both flip on the same `.app-dark`
+toggle class:
 
-1. **`frontend/src/assets/theme.css`** — plain CSS custom properties, the core palette (`--bg`,
-   `--surface`, `--fg`, `--muted`, `--border`, `--accent`) in OKLch, plus `--success`/`--warn`/`--danger`
-   as plain hex (`#16a34a`/`#d97706`/`#dc2626` light, `#4ade80`/`#fbbf24`/`#f87171` dark — not OKLch),
-   radii, shadows, `--sidebar-w`, declared once on `:root` for light and re-declared on `.app-dark` for
-   dark. All of the shell/layout CSS in the same file (`.shell`, `.topbar`, `.sidebar`, `.nav-item`, …)
-   reads these variables — it never hardcodes a color.
-2. **`frontend/src/theme/preset.ts`** — a PrimeVue `definePreset(Aura, …)` (`StruoPreset`) that maps
-   PrimeVue's own semantic tokens (`primary`, `surface`, and per-color-scheme `color`/`hoverColor`/
-   `activeColor`) onto the **same** palette (`sky` for primary, `slate` for surface), so PrimeVue's own
-   components (buttons, inputs, dialogs) match `theme.css`'s hand-styled shell instead of drifting from
-   it — the file's own comment states this explicitly ("same palette as assets/theme.css so both layers
-   flip together").
+1. **`frontend/src/assets/tokens.css`** — the Tailwind v4 entry point (`@import "tailwindcss"`) and the
+   shadcn semantic custom properties (`--background`, `--foreground`, `--primary`, `--radius`,
+   `--sidebar-*`, …), declared once on `:root` for light and re-declared on `.app-dark` for dark.
+   `@theme inline` maps each property onto the Tailwind utility classes (`bg-background`,
+   `text-primary`, …) that both `src/components/ui/` and first-party components consume.
+2. **`frontend/src/assets/theme.css`** — the app's unlayered global layer: the page/surface/foreground
+   and status/shadow/overlay/font custom properties (`--bg`, `--surface`, `--fg`, `--warn`, `--danger`,
+   `--shadow-*`, `--overlay`, `--font`, `--mono`) first-party scoped CSS reads, plus the `html`/`body`
+   resets, the theme-transition rule, and `.app-breadcrumb`. It loads after `tokens.css`, and because
+   none of its rules sit inside a Tailwind `@layer`, they outrank any utility class applied to the same
+   element regardless of specificity — an unlayered declaration wins over a layered one (unless the
+   layered side carries `!important`, which inverts this), which is the single most common way a
+   hand-written CSS override silently does nothing.
 
-Both are registered once, in `frontend/src/main.ts`:
+Both are imported once, in `frontend/src/main.ts`:
 
 ```ts
-app.use(PrimeVue, { theme: { preset: StruoPreset, options: { darkModeSelector: '.app-dark' } } })
+import './assets/tokens.css'
+import './assets/theme.css'
 ```
 
-`darkModeSelector: '.app-dark'` is the link between the two layers: `themeStore.apply()` toggles the
-`.app-dark` class on `<html>`, which simultaneously flips `theme.css`'s custom properties (a plain CSS
-selector match) and PrimeVue's own dark-mode token set (its own `darkModeSelector` mechanism) — one
-class, two systems, nothing separate to keep in sync. The initial mode is resolved before Pinia/Vue
-even exist, in `theme/resolveInitialTheme.ts`: a saved `struo.theme` in `localStorage`, else
-`prefers-color-scheme`, else `light`.
+`themeStore.apply()` toggles the `.app-dark` class on `<html>`, which flips both files' custom
+properties in one step (a plain CSS selector match) — nothing else needs to be told the mode changed.
+The initial mode is resolved before Pinia/Vue even exist, in `theme/resolveInitialTheme.ts`: a saved
+`struo.theme` in `localStorage`, else `prefers-color-scheme`, else `light`.
 
-To re-theme a screen still on PrimeVue: edit the `struoPresetConfig` semantic tokens in `preset.ts`
-(swap `sky`/`slate` for different PrimeVue palette tokens, or hand-write OKLch values) and the
-corresponding custom properties in `theme.css`'s `:root`/`.app-dark` blocks.
-
-For a screen already migrated to Tailwind/shadcn, the token layer to edit instead is
-**`frontend/src/assets/tokens.css`** — the shadcn semantic custom properties (`--background`,
-`--foreground`, `--primary`, `--radius`, …), declared once on `:root` for light and re-declared on
-`.app-dark` for dark, the same toggle class `preset.ts`/`theme.css` use. **`frontend/src/components/ui/`
-is vendored, read-only output** (no edits, no `:deep()` into it) — a re-theme changes the token layer
-(`tokens.css`) or a wrapper component that sits outside `ui/` and composes its primitives, never a file
-inside `ui/` itself.
+To re-theme the SPA, edit the semantic custom properties in `tokens.css`'s `:root`/`.app-dark` blocks —
+the contract every vendored `ui/` component and Tailwind utility reads — and, if the change also
+touches first-party chrome such as the sidebar or breadcrumb, the corresponding properties in
+`theme.css`.
 
 Chapter 3's `Branding:Name`/`Branding:LogoUrl` reach only the product name and logo, never the color
 palette — the palette is a template default edited in source, not a per-deployment configuration key.
 
-## Overriding PrimeVue's built-in styles
+## Restyling a vendored `ui/` component
 
-**Caution:** a same-specificity rule in `theme.css` does not reliably beat a PrimeVue component's own
-runtime-injected styles. PrimeVue ships its component CSS as its own stylesheet, not as part of
-`theme.css`'s cascade — a bare `.p-select { … }` in `theme.css` ties on specificity against PrimeVue's
-own `.p-select` rule, and which one wins then depends on injection/source order, not intent.
+**`frontend/src/components/ui/` is vendored, read-only generated output — never edit it, and never
+`:deep()` into it.** A re-theme happens one layer up, in one of three places:
 
-**This technique — this section — applies only to a screen still on PrimeVue.** A screen already
-migrated to Tailwind/shadcn has no PrimeVue classes to fight in the first place; style it with plain
-Tailwind utilities or `tokens.css`. For a screen still on PrimeVue, **raise specificity with a compound
-selector**, not a bare PrimeVue class — the pattern still live in this codebase is a component-scoped
-`:deep()` paired with a real ancestor class inside a `<style scoped>` block:
-`frontend/src/components/ItemForm.vue`'s `.field :deep(.p-select), .field :deep(.p-multiselect),
-.field :deep(.p-treeselect) { width: 100%; max-width: 480px; }`, or `LoginView.vue`'s
-`.field :deep(.p-inputtext), .field :deep(.p-password) { … }`. `:deep()` alone does not raise
-specificity — pairing it with an ancestor class does.
+- **The token layer** (`frontend/src/assets/tokens.css`), for anything already exposed as a semantic
+  custom property — a color, a radius, a shadow. Every vendored component and Tailwind utility reads the
+  same token, so one edit reaches every consumer at once.
+- **The `class` prop, at the point of use**, for anything expressible as a Tailwind utility class. Every
+  vendored `ui/` component that renders styled markup merges its `class` prop through `cn()`
+  (`frontend/src/components/ui/input/Input.vue` shows the pattern), so passing utilities where the
+  component is used restyles that one usage without touching `ui/` —
+  `frontend/src/components/fields/FilePicker.vue` and `FilesField.vue` both do this, passing a `class`
+  into `DialogScrollContent` that widens it to `min(78vw,1300px)` and narrows that to `95vw` below a
+  960px viewport.
+- **A wrapper component that sits outside `ui/`**, for anything neither of the above can express — a
+  fixed width on one specific usage, extra spacing, a one-off layout tweak. A wrapper's own `<style scoped>`
+  block is unlayered CSS, and because Tailwind v4 puts every utility class in `@layer utilities`,
+  an unlayered declaration on the same element outranks a utility regardless of specificity (unless the
+  utility carries `!important`, which inverts this) — this is what makes a wrapping component's scoped
+  style the reliable place to put such an override. Vue's scope id lands only on a child component's root
+  element, though, not on what it renders internally, so a wrapper's scoped style reaches the vendored
+  component's root element — the same node the `class` prop above lands on — and stops there; reaching
+  what the component renders inside that root still needs the `:deep()` this section already rules out.
+  That leaves the token layer as the one path that actually reaches inside, because the inner nodes read
+  those custom properties themselves.
 
 Avoid reaching for `!important` here: it wins the immediate override but leaves the *next* override —
 yours or a fork's — fighting the same battle one level worse.
@@ -127,7 +131,7 @@ resolved before any store exists (`localStorage['struo.uiLocale']`, else the har
 `'zh-TW'`), then owned at runtime by the `uiLocaleStore` Pinia store: `set(locale)` updates
 `i18n.global.locale.value`, sets `<html lang>`, and persists the choice back to `localStorage`.
 `UiLanguageSwitcher.vue` is the only place that calls it, driven by the shadcn/reka-ui `Select`
-(`@/components/ui/select`, not PrimeVue's) whose two options read `t('lang.zh-TW')` / `t('lang.en')`.
+(`@/components/ui/select`) whose two options read `t('lang.zh-TW')` / `t('lang.en')`.
 
 **To add a new UI locale** (e.g. Japanese):
 
@@ -164,27 +168,28 @@ never needs to know it is being rendered inside a generated form at all.
 
 ```vue
 <script setup lang="ts">
-import ColorPicker from 'primevue/colorpicker'
-import InputText from 'primevue/inputtext'
+import { Input } from '@/components/ui/input'
 import type { FieldMeta } from '../../types/schema'
 
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
-// PrimeVue's ColorPicker works in bare hex ("ff0000"); the stored/API value is "#ff0000".
-function onPick(hex: string): void {
-  emit('update:modelValue', `#${hex}`)
+// The native color input works in "#rrggbb"; fall back to black while the field is still empty.
+function onPick(e: Event): void {
+  emit('update:modelValue', (e.target as HTMLInputElement).value)
 }
 </script>
 
 <template>
-  <div class="color-swatch-field">
-    <ColorPicker
-      :model-value="(modelValue as string)?.replace(/^#/, '') ?? ''"
+  <div class="flex items-center gap-2">
+    <input
+      type="color"
+      :value="(modelValue as string) || '#000000'"
       :disabled="disabled"
-      @update:model-value="onPick"
+      class="border-input h-9 w-12 shrink-0 cursor-pointer rounded-md border p-0.5"
+      @input="onPick"
     />
-    <InputText
+    <Input
       :model-value="(modelValue as string)"
       :disabled="disabled"
       :maxlength="field.maxLength ?? undefined"
@@ -192,10 +197,6 @@ function onPick(hex: string): void {
     />
   </div>
 </template>
-
-<style scoped>
-.color-swatch-field { display: flex; align-items: center; gap: 8px; }
-</style>
 ```
 
 **2. Register it** — in `frontend/src/lib/fieldTypes/registry.ts`, swap the `color` entry's component.

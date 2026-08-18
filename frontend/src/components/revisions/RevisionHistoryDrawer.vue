@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import Drawer from 'primevue/drawer'
-import Button from 'primevue/button'
-import ConfirmDialog from 'primevue/confirmdialog'
-import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/composables/useConfirm'
+import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import RevisionSnapshotView from './RevisionSnapshotView.vue'
-import { revisionOperationKey } from '../../lib/revisionOperation'
+import { revisionOperationLabel } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import { createLatestWins } from '../../lib/latestWins'
 import { itemsApi, type RevisionInfo, type RevisionDetail } from '../../api/itemsApi'
@@ -38,10 +37,14 @@ const reverting = ref(false)
 
 const isEmpty = computed(() => !listLoading.value && !listError.value && revisions.value.length === 0)
 
+function isActiveRev(rev: RevisionInfo): boolean {
+  return selected.value?.revisionNumber === rev.revisionNumber
+}
+
 const detailLoad = createLatestWins()
 
-function opLabel(op: string): string {
-  return t(revisionOperationKey(op))
+function nodeLabel(rev: RevisionInfo): string {
+  return revisionOperationLabel(rev.operation, rev.sourceRevisionNumber, t)
 }
 function whenLabel(iso: string): string {
   return formatRevisionTime(iso)
@@ -82,26 +85,24 @@ async function select(rev: RevisionInfo): Promise<void> {
   }
 }
 
-function onRevert(n: number): void {
+async function onRevert(n: number): Promise<void> {
   if (reverting.value) return
-  confirm.require({
-    group: 'revisions',
+  const accepted = await confirm.require({
     header: t('revisions.revertConfirmHeader'),
     message: t('revisions.revertConfirmMessage', { n }),
-    accept: async () => {
-      reverting.value = true
-      try {
-        const item = await itemsApi.revert(props.collection, props.itemId, n)
-        emit('reverted', item)
-        await load()
-        toast.add({ severity: 'success', summary: t('revisions.reverted', { n }), life: 2500 })
-      } catch {
-        toast.add({ severity: 'error', summary: t('revisions.revertFailed'), life: 3500 })
-      } finally {
-        reverting.value = false
-      }
-    },
   })
+  if (!accepted) return
+  reverting.value = true
+  try {
+    const item = await itemsApi.revert(props.collection, props.itemId, n)
+    emit('reverted', item)
+    await load()
+    toast.add({ severity: 'success', summary: t('revisions.reverted', { n }), life: 2500 })
+  } catch {
+    toast.add({ severity: 'error', summary: t('revisions.revertFailed'), life: 3500 })
+  } finally {
+    reverting.value = false
+  }
 }
 
 watch(
@@ -114,67 +115,83 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
 </script>
 
 <template>
-  <Drawer
-    :visible="visible"
-    position="right"
-    :header="t('revisions.title')"
-    class="rev-drawer"
-    :style="{ width: '46rem', maxWidth: '100vw' }"
-    @update:visible="(v: boolean) => emit('update:visible', v)"
-  >
-    <ConfirmDialog group="revisions" />
-    <div class="rev-layout">
-      <aside class="rev-list">
-        <p v-if="listLoading" class="rev-notice">{{ t('revisions.loading') }}</p>
-        <div v-else-if="listError" class="rev-notice rev-error" role="alert">
-          <span>{{ listError }}</span>
-          <Button :label="t('revisions.retry')" size="small" text @click="load" />
-        </div>
-        <p v-else-if="isEmpty" class="rev-notice">{{ t('revisions.empty') }}</p>
-        <ul v-else class="rev-items">
-          <li v-for="rev in revisions" :key="rev.revisionNumber">
-            <button
+  <Sheet :open="visible" @update:open="(v: boolean) => emit('update:visible', v)">
+    <!--
+      SheetContent side="right" carries a bare w-3/4 AND an sm:max-w-sm. tailwind-merge keys
+      conflicts on (modifier set, class group), so the bare w-[46rem] displaces w-3/4 while
+      sm:max-w-sm needs an sm:-prefixed max-width of its own to lose. 46rem is wider than the
+      640px sm breakpoint, so the sm: override is 100vw rather than 46rem — otherwise the sheet
+      overflows the viewport between 640px and 736px.
+    -->
+    <SheetContent side="right" class="w-[46rem] max-w-[100vw] sm:max-w-[100vw]">
+      <SheetHeader class="px-6">
+        <SheetTitle>{{ t('revisions.title') }}</SheetTitle>
+      </SheetHeader>
+      <div class="rev-layout">
+        <aside class="rev-list">
+          <p v-if="listLoading" class="rev-notice text-muted-foreground">{{ t('revisions.loading') }}</p>
+          <div v-else-if="listError" class="rev-notice rev-error" role="alert">
+            <span>{{ listError }}</span>
+            <!-- variant="ghost" declares no base text colour, so without this it would inherit
+                 .rev-error's danger red at rest and jump to hover:text-accent-foreground on
+                 hover; text-foreground makes the rest state deliberate and matches every other
+                 ghost button's hover, unmodified. -->
+            <Button
               type="button"
-              class="rev-item"
-              :class="{ 'rev-item--active': selected?.revisionNumber === rev.revisionNumber }"
-              @click="select(rev)"
+              variant="ghost"
+              size="sm"
+              class="text-foreground"
+              data-test="rev-retry"
+              @click="load"
             >
-              <span class="rev-item__num">#{{ rev.revisionNumber }}</span>
-              <span class="rev-item__op">{{ opLabel(rev.operation) }}</span>
-              <span class="rev-item__when">{{ whenLabel(rev.createdAt) }}</span>
-            </button>
-          </li>
-        </ul>
-      </aside>
-      <RevisionSnapshotView
-        class="rev-pane"
-        :detail="detail"
-        :loading="detailLoading"
-        :error="detailError"
-        :can-revert="canRevert"
-        :reverting="reverting"
-        @revert="onRevert"
-      />
-    </div>
-  </Drawer>
+              {{ t('revisions.retry') }}
+            </Button>
+          </div>
+          <p v-else-if="isEmpty" class="rev-notice text-muted-foreground">{{ t('revisions.empty') }}</p>
+          <ul v-else class="rev-items">
+            <li v-for="rev in revisions" :key="rev.revisionNumber">
+              <button
+                type="button"
+                class="rev-item rounded-md"
+                :class="{ 'rev-item--active': isActiveRev(rev), 'bg-primary/10': isActiveRev(rev) }"
+                @click="select(rev)"
+              >
+                <span class="rev-item__num">#{{ rev.revisionNumber }}</span>
+                <span class="rev-item__op">{{ nodeLabel(rev) }}</span>
+                <span class="rev-item__when text-muted-foreground">{{ whenLabel(rev.createdAt) }}</span>
+              </button>
+            </li>
+          </ul>
+        </aside>
+        <RevisionSnapshotView
+          class="rev-pane"
+          :detail="detail"
+          :loading="detailLoading"
+          :error="detailError"
+          :can-revert="canRevert"
+          :reverting="reverting"
+          @revert="onRevert"
+        />
+      </div>
+    </SheetContent>
+  </Sheet>
 </template>
 
 <style scoped>
-.rev-layout { display: grid; grid-template-columns: 16rem 1fr; gap: 20px; height: 100%; min-height: 0; }
+.rev-layout { display: grid; grid-template-columns: 16rem 1fr; gap: 20px; flex: 1; min-height: 0; padding: 0 1.5rem 1.5rem; }
 .rev-list { border-right: 1px solid var(--border); padding-right: 12px; overflow: auto; }
-.rev-notice { color: var(--legacy-muted); margin: 0; display: flex; align-items: center; gap: 8px; }
+.rev-notice { margin: 0; display: flex; align-items: center; gap: 8px; }
 .rev-error { color: var(--danger); }
 .rev-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .rev-item {
   width: 100%; text-align: left; display: grid; gap: 2px; cursor: pointer;
-  padding: 8px 10px; border: 1px solid transparent; border-radius: var(--legacy-radius, 8px);
-  background: transparent; color: var(--fg);
+  padding: 8px 10px; border: 1px solid transparent; color: var(--fg);
 }
 .rev-item:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
-.rev-item--active { border-color: var(--border); background: color-mix(in srgb, var(--legacy-accent) 10%, transparent); }
+.rev-item--active { border-color: var(--border); }
 .rev-item__num { font-weight: 700; font-variant-numeric: tabular-nums; }
 .rev-item__op { font-size: .85rem; }
-.rev-item__when { font-size: .75rem; color: var(--legacy-muted); }
+.rev-item__when { font-size: .75rem; }
 .rev-pane { min-width: 0; overflow: auto; }
 @media (max-width: 640px) { .rev-layout { grid-template-columns: 1fr; } }
 </style>

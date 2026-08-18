@@ -42,7 +42,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `src/Struo.Application` | Application-layer abstractions, use-case contracts, options, query/security contracts. |
 | `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, all `AddStruoXxx` DI registration. |
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
-| `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace — mid-migration off PrimeVue onto Tailwind v4 + shadcn-vue, so both UI stacks currently coexist. |
+| `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `db/migrations/` | Reviewed, forward-only ALTER scripts for evolving an already-created schema; the template ships none — anything here belongs to the fork that put it there. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |

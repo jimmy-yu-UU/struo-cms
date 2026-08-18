@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import PrimeVue from 'primevue/config'
 import FieldInput from './FieldInput.vue'
 import FilePicker from './FilePicker.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -25,7 +24,7 @@ const stubs = {
   Input: { template: '<input class="stub-text" />' },
   Textarea: { template: '<textarea class="stub-textarea" />' },
   NumberField: { template: '<input class="stub-number" />' },
-  Checkbox: { template: '<input class="stub-checkbox" />' },
+  Switch: { template: '<button role="switch" class="stub-switch" />' },
   DatePicker: { template: '<input class="stub-date" />' },
   Select: { template: '<div class="stub-select" role="combobox" />' },
   RadioGroup: { template: '<div class="stub-radio" />' },
@@ -71,7 +70,6 @@ describe('FieldInput', () => {
   it('binds maxlength on text inputs when the field declares one', () => {
     const w = mount(FieldInput, {
       props: { field: field({ interface: 'text', maxLength: 100 }), modelValue: '' },
-      global: { plugins: [PrimeVue] },
     })
     expect(w.get('input').attributes('maxlength')).toBe('100')
   })
@@ -79,7 +77,6 @@ describe('FieldInput', () => {
   it('omits maxlength when the field has none', () => {
     const w2 = mount(FieldInput, {
       props: { field: field({ interface: 'textarea', maxLength: null }), modelValue: '' },
-      global: { plugins: [PrimeVue] },
     })
     expect(w2.get('textarea').attributes('maxlength')).toBeUndefined()
   })
@@ -124,9 +121,9 @@ describe('FieldInput', () => {
       expect(w.get('textarea').attributes('id')).toBe('my-id')
     })
 
-    it('lands on the real checkbox button, not a wrapper, for a boolean field', () => {
+    it('lands on the real switch button, not a wrapper, for a boolean field', () => {
       const w = mount(FieldInput, { props: { field: field({ interface: 'boolean' }), modelValue: false, id: 'my-id' } })
-      expect(w.get('[role="checkbox"]').attributes('id')).toBe('my-id')
+      expect(w.find('#my-id').attributes('role')).toBe('switch')
     })
 
     // reka's NumberFieldRoot declares `id` as its own prop (consuming it rather than letting it

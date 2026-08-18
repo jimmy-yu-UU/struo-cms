@@ -29,4 +29,16 @@ describe('locale packs', () => {
     expect(zhTW.revisions.open).toBe('歷史紀錄')
     expect(en.revisions.open).toBe('History')
   })
+
+  // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local
+  // mirror: every component test that asserts an accessible name built from these separators
+  // reads them back off this same object, so a mutation here propagates to "expected" and
+  // "actual" together and would stay green. nameListSeparator is the sentence comma '，' — it
+  // joins a field label to a state description ("地區，已選 1 項"), two unlike phrases, not a
+  // list of like items, so the enumeration comma '、' is wrong here even though it reads more
+  // naturally for an actual list.
+  it('pins the zh-TW separators to the maintainer-ruled characters, not ASCII or the enumeration comma', () => {
+    expect(zhTW.fields.namePairSeparator).toBe('：')
+    expect(zhTW.fields.nameListSeparator).toBe('，')
+  })
 })

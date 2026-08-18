@@ -22,6 +22,7 @@ export type RevisionInfo = {
   operation: string
   createdAt: string
   createdBy: string | null
+  sourceRevisionNumber?: number | null
 }
 export type RevisionDetail = RevisionInfo & { snapshot: unknown }
 

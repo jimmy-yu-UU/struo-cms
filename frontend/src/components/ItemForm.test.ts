@@ -9,7 +9,7 @@ import type { FormModel } from '../types/itemForm'
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
-    relations: 'Relations', translatableBadge: 'Translatable',
+    translatableBadge: 'Translatable',
     localeComplete: 'Has content', localeIncomplete: 'No content yet',
   } } },
 })
@@ -123,6 +123,7 @@ describe('ItemForm', () => {
     // shared- and translatable-field wrappers covered below) — pinned here rather than folded into
     // an aggregate count, since this is the only test that mounts a relation at all.
     expect(w.find('.relations .field').exists()).toBe(true)
+    expect(w.find('.relations h3').exists()).toBe(false)
   })
   it('keeps the .field wrapper class on each of the three call sites the e2e suite locates fields by', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
@@ -139,6 +140,28 @@ describe('ItemForm', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
     expect(w.findComponent({ name: 'TabPanel' }).exists()).toBe(false)
     expect(w.findAll('[role="tab"]')).toHaveLength(2)
+  })
+
+  // Boolean fields used to get their own `orientation="horizontal"` + <FieldContent> branch here,
+  // which put the label beside the control instead of above it — the only fields on the form with
+  // a different shape. The maintainer rejected that: a boolean field must lay out exactly like
+  // every other field (label above, control below, left-aligned). The width-forcing rule this used
+  // to work around is now absorbed by a wrapper inside BooleanField itself (see BooleanField.vue
+  // and fieldComponents.test.ts), so ItemForm no longer needs — or should have — a special case.
+  it('lays a boolean field out the same vertical shape as every other field', () => {
+    const boolMeta: CollectionMeta = { ...meta, fields: [
+      ...meta.fields,
+      field('isActive', { label: 'Active', interface: 'boolean', sort: 9 }),
+    ] }
+    const boolModel: FormModel = { ...model, shared: { ...model.shared, isActive: true } }
+    const w = mountForm({ meta: boolMeta, model: boolModel, locales, errors: {} })
+
+    const boolField = w.findAll('[data-slot="field"]').find((f) => f.text().includes('Active'))!
+    const textField = w.findAll('[data-slot="field"]').find((f) => f.text().includes('status'))!
+    for (const f of [boolField, textField]) {
+      expect(f.attributes('data-orientation')).toBeUndefined()
+      expect(f.find('[data-slot="field-content"]').exists()).toBe(false)
+    }
   })
 
   // Every FieldLabel here has always dangled: `for="f.name"` in the shared branch pointed at

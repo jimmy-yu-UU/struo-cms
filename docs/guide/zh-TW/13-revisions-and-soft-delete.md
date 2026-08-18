@@ -54,10 +54,10 @@ $ curl -s -X POST http://localhost:5221/api/items/article -H "Content-Type: appl
       "internalNote": "secret-note-v1",
       "translations": { "en": { "title": "Original Title", "body": "Original body text.", "internalSlug": "original-slug-v1" } }
     }'
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":0,"status":"draft", ...}}
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":0,"status":"draft", ...}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1"
-{"success":true,"data":{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b","snapshot":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Original Title","body":"Original body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions/1"
+{"success":true,"data":{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null,"snapshot":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Original Title","body":"Original body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
 ```
 
 (注意 `internalNote`——上面建立請求中設定的——並未出現在這份快照回應的任何地方，`translations.en`
@@ -74,6 +74,9 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-
 | 移入回收桶(軟刪除) | 透過 `CaptureRevisionAsync`，於 `DeleteAsync` 的回收桶分支之中，與那次原子性回收桶 UPDATE 位於同一個交易之中，且僅在它確實影響到某一列資料時才會執行 | `"delete"` |
 | 還原(回收桶) | 透過 `CaptureRevisionAsync`，於 `RestoreAsync` 之中，與那次原子性還原 UPDATE 位於同一個交易之中 | `"restore"` |
 | 還原(版本紀錄) | 透過 `UpdateCoreAsync` 以一般更新的形式重新套用該快照(見下方)，而這本身又會擷取一筆新的快照 | `"revert"` |
+
+一筆還原(版本紀錄)的紀錄還會額外帶有 `sourceRevisionNumber`——記錄的是哪一筆版本紀錄的快照被重新套用；
+其他每一種操作都會讓它保持 `null`。
 
 把擷取動作放進與該次寫入相同的交易之中，代表一筆版本紀錄絕不可能存在於一次本身已經回滾的寫入之下——而且
 對於移入回收桶/還原而言，這個擷取動作還取決於底層那個原子性的 `WHERE deletedat IS NULL`/`IS NOT NULL`
@@ -106,16 +109,16 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-
 這兩個鍵——遮蔽對每一筆過去的版本紀錄都一視同仁，而不只是對最新的那一筆：
 
 ```
-$ curl -s -X PUT http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27 \
+$ curl -s -X PUT http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35 \
     -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{
       "status": "published",
       "internalNote": "secret-note-v2-CHANGED",
       "translations": { "en": { "title": "Updated Title", "body": "Updated body text.", "internalSlug": "updated-slug-v2-CHANGED" } }
     }'
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":1,"status":"published", ...}}
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":1,"status":"published", ...}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/2"
-{"success":true,"data":{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b","snapshot":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":1,"status":"published","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Updated Title","body":"Updated body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions/2"
+{"success":true,"data":{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null,"snapshot":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":1,"status":"published","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"categoryId":null,"tags":[],"translations":{"en":{"title":"Updated Title","body":"Updated body text.","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null}}}}}
 ```
 
 兩份被遮蔽的快照都沒有顯示 `internalNote` 或 `translations.en.internalSlug`——但這些值確實有被真正
@@ -126,29 +129,29 @@ API 回應曝光過。
 ## 列出、檢視與還原版本紀錄
 
 **REST**(第 9 章，完整端點表)——`GET /api/items/{collection}/{id}/revisions`(列表，最新在前，
-只有 metadata：`revisionNumber`、`operation`、`createdAt`、`createdBy`)、`GET .../revisions/{n}`
-(單筆版本紀錄，附上經過遮蔽的 `snapshot`)、`POST .../revisions/{n}/revert`(套用它)。這三者分別都
-需要該集合一般的 `CanRead`/`CanWrite` 授權——版本紀錄並沒有專屬的額外權限層級。列出目前為止 `article`
-的兩筆版本紀錄(最新在前)：
+只有 metadata：`revisionNumber`、`operation`、`createdAt`、`createdBy`、`sourceRevisionNumber`)、
+`GET .../revisions/{n}`(單筆版本紀錄，附上經過遮蔽的 `snapshot`)、`POST .../revisions/{n}/revert`
+(套用它)。這三者分別都需要該集合一般的 `CanRead`/`CanWrite` 授權——版本紀錄並沒有專屬的額外權限層級。
+列出目前為止 `article` 的兩筆版本紀錄(最新在前)：
 
 ```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions"
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b"},{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677","createdBy":"019fa8b2-4d09-7155-b641-2c3e2519233b"}]}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions"
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
 ```
 
 **GraphQL**(第 10 章，`RevisionResolvers.cs`)——當一個集合宣告 `Revisions = true`，
 `StruoTypeModule` 會加入 `{collection}Revisions(id: ID!): [Revision!]!`、`{collection}Revision(id:
 ID!, revisionNumber: Int!): Revision`，以及一個 `revert{X}(id: ID!, revisionNumber: Int!): X`
 mutation，全部都不需要任何特定集合的 GraphQL 程式碼即可生成——共用的 `Revision` 型別是
-`{ revisionNumber, operation, createdAt, createdBy, snapshot }`。透過內省 `article` 自己生成的
-schema 確認——`Query` 上有 `articleRevisions`/`articleRevision`，`Mutation` 上有
+`{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`。透過內省
+`article` 自己生成的 schema 確認——`Query` 上有 `articleRevisions`/`articleRevision`，`Mutation` 上有
 `revertArticle`，與一般生成的 `article`/`articles`/`createArticle`/`updateArticle`/`deleteArticle`/
 `restoreArticle` 並列——並實際呼叫了那個生成出來的查詢欄位：
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
-    -d '{"query":"{ articleRevisions(id: \"019fad0e-8904-7ac7-a20e-796f1c50ea27\") { revisionNumber operation createdAt } }"}'
-{"data":{"articleRevisions":[{"revisionNumber":2,"operation":"update","createdAt":"2026-07-29T08:47:40.66141Z"},{"revisionNumber":1,"operation":"create","createdAt":"2026-07-29T08:47:18.943677Z"}]}}
+    -d '{"query":"{ articleRevisions(id: \"01a00d89-50c0-7655-af49-bbc4a9221a35\") { revisionNumber operation createdAt sourceRevisionNumber } }"}'
+{"data":{"articleRevisions":[{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709Z","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929Z","sourceRevisionNumber":null}]}}
 ```
 
 這一切都沒有任何特定集合的 resolver 程式碼——它純粹是從實體 `[CmsCollection]` attribute 上的
@@ -170,15 +173,15 @@ REST 端點(而非 GraphQL)——一個列表檢視、一個快照詳情檢視(`
 `"…-CHANGED"` 值的更新之後，把 `article` 還原回版本紀錄 1(它原始的 `create` 快照)：
 
 ```
-$ curl -s -X POST http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions/1/revert \
+$ curl -s -X POST http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions/1/revert \
     -H "X-Struo-CSRF: 1" -b cookies.txt
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":2,"status":"draft", ...}}
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":2,"status":"draft", ...}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27"
-{"success":true,"data":{"id":"019fad0e-8904-7ac7-a20e-796f1c50ea27","version":2,"status":"draft", ...,"translations":{"en":{"title":"Original Title","body":"Original body text.", ...}}}}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35"
+{"success":true,"data":{"id":"01a00d89-50c0-7655-af49-bbc4a9221a35","version":2,"status":"draft", ...,"translations":{"en":{"title":"Original Title","body":"Original body text.", ...}}}}
 
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-7ac7-a20e-796f1c50ea27/revisions"
-{"success":true,"data":[{"revisionNumber":3,"operation":"revert","createdAt":"2026-07-29T08:47:59.288629", ...},{"revisionNumber":2,"operation":"update", ...},{"revisionNumber":1,"operation":"create", ...}]}
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-7655-af49-bbc4a9221a35/revisions"
+{"success":true,"data":[{"revisionNumber":3,"operation":"revert","createdAt":"2026-08-17T02:25:27.199963","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":1},{"revisionNumber":2,"operation":"update","createdAt":"2026-08-17T02:25:09.564709","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-08-17T02:24:58.203929","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
 ```
 
 `status` 與 `translations.en.title`/`body` 都回到它們版本紀錄 1 的值，`version` 向前推進
@@ -188,13 +191,13 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/019fad0e-8904-
 
 ```
 $ docker exec struo-postgres psql -U struo -d struo -c \
-    "select status, internalnote from articles where id='019fad0e-8904-7ac7-a20e-796f1c50ea27';"
+    "select status, internalnote from articles where id='01a00d89-50c0-7655-af49-bbc4a9221a35';"
  status | internalnote
 --------+----------------
  draft  | secret-note-v1
 
 $ docker exec struo-postgres psql -U struo -d struo -c \
-    "select title, internalslug from article_translations where articleid='019fad0e-8904-7ac7-a20e-796f1c50ea27' and locale='en';"
+    "select title, internalslug from article_translations where articleid='01a00d89-50c0-7655-af49-bbc4a9221a35' and locale='en';"
       title      |   internalslug
 ------------------+-------------------
  Original Title   | original-slug-v1
