@@ -255,8 +255,9 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     /// (junction rows, translation rows).</summary>
     private sealed class ThrowingOnDeleteRevisionStore(IRevisionStore inner) : IRevisionStore
     {
-        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default) =>
-            inner.CaptureAsync(collection, itemId, operation, snapshotJson, ct);
+        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson,
+            long? sourceRevisionNumber = null, CancellationToken ct = default) =>
+            inner.CaptureAsync(collection, itemId, operation, snapshotJson, sourceRevisionNumber, ct);
         public Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default) =>
             inner.ListAsync(collection, itemId, ct);
         public Task<RevisionRecord?> GetAsync(string collection, string itemId, long revisionNumber, CancellationToken ct = default) =>

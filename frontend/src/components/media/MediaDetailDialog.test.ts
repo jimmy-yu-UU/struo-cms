@@ -9,26 +9,26 @@ import { ApiError } from '../../api/apiClient'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 
-const confirmRequire = vi.fn()
-vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
+const confirmRequire = vi.fn<(req: unknown) => Promise<boolean>>(() => Promise.resolve(true))
+vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
 const toastAdd = vi.fn()
-vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }))
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { media: {
     detailTitle: 'File details', fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
     copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL', status: 'Status',
-    save: 'Save', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
+    save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     folderField: 'Folder', folderUncategorized: 'Uncategorized',
   }, confirm: {
     softDeleteHeader: 'Move to trash', softDeleteMessage: 'Move this item to trash? You can restore it later.',
     hardDeleteHeader: 'Confirm delete', hardDeleteMessage: 'Delete this item? This cannot be undone.',
+  }, fields: {
+    selectAnItem: 'Select an item', namePairSeparator: ': ',
   } } },
 })
-
-const DialogStub = { name: 'Dialog', template: '<div v-if="visible"><slot /><slot name="footer" /></div>', props: ['visible'] }
 
 const fileMeta = {
   name: 'file', label: 'File',
@@ -40,7 +40,16 @@ const fileMeta = {
     { name: 'title', label: 'Title', interface: 'text', required: false, searchable: true, sortable: false, readOnly: false, hidden: false, translatable: true, sort: 1, isSystem: false },
     { name: 'alt', label: 'Alt', interface: 'text', required: false, searchable: false, sortable: false, readOnly: false, hidden: false, translatable: true, sort: 2, isSystem: false },
   ],
-  relations: [],
+  // The real `file` collection DOES declare this relation (verified against
+  // src/Struo.Infrastructure/Files/File.cs, the metadata scanner, and /api/schema) -- an empty
+  // `relations: []` fixture here would make buildItemPayload's relations loop never execute at
+  // all, silently hiding the exact bug this dialog's folder-removal introduced: parseItemToForm
+  // reads `item[rel.name]` dynamically off `meta.relations`, so with this relation present and no
+  // `deep` expansion on the GET, it would populate `model.relations.folder = null` regardless of
+  // the removed widget, and buildItemPayload would then emit `folderId: null` on every save.
+  relations: [
+    { name: 'folder', label: 'Folder', kind: 'manyToOne', targetCollection: 'mediafolder', interface: 'treeSelect', foreignKey: 'folderId', displayTemplate: null, editable: true, selfReferencing: false },
+  ],
 }
 
 function seedStores() {
@@ -58,23 +67,23 @@ const item = {
   translations: { en: { title: 'Hello', alt: 'An image' }, 'zh-TW': { title: '', alt: '' } },
 }
 
-// Two-level folder tree: root 'a', child 'b' (parentId 'a').
-const folderRows = [
-  { id: 'a', name: 'Root A', parentId: null },
-  { id: 'b', name: 'Child B', parentId: 'a' },
-]
+type MountFile = { id: string; fileName: string; contentType: string; size: number } | null
 
-function mountDialog() {
+function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelete?: boolean } = {}) {
   return mount(MediaDetailDialog, {
-    props: { file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }, canWrite: true, canDelete: true },
-    global: { plugins: [i18n], stubs: {
-      Dialog: DialogStub,
-      InputText: { name: 'InputText', template: '<input />' },
-      Button: { name: 'Button', template: '<button><slot /></button>', props: ['label'] },
-      SelectButton: { name: 'SelectButton', template: '<div />' },
-      ConfirmDialog: { name: 'ConfirmDialog', template: '<div />' },
-      TreeSelect: { name: 'TreeSelect', template: '<div />', props: ['modelValue', 'options', 'disabled'] },
-    } },
+    props: {
+      file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 },
+      canWrite: true,
+      canDelete: true,
+      ...overrides,
+    },
+    global: {
+      plugins: [i18n],
+      // reka's portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
+      // whole dialog body. Nothing here asserts against document.body, so the in-tree render is fine.
+      stubs: { teleport: true },
+      renderStubDefaultSlot: true,
+    },
   })
 }
 
@@ -82,14 +91,9 @@ describe('MediaDetailDialog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
-    confirmRequire.mockClear(); toastAdd.mockClear()
+    confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
+    toastAdd.mockClear()
     seedStores()
-    // Default: no mediafolder rows unless a test overrides. Component load() is only expected
-    // to call itemsApi.list('mediafolder', ...) — never itemsApi.list for anything else.
-    vi.spyOn(itemsApi, 'list').mockImplementation((collection) => {
-      if (collection === 'mediafolder') return Promise.resolve({ data: folderRows, total: folderRows.length })
-      return Promise.resolve({ data: [], total: 0 })
-    })
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
       configurable: true,
@@ -100,9 +104,10 @@ describe('MediaDetailDialog', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    // Relation FKs like folderId are only projected under `deep` expansion (nested as
-    // `folder: { id }`) -- the load must request it, or folderId always reads back undefined.
-    expect(itemsApi.get).toHaveBeenCalledWith('file', 'f1', { deep: ['folder'] })
+    // This dialog no longer edits folder assignment, so it has no reason to request the `deep:
+    // ['folder']` expansion any more -- a regression that brings that param back would be a sign
+    // dead folder-reading code crept back in alongside it.
+    expect(itemsApi.get).toHaveBeenCalledWith('file', 'f1')
     const vm = w.vm as unknown as { model: { translations: Record<string, Record<string, unknown>>; version?: number } }
     expect(vm.model.translations.en.title).toBe('Hello')
     expect(vm.model.version).toBe(3)
@@ -232,34 +237,167 @@ describe('MediaDetailDialog', () => {
     const w = mountDialog()
     // Synchronous portion of load() (up to its first await) has already run as part of mount, so
     // the initial render reflects loading === true before we resolve the pending itemsApi.get.
-    const inputs = w.findAllComponents({ name: 'InputText' })
-    // The two per-locale text inputs (title, alt) are the first two InputText instances rendered.
-    // Vue renders a `true` boolean attribute as the empty string (`disabled=""`), so assert
-    // presence rather than truthiness.
+    const inputs = w.findAll('input[data-slot="input"]')
+    // The two per-locale text inputs (title, alt) are the first two vendored Input instances
+    // rendered. Vue renders a `true` boolean attribute as the empty string (`disabled=""`), so
+    // assert presence rather than truthiness.
     expect(inputs[0].attributes('disabled')).toBe('')
     resolveGet(item)
     await flushPromises()
-    expect(w.findAllComponents({ name: 'InputText' })[0].attributes('disabled')).toBeFalsy()
+    expect(w.findAll('input[data-slot="input"]')[0].attributes('disabled')).toBeFalsy()
   })
 
-  it('confirms with soft-delete copy, deletes via filesApi.remove (trash, no purge) after accept, and emits deleted', async () => {
+  it('renders the vendored dialog and inputs, not PrimeVue ones', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
+    // MediaLibraryView mounts this dialog unconditionally with :file="selected", and `selected`
+    // starts null -- taking that same null-then-real transition here (instead of a prop that is
+    // already non-null at setup) matches the real initial-mount path.
+    const w = mountDialog({ file: null })
+    await flushPromises()
+    await w.setProps({ file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 } })
+    await flushPromises()
+    expect(w.find('[data-slot="dialog-title"]').exists()).toBe(true)
+    // Title, Alt and the read-only File URL.
+    const inputs = () => w.findAll('[data-slot="input"]')
+    expect(inputs()).toHaveLength(3)
+    expect(w.findComponent({ name: 'SelectButton' }).exists()).toBe(false)
+    const fileUrlInput = () => inputs()[2].element as HTMLInputElement
+    expect(fileUrlInput().value).toContain('f1')
+    expect(inputs()[2].attributes('readonly')).toBe('')
+
+    // The dialog stays open across this second file (both props.file values are non-null, so
+    // reka's Presence never unmounts/remounts DialogScrollContent) -- a `defaultValue`-only
+    // binding would leave the URL box showing 'f1' forever once the user switches files without
+    // closing the dialog in between.
+    await w.setProps({ file: { id: 'f2', fileName: 'b.png', contentType: 'image/png', size: 2048 } })
+    await flushPromises()
+    expect(fileUrlInput().value).toContain('f2')
+  })
+
+  it('switches locale through a ToggleGroup and ignores its deselect emit', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    ;(w.vm as unknown as { onDelete: () => void }).onDelete()
-    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    expect(w.find('[data-slot="toggle-group"]').exists()).toBe(true)
+    const items = () => w.findAll('[data-slot="toggle-group-item"]')
+    // 'en' is the default locale, so it starts pressed; 'zh-TW' does not.
+    expect(items()[0].attributes('data-state')).toBe('on')
+    expect(items()[1].attributes('data-state')).toBe('off')
+
+    const vm = w.vm as unknown as { activeLocale: string; onLocaleToggle: (v: unknown) => void }
+    vm.onLocaleToggle('zh-TW')
+    await flushPromises()
+    expect(vm.activeLocale).toBe('zh-TW')
+    // The ToggleGroup's :model-value must actually be wired to activeLocale, not just the exposed
+    // ref changing underneath a control that stopped tracking it.
+    expect(items()[0].attributes('data-state')).toBe('off')
+    expect(items()[1].attributes('data-state')).toBe('on')
+
+    // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again, and a
+    // locale switcher has no "no locale" state to fall into.
+    vm.onLocaleToggle(undefined)
+    await flushPromises()
+    expect(vm.activeLocale).toBe('zh-TW')
+    expect(items()[1].attributes('data-state')).toBe('on')
+  })
+
+  it('reflects the stored Title and Alt, including a model replacement after mount', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const titleInput = () => w.findAll('input[data-slot="input"]')[0].element as HTMLInputElement
+    const altInput = () => w.findAll('input[data-slot="input"]')[1].element as HTMLInputElement
+    expect(titleInput().value).toBe('Hello')
+    expect(altInput().value).toBe('An image')
+    // ItemFormView-style recovery replaces the whole model; an uncontrolled input would keep its
+    // own stale state through that and the next save would write the stale value.
+    const vm = w.vm as unknown as { setField: (n: 'title' | 'alt', v: string) => void }
+    vm.setField('title', 'Replaced')
+    vm.setField('alt', 'Replaced alt')
+    await flushPromises()
+    expect(titleInput().value).toBe('Replaced')
+    expect(altInput().value).toBe('Replaced alt')
+  })
+
+  it('swaps the Save label while saving, since ui/button has no loading prop, and disables the button too', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const saveButton = () => w.findAll('button').find((b) => b.text() === 'Save' || b.text() === 'Saving…')
+    expect((w.vm as unknown as { saveLabel: string }).saveLabel).toBe('Save')
+    expect(saveButton()?.attributes('disabled')).toBeFalsy()
+    let release!: () => void
+    vi.spyOn(itemsApi, 'update').mockReturnValue(new Promise((r) => { release = () => r(item as never) }) as never)
+    const pending = (w.vm as unknown as { onSave: () => Promise<void> }).onSave()
+    await flushPromises()
+    expect((w.vm as unknown as { saveLabel: string }).saveLabel).toBe('Saving…')
+    // ui/button has no `loading` prop, so double-submit protection on this versioned write comes
+    // entirely from :disabled -- without it a second click re-enters onSave with the same version
+    // and produces a spurious conflict.
+    expect(saveButton()?.attributes('disabled')).toBe('')
+    release()
+    await pending
+  })
+
+  it('gives every dialog button an explicit type="button"', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const buttons = w.findAll('button')
+    expect(buttons.length).toBeGreaterThan(0)
+    buttons.forEach((b) => expect(b.attributes('type')).toBe('button'))
+  })
+
+  it('renders distinct lucide icons for delete and copy-url, not swapped', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    const buttons = w.findAll('button')
+    const deleteButton = buttons.find((b) => b.text().includes('Delete file'))
+    const copyButton = buttons.find((b) => b.attributes('aria-label') === 'Copy URL')
+    expect(deleteButton?.find('.lucide-trash-2').exists()).toBe(true)
+    expect(deleteButton?.find('.lucide-copy').exists()).toBe(false)
+    expect(copyButton?.find('.lucide-copy').exists()).toBe(true)
+    expect(copyButton?.find('.lucide-trash-2').exists()).toBe(false)
+  })
+
+  it('deletes only when the confirmation resolves true', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    confirmRequire.mockResolvedValueOnce(false)
+    const w = mountDialog()
+    await flushPromises()
+    await (w.vm as unknown as { onDelete: () => Promise<void> }).onDelete()
+    expect(remove).not.toHaveBeenCalled()
+    confirmRequire.mockResolvedValueOnce(true)
+    await (w.vm as unknown as { onDelete: () => Promise<void> }).onDelete()
+    await flushPromises()
+    expect(remove).toHaveBeenCalledWith('f1')
+    expect(w.emitted('deleted')).toBeTruthy()
+  })
+
+  it('requests the soft-delete confirm copy before trashing', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    vi.spyOn(filesApi, 'remove').mockResolvedValue(undefined as never)
+    const w = mountDialog()
+    await flushPromises()
+    await (w.vm as unknown as { onDelete: () => Promise<void> }).onDelete()
+    await flushPromises()
     // The dialog's delete action trashes (filesApi.remove defaults to soft-delete), so its confirm
     // copy must match -- not the hard-delete "cannot be undone" copy.
     expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({
       header: 'Move to trash',
       message: 'Move this item to trash? You can restore it later.',
     }))
-    const accept = confirmRequire.mock.calls[0][0].accept as () => Promise<void>
-    await accept()
+  })
+
+  it('mounts no ConfirmDialog of its own', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
     await flushPromises()
-    expect(remove).toHaveBeenCalledWith('f1')
-    expect(w.emitted('deleted')).toBeTruthy()
+    // A local ConfirmDialog nested inside MediaLibraryView's own would fire one confirmation
+    // twice; AppShell's store-backed ConfirmHost is the only confirmation surface in the app.
+    expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
   })
 
   it('does not render an "open in full editor" link: no such button, no vue-router import', async () => {
@@ -270,81 +408,69 @@ describe('MediaDetailDialog', () => {
     expect(w.findAll('.pi-external-link').length).toBe(0)
   })
 
-  it('loads mediafolder rows and shows a Folder TreeSelect', async () => {
+  // Folder assignment moved to the media library's drag-and-drop / "Move to…" context menu / batch
+  // move -- this dialog no longer renders a folder picker or reads/writes folderId at all.
+  it('renders no folder picker of any kind', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    expect(itemsApi.list).toHaveBeenCalledWith('mediafolder', expect.objectContaining({ page: 0, rows: 500, sort: 'name', deep: ['parent'] }))
-    expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(true)
+    expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(false)
+    // Asserted against the picker specifically (the exact remaining field labels), not a blanket
+    // "'Folder' appears nowhere in the dialog" check -- that would also fail on unrelated future
+    // copy that happens to contain the word.
+    const fieldLabels = w.findAll('.md-field > span').map((s) => s.text())
+    expect(fieldLabels).toEqual(['Title', 'Alt text', 'File URL'])
   })
 
-  // The items API never returns a flat `folderId` column -- [CmsRelation] FKs only appear once
-  // `deep=folder` expands the relation, nested as `folder: { id, ... }` under the nav-property
-  // name. These cases mock that real response shape; a regression back to reading item.folderId
-  // directly would leave folderId permanently null/undefined and must fail these.
-  it('selects the current folder as the initial TreeSelect value from the deep-expanded item.folder', async () => {
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
-    const w = mountDialog()
-    await flushPromises()
-    const vm = w.vm as unknown as { folderId: string | null }
-    expect(vm.folderId).toBe('b')
-  })
-
-  it('selects the Uncategorized node as the initial TreeSelect value when item.folder is absent (unfiled)', async () => {
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: null } as never)
-    const w = mountDialog()
-    await flushPromises()
-    const vm = w.vm as unknown as { folderId: string | null }
-    expect(vm.folderId).toBeNull()
-  })
-
-  it('sends the selected folder id in the update payload on save', async () => {
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: null } as never)
-    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
-    const w = mountDialog()
-    await flushPromises()
-    const vm = w.vm as unknown as { onFolderChange: (s: Record<string, boolean>) => void; onSave: () => Promise<void> }
-    vm.onFolderChange({ b: true })
-    await vm.onSave()
-    await flushPromises()
-    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: 'b' }))
-  })
-
-  it('sends folderId null when Uncategorized is selected on save', async () => {
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
-    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
-    const w = mountDialog()
-    await flushPromises()
-    const vm = w.vm as unknown as { onFolderChange: (s: Record<string, boolean>) => void; onSave: () => Promise<void> }
-    vm.onFolderChange({ __unfiled: true })
-    await vm.onSave()
-    await flushPromises()
-    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: null }))
-  })
-
-  it('preserves a filed file\'s folder on save (data-loss regression guard): the folder must not be nulled out', async () => {
-    // This is the exact CRITICAL data-loss path: a file that IS filed under folder 'b' is loaded,
-    // the user changes nothing, and hits Save. Before the fix, item.folderId was always undefined
-    // (the API never returns it outside `deep`), so folderId.value silently became null and Save
-    // unfiled the file. With deep:['folder'], the nested item.folder.id must populate folderId,
-    // and an untouched save must send that same folder id back, not null.
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
-    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
-    const w = mountDialog()
-    await flushPromises()
-    const vm = w.vm as unknown as { folderId: string | null; onSave: () => Promise<void> }
-    expect(vm.folderId).toBe('b')
-    await vm.onSave()
-    await flushPromises()
-    expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ folderId: 'b' }))
-  })
-
-  it('degrades gracefully (no blocking) when mediafolder loading fails', async () => {
+  it('never calls itemsApi.list (no mediafolder fetch left to drive a picker that no longer exists)', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
-    vi.spyOn(itemsApi, 'list').mockRejectedValue(new Error('boom'))
+    // Rejects immediately instead of falling through to a real API layer -- a regression that
+    // reintroduces a list() call should fail loudly here, not silently succeed against whatever
+    // itemsApi.list happens to resolve to when unmocked.
+    const list = vi.spyOn(itemsApi, 'list')
+      .mockImplementation(() => Promise.reject(new Error('itemsApi.list should not be called by MediaDetailDialog')))
+    mountDialog()
+    await flushPromises()
+    expect(list).not.toHaveBeenCalled()
+  })
+
+  // THE regression this dialog's folder-picker removal must not reintroduce: the items API never
+  // returns a flat `folderId` column outside `deep` expansion, so if a save payload ever included
+  // `folderId` again (even as `null`) it would silently unfile the item on every save from this
+  // dialog. Asserting the key is entirely ABSENT -- not merely falsy -- is what actually catches a
+  // `folderId: null` regression; `expect(payload.folderId).toBeFalsy()` would pass right through it.
+  //
+  // This is only a meaningful guard because `fileMeta.relations` above declares the REAL `folder`
+  // relation (matching the live schema) -- an empty `relations: []` fixture would make
+  // buildItemPayload's relations loop never execute, making this assertion pass vacuously
+  // regardless of whether the dialog's own `relations: {}` override is present.
+  it('sends no folderId key at all in the update payload', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
     const w = mountDialog()
     await flushPromises()
-    expect((w.vm as unknown as { error: string }).error).toBe('')
-    expect(w.findComponent({ name: 'TreeSelect' }).exists()).toBe(true)
+    const vm = w.vm as unknown as { onSave: () => Promise<void> }
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenCalledTimes(1)
+    const payload = update.mock.calls[0][2] as Record<string, unknown>
+    expect('folderId' in payload).toBe(false)
+  })
+
+  // Restores the data-loss regression guard the pre-removal dialog carried (there under the name
+  // "preserves a filed file's folder on save") in the form that now fits: even if the GET response
+  // happens to carry a `folder` object (e.g. some other change reintroduces `deep` without
+  // reintroducing this dialog's own folder-editing UI), `relations: {}` must still neutralise it --
+  // the dialog no longer has a UI path to express a folder choice, so it must never derive one.
+  it('sends no folderId even when the GET response happens to include folder data (data-loss regression guard)', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+    const w = mountDialog()
+    await flushPromises()
+    const vm = w.vm as unknown as { onSave: () => Promise<void> }
+    await vm.onSave()
+    await flushPromises()
+    const payload = update.mock.calls[0][2] as Record<string, unknown>
+    expect('folderId' in payload).toBe(false)
   })
 })

@@ -83,6 +83,22 @@ describe('FilesField', () => {
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['f2']])
   })
 
+  // FileThumbnail renders for real here (unlike the shared `stubs`, which stubs it out) --
+  // asserting the rendered `data-size` attribute rather than a prop read fails if the
+  // size="sm" binding is ever dropped from the row template.
+  it('gives each row thumbnail the sm size', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f1, f2], total: 2 })
+    const w = mount(FilesField, {
+      props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] },
+      global: { plugins: [i18n], stubs: { Dialog: true, MediaGrid: true } },
+    })
+    await flushPromises()
+    const thumbs = w.findAll('.file-thumb')
+    expect(thumbs.length).toBeGreaterThan(0)
+    for (const thumb of thumbs) expect(thumb.attributes('data-size')).toBe('sm')
+  })
+
   it('toggling an unselected file in the picker appends it last', async () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list')

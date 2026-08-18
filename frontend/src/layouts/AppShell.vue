@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import Toast from 'primevue/toast'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
 import { useSchemaStore } from '@/stores/schemaStore'
@@ -40,11 +39,7 @@ onMounted(() => { schema.load() })
       </div>
     </SidebarInset>
 
-    <!-- The app's global outlets, mounted exactly once. Toast (PrimeVue) stays alongside
-         Toaster (shadcn/vue-sonner) until the last `primevue/usetoast` call site migrates —
-         five views/components still call it, and ToastService.add() emits on
-         ToastEventBus with no host subscribed (silently, no error) if this is removed. -->
-    <Toast position="top-right" />
+    <!-- The app's global outlets, mounted exactly once. -->
     <Toaster position="top-right" />
     <ConfirmHost />
   </SidebarProvider>

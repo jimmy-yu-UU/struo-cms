@@ -307,9 +307,10 @@ function guardLeave(): Promise<boolean> {
   // sequentially on the same navigation.
   if (!(isDirty(baseline.value, model) || (matrix.value?.dirty ?? false))) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
-  // Cancel and dismiss (Esc / backdrop / X) are the same outcome here by design: confirmStore
-  // guarantees every request settles its Promise exactly once, so there is no third "closed
-  // without answering" state that would otherwise leave this navigation awaiting forever.
+  // Cancel and dismiss (Escape — an AlertDialog is not backdrop-dismissible, and ConfirmHost
+  // renders no close button) are the same outcome here by design: confirmStore guarantees every
+  // request settles its Promise exactly once, so there is no third "closed without answering"
+  // state that would otherwise leave this navigation awaiting forever.
   return confirm.require({ header, message })
 }
 onBeforeRouteLeave(() => guardLeave())

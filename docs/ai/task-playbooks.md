@@ -286,16 +286,15 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `media/`, `revisions/`, `rbac/`),
    `composables/`, `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including
    `fieldTypes/`), `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
-2. **Theming**: for a screen still on PrimeVue, change both `frontend/src/assets/theme.css` (the OKLch
-   custom-property palette those screens read) and `frontend/src/theme/preset.ts` (the PrimeVue
-   `definePreset(Aura, ...)` mapping onto the same palette) together — they must stay in sync or
-   PrimeVue's own components drift from the hand-styled shell. For a screen already migrated to
-   Tailwind/shadcn, the file to edit instead is `frontend/src/assets/tokens.css` (the shadcn semantic
-   custom properties, `--background`/`--primary`/`--radius`/…, on the same `.app-dark` toggle class).
+2. **Theming**: edit `frontend/src/assets/tokens.css` for the shadcn semantic custom properties
+   (`--background`/`--primary`/`--radius`/…, on the `.app-dark` toggle class) that every vendored `ui/`
+   component and Tailwind utility reads, and `frontend/src/assets/theme.css` for the unlayered global
+   layer (page/surface/foreground and status/shadow/overlay/font custom properties, `html`/`body`
+   resets, the theme-transition rule, `.app-breadcrumb`) first-party scoped CSS reads.
    **`frontend/src/components/ui/` is vendored, read-only output — never edit it and never `:deep()`
-   into it**; a re-theme changes the token layer or a wrapper component outside `ui/`. See chapter 14's
-   "Overriding PrimeVue's built-in styles" for how to override a still-on-PrimeVue component's style
-   without losing a specificity fight. Avoid `!important`.
+   into it**; a re-theme changes a token layer or a wrapper component outside `ui/`. See chapter 14's
+   "Restyling a vendored `ui/` component" for how to override a component's style without losing a
+   specificity fight. Avoid `!important`.
 3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
    under the right namespace (`common`, `nav`, `dashboard`, `collectionList`, `itemForm`, `media`,
    `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only

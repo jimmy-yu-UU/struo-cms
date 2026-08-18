@@ -24,6 +24,10 @@ internal static class FakeMetadataFixtures
     {
         Name = "article",
         Label = "Article",
+        // Revisions = true so the schema-shape gate (GraphQlSchemaTests) sees the per-collection
+        // articleRevisions/articleRevision query fields; Category is left non-revisioned so other
+        // tests can still prove those fields are absent for a non-opted-in collection.
+        Revisions = true,
         FieldGroups = [],
         Fields =
         [

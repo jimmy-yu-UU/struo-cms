@@ -32,6 +32,11 @@ public sealed class Revision
     public long RevisionNumber { get; set; }
     public string Operation { get; set; } = "";
 
+    /// <summary>For an <c>Operation == "revert"</c> row, the revision number whose snapshot was
+    /// re-applied. NULL on every other operation, and on revert rows written before this column
+    /// existed — the history UI falls back to the plain operation label when it is null.</summary>
+    [SugarColumn(IsNullable = true)] public long? SourceRevisionNumber { get; set; }
+
     // MUST be unbounded: SqlSugar's default varchar(255) overflows for a realistic snapshot (the same
     // content-column-widening problem the EntityService hook solves for [CmsField] content
     // interfaces). Declared explicitly rather than by convention, because Snapshot is a plain

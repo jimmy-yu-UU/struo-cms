@@ -25,6 +25,7 @@ const enMessages = {
   fields: {
     noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
     searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.', selectAFolder: 'Select a folder',
+    namePairSeparator: ': ',
   },
   media: { folderAll: 'All files', folderUncategorized: 'Uncategorized', folderField: 'Folder' },
 }
@@ -36,6 +37,7 @@ const zhMessages = {
   fields: {
     noFileSelected: '未選擇檔案', selectFile: '選擇', clear: '清除', selectAFile: '選擇檔案',
     searchFiles: '搜尋檔案…', loadFilesFailed: '檔案載入失敗。', selectAFolder: '選擇資料夾',
+    namePairSeparator: '：',
   },
   media: { folderAll: '全部檔案', folderUncategorized: '未分類', folderField: '資料夾' },
 }
@@ -78,6 +80,18 @@ describe('FilePicker', () => {
     const w = mount(FilePicker, { props: { modelValue: 'f1', image: true }, global: { plugins: [i18n], stubs } })
     await flushPromises()
     expect(w.text()).toContain('a.png')
+  })
+
+  // FileThumbnail renders for real here (the shared `stubs` doesn't stub it) -- this asserts
+  // the rendered `data-size` attribute rather than a prop read, so it fails if the size="sm"
+  // binding is ever dropped from the template even though FileThumbnail itself still defaults
+  // to "tile".
+  it('shows the current value at the sm thumbnail size', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1 })
+    const w = mount(FilePicker, { props: { modelValue: 'f1', image: true }, global: { plugins: [i18n], stubs } })
+    await flushPromises()
+    expect(w.get('.file-thumb').attributes('data-size')).toBe('sm')
   })
 
   it('clear emits null', async () => {
@@ -348,7 +362,8 @@ describe('FilePicker', () => {
       // folderSel defaults to '__all', which resolves to the "All files" node label — this is the
       // reachable half of TreeSelect's accessible name (label + current value); the placeholder
       // half only shows when modelValue is null, which FilePicker's folderSel never is.
-      expect(tree.get('button').attributes('aria-label')).toBe(`${zhMessages.media.folderField}: ${zhMessages.media.folderAll}`)
+      expect(tree.get('button').attributes('aria-label'))
+        .toBe(`${zhMessages.media.folderField}${zhMessages.fields.namePairSeparator}${zhMessages.media.folderAll}`)
     })
 
     // A placeholder is not an accessible name: it disappears the instant the user types into the

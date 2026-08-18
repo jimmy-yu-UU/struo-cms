@@ -115,7 +115,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
 <template>
   <div class="file-picker">
     <div v-if="current" class="file-picker__current">
-      <FileThumbnail v-if="image" :file="current" class="file-picker__thumb" />
+      <FileThumbnail v-if="image" :file="current" size="sm" />
       <span>{{ current.fileName }}</span>
     </div>
     <span v-else-if="missingId" class="file-picker__missing italic text-muted-foreground">{{ missingId }}</span>
@@ -175,20 +175,6 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-/*
- * FileThumbnail's own scoped .file-thumb rule and this one carry equal specificity (one class +
- * one scoped-id attribute each — the div is this component's own scope AND FileThumbnail's,
- * because a child's root node picks up both when the parent passes it a class), so which wins
- * would otherwise depend on which style block Vite happens to emit later in the bundle. Matching
- * both classes in one compound selector adds a second class to the specificity count, which wins
- * regardless of source order.
- */
-.file-thumb.file-picker__thumb {
-  width: 48px;
-  height: 48px;
-  flex: none;
 }
 
 .file-picker__actions {

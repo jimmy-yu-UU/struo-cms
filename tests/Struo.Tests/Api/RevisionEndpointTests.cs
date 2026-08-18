@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Api/RevisionEndpointTests.cs
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -101,6 +102,38 @@ public class RevisionEndpointTests(ApiFactory factory)
 
         var snapshot = Root(body).GetProperty("data").GetProperty("snapshot");
         snapshot.GetProperty("status").GetString().Should().Be("draft"); // non-hidden fields untouched
+    }
+
+    /// <summary>Task 3: the revert-target revision number must round-trip through both the REST
+    /// list (free, since it serialises <c>RevisionInfo</c> records directly) and the REST detail
+    /// endpoint (an explicit anonymous object that needs the field added by hand).</summary>
+    [Fact]
+    public async Task Revision_list_and_detail_expose_sourceRevisionNumber_for_a_revert()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(client, "RevisionSourceRoundTrip", status: "draft"); // rev 1
+
+        var put = await client.PutAsJsonAsync($"/api/items/article/{id}",
+            new { status = "published", translations = new { en = new { title = "RevisionSourceRoundTrip" } } });
+        put.StatusCode.Should().Be(HttpStatusCode.OK); // rev 2: update, status=published
+
+        var revert = await client.PostAsync($"/api/items/article/{id}/revisions/1/revert", null);
+        revert.StatusCode.Should().Be(HttpStatusCode.OK); // rev 3: revert to 1
+
+        var list = await client.GetAsync($"/api/items/article/{id}/revisions");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        var data = Root(await list.Content.ReadAsStringAsync()).GetProperty("data");
+        var newest = data[0];
+        newest.GetProperty("operation").GetString().Should().Be("revert");
+        newest.GetProperty("sourceRevisionNumber").GetInt64().Should().Be(1);
+
+        var update = data.EnumerateArray().Single(e => e.GetProperty("operation").GetString() == "update");
+        update.GetProperty("sourceRevisionNumber").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var rev3 = await client.GetAsync($"/api/items/article/{id}/revisions/3");
+        rev3.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rev3Data = Root(await rev3.Content.ReadAsStringAsync()).GetProperty("data");
+        rev3Data.GetProperty("sourceRevisionNumber").GetInt64().Should().Be(1);
     }
 
     [Fact]

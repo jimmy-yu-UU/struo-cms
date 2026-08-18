@@ -2,10 +2,9 @@ import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
 
 // File soft-delete live gate. Covers the critical path this feature adds to the media
-// library: trashing a file from its DETAIL DIALOG (the active-view path — this is the one where a
-// duplicate-ConfirmDialog bug was previously fixed by scoping MediaDetailDialog's ConfirmDialog to
-// its own unnamed group, separate from MediaLibraryView's `media-folder`/`media-file` groups), then
-// restore, re-trash, and permanent purge from the Trash view. Also asserts the server-side effect
+// library: trashing a file from its DETAIL DIALOG (the active-view path, distinct from the
+// list-row trash action MediaLibraryView also exposes), then restore, re-trash, and permanent
+// purge from the Trash view. Also asserts the server-side effect
 // (GET /api/files/{id}/content 404 while trashed, 200 once restored) so this isn't just a UI-state
 // check — it proves FileService's soft-delete query filter actually excludes the row.
 //
@@ -71,7 +70,7 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
 }
 
 // Isolates the uploaded row by its unique stamped filename (server-side debounced search) and opens
-// its detail dialog, waiting for MediaDetailDialog's `deep=folder` GET so fields are populated.
+// its detail dialog, waiting for MediaDetailDialog's item GET so fields are populated.
 async function openDetailByName(page: Page, fileName: string): Promise<void> {
   await page.getByPlaceholder('Search files…').fill(fileName)
   const tile = fileTile(page, fileName)
@@ -90,7 +89,7 @@ async function trashFromDetailDialog(page: Page): Promise<void> {
   await detailDialog(page).getByRole('button', { name: 'Delete file', exact: true }).click()
   const trashConfirm = page.getByRole('alertdialog', { name: 'Move to trash' })
   await expect(trashConfirm).toHaveCount(1)
-  await trashConfirm.getByRole('button', { name: 'Yes' }).click()
+  await trashConfirm.getByRole('button', { name: 'Confirm' }).click()
   await expect(detailDialog(page)).toHaveCount(0)
 }
 
@@ -157,7 +156,7 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
   await expect(trashRow(page, fileName)).toBeVisible()
   await trashRow(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
   await expect(page.getByRole('alertdialog', { name: 'Delete permanently' })).toHaveCount(1)
-  await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Yes' }).click()
+  await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Confirm' }).click()
   await expect(trashRow(page, fileName)).toHaveCount(0)
 
   // Purged: gone from Trash and content stays 404 (not merely "excluded from reads" but truly gone).

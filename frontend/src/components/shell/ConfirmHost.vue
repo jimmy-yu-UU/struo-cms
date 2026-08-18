@@ -46,7 +46,19 @@ function onOpenChange(next: boolean): void {
 
 <template>
   <AlertDialog :open="open" @update:open="onOpenChange">
-    <AlertDialogContent>
+    <!--
+      This is the one app-wide confirmation surface (a Pinia-backed singleton mounted once in
+      AppShell), so it can fire while another vendored overlay — Sheet, Dialog, DialogScrollContent,
+      Popover, Select, dropdown, tooltip, combobox — is already open, and every one of those shares
+      the same z-50 from `ui/`. At equal z-index a fixed-position element's stacking falls to DOM
+      order, which this component does not control (it is teleported to body independently of
+      whatever else is already open); confirmed live with an open Sheet, where the sheet's own
+      overlay painted on top of this dialog and silently swallowed clicks on its buttons even
+      though the dialog remained visible underneath.
+      z-[60] is the deliberate ceiling for this one singleton only: nothing else in this app should
+      go this high, and this comment is where that ceiling is written down.
+    -->
+    <AlertDialogContent class="z-[60]">
       <AlertDialogHeader>
         <AlertDialogTitle>{{ header }}</AlertDialogTitle>
         <AlertDialogDescription>{{ request?.message }}</AlertDialogDescription>

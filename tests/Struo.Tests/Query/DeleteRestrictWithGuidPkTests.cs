@@ -138,7 +138,8 @@ public class DeleteRestrictWithGuidPkTests
     // are never invoked here — this stub only needs to satisfy the constructor.
     private sealed class StubRevisionStore : IRevisionStore
     {
-        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson, CancellationToken ct = default) =>
+        public Task CaptureAsync(string collection, string itemId, string operation, string snapshotJson,
+            long? sourceRevisionNumber = null, CancellationToken ct = default) =>
             throw new InvalidOperationException("Not expected to be called: target collection is not revisioned.");
         public Task<IReadOnlyList<RevisionInfo>> ListAsync(string collection, string itemId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<RevisionInfo>>([]);

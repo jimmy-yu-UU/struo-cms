@@ -324,7 +324,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 (`{collection}Revisions(id: ID!): [Revision!]!`、
 `{collection}Revision(id: ID!, revisionNumber: Int!): Revision`) 與一個 mutation
 (`revert{X}(id: ID!, revisionNumber: Int!): X`)——`RevisionResolvers.cs`。共用的 `Revision`
-型別是 `{ revisionNumber, operation, createdAt, createdBy, snapshot }`;清單欄位的每一筆項目都
+型別是 `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`;清單欄位的每一筆項目都
 回傳 `snapshot: null` (只有中介資料，與 REST 的清單端點一致)，而單筆欄位則會填入它，解析成
 `Any` 純量。**七個即時上線的框架集合，沒有任何一個宣告 `Revisions = true`**，所以目前這個 host
 的 schema 中完全不存在這些欄位——直接對照上方 introspection 出來的 `Query`/`Mutation` 欄位清單
