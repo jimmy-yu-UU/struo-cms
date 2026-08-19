@@ -30,22 +30,22 @@ async function login(page: Page): Promise<void> {
 }
 
 // Required fields render their label with a trailing `*` and NO separating
-// space (ItemForm.vue appends `<span class="req">*</span>`), so a required
-// field's label text is e.g. "Title*". Match the label anchored with an
-// optional trailing `*` — anchoring keeps "Title" from also matching the
+// space (ItemForm.vue appends `<span class="text-destructive ml-0.5">*</span>` — `ml-0.5` is a
+// margin, not a whitespace character, so the label's accessible text is still "Title*"). Match the
+// label anchored with an optional trailing `*` — anchoring keeps "Title" from also matching the
 // distinct "SEO Title" field.
 function labelMatch(label: string): RegExp {
   return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*?$`)
 }
 
 // fieldByLabel()/translatableFieldByLabel() return the `.field` wrapper, not a control, because
-// every call site scopes a further sub-query off it -- `.locator('input')`,
-// `.locator('.ProseMirror')`, `.getByRole('combobox')`, `.getByText(...)` for chip/row lookups --
-// and those differ per interface. `getByLabel()` resolves straight to the labelled control or
-// trigger itself, which is not a uniform container shape across interfaces (nor, per
-// FieldInput.vue's own comment on `:id` forwarding, consistently label-associated in the first
-// place), so it can't stand in here. Scope by the `.field` container that has the matching label
-// text instead -- one locator strategy that works for every interface here.
+// every call site scopes a further sub-query off it — `.locator('input')`, `.locator('.ProseMirror')`,
+// `.getByRole('combobox')`, `.getByText(...)` for chip/row lookups, or `.getByRole('button')` — and
+// those differ per interface. `getByLabel()` resolves straight to the labelled control or trigger
+// itself, which is not a uniform container shape across interfaces (nor, per FieldInput.vue's own
+// comment on `:id` forwarding, consistently label-associated in the first place), so it can't stand
+// in here. Scope by the `.field` container that has the matching label text instead — one locator
+// strategy that works for every interface here.
 function fieldByLabel(page: Page, label: string) {
   return page.locator('.field', { has: page.getByText(labelMatch(label)) })
 }
@@ -53,12 +53,15 @@ function fieldByLabel(page: Page, label: string) {
 // Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>. Two independent gates keep
 // an inactive locale's fields out of the DOM: reka's TabsContent unmounts its own slot content
 // when not the active panel (TabsRoot's `unmountOnHide` defaults to true), and ItemForm.vue's own
-// `v-if="loc.code === activeLocale"` wraps the Field markup inside that slot as a second, redundant
-// gate. The TabsContent element itself is still force-mounted for every locale (with `hidden` set),
-// but it renders no content for the inactive one -- confirmed by ItemForm.test.ts, which asserts
-// exactly one translatable `.field-input` (the active locale's) both before and after switching
-// tabs. Plain fieldByLabel() above would therefore already resolve to a single match; scoping to
-// `:visible` here only becomes load-bearing if both gates were removed at once.
+// `v-if="loc.code === activeLocale"` wraps the Field markup inside that slot as a second,
+// belt-and-braces gate — not redundant with it: reka's gate settles one microtask later than the
+// `v-if` does (ItemForm.test.ts documents needing a flush for it), while the `v-if` flips in the
+// same render tick, so it closes that transient window. The TabsContent element itself is still
+// force-mounted for every locale (with `hidden` set), but it renders no content for the inactive
+// one — confirmed by ItemForm.test.ts, which asserts exactly one translatable `.field-input` (the
+// active locale's) both before and after switching tabs. Plain fieldByLabel() above would therefore
+// already resolve to a single match; scoping to `:visible` here only becomes load-bearing if both
+// gates were removed at once.
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
 }

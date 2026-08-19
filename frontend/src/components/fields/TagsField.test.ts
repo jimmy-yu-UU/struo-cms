@@ -69,9 +69,9 @@ describe('TagsField', () => {
     expect(w.get('.tag-remove').attributes('aria-label')).toBe('Delete')
   })
 
-  // A bare component-absence check also passes for a hand-rolled <input>, so
-  // assert the vendored composition's real data-slot hook positively too: both cells of a row, and
-  // both buttons (remove and add), not just the first one found.
+  // A bare component-absence check also passes for a hand-rolled <input>, so assert the vendored
+  // composition's real data-slot hook directly: both cells of a row, and both buttons (remove and
+  // add), not just the first one found.
   it('renders the vendored input and button data-slot hooks throughout the row', () => {
     const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a' }] }, ...opts })
     expect(w.findAll('[data-slot="input"]')).toHaveLength(2)

@@ -63,9 +63,10 @@ internal static class FileFieldResolvers
     /// <summary>
     /// Manual GreenDonut <see cref="BatchDataLoader{TKey,TValue}"/> — constructed ad-hoc per request
     /// by HotChocolate (<c>ctx.DataLoader&lt;T&gt;()</c>); no DI registration is required for a
-    /// manually-written subclass (verified against the installed HotChocolate/GreenDonut 16.4.0 —
-    /// the inline registration-free <c>ctx.BatchDataLoader&lt;TKey,TValue&gt;(fetch)</c> helper from
-    /// v13-15 was removed in v15; v16's replacement is this class shape + <c>ctx.DataLoader&lt;T&gt;()</c>).
+    /// manually-written subclass (verified against HotChocolate/GreenDonut 16.4.0; not re-verified
+    /// against the currently pinned 16.6.0 — the inline registration-free
+    /// <c>ctx.BatchDataLoader&lt;TKey,TValue&gt;(fetch)</c> helper from v13-15 was removed in v15; v16's
+    /// replacement is this class shape + <c>ctx.DataLoader&lt;T&gt;()</c>).
     /// One batched <see cref="IGraphQlDataSource.QueryAsync"/>("file", id _in keys) call per request
     /// for the common case; ids absent from the result are simply omitted from the batch's returned
     /// dictionary, which GreenDonut surfaces as a null <c>LoadAsync</c> result (no throw).
