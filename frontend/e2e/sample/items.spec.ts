@@ -26,15 +26,15 @@ function labelMatch(label: string): RegExp {
 }
 
 // ItemForm.vue renders each editable field inside a `.field` wrapper with a
-// plain (unlinked — no `for`/`id` pair on the rendered PrimeVue control)
-// `<label>`, so `getByLabel()` cannot resolve these controls. Scope by the
-// `.field` container that has the matching label text instead.
+// plain (unlinked — no `for`/`id` pair on the rendered control) `<label>`,
+// so `getByLabel()` cannot resolve these controls. Scope by the `.field`
+// container that has the matching label text instead.
 function fieldByLabel(page: Page, label: string) {
   return page.locator('.field', { has: page.getByText(labelMatch(label)) })
 }
 
 // Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>, which
-// is NOT `lazy` — PrimeVue keeps every <TabPanel> mounted and only toggles
+// is NOT `lazy` — every <TabPanel> stays mounted and only toggles
 // `display:none` on the inactive ones. With two seeded locales (en + zh-TW),
 // both panels' "Title"/"Body" `.field` wrappers exist in the DOM at once, so
 // the plain fieldByLabel() above resolves to 2 elements (strict-mode
@@ -46,10 +46,9 @@ function translatableFieldByLabel(page: Page, label: string) {
 }
 
 // Article.Status is [CmsField(Interface = FieldInterface.Select)] with
-// CmsOptions("draft:Draft", "published:Published") -> FieldInput renders a
-// PrimeVue <Select> (a role="combobox" trigger + role="listbox"/"option"
-// overlay), NOT a text input, so it cannot be `.fill()`ed. Click the trigger,
-// then click the option by its visible label.
+// CmsOptions("draft:Draft", "published:Published") -> FieldInput renders SelectField.vue's
+// ui/select (a role="combobox" trigger + role="listbox"/"option" overlay), NOT a text input, so
+// it cannot be `.fill()`ed. Click the trigger, then click the option by its visible label.
 async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
   const field = fieldByLabel(page, 'Status')
   await field.getByRole('combobox').click()

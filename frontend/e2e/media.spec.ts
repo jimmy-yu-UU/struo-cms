@@ -62,7 +62,7 @@ async function uploadOne(page: Page, fileName: string): Promise<string> {
   // the caller's assignment can't orphan the uploaded file in the shared dev store. (Review nit.)
   uploadedFileId = id
 
-  // Close the dialog (dismissableMask + closeOnEscape are both PrimeVue Dialog defaults here).
+  // Close the dialog (reka-ui's DialogRoot closes on Escape by default).
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog', { name: 'Upload files' })).toHaveCount(0)
   return id
