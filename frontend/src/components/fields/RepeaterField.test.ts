@@ -132,10 +132,9 @@ describe('RepeaterField', () => {
     expect(downs[2].attributes('disabled')).toBe('')
   })
 
-  // A negative assertion alone (no PrimeVue markup) also passes for a hand-rolled control, so
-  // assert the vendored button's real data-slot hook positively too. Per-hook (not a raw total
-  // count) so this cannot be coupled to how many buttons a sub-field's own component happens to
-  // render internally.
+  // A bare presence check also passes for a hand-rolled control, so assert the vendored button's
+  // real data-slot hook instead. Per-hook (not a raw total count) so this cannot be coupled to how
+  // many buttons a sub-field's own component happens to render internally.
   it('renders the vendored button data-slot hook on every control', () => {
     const w = mount(RepeaterField, { props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }] }, ...opts })
     for (const hook of ['.repeater-up', '.repeater-down', '.repeater-remove']) {
@@ -144,7 +143,6 @@ describe('RepeaterField', () => {
       els.forEach((el) => expect(el.attributes('data-slot')).toBe('button'))
     }
     expect(w.get('.repeater-add').attributes('data-slot')).toBe('button')
-    expect(w.find('.p-button').exists()).toBe(false)
   })
 
   // Mounted with a non-empty model so the row buttons actually exist — a disabled assertion over

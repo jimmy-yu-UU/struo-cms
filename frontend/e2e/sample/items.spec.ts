@@ -17,39 +17,45 @@ async function login(page: Page): Promise<void> {
 }
 
 // Required fields render their label with a trailing `*` and NO separating
-// space (ItemForm.vue appends `<span class="req">*</span>`), so a required
-// field's label text is e.g. "Title*". Match the label anchored with an
-// optional trailing `*` — anchoring keeps "Title" from also matching the
+// space (ItemForm.vue appends `<span class="text-destructive ml-0.5">*</span>` — `ml-0.5` is a
+// margin, not a whitespace character, so the label's accessible text is still "Title*"). Match the
+// label anchored with an optional trailing `*` — anchoring keeps "Title" from also matching the
 // distinct "SEO Title" field.
 function labelMatch(label: string): RegExp {
   return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*?$`)
 }
 
-// ItemForm.vue renders each editable field inside a `.field` wrapper with a
-// plain (unlinked — no `for`/`id` pair on the rendered PrimeVue control)
-// `<label>`, so `getByLabel()` cannot resolve these controls. Scope by the
-// `.field` container that has the matching label text instead.
+// fieldByLabel()/translatableFieldByLabel() return the `.field` wrapper, not a control, because
+// every call site scopes a further sub-query off it — `.locator('input')`, `.locator('.ProseMirror')`,
+// or `.getByRole('combobox')` — and those differ per interface. `getByLabel()` resolves straight to
+// the labelled control or trigger itself, which is not a uniform container shape across interfaces
+// (nor, per FieldInput.vue's own comment on `:id` forwarding, consistently label-associated in the
+// first place), so it can't stand in here. Scope by the `.field` container that has the matching
+// label text instead — one locator strategy that works for every interface here.
 function fieldByLabel(page: Page, label: string) {
   return page.locator('.field', { has: page.getByText(labelMatch(label)) })
 }
 
-// Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>, which
-// is NOT `lazy` — PrimeVue keeps every <TabPanel> mounted and only toggles
-// `display:none` on the inactive ones. With two seeded locales (en + zh-TW),
-// both panels' "Title"/"Body" `.field` wrappers exist in the DOM at once, so
-// the plain fieldByLabel() above resolves to 2 elements (strict-mode
-// violation). Scope to `:visible` so only the active (default-locale) tab's
-// field matches — the inactive panel's `.field` is excluded because it (and
-// its descendants) are `display:none`.
+// Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>. Two independent gates keep
+// an inactive locale's fields out of the DOM: reka's TabsContent unmounts its own slot content
+// when not the active panel (TabsRoot's `unmountOnHide` defaults to true), and ItemForm.vue's own
+// `v-if="loc.code === activeLocale"` wraps the Field markup inside that slot as a second,
+// belt-and-braces gate — not redundant with it: reka's gate settles one microtask later than the
+// `v-if` does (ItemForm.test.ts documents needing a flush for it), while the `v-if` flips in the
+// same render tick, so it closes that transient window. The TabsContent element itself is still
+// force-mounted for every locale (with `hidden` set), but it renders no content for the inactive
+// one — confirmed by ItemForm.test.ts, which asserts exactly one translatable `.field-input` (the
+// active locale's) both before and after switching tabs. Plain fieldByLabel() above would therefore
+// already resolve to a single match; scoping to `:visible` here only becomes load-bearing if both
+// gates were removed at once.
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
 }
 
 // Article.Status is [CmsField(Interface = FieldInterface.Select)] with
-// CmsOptions("draft:Draft", "published:Published") -> FieldInput renders a
-// PrimeVue <Select> (a role="combobox" trigger + role="listbox"/"option"
-// overlay), NOT a text input, so it cannot be `.fill()`ed. Click the trigger,
-// then click the option by its visible label.
+// CmsOptions("draft:Draft", "published:Published") -> FieldInput renders SelectField.vue's
+// ui/select (a role="combobox" trigger + role="listbox"/"option" overlay), NOT a text input, so
+// it cannot be `.fill()`ed. Click the trigger, then click the option by its visible label.
 async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
   const field = fieldByLabel(page, 'Status')
   await field.getByRole('combobox').click()

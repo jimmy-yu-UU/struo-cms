@@ -40,14 +40,6 @@ describe('FilesField', () => {
     vi.restoreAllMocks()
   })
 
-  it('no longer renders PrimeVue OrderList', async () => {
-    setupStores()
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [f1, f2], total: 2 })
-    const w = mount(FilesField, { props: { field: field({ interface: 'files' }), modelValue: ['f1', 'f2'] }, global: { plugins: [i18n], stubs } })
-    await flushPromises()
-    expect(w.findComponent({ name: 'OrderList' }).exists()).toBe(false)
-  })
-
   it('resolves the model ids in order on mount', async () => {
     setupStores()
     // Return out of model order to prove the component re-orders to the model.

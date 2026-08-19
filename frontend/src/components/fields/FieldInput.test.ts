@@ -31,7 +31,7 @@ const stubs = {
 }
 
 describe('FieldInput', () => {
-  it('renders InputText for text interface', () => {
+  it('renders the text field for the text interface', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-text').exists()).toBe(true)
   })

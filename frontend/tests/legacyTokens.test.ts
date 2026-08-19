@@ -31,7 +31,7 @@ describe('legacy token collision', () => {
     expect(offenders.map((f) => f.replace(SRC, ''))).toEqual([])
   })
 
-  it('theme.css no longer declares any colliding name', () => {
+  it('theme.css declares no colliding name', () => {
     const css = readFileSync(join(SRC, 'assets/theme.css'), 'utf8')
     for (const name of [...RENAMED, ...SURRENDERED]) {
       expect(css, `theme.css still declares --${name}`).not.toMatch(new RegExp(`^\\s*--${name}:`, 'm'))

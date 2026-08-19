@@ -72,8 +72,8 @@ const errors = ref<Record<string, string>>({})
 const serverError = ref('')
 const loading = ref(true)
 const submitting = ref(false)
-// ui/button has no `loading` prop (unlike the PrimeVue Button it replaces), so the in-flight
-// Save state is surfaced through this label swap plus :disabled="submitting" on the button below.
+// ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
+// swap plus :disabled="submitting" on the button below.
 const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
 const notFound = ref(false)
 const conflict = ref(false)

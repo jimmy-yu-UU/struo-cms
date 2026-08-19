@@ -247,7 +247,7 @@ describe('MediaDetailDialog', () => {
     expect(w.findAll('input[data-slot="input"]')[0].attributes('disabled')).toBeFalsy()
   })
 
-  it('renders the vendored dialog and inputs, not PrimeVue ones', async () => {
+  it('renders the vendored dialog and inputs', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     // MediaLibraryView mounts this dialog unconditionally with :file="selected", and `selected`
     // starts null -- taking that same null-then-real transition here (instead of a prop that is
@@ -260,7 +260,6 @@ describe('MediaDetailDialog', () => {
     // Title, Alt and the read-only File URL.
     const inputs = () => w.findAll('[data-slot="input"]')
     expect(inputs()).toHaveLength(3)
-    expect(w.findComponent({ name: 'SelectButton' }).exists()).toBe(false)
     const fileUrlInput = () => inputs()[2].element as HTMLInputElement
     expect(fileUrlInput().value).toContain('f1')
     expect(inputs()[2].attributes('readonly')).toBe('')
@@ -391,13 +390,13 @@ describe('MediaDetailDialog', () => {
     }))
   })
 
-  it('mounts no ConfirmDialog of its own', async () => {
+  it('mounts no local confirmation dialog', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    // A local ConfirmDialog nested inside MediaLibraryView's own would fire one confirmation
+    // A local AlertDialog nested inside this dialog would fire one confirmation
     // twice; AppShell's store-backed ConfirmHost is the only confirmation surface in the app.
-    expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
+    expect(w.findComponent({ name: 'AlertDialog' }).exists()).toBe(false)
   })
 
   it('does not render an "open in full editor" link: no such button, no vue-router import', async () => {

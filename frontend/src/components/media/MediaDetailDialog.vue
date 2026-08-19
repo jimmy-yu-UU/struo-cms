@@ -76,8 +76,8 @@ function onLocaleToggle(value: unknown): void {
   if (typeof value === 'string' && value.length > 0) activeLocale.value = value
 }
 
-// ui/button has no `loading` prop (unlike the PrimeVue Button it replaces), so the in-flight save
-// state is surfaced through this label swap plus :disabled on the button.
+// ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
+// swap plus :disabled on the button.
 const saveLabel = computed(() => (saving.value ? t('media.saving') : t('media.save')))
 
 async function load(): Promise<void> {

@@ -24,8 +24,7 @@ function onInput(e: Event): void {
         class="pointer-events-none absolute left-3 size-4 text-muted-foreground"
         aria-hidden="true"
       />
-      <!-- pl-9 clears the absolutely-positioned icon. The vendored Input is already w-full, so
-           the old `.iwrap :deep(input) { width: 100% }` rule this replaces is gone, not ported. -->
+      <!-- pl-9 clears the absolutely-positioned icon. The vendored Input is already w-full. -->
       <Input
         type="search"
         :model-value="searchValue"

@@ -21,7 +21,7 @@ function mountDialog(props: { visible: boolean; header: string; initialName?: st
 }
 
 describe('MediaFolderNameDialog', () => {
-  it('renders the vendored dialog and input, not PrimeVue ones', () => {
+  it('renders the vendored dialog and input', () => {
     const w = mountDialog({ visible: true, header: 'New folder' })
     expect(w.find('[data-slot="dialog-content"]').exists()).toBe(true)
     expect(w.find('[data-slot="input"]').exists()).toBe(true)

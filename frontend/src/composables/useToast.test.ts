@@ -10,7 +10,7 @@ import { useToast } from './useToast'
 describe('useToast', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('routes each PrimeVue severity to its sonner counterpart', () => {
+  it('routes each severity to its sonner counterpart', () => {
     const toast = useToast()
     toast.add({ severity: 'success', summary: 'Saved' })
     toast.add({ severity: 'info', summary: 'Note' })

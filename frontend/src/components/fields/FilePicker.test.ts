@@ -216,7 +216,7 @@ describe('FilePicker', () => {
   describe('folder filter', () => {
     type Vm = { openDialog: () => Promise<void>; onFolderChange: (s: string | null) => void; loadOptions: () => Promise<void>; files: unknown[]; folders: unknown[] }
 
-    it('takes a plain folder key, not PrimeVue TreeSelect\'s keyed object', async () => {
+    it('takes a plain folder key', async () => {
       setupStores()
       mockList()
       const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })

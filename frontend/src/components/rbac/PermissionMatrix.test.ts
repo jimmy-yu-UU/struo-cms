@@ -53,7 +53,7 @@ describe('PermissionMatrix', () => {
     expect(rbacApi.getRolePermissions).toHaveBeenCalledWith('r1')
   })
 
-  it('renders vendored checkboxes, not PrimeVue ones', async () => {
+  it('renders one vendored checkbox per collection-permission cell', async () => {
     seedSchema()
     const w = mountMatrix()
     await flushPromises()
