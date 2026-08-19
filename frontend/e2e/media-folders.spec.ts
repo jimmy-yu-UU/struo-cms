@@ -259,10 +259,10 @@ test('media folders: create, upload with title autofill, a folder-untouched save
 
   const rejectedStatus = await attemptDeleteFolder(page, folderName)
   expect(rejectedStatus).toBe(409)
-  // useToast() (see composables/useToast.ts) bridges to vue-sonner, not PrimeVue's <Toast>: the
-  // visible toast is a plain styled <li> with no role, and sonner's accessibility announcement is
-  // a separate off-screen `<section aria-live="polite">` -- neither carries role="alert", so this
-  // must match on visible text rather than the alert role.
+  // useToast() (see composables/useToast.ts) bridges to vue-sonner: the visible toast is a plain
+  // styled <li> with no role, and sonner's accessibility announcement is a separate off-screen
+  // `<section aria-live="polite">` -- neither carries role="alert", so this must match on visible
+  // text rather than the alert role.
   await expect(page.getByText('Folder is not empty', { exact: false })).toBeVisible()
   await expect(folderCard(page, folderName)).toBeVisible()
 

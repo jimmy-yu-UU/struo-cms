@@ -40,15 +40,15 @@ function labelMatch(label: string): RegExp {
 
 // ItemForm.vue renders each editable field (shared, translatable, AND
 // relation) inside a `.field` wrapper with a plain (unlinked — no `for`/`id`
-// pair on the rendered PrimeVue control) `<label>`, so `getByLabel()` cannot
-// resolve these controls. Scope by the `.field` container that has the
-// matching label text instead.
+// pair on the rendered control) `<label>`, so `getByLabel()` cannot resolve
+// these controls. Scope by the `.field` container that has the matching
+// label text instead.
 function fieldByLabel(page: Page, label: string) {
   return page.locator('.field', { has: page.getByText(labelMatch(label)) })
 }
 
 // Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>, which
-// is NOT `lazy` — PrimeVue keeps every <TabPanel> mounted and only toggles
+// is NOT `lazy` — every <TabPanel> stays mounted and only toggles
 // `display:none` on the inactive ones. With two seeded locales (en + zh-TW),
 // both panels' "Title"/"Body" `.field` wrappers exist in the DOM at once, so
 // the plain fieldByLabel() above resolves to 2 elements (strict-mode
