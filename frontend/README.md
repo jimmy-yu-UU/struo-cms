@@ -55,19 +55,15 @@ and what CI does and does not run.
 Some admin flows only exist on collections with `Revisions = true` — currently only the sample's
 `Article` (`samples/Struo.Sample.Blog/Article.cs`), since none of the seven core collections opts in.
 To exercise such a flow against this SPA (revision history, revert, etc.), opt the sample into the
-running API first, following [chapter 16](../docs/guide/en/16-sample-walkthrough.md)'s "Opting it in"
-exactly: add the `ProjectReference` from `src/Struo.Api/Struo.Api.csproj` to
-`samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj`, and set `Struo:ContentAssemblies` to
-`[ "Struo.Sample.Blog" ]` in the gitignored `src/Struo.Api/appsettings.Development.json`. Rebuild and
-start the API on `:5221` as usual (chapter 2), then `pnpm dev`
-here — no separate frontend configuration is needed.
+running API first, following [chapter 16](../docs/guide/en/16-sample-walkthrough.md)'s "Opting it in".
+Rebuild and start the API on `:5221` as usual (chapter 2), then `pnpm dev` here — no separate frontend
+configuration is needed.
 
-**This is a temporary, uncommitted opt-in — revert the `ProjectReference` as soon as you're done**, before
-committing anything else. `dotnet test`'s `Host_project_has_no_project_reference_into_samples`
+**This is a temporary, uncommitted opt-in — revert it as soon as you're done**, before committing
+anything else. `dotnet test`'s `Host_project_has_no_project_reference_into_samples`
 (`tests/Struo.Tests/Template/TemplateInvariantsTests.cs`) fails while the reference is in place — that is
 expected, not a regression to chase — and passes again once it's reverted; confirm `git status` shows no
-tracked diff at all before moving on (not just to `Struo.Api.csproj`) — the `Struo:ContentAssemblies`
-edit above belongs in the gitignored Development file precisely so it never shows up there. The host has
-no `ProjectReference` to the sample by default
-because it's an optional, detachable demo, not shipped capability — see the core/sample boundary in
-`AGENTS.md`.
+tracked diff at all before moving on (not just to `Struo.Api.csproj`) — chapter 16's
+`Struo:ContentAssemblies` edit belongs in the gitignored Development file precisely so it never shows up
+there. The host has no `ProjectReference` to the sample by default because it's an optional, detachable
+demo, not shipped capability — see the core/sample boundary in `AGENTS.md`.

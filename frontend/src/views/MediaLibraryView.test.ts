@@ -229,7 +229,7 @@ describe('MediaLibraryView', () => {
     expect((w.vm as unknown as { view: string }).view).toBe('grid')
   })
 
-  it('renders the migrated icons as distinct lucide icons in every slot the migration touched', async () => {
+  it('renders a distinct lucide icon in every icon-bearing control, never reusing one for two meanings', async () => {
     const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }], folders)
     const w = mountView()
@@ -753,8 +753,8 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     const folder: FolderRow = { id: 'd1', name: 'Alpha', parentId: null }
     await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(folder)
-    // ConfirmRequest carries severity at the top level, and ConfirmHost reads it to pick the destructive
-    // button variant.
+    // ConfirmRequest carries severity at the top level, and ConfirmHost reads it to pick the
+    // destructive button variant.
     expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
     expect(confirmRequire.mock.calls[0][0].group).toBeUndefined()
   })

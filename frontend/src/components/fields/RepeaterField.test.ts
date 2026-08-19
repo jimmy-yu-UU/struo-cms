@@ -133,9 +133,8 @@ describe('RepeaterField', () => {
   })
 
   // A bare presence check also passes for a hand-rolled control, so assert the vendored button's
-  // real data-slot hook instead. Per-hook (not a raw total
-  // count) so this cannot be coupled to how many buttons a sub-field's own component happens to
-  // render internally.
+  // real data-slot hook instead. Per-hook (not a raw total count) so this cannot be coupled to how
+  // many buttons a sub-field's own component happens to render internally.
   it('renders the vendored button data-slot hook on every control', () => {
     const w = mount(RepeaterField, { props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }] }, ...opts })
     for (const hook of ['.repeater-up', '.repeater-down', '.repeater-remove']) {

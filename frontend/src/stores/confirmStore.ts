@@ -17,7 +17,7 @@ type State = {
 
 // One dialog for the whole app: every caller shares this single pending request instead of each
 // component mounting its own <ConfirmDialog />, which would let a parent and child both fire the
-// same confirmation twice. Holding the single pending request here makes that structurally impossible.
+// same confirmation twice — sharing one request here makes that structurally impossible.
 export const useConfirmStore = defineStore('confirm', {
   state: (): State => ({ open: false, request: null, resolve: null, requestId: 0 }),
   actions: {

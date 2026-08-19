@@ -65,9 +65,10 @@
 - 一個 fork 在 `CreateBuilder` 回傳*之後*才加入的**自訂**設定提供者 (例如 secret manager 或
   key-vault 提供者)，必須在這次讀取之前註冊到 `builder.Configuration` 上，否則它裡面的
   `Struo:ContentAssemblies` 項目永遠不會被中介資料掃描看見。
-- 每一個具名的組件都必須真的能被解析——不論是 host 專案的 `ProjectReference` (在
-  `Struo.Api.csproj` 中)，或以其他方式存在為一個可載入的 DLL。無法解析的項目會讓啟動失敗，而不是
-  被靜默略過。
+- 每一個具名的組件都必須真的能透過 `Assembly.Load` 被解析，這代表它必須被登記在
+  `Struo.Api.deps.json` 中——實務上，就是 host 專案參照了它 (在 `Struo.Api.csproj` 中的一個
+  `ProjectReference`)。一個只是放在 `Struo.Api.dll` 旁邊、卻未被登記的 DLL 並不足夠。無法解析的
+  項目會讓啟動失敗，而不是被靜默略過。
 
 需要重新啟動 (依其設計，這本來就是一次啟動期掃描)。第 16 章會走過 Blog 範例具體的兩步驟選用啟用
 方式。

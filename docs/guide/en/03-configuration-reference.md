@@ -76,9 +76,10 @@ means:
 - A **custom** configuration provider a fork adds after `CreateBuilder` returns (for example, a secret
   manager or key-vault provider) must be registered on `builder.Configuration` *before* this read, or
   its `Struo:ContentAssemblies` entries will silently never be seen by the metadata scan.
-- Each named assembly must actually be resolvable — referenced by the host project (a `ProjectReference`
-  in `Struo.Api.csproj`) or otherwise present as a loadable DLL. An unresolvable entry fails startup
-  rather than being silently skipped.
+- Each named assembly must actually be resolvable via `Assembly.Load`, which means it must be registered
+  in `Struo.Api.deps.json` — in practice, that means the host project references it (a
+  `ProjectReference` in `Struo.Api.csproj`). A DLL merely sitting next to `Struo.Api.dll`, unregistered
+  there, is not enough. An unresolvable entry fails startup rather than being silently skipped.
 
 Restart required (this is a startup-time scan by construction). Chapter 16 walks through the concrete
 two-step opt-in for the Blog sample.

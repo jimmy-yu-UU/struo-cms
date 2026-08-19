@@ -178,9 +178,10 @@ scans exactly three sources of assemblies:
    resolved with `Assembly.Load(new AssemblyName(name))`; **an entry that can't be loaded fails startup**
    with a `MetadataException` naming the entry — it is never silently skipped.
 
-For a named assembly to load, it must actually be resolvable: either referenced by the host project (a
-`ProjectReference` in `src/Struo.Api/Struo.Api.csproj`) or otherwise present as a loadable DLL alongside
-the host. The shipped host has **no** `ProjectReference` to any content project, and
+For a named assembly to load, it must actually be resolvable via `Assembly.Load`, which means it must be
+registered in `Struo.Api.deps.json` — in practice, referenced by the host project (a `ProjectReference`
+in `src/Struo.Api/Struo.Api.csproj`). A DLL merely sitting next to `Struo.Api.dll`, unregistered there,
+will not load. The shipped host has **no** `ProjectReference` to any content project, and
 `Struo:ContentAssemblies` ships as `[]` — which is exactly why a fresh checkout has zero content
 collections (chapters 1–2).
 

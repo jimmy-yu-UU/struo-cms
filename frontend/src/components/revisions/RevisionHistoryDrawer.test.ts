@@ -255,8 +255,8 @@ describe('RevisionHistoryDrawer', () => {
     const w = mountDrawer()
     await flushPromises()
     const retryBtn = w.get('[data-test="rev-retry"]')
-    // Identity guard: type="button" and a forwarded data-test attribute are not distinctive — only the
-    // vendored component's own data-slot hook is.
+    // Identity guard: type="button" and a forwarded data-test attribute are not distinctive —
+    // only the vendored component's own data-slot hook is.
     expect(retryBtn.attributes('data-slot')).toBe('button')
     expect(retryBtn.attributes('data-variant')).toBe('ghost')
     expect(retryBtn.attributes('data-size')).toBe('sm')

@@ -105,9 +105,8 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
 
 // Click a collection link in the sidebar: a real <nav aria-label="Main navigation"> landmark
 // wraps the nav groups (no bare "the sidebar" element to select by tag/class), and collection
-// links render as plain buttons (SidebarNavItem). Groups mount expanded
-// by default (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh
-// mount.
+// links render as plain buttons (SidebarNavItem). Groups mount expanded by default (TheSidebar
+// isOpen = open[group] ?? true), so the leaf is always visible on a fresh mount.
 async function navSidebar(page: Page, label: string): Promise<void> {
   const sidebar = page.getByRole('navigation', { name: 'Main navigation' })
   const item = sidebar.getByRole('button', { name: label, exact: true })

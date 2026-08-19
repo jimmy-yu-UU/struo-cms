@@ -313,11 +313,10 @@ describe('field components (simple inputs)', () => {
 })
 
 describe('field components (choice + structural)', () => {
-  // The migration's own assertion: the vendored Select composition has no options prop (options
-  // are SelectItem children), so the only thing worth pinning is what the trigger actually shows.
-  // This is the inbound-direction assertion: mounting with a non-default incoming model and
-  // asserting the control reflects it, which proves the binding is real rather than just that
-  // something renders.
+  // The vendored Select composition has no options prop (options are SelectItem children), so the
+  // only thing worth pinning is what the trigger actually shows. This is the inbound-direction
+  // assertion: mounting with a non-default incoming model and asserting the control reflects it,
+  // which proves the binding is real rather than just that something renders.
   it('SelectField shows the current option label on the trigger', async () => {
     const w = mount(SelectField, {
       props: {
