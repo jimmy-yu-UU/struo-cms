@@ -63,11 +63,13 @@ public static class GraphQlServiceCollectionExtensions
             .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
             .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
             .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
-            // Static cost analysis is the alias-amplification defense — HotChocolate 16.4.0 has
-            // no dedicated alias/operation-count rule, but every aliased selection accrues its own
-            // field cost, so a request that repeats an expensive list field under N aliases costs ~N×
-            // and is rejected before any resolver (and thus any DB call) runs. This complements the
-            // max-execution-depth rule and the accepted-absent rate limiting.
+            // Static cost analysis is the alias-amplification defense. HotChocolate 16.6.0's
+            // validation rule set has no dedicated alias/operation-count rule (checked directly
+            // against the HotChocolate.Validation 16.6.0 assembly), so every aliased selection
+            // accrues its own field cost instead, and a request that repeats an expensive list field
+            // under N aliases costs ~N× and is rejected before any resolver (and thus any DB call)
+            // runs. This complements the max-execution-depth rule and the accepted-absent rate
+            // limiting.
             .AddCostAnalyzer()
             .ModifyCostOptions(o =>
             {
@@ -78,8 +80,9 @@ public static class GraphQlServiceCollectionExtensions
                 //   - a 50-alias `articles { items { id } }` amplification measures fieldCost = 550.
                 // 150 sits between them (~4.5x headroom over legitimate traffic, rejects the bomb at
                 // ~0.27x). The default 1000-tier would NOT catch a cheap-field alias bomb (550 < 1000),
-                // so it is deliberately lowered. Note the HotChocolate 16.4.0 default MaxFieldCost is
-                // 1000; this is the smallest round value that separates our observed legit/abuse costs.
+                // so it is deliberately lowered. HotChocolate 16.6.0's default MaxFieldCost is still
+                // 1000 (checked directly against the HotChocolate.CostAnalysis 16.6.0 assembly); this
+                // is the smallest round value that separates our observed legit/abuse costs.
                 o.MaxFieldCost = 150.0;
                 o.MaxTypeCost = 150.0;
             })

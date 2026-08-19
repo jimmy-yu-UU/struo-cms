@@ -111,39 +111,39 @@ core。不過，單純執行 `rm -rf samples/` 仍會破壞 solution 層級的 `
 
 後端:
 
-| 元件 | 版本 | 來源 |
+| 元件 | 詳情 | 來源 |
 |---|---|---|
-| .NET SDK | 10.0.0, `rollForward: latestMinor` | `global.json` |
+| .NET SDK | `rollForward: latestMinor` | `global.json` |
 | 目標 Framework | `net10.0` | `Directory.Build.props` |
 | C# 語言版本 | `latest` | `Directory.Build.props` |
 | Nullable 參考型別 | 啟用 | `Directory.Build.props` |
-| ORM | SqlSugarCore 5.1.4.215 | `Directory.Packages.props` |
+| ORM | SqlSugarCore | `Directory.Packages.props` |
 | 執行期資料庫 | PostgreSQL (`docker-compose.yml` 中的 `postgres:17-alpine`) | `docker-compose.yml` |
-| 僅測試用資料庫 | SQLite (`Microsoft.Data.Sqlite` 10.0.9) | `Directory.Packages.props` |
-| GraphQL | HotChocolate.AspNetCore 16.4.0 | `Directory.Packages.props` |
-| API 瀏覽工具 | Scalar.AspNetCore 2.16.5 (Mars 佈景主題、Axios client) | `Directory.Packages.props`, `Program.cs` |
-| 日誌 | Serilog.AspNetCore 10.0.0 + Serilog.Sinks.File 7.0.0 | `Directory.Packages.props` |
-| 密碼雜湊 | Isopoh.Cryptography.Argon2 2.0.0 (Argon2id) | `Directory.Packages.props` |
-| 物件儲存 (S3 後端) | AWSSDK.S3 4.0.25.3 | `Directory.Packages.props` |
-| 圖片轉換 | NetVips 3.2.0 / NetVips.Native 8.18.4 | `Directory.Packages.props` |
-| 富文本清理 | HtmlSanitizer 9.1.974 | `Directory.Packages.props` |
-| Session 存放 | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis 10.0.9 | `Directory.Packages.props` |
-| SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.9 | `Directory.Packages.props` |
-| 測試執行器 | xUnit 2.9.3 | `Directory.Packages.props` |
+| 僅測試用資料庫 | SQLite (`Microsoft.Data.Sqlite`) | `Directory.Packages.props` |
+| GraphQL | HotChocolate.AspNetCore | `Directory.Packages.props` |
+| API 瀏覽工具 | Scalar.AspNetCore (Mars 佈景主題、Axios client) | `Directory.Packages.props`, `Program.cs` |
+| 日誌 | Serilog.AspNetCore + Serilog.Sinks.File | `Directory.Packages.props` |
+| 密碼雜湊 | Isopoh.Cryptography.Argon2 (Argon2id) | `Directory.Packages.props` |
+| 物件儲存 (S3 後端) | AWSSDK.S3 | `Directory.Packages.props` |
+| 圖片轉換 | NetVips / NetVips.Native | `Directory.Packages.props` |
+| 富文本清理 | HtmlSanitizer | `Directory.Packages.props` |
+| Session 存放 | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis | `Directory.Packages.props` |
+| SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect | `Directory.Packages.props` |
+| 測試執行器 | xUnit | `Directory.Packages.props` |
 
-前端 (版本以 `frontend/package.json` 所宣告者為準;caret 範圍依提交的 lockfile 解析):
+前端 (確切版本請見 `frontend/package.json`;caret 範圍依提交的 lockfile 解析):
 
-| 元件 | 版本 | 來源 |
+| 元件 | 詳情 | 來源 |
 |---|---|---|
-| Vue | ^3.5.39 | `frontend/package.json` |
-| UI 元件庫 | Tailwind CSS ^4.3.3 + shadcn-vue 的供應商元件 (reka-ui ^2.10.3;toast 用 vue-sonner ^2.0.9) | `frontend/package.json` |
-| 富文本編輯器 | TipTap ^3.27.1 (starter-kit + extensions) | `frontend/package.json` |
-| 狀態管理 | Pinia ^3.0.4 | `frontend/package.json` |
-| 路由 | vue-router ^5.1.0 | `frontend/package.json` |
-| 國際化 | vue-i18n ^11.4.6 | `frontend/package.json` |
-| 建置工具 | Vite ^8.1.1 | `frontend/package.json` |
-| 程式語言 | TypeScript ~6.0.2 | `frontend/package.json` |
-| E2E 測試 | Playwright ^1.61.1 | `frontend/package.json` |
+| Vue | — | `frontend/package.json` |
+| UI 元件庫 | Tailwind CSS + shadcn-vue 的供應商元件 (reka-ui;toast 用 vue-sonner) | `frontend/package.json` |
+| 富文本編輯器 | TipTap (starter-kit + extensions) | `frontend/package.json` |
+| 狀態管理 | Pinia | `frontend/package.json` |
+| 路由 | vue-router | `frontend/package.json` |
+| 國際化 | vue-i18n | `frontend/package.json` |
+| 建置工具 | Vite | `frontend/package.json` |
+| 程式語言 | TypeScript | `frontend/package.json` |
+| E2E 測試 | Playwright | `frontend/package.json` |
 
 CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、Node.js `24`、pnpm `10`。
 

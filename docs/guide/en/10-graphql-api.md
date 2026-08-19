@@ -376,9 +376,11 @@ Three independent limits apply, all configured in `AddStruoGraphQl`:
   selection tree nests more than 12 levels deep is rejected before any resolver runs, introspection
   exempted.
 - **Cost analysis** — `.AddCostAnalyzer()` with `MaxFieldCost = 150.0` / `MaxTypeCost = 150.0`: the
-  alias-amplification defense — HotChocolate 16.4.0 has no dedicated alias/operation-count rule, but
-  every aliased selection accrues its own field cost, so repeating an expensive list field under many
-  aliases costs roughly proportionally and is rejected the same way. Calibrated against the project's
+  alias-amplification defense. HotChocolate 16.6.0's validation rule set has no dedicated
+  alias/operation-count rule (checked directly against the `HotChocolate.Validation` 16.6.0 assembly),
+  so cost analysis carries this defense instead — every aliased selection accrues its own field cost,
+  so repeating an expensive list field under many aliases costs roughly proportionally and is rejected
+  the same way. Calibrated against the project's
   own GraphQL test suite: the heaviest legitimate query measured `fieldCost = 33`; a 50-alias
   amplification measured `fieldCost = 550`; `150` sits between the two.
 - **Relation-path depth** — chapter 8's 6-hop cap on a dotted relation path applies unchanged here,
