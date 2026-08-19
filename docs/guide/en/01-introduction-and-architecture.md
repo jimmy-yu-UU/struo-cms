@@ -118,40 +118,40 @@ above), though — see chapter 16's removal checklist for the full, safe procedu
 
 Backend:
 
-| Component | Version | Source |
+| Component | Detail | Source |
 |---|---|---|
-| .NET SDK | 10.0.0, `rollForward: latestMinor` | `global.json` |
+| .NET SDK | `rollForward: latestMinor` | `global.json` |
 | Target framework | `net10.0` | `Directory.Build.props` |
 | C# language version | `latest` | `Directory.Build.props` |
 | Nullable reference types | enabled | `Directory.Build.props` |
-| ORM | SqlSugarCore 5.1.4.215 | `Directory.Packages.props` |
+| ORM | SqlSugarCore | `Directory.Packages.props` |
 | Runtime database | PostgreSQL (`postgres:17-alpine` in `docker-compose.yml`) | `docker-compose.yml` |
-| Test-only database | SQLite (`Microsoft.Data.Sqlite` 10.0.9) | `Directory.Packages.props` |
-| GraphQL | HotChocolate.AspNetCore 16.4.0 | `Directory.Packages.props` |
-| API explorer | Scalar.AspNetCore 2.16.5 (Mars theme, Axios client) | `Directory.Packages.props`, `Program.cs` |
-| Logging | Serilog.AspNetCore 10.0.0 + Serilog.Sinks.File 7.0.0 | `Directory.Packages.props` |
-| Password hashing | Isopoh.Cryptography.Argon2 2.0.0 (Argon2id) | `Directory.Packages.props` |
-| Object storage (S3 backend) | AWSSDK.S3 4.0.25.3 | `Directory.Packages.props` |
-| Image transforms | NetVips 3.2.0 / NetVips.Native 8.18.4 | `Directory.Packages.props` |
-| Rich-text sanitization | HtmlSanitizer 9.1.974 | `Directory.Packages.props` |
-| Session store | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis 10.0.9 | `Directory.Packages.props` |
-| SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect 10.0.9 | `Directory.Packages.props` |
-| Test runner | xUnit 2.9.3 | `Directory.Packages.props` |
+| Test-only database | SQLite (`Microsoft.Data.Sqlite`) | `Directory.Packages.props` |
+| GraphQL | HotChocolate.AspNetCore | `Directory.Packages.props` |
+| API explorer | Scalar.AspNetCore (Mars theme, Axios client) | `Directory.Packages.props`, `Program.cs` |
+| Logging | Serilog.AspNetCore + Serilog.Sinks.File | `Directory.Packages.props` |
+| Password hashing | Isopoh.Cryptography.Argon2 (Argon2id) | `Directory.Packages.props` |
+| Object storage (S3 backend) | AWSSDK.S3 | `Directory.Packages.props` |
+| Image transforms | NetVips / NetVips.Native | `Directory.Packages.props` |
+| Rich-text sanitization | HtmlSanitizer | `Directory.Packages.props` |
+| Session store | Redis, via Microsoft.Extensions.Caching.StackExchangeRedis | `Directory.Packages.props` |
+| SSO | Microsoft.AspNetCore.Authentication.OpenIdConnect | `Directory.Packages.props` |
+| Test runner | xUnit | `Directory.Packages.props` |
 
-Frontend (versions as declared in `frontend/package.json`; caret ranges resolve via the committed
+Frontend (see `frontend/package.json` for exact versions; caret ranges resolve via the committed
 lockfile):
 
-| Component | Version | Source |
+| Component | Detail | Source |
 |---|---|---|
-| Vue | ^3.5.39 | `frontend/package.json` |
-| UI library | Tailwind CSS ^4.3.3 + shadcn-vue's vendored components (reka-ui ^2.10.3; vue-sonner ^2.0.9 for toasts) | `frontend/package.json` |
-| Rich text editor | TipTap ^3.27.1 (starter-kit + extensions) | `frontend/package.json` |
-| State management | Pinia ^3.0.4 | `frontend/package.json` |
-| Router | vue-router ^5.1.0 | `frontend/package.json` |
-| Internationalization | vue-i18n ^11.4.6 | `frontend/package.json` |
-| Build tool | Vite ^8.1.1 | `frontend/package.json` |
-| Language | TypeScript ~6.0.2 | `frontend/package.json` |
-| E2E testing | Playwright ^1.61.1 | `frontend/package.json` |
+| Vue | — | `frontend/package.json` |
+| UI library | Tailwind CSS + shadcn-vue's vendored components (reka-ui; vue-sonner for toasts) | `frontend/package.json` |
+| Rich text editor | TipTap (starter-kit + extensions) | `frontend/package.json` |
+| State management | Pinia | `frontend/package.json` |
+| Router | vue-router | `frontend/package.json` |
+| Internationalization | vue-i18n | `frontend/package.json` |
+| Build tool | Vite | `frontend/package.json` |
+| Language | TypeScript | `frontend/package.json` |
+| E2E testing | Playwright | `frontend/package.json` |
 
 Toolchain versions pinned in CI (`.github/workflows/ci.yml`): .NET SDK `10.0.x`, Node.js `24`, pnpm
 `10`.

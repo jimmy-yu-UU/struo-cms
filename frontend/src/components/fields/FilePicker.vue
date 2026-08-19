@@ -139,8 +139,7 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
         Its own width class is an unprefixed max-w-lg (no sm: modifier, unlike plain DialogContent),
         so the override below re-supplies no modifier either — tailwind-merge keys on (modifier
         set, class group), and a bare max-w-lg only loses to another bare max-w-* class.
-        max-[960px]:max-w-[95vw] restores the old PrimeVue Dialog's `:breakpoints="{ '960px':
-        '95vw' }"`, which widened the dialog on medium viewports rather than keeping the 78vw cap.
+        max-[960px]:max-w-[95vw] widens the dialog on medium viewports rather than keeping the 78vw cap.
       -->
       <DialogScrollContent class="max-w-[min(78vw,1300px)] max-[960px]:max-w-[95vw]">
         <DialogHeader>

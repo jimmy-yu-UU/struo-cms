@@ -151,13 +151,12 @@ describe('RevisionHistoryDrawer', () => {
     expect(list).toHaveBeenCalledWith('article', '5')
   })
 
-  it('renders a vendored sheet, not a PrimeVue drawer', async () => {
+  it('renders a vendored sheet', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     const w = mountDrawer()
     await flushPromises()
     expect(w.find('[data-slot="sheet-content"]').exists()).toBe(true)
     expect(w.find('[data-slot="sheet-title"]').exists()).toBe(true)
-    expect(w.findComponent({ name: 'Drawer' }).exists()).toBe(false)
   })
 
   it('closes through the sheet\'s own open change', async () => {
@@ -233,13 +232,13 @@ describe('RevisionHistoryDrawer', () => {
     expect(w.emitted('reverted')).toBeTruthy()
   })
 
-  it('mounts no ConfirmDialog of its own', async () => {
+  it('mounts no local confirmation dialog', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     const w = mountDrawer()
     await flushPromises()
     // The store-backed host in AppShell is the only confirmation host in the app, so this
     // component must not mount its own.
-    expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
+    expect(w.findComponent({ name: 'AlertDialog' }).exists()).toBe(false)
   })
 
   it('types every button in the drawer', async () => {
@@ -256,9 +255,8 @@ describe('RevisionHistoryDrawer', () => {
     const w = mountDrawer()
     await flushPromises()
     const retryBtn = w.get('[data-test="rev-retry"]')
-    // Identity guard: PrimeVue's Button also renders `type="button"` and forwards a `data-test`
-    // attribute, so neither of those alone would catch a reverted import — only the vendored
-    // component's own `data-slot` hook does.
+    // Identity guard: type="button" and a forwarded data-test attribute are not distinctive —
+    // only the vendored component's own data-slot hook is.
     expect(retryBtn.attributes('data-slot')).toBe('button')
     expect(retryBtn.attributes('data-variant')).toBe('ghost')
     expect(retryBtn.attributes('data-size')).toBe('sm')

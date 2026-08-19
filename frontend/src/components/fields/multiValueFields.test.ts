@@ -39,9 +39,8 @@ describe('MultiSelectField', () => {
     expect(w.text()).not.toContain('Beta')
   })
 
-  it('renders the vendored combobox trigger, not PrimeVue MultiSelect', () => {
+  it('renders the vendored combobox trigger', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: [] }, ...comboOpts })
-    expect(w.findComponent({ name: 'MultiSelect' }).exists()).toBe(false)
     expect(w.find('[data-slot="combobox-trigger"]').exists()).toBe(true)
   })
 

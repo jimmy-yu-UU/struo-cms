@@ -9,7 +9,8 @@ namespace Struo.Tests.GraphQl;
 // A single operation must not be able to amplify DB load by repeating an expensive list
 // field under many aliases (there is no rate limiting in front of /graphql). The cost analyzer
 // (AddCostAnalyzer in GraphQlServiceCollectionExtensions) accrues field cost per alias and rejects
-// the operation before any resolver runs. HotChocolate 16.4.0 has no dedicated alias-count rule —
+// the operation before any resolver runs. HotChocolate 16.6.0's validation rule set has no dedicated
+// alias-count rule (checked directly against the HotChocolate.Validation 16.6.0 assembly) —
 // cost analysis IS the alias-amplification defense (each alias accrues its own field cost).
 [Collection("ApiIntegration")]
 public class GraphQlCostAnalysisTests(ApiFactory factory)

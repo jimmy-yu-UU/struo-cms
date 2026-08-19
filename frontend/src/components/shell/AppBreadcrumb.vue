@@ -25,7 +25,7 @@ const crumbs = computed(() =>
 
 // BreadcrumbLink renders an <a>. Its default navigation would cancel a router.push that is
 // suspended on the unsaved-changes leave guard — the user's "Yes" would then target an
-// already-aborted navigation. Same hazard the PrimeVue version guarded against.
+// already-aborted navigation.
 function go(event: Event, to: NonNullable<ReturnType<typeof buildBreadcrumb>[number]['to']>): void {
   event.preventDefault()
   router.push(to)

@@ -1,10 +1,17 @@
 /* StruoCMS's non-shadcn global layer: the page/surface/foreground, --warn/--danger status, and
    shadow/overlay/font custom properties that first-party scoped CSS reads, plus the html/body
    resets, the theme-transition rule below, and .app-breadcrumb. Every rule here is unlayered, so it
-   outranks any Tailwind utility applied to the same element regardless of specificity — .app-breadcrumb's
-   unlayered background/border/padding below is the one live example of this in the file: a bg-* or
-   p-* utility on that element does nothing. Loading after tokens.css only matters for settling
-   collisions against tokens.css's own unlayered declarations, not for outranking Tailwind.
+   outranks any Tailwind utility applied to the same element regardless of specificity — layer order
+   decides, not selector weight. For example: html { font-family } defeats the font-sans/font-serif/
+   font-mono utilities (not font-weight utilities, which font-family doesn't touch); body { margin: 0 }
+   defeats m-*; .app-breadcrumb's background/border/padding/margin-bottom defeat bg-*, border-*, p-*,
+   and mb-* on that element; and the universal transition rule below (*, *::before, *::after) defeats
+   transition-*, duration-*, and ease-* utilities on every element in the app — its transition
+   shorthand overwrites the whole transition-property list, so e.g. transition-all or
+   transition-transform is silently reduced to just background-color/border-color/color. This is not
+   an exhaustive list.
+   Loading after tokens.css only matters for settling collisions against tokens.css's own unlayered
+   declarations, not for outranking Tailwind.
    --surface-2 is declared in tokens.css, not here — see that file's comment on --surface-2
    (frontend/tests/legacyTokens.test.ts's header explains why only tokens.css may reference
    --muted). */

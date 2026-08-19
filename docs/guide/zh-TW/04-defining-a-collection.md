@@ -169,9 +169,10 @@ UI 可用)，而 `Tags` 通常不會設定，讓使用者能真正自由輸入�
    `Assembly.Load(new AssemblyName(name))` 解析;**任何無法載入的項目都會讓啟動失敗**，並擲出一個
    指名該項目的 `MetadataException`——絕不會被靜默略過。
 
-要讓一個具名的組件被載入，它必須真的能被解析:要嘛被 host 專案參照 (在
-`src/Struo.Api/Struo.Api.csproj` 中的一個 `ProjectReference`)，要嘛以其他方式，以一個可載入的 DLL
-存在於 host 旁邊。出貨的 host 對任何內容專案都**沒有** `ProjectReference`，而
+要讓一個具名的組件被載入，它必須真的能透過 `Assembly.Load` 被解析，這代表它必須被登記在
+`Struo.Api.deps.json` 中——實務上，就是被 host 專案參照 (在 `src/Struo.Api/Struo.Api.csproj` 中的一個
+`ProjectReference`)。一個只是放在 `Struo.Api.dll` 旁邊、未被登記的 DLL 並不會被載入。出貨的 host
+對任何內容專案都**沒有** `ProjectReference`，而
 `Struo:ContentAssemblies` 出貨時是 `[]`——這正是為什麼一份全新的 checkout 會有零個內容集合
 (第 1–2 章)。
 

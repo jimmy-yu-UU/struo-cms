@@ -105,9 +105,8 @@ async function createAndOpenCategory(page: Page, name: string): Promise<string> 
 
 // Click a collection link in the sidebar: a real <nav aria-label="Main navigation"> landmark
 // wraps the nav groups (no bare "the sidebar" element to select by tag/class), and collection
-// links render as plain buttons (SidebarNavItem), not a PrimeVue PanelMenu. Groups mount expanded
-// by default (TheSidebar isOpen = open[group] ?? true), so the leaf is always visible on a fresh
-// mount.
+// links render as plain buttons (SidebarNavItem). Groups mount expanded by default (TheSidebar
+// isOpen = open[group] ?? true), so the leaf is always visible on a fresh mount.
 async function navSidebar(page: Page, label: string): Promise<void> {
   const sidebar = page.getByRole('navigation', { name: 'Main navigation' })
   const item = sidebar.getByRole('button', { name: label, exact: true })
@@ -144,8 +143,7 @@ test('editing then navigating away prompts; reject stays and preserves edits, ac
 
   // Reject -> stay on the form, edit preserved, still the same article URL.
   // This dialog is ItemFormView's own guardLeave() confirm, which resolves through the local
-  // confirmStore/ConfirmHost — its Cancel button defaults to common.cancel ("Cancel"), not
-  // PrimeVue's "No".
+  // confirmStore/ConfirmHost — its Cancel button defaults to common.cancel ("Cancel").
   await page.getByRole('button', { name: 'Cancel' }).click()
   await expect(guardDialog(page)).toHaveCount(0)
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)

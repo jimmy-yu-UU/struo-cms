@@ -1,8 +1,8 @@
-// Maps a file's content type (with the filename as fallback) to a PrimeIcon glyph and a short,
-// human-readable label (e.g. "PDF", "PPTX") for non-previewable files. Replaces showing the raw
-// MIME string, which is long and ugly for Office/OOXML types. PrimeIcons 7 only ships dedicated
-// glyphs for PDF/Word/Excel; everything else uses the generic file/media icon, and the short label
-// carries the format identity.
+// Maps a file's content type (with the filename as fallback) to an icon token (the "pi-" prefix
+// dialect resolveIcon in lib/icons.ts accepts) and a short, human-readable label (e.g. "PDF",
+// "PPTX") for non-previewable files. Replaces showing the raw MIME string, which is long and ugly
+// for Office/OOXML types. PDF/Word/Excel/plain-text get a dedicated icon below; other types fall
+// back to the generic file or media icon, and the short label carries the format identity.
 
 export type FileTypeDisplay = { icon: string; label: string }
 

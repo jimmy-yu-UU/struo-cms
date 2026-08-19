@@ -60,9 +60,8 @@ describe('TagsField', () => {
     expect(w.emitted('update:modelValue')?.at(-1)).toStrictEqual([[{ value: 'a' }]])
   })
 
-  it('no longer renders PrimeVue controls', () => {
+  it('gives the icon-only remove control a resolved accessible name', () => {
     const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a' }] }, ...opts })
-    expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
     // The remove control must stay reachable by an accessible name, not just by class: it is an
     // icon-only button, and an icon-only button with no label is invisible to assistive tech.
     // Asserting the exact resolved string (not just truthy) catches an unresolved i18n key, which
@@ -70,9 +69,9 @@ describe('TagsField', () => {
     expect(w.get('.tag-remove').attributes('aria-label')).toBe('Delete')
   })
 
-  // A negative assertion alone (no PrimeVue component) also passes for a hand-rolled <input>, so
-  // assert the vendored composition's real data-slot hook positively too: both cells of a row, and
-  // both buttons (remove and add), not just the first one found.
+  // A bare component-absence check also passes for a hand-rolled <input>, so assert the vendored
+  // composition's real data-slot hook directly: both cells of a row, and both buttons (remove and
+  // add), not just the first one found.
   it('renders the vendored input and button data-slot hooks throughout the row', () => {
     const w = mount(TagsField, { props: { field: field({ interface: 'tags' }), modelValue: [{ value: 'a' }] }, ...opts })
     expect(w.findAll('[data-slot="input"]')).toHaveLength(2)

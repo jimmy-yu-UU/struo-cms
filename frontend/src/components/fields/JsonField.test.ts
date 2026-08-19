@@ -34,11 +34,10 @@ describe('JsonField', () => {
     expect(w.find('.json-error').exists()).toBe(true)
   })
 
-  it('marks the textarea invalid via aria, not a PrimeVue class', async () => {
+  it('marks the textarea invalid via aria and announces the error', async () => {
     const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } } })
     await w.get('textarea').setValue('{ not json')
     expect(w.get('textarea').attributes('aria-invalid')).toBe('true')
-    expect(w.find('.p-error').exists()).toBe(false)
     // The error must be announced, not just coloured — colour alone is not an accessible error signal.
     expect(w.get('.json-error').attributes('role')).toBe('alert')
   })
