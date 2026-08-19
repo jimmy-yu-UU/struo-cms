@@ -38,23 +38,25 @@ function labelMatch(label: string): RegExp {
   return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*?$`)
 }
 
-// ItemForm.vue renders each editable field (shared, translatable, AND
-// relation) inside a `.field` wrapper with a plain (unlinked — no `for`/`id`
-// pair on the rendered control) `<label>`, so `getByLabel()` cannot resolve
-// these controls. Scope by the `.field` container that has the matching
-// label text instead.
+// ItemForm.vue's FieldLabel does carry an explicit `for`/`id` pair — but per FieldInput.vue's own
+// comment on `:id` forwarding, that pairing only really associates when the field's rendered
+// component root IS the native control. Name (Text) qualifies and gets a real association; Status
+// (Select) and the relation fields (Category/Tags/Articles, via RelationPicker) do not — those
+// components' root is a wrapper, so the same `id` lands there and pairs with nothing.
+// `getByLabel()` would therefore work for some of the fields this spec touches but not others.
+// Scope by the `.field` container that has the matching label text instead — one locator strategy
+// that works for every interface here.
 function fieldByLabel(page: Page, label: string) {
   return page.locator('.field', { has: page.getByText(labelMatch(label)) })
 }
 
-// Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>, which
-// is NOT `lazy` — every <TabPanel> stays mounted and only toggles
-// `display:none` on the inactive ones. With two seeded locales (en + zh-TW),
-// both panels' "Title"/"Body" `.field` wrappers exist in the DOM at once, so
-// the plain fieldByLabel() above resolves to 2 elements (strict-mode
-// violation). Scope to `:visible` so only the active (default-locale) tab's
-// field matches — the inactive panel's `.field` is excluded because it (and
-// its descendants) are `display:none`.
+// Translatable fields (Title/Body) live inside ItemForm.vue's <Tabs>. Each locale's Field markup
+// is individually gated by `v-if="loc.code === activeLocale"` inside its TabsContent, so only the
+// active locale's Title/Body fields are ever mounted -- the inactive locale's panel renders
+// nothing (confirmed by ItemForm.test.ts, which asserts exactly one translatable `.field-input` --
+// the active locale's -- both before and after switching tabs). Plain fieldByLabel() above would
+// therefore already resolve to a single match; scoping to `:visible` here is a defensive safeguard
+// against that inner v-if changing, not what disambiguates today's DOM.
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
 }
