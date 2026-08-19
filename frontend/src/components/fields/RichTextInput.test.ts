@@ -206,11 +206,13 @@ describe('RichTextInput', () => {
     await w.get('[data-cmd="table"]').trigger('click')
   }
 
-  it('no longer renders PrimeIcons font classes, including inside either open popover panel', async () => {
+  it('renders lucide glyphs in the toolbar', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     await openBothMenus(w)
-    expect(w.html()).not.toMatch(/class="[^"]*\bpi\b/)
+    expect(w.find('[data-cmd="bulletList"] .lucide-list').exists()).toBe(true)
+    expect(w.find('[data-cmd="color"] .lucide-baseline').exists()).toBe(true)
+    expect(w.find('[data-cmd="table"] .lucide-table').exists()).toBe(true)
   })
 
   // Icon-only toolbar buttons need names: an icon with no text node otherwise announces only

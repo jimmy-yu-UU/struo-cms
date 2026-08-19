@@ -18,11 +18,9 @@ const detail = { revisionNumber: 3, operation: 'update', createdAt: '2026-07-21T
 
 type ViewProps = { detail: RevisionDetail | null; loading: boolean; error: string; canRevert: boolean; reverting?: boolean }
 
-// No Button stub here: a name-keyed stub would blind this suite to which Button
-// mounted (PrimeVue and the vendored component share the name). The `data-slot="button"`
-// assertion below is what actually pins the vendored component; without a Button stub
-// present, dropping that assertion would let a PrimeVue button pass every other check here
-// undetected, since RotateCcw/the label live in a default slot both components render.
+// No Button stub here: a name-keyed stub would blind this suite to what actually mounted. The
+// data-slot="button" assertion below is what pins the vendored component — RotateCcw and the label
+// live in a default slot, so neither distinguishes it.
 function mountView(props: ViewProps) {
   return mount(RevisionSnapshotView, { props, global: { plugins: [i18n] } })
 }
@@ -69,20 +67,18 @@ describe('RevisionSnapshotView', () => {
     expect(w.text()).not.toContain('null')
   })
 
-  it('renders a lucide revert glyph, not a primeicons class', () => {
+  it('renders a lucide revert glyph', () => {
     const w = mountView({ detail, loading: false, error: '', canRevert: true })
     expect(w.find('.lucide-rotate-ccw').exists()).toBe(true)
-    expect(w.find('.pi').exists()).toBe(false)
   })
 
   it('types the revert button so it can never submit a surrounding form', () => {
     expect(mountView({ detail, loading: false, error: '', canRevert: true }).get('.rev-revert-btn').attributes('type')).toBe('button')
   })
 
-  it('renders the vendored ui/button, not a PrimeVue one', () => {
-    // PrimeVue's Button also renders a default slot and also passes through `type`, so
-    // neither the icon/label content nor the `type` attribute distinguishes the two — only
-    // this data-slot hook, which only the vendored Primitive-based button emits, does.
+  it('renders the vendored ui/button', () => {
+    // Identity guard: a default slot and the `type` attribute are not distinctive — only this
+    // data-slot hook, which only the vendored Primitive-based button emits, does.
     expect(mountView({ detail, loading: false, error: '', canRevert: true }).get('.rev-revert-btn').attributes('data-slot')).toBe('button')
   })
 

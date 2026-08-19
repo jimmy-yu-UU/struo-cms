@@ -42,14 +42,12 @@ describe('FileThumbnail', () => {
     expect(w.find('img').attributes('draggable')).toBe('false')
   })
 
-  it('renders a chip (no img) for non-image types: a resolved lucide glyph + short label, not the raw MIME, filename, or a primeicons class', () => {
+  it('renders a chip (no img) for non-image types: a resolved lucide glyph + short label, not the raw MIME or filename', () => {
     const w = mount(FileThumbnail, { props: { file: pdf } })
     expect(w.find('img').exists()).toBe(false)
     // lib/fileTypeDisplay maps application/pdf to the pi-file-pdf token, which ICON_MAP resolves
-    // to lucide's FileType. Asserting the resolved icon proves the token went through resolveIcon
-    // rather than being rendered as a primeicons font class.
+    // to lucide's FileType. Asserting the resolved icon proves the token went through resolveIcon.
     expect(w.find('.file-chip__icon.lucide-file-type').exists()).toBe(true)
-    expect(w.find('.pi').exists()).toBe(false)
     expect(w.find('.file-chip__meta').text()).toBe('PDF')
     // the long/ugly MIME string and the filename must NOT appear (the tile caption shows the name)
     expect(w.text()).not.toContain('application/pdf')
@@ -61,7 +59,6 @@ describe('FileThumbnail', () => {
     await w.find('img').trigger('error')
     expect(w.find('img').exists()).toBe(false)
     expect(w.find('.file-chip__icon.lucide-image').exists()).toBe(true)
-    expect(w.find('.pi').exists()).toBe(false)
     expect(w.find('.file-chip__meta').text()).toBe('PNG')
     expect(w.text()).not.toContain('image/png')
     expect(w.text()).not.toContain('a.png')

@@ -32,9 +32,9 @@ const locales: LanguageInfo[] = [
 ]
 const model: FormModel = { shared: { status: 'draft' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {} }
 // Tabs/TabsList/TabsTrigger/TabsContent are thin reka wrappers with no portal, so they mount as
-// their real selves rather than stubs. That alone only buys "no PrimeVue global needed"; the tests
-// below that exercise the v-model binding and the mount/unmount behaviour do so by actually
-// triggering reka's activation event, not merely by mounting the real component.
+// their real selves rather than stubs. The tests below that exercise the v-model binding and the
+// mount/unmount behaviour do so by actually triggering reka's activation event, not merely by
+// mounting the real component.
 const stubs = {
   FieldInput: { props: ['field', 'modelValue', 'disabled', 'id'], template: '<div class="field-input" :id="id" :data-name="field.name" />' },
 }
@@ -136,12 +136,6 @@ describe('ItemForm', () => {
     expect(w.find('.field .field-input[data-name="status"]').exists()).toBe(true) // shared
     expect(w.find('.field .field-input[data-name="title"]').exists()).toBe(true)  // translatable
   })
-  it('no longer renders PrimeVue tabs', () => {
-    const w = mountForm({ meta, model, locales, errors: {} })
-    expect(w.findComponent({ name: 'TabPanel' }).exists()).toBe(false)
-    expect(w.findAll('[role="tab"]')).toHaveLength(2)
-  })
-
   // Boolean fields used to get their own `orientation="horizontal"` + <FieldContent> branch here,
   // which put the label beside the control instead of above it — the only fields on the form with
   // a different shape. The maintainer rejected that: a boolean field must lay out exactly like

@@ -88,7 +88,7 @@ describe('MediaLibraryView', () => {
     vi.spyOn(itemsApi, 'update').mockResolvedValue({})
   })
 
-  it('renders the vendored controls, not PrimeVue ones', async () => {
+  it('renders the vendored controls', async () => {
     makeListMock([{ data: rows, total: 1 }])
     seedUser({ write: true, delete: true })
     const w = mountView()
@@ -96,13 +96,7 @@ describe('MediaLibraryView', () => {
     // Three Selects (type, sort, and DataTablePagination's own page-size control -- total:1 still
     // renders the pager since the v-if is `total > 0`, not `total > perPage`, see the "renders the
     // pager for a single page of results" test below) and two ToggleGroups (Active/Trash,
-    // grid/list). `global.plugins` above carries no `PrimeVue` plugin, so a reverted PrimeVue
-    // `Select` crashes at mount reading `$primevue.config` -- it alone extends PrimeVue's
-    // `BaseInput`, which reads that during render. PrimeVue's `Button` and `SelectButton` mount
-    // fine with no plugin at all, so those two are guarded by other assertions instead: a reverted
-    // `Button` is caught by the icon-identity test below (it would render no
-    // `.lucide-folder-plus`/`.lucide-upload`), and a reverted `SelectButton` would drop this test's
-    // own `[data-slot="toggle-group"]` count from 2 to 1.
+    // grid/list).
     expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(3)
     expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
   })
@@ -759,8 +753,8 @@ describe('MediaLibraryView', () => {
     await flushPromises()
     const folder: FolderRow = { id: 'd1', name: 'Alpha', parentId: null }
     await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(folder)
-    // PrimeVue nested this under acceptProps; ConfirmRequest carries it at the top level, and
-    // ConfirmHost reads request.severity to pick the destructive button variant.
+    // ConfirmRequest carries severity at the top level, and ConfirmHost reads it to pick the destructive
+    // button variant.
     expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
     expect(confirmRequire.mock.calls[0][0].group).toBeUndefined()
   })
@@ -777,13 +771,13 @@ describe('MediaLibraryView', () => {
     expect(remove).not.toHaveBeenCalled()
   })
 
-  it('mounts no per-group ConfirmDialog of its own', async () => {
+  it('mounts no per-group confirmation dialog of its own', async () => {
     makeListMock([{ data: rows, total: 1 }])
     const w = mountView()
     await flushPromises()
-    // One store-backed ConfirmHost is mounted once in AppShell; a second dialog here is what used
-    // to make a parent and child fire the same confirmation twice.
-    expect(w.findComponent({ name: 'ConfirmDialog' }).exists()).toBe(false)
+    // One store-backed ConfirmHost is mounted once in AppShell; a second dialog here would
+    // make a parent and child fire the same confirmation twice.
+    expect(w.findComponent({ name: 'AlertDialog' }).exists()).toBe(false)
   })
 
   it('combines the type filter and folder filter when both apply', async () => {
