@@ -483,7 +483,7 @@ describe('ItemFormView', () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
-    // ui/button has no `loading` prop (unlike the PrimeVue Button this replaces), so the in-flight
+    // ui/button has no `loading` prop, so the in-flight
     // state has to be proven through `disabled` + a label swap instead — hold the update pending so
     // both the mid-flight and settled DOM states can be observed.
     let resolveUpdate!: (v: Record<string, unknown>) => void

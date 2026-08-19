@@ -160,8 +160,8 @@ describe('RelationPicker', () => {
     expect((w.vm as any).options[0].id).toBe('new')
   })
 
-  // show-clear was a PrimeVue Select prop; ui/select has no equivalent, so the ability to unset a
-  // relation only survives if we render the control ourselves.
+  // ui/select has no clear affordance of its own, so the ability to unset a relation only survives
+  // if we render the control ourselves.
   it('offers a clear control on the single-select branch', () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })

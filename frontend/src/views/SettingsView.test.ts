@@ -69,8 +69,8 @@ describe('SettingsView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-slot="input"]').exists()).toBe(true)
-    // data-slot is the real migration guard: PrimeVue's own Button also renders a plain
-    // type="button" <button>, so that attribute alone cannot distinguish the two.
+    // data-slot="button" is ui/button's own hook (its underlying reka Primitive renders it
+    // unconditionally), so this assertion is blind to the rendered text but not to the rendered element.
     expect(w.get('[data-test="save"]').attributes('data-slot')).toBe('button')
     expect(w.get('[data-test="save"]').attributes('type')).toBe('button')
   })

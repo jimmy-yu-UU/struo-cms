@@ -55,7 +55,6 @@ describe('KeyValueField', () => {
     const w = mount(KeyValueField, { props: { field: field({ interface: 'keyValue' }), modelValue: { a: '1' } }, ...zhOpts })
     expect(w.get('.kv-remove').attributes('aria-label')).toBe(zhTW.common.delete)
     expect(w.get('.kv-add').text()).toContain(zhTW.fields.add)
-    expect(w.findComponent({ name: 'InputText' }).exists()).toBe(false)
   })
 
   // Without a distinct accessible name, both inputs are unnamed native text boxes — a screen
@@ -72,7 +71,7 @@ describe('KeyValueField', () => {
     expect(valueInput.attributes('placeholder')).toBe(zhTW.fields.keyValueValue)
   })
 
-  // A negative assertion alone (no PrimeVue component) also passes for a hand-rolled <input>, so
+  // A bare component-absence check also passes for a hand-rolled <input>, so
   // assert the vendored composition's real data-slot hook positively too: both cells of the row,
   // and both buttons (remove and add), not just the first one found.
   it('renders the vendored input and button data-slot hooks throughout the row', () => {
