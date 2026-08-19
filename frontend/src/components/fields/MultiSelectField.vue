@@ -29,9 +29,9 @@ const triggerAccessibleName = computed(() =>
     : props.field.label,
 )
 
-// PrimeVue's MultiSelect owned both the chip display and the array arithmetic. The combobox owns
-// neither, so both live here. Emit a new array every time — this repo's immutability convention,
-// and the parent must receive a distinct array rather than the one it passed in.
+// The combobox owns neither the chip display nor the array arithmetic, so both live here. Emit a
+// new array every time — this repo's immutability convention, and the parent must receive a
+// distinct array rather than the one it passed in.
 function toggleValue(value: string): void {
   const next = selected.value.includes(value)
     ? selected.value.filter((v) => v !== value)

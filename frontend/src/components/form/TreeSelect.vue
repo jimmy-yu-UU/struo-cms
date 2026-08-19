@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight } from '@lucide/vue'
 
 // Structurally compatible with lib/buildRelationTree.ts's TreeNode (key/label/children, plus an
-// extra `data` field only PrimeVue's TreeSelect needed) — a TreeNode[] satisfies this prop as-is,
-// so callers building on buildRelationTree need no shape conversion, only the modelValue
-// unwrapping this component already removes (PrimeVue's TreeSelect bound a `{ [key]: true }`
-// keyed object; this one takes and emits a plain key).
+// extra `data` field this component doesn't use) — a TreeNode[] satisfies this prop as-is, so
+// callers building on buildRelationTree need no shape conversion. modelValue is a plain key
+// string, not a keyed object.
 export type TreeSelectNode = { key: string; label: string; children?: TreeSelectNode[] }
 
 // `label` names the field this control belongs to (e.g. "Parent page") — DatePicker.vue takes the

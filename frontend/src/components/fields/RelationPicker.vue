@@ -157,8 +157,8 @@ const multipleAccessibleName = computed(() => (
     : props.relation.label
 ))
 
-// The combobox owns neither the chip display nor the array arithmetic (PrimeVue's MultiSelect
-// owned both) — emit a new array every time per this repo's immutability convention.
+// The combobox owns neither the chip display nor the array arithmetic — emit a new array every
+// time per this repo's immutability convention.
 function toggleValue(id: string): void {
   const next = multipleSelected.value.includes(id)
     ? multipleSelected.value.filter((v) => v !== id)
@@ -245,7 +245,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
 
     <!-- ui/select has no search input, and this picker's options are server-side paginated, so a
          plain Select could only ever offer the first page — the combobox shape is used here too,
-         with its own clear button standing in for PrimeVue Select's `show-clear`. -->
+         with its own clear button. -->
     <div v-else class="flex w-full max-w-[480px] items-center gap-1.5">
       <Combobox class="flex-1" :model-value="singleSelected" :disabled="disabled" @update:model-value="onChange">
         <ComboboxAnchor class="w-full">
