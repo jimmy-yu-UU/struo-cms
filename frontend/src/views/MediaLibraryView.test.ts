@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import MediaLibraryView from './MediaLibraryView.vue'
@@ -78,6 +78,15 @@ function makeListMock(fileResults: Array<{ data: unknown; total: number }>, fold
     return Promise.resolve(result as never)
   })
 }
+
+// onSearchInput runs through a 300ms debounce that the view cancels in onUnmounted. A test that
+// exercises the search path without waiting that debounce out (the selection tests below only
+// assert the synchronous clear, so they have no reason to wait) leaves the timer armed on a
+// wrapper nothing ever unmounts. It then fires into a LATER test, calling load() against whichever
+// itemsApi.list spy is installed by then -- vi.restoreAllMocks() in beforeEach does not disarm a
+// timer -- and a stray call lands as the last one a toHaveBeenLastCalledWith assertion sees.
+// Unmounting every wrapper after its own test lets the component's own cancel run on time.
+enableAutoUnmount(afterEach)
 
 describe('MediaLibraryView', () => {
   beforeEach(() => {
