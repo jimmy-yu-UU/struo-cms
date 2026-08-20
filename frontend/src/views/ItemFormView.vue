@@ -72,9 +72,10 @@ const showEffective = computed(() => isSuperAdminOnExistingUser.value)
 // TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
 const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
 
-// Administrator password-reset action, shown only where EffectivePermissionsPanel already is: the
-// User collection is AdminOnly, so reaching this form at all already implies a super admin, but the
-// guard is kept explicit rather than relying on that indirection.
+// Administrator password-reset action, shown only where EffectivePermissionsPanel already is.
+// User's AdminOnly flag (see the RBAC-editors comment above) gates writes only — Create/Update/Delete
+// in ItemService — not reads, so a non-super-admin holding an ordinary read grant on `user` can still
+// reach this form. This guard is therefore load-bearing, not a redundant belt-and-braces check.
 const showResetPassword = computed(() => isSuperAdminOnExistingUser.value)
 const resetPasswordOpen = ref(false)
 
@@ -403,9 +404,10 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
       />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
 
-      <!-- type="button" is load-bearing: this sits outside ItemForm's own <form> element (a
-           sibling of it in this template), but ui/button injects no type of its own, so a stray
-           implicit submit is still worth guarding against explicitly. -->
+      <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
+           ItemForm, entirely outside its <form> element, so it has no form to submit today. It is
+           kept anyway because ui/button injects no type of its own — if this control were ever
+           re-parented inside a <form>, an untyped button would silently start submitting it. -->
       <Button v-if="showResetPassword" type="button" variant="outline" @click="resetPasswordOpen = true">
         {{ t('password.resetTitle') }}
       </Button>

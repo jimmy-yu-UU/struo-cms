@@ -953,6 +953,9 @@ describe('ItemFormView', () => {
     await w.vm.init()
     await flushPromises()
 
+    // Positive anchor: the view did reach its normal rendered state (not stuck loading / not-found),
+    // so the absence below is a real "hidden by the guard", not a vacuous pass from an early return.
+    expect(w.get('.page-head h1').text()).toBe('Edit User')
     expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
   })
@@ -965,6 +968,9 @@ describe('ItemFormView', () => {
     await w.vm.init()
     await flushPromises()
 
+    // Positive anchor: proves the create form actually rendered, so the absence below is the guard
+    // excluding create mode, not the view stuck in a loading/error state.
+    expect(w.get('.page-head h1').text()).toBe('New User')
     expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
   })
@@ -977,6 +983,9 @@ describe('ItemFormView', () => {
     await w.vm.init()
     await flushPromises()
 
+    // Positive anchor: proves the article form actually rendered, so the absence below is the guard
+    // excluding non-user collections, not the view stuck in a loading/error state.
+    expect(w.get('.page-head h1').text()).toBe('Edit Article')
     expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
   })
