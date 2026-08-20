@@ -155,7 +155,7 @@ describe('ApiClient', () => {
     })
   })
 
-  it('leaves retryAfterSeconds undefined when Retry-After is absent or unparseable', async () => {
+  it('leaves retryAfterSeconds undefined when Retry-After is absent', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: false, error: { code: 'BAD_USER_INPUT', message: 'nope' } }), {
         status: 400,
@@ -165,6 +165,21 @@ describe('ApiClient', () => {
     const c = new ApiClient('/api')
 
     const err = await c.get('/whatever').catch((e) => e) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.retryAfterSeconds).toBeUndefined()
+  })
+
+  it('ignores a non-numeric Retry-After rather than storing NaN', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'nope' } }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': 'Wed, 21 Oct 2015 07:28:00 GMT' },
+      }),
+    ))
+    const c = new ApiClient('/api')
+
+    const err = await c.get('/whatever').catch((e) => e) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
     expect(err.retryAfterSeconds).toBeUndefined()
   })
 })
