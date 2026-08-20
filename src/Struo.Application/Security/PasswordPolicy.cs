@@ -14,8 +14,12 @@ namespace Struo.Application.Security;
 public static class PasswordPolicy
 {
     /// <summary>Returns null when the password satisfies the policy, otherwise a caller-facing
-    /// message. The message is a fallback only: the SPA composes its own localized text from the
-    /// published minimum, so this string must never be the only way a user learns the rule.</summary>
+    /// message. For a too-short password this string is a fallback: the SPA's own check runs first
+    /// and composes localized text from the published <see cref="PasswordPolicyOptions.MinLength"/>,
+    /// so this string only surfaces if that local check is bypassed. For a too-long password there
+    /// is no such fallback — <see cref="PasswordPolicyOptions.MaxLength"/> is deliberately not
+    /// published (see its own remarks), so the client has nothing to compose from and this string is
+    /// the sole user-facing explanation of that bound.</summary>
     public static string? Validate(string? password, PasswordPolicyOptions policy)
     {
         if (string.IsNullOrEmpty(password) || password.Length < policy.MinLength)
