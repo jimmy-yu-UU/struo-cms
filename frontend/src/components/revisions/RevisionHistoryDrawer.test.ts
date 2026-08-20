@@ -151,6 +151,9 @@ describe('RevisionHistoryDrawer', () => {
     expect(list).toHaveBeenCalledWith('article', '5')
   })
 
+  // Identity guard: a hand-rolled overlay with the same heading text would pass a text- or
+  // class-based check — only the sheet-* data-slot hooks, which only the vendored Sheet
+  // composition emits, pin the real component.
   it('renders a vendored sheet', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     const w = mountDrawer()
