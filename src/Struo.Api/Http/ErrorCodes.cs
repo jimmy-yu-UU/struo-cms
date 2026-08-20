@@ -21,6 +21,16 @@ public static class ErrorCodes
     // even though the declared Content-Length passed the up-front check.
     public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
 
+    // "Your current password is wrong" on PUT /api/users/{id}/password. Deliberately NOT 401/
+    // Unauthorized: the caller IS authenticated (they hold a session), and the SPA's global 401
+    // handler clears the session for every 401 — so reusing Unauthorized here logged the user out
+    // on a typo. 400 + this code keeps the global handler's meaning single ("your session is gone").
+    public const string InvalidCurrentPassword = "INVALID_CURRENT_PASSWORD";
+
+    // Self-service password change attempted on an account provisioned through external OIDC: its
+    // stored hash is the empty string because it never had a local password.
+    public const string NoLocalPassword = "NO_LOCAL_PASSWORD";
+
     public static string ForStatus(int status) => status switch
     {
         400 => BadUserInput,
