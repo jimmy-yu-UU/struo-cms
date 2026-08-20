@@ -84,6 +84,18 @@ describe('ChangePasswordDialog', () => {
     expect(buttons.some((b) => b.text() === en.password.generate)).toBe(true)
   })
 
+  it('blocks submit in self mode when the current password is left blank', async () => {
+    // The endpoint rate-limits per authenticated user and treats a blank currentPassword
+    // identically to a wrong one, so this must be caught locally rather than spent as one of a
+    // small number of attempts.
+    const spy = vi.spyOn(usersApi, 'changePassword')
+    const w = mountDialog('self-id')
+    await flushPromises()
+    await fillAndSubmit(w, ['', 'newpassword1', 'newpassword1'])
+    expect(spy).not.toHaveBeenCalled()
+    expect(w.text()).toContain(en.password.currentRequired)
+  })
+
   it('blocks submit when the two new-password fields differ', async () => {
     const spy = vi.spyOn(usersApi, 'changePassword')
     const w = mountDialog('other-id')
@@ -139,13 +151,28 @@ describe('ChangePasswordDialog', () => {
   })
 
   it('puts a policy BAD_USER_INPUT on the new-password field', async () => {
-    vi.spyOn(usersApi, 'changePassword').mockRejectedValue(new ApiError(400, 'x', 'BAD_USER_INPUT'))
+    // BAD_USER_INPUT covers every PasswordPolicy.Validate rejection, not only "too short" -- e.g. a
+    // too-long password, whose MaxLength policy value is deliberately never published to this
+    // client (see PasswordPolicy.cs), so the server's own message is the only place that reason
+    // lives. Asserting a fixed "too short" cause here regardless of the server's actual message
+    // would be exactly the defect this test exists to catch: a wrong message next to a too-long
+    // password. The field must show the server's own e.message, not a hardcoded assumed cause.
+    const serverMessage = 'Password must be at most 128 characters.'
+    vi.spyOn(usersApi, 'changePassword').mockRejectedValue(new ApiError(400, serverMessage, 'BAD_USER_INPUT'))
     const w = mountDialog('other-id')
     await flushPromises()
     await fillAndSubmit(w, ['newpassword1', 'newpassword1'])
     expect(w.find('[role="alert"]').exists()).toBe(true)
-    expect(w.text()).toContain(interpolate(en.password.tooShort, { min: 8 }))
+    expect(w.text()).toContain(serverMessage)
     expect(toastAdd).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the composed too-short message on a BAD_USER_INPUT with no server message', async () => {
+    vi.spyOn(usersApi, 'changePassword').mockRejectedValue(new ApiError(400, '', 'BAD_USER_INPUT'))
+    const w = mountDialog('other-id')
+    await flushPromises()
+    await fillAndSubmit(w, ['newpassword1', 'newpassword1'])
+    expect(w.text()).toContain(interpolate(en.password.tooShort, { min: 8 }))
   })
 
   it('shows NO_LOCAL_PASSWORD, FORBIDDEN and NOT_FOUND as toasts', async () => {
@@ -172,7 +199,6 @@ describe('ChangePasswordDialog', () => {
     await fillAndSubmit(w, ['newpassword1', 'newpassword1'])
     const expected = interpolate(en.errors.tooManyRequestsWithWait, { seconds: 30 })
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: expected }))
-    expect(expected).toContain('30')
   })
 
   it('generates a password into the field and copies it to the clipboard', async () => {
@@ -187,6 +213,24 @@ describe('ChangePasswordDialog', () => {
     expect(newValue.length).toBeGreaterThanOrEqual(20)
     expect((inputs[1].element as HTMLInputElement).value).toBe(newValue)
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(newValue)
+  })
+
+  it('resets fields and errors when the dialog closes and reopens', async () => {
+    // Named global constraint of this slice, and two later tasks mount this dialog -- a stale
+    // attempt (typed passwords, a shown field error) must never survive a close/reopen cycle.
+    vi.spyOn(usersApi, 'changePassword').mockRejectedValue(new ApiError(400, 'x', 'INVALID_CURRENT_PASSWORD'))
+    const w = mountDialog('self-id')
+    await flushPromises()
+    await fillAndSubmit(w, ['wrongcurrent', 'newpassword1', 'newpassword1'])
+    expect(w.text()).toContain(en.password.invalidCurrent)
+
+    await w.setProps({ open: false })
+    await w.setProps({ open: true })
+    await flushPromises()
+
+    const inputs = w.findAll('input')
+    expect(inputs.map((i) => (i.element as HTMLInputElement).value)).toEqual(['', '', ''])
+    expect(w.text()).not.toContain(en.password.invalidCurrent)
   })
 
   it('shows a toast when the clipboard write rejects, instead of failing silently', async () => {

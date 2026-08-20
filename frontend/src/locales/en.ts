@@ -69,6 +69,7 @@ export default {
     resetTitle: 'Reset password',
     resetDescription: 'Set a new password for this user. They can change it themselves afterwards.',
     current: 'Current password',
+    currentRequired: 'Enter your current password.',
     new: 'New password',
     confirm: 'Confirm new password',
     submit: 'Update password',

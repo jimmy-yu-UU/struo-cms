@@ -46,6 +46,13 @@ watch(() => props.open, (open) => {
 function validate(): boolean {
   currentError.value = ''
   newError.value = ''
+  // Self mode only: the endpoint rate-limits per authenticated user and treats an empty
+  // currentPassword identically to a wrong one, so catching a blank field locally (rather than
+  // letting an Enter-key slip burn one of a small number of attempts) is worth the extra check.
+  if (isSelf.value && currentPassword.value.length === 0) {
+    currentError.value = t('password.currentRequired')
+    return false
+  }
   if (newPassword.value.length < appConfig.passwordMinLength) {
     newError.value = t('password.tooShort', { min: appConfig.passwordMinLength })
     return false
@@ -72,6 +79,9 @@ async function onGenerate(): Promise<void> {
 }
 
 async function onSubmit(): Promise<void> {
+  // Structural re-entrancy guard, not just the :disabled on the submit button -- the button state
+  // is DOM-dependent and this isn't.
+  if (submitting.value) return
   if (!validate()) return
   submitting.value = true
   try {
@@ -103,7 +113,14 @@ function handleFailure(e: unknown): void {
       currentError.value = t('password.invalidCurrent')
       return
     case 'BAD_USER_INPUT':
-      newError.value = t('password.tooShort', { min: appConfig.passwordMinLength })
+      // BAD_USER_INPUT covers every PasswordPolicy.Validate rejection, not just "too short" --
+      // MaxLength (128) is deliberately never published to this client (see PasswordPolicy.cs), so
+      // there is no minimum-style composed message this SPA can build for a too-long password. The
+      // server's own e.message is the ONLY place that reason lives; asserting the composed
+      // too-short text here regardless of cause would put a wrong, misdirecting message next to a
+      // too-long password. Fall back to the composed text only if the server ever returns no
+      // message at all.
+      newError.value = e.message || t('password.tooShort', { min: appConfig.passwordMinLength })
       return
     case 'NO_LOCAL_PASSWORD':
       toast.add({ severity: 'error', summary: t('password.noLocalPassword'), life: 3500 })
@@ -127,9 +144,9 @@ function handleFailure(e: unknown): void {
 
 <template>
   <Dialog :open="open" @update:open="(v: boolean) => emit('update:open', v)">
-    <!-- max-w-lg here is BARE (DialogContent's own is sm:max-w-lg), so nothing needs to override it
-         for this form's width. -->
-    <DialogScrollContent class="max-w-lg">
+    <!-- DialogScrollContent's own width class is already a bare max-w-lg (unlike DialogContent's
+         sm:max-w-lg), which is exactly this form's width, so no override class is passed here. -->
+    <DialogScrollContent>
       <DialogHeader>
         <DialogTitle>{{ isSelf ? t('password.changeTitle') : t('password.resetTitle') }}</DialogTitle>
         <DialogDescription v-if="!isSelf">{{ t('password.resetDescription') }}</DialogDescription>
@@ -144,8 +161,15 @@ function handleFailure(e: unknown): void {
             :aria-invalid="!!currentError"
             :aria-describedby="currentError ? 'cpd-current-error' : undefined"
           />
-          <p v-if="currentError" id="cpd-current-error" role="alert" class="cpd-error">{{ currentError }}</p>
         </label>
+        <!--
+          Deliberately a sibling of the <label>, not nested inside it: a <label> gives its wrapped
+          control an accessible NAME from all of its text content, so an error <p> nested here would
+          make the input's name become "Current password Current password is incorrect." the moment
+          the error appears -- changing the field's name mid-interaction and, since
+          aria-describedby already points at the same node, announcing it twice.
+        -->
+        <p v-if="isSelf && currentError" id="cpd-current-error" role="alert" class="cpd-error">{{ currentError }}</p>
 
         <label class="cpd-field">
           <span>{{ t('password.new') }}</span>
@@ -159,7 +183,15 @@ function handleFailure(e: unknown): void {
 
         <label class="cpd-field">
           <span>{{ t('password.confirm') }}</span>
-          <PasswordInput v-model="confirmPassword" autocomplete="new-password" />
+          <!-- The mismatch error is about the pair, not either field alone, and it lands in
+               newError -- so this field points at the same cpd-new-error node the new-password
+               field does. -->
+          <PasswordInput
+            v-model="confirmPassword"
+            autocomplete="new-password"
+            :aria-invalid="!!newError"
+            :aria-describedby="newError ? 'cpd-new-error' : undefined"
+          />
         </label>
 
         <p v-if="newError" id="cpd-new-error" role="alert" class="cpd-error">{{ newError }}</p>
