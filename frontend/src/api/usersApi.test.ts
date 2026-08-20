@@ -9,13 +9,18 @@ describe('usersApi', () => {
 
   it('sends the self-service shape with currentPassword', async () => {
     await usersApi.changePassword('u1', { newPassword: 'n', currentPassword: 'c' })
-    expect(apiClient.put).toHaveBeenCalledWith('/users/u1/password', {
+    expect(apiClient.put).toHaveBeenCalledExactlyOnceWith('/users/u1/password', {
       newPassword: 'n', currentPassword: 'c',
     })
   })
 
   it('omits currentPassword on the admin-reset shape', async () => {
     await usersApi.changePassword('u2', { newPassword: 'n' })
-    expect(apiClient.put).toHaveBeenCalledWith('/users/u2/password', { newPassword: 'n' })
+    expect(apiClient.put).toHaveBeenCalledExactlyOnceWith('/users/u2/password', { newPassword: 'n' })
+    // toHaveBeenCalledWith uses non-strict equality, which treats an explicit
+    // `currentPassword: undefined` key as equal to the key being absent — but the endpoint's
+    // self-vs-admin logic keys on presence, not value, so presence needs its own assertion.
+    const [, body] = vi.mocked(apiClient.put).mock.calls[0]!
+    expect('currentPassword' in (body as object)).toBe(false)
   })
 })

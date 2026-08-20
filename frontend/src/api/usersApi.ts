@@ -2,8 +2,9 @@ import { apiClient } from './apiClient'
 
 export type ChangePasswordBody = {
   newPassword: string
-  // Required by the API when the target is the caller themselves, and rejected as meaningless
-  // otherwise — so the caller omits it for an admin reset rather than sending an empty string.
+  // Required by the API when the target is the caller themselves — a missing or empty value
+  // there produces 400 INVALID_CURRENT_PASSWORD — but silently ignored on an admin reset, so the
+  // caller omits it for an admin reset rather than sending an empty string.
   currentPassword?: string
 }
 
