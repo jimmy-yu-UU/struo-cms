@@ -167,9 +167,9 @@
   }
 
   /* Tailwind v4 preflight does not restore v3's implicit `cursor: pointer` on <button> —
-     browsers default a <button> to `cursor: default`. The old shell CSS's `.nav-item { cursor:
-     pointer }` covered this pre-migration; it was deleted with the rest of that stylesheet, and
-     neither shadcn's buttonVariants nor the vendored sidebar buttons carry a cursor utility.
+     browsers default a <button> to `cursor: default`. Neither shadcn's buttonVariants nor the
+     vendored sidebar buttons carry a cursor utility, so without this rule nothing in the app
+     supplies one.
      Excludes disabled controls (native `disabled` and the `aria-disabled="true"` convention the
      vendored sidebar/menu components use) — a disabled control should not look clickable. */
   button:not(:disabled):not([aria-disabled="true"]) {

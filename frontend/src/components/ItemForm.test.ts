@@ -136,12 +136,10 @@ describe('ItemForm', () => {
     expect(w.find('.field .field-input[data-name="status"]').exists()).toBe(true) // shared
     expect(w.find('.field .field-input[data-name="title"]').exists()).toBe(true)  // translatable
   })
-  // Boolean fields used to get their own `orientation="horizontal"` + <FieldContent> branch here,
-  // which put the label beside the control instead of above it — the only fields on the form with
-  // a different shape. The maintainer rejected that: a boolean field must lay out exactly like
-  // every other field (label above, control below, left-aligned). The width-forcing rule this used
-  // to work around is now absorbed by a wrapper inside BooleanField itself (see BooleanField.vue
-  // and fieldComponents.test.ts), so ItemForm no longer needs — or should have — a special case.
+  // A boolean field lays out exactly like every other field — label above, control below,
+  // left-aligned — and ItemForm carries no special case to make that happen. The width-forcing
+  // rule that would otherwise need one is absorbed by a wrapper inside BooleanField itself (see
+  // BooleanField.vue and fieldComponents.test.ts).
   it('lays a boolean field out the same vertical shape as every other field', () => {
     const boolMeta: CollectionMeta = { ...meta, fields: [
       ...meta.fields,
