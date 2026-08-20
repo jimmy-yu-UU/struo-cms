@@ -31,6 +31,12 @@ public static class ErrorCodes
     // stored hash is the empty string because it never had a local password.
     public const string NoLocalPassword = "NO_LOCAL_PASSWORD";
 
+    // Correct password, but the account is deactivated. Only reachable after a successful hash
+    // verify (AuthService checks IsActive afterwards), so surfacing it leaks nothing the caller had
+    // not already proven — unlike splitting "wrong password" from "no such account", which would
+    // open the enumeration surface the timing equalizer exists to close.
+    public const string AccountInactive = "ACCOUNT_INACTIVE";
+
     public static string ForStatus(int status) => status switch
     {
         400 => BadUserInput,
