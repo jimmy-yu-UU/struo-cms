@@ -144,7 +144,7 @@ public static class ConditionalModelTranslator
 
     /// <summary>
     /// Maps a CLR type to the string SqlSugar's <c>ConditionalModel.CSharpTypeName</c> expects
-    /// (verified against the installed SqlSugarCore 5.1.4.215 via decompilation of
+    /// (verified against SqlSugarCore 5.1.4.216 via decompilation of
     /// <c>UtilMethods.ConvertDataByTypeName</c>/<c>IsNumber</c>, which compare case-insensitively
     /// against these literals and against <c>Type.Name</c>). Returns null for <see cref="string"/>
     /// and any unmapped type, so those columns keep today's untyped (string) behavior exactly.
