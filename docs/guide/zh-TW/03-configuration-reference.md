@@ -173,6 +173,19 @@
 如果一個 `Production` 環境的啟動仍以 (或仍設定為要植入) 字面預設密碼 `admin` 做為種子，API 會記錄
 一則**警告**，指名該變更哪一項設定——但它並不會因此拒絕啟動。
 
+## `Auth:Password`
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `Auth:Password:MinLength` | int | `8` | API 所接受的任何明文密碼的最小長度。 |
+| `Auth:Password:MaxLength` | int | `128` | API 所接受的任何明文密碼的最大長度。 |
+
+這項規則會在每一個接受明文密碼的請求路徑寫入點被強制執行——`POST /api/users` (建立使用者) 與
+`PUT /api/users/{id}/password` (變更密碼)——兩者都透過同一個共用的驗證器，因此不會彼此漂移。
+`MaxLength` 只是一個健全性上限，不是安全控制:Argon2id 的成本是由它自己的時間/記憶體/平行度參數
+決定的，不受輸入長度影響，所以較長的密碼並不會放大雜湊運算量。可透過 `Auth__Password__MinLength` /
+`Auth__Password__MaxLength` 覆寫;需要重新啟動。
+
 ## `Rbac:PublicReadCollections`
 
 | 鍵 | 型別 | 預設值 | 作用 |
