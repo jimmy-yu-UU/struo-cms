@@ -358,7 +358,7 @@ public sealed class SqlSugarItemRepository(
         try
         {
             // BeginTranAsync/CommitTranAsync/RollbackTranAsync have no CancellationToken overloads
-            // (SqlSugar 5.1.4.215); the token is honored by the awaited ORM calls inside body().
+            // (SqlSugar 5.1.4.216); the token is honored by the awaited ORM calls inside body().
             await db.Ado.BeginTranAsync();
             await body();
             await db.Ado.CommitTranAsync();
@@ -396,7 +396,7 @@ public sealed class SqlSugarItemRepository(
         return await invoke(this, entity, ct);
     }
 
-    // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.215); its only effect beyond
+    // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.216); its only effect beyond
     // ExecuteCommandAsync is to back-populate a DB-generated identity PK onto the entity. Most
     // collections use client-generated Guid PKs (set in CreateAsync above) — nothing to read back,
     // so ExecuteCommandAsync(ct) + returning the same instance is equivalent while forwarding the

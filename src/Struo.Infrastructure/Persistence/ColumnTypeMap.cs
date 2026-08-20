@@ -21,13 +21,12 @@ namespace Struo.Infrastructure.Persistence;
 /// malformed DDL such as <c>nvarchar(max)(4000)</c>) was checked by reading the upstream source at
 /// <c>https://github.com/DotNetNext/SqlSugar</c> (the <c>donet5/SqlSugar</c> slug this package is
 /// still sometimes referenced by is a 301 redirect to the same repository, confirmed by reading the
-/// HTTP response), tag <c>5.1.4.197</c> — the closest published git tag to the pinned
-/// <c>5.1.4.215</c>. The upstream tag series stops at <c>5.1.4.197</c>: fifteen further stable NuGet
-/// releases (<c>5.1.4.198</c> through <c>5.1.4.211</c>, then <c>5.1.4.214</c> — <c>.212</c>/<c>.213</c>
-/// as of this writing only ever shipped as prerelease builds) sit strictly between that tag and the
-/// pinned <c>5.1.4.215</c>, none of them tagged upstream. The endpoints were bounded, not every commit
-/// in between: the relevant methods below are byte-identical between the <c>5.1.4.197</c> tag and
-/// <c>master</c> as of this writing (diffed directly), so the divergence risk is low but not zero.
+/// HTTP response), tag <c>5.1.4.197</c> — the closest published git tag to the version pinned in
+/// <c>Directory.Packages.props</c>, which is not itself tagged upstream. The tag series stops at
+/// <c>5.1.4.197</c>, with a dozen-plus untagged stable NuGet releases sitting strictly between it and
+/// the pin (<c>.212</c>/<c>.213</c> only ever shipped as prerelease builds). The endpoints were
+/// bounded, not every commit in between: the relevant methods below were byte-identical between the
+/// <c>5.1.4.197</c> tag and <c>master</c> when diffed, so the divergence risk is low but not zero.
 /// <b>This is a source-reading conclusion, not a result verified against a live SQL Server or MySQL
 /// instance.</b>
 /// </para>

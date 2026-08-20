@@ -214,7 +214,7 @@ public class SqlSugarItemRepositoryTests : IDisposable
     }
 
     // The identity-PK create branch calls ExecuteReturnEntityAsync (no ct overload
-    // in SqlSugarCore 5.1.4.215), so it must observe an already-cancelled token pre-flight —
+    // in SqlSugarCore 5.1.4.216), so it must observe an already-cancelled token pre-flight —
     // symmetric with the Guid path's ExecuteCommandAsync(ct) semantics.
     [Fact]
     public async Task CreateAsync_identity_pk_honors_cancellation()
