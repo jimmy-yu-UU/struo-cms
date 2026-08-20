@@ -40,7 +40,9 @@ function labelMatch(label: string): RegExp {
 
 // fieldByLabel()/translatableFieldByLabel() return the `.field` wrapper, not a control, because
 // every call site scopes a further sub-query off it — `.locator('input')`, `.locator('.ProseMirror')`,
-// `.getByRole('combobox')`, `.getByText(...)` for chip/row lookups, or `.getByRole('button')` — and
+// `.getByRole('combobox')`, `.locator('[data-slot="combobox-trigger"]')` where the accessible name
+// is the selected value rather than a fixed one (see the comment at that call site),
+// `.getByText(...)` for chip/row lookups, or `.getByRole('button')` — and
 // those differ per interface. `getByLabel()` resolves straight to the labelled control or trigger
 // itself, which is not a uniform container shape across interfaces (nor, per FieldInput.vue's own
 // comment on `:id` forwarding, consistently label-associated in the first place), so it can't stand

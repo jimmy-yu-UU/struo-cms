@@ -1,8 +1,12 @@
 // Maps a file's content type (with the filename as fallback) to an icon token (the "pi-" prefix
 // dialect resolveIcon in lib/icons.ts accepts) and a short, human-readable label (e.g. "PDF",
 // "PPTX") for non-previewable files. Replaces showing the raw MIME string, which is long and ugly
-// for Office/OOXML types. PDF/Word/Excel/plain-text get a dedicated icon below; other types fall
-// back to the generic file or media icon, and the short label carries the format identity.
+// for Office/OOXML types. PDF/Word/Excel/plain-text get a dedicated icon token below; other types
+// fall back to the generic file or media icon, and the short label carries the format identity.
+// "Dedicated" is true of the token, not always of the glyph: ICON_MAP currently resolves both
+// pi-file-edit and pi-file-word to lucide's FileText, so a .txt and a .docx draw the same picture.
+// Nothing renders one of these icons without its label beside it (FileThumbnail's chip always
+// draws both), which is why that collision is a cosmetic overlap rather than an ambiguity.
 
 export type FileTypeDisplay = { icon: string; label: string }
 
