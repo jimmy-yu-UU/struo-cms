@@ -74,6 +74,8 @@ try
     // Config-bound tuning for the login rate limiter below (defaults: 5 attempts / 60s).
     builder.Services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
+    builder.Services.AddOptions<Struo.Application.Configuration.PasswordPolicyOptions>()
+        .BindConfiguration(Struo.Application.Configuration.PasswordPolicyOptions.SectionName);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
