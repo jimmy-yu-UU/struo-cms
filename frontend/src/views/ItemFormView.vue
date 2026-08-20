@@ -11,6 +11,7 @@ import PageHeader from '../components/common/PageHeader.vue'
 import RevisionHistoryDrawer from '../components/revisions/RevisionHistoryDrawer.vue'
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
+import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -60,12 +61,22 @@ const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
 const showMatrix = computed(
   () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
 )
-const showEffective = computed(
+// Shared by showEffective and showResetPassword below — both gate on the exact same condition
+// (super-admin, existing user row), so it is named once here rather than duplicated verbatim in two
+// places, which would only need to drift once to disagree.
+const isSuperAdminOnExistingUser = computed(
   () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
 )
+const showEffective = computed(() => isSuperAdminOnExistingUser.value)
 // The effective-permissions preview follows the CURRENT (possibly unsaved) Roles
 // TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
 const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
+
+// Administrator password-reset action, shown only where EffectivePermissionsPanel already is: the
+// User collection is AdminOnly, so reaching this form at all already implies a super admin, but the
+// guard is kept explicit rather than relying on that indirection.
+const showResetPassword = computed(() => isSuperAdminOnExistingUser.value)
+const resetPasswordOpen = ref(false)
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
@@ -391,6 +402,18 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :create-mode="isCreate"
       />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
+
+      <!-- type="button" is load-bearing: this sits outside ItemForm's own <form> element (a
+           sibling of it in this template), but ui/button injects no type of its own, so a stray
+           implicit submit is still worth guarding against explicitly. -->
+      <Button v-if="showResetPassword" type="button" variant="outline" @click="resetPasswordOpen = true">
+        {{ t('password.resetTitle') }}
+      </Button>
+      <ChangePasswordDialog
+        v-if="showResetPassword"
+        v-model:open="resetPasswordOpen"
+        :target-user-id="idStr"
+      />
 
       <RevisionHistoryDrawer
         v-if="!isCreate && meta.revisions"
