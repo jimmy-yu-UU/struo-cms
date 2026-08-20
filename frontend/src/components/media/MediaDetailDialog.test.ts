@@ -394,8 +394,9 @@ describe('MediaDetailDialog', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    // A local AlertDialog nested inside this dialog would fire one confirmation
-    // twice; AppShell's store-backed ConfirmHost is the only confirmation surface in the app.
+    // The store-backed host in AppShell is the only confirmation host in the app, so this
+    // component must not mount its own: a second host bound to that same store renders one
+    // confirmation twice, and any other local dialog is a second confirmation surface.
     expect(w.findComponent({ name: 'AlertDialog' }).exists()).toBe(false)
   })
 

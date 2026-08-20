@@ -145,7 +145,7 @@ core。不過，單純執行 `rm -rf samples/` 仍會破壞 solution 層級的 `
 | 程式語言 | TypeScript | `frontend/package.json` |
 | E2E 測試 | Playwright | `frontend/package.json` |
 
-CI 中固定的工具鏈版本 (`.github/workflows/ci.yml`):.NET SDK `10.0.x`、Node.js `24`、pnpm `10`。
+各道 gate 所使用的 .NET SDK、Node.js 與 pnpm 版本固定於 `.github/workflows/ci.yml`。
 
 ## 能力總覽
 

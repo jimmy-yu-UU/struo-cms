@@ -80,9 +80,11 @@ describe('LoginView', () => {
     // Two native inputs, both from ui/input: the email field and PasswordInput's inner control.
     expect(w.findAll('[data-slot="input"]')).toHaveLength(2)
     expect(w.findComponent({ name: 'PasswordInput' }).exists()).toBe(true)
-    // Without OIDC: submit + the PasswordInput toggle are both ui/button. data-slot="button" is
-    // ui/button's own hook (its underlying reka Primitive renders it unconditionally), so this
-    // count is blind to the rendered text but not to the rendered element.
+    // Identity guard: a hand-rolled <button> would satisfy a role- or text-based check just as
+    // well, so the assertion targets data-slot="button" — ui/button's own hook, which its
+    // underlying reka Primitive renders unconditionally. Counting those hooks is therefore blind
+    // to the rendered text but not to the rendered element. Without OIDC there are two: the submit
+    // button and the PasswordInput toggle.
     expect(w.findAll('[data-slot="button"]')).toHaveLength(2)
   })
 
