@@ -8,7 +8,10 @@ export const PASSWORD_CHARSET =
 const DEFAULT_LENGTH = 20
 
 // Largest multiple of the charset size that fits in a byte. Bytes at or above this are rejected
-// rather than folded with `%`, which would make the first (256 % n) characters more likely.
+// rather than folded with `%`, which would make the first (256 % n) characters more likely. This
+// assumes the charset is at most 256 characters — beyond that, floor(256 / n) is 0, the threshold
+// becomes 0, and every byte is rejected forever. Not worth guarding against a human-transcribable
+// password charset, but worth knowing if this charset is ever widened.
 const MAX_ACCEPTABLE_BYTE = Math.floor(256 / PASSWORD_CHARSET.length) * PASSWORD_CHARSET.length
 
 /**
@@ -24,7 +27,7 @@ export function generatePassword(minLength: number): string {
   while (out.length < length) {
     crypto.getRandomValues(buffer)
     for (const byte of buffer) {
-      if (out.length === length) break
+      if (out.length >= length) break
       if (byte >= MAX_ACCEPTABLE_BYTE) continue // rejection sampling — see MAX_ACCEPTABLE_BYTE
       out.push(PASSWORD_CHARSET[byte % PASSWORD_CHARSET.length])
     }
