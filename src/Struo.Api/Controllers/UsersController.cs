@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Api.Http;
 using ErrorCodes = Struo.Api.Http.ErrorCodes; // disambiguates from the global `HotChocolate.ErrorCodes` using (GraphQl)
 using Struo.Application.Abstractions;
+using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Security;
 
@@ -17,10 +19,9 @@ public sealed record ChangePasswordRequest(string NewPassword, string? CurrentPa
 [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
 public sealed class UsersController(
     IUserAccountStore accounts, IPasswordHasher hasher, IUserCredentialStore store,
-    ICurrentPermissions permissions, ICurrentUserAccessor currentUser) : ControllerBase
+    ICurrentPermissions permissions, ICurrentUserAccessor currentUser,
+    IOptions<PasswordPolicyOptions> passwordPolicy) : ControllerBase
 {
-    private const int MinPasswordLength = 8;
-
     private IActionResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
             ? null
@@ -32,9 +33,8 @@ public sealed class UsersController(
         if (RequireAdmin() is { } denied) return denied;
         if (string.IsNullOrWhiteSpace(body.Email))
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Email is required.");
-        if (body.Password is null || body.Password.Length < MinPasswordLength)
-            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                $"Password must be at least {MinPasswordLength} characters.");
+        if (PasswordPolicy.Validate(body.Password, passwordPolicy.Value) is { } policyError)
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, policyError);
         if (await store.FindByEmailAsync(body.Email, ct) is not null)
             return ApiResults.Fail(StatusCodes.Status409Conflict, ErrorCodes.Conflict, "Email already in use.");
 
@@ -45,9 +45,8 @@ public sealed class UsersController(
     [HttpPut("{id:guid}/password")]
     public async Task<IActionResult> ChangePassword(Guid id, [FromBody] ChangePasswordRequest body, CancellationToken ct)
     {
-        if (body.NewPassword is null || body.NewPassword.Length < MinPasswordLength)
-            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                $"Password must be at least {MinPasswordLength} characters.");
+        if (PasswordPolicy.Validate(body.NewPassword, passwordPolicy.Value) is { } policyError)
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, policyError);
 
         var isSelf = currentUser.GetCurrentUserId() is { } me && me == id;
         if (!isSelf)
