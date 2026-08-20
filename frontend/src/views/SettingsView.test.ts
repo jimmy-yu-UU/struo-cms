@@ -69,8 +69,10 @@ describe('SettingsView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-slot="input"]').exists()).toBe(true)
-    // data-slot="button" is ui/button's own hook (its underlying reka Primitive renders it
-    // unconditionally), so this assertion is blind to the rendered text but not to the rendered element.
+    // Identity guard: data-test="save" is forwarded by anything the view chooses to render, so it
+    // cannot tell a hand-rolled <button> from the vendored one. data-slot="button" can — it is
+    // ui/button's own hook, which its underlying reka Primitive renders unconditionally — and it
+    // stays blind to the rendered text while pinning the rendered element.
     expect(w.get('[data-test="save"]').attributes('data-slot')).toBe('button')
     expect(w.get('[data-test="save"]').attributes('type')).toBe('button')
   })

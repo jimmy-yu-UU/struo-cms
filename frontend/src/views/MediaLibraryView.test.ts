@@ -775,8 +775,9 @@ describe('MediaLibraryView', () => {
     makeListMock([{ data: rows, total: 1 }])
     const w = mountView()
     await flushPromises()
-    // One store-backed ConfirmHost is mounted once in AppShell; a second dialog here would
-    // make a parent and child fire the same confirmation twice.
+    // The store-backed host in AppShell is the only confirmation host in the app, so neither this
+    // view nor any of its groups may mount one: a second host bound to that same store renders one
+    // confirmation twice, and any other local dialog is a second confirmation surface.
     expect(w.findComponent({ name: 'AlertDialog' }).exists()).toBe(false)
   })
 
