@@ -99,7 +99,7 @@ public sealed class SqlSugarSiteSettingsStore(ISqlSugarClient db) : ISiteSetting
     /// provider-agnostic <see cref="DbException.SqlState"/> (.NET 8+, <c>System.Data.Common</c>) rather
     /// than a direct <c>Npgsql.PostgresException</c> type check. Deliberate: adding a direct
     /// <c>PackageReference</c> to Npgsql here would let NuGet resolve it independently of the version
-    /// SqlSugarCore 5.1.4.215 itself depends on (Npgsql 5.0.18 transitively) and silently upgrade the
+    /// SqlSugarCore 5.1.4.216 itself depends on (Npgsql 5.0.18 transitively) and silently upgrade the
     /// whole app's Postgres driver across major versions wherever the resolver picks a newer floor — a
     /// binary-compatibility and behavior risk (e.g. Npgsql 6+ tightened <c>DateTime.Kind</c> handling for
     /// timestamp columns) this store has no business introducing. <c>Npgsql.PostgresException</c>
