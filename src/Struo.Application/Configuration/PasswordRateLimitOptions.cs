@@ -17,9 +17,12 @@ public sealed class PasswordRateLimitOptions
     /// multi-pod deployments where this in-memory, per-pod limiter cannot enforce a global limit.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Max attempts per authenticated user within <see cref="WindowSeconds"/>. A super-admin
-    /// doing bulk resets shares this budget and will be throttled past it — accepted, and the reason
-    /// the value is configurable.</summary>
+    /// <summary>Max attempts per authenticated user within <see cref="WindowSeconds"/>. The partition
+    /// key is the ACTING user's id, not the target's — a super-admin doing bulk resets spends down
+    /// their own single bucket and will be throttled past it, while every target user's own budget is
+    /// left untouched. That is the safer direction: it also means this endpoint can never be used to
+    /// lock a victim out of changing their own password. Configurable in case the admin-side
+    /// throttling becomes a problem in practice.</summary>
     public int PermitLimit { get; set; } = 5;
 
     /// <summary>Fixed-window length, in seconds.</summary>

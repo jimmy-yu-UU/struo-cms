@@ -54,9 +54,11 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
 
     private async Task<HttpClient> CreateAuthenticatedClientOnAsync(WebApplicationFactory<Program> host)
     {
-        // Ensures the shared admin row exists in the DB both hosts point at (idempotent); the
-        // returned client from the BASE factory is unused here — only the seeding side effect matters.
-        await _factory.CreateAuthenticatedClientAsync();
+        // Ensures the shared admin row exists in the DB both hosts point at (idempotent). Uses
+        // EnsureAdminSeededAsync rather than CreateAuthenticatedClientAsync specifically to avoid
+        // paying for a login round-trip (a full Argon2id verify) against the BASE host whose client
+        // this method has no use for — only the DB seeding side effect is needed here.
+        await _factory.EnsureAdminSeededAsync();
 
         var client = host.CreateClient();
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
@@ -86,9 +88,12 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
         using var doc = JsonDocument.Parse(await third.Content.ReadAsStringAsync());
         doc.RootElement.GetProperty("success").GetBoolean().Should().BeFalse();
         doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("TOO_MANY_REQUESTS");
-        // The message must not talk about logins — this is the change-password endpoint.
+        // Positive assertion, not just "doesn't mention login": NotContain("login") would also pass
+        // for OnRejected's generic "_" fallback copy if the PolicyName metadata lookup ever came back
+        // null, silently proving nothing about the "password" branch actually being taken. Pinning the
+        // exact password-specific sentence fails on both the login copy AND the generic fallback.
         doc.RootElement.GetProperty("error").GetProperty("message").GetString()
-            .Should().NotContain("login");
+            .Should().Be("Too many password change attempts. Please try again later.");
     }
 
     // The core assertion for the partition key. If the key were the client IP (fixed for TestServer)
@@ -117,6 +122,15 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
             (await AttemptAsync(client, userId)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    // NOTE on what this actually proves: /api/auth/me carries no [EnableRateLimiting] attribute at
+    // all, so this test would have passed even before the "password" policy existed — it is NOT
+    // evidence that the "password" policy is scoped correctly (Attempts_beyond_the_permit_limit_...
+    // and Two_different_users_do_not_share_a_bucket above cover that). What it DOES guard is a
+    // regression where some future change adds a rate limiter GLOBALLY (e.g. builder.Services
+    // .AddRateLimiter with a GlobalLimiter, or an app.Use... applied ahead of routing) that would
+    // catch every endpoint including this unrelated one. Largely overlaps with
+    // AuthLoginRateLimitTests.Logout_and_me_are_not_rate_limited_by_the_login_policy; kept anyway
+    // since that test's PermitLimit is tiny for the "login" policy specifically, not "password".
     [Fact]
     public async Task The_password_policy_does_not_limit_other_endpoints()
     {

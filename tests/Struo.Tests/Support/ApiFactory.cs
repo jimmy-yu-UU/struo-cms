@@ -61,7 +61,65 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // derived host via WithWebHostBuilder with a small, dedicated PermitLimit.
                 ["RateLimiting:Login:PermitLimit"] = "100000",
                 ["RateLimiting:Login:WindowSeconds"] = "60"
+                // RateLimiting:Password is deliberately left at its production default (5/60s) here,
+                // unlike RateLimiting:Login above: it partitions by authenticated user id, and every
+                // call site except the shared admin logs in a freshly-seeded user via
+                // CreateEditorClientAsync/CreateRolelessClientAsync, so each gets its own untouched
+                // bucket — raising the default would mask exactly the per-user-partition bug
+                // PasswordChangeRateLimitTests exists to catch. The ONE exception is the shared admin
+                // from CreateAuthenticatedClientAsync: every admin-authenticated password change in
+                // this collection spends down that single bucket. As of this writing
+                // UserCredentialWriteAuditTests uses 2 of the 5 permits (well inside the 60s test
+                // run), so there is headroom, but it is not unlimited. A future author adding more
+                // admin-authenticated password changes to this collection should either (a) use a
+                // fresh CreateEditorClientAsync user instead of the shared admin when the test doesn't
+                // specifically need admin privileges, or (b) raise RateLimiting:Password:PermitLimit
+                // on an isolated derived host via WithWebHostBuilder the way
+                // PasswordChangeRateLimitTests/AuthLoginRateLimitTests already do — not here, since
+                // that would blunt the very partition-key test this limiter needs.
             }));
+    }
+
+    /// <summary>
+    /// Idempotently ensures the shared IT admin user/role exist in the DB, WITHOUT creating a client
+    /// or logging in. Split out of <see cref="CreateAuthenticatedClientAsync"/> (mirroring the
+    /// <see cref="SeedEditorAsync"/>/<see cref="CreateEditorClientAsync"/> split) so a caller that only
+    /// needs the admin row to exist — e.g. to then log in against a DIFFERENT (derived) host using the
+    /// public <see cref="AdminEmail"/>/<see cref="AdminPassword"/> constants — doesn't have to pay for
+    /// a login round-trip against this host whose resulting client it would only discard.
+    /// </summary>
+    public async Task EnsureAdminSeededAsync()
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var existing = await db.Queryable<User>().Where(u => u.Email == AdminEmail).FirstAsync();
+        if (existing is null)
+        {
+            var id = Guid.CreateVersion7();
+            await db.Insertable(new User
+            {
+                Id = id, Email = AdminEmail, Password = hasher.Hash(AdminPassword),
+                Name = "IT Admin", IsActive = true
+            }).ExecuteCommandAsync();
+            AdminUserId = id;
+        }
+        else
+        {
+            AdminUserId = existing.Id;
+        }
+
+        var adminRole = await db.Queryable<Role>().Where(r => r.Name == "admin").FirstAsync();
+        if (adminRole is null)
+        {
+            adminRole = new Role { Id = Guid.CreateVersion7(), Name = "admin", IsSuperAdmin = true };
+            await db.Insertable(adminRole).ExecuteCommandAsync();
+        }
+        var linked = await db.Queryable<UserRole>()
+            .Where(ur => ur.UserId == AdminUserId && ur.RoleId == adminRole.Id).AnyAsync();
+        if (!linked)
+            await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = AdminUserId, RoleId = adminRole.Id })
+                .ExecuteCommandAsync();
     }
 
     /// <summary>
@@ -71,38 +129,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public async Task<HttpClient> CreateAuthenticatedClientAsync()
     {
-        using (var scope = Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
-            var existing = await db.Queryable<User>().Where(u => u.Email == AdminEmail).FirstAsync();
-            if (existing is null)
-            {
-                var id = Guid.CreateVersion7();
-                await db.Insertable(new User
-                {
-                    Id = id, Email = AdminEmail, Password = hasher.Hash(AdminPassword),
-                    Name = "IT Admin", IsActive = true
-                }).ExecuteCommandAsync();
-                AdminUserId = id;
-            }
-            else
-            {
-                AdminUserId = existing.Id;
-            }
-
-            var adminRole = await db.Queryable<Role>().Where(r => r.Name == "admin").FirstAsync();
-            if (adminRole is null)
-            {
-                adminRole = new Role { Id = Guid.CreateVersion7(), Name = "admin", IsSuperAdmin = true };
-                await db.Insertable(adminRole).ExecuteCommandAsync();
-            }
-            var linked = await db.Queryable<UserRole>()
-                .Where(ur => ur.UserId == AdminUserId && ur.RoleId == adminRole.Id).AnyAsync();
-            if (!linked)
-                await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = AdminUserId, RoleId = adminRole.Id })
-                    .ExecuteCommandAsync();
-        }
+        await EnsureAdminSeededAsync();
 
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
