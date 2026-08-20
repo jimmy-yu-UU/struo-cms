@@ -12,12 +12,23 @@ export class ApiError extends Error {
   readonly status: number
   readonly code?: string
   readonly details?: ValidationDetail[]
-  constructor(status: number, message: string, code?: string, details?: ValidationDetail[]) {
+  // Seconds to wait, lifted from the standard Retry-After response header (the API sets it on every
+  // 429). Kept off the error envelope on purpose: ErrorBody.details is a {field,message} list, so a
+  // scalar delay has no honest place in it.
+  readonly retryAfterSeconds?: number
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: ValidationDetail[],
+    retryAfterSeconds?: number,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.details = details
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -87,11 +98,19 @@ export class ApiClient {
       try {
         errBody = (await res.json())?.error as ApiErrorBody | undefined
       } catch { /* non-JSON error body: leave errBody undefined */ }
+      // Retry-After is either delta-seconds or an HTTP-date; only the former is emitted here, so a
+      // non-numeric value is dropped rather than guessed at.
+      const retryAfterRaw = res.headers.get('Retry-After')
+      const retryAfterSeconds =
+        retryAfterRaw !== null && /^\d+$/.test(retryAfterRaw.trim())
+          ? Number(retryAfterRaw.trim())
+          : undefined
       throw new ApiError(
         res.status,
         errBody?.message ?? `Request failed (${res.status})`,
         errBody?.code,
         errBody?.details,
+        retryAfterSeconds,
       )
     }
 

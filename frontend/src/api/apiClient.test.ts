@@ -5,6 +5,7 @@ function mockFetch(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
     status,
     ok: status >= 200 && status < 300,
+    headers: { get: () => null },
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response)
@@ -72,6 +73,7 @@ describe('ApiClient', () => {
     const c = new ApiClient('/api')
     globalThis.fetch = vi.fn().mockResolvedValue({
       status: 500, ok: false,
+      headers: { get: () => null },
       json: async () => { throw new Error('not json') },
       text: async () => 'oops',
     } as unknown as Response)
@@ -135,5 +137,34 @@ describe('ApiClient', () => {
     await new ApiClient('/api').get('/auth/me')
     const headers = (f.mock.calls[0][1].headers ?? {}) as Record<string, string>
     expect(headers['X-Struo-CSRF']).toBeUndefined()
+  })
+
+  it('exposes Retry-After as retryAfterSeconds on the thrown ApiError', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'nope' } }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '42' },
+      }),
+    ))
+    const c = new ApiClient('/api')
+
+    await expect(c.get('/whatever')).rejects.toMatchObject({
+      status: 429,
+      code: 'TOO_MANY_REQUESTS',
+      retryAfterSeconds: 42,
+    })
+  })
+
+  it('leaves retryAfterSeconds undefined when Retry-After is absent or unparseable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: { code: 'BAD_USER_INPUT', message: 'nope' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ))
+    const c = new ApiClient('/api')
+
+    const err = await c.get('/whatever').catch((e) => e) as ApiError
+    expect(err.retryAfterSeconds).toBeUndefined()
   })
 })
