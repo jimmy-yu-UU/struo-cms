@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import PasswordInput from '@/components/form/PasswordInput.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useAppConfigStore } from '../stores/appConfigStore'
-import { apiBaseUrl } from '../api/apiClient'
+import { apiBaseUrl, ApiError } from '../api/apiClient'
+import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
 import BrandMark from '../components/shell/BrandMark.vue'
 
 const email = ref('')
@@ -31,9 +32,27 @@ async function onSubmit() {
     await auth.login(email.value, password.value)
     router.push({ name: 'dashboard' })
   } catch (e) {
-    error.value = e instanceof Error && e.message ? e.message : t('login.failed')
+    error.value = loginErrorMessage(e)
   } finally {
     submitting.value = false
+  }
+}
+
+// The server's prose is English-only and deliberately vague, so it is never displayed: map the
+// machine-readable code to a localized sentence and keep the server message as a last resort.
+// UNAUTHORIZED covers both "wrong password" and "no such account" — that pair must stay
+// indistinguishable (the account-enumeration surface), so they share one message here by design;
+// a future maintainer should not "improve" this by splitting them back apart.
+function loginErrorMessage(e: unknown): string {
+  if (!(e instanceof ApiError)) return t('login.failed')
+  switch (e.code) {
+    case 'UNAUTHORIZED': return t('login.invalidCredentials')
+    case 'ACCOUNT_INACTIVE': return t('login.accountInactive')
+    case 'TOO_MANY_REQUESTS': {
+      const m = tooManyRequestsMessage(e)
+      return t(m.key, m.params ?? {})
+    }
+    default: return t('login.failed')
   }
 }
 
