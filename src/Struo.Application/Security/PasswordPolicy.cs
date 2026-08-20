@@ -2,7 +2,7 @@ using Struo.Application.Configuration;
 
 namespace Struo.Application.Security;
 
-/// <summary>Single home for the plaintext-password rules. Every REQUEST-PATH call site that accepts a
+/// <summary>Single home for the plaintext-password rules. Every request-path WRITE that accepts a
 /// password routes through <see cref="Validate"/> — inlining the check anywhere else lets those paths
 /// drift (which is exactly what this type replaced).
 /// <para>
