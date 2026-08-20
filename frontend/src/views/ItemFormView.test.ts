@@ -1,11 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import ItemFormView from './ItemFormView.vue'
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
+import ChangePasswordDialog from '../components/account/ChangePasswordDialog.vue'
 import { itemsApi } from '../api/itemsApi'
 import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
@@ -60,7 +61,15 @@ const meta = { name: 'article', label: 'Article', fields: [
 // The single app-wide ConfirmHost lives in AppShell, not here, so ConfirmDialog is not part of this
 // stub map. renderStubDefaultSlot lets the Save/History Button stubs render their label text so the
 // button assertions below can read it.
-const stubs = { ItemForm: true, Button: true, RevisionHistoryDrawer: true }
+// teleport: ChangePasswordDialog's vendored Dialog renders through reka's DialogPortal (built on
+// Vue's own Teleport) once opened; stubbed the same way UserMenu.test.ts / ChangePasswordDialog.test.ts
+// stub it, so a real teleport target absent from this test's jsdom tree never drops dialog content.
+const stubs = { ItemForm: true, Button: true, RevisionHistoryDrawer: true, teleport: true }
+
+// ChangePasswordDialog (mounted for real below) is a stateful component; without this, a wrapper
+// left over from an earlier test can keep reacting once a later test's spies are installed — the
+// exact hazard PR #35/#36 fixed for other view tests in this repo.
+enableAutoUnmount(afterEach)
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -98,6 +107,7 @@ const i18n = createI18n({
       effectiveLoadFailed: 'Failed to load effective permissions',
       grantsSaveFailedAfterCreate: "The role was created, but saving its permissions failed — retry from the role's edit page.",
     },
+    password: { resetTitle: 'Reset password' },
   } },
 })
 function mountView() {
@@ -907,6 +917,68 @@ describe('ItemFormView', () => {
     expect(panel.exists()).toBe(true)
     expect(panel.props('roleIds')).toEqual(['r1', 'r2'])
     expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', ['r1', 'r2'])
+  })
+
+  // ---- admin password-reset action on the User form (super-admin, existing user row only) ----
+
+  it('offers a reset-password action on an existing user row for a super admin', async () => {
+    vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
+
+    routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
+    const { schema } = setupStores() // superAdmin: true by default
+    ;(schema.get as any).mockReturnValue(userMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    const resetBtn = w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')
+    expect(resetBtn).toBeDefined()
+    expect(resetBtn!.attributes('type')).toBe('button') // must never fall through to an implicit submit
+
+    const dialog = w.findComponent(ChangePasswordDialog)
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.props('targetUserId')).toBe('u9')
+  })
+
+  it('hides the reset-password action for a non-super-admin', async () => {
+    routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
+    const { schema } = setupStores({ superAdmin: false })
+    ;(schema.get as any).mockReturnValue(userMeta)
+    useAuthStore().user = {
+      id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true, delete: false } },
+    }
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
+    expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
+  })
+
+  it('hides the reset-password action on the create form', async () => {
+    routeParams = { name: 'user' }; routeName = 'collection-create'
+    const { schema } = setupStores() // superAdmin: true, but create mode has no existing row
+    ;(schema.get as any).mockReturnValue(userMeta)
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
+    expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
+  })
+
+  it('hides the reset-password action on a non-user collection', async () => {
+    routeParams = { name: 'article', id: '5' }; routeName = 'collection-item'
+    setupStores() // superAdmin: true, but this is the `article` collection, not `user`
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
+    expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
   })
 
   // ---- unified leave guard + form Save flushes a dirty permission matrix ----
