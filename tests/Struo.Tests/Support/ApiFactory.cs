@@ -114,10 +114,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Seeds a non-super role with the given read/write grants, a fresh editor user,
-    /// the user-role link, and returns a logged-in client + the user id.
+    /// Seeds a non-super role with the given read/write grants, a fresh editor user, and the
+    /// user-role link, and returns the credentials + user id — WITHOUT logging in. Split out of
+    /// <see cref="CreateEditorClientAsync"/> so a derived host (e.g. via <c>WithWebHostBuilder</c>)
+    /// can seed through this base factory (both hosts share the one <see cref="SqliteTestDatabase"/>)
+    /// and then log the same user in against its OWN <c>HttpClient</c>/cookie jar.
     /// </summary>
-    public async Task<(HttpClient client, Guid userId)> CreateEditorClientAsync(
+    public async Task<(string email, string password, Guid userId)> SeedEditorAsync(
         string[] readCollections, string[] writeCollections)
     {
         Guid userId;
@@ -147,6 +150,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                     CanRead = readCollections.Contains(c), CanWrite = writeCollections.Contains(c)
                 }).ExecuteCommandAsync();
         }
+        return (email, password, userId);
+    }
+
+    /// <summary>
+    /// Seeds a non-super role with the given read/write grants, a fresh editor user,
+    /// the user-role link, and returns a logged-in client + the user id.
+    /// </summary>
+    public async Task<(HttpClient client, Guid userId)> CreateEditorClientAsync(
+        string[] readCollections, string[] writeCollections)
+    {
+        var (email, password, userId) = await SeedEditorAsync(readCollections, writeCollections);
         var client = CreateClient();
         // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
         // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.

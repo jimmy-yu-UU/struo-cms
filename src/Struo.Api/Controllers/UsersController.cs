@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Api.Http;
@@ -43,6 +44,10 @@ public sealed class UsersController(
     }
 
     [HttpPut("{id:guid}/password")]
+    // Same rationale as the login limiter, one layer in: the self-service branch runs a full Argon2id
+    // verify on a caller-supplied value, and being behind authentication puts it outside the login
+    // policy entirely. Partitioned per user — see PasswordRateLimitOptions.
+    [EnableRateLimiting("password")]
     public async Task<IActionResult> ChangePassword(Guid id, [FromBody] ChangePasswordRequest body, CancellationToken ct)
     {
         if (PasswordPolicy.Validate(body.NewPassword, passwordPolicy.Value) is { } policyError)

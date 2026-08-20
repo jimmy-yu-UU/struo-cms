@@ -76,6 +76,8 @@ try
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
     builder.Services.AddOptions<Struo.Application.Configuration.PasswordPolicyOptions>()
         .BindConfiguration(Struo.Application.Configuration.PasswordPolicyOptions.SectionName);
+    builder.Services.AddOptions<Struo.Application.Configuration.PasswordRateLimitOptions>()
+        .BindConfiguration(Struo.Application.Configuration.PasswordRateLimitOptions.SectionName);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
@@ -101,9 +103,21 @@ try
                 context.HttpContext.Response.Headers.RetryAfter =
                     ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
             }
+
+            // OnRejected is global across every policy, so the copy must come from the policy that
+            // actually rejected — a 429 from the change-password endpoint saying "login attempts" is
+            // simply wrong. PolicyName comes off the endpoint's [EnableRateLimiting] metadata.
+            var policyName = context.HttpContext.GetEndpoint()
+                ?.Metadata.GetMetadata<Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute>()
+                ?.PolicyName;
+            var message = policyName switch
+            {
+                "login" => "Too many login attempts. Please try again later.",
+                "password" => "Too many password change attempts. Please try again later.",
+                _ => "Too many requests. Please try again later.",
+            };
             await context.HttpContext.Response.WriteAsJsonAsync(
-                Struo.Api.Http.Envelope.Error(
-                    Struo.Api.Http.ErrorCodes.TooManyRequests, "Too many login attempts. Please try again later."),
+                Struo.Api.Http.Envelope.Error(Struo.Api.Http.ErrorCodes.TooManyRequests, message),
                 cancellationToken: ct);
         };
 
@@ -134,6 +148,36 @@ try
             {
                 PermitLimit = loginOptions.PermitLimit,
                 Window = TimeSpan.FromSeconds(loginOptions.WindowSeconds),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            });
+        });
+
+        rateLimiterOptions.AddPolicy("password", httpContext =>
+        {
+            var passwordOptions = httpContext.RequestServices
+                .GetRequiredService<IOptions<Struo.Application.Configuration.PasswordRateLimitOptions>>().Value;
+
+            // Partition key = the AUTHENTICATED user id. UseAuthentication runs before
+            // UseRateLimiter (see the middleware chain below), so the principal is already resolved
+            // here. Falling back to the client IP when it is somehow absent is deliberate: the
+            // endpoint is [Authorize]d so this should be unreachable, and a bounded-by-IP partition
+            // is a safer failure than an unbounded one.
+            var currentUser = httpContext.RequestServices
+                .GetRequiredService<Struo.Application.Abstractions.ICurrentUserAccessor>();
+            var partitionKey = currentUser.GetCurrentUserId()?.ToString()
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown";
+
+            if (!passwordOptions.Enabled)
+            {
+                return RateLimitPartition.GetNoLimiter<string>(partitionKey);
+            }
+
+            return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = passwordOptions.PermitLimit,
+                Window = TimeSpan.FromSeconds(passwordOptions.WindowSeconds),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             });
