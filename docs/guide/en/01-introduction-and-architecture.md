@@ -153,8 +153,8 @@ lockfile):
 | Language | TypeScript | `frontend/package.json` |
 | E2E testing | Playwright | `frontend/package.json` |
 
-Toolchain versions pinned in CI (`.github/workflows/ci.yml`): .NET SDK `10.0.x`, Node.js `24`, pnpm
-`10`.
+The .NET SDK, Node.js and pnpm versions every gate runs against are pinned in
+`.github/workflows/ci.yml`.
 
 ## Capability summary
 
