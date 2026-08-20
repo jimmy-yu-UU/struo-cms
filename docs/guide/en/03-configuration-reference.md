@@ -189,6 +189,20 @@ If a `Production`-environment start is still seeded with (or still configured to
 default password `admin`, the API logs a **warning** naming the exact setting to change — it does not
 refuse to start on that condition.
 
+## `Auth:Password`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `Auth:Password:MinLength` | int | `8` | Minimum accepted length for any plaintext password submitted to the API. |
+| `Auth:Password:MaxLength` | int | `128` | Maximum accepted length for any plaintext password submitted to the API. |
+
+Enforced at every request-path write that accepts a plaintext password — `POST /api/users` (create)
+and `PUT /api/users/{id}/password` (change) — through one shared validator, so the two call sites
+cannot drift from each other. `MaxLength` is a sanity bound, not a security control: Argon2id's cost
+is fixed by its own time/memory/parallelism parameters, not by input length, so a long password does
+not amplify hashing work. Override via `Auth__Password__MinLength` / `Auth__Password__MaxLength`;
+restart required.
+
 ## `Rbac:PublicReadCollections`
 
 | Key | Type | Default | Effect |

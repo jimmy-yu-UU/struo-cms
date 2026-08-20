@@ -40,6 +40,15 @@ public class PasswordPolicyTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Create_accepts_a_password_exactly_at_the_maximum()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync();
+        var resp = await client.PostAsJsonAsync("/api/users",
+            new { email = $"maxexact-{Guid.NewGuid():N}@struo.test", password = new string('x', 128), name = "MaxExact" });
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
     public async Task Change_password_rejects_a_new_password_below_the_minimum()
     {
         var (client, userId) = await factory.CreateEditorClientAsync([], []);

@@ -305,6 +305,11 @@ public sealed class ShippedConfigurationBindingTests
     public void Shipped_appsettings_login_rate_limit_keys_match_LoginRateLimitOptions() =>
         AssertShippedKeysMatchProperties<LoginRateLimitOptions>(LoginRateLimitOptions.SectionName);
 
+    /// <inheritdoc cref="Shipped_appsettings_Branding_keys_match_BrandingOptions"/>
+    [Fact]
+    public void Shipped_appsettings_password_policy_keys_match_PasswordPolicyOptions() =>
+        AssertShippedKeysMatchProperties<PasswordPolicyOptions>(PasswordPolicyOptions.SectionName);
+
     private static void AssertShippedKeysMatchProperties<TOptions>(string sectionName)
     {
         var keys = ShippedConfiguration().GetSection(sectionName).GetChildren()
