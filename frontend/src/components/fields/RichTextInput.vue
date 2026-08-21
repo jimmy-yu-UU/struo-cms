@@ -99,7 +99,7 @@ const editor = useEditor({
   content: absolutizeImageSrc(props.modelValue || ''),
   editable: !props.disabled,
   // Applied to the contenteditable element itself, not the outer .rich-text frame: the frame
-  // stays full width for its border/toolbar, while this is where the content measure should live.
+  // stays full width for its border/toolbar — confirmed live, content caps at the plugin's measure, left-aligned.
   editorProps: { attributes: { class: 'prose dark:prose-invert' } },
   extensions: [
     StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
