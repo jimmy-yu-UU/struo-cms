@@ -341,6 +341,13 @@ $ docker exec struo-postgres psql -U struo -d struo -t -c "select password from 
 是 `PUT /api/users/{id}/password`——無論是身為 super-admin 變更別人的密碼，還是身為帳號本人提供正確的
 `currentPassword`(見上方的自助式例外)；第 9 章記載了這個端點本身。)
 
+管理後台實際上把這個端點放在兩個入口，不是一個:每一位已登入的使用者，都能透過 app shell 右上角的
+帳號選單走自助式變更;super-admin 則是從使用者表單上的動作走重設路徑。自助式變更之所以放在 shell
+選單而不是使用者表單上，正是因為 `User` 是 `AdminOnly`(見上方)——一般使用者根本無法開啟那個表單，
+若把自助式變更放進表單裡，等於讓除了 super-admin 以外的每一種角色都失去變更自己密碼的途徑。
+`AdminOnly` 管控的是寫入，不是表單對其擁有者的可見性;真正讓「僅限管理員」這一半成立的，是重設動作
+本身的守衛。
+
 ## 管理後台中的有效權限預覽
 
 `GET /api/users/{id}/effective-permissions`(僅限 super-admin，第 9 章)的存在，正是為了讓管理後台的

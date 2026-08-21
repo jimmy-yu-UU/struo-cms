@@ -189,6 +189,11 @@ If a `Production`-environment start is still seeded with (or still configured to
 default password `admin`, the API logs a **warning** naming the exact setting to change — it does not
 refuse to start on that condition.
 
+The shipped default (`"admin"`, 5 characters) is shorter than the 8-character minimum the next section
+documents — that is not an oversight. The seeder hashes `Auth:BootstrapAdmin:Password` directly from
+config, bypassing `PasswordPolicy.Validate` entirely, so a fresh install always has a working login even
+before an operator has changed anything.
+
 ## `Auth:Password`
 
 | Key | Type | Default | Effect |

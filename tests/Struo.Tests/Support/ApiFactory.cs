@@ -69,8 +69,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // PasswordChangeRateLimitTests exists to catch. The ONE exception is the shared admin
                 // from CreateAuthenticatedClientAsync: every admin-authenticated password change in
                 // this collection spends down that single bucket. As of this writing
-                // UserCredentialWriteAuditTests uses 2 of the 5 permits (well inside the 60s test
-                // run), so there is headroom, but it is not unlimited. A future author adding more
+                // UserCredentialWriteAuditTests and PasswordChangeSemanticsTests together use 3 of the
+                // 5 permits (well inside the 60s test run), so there is headroom, but it is not
+                // unlimited. A future author adding more
                 // admin-authenticated password changes to this collection should either (a) use a
                 // fresh CreateEditorClientAsync user instead of the shared admin when the test doesn't
                 // specifically need admin privileges, or (b) raise RateLimiting:Password:PermitLimit

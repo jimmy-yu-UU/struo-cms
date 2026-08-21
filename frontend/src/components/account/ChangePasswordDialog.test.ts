@@ -74,6 +74,17 @@ describe('ChangePasswordDialog', () => {
     expect(w.text()).toContain(en.password.current)
   })
 
+  it('asks for the current password when a super-admin opens their own row (isSelf never consults isSuperAdmin)', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'self-id', isSuperAdmin: true, permissions: {} }
+    const w = mountDialog('self-id')
+    await flushPromises()
+    const inputs = w.findAll('input')
+    expect(inputs).toHaveLength(3)
+    expect(inputs[0].attributes('autocomplete')).toBe('current-password')
+    expect(w.text()).toContain(en.password.current)
+  })
+
   it('does not ask for the current password when the target is someone else', async () => {
     const w = mountDialog('other-id')
     await flushPromises()
