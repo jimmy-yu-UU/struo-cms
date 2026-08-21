@@ -28,6 +28,12 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 進行比對；驗證成功後，會直接以 `Cookie` 機制簽入一個 `ClaimsPrincipal`——密碼驗證與 cookie 核發發生在
 同一個請求之中，並不存在獨立的「以密碼交換 token」這道步驟。
 
+不過有兩種失敗結果被刻意合併成同一個代碼：密碼錯誤，以及對一個根本不存在的電子郵件嘗試登入，兩者都會
+解析成 `UNAUTHORIZED`(第 9 章)，因為把它們區分開來會打開一個帳號列舉的攻擊面。
+`AuthService.AuthenticateAsync` 會*先*驗證密碼雜湊、*之後*才檢查 `IsActive`，所以一個已停用的帳號，
+只有在呼叫端已經證明自己輸入了正確密碼之後，才會抵達它自己專屬的代碼(`ACCOUNT_INACTIVE`)——揭露這個
+代碼，不會洩漏呼叫端尚未證明過的任何資訊。
+
 ## Session cookie 與分散式 ticket 存放
 
 **cookie** 機制(`AuthSchemes.Cookie`，常數為 `"Cookies"`)是預設的 `AuthSchemes.Adaptive` policy
@@ -100,7 +106,7 @@ cookie 的請求同樣豁免。這正是為什麼上面那個 bearer `PUT` 不�
 `PermitLimit`(預設 `5`)、`WindowSeconds`(預設 `60`)。每一次匿名登入嘗試都會耗用完整的 Argon2id
 CPU 運算，無論結果為何，因此一次不受限的暴力破解嘗試同時也是一個 CPU 耗盡型的 DoS 攻擊媒介——這個限制器
 的存在正是為了界限這個風險，且只套用在 `AuthController` 自身端點之中的登入這個 action 上(登出／me／
-OIDC challenge 則刻意不受限制)。不過它並不是這個應用程式裡唯一的速率限制器:另一個獨立設定的限制器
+OIDC challenge 則刻意不受限制)。不過它並不是這個應用程式裡唯一的速率限制器：另一個獨立設定的限制器
 改守護 `PUT /api/users/{id}/password`，依呼叫端自己已驗證的使用者 id 分區，而不是依 client IP——它的
 設定見第 3 章，兩個限制器共用的 `429` 回應形狀見第 9 章。第 9 章也展示了登入限制器自身視窗耗盡後產生
 的即時 `429` 回應(`Retry-After: 60`，錯誤代碼 `TOO_MANY_REQUESTS`)；本章不會再次觸發它。
@@ -126,7 +132,7 @@ HTTP/1.1 404 Not Found
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 
 $ curl -s http://localhost:5221/api/config
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 啟用時，`Oidc:Authority`/`ClientId`/`ClientSecret` 在啟動時全部為必填(`ValidateOnStart`)；handler

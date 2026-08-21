@@ -31,6 +31,13 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 password verification and cookie issuance happen in the same request, there is no separate "exchange a
 password for a token" step.
 
+Two failure outcomes are deliberately merged into one code, though: a wrong password and a login
+attempt against an email that doesn't exist both resolve to `UNAUTHORIZED` (chapter 9), because telling
+them apart would open an account-enumeration surface. `AuthService.AuthenticateAsync` verifies the
+password hash *before* checking `IsActive`, so a deactivated account only ever reaches its own distinct
+code (`ACCOUNT_INACTIVE`) after the caller has already proven the correct password — surfacing that one
+leaks nothing the caller hadn't already demonstrated.
+
 ## Session cookies and the distributed ticket store
 
 The **cookie** scheme (`AuthSchemes.Cookie`, constant `"Cookies"`) is the one the default
@@ -137,7 +144,7 @@ HTTP/1.1 404 Not Found
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 
 $ curl -s http://localhost:5221/api/config
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 When enabled, `Oidc:Authority`/`ClientId`/`ClientSecret` are all required at startup

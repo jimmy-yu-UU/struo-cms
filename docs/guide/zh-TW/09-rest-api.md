@@ -92,7 +92,7 @@ PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-除了 `PAYLOAD_TOO_LARGE` 之外，以上每一個代碼都有即時觸發的範例:
+下方即時觸發的範例，涵蓋了以上除了 `PAYLOAD_TOO_LARGE`、`INTERNAL_SERVER_ERROR`(兩者都在下文中有說明為何略過)，以及三個密碼管理代碼之外的每一個代碼——`INVALID_CURRENT_PASSWORD` 在下方的 Users 章節有自己的即時範例;`NO_LOCAL_PASSWORD` 與 `ACCOUNT_INACTIVE` 則本章完全沒有即時觸發過:
 
 ```
 $ curl -s http://localhost:5221/api/languages
@@ -524,6 +524,9 @@ $ curl -s -i "http://localhost:5221/api/auth/login/oidc"
 $ curl -s "http://localhost:5221/api/config"
 {"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
+
+(這裡的 `brandName` 是上面品牌範例留下的已儲存覆寫值，不是 `Branding:Name` 在 appsettings.json 中的
+預設值 `"StruoCMS"`——那個預設值記載於第 3 章。)
 
 ### Ping (`PingController`，`api/ping`)——匿名
 

@@ -93,7 +93,7 @@ PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-Live-triggered examples for every code above except `PAYLOAD_TOO_LARGE`:
+Live-triggered examples below cover every code above except `PAYLOAD_TOO_LARGE`, `INTERNAL_SERVER_ERROR` (both excused further down), and the three password-management codes — `INVALID_CURRENT_PASSWORD` gets its own live example in the Users section further down instead; `NO_LOCAL_PASSWORD` and `ACCOUNT_INACTIVE` are not live-triggered anywhere in this chapter:
 
 ```
 $ curl -s http://localhost:5221/api/languages
@@ -536,6 +536,9 @@ $ curl -s -i "http://localhost:5221/api/auth/login/oidc"
 $ curl -s "http://localhost:5221/api/config"
 {"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
+
+(`brandName` here is the saved override from the branding example above, not `Branding:Name`'s
+appsettings.json default of `"StruoCMS"` — chapter 3 documents that default.)
 
 ### Ping (`PingController`, `api/ping`) — anonymous
 
