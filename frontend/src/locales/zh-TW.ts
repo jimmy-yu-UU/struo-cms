@@ -311,6 +311,7 @@ export default {
       link: '連結', horizontalRule: '水平線', insertImage: '插入圖片',
       undo: '復原', redo: '重做',
       linkPrompt: '連結網址', insertImageTitle: '插入圖片',
+      placeholder: '開始輸入…',
     },
   },
   filterBuilder: {

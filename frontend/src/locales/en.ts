@@ -313,6 +313,7 @@ export default {
       link: 'Link', horizontalRule: 'Horizontal rule', insertImage: 'Insert image',
       undo: 'Undo', redo: 'Redo',
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
+      placeholder: 'Write something…',
     },
   },
   filterBuilder: {

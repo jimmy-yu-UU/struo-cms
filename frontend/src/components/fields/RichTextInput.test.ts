@@ -21,6 +21,7 @@ const i18n = createI18n({
       link: 'Link', horizontalRule: 'Horizontal rule', insertImage: 'Insert image',
       undo: 'Undo', redo: 'Redo',
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
+      placeholder: 'Write something…',
     },
   } } },
 })
@@ -282,6 +283,22 @@ describe('RichTextInput', () => {
     const classes = w.get('.ProseMirror').classes()
     expect(classes).toContain('prose')
     expect(classes).toContain('dark:prose-invert')
+    w.unmount()
+  })
+
+  it('shows the localized placeholder on an empty document', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
+    await flushPromises()
+    const p = w.get('.ProseMirror p')
+    expect(p.classes()).toContain('is-editor-empty')
+    expect(p.attributes('data-placeholder')).toBe('Write something…')
+    w.unmount()
+  })
+
+  it('does not mark a non-empty document as empty', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    expect(w.get('.ProseMirror p').classes()).not.toContain('is-editor-empty')
     w.unmount()
   })
 })

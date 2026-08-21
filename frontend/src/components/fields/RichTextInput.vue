@@ -10,6 +10,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
+import { Placeholder } from '@tiptap/extensions'
 import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
   Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
@@ -110,6 +111,7 @@ const editor = useEditor({
     Color,
     Subscript.extend({ excludes: 'superscript' }),
     Superscript.extend({ excludes: 'subscript' }),
+    Placeholder.configure({ placeholder: () => t('fields.richtext.placeholder') }),
   ],
   onUpdate: () => emitNormalized(),
 })
@@ -268,4 +270,14 @@ defineExpose({ editor, insertImage })
 <style scoped>
 /* TipTap's own generated DOM, not a vendored ui/ component — styling it here is legitimate. */
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
+
+/* Placeholder is admin chrome, not article content — a rendered article has no placeholder — so it
+   deliberately uses the admin's own token rather than a typography variable. */
+.rich-text__content :deep(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
 </style>
