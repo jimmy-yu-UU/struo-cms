@@ -50,8 +50,9 @@ $ curl -s http://localhost:5221/api/languages
   `EnvelopeResultFilter` 永遠不會看到它，而且當它收斂為 `INTERNAL_SERVER_ERROR` 時，該例外會先在
   伺服器端被記錄下來。
 - **MVC 之前的 middleware** (`CsrfProtectionMiddleware` 的 403、cookie 驗證方案的
-  `OnRedirectToLogin`/`OnRedirectToAccessDenied` 401/403、登入速率限制器的 429) 是手動寫入相同的
-  信封形狀，使用 `EnvelopeJsonOptionsHolder` 中共用的 camelCase `JsonSerializerOptions`——因為這些
+  `OnRedirectToLogin`/`OnRedirectToAccessDenied` 401/403、登入與變更密碼這兩個速率限制器的
+  429——兩者都經過同一個 `OnRejected` callback) 是手動寫入相同的信封形狀，使用
+  `EnvelopeJsonOptionsHolder` 中共用的 camelCase `JsonSerializerOptions`——因為這些
   元件的執行時機，早於 MVC 自身的 `JsonOptions` (同樣是 camelCase，設定於 `Program.cs`) 生效之前。
 
 ## 錯誤代碼

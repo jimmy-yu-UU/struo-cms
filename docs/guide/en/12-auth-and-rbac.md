@@ -373,6 +373,14 @@ the database. The only supported way to change a password is `PUT /api/users/{id
 a super-admin changing someone else's, or as the account's own owner supplying a correct
 `currentPassword` (see the self-service exception above); chapter 9 documents the endpoint itself.)
 
+The admin SPA surfaces that endpoint at two entry points, not one: every signed-in user reaches
+self-service through the account menu in the app shell (top right), and a super-admin reaches the
+reset action from the User form. Self-service lives in the shell menu rather than on the User form
+itself precisely because `User` is `AdminOnly` (above) — a non-super-admin can never open that form at
+all, so putting self-service there would leave every other role with no route to their own password.
+`AdminOnly` gates writes, not the form's visibility to its owner; it is the guard on the reset action
+that actually keeps the admin-only half of this true.
+
 ## Effective-permission preview in the admin
 
 `GET /api/users/{id}/effective-permissions` (super-admin only, chapter 9) exists specifically so the

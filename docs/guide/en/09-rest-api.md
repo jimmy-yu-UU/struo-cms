@@ -52,9 +52,10 @@ identical regardless of which layer answered:
   **outside** the MVC pipeline, so `EnvelopeResultFilter` never sees it, and the exception is logged
   server-side first when it collapses to `INTERNAL_SERVER_ERROR`.
 - **Pre-MVC middleware** (`CsrfProtectionMiddleware`'s 403, the cookie scheme's `OnRedirectToLogin`/
-  `OnRedirectToAccessDenied` 401/403, the login rate limiter's 429) writes the same envelope shape by
-  hand, using the shared camelCase `JsonSerializerOptions` in `EnvelopeJsonOptionsHolder` — because
-  these run before MVC's own `JsonOptions` (also camelCase, configured in `Program.cs`) would apply.
+  `OnRedirectToAccessDenied` 401/403, the login and password-change rate limiters' 429s — both route
+  through the same `OnRejected` callback) writes the same envelope shape by hand, using the shared
+  camelCase `JsonSerializerOptions` in `EnvelopeJsonOptionsHolder` — because these run before MVC's own
+  `JsonOptions` (also camelCase, configured in `Program.cs`) would apply.
 
 ## Error codes
 

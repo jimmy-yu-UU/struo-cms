@@ -74,8 +74,15 @@ try
     // Config-bound tuning for the login rate limiter below (defaults: 5 attempts / 60s).
     builder.Services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
+    // Fail fast at boot: MinLength is published to the SPA and sizes the admin password generator, so
+    // a misconfigured MinLength > MaxLength would hand an administrator a "Generate strong password"
+    // button that produces passwords the server always rejects, with no error until the next write.
     builder.Services.AddOptions<Struo.Application.Configuration.PasswordPolicyOptions>()
-        .BindConfiguration(Struo.Application.Configuration.PasswordPolicyOptions.SectionName);
+        .BindConfiguration(Struo.Application.Configuration.PasswordPolicyOptions.SectionName)
+        .Validate(
+            o => o.MinLength >= 1 && o.MinLength <= o.MaxLength,
+            "Auth:Password:MinLength must be >= 1 and <= Auth:Password:MaxLength.")
+        .ValidateOnStart();
     builder.Services.AddOptions<Struo.Application.Configuration.PasswordRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.PasswordRateLimitOptions.SectionName);
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)

@@ -67,7 +67,7 @@ public sealed class UsersController(
             // OIDC-provisioned accounts carry an empty hash. Guard BEFORE verifying — handing an
             // empty encoded string to the hasher is unacceptable in either outcome (a throw is a
             // masked 500; a false reads as "wrong current password", which is misleading).
-            if (string.IsNullOrEmpty(existing.PasswordEncoded))
+            if (string.IsNullOrWhiteSpace(existing.PasswordEncoded))
                 return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.NoLocalPassword,
                     "This account signs in through an external provider and has no local password.");
 
