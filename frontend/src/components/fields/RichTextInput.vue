@@ -36,7 +36,7 @@ defineOptions({ name: 'RichTextInput' })
 const props = defineProps<{ modelValue: string; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const langStore = useLanguageStore()
 const imageDialogOpen = ref(false)
 const files = ref<FileRow[]>([])
@@ -114,6 +114,15 @@ const editor = useEditor({
     Placeholder.configure({ placeholder: () => t('fields.richtext.placeholder') }),
   ],
   onUpdate: () => emitNormalized(),
+})
+
+// Placeholder text is delivered as a ProseMirror decoration, and decorations only recompute when
+// editor state changes. Switching the UI locale dispatches nothing, so nudge the view with an
+// empty transaction to force the decoration to be rebuilt with the new string.
+watch(locale, () => {
+  const ed = editor.value
+  if (!ed) return
+  ed.view.dispatch(ed.state.tr)
 })
 
 // Keep the editor in sync with external model changes without clobbering the cursor.

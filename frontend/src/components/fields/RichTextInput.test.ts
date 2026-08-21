@@ -23,7 +23,8 @@ const i18n = createI18n({
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
       placeholder: 'Write something…',
     },
-  } } },
+  } },
+  'zh-TW': { fields: { richtext: { placeholder: '開始輸入…' } } } },
 })
 
 // Dialog/Popover are reka compound components: DialogContent/PopoverContent inject context that
@@ -40,6 +41,7 @@ describe('RichTextInput', () => {
   })
   afterEach(() => {
     vi.restoreAllMocks()
+    i18n.global.locale.value = 'en'
   })
 
   it('rejects a javascript: URL from the link prompt (defense-in-depth)', async () => {
@@ -299,6 +301,16 @@ describe('RichTextInput', () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
     await flushPromises()
     expect(w.get('.ProseMirror p').classes()).not.toContain('is-editor-empty')
+    w.unmount()
+  })
+
+  it('re-renders the placeholder when the UI locale changes', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
+    await flushPromises()
+    expect(w.get('.ProseMirror p').attributes('data-placeholder')).toBe('Write something…')
+    i18n.global.locale.value = 'zh-TW'
+    await flushPromises()
+    expect(w.get('.ProseMirror p').attributes('data-placeholder')).toBe('開始輸入…')
     w.unmount()
   })
 })
