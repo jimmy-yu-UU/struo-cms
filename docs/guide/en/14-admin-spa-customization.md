@@ -85,6 +85,47 @@ touches first-party chrome such as the sidebar or breadcrumb, the corresponding 
 Chapter 3's `Branding:Name`/`Branding:LogoUrl` reach only the product name and logo, never the color
 palette — the palette is a template default edited in source, not a per-deployment configuration key.
 
+### The rich-text editor's typography
+
+The `richText` field's editable surface (`frontend/src/components/fields/RichTextInput.vue`) carries
+`class="prose dark:prose-invert"` on its ProseMirror content element, rendering with
+`@tailwindcss/typography`'s factory defaults — no custom CSS file, class, or `--tw-prose-*` override
+of its own. The intent is for the editing surface to resemble a rendered article rather than plain
+unstyled HTML.
+
+This is a suggestion, not a requirement, and the choice stays with the frontend developer: if your
+site's own frontend also renders content with Tailwind and `@tailwindcss/typography`, the editor's
+appearance will track the published article closely, because both sides are using the same plugin's
+defaults on the same stored HTML. If your frontend uses a different rendering stack, override the
+`--tw-prose-*` custom properties on `.prose` to pull the editor's look toward your own layout instead
+— those properties are `@tailwindcss/typography`'s own mechanism (see that package's documentation),
+not a contract StruoCMS defines or guarantees.
+
+Four gaps between the editor and a rendered article are deliberately left as accepted trade-offs, not
+defects:
+
+- **Dark mode.** `dark:prose-invert` guarantees the dark editor stays readable; it is not tuned to
+  match any particular frontend's dark theme. The faithful preview of the plugin's defaults is the
+  light theme.
+- **Font.** The editor inherits the admin SPA's own font stack. The template deliberately does not
+  guess a font on a fork's behalf.
+- **Background.** The editing surface sits on the admin's card surface, not on a site's page
+  background — the page chrome a frontend puts around an article is outside what this template
+  controls.
+- **Table header cells.** TipTap's table extension stores header cells as `<th>` elements inside
+  `<tbody>`, with no `<thead>` element at all. `@tailwindcss/typography`'s table rules key off
+  `thead th`, `tbody td`, `thead`, and `tbody tr`, so a header cell in this markup matches none of
+  them: it renders with no padding and no header emphasis, while body cells keep their padding and
+  every row keeps its rule. This is not a divergence between the editor and the published article —
+  because the stored HTML is exactly what a frontend renders, a frontend that also uses
+  `@tailwindcss/typography` shows the identical header treatment. The gap lives in the markup
+  TipTap's table extension writes, not in this styling choice, and it is not something to fix with
+  extra CSS here.
+
+None of this makes the editor an exact preview of production rendering: a frontend's own
+customization of Tailwind, of the typography plugin, or a rendering stack that uses neither, is
+outside what this template controls.
+
 ## Restyling a vendored `ui/` component
 
 **`frontend/src/components/ui/` is vendored, read-only generated output — never edit it, and never
