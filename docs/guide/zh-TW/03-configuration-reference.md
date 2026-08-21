@@ -190,6 +190,10 @@
 決定的，不受輸入長度影響，所以較長的密碼並不會放大雜湊運算量。可透過 `Auth__Password__MinLength` /
 `Auth__Password__MaxLength` 覆寫;需要重新啟動。
 
+這兩個鍵同樣以 `ValidateOnStart` 繫結:`MinLength` 必須 `>= 1` 且 `<= MaxLength`，所以一個設定錯誤的
+覆寫值(例如把 `MinLength` 調到高於 `MaxLength`)會讓啟動時就拋出 `OptionsValidationException` 而失
+敗，而不是讓這份設定被接受，之後每一次密碼請求才發現一律被拒。
+
 ## `Rbac:PublicReadCollections`
 
 | 鍵 | 型別 | 預設值 | 作用 |
