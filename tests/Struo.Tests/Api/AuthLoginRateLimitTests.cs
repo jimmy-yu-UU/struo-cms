@@ -48,6 +48,13 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
         using var doc = JsonDocument.Parse(await third.Content.ReadAsStringAsync());
         doc.RootElement.GetProperty("success").GetBoolean().Should().BeFalse();
         doc.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("TOO_MANY_REQUESTS");
+        // OnRejected now dispatches its message by which policy rejected the request (added
+        // alongside the "password" policy), so this exact literal is no longer a hardcoded string
+        // that can't regress on its own — pin it here so a silent fall-through to the generic
+        // "_" branch (e.g. if the PolicyName metadata lookup ever came back null for this policy)
+        // shows up as a failure here instead of only in a documentation transcript.
+        doc.RootElement.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be("Too many login attempts. Please try again later.");
     }
 
     [Fact]

@@ -173,6 +173,27 @@
 如果一個 `Production` 環境的啟動仍以 (或仍設定為要植入) 字面預設密碼 `admin` 做為種子，API 會記錄
 一則**警告**，指名該變更哪一項設定——但它並不會因此拒絕啟動。
 
+出貨預設值 (`"admin"`，5 個字元) 比下一節記載的 8 字元下限還短——這不是疏漏。種子邏輯直接把
+`Auth:BootstrapAdmin:Password` 從設定值雜湊，完全不經過 `PasswordPolicy.Validate`，所以一次全新安裝
+在操作者還沒改過任何東西之前，就已經有一個能登入的帳號。
+
+## `Auth:Password`
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `Auth:Password:MinLength` | int | `8` | API 所接受的任何明文密碼的最小長度。 |
+| `Auth:Password:MaxLength` | int | `128` | API 所接受的任何明文密碼的最大長度。 |
+
+這項規則會在每一個接受明文密碼的請求路徑寫入點被強制執行——`POST /api/users` (建立使用者) 與
+`PUT /api/users/{id}/password` (變更密碼)——兩者都透過同一個共用的驗證器，因此不會彼此漂移。
+`MaxLength` 只是一個健全性上限，不是安全控制:Argon2id 的成本是由它自己的時間/記憶體/平行度參數
+決定的，不受輸入長度影響，所以較長的密碼並不會放大雜湊運算量。可透過 `Auth__Password__MinLength` /
+`Auth__Password__MaxLength` 覆寫;需要重新啟動。
+
+這兩個鍵同樣以 `ValidateOnStart` 繫結:`MinLength` 必須 `>= 1` 且 `<= MaxLength`，所以一個設定錯誤的
+覆寫值(例如把 `MinLength` 調到高於 `MaxLength`)會讓啟動時就拋出 `OptionsValidationException` 而失
+敗，而不是讓這份設定被接受，之後每一次密碼請求才發現一律被拒。
+
 ## `Rbac:PublicReadCollections`
 
 | 鍵 | 型別 | 預設值 | 作用 |
@@ -214,6 +235,24 @@
 (例如 Kubernetes) 中，且已在 ingress/edge/WAF 那一層改用逐 IP 速率限制時，才把它設為 `false`——那
 一層能看到真實的 client IP，且位於每個 pod 之前，而這個限流器的狀態是記憶體內、逐 pod 的，因此在
 那種拓樸下無法在多個 replica 間強制一個真正的全域限制。需要重新啟動。
+
+## `RateLimiting:Password`
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `RateLimiting:Password:Enabled` | bool | `true` | 開啟或關閉改密碼的速率限制器。 |
+| `RateLimiting:Password:PermitLimit` | int | `5` | 在視窗期間內，每個已驗證使用者允許的嘗試次數。 |
+| `RateLimiting:Password:WindowSeconds` | int | `60` | 固定視窗的長度，單位為秒。 |
+
+此限流器只套用在 `PUT /api/users/{id}/password` 上 (固定視窗，依**已驗證呼叫端**自己的使用者 id
+分區，而不是依 client IP)。採用不同的分區鍵是刻意的:這個端點永遠有一個呼叫端身分可以拿來當鍵，所以不同於
+`RateLimiting:Login` 的匿名端點，它不會碰到那個但書——登入限流器的逐 IP 鍵，在反向代理沒有轉發
+真實 client IP 時，會收斂成單一共用桶。這也代表被消耗的是**動作發出者**的額度:一個
+正在為其他帳號做批次重設密碼的超級管理員，會耗盡自己單一的額度並被限流擋下，而每一個目標使用者自己
+的額度則完全不受影響——這個端點永遠無法被用來讓某個受害者無法變更自己的密碼。對於直接部署或
+單一實例部署而言，`Enabled = true` 屬於安全的預設值;只有在多 pod 部署中，且這個記憶體內、逐 pod
+的限流器無法在多個 replica 間強制一個真正的全域上限時，才把它設為 `false`——這跟 `RateLimiting:Login`
+面對的但書相同。需要重新啟動。
 
 ## `Branding`
 

@@ -29,6 +29,7 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
         [FromServices] IOptions<BrandingOptions> branding,
         [FromServices] ISiteSettingsStore settings,
         [FromServices] FileService files,
+        [FromServices] IOptions<PasswordPolicyOptions> passwordPolicy,
         CancellationToken ct)
     {
         // This endpoint is anonymous and was hitting the DB on every request. 30s staleness
@@ -53,7 +54,16 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
                 logoUrl = $"/api/files/{id}/content";
         }
 
-        var payload = new { oidcEnabled = oidc.Value.Enabled, brandName = name, brandLogoUrl = logoUrl };
+        // passwordMinLength is startup-bound config (not DB state), so it is safe under the 30s
+        // cache below — a change requires a restart anyway. Publishing it anonymously is fine: a
+        // minimum length is discoverable by trying, and the SPA needs it before anyone signs in.
+        var payload = new
+        {
+            oidcEnabled = oidc.Value.Enabled,
+            brandName = name,
+            brandLogoUrl = logoUrl,
+            passwordMinLength = passwordPolicy.Value.MinLength
+        };
         cache.Set(CacheKey, payload, CacheDuration);
         return Ok(payload);
     }

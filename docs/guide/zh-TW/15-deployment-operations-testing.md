@@ -16,6 +16,7 @@
 | `Auth:BootstrapAdmin:Password` | Overridden before the **first** boot against a fresh database | 只會被查閱一次，也就是 `users` 資料表第一次被建立的當下(`DataSeeder.cs`)；之後的啟動永遠不會再讀取它。一次 `Production` 啟動，若仍然用字面預設值 `admin` 完成種子資料建立，會記錄一則 `WARNING`，指名確切要變更的設定(`DataSeeder.WarnIfDefaultAdminPasswordInProduction`)，但**不會**拒絕啟動——已即時驗證：`[17:30:16 WRN] Bootstrap admin is using the default password 'admin'. Change it immediately via Auth__BootstrapAdmin__Password.` 這則警告比較的是**目前設定的**值與字面字串 `"admin"`(在 `WarnIfDefaultAdminPasswordInProduction` 內部)，而不是該帳號實際儲存的密碼雜湊——因此一個維運者若先前讓資料庫以預設值完成種子建立，之後才在設定中改用一個高強度的值，會讓這則警告在之後每一次啟動時都被靜音，即使所儲存的帳號實際上仍然是原本那組預設密碼的雜湊。 |
 | `RateLimiting:Login:Enabled` | `false` only when per-IP limiting is enforced at the ingress/edge | 應用程式內建的登入限制器以 `Connection.RemoteIpAddress` 分區，其計數器存在於逐行程的記憶體中(`Program.cs`，`AddRateLimiter`/`AddPolicy("login", …)` 那個區塊)。若在一個扇出到 N 個複本的負載平衡器背後仍保留為 `true`，實際生效的上限會不一致地變成大約 N 倍於設定值，而且永遠不是一個真正的全域上限——程式碼自己的註解就明白寫著正是為此才「委由 ingress/edge/WAF 處理」。 |
 | Reverse-proxy forwarded headers | The deployment must add `UseForwardedHeaders` (with `KnownProxies`/`KnownNetworks`) itself | `Program.cs`在整條管線中完全沒有呼叫過 `app.UseForwardedHeaders(...)`——登入限制器分區鍵旁邊的註解就明白寫著這件事(「這裡刻意不處理」)。在任何反向代理之後，`Connection.RemoteIpAddress` 都會是**代理伺服器自己的**位址，而不是真正客戶端的位址，因此每一次透過該代理的登入嘗試都會被摺疊進單一個速率限制分區——結果要嘛是代理伺服器背後的每一位使用者共用同一個每 60 秒 5 次的額度(一次意外的自我加害型阻斷服務)，要嘛在搭配 `RateLimiting:Login:Enabled=false` 時，若邊緣層實際上也沒有提供逐 IP 保護，就會完全沒有任何逐 IP 保護存在。 |
+| `RateLimiting:Password:Enabled` | `false` only when a global per-user limit doesn't matter for a multi-pod deployment | 改密碼限制器依**已驗證呼叫端的使用者 id** 分區，不是依 `Connection.RemoteIpAddress`，所以它**不會**有上面那一列描述的、反向代理把所有請求收斂成單一共用桶的失效模式。不過它仍然有登入限制器的另一種失效模式：它的計數器是位於行程內、逐 pod 的記憶體(`Program.cs`、`AddPolicy("password", …)`)，所以在 N 個 replica 背後，同一個使用者的請求可能落在不同的 pod 上，讓有效的逐使用者上限變成大約設定值的 N 倍，而不是一個真正的全域上限。 |
 | Scalar / OpenAPI | Not reachable in Production — do not rely on network-level blocking alone | `app.MapOpenApi()` 與 `app.MapScalarApiReference(...)` 都由 `if (!app.Environment.IsProduction())`(`Program.cs`)守護。已針對一個 Production 模式的執行個體進行即時驗證：`GET /scalar` → 404、`GET /openapi/v1.json` → 404。(第 10 章記載了鄰近的 GraphQL schema 揭露路由——introspection 與 `GET /graphql?sdl`——它們由 `GraphQl:ExposeSchema` 把關，預設在 Production 同樣是關閉的。) |
 | `Redis:ConnectionString` | Set to a real Redis instance for any deployment with more than one API replica, or any deployment where sessions must survive a restart | 留空時會回退到 `AddDistributedMemoryCache()`(`AuthWiring.cs`)——一個支撐 cookie 驗證 ticket 存放區的行程內、逐執行個體快取。重新啟動會遺失每一個 session(強制重新登入)；在負載平衡器背後有一個以上的複本時，每個複本各自擁有自己的 session 存放區，因此一個使用者的 session 只有在核發它的那個複本上才有效。 |
 | Cookie `Secure` policy | The reverse proxy/load balancer must terminate HTTPS in front of a Production deployment | `AuthWiring.cs` 只要 `env.IsProduction()` 就會設定 `CookieSecurePolicy.Always`(否則為 `CookieSecurePolicy.SameAsRequest`，這樣開發/測試用的 HTTP host(即執行本章範例的
@@ -114,8 +115,9 @@ checksum/down-migration/dry-run)——全部收錄於 **`db/migrations/README.md
 
 ## 啟動行為與失敗模式
 
-- **快速失敗的選項驗證：** `Database`、`Struo:Files`、`Oidc` 與 `Query` 都以 `ValidateOnStart`
-  繫結；一個缺少的 `Database:ConnectionString`、一個缺少 `ClientId` 的 `Oidc:Enabled=true` 設定，
+- **快速失敗的選項驗證：** `Database`、`Struo:Files`、`Oidc`、`Query` 與 `Auth:Password` 都以
+  `ValidateOnStart` 繫結；一個缺少的 `Database:ConnectionString`、一個缺少 `ClientId` 的
+  `Oidc:Enabled=true` 設定，
   或一個超出範圍的 `Query:MaxLimit`，都會在應用程式開始監聽之前拋出 `OptionsValidationException`，
   而不是以一次令人困惑的首次請求失敗浮現出來
   (`tests/Struo.Tests/DependencyInjection/OptionsValidationTests.cs` 針對一個真實的泛型 host，正好

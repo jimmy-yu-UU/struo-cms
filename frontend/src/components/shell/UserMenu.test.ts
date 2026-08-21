@@ -1,12 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import UserMenu from './UserMenu.vue'
+import ChangePasswordDialog from '../account/ChangePasswordDialog.vue'
 import { useAuthStore } from '../../stores/authStore'
 import { i18n } from '../../i18n'
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+
+// UserMenu now mounts ChangePasswordDialog, a stateful component -- without this, a wrapper left
+// over from one test can keep reacting once the next test's spies/mocks are installed, the exact
+// hazard PR #35/#36 fixed for other view tests in this repo.
+enableAutoUnmount(afterEach)
 
 function mountMenu() {
   // reka-ui's DropdownMenu portal is itself named "Teleport" -- see vitest.setup.ts for why
@@ -26,6 +32,12 @@ describe('UserMenu', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     i18n.global.locale.value = 'zh-TW'
+  })
+
+  // No global restoreMocks/clearMocks is configured for this suite -- the logout spy below must be
+  // restored here or it would keep intercepting auth.logout in every later test file.
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('shows the super-admin role label', () => {
@@ -77,5 +89,33 @@ describe('UserMenu', () => {
 
     expect(logoutSpy).toHaveBeenCalledOnce()
     expect(push).toHaveBeenCalledWith({ name: 'login' })
+  })
+
+  it('offers a change-password item that opens the dialog for the signed-in user', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'me', email: 'me@x', isSuperAdmin: false, permissions: {} }
+    const wrapper = mountMenu()
+
+    await openMenu(wrapper)
+    const item = wrapper.findAll('[role="menuitem"]').find((el) => el.text().includes('變更密碼'))
+    expect(item).toBeDefined()
+    await item!.trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.findComponent(ChangePasswordDialog)
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.props('open')).toBe(true)
+    expect(dialog.props('targetUserId')).toBe('me')
+  })
+
+  it('does not render the change-password item when there is no signed-in user', async () => {
+    const auth = useAuthStore()
+    auth.user = null
+    const wrapper = mountMenu()
+
+    await openMenu(wrapper)
+    const item = wrapper.findAll('[role="menuitem"]').find((el) => el.text().includes('變更密碼'))
+    expect(item).toBeUndefined()
+    expect(wrapper.findComponent(ChangePasswordDialog).exists()).toBe(false)
   })
 })

@@ -19,15 +19,15 @@
     "@lucide/vue": "^1.31.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/vue-table": "^9.1.2",
-    "@tiptap/extension-image": "^3.29.2",
-    "@tiptap/extension-link": "^3.29.2",
-    "@tiptap/extension-subscript": "^3.29.2",
-    "@tiptap/extension-superscript": "^3.29.2",
-    "@tiptap/extension-table": "^3.29.2",
-    "@tiptap/extension-text-align": "^3.29.2",
-    "@tiptap/extension-text-style": "^3.29.2",
-    "@tiptap/starter-kit": "^3.29.2",
-    "@tiptap/vue-3": "^3.29.2",
+    "@tiptap/extension-image": "^3.30.0",
+    "@tiptap/extension-link": "^3.30.0",
+    "@tiptap/extension-subscript": "^3.30.0",
+    "@tiptap/extension-superscript": "^3.30.0",
+    "@tiptap/extension-table": "^3.30.0",
+    "@tiptap/extension-text-align": "^3.30.0",
+    "@tiptap/extension-text-style": "^3.30.0",
+    "@tiptap/starter-kit": "^3.30.0",
+    "@tiptap/vue-3": "^3.30.0",
     "@vueuse/core": "^14.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -52,6 +52,6 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10",
-    "vue-tsc": "^3.3.9"
+    "vue-tsc": "^3.3.10"
   }
 }

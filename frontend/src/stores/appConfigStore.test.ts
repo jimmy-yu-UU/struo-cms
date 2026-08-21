@@ -17,7 +17,7 @@ describe('appConfigStore', () => {
 
   it('load() populates state from the API', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
-      oidcEnabled: true, brandName: 'Acme', brandLogoUrl: 'https://x/logo.svg',
+      oidcEnabled: true, brandName: 'Acme', brandLogoUrl: 'https://x/logo.svg', passwordMinLength: 14,
     })
     const store = useAppConfigStore()
     await store.load()
@@ -32,6 +32,26 @@ describe('appConfigStore', () => {
     await store.load()
     expect(store.brandName).toBe('StruoCMS')
     expect(store.oidcEnabled).toBe(false)
+  })
+
+  it('loads passwordMinLength from the config endpoint', async () => {
+    vi.spyOn(api, 'getAppConfig').mockResolvedValue({
+      oidcEnabled: false, brandName: 'B', brandLogoUrl: null, passwordMinLength: 14,
+    })
+    const store = useAppConfigStore()
+
+    await store.load()
+
+    expect(store.passwordMinLength).toBe(14)
+  })
+
+  it('keeps the safe default when the config endpoint fails', async () => {
+    vi.spyOn(api, 'getAppConfig').mockRejectedValue(new Error('down'))
+    const store = useAppConfigStore()
+
+    await store.load()
+
+    expect(store.passwordMinLength).toBe(8)
   })
 
   it('brandInitial is the upper-cased first character', () => {

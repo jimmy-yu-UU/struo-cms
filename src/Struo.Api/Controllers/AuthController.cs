@@ -25,8 +25,16 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     {
         var result = await auth.AuthenticateAsync(body.Email, body.Password, ct);
         if (!result.Succeeded)
-            return Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
-                Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
+        {
+            // Inactive is only ever returned when the password verified (AuthService checks the hash
+            // first), so it gets its own code. InvalidCredentials deliberately covers BOTH "wrong
+            // password" and "no such account" under one code — that pair must stay indistinguishable.
+            return result.Failure == Struo.Application.Security.AuthFailure.Inactive
+                ? Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
+                    Struo.Api.Http.ErrorCodes.AccountInactive, "This account has been deactivated.")
+                : Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
+                    Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
+        }
 
         var identity = new ClaimsIdentity(AuthSchemes.Cookie);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
