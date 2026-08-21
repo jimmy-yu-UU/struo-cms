@@ -228,6 +228,24 @@
 一層能看到真實的 client IP，且位於每個 pod 之前，而這個限流器的狀態是記憶體內、逐 pod 的，因此在
 那種拓樸下無法在多個 replica 間強制一個真正的全域限制。需要重新啟動。
 
+## `RateLimiting:Password`
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `RateLimiting:Password:Enabled` | bool | `true` | 開啟或關閉改密碼的速率限制器。 |
+| `RateLimiting:Password:PermitLimit` | int | `5` | 在視窗期間內，每個已驗證使用者允許的嘗試次數。 |
+| `RateLimiting:Password:WindowSeconds` | int | `60` | 固定視窗的長度，單位為秒。 |
+
+此限流器只套用在 `PUT /api/users/{id}/password` 上 (固定視窗，依**已驗證呼叫端**自己的使用者 id
+分區，而不是依 client IP)。採用不同的分區鍵是刻意的:這個端點永遠有一個呼叫端身分可以拿來當鍵，所以
+——不同於 `RateLimiting:Login` 的匿名端點——它不受那個會讓登入限流器的逐 IP 鍵，在沒有轉發真實
+client IP 的反向代理背後，收斂成單一共用桶的但書影響。這也代表被消耗的是**動作發出者**的額度:一個
+正在為其他帳號做批次重設密碼的超級管理員，會耗盡自己單一的額度並被限流擋下，而每一個目標使用者自己
+的額度則完全不受影響——這個端點永遠無法被用來把某個受害者鎖在自己的密碼變更之外。對於直接部署或
+單一實例部署而言，`Enabled = true` 屬於安全的預設值;只有在多 pod 部署中，且這個記憶體內、逐 pod
+的限流器無法在多個 replica 間強制一個真正的全域上限時，才把它設為 `false`——這跟 `RateLimiting:Login`
+面對的但書相同。需要重新啟動。
+
 ## `Branding`
 
 | 鍵 | 型別 | 預設值 | 作用 |

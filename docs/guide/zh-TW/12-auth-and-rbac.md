@@ -99,9 +99,11 @@ cookie 的請求同樣豁免。這正是為什麼上面那個 bearer `PUT` 不�
 `src/Struo.Application/Configuration/LoginRateLimitOptions.cs`)：`Enabled`(預設 `true`)、
 `PermitLimit`(預設 `5`)、`WindowSeconds`(預設 `60`)。每一次匿名登入嘗試都會耗用完整的 Argon2id
 CPU 運算，無論結果為何，因此一次不受限的暴力破解嘗試同時也是一個 CPU 耗盡型的 DoS 攻擊媒介——這個限制器
-的存在正是為了界限這個風險，且只套用在登入這個 action 上(登出／me／OIDC challenge 則刻意不受限制)。
-第 9 章展示了視窗耗盡後產生的即時 `429` 回應(`Retry-After: 60`，錯誤代碼 `TOO_MANY_REQUESTS`)；本章
-不會再次觸發它。
+的存在正是為了界限這個風險，且只套用在 `AuthController` 自身端點之中的登入這個 action 上(登出／me／
+OIDC challenge 則刻意不受限制)。不過它並不是這個應用程式裡唯一的速率限制器:另一個獨立設定的限制器
+改守護 `PUT /api/users/{id}/password`，依呼叫端自己已驗證的使用者 id 分區，而不是依 client IP——它的
+設定見第 3 章，兩個限制器共用的 `429` 回應形狀見第 9 章。第 9 章也展示了登入限制器自身視窗耗盡後產生
+的即時 `429` 回應(`Retry-After: 60`，錯誤代碼 `TOO_MANY_REQUESTS`)；本章不會再次觸發它。
 
 **何時停用它：** 只有在多複本部署(例如 Kubernetes)中，且改由 ingress/edge/WAF 這一層強制執行逐 IP
 速率限制時，才將 `Enabled` 設為 `false`——那一層看得到真正的用戶端 IP，且位於每個 pod 之前，而這個限制
@@ -273,14 +275,16 @@ $ curl -s -i -X PUT http://localhost:5221/api/roles/<id>/permissions -H "X-Struo
 於 `ChangePassword` 的自助式分支之中。這是整個身分／RBAC 表面中唯一一條自助式寫入路徑；其他每一個 `UsersController`/
 `RolesController` action(建立使用者、核發／撤銷 access token、有效權限預覽、角色權限矩陣)都無條件
 需要 super-admin，沒有任何自助式例外。以下針對 `editor@example.com`(沒有任何管理授權)變更自己密碼
-的情境進行了即時驗證：一個錯誤的 `currentPassword` 會被拒絕為 `401`——這是「知識證明」而非管理員關卡，
-所以是 `UNAUTHORIZED` 而非 `FORBIDDEN`——而正確的值則會成功：
+的情境進行了即時驗證：一個錯誤的 `currentPassword` 會被拒絕為 `400`，代碼是
+`INVALID_CURRENT_PASSWORD`——這是「知識證明」而非管理員關卡，但也刻意**不是** `401`/`UNAUTHORIZED`，
+因為呼叫端本來就持有一個有效的 session；SPA 的全域 401 處理器只要看到 `401` 就會清除 session，所以
+沿用那個代碼在這裡會讓呼叫端因為一個單純的打字錯誤而被登出——而正確的 `currentPassword` 則會成功：
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"wrongpass"}'
-HTTP/1.1 401 Unauthorized
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+HTTP/1.1 400 Bad Request
+{"success":false,"error":{"code":"INVALID_CURRENT_PASSWORD","message":"Current password is incorrect."}}
 
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"editorpass1"}'

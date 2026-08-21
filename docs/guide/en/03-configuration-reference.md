@@ -249,6 +249,26 @@ limiting is instead enforced at the ingress/edge/WAF — that layer sees the rea
 front of every pod, whereas this limiter's state is in-memory and per-pod, so it cannot enforce a true
 global limit across replicas in that topology. Restart required.
 
+## `RateLimiting:Password`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `RateLimiting:Password:Enabled` | bool | `true` | Turns the change-password rate limiter on or off. |
+| `RateLimiting:Password:PermitLimit` | int | `5` | Attempts allowed per authenticated user within the window. |
+| `RateLimiting:Password:WindowSeconds` | int | `60` | Fixed-window length, in seconds. |
+
+This limiter applies only to `PUT /api/users/{id}/password` (fixed-window, partitioned by the
+**authenticated caller's** user id rather than client IP). That different partition key is deliberate:
+this endpoint always has a caller identity to key on, so — unlike `RateLimiting:Login`'s anonymous
+endpoint — it is immune to the reverse-proxy caveat that collapses the login limiter's per-IP key into a
+single shared bucket behind a proxy that doesn't forward the real client IP. It also means the *acting*
+user is whose budget gets spent: a super-admin doing bulk password resets for other accounts burns down
+their own single bucket and gets throttled past it, while every target user's own budget is left
+completely untouched — this endpoint can never be used to lock a victim out of changing their own
+password. `Enabled = true` is secure-by-default for a direct or single-instance deployment; set it to
+`false` only in multi-pod deployments where this in-memory, per-pod limiter cannot enforce a true global
+limit across replicas — the same caveat `RateLimiting:Login` has. Restart required.
+
 ## `Branding`
 
 | Key | Type | Default | Effect |
