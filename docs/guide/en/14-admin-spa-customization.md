@@ -97,9 +97,14 @@ This is a suggestion, not a requirement, and the choice stays with the frontend 
 site's own frontend also renders content with Tailwind and `@tailwindcss/typography`, the editor's
 appearance will track the published article closely, because both sides are using the same plugin's
 defaults on the same stored HTML. If your frontend uses a different rendering stack, override the
-`--tw-prose-*` custom properties on `.prose` to pull the editor's look toward your own layout instead
-— those properties are `@tailwindcss/typography`'s own mechanism (see that package's documentation),
-not a contract StruoCMS defines or guarantees.
+`--tw-prose-*` custom properties on `.prose` in `frontend/src/assets/tokens.css`, where the plugin
+is registered (`@plugin "@tailwindcss/typography"`), to pull the editor's look toward your own
+layout instead. Write the override as a plain rule, not inside a `@layer` or `@utility` block: the
+plugin's own `.prose` rule is emitted inside `@layer utilities`, and the same rule as `theme.css`
+above applies — an unlayered declaration outranks a layered one at equal specificity — so a plain
+rule wins here too, while a layered override would silently lose. Those properties are
+`@tailwindcss/typography`'s own mechanism (see that package's documentation), not a contract
+StruoCMS defines or guarantees.
 
 Four gaps between the editor and a rendered article are deliberately left as accepted trade-offs, not
 defects:
@@ -113,10 +118,11 @@ defects:
   background — the page chrome a frontend puts around an article is outside what this template
   controls.
 - **Table header cells.** TipTap's table extension stores header cells as `<th>` elements inside
-  `<tbody>`, with no `<thead>` element at all. `@tailwindcss/typography`'s table rules key off
-  `thead th`, `tbody td`, `thead`, and `tbody tr`, so a header cell in this markup matches none of
-  them: it renders with no padding and no header emphasis, while body cells keep their padding and
-  every row keeps its rule. This is not a divergence between the editor and the published article —
+  `<tbody>`, with no `<thead>` element at all. The `@tailwindcss/typography` rules that supply
+  padding and header emphasis key off `thead th`, `tbody td`, `thead`, and `tbody tr`, so a header
+  cell in this markup matches none of them: it renders with no padding and no header emphasis,
+  while body cells keep their padding and every row keeps its rule. This is not a divergence
+  between the editor and the published article —
   because the stored HTML is exactly what a frontend renders, a frontend that also uses
   `@tailwindcss/typography` shows the identical header treatment. The gap lives in the markup
   TipTap's table extension writes, not in this styling choice, and it is not something to fix with
