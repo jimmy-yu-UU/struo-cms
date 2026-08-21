@@ -58,14 +58,14 @@ identical regardless of which layer answered:
 
 ## Error codes
 
-`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) declares exactly these ten stable `code` values. This
+`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) declares exactly these thirteen stable `code` values. This
 is the same catalog GraphQL's `StruoErrorFilter` uses (chapter 10) — a `PermissionDeniedException`
 maps to the identical code on both protocols, for example — so a client that already handles GraphQL
 errors recognizes REST errors by the same string.
 
 | Code | Typical status | Meaning |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | No/invalid credentials, or a `PermissionDeniedException` reached while unauthenticated (`DomainErrorMap` picks this over `FORBIDDEN` specifically because the caller isn't authenticated at all). |
+| `UNAUTHORIZED` | 401 | No/invalid credentials, or a `PermissionDeniedException` reached while unauthenticated (`DomainErrorMap` picks this over `FORBIDDEN` specifically because the caller isn't authenticated at all). A login with a *correct* password on a deactivated account does **not** land here — that gets its own code below (`ACCOUNT_INACTIVE`), since the caller has already proven the credential. |
 | `FORBIDDEN` | 403 | Authenticated but not permitted — a per-collection RBAC denial, an `AdminOnly`-collection write attempted without super-admin, or a missing `X-Struo-CSRF` header. |
 | `NOT_FOUND` | 404 | Unknown id, unknown collection (`CollectionNotFoundException`), or any bare `NotFound()` result. |
 | `CONFLICT` | 409 | A `RelationConflictException` — deleting a row another row still references under `OnDelete.Restrict` (chapter 7) — or any other bare `409` result. |
@@ -73,8 +73,11 @@ errors recognizes REST errors by the same string.
 | `BAD_USER_INPUT` | 400 | A `QueryException` — malformed query parameters, an unknown filter field, a failed application-level check (weak password, duplicate/unknown role-permission collection, malformed id, a required-field-missing write — see below), etc. |
 | `VALIDATION` | 400 | ASP.NET Core model-binding/model-state failure (a request-body property that fails `[Required]`/data-annotation validation before the action even runs) — the only code that carries `details`. |
 | `INTERNAL_SERVER_ERROR` | 500 | Any exception `DomainErrorMap` doesn't recognize. The client-facing message is always the masked generic string `"An internal error occurred."`; the real exception is logged server-side, never leaked to the response. |
-| `TOO_MANY_REQUESTS` | 429 | The `POST /api/auth/login` rate limiter rejected the request (fixed-window per client IP; chapter 3's `RateLimiting:Login` section). Written directly from the limiter's `OnRejected` callback — no exception is thrown, so `DomainErrorMap` is never consulted for this one. |
+| `TOO_MANY_REQUESTS` | 429 | Either of two independent fixed-window rate limiters rejected the request: `POST /api/auth/login` (partitioned by client IP; chapter 3's `RateLimiting:Login` section) or `PUT /api/users/{id}/password` (partitioned by the authenticated caller's user id; chapter 3's `RateLimiting:Password` section). Both write this code directly from the same shared `OnRejected` callback — no exception is thrown, so `DomainErrorMap` is never consulted for this one; the callback picks its message wording ("login attempts" vs. "password change attempts") from whichever policy actually rejected. |
 | `PAYLOAD_TOO_LARGE` | 413 | A streamed upload whose actual bytes exceed `Struo:Files:MaxUploadBytes` even though the declared `Content-Length` passed the up-front check (a "lying" or chunked upload). Not exercised live in this chapter — triggering it needs an upload past the configured 25 MB default — but the mapping is real: `DomainErrorMap.StatusFor` → 413. |
+| `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password`, self-service branch: the caller supplied a missing or wrong `currentPassword`. Deliberately not `401` — the caller already holds a valid session, and the SPA's global 401 handler clears the session on every `401` it sees, so reusing `UNAUTHORIZED` here would log the caller out on a plain typo. |
+| `NO_LOCAL_PASSWORD` | 400 | Self-service password change attempted on an account provisioned entirely through external OIDC, whose stored hash is the empty string because it never had a local password. |
+| `ACCOUNT_INACTIVE` | 401 | `POST /api/auth/login` with a *correct* password on a deactivated account. Only reachable after a successful hash verify, so surfacing it leaks nothing the caller hadn't already proven — unlike splitting "wrong password" from "no such account", which stays merged under `UNAUTHORIZED` above (chapter 12 covers why). |
 
 `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) is the single source of the exception→code
 mapping, shared verbatim with GraphQL's error filter:
@@ -139,7 +142,7 @@ the masked/logged behavior are read directly from `StruoExceptionHandler`/`Domai
 | `404 Not Found` | `NOT_FOUND`. |
 | `409 Conflict` | `CONFLICT` or `VERSION_CONFLICT`. |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`. |
-| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (login only). |
+| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (the login limiter or the password-change limiter — see above). |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`. |
 
 ```
@@ -426,8 +429,9 @@ HTTP/1.1 204 No Content
 $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"email":"editor@example.com","password":"editorpass1"}'
 {"success":true,"data":{"id":"...","email":"editor@example.com","name":null}}
 
-$ curl -s -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"newpassword2"}'
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+$ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"newpassword2"}'
+HTTP/1.1 400 Bad Request
+{"success":false,"error":{"code":"INVALID_CURRENT_PASSWORD","message":"Current password is incorrect."}}
 
 $ curl -s -X POST http://localhost:5221/api/users/<id>/access-token -H "X-Struo-CSRF: 1" -b cookies.txt
 {"success":true,"data":{"token":"<token>"}}
@@ -484,7 +488,7 @@ it without waiting out the 30-second TTL:
 $ curl -s -X PUT http://localhost:5221/api/settings/branding -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"brandName":"StruoCMS Docs Demo","logoFileId":null}'
 {"success":true,"data":{"brandName":"StruoCMS Docs Demo","brandLogoUrl":null}}
 $ curl -s "http://localhost:5221/api/config"
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 ### Schema (`SchemaController`, `api/schema`) — requires Cookie or Bearer only
@@ -526,11 +530,11 @@ $ curl -s -i "http://localhost:5221/api/auth/login/oidc"
 
 | Method & path | Response |
 |---|---|
-| `GET /api/config` | `200`, `{ oidcEnabled, brandName, brandLogoUrl }` — cached 30s server-side; evicted immediately by a branding save |
+| `GET /api/config` | `200`, `{ oidcEnabled, brandName, brandLogoUrl, passwordMinLength }` — cached 30s server-side; evicted immediately by a branding save |
 
 ```
 $ curl -s "http://localhost:5221/api/config"
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 ### Ping (`PingController`, `api/ping`) — anonymous

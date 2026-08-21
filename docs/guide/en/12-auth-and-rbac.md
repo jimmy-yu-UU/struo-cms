@@ -107,9 +107,13 @@ itself (see either chapter for the full OWASP rationale and the middleware's `Re
 `Enabled` (default `true`), `PermitLimit` (default `5`), `WindowSeconds` (default `60`). Every anonymous
 login attempt burns full Argon2id CPU regardless of outcome, so an unbounded brute-force attempt is also
 a CPU-exhaustion DoS vector — this limiter exists specifically to bound that, applied to the login
-action only (logout/me/the OIDC challenge are deliberately not limited). Chapter 9 shows the live `429`
-response (`Retry-After: 60`, error code `TOO_MANY_REQUESTS`) this produces once the window is exhausted;
-this chapter does not re-trigger it.
+action alone among `AuthController`'s own endpoints (logout/me/the OIDC challenge are deliberately not
+limited). It is not, however, the only rate limiter in the app: a second, independently-configured
+limiter guards `PUT /api/users/{id}/password` instead, partitioned by the caller's own authenticated
+user id rather than client IP — see chapter 3 for its configuration and chapter 9 for the shared `429`
+response shape both limiters write. Chapter 9 also shows the live `429` this login limiter itself
+produces once its own window is exhausted (`Retry-After: 60`, error code `TOO_MANY_REQUESTS`); this
+chapter does not re-trigger it.
 
 **When to disable it:** set `Enabled` to `false` only in a multi-replica deployment (e.g. Kubernetes)
 where per-IP rate limiting is instead enforced at the ingress/edge/WAF layer — that layer sees the real
@@ -298,14 +302,16 @@ the entire identity/RBAC surface; every other `UsersController`/`RolesController
 user, issuing/revoking an access token, the effective-permissions preview, the role permission matrix)
 requires super-admin unconditionally, with no self-service exception. Live-verified against
 `editor@example.com` (no admin grant of any kind), changing their own password: a wrong `currentPassword`
-is rejected as `401` — proof-of-knowledge, not an admin gate, so it is `UNAUTHORIZED` rather than
-`FORBIDDEN` — and the correct one succeeds:
+is rejected as `400` with code `INVALID_CURRENT_PASSWORD` — proof-of-knowledge, not an admin gate, but
+deliberately **not** `401`/`UNAUTHORIZED` either, because the caller already holds a valid session; the
+SPA's global 401 handler clears the session on every `401` it sees, so reusing that code here would log
+the caller out on a plain typo — and the correct `currentPassword` succeeds:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"wrongpass"}'
-HTTP/1.1 401 Unauthorized
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+HTTP/1.1 400 Bad Request
+{"success":false,"error":{"code":"INVALID_CURRENT_PASSWORD","message":"Current password is incorrect."}}
 
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"editorpass1"}'
