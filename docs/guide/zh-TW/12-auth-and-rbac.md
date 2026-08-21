@@ -28,6 +28,12 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 進行比對；驗證成功後，會直接以 `Cookie` 機制簽入一個 `ClaimsPrincipal`——密碼驗證與 cookie 核發發生在
 同一個請求之中，並不存在獨立的「以密碼交換 token」這道步驟。
 
+不過有兩種失敗結果被刻意合併成同一個代碼：密碼錯誤，以及對一個根本不存在的電子郵件嘗試登入，兩者都會
+解析成 `UNAUTHORIZED`(第 9 章)，因為把它們區分開來會打開一個帳號列舉的攻擊面。
+`AuthService.AuthenticateAsync` 會*先*驗證密碼雜湊、*之後*才檢查 `IsActive`，所以一個已停用的帳號，
+只有在呼叫端已經證明自己輸入了正確密碼之後，才會抵達它自己專屬的代碼(`ACCOUNT_INACTIVE`)——揭露這個
+代碼，不會洩漏呼叫端尚未證明過的任何資訊。
+
 ## Session cookie 與分散式 ticket 存放
 
 **cookie** 機制(`AuthSchemes.Cookie`，常數為 `"Cookies"`)是預設的 `AuthSchemes.Adaptive` policy
@@ -99,9 +105,11 @@ cookie 的請求同樣豁免。這正是為什麼上面那個 bearer `PUT` 不�
 `src/Struo.Application/Configuration/LoginRateLimitOptions.cs`)：`Enabled`(預設 `true`)、
 `PermitLimit`(預設 `5`)、`WindowSeconds`(預設 `60`)。每一次匿名登入嘗試都會耗用完整的 Argon2id
 CPU 運算，無論結果為何，因此一次不受限的暴力破解嘗試同時也是一個 CPU 耗盡型的 DoS 攻擊媒介——這個限制器
-的存在正是為了界限這個風險，且只套用在登入這個 action 上(登出／me／OIDC challenge 則刻意不受限制)。
-第 9 章展示了視窗耗盡後產生的即時 `429` 回應(`Retry-After: 60`，錯誤代碼 `TOO_MANY_REQUESTS`)；本章
-不會再次觸發它。
+的存在正是為了界限這個風險，且只套用在 `AuthController` 自身端點之中的登入這個 action 上(登出／me／
+OIDC challenge 則刻意不受限制)。不過它並不是這個應用程式裡唯一的速率限制器：另一個獨立設定的限制器
+改守護 `PUT /api/users/{id}/password`，依呼叫端自己已驗證的使用者 id 分區，而不是依 client IP——它的
+設定見第 3 章，兩個限制器共用的 `429` 回應形狀見第 9 章。第 9 章也展示了登入限制器自身視窗耗盡後產生
+的即時 `429` 回應(`Retry-After: 60`，錯誤代碼 `TOO_MANY_REQUESTS`)；本章不會再次觸發它。
 
 **何時停用它：** 只有在多複本部署(例如 Kubernetes)中，且改由 ingress/edge/WAF 這一層強制執行逐 IP
 速率限制時，才將 `Enabled` 設為 `false`——那一層看得到真正的用戶端 IP，且位於每個 pod 之前，而這個限制
@@ -124,7 +132,7 @@ HTTP/1.1 404 Not Found
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 
 $ curl -s http://localhost:5221/api/config
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 啟用時，`Oidc:Authority`/`ClientId`/`ClientSecret` 在啟動時全部為必填(`ValidateOnStart`)；handler
@@ -273,14 +281,16 @@ $ curl -s -i -X PUT http://localhost:5221/api/roles/<id>/permissions -H "X-Struo
 於 `ChangePassword` 的自助式分支之中。這是整個身分／RBAC 表面中唯一一條自助式寫入路徑；其他每一個 `UsersController`/
 `RolesController` action(建立使用者、核發／撤銷 access token、有效權限預覽、角色權限矩陣)都無條件
 需要 super-admin，沒有任何自助式例外。以下針對 `editor@example.com`(沒有任何管理授權)變更自己密碼
-的情境進行了即時驗證：一個錯誤的 `currentPassword` 會被拒絕為 `401`——這是「知識證明」而非管理員關卡，
-所以是 `UNAUTHORIZED` 而非 `FORBIDDEN`——而正確的值則會成功：
+的情境進行了即時驗證：一個錯誤的 `currentPassword` 會被拒絕為 `400`，代碼是
+`INVALID_CURRENT_PASSWORD`——這是「知識證明」而非管理員關卡，但也刻意**不是** `401`/`UNAUTHORIZED`，
+因為呼叫端本來就持有一個有效的 session；SPA 的全域 401 處理器只要看到 `401` 就會清除 session，所以
+沿用那個代碼在這裡會讓呼叫端因為一個單純的打字錯誤而被登出——而正確的 `currentPassword` 則會成功：
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"wrongpass"}'
-HTTP/1.1 401 Unauthorized
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+HTTP/1.1 400 Bad Request
+{"success":false,"error":{"code":"INVALID_CURRENT_PASSWORD","message":"Current password is incorrect."}}
 
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"editorpass1"}'
@@ -330,6 +340,13 @@ $ docker exec struo-postgres psql -U struo -d struo -t -c "select password from 
 (上面的雜湊值在寫入前後完全相同——送出的 `"IGNORED-VALUE"` 從未抵達資料庫。變更密碼唯一受支援的方式
 是 `PUT /api/users/{id}/password`——無論是身為 super-admin 變更別人的密碼，還是身為帳號本人提供正確的
 `currentPassword`(見上方的自助式例外)；第 9 章記載了這個端點本身。)
+
+管理後台實際上把這個端點放在兩個入口，不是一個：每一位已登入的使用者，都能透過 app shell 右上角的
+帳號選單走自助式變更；super-admin 則是從使用者表單上的動作走重設路徑。自助式變更之所以放在 shell
+選單而不是使用者表單上，是因為那個表單本來就不是一條可靠的路徑——一般角色通常都沒有被授予 `user`
+的讀取權限，所以那個表單根本不會出現在大多數角色的側邊選單裡；而承上一段，就算某個角色真的持有這項
+授權，走進表單也看不到重設動作，因為那個動作有它自己明確的 super-admin 守衛。shell 選單才是每一位
+已登入使用者，真正靠得住、能變更自己密碼的那條路徑。
 
 ## 管理後台中的有效權限預覽
 
