@@ -97,6 +97,9 @@ function onImageSelected(id: string): void {
 const editor = useEditor({
   content: absolutizeImageSrc(props.modelValue || ''),
   editable: !props.disabled,
+  // Applied to the contenteditable element itself, not the outer .rich-text frame: the frame
+  // stays full width for its border/toolbar, while this is where the content measure should live.
+  editorProps: { attributes: { class: 'prose dark:prose-invert' } },
   extensions: [
     StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
     Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
@@ -237,7 +240,7 @@ defineExpose({ editor, insertImage })
       <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"
         :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
     </div>
-    <EditorContent class="rich-text__content min-h-32 p-2.5 [&_th]:bg-muted" :editor="editor" />
+    <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor" />
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain
@@ -265,7 +268,4 @@ defineExpose({ editor, insertImage })
 <style scoped>
 /* TipTap's own generated DOM, not a vendored ui/ component — styling it here is legitimate. */
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
-.rich-text__content :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; }
-.rich-text__content :deep(th), .rich-text__content :deep(td) { border: 1px solid var(--border); padding: 4px 8px; }
-.rich-text__content :deep(th) { text-align: left; }
 </style>

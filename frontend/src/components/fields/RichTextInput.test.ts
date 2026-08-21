@@ -273,4 +273,15 @@ describe('RichTextInput', () => {
     await flushPromises()
     expect(w.get('input').attributes('aria-label')).toBe('Search files…')
   })
+
+  it('applies the typography prose classes to the editable surface', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    // The classes go on the contenteditable element itself, not the padded box around it, so the
+    // measure caps the text while the bordered frame stays full width.
+    const classes = w.get('.ProseMirror').classes()
+    expect(classes).toContain('prose')
+    expect(classes).toContain('dark:prose-invert')
+    w.unmount()
+  })
 })
