@@ -93,7 +93,7 @@ PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-Live-triggered examples below cover every code above except `PAYLOAD_TOO_LARGE`, `INTERNAL_SERVER_ERROR` (both excused further down), and the three password-management codes — `INVALID_CURRENT_PASSWORD` gets its own live example in the Users section further down instead; `NO_LOCAL_PASSWORD` and `ACCOUNT_INACTIVE` are not live-triggered anywhere in this chapter:
+Live-triggered examples below cover every code above except `PAYLOAD_TOO_LARGE` (excused above, in its own row), `INTERNAL_SERVER_ERROR` (excused below), and three more codes: `INVALID_CURRENT_PASSWORD` gets its own live example in the Users section further down instead; `NO_LOCAL_PASSWORD` and `ACCOUNT_INACTIVE` are not live-triggered anywhere in this chapter:
 
 ```
 $ curl -s http://localhost:5221/api/languages
