@@ -92,7 +92,7 @@ PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-下方即時觸發的範例，涵蓋了以上除了 `PAYLOAD_TOO_LARGE`、`INTERNAL_SERVER_ERROR`(兩者都在下文中有說明為何略過)，以及三個密碼管理代碼之外的每一個代碼——`INVALID_CURRENT_PASSWORD` 在下方的 Users 章節有自己的即時範例;`NO_LOCAL_PASSWORD` 與 `ACCOUNT_INACTIVE` 則本章完全沒有即時觸發過:
+下方即時觸發的範例，涵蓋了以上除了 `PAYLOAD_TOO_LARGE`(已在上方自己的那一列中說明為何略過)、`INTERNAL_SERVER_ERROR`(在下文中說明為何略過)，以及另外三個代碼之外的每一個代碼——`INVALID_CURRENT_PASSWORD` 在下方的 Users 章節有自己的即時範例;`NO_LOCAL_PASSWORD` 與 `ACCOUNT_INACTIVE` 則本章完全沒有即時觸發過:
 
 ```
 $ curl -s http://localhost:5221/api/languages
