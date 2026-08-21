@@ -6,6 +6,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* The rich-text editor's content area uses this plugin's factory-default prose styling as-is,
+   deliberately not mapped onto this file's semantic tokens below — the goal is for the editing
+   surface to resemble rendered article content, not admin chrome. */
+@plugin "@tailwindcss/typography";
+
 /* shadcn defaults to `.dark`; this app has always toggled `.app-dark` and persists it in
    localStorage['struo.theme'] (src/theme/resolveInitialTheme.ts). Re-point the variant
    rather than renaming the class — the class name is load-bearing for e2e and for the
