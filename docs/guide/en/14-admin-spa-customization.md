@@ -101,8 +101,8 @@ defaults on the same stored HTML. If your frontend uses a different rendering st
 is registered (`@plugin "@tailwindcss/typography"`), to pull the editor's look toward your own
 layout instead. Write the override as a plain rule, not inside a `@layer` or `@utility` block: the
 plugin's own `.prose` rule is emitted inside `@layer utilities`, and the same rule as `theme.css`
-above applies — an unlayered declaration outranks a layered one at equal specificity — so a plain
-rule wins here too, while a layered override would silently lose. Those properties are
+above applies — an unlayered declaration outranks a layered one regardless of specificity — so a
+plain rule wins here too, while a layered override would silently lose. Those properties are
 `@tailwindcss/typography`'s own mechanism (see that package's documentation), not a contract
 StruoCMS defines or guarantees.
 

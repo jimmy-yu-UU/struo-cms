@@ -94,8 +94,8 @@ import './assets/theme.css'
 `frontend/src/assets/tokens.css`——這個 plugin 本身註冊的地方(`@plugin "@tailwindcss/typography"`)——
 覆寫 `.prose` 上的 `--tw-prose-*` 這些自訂屬性，讓編輯器的外觀靠近你自己的排版。請把覆寫寫成一般規則，
 不要放進 `@layer` 或 `@utility` 區塊：這個 plugin 自己的 `.prose` 規則是放在 `@layer utilities` 裡的，
-跟前面 `theme.css` 那條「沒有分層的宣告會贏過有分層的宣告」一樣，一般規則在相同特異度下會勝過它，放進
-分層裡就會靜默失效。這些屬性是 `@tailwindcss/typography` 自己的機制(請參閱該套件的文件)，不是 StruoCMS
+跟前面 `theme.css` 那條「沒有分層的宣告會贏過有分層的宣告」一樣，無論特異度高低，一般規則都會勝過它，
+放進分層裡就會靜默失效。這些屬性是 `@tailwindcss/typography` 自己的機制(請參閱該套件的文件)，不是 StruoCMS
 定義或保證的契約。
 
 編輯器與已渲染文章之間有四項刻意保留的落差，它們是接受的代價，而不是缺陷：
