@@ -50,20 +50,21 @@ $ curl -s http://localhost:5221/api/languages
   `EnvelopeResultFilter` 永遠不會看到它，而且當它收斂為 `INTERNAL_SERVER_ERROR` 時，該例外會先在
   伺服器端被記錄下來。
 - **MVC 之前的 middleware** (`CsrfProtectionMiddleware` 的 403、cookie 驗證方案的
-  `OnRedirectToLogin`/`OnRedirectToAccessDenied` 401/403、登入速率限制器的 429) 是手動寫入相同的
-  信封形狀，使用 `EnvelopeJsonOptionsHolder` 中共用的 camelCase `JsonSerializerOptions`——因為這些
+  `OnRedirectToLogin`/`OnRedirectToAccessDenied` 401/403、登入與變更密碼這兩個速率限制器的
+  429——兩者都經過同一個 `OnRejected` callback) 是手動寫入相同的信封形狀，使用
+  `EnvelopeJsonOptionsHolder` 中共用的 camelCase `JsonSerializerOptions`——因為這些
   元件的執行時機，早於 MVC 自身的 `JsonOptions` (同樣是 camelCase，設定於 `Program.cs`) 生效之前。
 
 ## 錯誤代碼
 
-`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) 恰好宣告了以下這十個穩定的 `code` 值。這正是
+`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) 恰好宣告了以下這十三個穩定的 `code` 值。這正是
 GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉例來說，一個
 `PermissionDeniedException` 在兩種協定上都會對應到相同的代碼——所以一個已經處理過 GraphQL 錯誤的
 客戶端，也能透過同一組字串辨識出 REST 的錯誤。
 
 | 代碼 | 常見狀態碼 | 意義 |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | 沒有憑證或憑證無效，或是遇到 `PermissionDeniedException` 但呼叫端根本尚未通過驗證 (`DomainErrorMap` 之所以選擇這個而不是 `FORBIDDEN`，正是因為呼叫端完全沒有通過驗證)。 |
+| `UNAUTHORIZED` | 401 | 沒有憑證或憑證無效，或是遇到 `PermissionDeniedException` 但呼叫端根本尚未通過驗證 (`DomainErrorMap` 之所以選擇這個而不是 `FORBIDDEN`，正是因為呼叫端完全沒有通過驗證)。以*正確*密碼登入一個已停用的帳號，並**不會**落在這裡——那有自己專屬的代碼 (`ACCOUNT_INACTIVE`，見下文)，因為呼叫端已經證明了自己的憑證。 |
 | `FORBIDDEN` | 403 | 已通過驗證但不被允許——一次逐集合 (collection) 的 RBAC 拒絕、一次未具超級管理員身分卻嘗試寫入 `AdminOnly` 集合、或是缺少 `X-Struo-CSRF` 標頭。 |
 | `NOT_FOUND` | 404 | 未知的 id、未知的集合 (`CollectionNotFoundException`)，或任何裸 `NotFound()` 結果。 |
 | `CONFLICT` | 409 | 一個 `RelationConflictException`——刪除一列仍被另一列在 `OnDelete.Restrict` 下參照的資料 (第 7 章)——或任何其他裸 `409` 結果。 |
@@ -72,8 +73,11 @@ GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉
 | `VALIDATION` | 400 | ASP.NET Core 自身的 model-binding/model-state 驗證失敗 (一個請求本文屬性在 action 尚未執行之前，就未通過 `[Required]`/資料註記驗證)——唯一會帶有 `details` 的代碼。 |
 | `INTERNAL_SERVER_ERROR` | 500 | 任何 `DomainErrorMap` 無法辨識的例外。給客戶端看到的訊息永遠是遮蔽過的通用字串
 `"An internal error occurred."`;真正的例外會在伺服器端被記錄下來，絕不會外洩到回應中。 |
-| `TOO_MANY_REQUESTS` | 429 | `POST /api/auth/login` 的速率限制器拒絕了這次請求 (以客戶端 IP 為單位的固定視窗;第 3 章的 `RateLimiting:Login` 段落)。這是直接從限制器的 `OnRejected` 回呼寫出的——沒有任何例外被擲出，所以這個代碼從不會經由 `DomainErrorMap` 查詢。 |
+| `TOO_MANY_REQUESTS` | 429 | 兩個各自獨立的固定視窗速率限制器之一拒絕了這次請求:`POST /api/auth/login` (以客戶端 IP 為單位;第 3 章的 `RateLimiting:Login` 段落)，或是 `PUT /api/users/{id}/password` (以已驗證呼叫端的使用者 id 為單位;第 3 章的 `RateLimiting:Password` 段落)。兩者都是直接從同一個共用的 `OnRejected` 回呼寫出的——沒有任何例外被擲出，所以這個代碼從不會經由 `DomainErrorMap` 查詢;回呼會依實際拒絕的是哪一個政策，挑選對應的訊息文字 (「login attempts」或「password change attempts」)。 |
 | `PAYLOAD_TOO_LARGE` | 413 | 一次串流上傳，即使宣告的 `Content-Length` 通過了前置檢查，實際位元組數仍超過 `Struo:Files:MaxUploadBytes` (一次「說謊」或分塊上傳)。本章並未即時演練這個項目——要觸發它需要上傳超過預設 25 MB 上限的內容——但這個對應是真實的:`DomainErrorMap.StatusFor` → 413。 |
+| `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password` 的自助式分支:呼叫端送出的 `currentPassword` 缺漏或錯誤。刻意不是 `401`——呼叫端本來就持有一個有效的 session，而 SPA 的全域 401 處理器只要看到 `401` 就會清除 session，所以沿用 `UNAUTHORIZED` 會讓呼叫端因為一個單純的打字錯誤而被登出。 |
+| `NO_LOCAL_PASSWORD` | 400 | 在一個完全透過外部 OIDC 建立的帳號上，嘗試自助式變更密碼——它儲存的雜湊值是空字串，因為它從來沒有本機密碼。 |
+| `ACCOUNT_INACTIVE` | 401 | `POST /api/auth/login` 以*正確*密碼登入一個已停用的帳號。只有在雜湊驗證成功之後才會抵達這裡，所以揭露它並不會洩漏呼叫端尚未證明過的任何資訊——不同於把「密碼錯誤」與「沒有這個帳號」拆開，那兩者仍合併在上方的 `UNAUTHORIZED` 之下 (原因見第 12 章)。 |
 
 `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) 是例外對應到代碼的唯一來源，與 GraphQL
 的錯誤過濾器逐字共用:
@@ -89,7 +93,7 @@ PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-除了 `PAYLOAD_TOO_LARGE` 之外，以上每一個代碼都有即時觸發的範例:
+下方即時觸發的範例，涵蓋了以上除了 `PAYLOAD_TOO_LARGE`(已在上方自己的那一列中說明為何略過)、`INTERNAL_SERVER_ERROR`(在下文中說明為何略過)，以及另外三個代碼之外的每一個代碼——`INVALID_CURRENT_PASSWORD` 在下方的 Users 章節有自己的即時範例;`NO_LOCAL_PASSWORD` 與 `ACCOUNT_INACTIVE` 則本章完全沒有即時觸發過:
 
 ```
 $ curl -s http://localhost:5221/api/languages
@@ -138,7 +142,7 @@ Retry-After: 60
 | `404 Not Found` | `NOT_FOUND`。 |
 | `409 Conflict` | `CONFLICT` 或 `VERSION_CONFLICT`。 |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`。 |
-| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (僅限登入)。 |
+| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (登入限制器或改密碼限制器——見上文)。 |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`。 |
 
 ```
@@ -414,8 +418,9 @@ HTTP/1.1 204 No Content
 $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"email":"editor@example.com","password":"editorpass1"}'
 {"success":true,"data":{"id":"...","email":"editor@example.com","name":null}}
 
-$ curl -s -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"newpassword2"}'
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+$ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"newpassword2"}'
+HTTP/1.1 400 Bad Request
+{"success":false,"error":{"code":"INVALID_CURRENT_PASSWORD","message":"Current password is incorrect."}}
 
 $ curl -s -X POST http://localhost:5221/api/users/<id>/access-token -H "X-Struo-CSRF: 1" -b cookies.txt
 {"success":true,"data":{"token":"<token>"}}
@@ -472,7 +477,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/languages"
 $ curl -s -X PUT http://localhost:5221/api/settings/branding -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"brandName":"StruoCMS Docs Demo","logoFileId":null}'
 {"success":true,"data":{"brandName":"StruoCMS Docs Demo","brandLogoUrl":null}}
 $ curl -s "http://localhost:5221/api/config"
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 ### Schema (`SchemaController`，`api/schema`)——只需要 Cookie or Bearer
@@ -514,12 +519,15 @@ $ curl -s -i "http://localhost:5221/api/auth/login/oidc"
 
 | 方法與路徑 | 回應 |
 |---|---|
-| `GET /api/config` | `200`，`{ oidcEnabled, brandName, brandLogoUrl }`——伺服器端快取 30 秒;一次品牌設定的儲存會立即清除它 |
+| `GET /api/config` | `200`，`{ oidcEnabled, brandName, brandLogoUrl, passwordMinLength }`——伺服器端快取 30 秒;一次品牌設定的儲存會立即清除它 |
 
 ```
 $ curl -s "http://localhost:5221/api/config"
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
+
+(這裡的 `brandName` 是上面品牌範例留下的已儲存覆寫值，不是 `Branding:Name` 在 appsettings.json 中的
+預設值 `"StruoCMS"`——那個預設值記載於第 3 章。)
 
 ### Ping (`PingController`，`api/ping`)——匿名
 

@@ -11,8 +11,8 @@ using Xunit;
 namespace Struo.Tests.DependencyInjection;
 
 /// <summary>
-/// The four config-bound options (Database / Query / Oidc / Files) must fail fast at host
-/// start (via <c>ValidateOnStart</c> + DataAnnotations/predicate validation) instead of surfacing a
+/// The five config-bound options (Database / Query / Oidc / Files / Auth:Password) must fail fast at
+/// host start (via <c>ValidateOnStart</c> + DataAnnotations/predicate validation) instead of surfacing a
 /// confusing first-request 500.
 ///
 /// These tests build a real generic host that invokes the SAME registration extension methods used by
