@@ -90,9 +90,13 @@ import './assets/theme.css'
 
 這是一項建議，不是要求，選擇權留給前台開發者：如果你自己的前台也用 Tailwind 與
 `@tailwindcss/typography` 來渲染內容，編輯器的呈現就會與已發布的文章高度一致，因為兩邊是在同一份
-儲存的 HTML 上套用同一個 plugin 的預設值。如果你的前台採用其他渲染方案，可以在 `.prose` 上覆寫
-`--tw-prose-*` 這些自訂屬性，讓編輯器的外觀靠近你自己的排版——這些屬性是 `@tailwindcss/typography`
-自己的機制(請參閱該套件的文件)，不是 StruoCMS 定義或保證的契約。
+儲存的 HTML 上套用同一個 plugin 的預設值。如果你的前台採用其他渲染方案，可以在
+`frontend/src/assets/tokens.css`——這個 plugin 本身註冊的地方(`@plugin "@tailwindcss/typography"`)——
+覆寫 `.prose` 上的 `--tw-prose-*` 這些自訂屬性，讓編輯器的外觀靠近你自己的排版。請把覆寫寫成一般規則，
+不要放進 `@layer` 或 `@utility` 區塊：這個 plugin 自己的 `.prose` 規則是放在 `@layer utilities` 裡的，
+跟前面 `theme.css` 那條「沒有分層的宣告會贏過有分層的宣告」一樣，一般規則在相同特異度下會勝過它，放進
+分層裡就會靜默失效。這些屬性是 `@tailwindcss/typography` 自己的機制(請參閱該套件的文件)，不是 StruoCMS
+定義或保證的契約。
 
 編輯器與已渲染文章之間有四項刻意保留的落差，它們是接受的代價，而不是缺陷：
 
@@ -102,12 +106,12 @@ import './assets/theme.css'
 - **背景。** 編輯區坐在後台的卡片表面上，不是坐在站台的頁面背景上——前台在文章周圍放的頁面外框，
   不在這個模板的掌控範圍內。
 - **表格表頭儲存格。** TipTap 的表格擴充功能把表頭儲存格存成 `<tbody>` 裡的 `<th>` 元素，完全沒有
-  `<thead>` 元素。`@tailwindcss/typography` 的表格規則是鎖定 `thead th`、`tbody td`、`thead` 與
-  `tbody tr` 這些選擇器，因此這種標記下的表頭儲存格一個都對不上：它會沒有 padding、沒有表頭強調樣式，
-  而內文儲存格仍保有 padding，每一列也仍保有分隔線。這**不是**編輯器與已發布文章之間的落差——因為
-  儲存的 HTML 就是前台會渲染的內容，一個同樣使用 `@tailwindcss/typography` 的前台會呈現出完全相同的
-  表頭樣式。落差的根源在於 TipTap 表格擴充功能寫出的標記本身，不是這批的樣式選擇，也不是應該在這裡
-  用額外 CSS 修補的東西。
+  `<thead>` 元素。`@tailwindcss/typography` 負責 padding 與表頭強調樣式的表格規則，是鎖定
+  `thead th`、`tbody td`、`thead` 與 `tbody tr` 這些選擇器，因此這種標記下的表頭儲存格一個都對不上：
+  它會沒有 padding、沒有表頭強調樣式，而內文儲存格仍保有 padding，每一列也仍保有分隔線。這**不是**
+  編輯器與已發布文章之間的落差——因為儲存的 HTML 就是前台會渲染的內容，一個同樣使用
+  `@tailwindcss/typography` 的前台會呈現出完全相同的表頭樣式。落差的根源在於 TipTap 表格擴充功能寫出
+  的標記本身，不是這裡的樣式選擇，也不是應該在這裡用額外 CSS 修補的東西。
 
 以上任何一點都不代表編輯器是正式渲染結果的精確預覽：前台對 Tailwind、對 typography plugin 的客製化，
 或是完全不採用這兩者的渲染方案，都不在這個模板的掌控範圍內。
