@@ -34,17 +34,18 @@ namespace Struo.Tests.DependencyInjection;
 /// expected side is read with <see cref="JsonDocument"/> by LITERAL path (e.g. <c>"Database"</c>), and
 /// the actual side comes entirely from the production binder. The section name as literally spelled in
 /// the file is the only thing the two sides share there, which is exactly the coupling under test. The
-/// two key-shape tests (<c>Branding</c>, <c>RateLimiting:Login</c>) do NOT follow this pattern — they
-/// locate the section through the <c>SectionName</c> constant on both sides, for the reason recorded on
-/// those tests, so this paragraph's guarantee does not extend to them.
+/// three key-shape tests (<c>Branding</c>, <c>RateLimiting:Login</c>, <c>Auth:Password</c>) do NOT
+/// follow this pattern — they locate the section through the <c>SectionName</c> constant on both sides,
+/// for the reason recorded on those tests, so this paragraph's guarantee does not extend to them.
 /// </para>
 /// <para>
 /// Scope: <c>Database</c>, <c>Struo:Files</c> and <c>Oidc</c> are covered the same way — shipped file in,
 /// production registration extension called, values compared against a literal-path JsonDocument read.
 /// <c>Auth:BootstrapAdmin</c> is covered differently because it has no options type at all (<c>Program</c>
-/// reads it through the raw <see cref="IConfiguration"/> indexer), and <c>Branding</c> +
-/// <c>RateLimiting:Login</c> are covered by key shape only. The reason for that last split is recorded on
-/// each test rather than here, because it is a property of those sections, not of this file.
+/// reads it through the raw <see cref="IConfiguration"/> indexer), and <c>Branding</c>,
+/// <c>RateLimiting:Login</c> and <c>Auth:Password</c> are covered by key shape only. The reason for that
+/// last split is recorded on each test rather than here, because it is a property of those sections, not
+/// of this file.
 /// </para>
 /// </summary>
 public sealed class ShippedConfigurationBindingTests
@@ -272,15 +273,17 @@ public sealed class ShippedConfigurationBindingTests
     }
 
     /// <summary>
-    /// <c>Branding</c> and <c>RateLimiting:Login</c> cannot be covered the way the three sections above
-    /// are, for two independent reasons — both properties of those sections, not gaps in this harness:
+    /// <c>Branding</c>, <c>RateLimiting:Login</c> and <c>Auth:Password</c> cannot be covered the way the
+    /// three sections above are, for two independent reasons — both properties of those sections, not
+    /// gaps in this harness:
     /// <list type="number">
-    /// <item>neither is registered by an extension method. <c>Program</c> binds both inline, so there is
-    /// no callable seam short of booting a host, and a test that re-wrote the same
+    /// <item>none of the three is registered by an extension method. <c>Program</c> binds all of them
+    /// inline, so there is no callable seam short of booting a host, and a test that re-wrote the same
     /// <c>AddOptions/BindConfiguration</c> pair itself would only assert what the test wrote.</item>
     /// <item>every value they ship equals its C# default (<c>Name</c> "StruoCMS" / <c>LogoUrl</c> null;
-    /// <c>Enabled</c> true / <c>PermitLimit</c> 5 / <c>WindowSeconds</c> 60), so even a real binder
-    /// comparison would pass whether or not the section bound at all.</item>
+    /// <c>Enabled</c> true / <c>PermitLimit</c> 5 / <c>WindowSeconds</c> 60; <c>MinLength</c> 8 /
+    /// <c>MaxLength</c> 128), so even a real binder comparison would pass whether or not the section
+    /// bound at all.</item>
     /// </list>
     /// What remains, and does discriminate, is key shape: a misspelled key in the shipped file
     /// (<c>PermitLimits</c>, <c>LogoURL</c>) reverts that value to its default with no error anywhere.
@@ -289,10 +292,10 @@ public sealed class ShippedConfigurationBindingTests
     /// property the file forgot to document.
     /// <para>
     /// Limit: both sides here are located through the same <c>SectionName</c> constant, and <c>Program</c>
-    /// binds these two sections inline with that same constant. So this test cannot catch the class doc's
-    /// headline scenario for these two sections: if <c>Program</c> is edited to bind a hardcoded literal
-    /// that has drifted from <c>SectionName</c> (and the shipped file is updated to match that same
-    /// literal), production silently reverts to defaults while this test — which never reads
+    /// binds all three of these sections inline with that same constant. So this test cannot catch the
+    /// class doc's headline scenario for these three sections: if <c>Program</c> is edited to bind a
+    /// hardcoded literal that has drifted from <c>SectionName</c> (and the shipped file is updated to
+    /// match that same literal), production silently reverts to defaults while this test — which never reads
     /// <c>Program</c> — stays green. This is the same limit the bootstrap-admin test records above.
     /// </para>
     /// </summary>
@@ -305,12 +308,17 @@ public sealed class ShippedConfigurationBindingTests
     public void Shipped_appsettings_login_rate_limit_keys_match_LoginRateLimitOptions() =>
         AssertShippedKeysMatchProperties<LoginRateLimitOptions>(LoginRateLimitOptions.SectionName);
 
+    /// <inheritdoc cref="Shipped_appsettings_Branding_keys_match_BrandingOptions"/>
+    [Fact]
+    public void Shipped_appsettings_password_policy_keys_match_PasswordPolicyOptions() =>
+        AssertShippedKeysMatchProperties<PasswordPolicyOptions>(PasswordPolicyOptions.SectionName);
+
     private static void AssertShippedKeysMatchProperties<TOptions>(string sectionName)
     {
         var keys = ShippedConfiguration().GetSection(sectionName).GetChildren()
             // "// Xxx" keys are this file's own documentation convention (as on Database:MigrationsPath).
             // They are real configuration keys to the provider but bind to nothing, and they sit in the
-            // PARENT section of the two covered here — filtered anyway so the convention can be used
+            // PARENT section of the three covered here — filtered anyway so the convention can be used
             // inside these sections later without turning this test red for a comment.
             .Select(child => child.Key)
             .Where(key => !key.StartsWith("//", StringComparison.Ordinal))
