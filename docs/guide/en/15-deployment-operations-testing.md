@@ -127,9 +127,10 @@ table above applies to that diff exactly as it does anywhere else.
 
 ## Startup behavior and failure modes
 
-- **Fail-fast options validation:** `Database`, `Struo:Files`, `Oidc` and `Query` are all bound with
-  `ValidateOnStart`; a missing `Database:ConnectionString`, an `Oidc:Enabled=true` configuration missing
-  `ClientId`, or an out-of-range `Query:MaxLimit` all throw `OptionsValidationException` before the app
+- **Fail-fast options validation:** `Database`, `Struo:Files`, `Oidc`, `Query` and `Auth:Password` are
+  all bound with `ValidateOnStart`; a missing `Database:ConnectionString`, an `Oidc:Enabled=true`
+  configuration missing `ClientId`, or an out-of-range `Query:MaxLimit` all throw
+  `OptionsValidationException` before the app
   starts listening rather than surfacing as a confusing first-request failure
   (`tests/Struo.Tests/DependencyInjection/OptionsValidationTests.cs` exercises exactly these cases
   against a real generic host).

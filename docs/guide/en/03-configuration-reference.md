@@ -208,6 +208,11 @@ is fixed by its own time/memory/parallelism parameters, not by input length, so 
 not amplify hashing work. Override via `Auth__Password__MinLength` / `Auth__Password__MaxLength`;
 restart required.
 
+Both are also bound with `ValidateOnStart`: `MinLength` must be `>= 1` and `<= MaxLength`, so a
+misconfigured override (for example `MinLength` raised above `MaxLength`) fails startup with an
+`OptionsValidationException` rather than accepting the config and rejecting every password at request
+time.
+
 ## `Rbac:PublicReadCollections`
 
 | Key | Type | Default | Effect |

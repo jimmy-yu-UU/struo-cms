@@ -376,10 +376,11 @@ a super-admin changing someone else's, or as the account's own owner supplying a
 The admin SPA surfaces that endpoint at two entry points, not one: every signed-in user reaches
 self-service through the account menu in the app shell (top right), and a super-admin reaches the
 reset action from the User form. Self-service lives in the shell menu rather than on the User form
-itself precisely because `User` is `AdminOnly` (above) — a non-super-admin can never open that form at
-all, so putting self-service there would leave every other role with no route to their own password.
-`AdminOnly` gates writes, not the form's visibility to its owner; it is the guard on the reset action
-that actually keeps the admin-only half of this true.
+itself because the form is not a reliable route to begin with — no ordinary role is normally granted
+read on `user`, so the form is not even in most roles' sidebar — and, per the previous paragraph, a role
+that does hold that grant still sees no reset action there, since that action carries its own explicit
+super-admin guard. The shell menu is the one route every signed-in user reliably has to their own
+password.
 
 ## Effective-permission preview in the admin
 

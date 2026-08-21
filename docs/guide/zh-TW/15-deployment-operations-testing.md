@@ -115,8 +115,9 @@ checksum/down-migration/dry-run)——全部收錄於 **`db/migrations/README.md
 
 ## 啟動行為與失敗模式
 
-- **快速失敗的選項驗證：** `Database`、`Struo:Files`、`Oidc` 與 `Query` 都以 `ValidateOnStart`
-  繫結；一個缺少的 `Database:ConnectionString`、一個缺少 `ClientId` 的 `Oidc:Enabled=true` 設定，
+- **快速失敗的選項驗證：** `Database`、`Struo:Files`、`Oidc`、`Query` 與 `Auth:Password` 都以
+  `ValidateOnStart` 繫結；一個缺少的 `Database:ConnectionString`、一個缺少 `ClientId` 的
+  `Oidc:Enabled=true` 設定，
   或一個超出範圍的 `Query:MaxLimit`，都會在應用程式開始監聽之前拋出 `OptionsValidationException`，
   而不是以一次令人困惑的首次請求失敗浮現出來
   (`tests/Struo.Tests/DependencyInjection/OptionsValidationTests.cs` 針對一個真實的泛型 host，正好
