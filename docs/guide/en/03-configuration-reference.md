@@ -189,6 +189,30 @@ If a `Production`-environment start is still seeded with (or still configured to
 default password `admin`, the API logs a **warning** naming the exact setting to change — it does not
 refuse to start on that condition.
 
+The shipped default (`"admin"`, 5 characters) is shorter than the 8-character minimum the next section
+documents — that is not an oversight. The seeder hashes `Auth:BootstrapAdmin:Password` directly from
+config, bypassing `PasswordPolicy.Validate` entirely, so a fresh install always has a working login even
+before an operator has changed anything.
+
+## `Auth:Password`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `Auth:Password:MinLength` | int | `8` | Minimum accepted length for any plaintext password submitted to the API. |
+| `Auth:Password:MaxLength` | int | `128` | Maximum accepted length for any plaintext password submitted to the API. |
+
+Enforced at every request-path write that accepts a plaintext password — `POST /api/users` (create)
+and `PUT /api/users/{id}/password` (change) — through one shared validator, so the two call sites
+cannot drift from each other. `MaxLength` is a sanity bound, not a security control: Argon2id's cost
+is fixed by its own time/memory/parallelism parameters, not by input length, so a long password does
+not amplify hashing work. Override via `Auth__Password__MinLength` / `Auth__Password__MaxLength`;
+restart required.
+
+Both are also bound with `ValidateOnStart`: `MinLength` must be `>= 1` and `<= MaxLength`, so a
+misconfigured override (for example `MinLength` raised above `MaxLength`) fails startup with an
+`OptionsValidationException` rather than accepting the config and rejecting every password at request
+time.
+
 ## `Rbac:PublicReadCollections`
 
 | Key | Type | Default | Effect |
@@ -234,6 +258,26 @@ deployment. Set it to `false` only in multi-pod deployments (e.g. Kubernetes) wh
 limiting is instead enforced at the ingress/edge/WAF — that layer sees the real client IP and sits in
 front of every pod, whereas this limiter's state is in-memory and per-pod, so it cannot enforce a true
 global limit across replicas in that topology. Restart required.
+
+## `RateLimiting:Password`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `RateLimiting:Password:Enabled` | bool | `true` | Turns the change-password rate limiter on or off. |
+| `RateLimiting:Password:PermitLimit` | int | `5` | Attempts allowed per authenticated user within the window. |
+| `RateLimiting:Password:WindowSeconds` | int | `60` | Fixed-window length, in seconds. |
+
+This limiter applies only to `PUT /api/users/{id}/password` (fixed-window, partitioned by the
+**authenticated caller's** user id rather than client IP). That different partition key is deliberate:
+this endpoint always has a caller identity to key on, so — unlike `RateLimiting:Login`'s anonymous
+endpoint — it is immune to the reverse-proxy caveat that collapses the login limiter's per-IP key into a
+single shared bucket behind a proxy that doesn't forward the real client IP. It also means the *acting*
+user is whose budget gets spent: a super-admin doing bulk password resets for other accounts burns down
+their own single bucket and gets throttled past it, while every target user's own budget is left
+completely untouched — this endpoint can never be used to lock a victim out of changing their own
+password. `Enabled = true` is secure-by-default for a direct or single-instance deployment; set it to
+`false` only in multi-pod deployments where this in-memory, per-pod limiter cannot enforce a true global
+limit across replicas — the same caveat `RateLimiting:Login` has. Restart required.
 
 ## `Branding`
 

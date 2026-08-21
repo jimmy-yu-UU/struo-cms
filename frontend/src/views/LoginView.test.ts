@@ -5,6 +5,7 @@ import LoginView from './LoginView.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useAppConfigStore } from '../stores/appConfigStore'
 import { i18n } from '../i18n'
+import { ApiError } from '../api/apiClient'
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
@@ -44,6 +45,10 @@ describe('LoginView', () => {
   })
 
   it('shows an error message when login fails', async () => {
+    // A plain (non-ApiError) rejection is not one auth.login actually produces in practice — it
+    // always throws ApiError, since it goes through apiClient — but it is still the fallback branch
+    // of loginErrorMessage's instanceof check, so it must never surface the raw Error.message
+    // (the server's prose is deliberately never displayed on this page any more).
     const store = useAuthStore()
     vi.spyOn(store, 'login').mockRejectedValue(new Error('Invalid credentials.'))
     const wrapper = mountLogin()
@@ -51,7 +56,59 @@ describe('LoginView', () => {
     await wrapper.find('input[type="password"]').setValue('bad')
     await wrapper.find('form').trigger('submit.prevent')
     await new Promise((r) => setTimeout(r, 0))
-    expect(wrapper.text()).toContain('Invalid credentials.')
+    expect(wrapper.text()).toContain('登入失敗,請稍後再試。') // t('login.failed'), the generic fallback
+    expect(wrapper.text()).not.toContain('Invalid credentials.')
+  })
+
+  // ---- localized auth-failure mapping (machine-readable error.code, never the server's prose) ----
+
+  it('shows a localized message for UNAUTHORIZED instead of the server prose', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(new ApiError(401, 'Invalid credentials.', 'UNAUTHORIZED'))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('bad')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(wrapper.text()).toContain('Email 或密碼不正確。') // t('login.invalidCredentials')
+    expect(wrapper.text()).not.toContain('Invalid credentials.') // never the server's raw prose
+  })
+
+  it('shows the deactivated-account message for ACCOUNT_INACTIVE', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(new ApiError(401, 'Account is deactivated.', 'ACCOUNT_INACTIVE'))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(wrapper.text()).toContain('此帳號已停用,請聯絡管理者。') // t('login.accountInactive')
+    expect(wrapper.text()).not.toContain('Account is deactivated.')
+  })
+
+  it('shows the wait time for TOO_MANY_REQUESTS', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(new ApiError(429, 'x', 'TOO_MANY_REQUESTS', undefined, 45))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    // t('errors.tooManyRequestsWithWait', { seconds: 45 }) — proves retryAfterSeconds reached the
+    // message, not just the generic (no-wait) tooManyRequests text.
+    expect(wrapper.text()).toContain('嘗試次數過多,請於 45 秒後再試。')
+  })
+
+  it('falls back to login.failed for an unrecognised failure', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(new ApiError(500, 'Something broke.', 'INTERNAL_SERVER_ERROR'))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(wrapper.text()).toContain('登入失敗,請稍後再試。') // t('login.failed')
+    expect(wrapper.text()).not.toContain('Something broke.')
   })
 
   it('hides the SSO button when oidc is disabled', () => {

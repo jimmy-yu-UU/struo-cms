@@ -31,6 +31,13 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 password verification and cookie issuance happen in the same request, there is no separate "exchange a
 password for a token" step.
 
+Two failure outcomes are deliberately merged into one code, though: a wrong password and a login
+attempt against an email that doesn't exist both resolve to `UNAUTHORIZED` (chapter 9), because telling
+them apart would open an account-enumeration surface. `AuthService.AuthenticateAsync` verifies the
+password hash *before* checking `IsActive`, so a deactivated account only ever reaches its own distinct
+code (`ACCOUNT_INACTIVE`) after the caller has already proven the correct password — surfacing that one
+leaks nothing the caller hadn't already demonstrated.
+
 ## Session cookies and the distributed ticket store
 
 The **cookie** scheme (`AuthSchemes.Cookie`, constant `"Cookies"`) is the one the default
@@ -107,9 +114,13 @@ itself (see either chapter for the full OWASP rationale and the middleware's `Re
 `Enabled` (default `true`), `PermitLimit` (default `5`), `WindowSeconds` (default `60`). Every anonymous
 login attempt burns full Argon2id CPU regardless of outcome, so an unbounded brute-force attempt is also
 a CPU-exhaustion DoS vector — this limiter exists specifically to bound that, applied to the login
-action only (logout/me/the OIDC challenge are deliberately not limited). Chapter 9 shows the live `429`
-response (`Retry-After: 60`, error code `TOO_MANY_REQUESTS`) this produces once the window is exhausted;
-this chapter does not re-trigger it.
+action alone among `AuthController`'s own endpoints (logout/me/the OIDC challenge are deliberately not
+limited). It is not, however, the only rate limiter in the app: a second, independently-configured
+limiter guards `PUT /api/users/{id}/password` instead, partitioned by the caller's own authenticated
+user id rather than client IP — see chapter 3 for its configuration and chapter 9 for the shared `429`
+response shape both limiters write. Chapter 9 also shows the live `429` this login limiter itself
+produces once its own window is exhausted (`Retry-After: 60`, error code `TOO_MANY_REQUESTS`); this
+chapter does not re-trigger it.
 
 **When to disable it:** set `Enabled` to `false` only in a multi-replica deployment (e.g. Kubernetes)
 where per-IP rate limiting is instead enforced at the ingress/edge/WAF layer — that layer sees the real
@@ -133,7 +144,7 @@ HTTP/1.1 404 Not Found
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 
 $ curl -s http://localhost:5221/api/config
-{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS","brandLogoUrl":null}}
+{"success":true,"data":{"oidcEnabled":false,"brandName":"StruoCMS Docs Demo","brandLogoUrl":null,"passwordMinLength":8}}
 ```
 
 When enabled, `Oidc:Authority`/`ClientId`/`ClientSecret` are all required at startup
@@ -298,14 +309,16 @@ the entire identity/RBAC surface; every other `UsersController`/`RolesController
 user, issuing/revoking an access token, the effective-permissions preview, the role permission matrix)
 requires super-admin unconditionally, with no self-service exception. Live-verified against
 `editor@example.com` (no admin grant of any kind), changing their own password: a wrong `currentPassword`
-is rejected as `401` — proof-of-knowledge, not an admin gate, so it is `UNAUTHORIZED` rather than
-`FORBIDDEN` — and the correct one succeeds:
+is rejected as `400` with code `INVALID_CURRENT_PASSWORD` — proof-of-knowledge, not an admin gate, but
+deliberately **not** `401`/`UNAUTHORIZED` either, because the caller already holds a valid session; the
+SPA's global 401 handler clears the session on every `401` it sees, so reusing that code here would log
+the caller out on a plain typo — and the correct `currentPassword` succeeds:
 
 ```
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"wrongpass"}'
-HTTP/1.1 401 Unauthorized
-{"success":false,"error":{"code":"UNAUTHORIZED","message":"Current password is incorrect."}}
+HTTP/1.1 400 Bad Request
+{"success":false,"error":{"code":"INVALID_CURRENT_PASSWORD","message":"Current password is incorrect."}}
 
 $ curl -s -i -X PUT http://localhost:5221/api/users/<self-id>/password -H "Content-Type: application/json" \
     -H "X-Struo-CSRF: 1" -b editor-cookies.txt -d '{"newPassword":"tempPassword3","currentPassword":"editorpass1"}'
@@ -359,6 +372,15 @@ $ docker exec struo-postgres psql -U struo -d struo -t -c "select password from 
 the database. The only supported way to change a password is `PUT /api/users/{id}/password` — either as
 a super-admin changing someone else's, or as the account's own owner supplying a correct
 `currentPassword` (see the self-service exception above); chapter 9 documents the endpoint itself.)
+
+The admin SPA surfaces that endpoint at two entry points, not one: every signed-in user reaches
+self-service through the account menu in the app shell (top right), and a super-admin reaches the
+reset action from the User form. Self-service lives in the shell menu rather than on the User form
+itself because the form is not a reliable route to begin with — no ordinary role is normally granted
+read on `user`, so the form is not even in most roles' sidebar — and, per the previous paragraph, a role
+that does hold that grant still sees no reset action there, since that action carries its own explicit
+super-admin guard. The shell menu is the one route every signed-in user reliably has to their own
+password.
 
 ## Effective-permission preview in the admin
 

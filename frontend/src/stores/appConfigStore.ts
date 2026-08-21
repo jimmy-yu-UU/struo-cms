@@ -7,6 +7,9 @@ export const useAppConfigStore = defineStore('appConfig', {
     oidcEnabled: false,
     brandName: 'StruoCMS',
     brandLogoUrl: null as string | null,
+    // Matches PasswordPolicyOptions.MinLength's server-side default; only takes effect when
+    // /api/config is unreachable, since load() otherwise overwrites it with the server's value.
+    passwordMinLength: 8,
   }),
   getters: {
     brandInitial: (state): string => (state.brandName.charAt(0).toUpperCase() ?? ''),
@@ -18,6 +21,7 @@ export const useAppConfigStore = defineStore('appConfig', {
         this.oidcEnabled = cfg.oidcEnabled
         this.brandName = cfg.brandName
         this.brandLogoUrl = cfg.brandLogoUrl
+        this.passwordMinLength = cfg.passwordMinLength
       } catch {
         // config unavailable — keep safe defaults; branding/SSO degrade, password login still works
       }
