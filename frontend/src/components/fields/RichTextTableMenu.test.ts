@@ -6,11 +6,8 @@ import RichTextTableMenu from './RichTextTableMenu.vue'
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { fields: { richtext: {
-    table: 'Table',
-    addRowBefore: 'Add row above', addRowAfter: 'Add row below',
-    addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
-    deleteRow: 'Delete row', deleteColumn: 'Delete column',
-    toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
+    table: 'Table', customSize: 'Custom size…',
+    tableSize: '{cols} columns × {rows} rows',
   } } } },
 })
 
@@ -19,30 +16,37 @@ const i18n = createI18n({
 const opts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
 describe('RichTextTableMenu', () => {
-  it('emits insert and closes', async () => {
-    const w = mount(RichTextTableMenu, { props: { inTable: false }, ...opts })
+  // Replaces the old "emits insert and closes" test: that test drove a dedicated
+  // `[data-cmd="tableInsert"]` button and asserted `emitted('action')` equalled `[['insert']]` —
+  // both the hook and the payload shape are gone now that the toolbar button opens a size-picker
+  // grid instead. This test drives the grid itself (RichTextTableGrid is already unit-tested on
+  // its own in RichTextTableGrid.test.ts) and asserts the richer `insert` payload the grid path
+  // now emits, plus that the popover still closes afterwards.
+  it('emits insert with the picked size and a header row, and closes', async () => {
+    const w = mount(RichTextTableMenu, { ...opts })
     await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cmd="tableInsert"]').trigger('click')
-    expect(w.emitted('action')).toEqual([['insert']])
-    expect(w.find('[data-cmd="tableInsert"]').exists()).toBe(false)
+    await w.get('[data-cell="3-3"]').trigger('click')
+    expect(w.emitted('insert')).toEqual([[{ rows: 3, cols: 3, withHeaderRow: true }]])
+    expect(w.find('[data-cell="3-3"]').exists()).toBe(false)
+    w.unmount()
   })
 
-  it('disables in-table actions when outside a table', async () => {
-    const w = mount(RichTextTableMenu, { props: { inTable: false }, ...opts })
+  // Replaces "disables in-table actions when outside a table" and "emits in-table actions when
+  // inside a table": both pinned an `inTable` prop and a set of in-table action buttons
+  // (addRowAfter, deleteTable, …) that this task deliberately removes from this component — those
+  // eight operations moved to the table's own right-click menu in Task 4. This component is now
+  // insert-only, so its replacement coverage is the "custom size…" escape hatch instead.
+  it('emits customSize and closes when the custom-size entry is picked', async () => {
+    const w = mount(RichTextTableMenu, { ...opts })
     await w.get('[data-cmd="table"]').trigger('click')
-    expect(w.get('[data-cmd="table-deleteTable"]').attributes('disabled')).toBeDefined()
-    expect(w.get('[data-cmd="tableInsert"]').attributes('disabled')).toBeUndefined()
-  })
-
-  it('emits in-table actions when inside a table', async () => {
-    const w = mount(RichTextTableMenu, { props: { inTable: true }, ...opts })
-    await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cmd="table-addRowAfter"]').trigger('click')
-    expect(w.emitted('action')).toEqual([['addRowAfter']])
+    await w.get('[data-cmd="tableCustomSize"]').trigger('click')
+    expect(w.emitted('customSize')).toEqual([[]])
+    expect(w.find('[data-cmd="tableCustomSize"]').exists()).toBe(false)
+    w.unmount()
   })
 
   it('disables the trigger when disabled', () => {
-    const w = mount(RichTextTableMenu, { props: { inTable: false, disabled: true }, ...opts })
+    const w = mount(RichTextTableMenu, { props: { disabled: true }, ...opts })
     expect(w.get('[data-cmd="table"]').attributes('disabled')).toBeDefined()
   })
 })

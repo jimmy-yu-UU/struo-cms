@@ -320,6 +320,7 @@ export default {
       addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
       deleteRow: 'Delete row', deleteColumn: 'Delete column',
       toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
+      tableSize: '{cols} columns × {rows} rows', customSize: 'Custom size…',
       placeholder: 'Write something…',
     },
   },
