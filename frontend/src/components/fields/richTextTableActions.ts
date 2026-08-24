@@ -25,8 +25,9 @@ export const IN_TABLE_ACTIONS: ReadonlyArray<TableAction> = [
   'deleteTable',
 ]
 
-// The context menu (a later slice) will place a separator before the first of these; the set
-// lives here so that menu does not hard-code an index.
+// The set of actions the context menu (RichTextTableContextMenu) places a separator before the
+// first of; it lives here, rather than as a hard-coded index in that menu, so the boundary stays
+// correct if IN_TABLE_ACTIONS' order ever changes.
 export const DESTRUCTIVE_TABLE_ACTIONS: ReadonlySet<TableAction> =
   new Set<TableAction>(['deleteRow', 'deleteColumn', 'deleteTable'])
 

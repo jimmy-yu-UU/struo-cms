@@ -3,6 +3,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
+import type { Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
 import { fileContentPath } from '../../lib/richTextImages'
 import { buttonVariants } from '@/components/ui/button'
@@ -513,6 +514,44 @@ describe('RichTextInput', () => {
     await nextTick()
     expect(w.find('[data-cmd="table-deleteRow"]').exists()).toBe(true)
     expect(ev.defaultPrevented).toBe(true)
+    w.unmount()
+  })
+
+  // posAtCoords needs real layout to resolve accurate coordinates, and jsdom lays nothing out --
+  // that half (does the reported position correspond to the cell actually under the cursor?)
+  // stays a live check per the plan's Task 7. What jsdom CAN pin, by stubbing posAtCoords itself,
+  // is the wiring around it: whatever position it resolves to must become the selection, because
+  // that is what makes a table action apply to the cell the user actually right-clicked rather
+  // than wherever the caret happened to be already. Tried first: letting jsdom's own
+  // posAtCoords run unstubbed against zero-size layout rects -- it returns an arbitrary non-null
+  // position regardless of the two lines under test, which is exactly why this test replaces it
+  // with a controlled stub instead of trusting jsdom's coordinate math.
+  it('moves the selection to whatever position posAtCoords resolves, on a right-click inside a table', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    // somePos: the text position just inside the LAST tableCell/tableHeader node in the document,
+    // derived from the real doc rather than hardcoded. `pos` from descendants is the position
+    // right before the node opens; +1 enters the cell to its (empty) paragraph child, +2 enters
+    // that paragraph's own (empty) content -- a valid, resolvable TextSelection anchor. Picking the
+    // LAST cell (not the first) matters: right after insertTable the selection already sits inside
+    // the first cell, so asserting against the first cell could pass even if the two lines under
+    // test never ran.
+    let somePos = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') somePos = pos + 2
+    })
+    expect(somePos).toBeGreaterThan(-1)
+    expect(ed.state.selection.from).not.toBe(somePos)
+    vi.spyOn(ed.view, 'posAtCoords').mockReturnValue({ pos: somePos, inside: -1 })
+    const cell = w.get('.ProseMirror table td, .ProseMirror table th')
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    cell.element.dispatchEvent(ev)
+    expect(ed.state.selection.from).toBe(somePos)
     w.unmount()
   })
 

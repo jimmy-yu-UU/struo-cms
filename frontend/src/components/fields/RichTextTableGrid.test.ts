@@ -29,6 +29,38 @@ describe('RichTextTableGrid', () => {
     expect(w.find('[data-cell="9-1"]').exists()).toBe(false)
   })
 
+  // ARIA requires a grid's cells to be owned by role="row" children rather than handed to the
+  // grid directly, which is the whole reason the eight `class="contents"` wrappers exist (the
+  // alternative considered was downgrading the widget to role="group"). Deleting those wrappers
+  // leaves every other assertion in this file true, so without this the semantics are unguarded
+  // -- and this is a template, so a fork WILL edit this component.
+  it('owns its cells through eight role="row" wrappers', () => {
+    w = build()
+    const rows = w.findAll('[role="row"]')
+    expect(rows.length).toBe(8)
+    // Scoped to the first row, not the grid: 80 gridcells anywhere under the grid would also be
+    // true of cells parented directly by it, which is the arrangement this test exists to reject.
+    expect(rows[0].findAll('[role="gridcell"]').length).toBe(10)
+  })
+
+  // The accessible name is deliberately the STATIC widget name, with the live size linked as a
+  // description instead -- see the component's own comment for why. Both halves are asserted
+  // because either one alone can rot: moving the size into aria-label, or dropping the
+  // aria-describedby link, each breaks the split without breaking the other attribute.
+  it('names itself statically and describes itself with the live readout', async () => {
+    w = build()
+    const grid = w.get('[role="grid"]')
+    const readoutId = w.get('[data-testid="table-size-readout"]').attributes('id')
+    // Without this, a future useId() returning undefined would make the equality below hold
+    // between two undefineds even with the aria-describedby binding deleted outright.
+    expect(readoutId).toBeTruthy()
+    expect(grid.attributes('aria-describedby')).toBe(readoutId)
+    expect(grid.attributes('aria-label')).toBe('Table')
+    // Static means static: picking a size must not rewrite the name.
+    await w.get('[data-cell="3-4"]').trigger('mouseenter')
+    expect(grid.attributes('aria-label')).toBe('Table')
+  })
+
   it('shows no highlight or readout before the first hover or key press', () => {
     w = build()
     expect(w.findAll('[data-cell][data-in-range="true"]').length).toBe(0)
