@@ -31,7 +31,7 @@ function label(level: HeadingLevel | null): string {
            type="button" onto what it wraps: this sits inside ItemForm.vue's <form>, so the Button
            does not rely on the merge behaviour of the component wrapping it. -->
       <Button type="button" variant="ghost" size="sm" data-cmd="headings" :disabled="disabled"
-        :aria-label="t('fields.richtext.headings')" :title="t('fields.richtext.headings')">
+        :aria-label="`${t('fields.richtext.headings')}: ${label(props.activeLevel)}`" :title="t('fields.richtext.headings')">
         {{ label(props.activeLevel) }}
       </Button>
     </PopoverTrigger>

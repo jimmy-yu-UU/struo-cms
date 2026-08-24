@@ -167,8 +167,11 @@ function activeHeadingLevel(): HeadingLevel | null {
 function onHeadingSelect(level: HeadingLevel | null): void {
   if (!editor.value) return
   const chain = editor.value.chain().focus()
+  // setHeading, not toggleHeading: this dropdown marks the current level as selected and offers an
+  // explicit "Body text" item, so every item must be idempotent -- re-picking the highlighted level
+  // has to leave the block at that level, not toggle it back to a paragraph.
   if (level === null) chain.setParagraph().run()
-  else chain.toggleHeading({ level }).run()
+  else chain.setHeading({ level }).run()
 }
 
 function onTableAction(action: TableAction): void {
