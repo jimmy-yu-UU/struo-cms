@@ -10,6 +10,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
+import { Placeholder } from '@tiptap/extensions'
 import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
   Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
@@ -35,7 +36,7 @@ defineOptions({ name: 'RichTextInput' })
 const props = defineProps<{ modelValue: string; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const langStore = useLanguageStore()
 const imageDialogOpen = ref(false)
 const files = ref<FileRow[]>([])
@@ -97,6 +98,11 @@ function onImageSelected(id: string): void {
 const editor = useEditor({
   content: absolutizeImageSrc(props.modelValue || ''),
   editable: !props.disabled,
+  // Applied to the contenteditable element itself, not the outer .rich-text frame: the frame
+  // stays full width for its border/toolbar while the content measure caps well short of it,
+  // leaving the padded box wider than the editable — the @click.self handler below hands a
+  // click landing in that gap off to the editor instead of leaving it dead.
+  editorProps: { attributes: { class: 'prose dark:prose-invert' } },
   extensions: [
     StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
     Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
@@ -107,8 +113,18 @@ const editor = useEditor({
     Color,
     Subscript.extend({ excludes: 'superscript' }),
     Superscript.extend({ excludes: 'subscript' }),
+    Placeholder.configure({ placeholder: () => t('fields.richtext.placeholder') }),
   ],
   onUpdate: () => emitNormalized(),
+})
+
+// Placeholder text is delivered as a ProseMirror decoration, and decorations only recompute when
+// editor state changes. Switching the UI locale dispatches nothing, so nudge the view with an
+// empty transaction to force the decoration to be rebuilt with the new string.
+watch(locale, () => {
+  const ed = editor.value
+  if (!ed) return
+  ed.view.dispatch(ed.state.tr)
 })
 
 // Keep the editor in sync with external model changes without clobbering the cursor.
@@ -237,7 +253,8 @@ defineExpose({ editor, insertImage })
       <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"
         :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
     </div>
-    <EditorContent class="rich-text__content min-h-32 p-2.5 [&_th]:bg-muted" :editor="editor" />
+    <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
+      @click.self="editor?.chain().focus().run()" />
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain
@@ -265,7 +282,14 @@ defineExpose({ editor, insertImage })
 <style scoped>
 /* TipTap's own generated DOM, not a vendored ui/ component — styling it here is legitimate. */
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
-.rich-text__content :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; }
-.rich-text__content :deep(th), .rich-text__content :deep(td) { border: 1px solid var(--border); padding: 4px 8px; }
-.rich-text__content :deep(th) { text-align: left; }
+
+/* Placeholder is admin chrome, not article content — a rendered article has no placeholder — so it
+   deliberately uses the admin's own token rather than a typography variable. */
+.rich-text__content :deep(.ProseMirror .is-editor-empty::before) {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
 </style>
