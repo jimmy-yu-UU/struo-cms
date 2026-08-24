@@ -126,28 +126,29 @@ no matter how the table was authored. StruoCMS closes that gap on the server ins
 the sanitizer's post-processing step (`TableHeadNormalizer`, in
 `src/Struo.Infrastructure/Security/TableHeadNormalizer.cs`) wraps a table's first row in `<thead>`
 whenever every cell in that row is a `<th>` and the table has no `<thead>` already. Because this runs
-as part of sanitization, it covers every write that goes through StruoCMS's item write pipeline —
-the editor, a direct API POST, a GraphQL mutation, an importer that calls the API — not only content
-that passed through TipTap. From that point on, the stored HTML a frontend renders carries a real
+as part of sanitization, it covers every write of a `RichText` field that goes through StruoCMS's item
+write pipeline — the editor, a direct API POST, a GraphQL mutation, an importer that calls the API —
+not only content that passed through TipTap. From that point on, the stored HTML a frontend renders carries a real
 `<thead>`, and `@tailwindcss/typography`'s `thead th` rules match it the way they are meant to.
 Content saved before this normalizer existed keeps its old shape until it is next re-saved: there is
 no backfill.
 
 The editor still cannot display that `<thead>` — its schema has nowhere to put the node — so the admin
-SPA carries its own CSS rule mirroring the plugin's header treatment onto the `th` markup inside `tbody`
-TipTap actually produces, scoped to the same first-row-all-`<th>` shape the server normalizes. The two
+SPA carries its own CSS rule mirroring the plugin's header treatment onto the `tbody`-nested `th`
+markup TipTap actually produces, scoped to the same first-row-all-`<th>` shape the server normalizes. The two
 sides now arrive at the same appearance through two separate mechanisms instead of one: this is
 consistency that is actively maintained, not a byproduct of the editor and the frontend rendering the
 same stored string. A fork that substantially restyles its own tables will not see the editor's header
 treatment follow along, because that CSS rule mirrors the typography plugin's own defaults, not
 whatever a fork replaces them with.
 
-One consequence follows from the "first row" condition being literal: the toolbar's header-row toggle
-can also mark any other row as a header row, and a header row that is not a table's first row is left
-inside `tbody` by the server, and left unstyled by the editor's CSS for the same reason — wrapping a
-mid-table row in `<thead>` would mean reordering the table's content, which the normalizer deliberately
-never does. The editor's plain rendering of that row is not a bug; it is accurate, because that is
-exactly how the row will render once published.
+One consequence follows from the "first row" condition being literal: the table right-click menu's
+header-row toggle can also mark any other row as a header row, and a header row that is not a table's
+first row is left inside `tbody` by the server. The normalizer deliberately never reorders a table's
+content, so wrapping a mid-table row in `<thead>` is not an option — that is why the published output
+still has no `<thead>` there, and it is why the editor's CSS, which only styles what the server also
+wraps, leaves that row unstyled too. The editor's plain rendering of that row is not a bug; it is
+accurate, because that is exactly how the row will render once published.
 
 None of this makes the editor an exact preview of production rendering: a frontend's own
 customization of Tailwind, of the typography plugin, or a rendering stack that uses neither, is

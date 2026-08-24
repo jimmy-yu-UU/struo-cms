@@ -587,15 +587,23 @@ describe('RichTextInput', () => {
     const vm = w.vm as unknown as { editor: { getHTML: () => string } }
     const html = vm.editor.getHTML()
 
-    // Header cells survive as header cells, with their text intact, not just as empty tags...
+    // Header cells survive as header cells, with their text intact, not just as empty tags --
+    // `/<th[\s>]/` so this can never match `<thead`, since the "not <thead" check below is the
+    // only thing standing between a false pass and a wrapped-in-thead-again regression otherwise.
     expect(html).toContain('<th')
-    expect((html.match(/<th/g) ?? []).length).toBe(2)
-    expect(html).toContain('H1')
+    expect((html.match(/<th[\s>]/g) ?? []).length).toBe(2)
+    // "H1" surviving toContain(html) alone would also pass if it landed outside any <th> at all --
+    // assert it falls inside the first header cell's own tag pair instead.
+    const firstTh = html.indexOf('<th')
+    const firstThClose = html.indexOf('</th>', firstTh)
+    expect(firstThClose).toBeGreaterThan(firstTh)
+    expect(html.slice(firstTh, firstThClose)).toContain('H1')
     expect(html).toContain('H2')
     // ...the body row is untouched...
     expect((html.match(/<td/g) ?? []).length).toBe(2)
-    // ...the header row still comes before the body row, not reordered...
-    expect(html.indexOf('<th')).toBeLessThan(html.indexOf('<td'))
+    // ...the header row still comes before the body row, not reordered -- `/<th[\s>]/` again so a
+    // stray `<thead` (which this test already asserts is absent) could never be mistaken for it...
+    expect(html.search(/<th[\s>]/)).toBeLessThan(html.indexOf('<td'))
     // ...and TipTap re-serializes without the thead, which is exactly why Task 1 lives on the
     // server and why the editor needs its own tbody-th styling rule.
     expect(html).not.toContain('<thead')
