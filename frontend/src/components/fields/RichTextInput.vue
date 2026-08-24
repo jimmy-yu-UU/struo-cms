@@ -22,8 +22,9 @@ import MediaGrid from '../media/MediaGrid.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
+import RichTextTableContextMenu from './RichTextTableContextMenu.vue'
 import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
-import type { TableAction } from './richTextTableActions'
+import { isInEditorTable, type TableAction } from './richTextTableActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -191,6 +192,37 @@ function onTableAction(action: TableAction): void {
   commands[action]()
 }
 
+const contentRoot = ref<HTMLElement | null>(null)
+
+// Runs in the CAPTURE phase on a wrapper that is a STRICT ANCESTOR of reka's own trigger element
+// (see the template below), and decides synchronously which menu the user gets:
+//
+//   - outside a table: stopPropagation, so reka never sees the event and nothing calls
+//     preventDefault -- the browser's own menu (spellcheck, paste) appears untouched.
+//   - inside a table: move the selection into the clicked cell, then let the event bubble on so
+//     reka opens ours.
+//
+// stopPropagation rather than reka's own `disabled` prop, because `disabled` is reactive and Vue
+// applies DOM/prop updates asynchronously: within this same event tick reka would still read the
+// previous value. A synchronous decision has no such race.
+//
+// The handler MUST sit on an element outside RichTextTableContextMenu, not on the element reka
+// binds to. stopPropagation() does not stop other listeners on the SAME element -- only
+// stopImmediatePropagation() does, and at-target listeners fire in registration order, which is
+// not ours to control. From a strict ancestor, the capture listener always runs first and
+// stopPropagation() reliably prevents the event from ever reaching reka.
+function onContentContextMenu(e: MouseEvent): void {
+  const root = contentRoot.value
+  const ed = editor.value
+  if (!root || !ed) return
+  if (!isInEditorTable(e.target, root)) { e.stopPropagation(); return }
+  // Commands act on the current selection, so a right-click on a cell the caret is not in would
+  // otherwise apply to wherever the caret happens to be. posAtCoords needs layout, so this line
+  // cannot be proven in jsdom -- it is verified live (see the plan's Task 7).
+  const at = ed.view.posAtCoords({ left: e.clientX, top: e.clientY })
+  if (at) ed.commands.focus(at.pos)
+}
+
 defineExpose({ editor, insertImage })
 </script>
 
@@ -265,8 +297,12 @@ defineExpose({ editor, insertImage })
       <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"
         :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
     </div>
-    <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
-      @click.self="editor?.chain().focus().run()" />
+    <div ref="contentRoot" @contextmenu.capture="onContentContextMenu">
+      <RichTextTableContextMenu :disabled="disabled" @action="onTableAction">
+        <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
+          @click.self="editor?.chain().focus().run()" />
+      </RichTextTableContextMenu>
+    </div>
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain

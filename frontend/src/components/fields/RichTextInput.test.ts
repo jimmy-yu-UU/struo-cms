@@ -55,6 +55,15 @@ if (!Range.prototype.getBoundingClientRect) {
     top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => undefined,
   }) as DOMRect
 }
+// jsdom implements neither this: prosemirror-view's posAtCoords (called from the table
+// context-menu's contextmenu handler) calls `doc.elementFromPoint(...)` unconditionally -- unlike
+// its caret*FromPoint calls a few lines above it, which do feature-check first -- so without this
+// stub the "arms its own menu for a right-click inside a table" test below throws an uncaught
+// TypeError from inside the event dispatch. Returning null here is what a real browser would do
+// for a point with no element under it, and is a safe stand-in since jsdom cannot lay out coordinates.
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => null
+}
 
 describe('RichTextInput', () => {
   beforeEach(() => {
@@ -434,6 +443,34 @@ describe('RichTextInput', () => {
     const p = w.get('.ProseMirror p')
     expect(p.classes()).not.toContain('is-editor-empty')
     expect(p.attributes('data-placeholder')).toBeUndefined()
+    w.unmount()
+  })
+
+  it('leaves the native menu alone for a right-click outside a table', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    const p = w.get('.ProseMirror p')
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    const stop = vi.spyOn(ev, 'stopPropagation')
+    p.element.dispatchEvent(ev)
+    // stopPropagation is the mechanism that keeps reka from opening ours and from preventing the
+    // browser default; asserting it is asserting the behaviour, not an implementation detail.
+    expect(stop).toHaveBeenCalled()
+    expect(ev.defaultPrevented).toBe(false)
+    w.unmount()
+  })
+
+  it('arms its own menu for a right-click inside a table', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cmd="tableInsert"]').trigger('click')
+    await flushPromises()
+    const cell = w.get('.ProseMirror table td, .ProseMirror table th')
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    const stop = vi.spyOn(ev, 'stopPropagation')
+    cell.element.dispatchEvent(ev)
+    expect(stop).not.toHaveBeenCalled()
     w.unmount()
   })
 })
