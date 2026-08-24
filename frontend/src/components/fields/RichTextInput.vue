@@ -370,4 +370,30 @@ defineExpose({ editor, insertImage })
   height: 0;
   pointer-events: none;
 }
+
+/* TipTap's table schema has no thead node: content the server normalized into <thead> is flattened
+   back to `tbody > th` the moment it is parsed into the editor, and getHTML() re-serializes it that
+   way too. So @tailwindcss/typography's `thead th` rules never match anything in here, and without
+   this the editor would show unstyled header cells for content that renders with full header
+   treatment once published.
+   The values mirror the plugin's own `base` modifier so the two agree; `tbody tr`'s bottom rule
+   already applies to the header row (it IS a tbody row), so only padding, colour, weight and
+   alignment are missing.
+   Scoped to the first row, not every `th`: the server only wraps a first row whose cells are ALL
+   `th` (see Task 1). A header row anywhere else -- reachable from the toolbar, since
+   prosemirror-tables' toggleHeaderRow toggles whatever row the caret is in, not row 0 -- stays
+   `tbody > th` once published, where typography's `thead th` matches nothing. Styling it here too
+   would make the editor lie about that: it would show padded, bold, bottom-aligned cells for a row
+   that renders unstyled once published. Mirroring the server's own condition keeps the editor
+   truthful instead. */
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th) {
+  color: var(--tw-prose-headings);
+  font-weight: 600;
+  vertical-align: bottom;
+  padding-inline-end: 0.5714286em;
+  padding-bottom: 0.5714286em;
+  padding-inline-start: 0.5714286em;
+}
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:first-child) { padding-inline-start: 0; }
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:last-child) { padding-inline-end: 0; }
 </style>

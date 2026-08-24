@@ -572,4 +572,32 @@ describe('RichTextInput', () => {
     expect(html).toContain('<th')
     w.unmount()
   })
+
+  // Task 1 makes the server wrap header rows in <thead>, so that is now what arrives in modelValue.
+  // TipTap's table schema has no thead node, so the parser must descend through it and keep the
+  // cells as header cells -- if it instead dropped them or downgraded them to td, every save after
+  // a load would destroy the header. ProseMirror's parser is documented to descend through
+  // elements with no matching rule, but this pins the actual behaviour of the installed version
+  // rather than trusting that.
+  it('parses a server-normalized <thead> back into a header row', async () => {
+    const stored = '<table><thead><tr><th>H1</th><th>H2</th></tr></thead>'
+                 + '<tbody><tr><td>a</td><td>b</td></tr></tbody></table>'
+    const w = mount(RichTextInput, { props: { modelValue: stored }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { getHTML: () => string } }
+    const html = vm.editor.getHTML()
+
+    // Header cells survive as header cells, with their text intact, not just as empty tags...
+    expect(html).toContain('<th')
+    expect((html.match(/<th/g) ?? []).length).toBe(2)
+    expect(html).toContain('H1')
+    expect(html).toContain('H2')
+    // ...the body row is untouched...
+    expect((html.match(/<td/g) ?? []).length).toBe(2)
+    // ...the header row still comes before the body row, not reordered...
+    expect(html.indexOf('<th')).toBeLessThan(html.indexOf('<td'))
+    // ...and TipTap re-serializes without the thead, which is exactly why Task 1 lives on the
+    // server and why the editor needs its own tbody-th styling rule.
+    expect(html).not.toContain('<thead')
+  })
 })
