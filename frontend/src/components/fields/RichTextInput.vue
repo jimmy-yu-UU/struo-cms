@@ -20,7 +20,9 @@ import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/compon
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
+import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
+import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
 import type { TableAction } from './richTextTableActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
@@ -104,7 +106,7 @@ const editor = useEditor({
   // click landing in that gap off to the editor instead of leaving it dead.
   editorProps: { attributes: { class: 'prose dark:prose-invert' } },
   extensions: [
-    StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
+    StarterKit.configure({ heading: { levels: [...HEADING_LEVELS] }, underline: false, link: false }),
     Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
     Image.configure({ inline: false }),
     TableKit.configure({ table: { resizable: false } }),
@@ -141,8 +143,6 @@ onBeforeUnmount(() => {
   debouncedLoadImages.cancel()
 })
 
-type Level = 2 | 3
-
 const alignKey = {
   left: 'alignLeft', center: 'alignCenter', right: 'alignRight', justify: 'alignJustify',
 } as const
@@ -156,6 +156,19 @@ function setLink(): void {
   if (url === '') { editor.value.chain().focus().unsetLink().run(); return }
   if (!isAllowedLinkUrl(url)) return // defense-in-depth: silently reject javascript:/data:/etc.
   editor.value.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+}
+
+function activeHeadingLevel(): HeadingLevel | null {
+  const ed = editor.value
+  if (!ed) return null
+  return HEADING_LEVELS.find((lvl) => ed.isActive('heading', { level: lvl })) ?? null
+}
+
+function onHeadingSelect(level: HeadingLevel | null): void {
+  if (!editor.value) return
+  const chain = editor.value.chain().focus()
+  if (level === null) chain.setParagraph().run()
+  else chain.toggleHeading({ level }).run()
 }
 
 function onTableAction(action: TableAction): void {
@@ -212,12 +225,8 @@ defineExpose({ editor, insertImage })
         :aria-label="t('fields.richtext.' + alignKey[al])" :title="t('fields.richtext.' + alignKey[al])"
         class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
         @click="editor!.chain().focus().setTextAlign(al).run()"><component :is="alignIcon[al]" /></Button>
-      <Button v-for="lvl in ([2, 3] as Level[])" :key="lvl" type="button" variant="ghost" size="icon" :data-cmd="`h${lvl}`"
-        :data-active="editor.isActive('heading', { level: lvl })" :disabled="disabled"
-        :aria-label="t(lvl === 2 ? 'fields.richtext.heading2' : 'fields.richtext.heading3')"
-        :title="t(lvl === 2 ? 'fields.richtext.heading2' : 'fields.richtext.heading3')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
-        @click="editor!.chain().focus().toggleHeading({ level: lvl }).run()">H{{ lvl }}</Button>
+      <RichTextHeadingMenu :disabled="disabled" :active-level="activeHeadingLevel()"
+        @select="onHeadingSelect" />
       <Button type="button" variant="ghost" size="icon" data-cmd="subscript" :data-active="editor.isActive('subscript')"
         :disabled="disabled" :aria-label="t('fields.richtext.subscript')" :title="t('fields.richtext.subscript')"
         class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleSubscript().run()">x₂</Button>
