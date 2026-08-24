@@ -29,8 +29,9 @@ describe('UserMenu', () => {
     i18n.global.locale.value = 'zh-TW'
   })
 
-  // No global restoreMocks/clearMocks is configured for this suite -- the logout spy below must be
-  // restored here or it would keep intercepting auth.logout in every later test file.
+  // Redundant with the global restoreMocks configured in vite.config.ts, and kept only because
+  // removing it here alone would leave the many other test files that do the same thing
+  // inconsistent -- that sweep is registered as its own follow-up.
   afterEach(() => {
     vi.restoreAllMocks()
   })
