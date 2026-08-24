@@ -182,6 +182,26 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
+  it('keeps the level when the active heading is picked again, and labels the trigger', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { isActive: (n: string, a?: Record<string, unknown>) => boolean } }
+    await w.get('[data-cmd="headings"]').trigger('click')
+    await w.get('[data-cmd="h3"]').trigger('click')
+    expect(vm.editor.isActive('heading', { level: 3 })).toBe(true)
+    // The trigger's rendered label reads editor.isActive() through the template, which (unlike
+    // reading vm.editor.isActive() directly above) only updates after tiptap/vue-3's two-rAF
+    // debounce -- see waitForEditorReactivity below.
+    await waitForEditorReactivity()
+    expect(w.get('[data-cmd="headings"]').text()).toBe('Heading 3')
+    // Re-picking the level that is already active must be a no-op, not a toggle back to paragraph.
+    await w.get('[data-cmd="headings"]').trigger('click')
+    await w.get('[data-cmd="h3"]').trigger('click')
+    expect(vm.editor.isActive('heading', { level: 3 })).toBe(true)
+    expect(vm.editor.isActive('paragraph')).toBe(false)
+    w.unmount()
+  })
+
   it('inserts a 3x3 table with header row via the table menu', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
