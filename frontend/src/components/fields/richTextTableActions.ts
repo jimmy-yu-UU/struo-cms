@@ -26,8 +26,10 @@ export const IN_TABLE_ACTIONS: ReadonlyArray<TableAction> = [
 ]
 
 // The set of actions the context menu (RichTextTableContextMenu) places a separator before the
-// first of; it lives here, rather than as a hard-coded index in that menu, so the boundary stays
-// correct if IN_TABLE_ACTIONS' order ever changes.
+// first of. It lives here rather than as a hard-coded index in that menu, so the separator follows
+// membership instead of a position -- but note that only works while these three stay contiguous in
+// IN_TABLE_ACTIONS (see its own comment above): interleave them and the predicate fires more than
+// once. RichTextTableContextMenu.test.ts pins the "exactly one separator" outcome.
 export const DESTRUCTIVE_TABLE_ACTIONS: ReadonlySet<TableAction> =
   new Set<TableAction>(['deleteRow', 'deleteColumn', 'deleteTable'])
 
