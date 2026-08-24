@@ -25,6 +25,13 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Every spy is restored and every mock's call history cleared between tests. Without these,
+    // a spy installed by one test stays installed for the rest of the file, and this repository
+    // has already shipped a bug of exactly that shape (PR #35/#36). tests/testIsolation.test.ts
+    // pins both. These fire before each test, so a spy installed in `beforeAll` is already
+    // restored by the time the first test runs; install spies in `beforeEach` or in the test.
+    restoreMocks: true,
+    clearMocks: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.{test,spec}.ts', 'tests/**/*.{test,spec}.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],

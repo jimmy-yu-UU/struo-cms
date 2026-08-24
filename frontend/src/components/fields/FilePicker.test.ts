@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import FilePicker from './FilePicker.vue'
@@ -67,13 +67,6 @@ function setupStores() {
   lang.languages = [{ code: 'en', name: 'English', isDefault: true }]
   return { lang }
 }
-
-// The search box runs through a 300ms debounce the component cancels in onBeforeUnmount. Any test
-// that types without waiting that debounce out leaves the timer armed on a wrapper nothing ever
-// unmounts, and it then fires load() into a LATER test against whichever itemsApi spy is installed
-// by then -- vi.restoreAllMocks() in beforeEach does not disarm a timer. Same hazard, same fix, as
-// MediaLibraryView.test.ts, where it was reproduced deterministically.
-enableAutoUnmount(afterEach)
 
 describe('FilePicker', () => {
   beforeEach(() => {
