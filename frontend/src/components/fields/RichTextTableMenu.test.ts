@@ -1,10 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 import RichTextTableMenu from './RichTextTableMenu.vue'
+
+const i18n = createI18n({
+  legacy: false, locale: 'en', fallbackLocale: 'en',
+  messages: { en: { fields: { richtext: {
+    table: 'Table',
+    addRowBefore: 'Add row above', addRowAfter: 'Add row below',
+    addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
+    deleteRow: 'Delete row', deleteColumn: 'Delete column',
+    toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
+  } } } },
+})
 
 // reka's own portal wrapper is itself named Teleport, so it collides with VTU's teleport stub and
 // drops slot content unless renderStubDefaultSlot is on.
-const opts = { global: { stubs: { teleport: true }, renderStubDefaultSlot: true } }
+const opts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
 describe('RichTextTableMenu', () => {
   it('emits insert and closes', async () => {
