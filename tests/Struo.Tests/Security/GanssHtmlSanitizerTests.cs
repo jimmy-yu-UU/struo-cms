@@ -280,9 +280,11 @@ public class GanssHtmlSanitizerTests
         // tbody -- this is the assertion that would actually fail if the wrap misplaced the section.
         var theadClose = clean.IndexOf("</thead>", StringComparison.Ordinal);
         var tbodyOpen = clean.IndexOf("<tbody>", StringComparison.Ordinal);
+        var tbodyClose = clean.IndexOf("</tbody>", StringComparison.Ordinal);
         theadClose.Should().BeGreaterThan(-1);
         tbodyOpen.Should().BeGreaterThan(theadClose);
-        clean.Substring(tbodyOpen).Should().Contain("<td>1</td>").And.Contain("</tbody>");
+        tbodyClose.Should().BeGreaterThan(tbodyOpen);
+        clean[tbodyOpen..tbodyClose].Should().Contain("<td>1</td>");
     }
 
     // A header-only table leaves an empty tbody behind. Emitting <tbody></tbody> into every fork's
@@ -306,7 +308,7 @@ public class GanssHtmlSanitizerTests
         clean.Should().Contain("<thead><tr><th>Inner</th></tr></thead>");
     }
 
-    // The 9 tests above all supply an explicit <tbody>, i.e. exactly what TipTap's renderHTML
+    // Every test above supplies an explicit <tbody>, i.e. exactly what TipTap's renderHTML
     // emits. But the reason this normalization lives on the server at all is the writers that are
     // NOT TipTap -- imports, ETL, direct API POSTs -- which routinely hand-author
     // <table><tr><th>...</tr></table> with no <tbody> at all. The HTML parser is expected to

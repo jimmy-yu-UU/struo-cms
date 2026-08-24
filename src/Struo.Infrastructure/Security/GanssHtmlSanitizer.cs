@@ -61,8 +61,9 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         // Structural canonicalization, not stripping: see TableHeadNormalizer for why the header
         // row has to be sectioned server-side. It rides this event rather than a second parse
         // because the sanitizer has already built the DOM -- and rides this class rather than
-        // RichTextCleaner because IHtmlSanitizer's only consumers in this repository are the two
-        // RichTextCleaner instances ItemService builds, so no other caller is affected.
+        // RichTextCleaner because this adapter *is* the RichText pipeline's sanitizer, not a
+        // second stage bolted onto it: a consumer added elsewhere would opt into normalization
+        // along with stripping, which IHtmlSanitizer's own interface doc now states plainly.
         _sanitizer.PostProcessDom += (_, e) => TableHeadNormalizer.Normalize(e.Document);
     }
 
