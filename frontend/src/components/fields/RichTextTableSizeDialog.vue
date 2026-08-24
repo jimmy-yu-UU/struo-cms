@@ -35,7 +35,9 @@ const errorId = useId()
 function inBounds(n: number): boolean {
   return Number.isInteger(n) && n >= min && n <= max
 }
-const valid = computed(() => inBounds(rows.value) && inBounds(cols.value))
+const rowsValid = computed(() => inBounds(rows.value))
+const colsValid = computed(() => inBounds(cols.value))
+const valid = computed(() => rowsValid.value && colsValid.value)
 
 // Reopening the dialog starts from the default again rather than from whatever the last rejected
 // attempt left behind.
@@ -67,12 +69,12 @@ defineExpose({ rows, cols, withHeaderRow, valid, submit })
         <div class="flex flex-col gap-1.5">
           <Label :for="rowsId">{{ t('fields.richtext.rows') }}</Label>
           <Input :id="rowsId" v-model.number="rows" type="number" :min="min" :max="max"
-            :aria-invalid="!valid" :aria-describedby="!valid ? errorId : undefined" data-testid="rows" />
+            :aria-invalid="!rowsValid" :aria-describedby="!valid ? errorId : undefined" data-testid="rows" />
         </div>
         <div class="flex flex-col gap-1.5">
           <Label :for="colsId">{{ t('fields.richtext.columns') }}</Label>
           <Input :id="colsId" v-model.number="cols" type="number" :min="min" :max="max"
-            :aria-invalid="!valid" :aria-describedby="!valid ? errorId : undefined" data-testid="cols" />
+            :aria-invalid="!colsValid" :aria-describedby="!valid ? errorId : undefined" data-testid="cols" />
         </div>
         <div class="flex items-center gap-2">
           <Checkbox :id="headerId" v-model="withHeaderRow" />

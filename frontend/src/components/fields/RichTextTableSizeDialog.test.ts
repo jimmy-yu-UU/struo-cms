@@ -84,4 +84,22 @@ describe('RichTextTableSizeDialog', () => {
     expect(typeof vm.rows).toBe('number')
     expect(vm.rows).toBe(7)
   })
+
+  // A shared `valid` driving both inputs' aria-invalid would mark the rows field invalid too
+  // merely because the columns field is out of range -- rows itself is still a perfectly fine
+  // value and must not be flagged. Only the offending field's own aria-invalid should flip; the
+  // error message stays the single shared paragraph (asserted separately below), so both inputs
+  // keep pointing at it via aria-describedby regardless of which one is actually invalid.
+  it('flags aria-invalid on only the out-of-range field, not both', async () => {
+    w = build()
+    const vm = w.vm as unknown as { cols: number }
+    vm.cols = 21
+    await w.vm.$nextTick()
+    expect(w.get('[data-testid="cols"]').attributes('aria-invalid')).toBe('true')
+    expect(w.get('[data-testid="rows"]').attributes('aria-invalid')).toBe('false')
+    // Both still point at the same shared error message while it is showing.
+    const errorId = w.get('[role="alert"]').attributes('id')
+    expect(w.get('[data-testid="rows"]').attributes('aria-describedby')).toBe(errorId)
+    expect(w.get('[data-testid="cols"]').attributes('aria-describedby')).toBe(errorId)
+  })
 })
