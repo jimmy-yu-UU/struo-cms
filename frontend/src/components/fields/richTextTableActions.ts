@@ -17,9 +17,9 @@ export const IN_TABLE_ACTIONS: ReadonlyArray<TableAction> = [
   'addRowAfter',
   'addColumnBefore',
   'addColumnAfter',
+  'toggleHeaderRow',
   'deleteRow',
   'deleteColumn',
-  'toggleHeaderRow',
   'deleteTable',
 ]
 

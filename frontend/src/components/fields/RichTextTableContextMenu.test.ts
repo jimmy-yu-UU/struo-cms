@@ -43,6 +43,23 @@ describe('RichTextTableContextMenu', () => {
     expect(emitted).toEqual([...IN_TABLE_ACTIONS])
   })
 
+  it('renders exactly one separator, before the first destructive action', async () => {
+    w = build()
+    await w.find('.target').trigger('contextmenu')
+    // Observed by printing the rendered menu HTML: reka's ContextMenuSeparator renders as a plain
+    // sibling `<div role="separator" data-slot="context-menu-separator">` among the
+    // ContextMenuItem divs, not nested inside one, so a single flat selector over both element
+    // kinds preserves their real DOM order and lets the separator's position be checked directly
+    // against its neighbour rather than assumed from IN_TABLE_ACTIONS.
+    const nodes = w.findAll('[data-cmd], [role="separator"]')
+    const separatorIndexes = nodes
+      .map((n, i) => (n.attributes('role') === 'separator' ? i : -1))
+      .filter((i) => i !== -1)
+    expect(separatorIndexes).toHaveLength(1)
+    const next = nodes[separatorIndexes[0] + 1]
+    expect(next.attributes('data-cmd')).toBe('table-deleteRow')
+  })
+
   it('emits nothing while disabled, and the handler refuses too', async () => {
     w = mount(RichTextTableContextMenu, {
       props: { disabled: true },

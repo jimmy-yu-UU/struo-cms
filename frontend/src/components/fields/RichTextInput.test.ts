@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import RichTextInput from './RichTextInput.vue'
@@ -471,6 +472,22 @@ describe('RichTextInput', () => {
     const stop = vi.spyOn(ev, 'stopPropagation')
     cell.element.dispatchEvent(ev)
     expect(stop).not.toHaveBeenCalled()
+    // Not-stopped alone is a proxy that would also pass if the handler were never attached, or
+    // took the `!ed` early-return path -- neither of which says our menu actually armed. reka's
+    // ContextMenuTrigger.handleContextMenu is itself async (it awaits Vue's own nextTick before
+    // opening and calling preventDefault), so the decision isn't observable until this test also
+    // awaits a tick.
+    // One tick is enough for reka's own async handleContextMenu to run its preventDefault --
+    // observed directly: ev.defaultPrevented was already true after a single `await nextTick()`.
+    // But that call also assigns rootContext's `open` ref, and that ref's own re-render (the one
+    // that actually mounts the menu's items into the DOM) is queued onto Vue's *next* flush rather
+    // than running inside the same continuation -- observed directly too: with only one tick,
+    // `data-state` on the trigger was still "closed" and no `data-cmd="table-*"` item existed yet.
+    // A second tick is what lets that follow-on render flush.
+    await nextTick()
+    await nextTick()
+    expect(w.find('[data-cmd="table-deleteRow"]').exists()).toBe(true)
+    expect(ev.defaultPrevented).toBe(true)
     w.unmount()
   })
 })

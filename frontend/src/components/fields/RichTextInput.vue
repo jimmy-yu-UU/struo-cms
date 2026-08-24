@@ -197,14 +197,32 @@ const contentRoot = ref<HTMLElement | null>(null)
 // Runs in the CAPTURE phase on a wrapper that is a STRICT ANCESTOR of reka's own trigger element
 // (see the template below), and decides synchronously which menu the user gets:
 //
-//   - outside a table: stopPropagation, so reka never sees the event and nothing calls
-//     preventDefault -- the browser's own menu (spellcheck, paste) appears untouched.
-//   - inside a table: move the selection into the clicked cell, then let the event bubble on so
-//     reka opens ours.
+//   - no editor yet, or outside a table: stopPropagation, so reka never sees the event and nothing
+//     calls preventDefault -- the browser's own menu (spellcheck, paste) appears untouched. This
+//     also stops ProseMirror's OWN contextmenu handler, which prosemirror-view registers on
+//     view.dom (a descendant of this wrapper) purely to force-flush a pending IME composition
+//     before the native menu opens (`handlers.contextmenu = view => forceDOMFlush(view)`, itself
+//     `endComposition(view)`, in prosemirror-view/dist/index.js). The narrow, accepted consequence
+//     of suppressing that here is a possibly-stale native menu mid-composition -- nothing about
+//     table state.
+//   - inside a table on a disabled (read-only) field: let the event continue on its own, doing
+//     nothing here. RichTextTableContextMenu already forwards `disabled` to its own
+//     ContextMenuTrigger, which will decline to open ours and fall back to the native menu, so
+//     there is nothing left for this handler to add -- and a disabled/read-only editor should not
+//     have its selection moved at all, which is why the focus-the-cell step below is skipped too.
+//   - inside a table on an enabled field: move the selection into the clicked cell, then let the
+//     event bubble on so reka opens ours.
 //
-// stopPropagation rather than reka's own `disabled` prop, because `disabled` is reactive and Vue
-// applies DOM/prop updates asynchronously: within this same event tick reka would still read the
-// previous value. A synchronous decision has no such race.
+// stopPropagation, not driving reka's own `disabled` prop, because that prop is shaped for a
+// component-lifetime setting while this handler's decision is per-event (which cell, if any, was
+// clicked) -- routing every right-click through a ref this handler flips before dispatch would be
+// a more roundabout way to express what a synchronous stopPropagation already says directly.
+// (Checked the installed reka-ui@2.10.3 source directly: ContextMenuTrigger's handleContextMenu
+// reads `disabled.value` synchronously as its very first statement, before any `await` in the
+// function -- so even a same-tick ref write here would already be visible to it, since this
+// capture-phase handler always finishes before that bubble-phase handler starts for the same
+// event. There is no staleness to route around either way; the reason to prefer stopPropagation is
+// the shape mismatch above, not a timing race.)
 //
 // The handler MUST sit on an element outside RichTextTableContextMenu, not on the element reka
 // binds to. stopPropagation() does not stop other listeners on the SAME element -- only
@@ -214,8 +232,9 @@ const contentRoot = ref<HTMLElement | null>(null)
 function onContentContextMenu(e: MouseEvent): void {
   const root = contentRoot.value
   const ed = editor.value
-  if (!root || !ed) return
+  if (!root || !ed) { e.stopPropagation(); return }
   if (!isInEditorTable(e.target, root)) { e.stopPropagation(); return }
+  if (props.disabled) return
   // Commands act on the current selection, so a right-click on a cell the caret is not in would
   // otherwise apply to wherever the caret happens to be. posAtCoords needs layout, so this line
   // cannot be proven in jsdom -- it is verified live (see the plan's Task 7).
