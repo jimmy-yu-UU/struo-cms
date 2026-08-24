@@ -1,5 +1,4 @@
 export type TableAction =
-  | 'insert'
   | 'addRowBefore'
   | 'addRowAfter'
   | 'addColumnBefore'
@@ -9,13 +8,44 @@ export type TableAction =
   | 'toggleHeaderRow'
   | 'deleteTable'
 
-export const IN_TABLE_ACTIONS: ReadonlyArray<readonly [TableAction, string]> = [
-  ['addRowBefore', 'Add row above'],
-  ['addRowAfter', 'Add row below'],
-  ['addColumnBefore', 'Add column left'],
-  ['addColumnAfter', 'Add column right'],
-  ['deleteRow', 'Delete row'],
-  ['deleteColumn', 'Delete column'],
-  ['toggleHeaderRow', 'Toggle header row'],
-  ['deleteTable', 'Delete table'],
+// Each action's i18n key under `fields.richtext.` IS its action name, so the list carries the
+// action alone and the call site derives the key. Keeping them structurally identical is what
+// makes a mismatch impossible rather than merely unlikely.
+//
+// Order is load-bearing: toggleHeaderRow sits BEFORE the three deletes so the destructive entries
+// stay contiguous and the context menu's separator predicate fires exactly once.
+export const IN_TABLE_ACTIONS: ReadonlyArray<TableAction> = [
+  'addRowBefore',
+  'addRowAfter',
+  'addColumnBefore',
+  'addColumnAfter',
+  'toggleHeaderRow',
+  'deleteRow',
+  'deleteColumn',
+  'deleteTable',
 ]
+
+// The set of actions the context menu (RichTextTableContextMenu) places a separator before the
+// first of. It lives here rather than as a hard-coded index in that menu, so the separator follows
+// membership instead of a position -- but note that only works while these three stay contiguous in
+// IN_TABLE_ACTIONS (see its own comment above): interleave them and the predicate fires more than
+// once. RichTextTableContextMenu.test.ts pins the "exactly one separator" outcome.
+export const DESTRUCTIVE_TABLE_ACTIONS: ReadonlySet<TableAction> =
+  new Set<TableAction>(['deleteRow', 'deleteColumn', 'deleteTable'])
+
+export const TABLE_SIZE_MIN = 1
+export const TABLE_SIZE_MAX = 20
+
+/**
+ * Whether a right-click landed inside a table that belongs to this editor.
+ *
+ * Deliberately DOM-only: it takes the event target rather than the editor, so it needs no layout
+ * and is testable in jsdom. Resolving the clicked cell to a ProseMirror position is a separate
+ * step that does need layout — see RichTextInput's context-menu handler.
+ */
+export function isInEditorTable(target: EventTarget | null, root: HTMLElement): boolean {
+  if (!(target instanceof Node)) return false
+  const el = target instanceof HTMLElement ? target : target.parentElement
+  const table = el?.closest('table')
+  return !!table && root.contains(table)
+}

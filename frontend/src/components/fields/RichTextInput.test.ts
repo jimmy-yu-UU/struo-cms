@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
+import type { Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
 import { fileContentPath } from '../../lib/richTextImages'
 import { buttonVariants } from '@/components/ui/button'
@@ -9,18 +11,32 @@ import { cn } from '@/lib/utils'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: {
+  messages: { en: {
+    common: { cancel: 'Cancel', confirm: 'Confirm' },
+    fields: {
     searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
       heading2: 'Heading 2', heading3: 'Heading 3',
+      heading4: 'Heading 4', heading5: 'Heading 5', heading6: 'Heading 6',
+      headings: 'Headings', paragraph: 'Body text',
       subscript: 'Subscript', superscript: 'Superscript',
       bulletList: 'Bullet list', numberedList: 'Numbered list',
       blockquote: 'Blockquote', codeBlock: 'Code block',
       link: 'Link', horizontalRule: 'Horizontal rule', insertImage: 'Insert image',
       undo: 'Undo', redo: 'Redo',
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
+      table: 'Table',
+      addRowBefore: 'Add row above', addRowAfter: 'Add row below',
+      addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
+      deleteRow: 'Delete row', deleteColumn: 'Delete column',
+      toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
+      tableSizeCols: '{count} column | {count} columns', tableSizeRows: '{count} row | {count} rows',
+      customSize: 'Custom size…',
+      customSizeTitle: 'Insert table', rows: 'Rows', columns: 'Columns',
+      withHeaderRow: 'Include header row',
+      sizeOutOfRange: 'Rows and columns must be between {min} and {max}.',
       placeholder: 'Write something…',
     },
   } },
@@ -47,6 +63,15 @@ if (!Range.prototype.getBoundingClientRect) {
   Range.prototype.getBoundingClientRect = () => ({
     top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => undefined,
   }) as DOMRect
+}
+// jsdom implements neither this: prosemirror-view's posAtCoords (called from the table
+// context-menu's contextmenu handler) calls `doc.elementFromPoint(...)` unconditionally -- unlike
+// its caret*FromPoint calls a few lines above it, which do feature-check first -- so without this
+// stub the "arms its own menu for a right-click inside a table" test below throws an uncaught
+// TypeError from inside the event dispatch. Returning null here is what a real browser would do
+// for a point with no element under it, and is a safe stand-in since jsdom cannot lay out coordinates.
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => null
 }
 
 describe('RichTextInput', () => {
@@ -158,11 +183,48 @@ describe('RichTextInput', () => {
     expect(vm.editor.getAttributes('textStyle').color).toBe('#dc2626')
   })
 
+  it('offers heading levels 2 through 6 and can return to body text', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      editor: { commands: { selectAll: () => void }; isActive: (n: string, a?: Record<string, unknown>) => boolean }
+    }
+    await w.get('[data-cmd="headings"]').trigger('click')
+    for (const lvl of [2, 3, 4, 5, 6]) {
+      await w.get(`[data-cmd="h${lvl}"]`).trigger('click')
+      expect(vm.editor.isActive('heading', { level: lvl }), `level ${lvl}`).toBe(true)
+      await w.get('[data-cmd="headings"]').trigger('click')
+    }
+    await w.get('[data-cmd="paragraph"]').trigger('click')
+    expect(vm.editor.isActive('paragraph')).toBe(true)
+    w.unmount()
+  })
+
+  it('keeps the level when the active heading is picked again, and labels the trigger', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { isActive: (n: string, a?: Record<string, unknown>) => boolean } }
+    await w.get('[data-cmd="headings"]').trigger('click')
+    await w.get('[data-cmd="h3"]').trigger('click')
+    expect(vm.editor.isActive('heading', { level: 3 })).toBe(true)
+    // The trigger's rendered label reads editor.isActive() through the template, which (unlike
+    // reading vm.editor.isActive() directly above) only updates after tiptap/vue-3's two-rAF
+    // debounce -- see waitForEditorReactivity below.
+    await waitForEditorReactivity()
+    expect(w.get('[data-cmd="headings"]').text()).toBe('Heading 3')
+    // Re-picking the level that is already active must be a no-op, not a toggle back to paragraph.
+    await w.get('[data-cmd="headings"]').trigger('click')
+    await w.get('[data-cmd="h3"]').trigger('click')
+    expect(vm.editor.isActive('heading', { level: 3 })).toBe(true)
+    expect(vm.editor.isActive('paragraph')).toBe(false)
+    w.unmount()
+  })
+
   it('inserts a 3x3 table with header row via the table menu', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cmd="tableInsert"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
     await flushPromises()
     const emitted = w.emitted('update:modelValue')
     const html = String(emitted!.at(-1)![0])
@@ -170,11 +232,29 @@ describe('RichTextInput', () => {
     expect(html).toContain('<th')
   })
 
+  // A non-square pick, unlike the 3x3 test above: a rows/cols swap in onTableInsert, or
+  // hardcoding a size and ignoring the payload entirely, would still pass a 3x3 assertion (it's
+  // symmetric) but fails this one. Counts observed directly from TipTap's own output for a
+  // { rows: 2, cols: 4 } insert: 2 <tr> (one header row, one body row) and 4 <th> (the header
+  // row's cells; the body row's 4 cells are <td>, not <th>).
+  it('inserts a non-square table matching the picked rows and cols, not a fixed or swapped size', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cell="2-4"]').trigger('click')
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect((html.match(/<tr>/g) ?? []).length).toBe(2)
+    expect((html.match(/<th\b/g) ?? []).length).toBe(4)
+    w.unmount()
+  })
+
   it('keeps every toolbar command reachable after the control swap', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     const commands = ['bold', 'italic', 'strike', 'alignLeft', 'alignCenter', 'alignRight',
-      'alignJustify', 'h2', 'h3', 'subscript', 'superscript', 'bulletList', 'orderedList',
+      'alignJustify', 'headings', 'subscript', 'superscript', 'bulletList', 'orderedList',
       'blockquote', 'codeBlock', 'link', 'hr', 'image', 'undo', 'redo']
     for (const cmd of commands) {
       expect(w.find(`[data-cmd="${cmd}"]`).exists(), cmd).toBe(true)
@@ -370,6 +450,7 @@ describe('RichTextInput', () => {
   it('keeps the placeholder visible after changing an empty block to a heading', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
     await flushPromises()
+    await w.get('[data-cmd="headings"]').trigger('click')
     await w.get('[data-cmd="h2"]').trigger('click')
     await flushPromises()
     const node = w.get('.ProseMirror').element.firstElementChild as HTMLElement
@@ -389,6 +470,106 @@ describe('RichTextInput', () => {
     const p = w.get('.ProseMirror p')
     expect(p.classes()).not.toContain('is-editor-empty')
     expect(p.attributes('data-placeholder')).toBeUndefined()
+    w.unmount()
+  })
+
+  it('leaves the native menu alone for a right-click outside a table', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    const p = w.get('.ProseMirror p')
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    const stop = vi.spyOn(ev, 'stopPropagation')
+    p.element.dispatchEvent(ev)
+    // stopPropagation is the mechanism that keeps reka from opening ours and from preventing the
+    // browser default; asserting it is asserting the behaviour, not an implementation detail.
+    expect(stop).toHaveBeenCalled()
+    expect(ev.defaultPrevented).toBe(false)
+    w.unmount()
+  })
+
+  it('arms its own menu for a right-click inside a table', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
+    await flushPromises()
+    const cell = w.get('.ProseMirror table td, .ProseMirror table th')
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    const stop = vi.spyOn(ev, 'stopPropagation')
+    cell.element.dispatchEvent(ev)
+    expect(stop).not.toHaveBeenCalled()
+    // Not-stopped alone is a proxy that would also pass if the handler were never attached, or
+    // took the `!ed` early-return path -- neither of which says our menu actually armed. reka's
+    // ContextMenuTrigger.handleContextMenu is itself async (it awaits Vue's own nextTick before
+    // opening and calling preventDefault), so the decision isn't observable until this test also
+    // awaits a tick.
+    // One tick is enough for reka's own async handleContextMenu to run its preventDefault --
+    // observed directly: ev.defaultPrevented was already true after a single `await nextTick()`.
+    // But that call also assigns rootContext's `open` ref, and that ref's own re-render (the one
+    // that actually mounts the menu's items into the DOM) is queued onto Vue's *next* flush rather
+    // than running inside the same continuation -- observed directly too: with only one tick,
+    // `data-state` on the trigger was still "closed" and no `data-cmd="table-*"` item existed yet.
+    // A second tick is what lets that follow-on render flush.
+    await nextTick()
+    await nextTick()
+    expect(w.find('[data-cmd="table-deleteRow"]').exists()).toBe(true)
+    expect(ev.defaultPrevented).toBe(true)
+    w.unmount()
+  })
+
+  // posAtCoords needs real layout to resolve accurate coordinates, and jsdom lays nothing out --
+  // that half (does the reported position correspond to the cell actually under the cursor?)
+  // stays a live check per the plan's Task 7. What jsdom CAN pin, by stubbing posAtCoords itself,
+  // is the wiring around it: whatever position it resolves to must become the selection, because
+  // that is what makes a table action apply to the cell the user actually right-clicked rather
+  // than wherever the caret happened to be already. Tried first: letting jsdom's own
+  // posAtCoords run unstubbed against zero-size layout rects -- it returns an arbitrary non-null
+  // position regardless of the two lines under test, which is exactly why this test replaces it
+  // with a controlled stub instead of trusting jsdom's coordinate math.
+  it('moves the selection to whatever position posAtCoords resolves, on a right-click inside a table', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    // somePos: the text position just inside the LAST tableCell/tableHeader node in the document,
+    // derived from the real doc rather than hardcoded. `pos` from descendants is the position
+    // right before the node opens; +1 enters the cell to its (empty) paragraph child, +2 enters
+    // that paragraph's own (empty) content -- a valid, resolvable TextSelection anchor. Picking the
+    // LAST cell (not the first) matters: right after insertTable the selection already sits inside
+    // the first cell, so asserting against the first cell could pass even if the two lines under
+    // test never ran.
+    let somePos = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') somePos = pos + 2
+    })
+    expect(somePos).toBeGreaterThan(-1)
+    expect(ed.state.selection.from).not.toBe(somePos)
+    vi.spyOn(ed.view, 'posAtCoords').mockReturnValue({ pos: somePos, inside: -1 })
+    const cell = w.get('.ProseMirror table td, .ProseMirror table th')
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    cell.element.dispatchEvent(ev)
+    expect(ed.state.selection.from).toBe(somePos)
+    w.unmount()
+  })
+
+  it('inserts a custom-sized table from the dialog', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cmd="tableCustomSize"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-cmd="tableSizeConfirm"]').trigger('click')
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { getHTML: () => string } }
+    const html = vm.editor.getHTML()
+    expect(html).toContain('<table')
+    expect((html.match(/<tr>/g) ?? []).length).toBe(3)
+    // 3 <tr> alone is true whether withHeaderRow is true or false -- this is what actually
+    // discriminates the dialog's default-checked header box reaching insertTable.
+    expect(html).toContain('<th')
     w.unmount()
   })
 })

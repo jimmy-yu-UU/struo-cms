@@ -20,8 +20,12 @@ import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/compon
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
+import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
-import type { TableAction } from './richTextTableActions'
+import RichTextTableContextMenu from './RichTextTableContextMenu.vue'
+import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
+import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
+import { isInEditorTable, type TableAction } from './richTextTableActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -104,7 +108,7 @@ const editor = useEditor({
   // click landing in that gap off to the editor instead of leaving it dead.
   editorProps: { attributes: { class: 'prose dark:prose-invert' } },
   extensions: [
-    StarterKit.configure({ heading: { levels: [2, 3] }, underline: false, link: false }),
+    StarterKit.configure({ heading: { levels: [...HEADING_LEVELS] }, underline: false, link: false }),
     Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
     Image.configure({ inline: false }),
     TableKit.configure({ table: { resizable: false } }),
@@ -141,8 +145,6 @@ onBeforeUnmount(() => {
   debouncedLoadImages.cancel()
 })
 
-type Level = 2 | 3
-
 const alignKey = {
   left: 'alignLeft', center: 'alignCenter', right: 'alignRight', justify: 'alignJustify',
 } as const
@@ -158,11 +160,26 @@ function setLink(): void {
   editor.value.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
 }
 
+function activeHeadingLevel(): HeadingLevel | null {
+  const ed = editor.value
+  if (!ed) return null
+  return HEADING_LEVELS.find((lvl) => ed.isActive('heading', { level: lvl })) ?? null
+}
+
+function onHeadingSelect(level: HeadingLevel | null): void {
+  if (!editor.value) return
+  const chain = editor.value.chain().focus()
+  // setHeading, not toggleHeading: this dropdown marks the current level as selected and offers an
+  // explicit "Body text" item, so every item must be idempotent -- re-picking the highlighted level
+  // has to leave the block at that level, not toggle it back to a paragraph.
+  if (level === null) chain.setParagraph().run()
+  else chain.setHeading({ level }).run()
+}
+
 function onTableAction(action: TableAction): void {
   if (!editor.value) return
   const chain = editor.value.chain().focus()
   const commands: Record<TableAction, () => void> = {
-    insert: () => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
     addRowBefore: () => chain.addRowBefore().run(),
     addRowAfter: () => chain.addRowAfter().run(),
     addColumnBefore: () => chain.addColumnBefore().run(),
@@ -173,6 +190,66 @@ function onTableAction(action: TableAction): void {
     deleteTable: () => chain.deleteTable().run(),
   }
   commands[action]()
+}
+
+function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolean }): void {
+  editor.value?.chain().focus()
+    .insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: size.withHeaderRow }).run()
+}
+
+// Opened by the table menu's "custom size…" entry; RichTextTableSizeDialog below reads it.
+const sizeDialogOpen = ref(false)
+
+const contentRoot = ref<HTMLElement | null>(null)
+
+// Runs in the CAPTURE phase on a wrapper that is a STRICT ANCESTOR of reka's own trigger element
+// (see the template below), and decides synchronously which menu the user gets:
+//
+//   - no editor yet, or outside a table: stopPropagation, so reka never sees the event and nothing
+//     calls preventDefault -- the browser's own menu (spellcheck, paste) appears untouched. This
+//     also stops ProseMirror's OWN contextmenu handler, which prosemirror-view registers on
+//     view.dom (a descendant of this wrapper) purely to force-flush a pending IME composition
+//     before the native menu opens (`handlers.contextmenu = view => forceDOMFlush(view)`, itself
+//     `endComposition(view)`, in prosemirror-view/dist/index.js). The narrow, accepted consequence
+//     of suppressing that here is a possibly-stale native menu mid-composition -- nothing about
+//     table state.
+//   - inside a table on a disabled (read-only) field: let the event continue on its own, doing
+//     nothing here. RichTextTableContextMenu already forwards `disabled` to its own
+//     ContextMenuTrigger, which will decline to open ours and fall back to the native menu, so
+//     there is nothing left for this handler to add -- and a disabled/read-only editor should not
+//     have its selection moved at all, which is why the focus-the-cell step below is skipped too.
+//   - inside a table on an enabled field: move the selection into the clicked cell, then let the
+//     event bubble on so reka opens ours.
+//
+// Two independent reasons to prefer stopPropagation over driving reka's own `disabled` prop, not
+// one. Shape: `disabled` is a component-lifetime prop, while the decision here is per-event (which
+// cell, if any, was clicked) -- a prop is the wrong vehicle for that regardless of timing. Timing:
+// checked the installed reka-ui@2.10.3 source directly (ContextMenuTrigger.js) --
+// `handleContextMenu` reads `disabled.value` synchronously as its very first statement, before its
+// own `await nextTick()`. That value arrives as a PROP, forwarded through three component
+// boundaries (this file's `disabled` -> RichTextTableContextMenu's own `disabled` prop -> the
+// vendored ui/context-menu ContextMenuTrigger's `useForwardProps` -> reka's own `toRefs(props)`).
+// Vue applies prop updates to a child component on its job queue, a microtask -- and DOM event
+// dispatch from the capture phase to the bubble phase is synchronous, so no microtask can run in
+// between. A ref flipped in this handler would still read stale at reka's guard, for the same
+// event, every time. stopPropagation() sidesteps both problems at once.
+//
+// The handler MUST sit on an element outside RichTextTableContextMenu, not on the element reka
+// binds to. stopPropagation() does not stop other listeners on the SAME element -- only
+// stopImmediatePropagation() does, and at-target listeners fire in registration order, which is
+// not ours to control. From a strict ancestor, the capture listener always runs first and
+// stopPropagation() reliably prevents the event from ever reaching reka.
+function onContentContextMenu(e: MouseEvent): void {
+  const root = contentRoot.value
+  const ed = editor.value
+  if (!root || !ed) { e.stopPropagation(); return }
+  if (!isInEditorTable(e.target, root)) { e.stopPropagation(); return }
+  if (props.disabled) return
+  // Commands act on the current selection, so a right-click on a cell the caret is not in would
+  // otherwise apply to wherever the caret happens to be. posAtCoords needs layout, so this line
+  // cannot be proven in jsdom -- it is verified live (see the plan's Task 7).
+  const at = ed.view.posAtCoords({ left: e.clientX, top: e.clientY })
+  if (at) ed.commands.focus(at.pos)
 }
 
 defineExpose({ editor, insertImage })
@@ -212,12 +289,8 @@ defineExpose({ editor, insertImage })
         :aria-label="t('fields.richtext.' + alignKey[al])" :title="t('fields.richtext.' + alignKey[al])"
         class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
         @click="editor!.chain().focus().setTextAlign(al).run()"><component :is="alignIcon[al]" /></Button>
-      <Button v-for="lvl in ([2, 3] as Level[])" :key="lvl" type="button" variant="ghost" size="icon" :data-cmd="`h${lvl}`"
-        :data-active="editor.isActive('heading', { level: lvl })" :disabled="disabled"
-        :aria-label="t(lvl === 2 ? 'fields.richtext.heading2' : 'fields.richtext.heading3')"
-        :title="t(lvl === 2 ? 'fields.richtext.heading2' : 'fields.richtext.heading3')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
-        @click="editor!.chain().focus().toggleHeading({ level: lvl }).run()">H{{ lvl }}</Button>
+      <RichTextHeadingMenu :disabled="disabled" :active-level="activeHeadingLevel()"
+        @select="onHeadingSelect" />
       <Button type="button" variant="ghost" size="icon" data-cmd="subscript" :data-active="editor.isActive('subscript')"
         :disabled="disabled" :aria-label="t('fields.richtext.subscript')" :title="t('fields.richtext.subscript')"
         class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleSubscript().run()">x₂</Button>
@@ -247,14 +320,18 @@ defineExpose({ editor, insertImage })
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
-      <RichTextTableMenu :disabled="disabled" :in-table="editor.isActive('table')" @action="onTableAction" />
+      <RichTextTableMenu :disabled="disabled" @insert="onTableInsert" @custom-size="sizeDialogOpen = true" />
       <Button type="button" variant="ghost" size="icon" data-cmd="undo" :disabled="disabled"
         :aria-label="t('fields.richtext.undo')" :title="t('fields.richtext.undo')" @click="editor!.chain().focus().undo().run()"><Undo2 /></Button>
       <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"
         :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
     </div>
-    <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
-      @click.self="editor?.chain().focus().run()" />
+    <div ref="contentRoot" @contextmenu.capture="onContentContextMenu">
+      <RichTextTableContextMenu :disabled="disabled" @action="onTableAction">
+        <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
+          @click.self="editor?.chain().focus().run()" />
+      </RichTextTableContextMenu>
+    </div>
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain
@@ -276,6 +353,7 @@ defineExpose({ editor, insertImage })
         <MediaGrid :files="files" selectable @select="onImageSelected" />
       </DialogScrollContent>
     </Dialog>
+    <RichTextTableSizeDialog v-model:open="sizeDialogOpen" @insert="onTableInsert" />
   </div>
 </template>
 

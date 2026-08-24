@@ -21,6 +21,29 @@ public class GanssHtmlSanitizerTests
     }
 
     [Fact]
+    public void Keeps_heading_levels_two_through_six()
+    {
+        var clean = _s.Sanitize("<h2>a</h2><h3>b</h3><h4>c</h4><h5>d</h5><h6>e</h6>");
+        clean.Should().Contain("<h2>").And.Contain("<h3>").And.Contain("<h4>")
+             .And.Contain("<h5>").And.Contain("<h6>");
+    }
+
+    // The editor deliberately offers H2-H6 only: the page title is the H1, so a second H1 inside
+    // body content would break the document outline. This asserts that choice instead of trusting
+    // a comment to survive the next person who widens the allowlist.
+    //
+    // It also pins what removal actually does, measured rather than assumed: Ganss.Xss leaves
+    // KeepChildNodes false, so a disallowed tag is dropped together with its subtree -- the text
+    // inside the h1 does not survive as a bare paragraph.
+    [Fact]
+    public void Strips_h1_and_its_text()
+    {
+        var clean = _s.Sanitize("<h1>Heading one</h1><p>body</p>");
+        clean.Should().NotContain("<h1");
+        clean.Should().Be("<p>body</p>");
+    }
+
+    [Fact]
     public void Strips_script_and_event_handlers()
     {
         var clean = _s.Sanitize("<p onclick=\"steal()\">hi</p><script>alert(1)</script>");
