@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Table } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -9,6 +10,8 @@ defineOptions({ name: 'RichTextTableMenu' })
 
 defineProps<{ disabled?: boolean; inTable: boolean }>()
 const emit = defineEmits<{ (e: 'action', action: TableAction): void }>()
+
+const { t } = useI18n()
 
 const open = ref(false)
 const inTableActions = IN_TABLE_ACTIONS
@@ -25,7 +28,7 @@ function run(action: TableAction): void {
       <!-- type="button" is explicit even though PopoverTrigger (as-child) already merges its own
            type="button" onto whatever it wraps: this sits inside ItemForm.vue's <form>, so the
            Button doesn't rely on the merge behaviour of the component wrapping it. -->
-      <Button type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled" aria-label="Table" title="Table">
+      <Button type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled" :aria-label="t('fields.richtext.table')" :title="t('fields.richtext.table')">
         <Table />
       </Button>
     </PopoverTrigger>
@@ -33,9 +36,9 @@ function run(action: TableAction): void {
       <button type="button" data-cmd="tableInsert" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground" @click="run('insert')">
         Insert 3×3 table
       </button>
-      <button v-for="[action, label] in inTableActions" :key="action" type="button"
+      <button v-for="[action, labelKey] in inTableActions" :key="action" type="button"
         :data-cmd="`table-${action}`" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="!inTable"
-        @click="run(action)">{{ label }}</button>
+        @click="run(action)">{{ t(`fields.richtext.${labelKey}`) }}</button>
     </PopoverContent>
   </Popover>
 </template>
