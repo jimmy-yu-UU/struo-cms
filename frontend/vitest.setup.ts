@@ -58,8 +58,6 @@ if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView ??= () => {}
 }
 
-export {}
-
 // Every wrapper mounted with @vue/test-utils is unmounted after the test that mounted it.
 //
 // Without this, a component that schedules work outlives its test and fires into the NEXT one:
@@ -69,8 +67,8 @@ export {}
 //     component's own onBeforeUnmount/onUnmounted cancel run.
 //   - A component still awaiting an in-flight submit (ChangePasswordDialog, mounted for real by
 //     ItemFormView's tests) keeps reacting after a later test installs its own spies.
-//   - Tests sharing module-level reactive state (AppShell's `routeState`) let a later test's
-//     writes leak into an earlier test's still-live instance.
+//   - Tests sharing module-level reactive state (AppShell.test.ts's `routeState`) let a later
+//     test's writes leak into an earlier test's still-live instance.
 //
 // This repository shipped that class of bug once already; PR #35/#36 fixed it per-file, and this
 // line generalises the fix. Do not remove it as unrelated boilerplate --
