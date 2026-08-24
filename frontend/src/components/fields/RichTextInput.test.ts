@@ -21,8 +21,10 @@ const i18n = createI18n({
       link: 'Link', horizontalRule: 'Horizontal rule', insertImage: 'Insert image',
       undo: 'Undo', redo: 'Redo',
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
+      placeholder: 'Write something…',
     },
-  } } },
+  } },
+  'zh-TW': { fields: { richtext: { placeholder: '開始輸入…' } } } },
 })
 
 // Dialog/Popover are reka compound components: DialogContent/PopoverContent inject context that
@@ -33,12 +35,27 @@ const i18n = createI18n({
 const stubs = { Button: true, MediaGrid: true, teleport: true }
 const globalOpts = { plugins: [i18n], stubs, renderStubDefaultSlot: true }
 
+// jsdom implements neither Range method: ProseMirror's own focus command chains a scrollIntoView
+// that measures the caret via `Range.getClientRects()`/`getBoundingClientRect()`, and without
+// this, that measurement throws asynchronously (inside a requestAnimationFrame callback, so
+// outside any promise a test awaits) the moment a test mounts attached to the real document and
+// focuses the editor — which the two `attachTo` tests below are the only ones in this file to do.
+if (!Range.prototype.getClientRects) {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList
+}
+if (!Range.prototype.getBoundingClientRect) {
+  Range.prototype.getBoundingClientRect = () => ({
+    top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => undefined,
+  }) as DOMRect
+}
+
 describe('RichTextInput', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
   afterEach(() => {
     vi.restoreAllMocks()
+    i18n.global.locale.value = 'en'
   })
 
   it('rejects a javascript: URL from the link prompt (defense-in-depth)', async () => {
@@ -272,5 +289,106 @@ describe('RichTextInput', () => {
     await w.get('[data-cmd="image"]').trigger('click')
     await flushPromises()
     expect(w.get('input').attributes('aria-label')).toBe('Search files…')
+  })
+
+  it('applies the typography prose classes to the editable surface', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    // The classes go on the contenteditable element itself, not the padded box around it, so the
+    // measure caps the text while the bordered frame stays full width.
+    const classes = w.get('.ProseMirror').classes()
+    expect(classes).toContain('prose')
+    expect(classes).toContain('dark:prose-invert')
+    w.unmount()
+  })
+
+  it('shows the localized placeholder on an empty document', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
+    await flushPromises()
+    const p = w.get('.ProseMirror p')
+    expect(p.classes()).toContain('is-editor-empty')
+    expect(p.attributes('data-placeholder')).toBe('Write something…')
+    w.unmount()
+  })
+
+  it('does not mark a non-empty document as empty', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    expect(w.get('.ProseMirror p').classes()).not.toContain('is-editor-empty')
+    w.unmount()
+  })
+
+  it('re-renders the placeholder when the UI locale changes', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
+    await flushPromises()
+    expect(w.get('.ProseMirror p').attributes('data-placeholder')).toBe('Write something…')
+    i18n.global.locale.value = 'zh-TW'
+    await flushPromises()
+    expect(w.get('.ProseMirror p').attributes('data-placeholder')).toBe('開始輸入…')
+    w.unmount()
+  })
+
+  // `prose` caps the editable at a 65ch measure while EditorContent's padded box stays full
+  // width, so a click landing in that gap must be handed off rather than left dead. Triggering
+  // the click directly on the wrapper (not on a descendant) is what makes Vue's @click.self
+  // condition (event.target === event.currentTarget) hold in jsdom, even though jsdom cannot lay
+  // out the 65ch measure itself to reproduce the gap visually.
+  // document.activeElement never changes for a node outside the real DOM tree, so this (and the
+  // disabled case below) needs `attachTo: document.body` — every other test in this file mounts
+  // detached, which is fine for them but would make a focus assertion vacuously pass on `body`.
+  it('focuses the editor when a click lands on the padded wrapper, not the editable', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    await w.get('.rich-text__content').trigger('click')
+    // tiptap's focus command always defers the actual DOM focus() call to a requestAnimationFrame
+    // callback (see @tiptap/core's focus.ts), even for a synchronous editor.commands.focus() call.
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
+    w.unmount()
+    container.remove()
+  })
+
+  // ProseMirror's own EditorView.focus() only calls dom.focus() when the view is editable, so the
+  // click handoff on a disabled editor is a verified no-op, not a guess — this pins that.
+  it('does not focus a disabled editor when the padded wrapper is clicked', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p>abc</p>', disabled: true }, global: globalOpts, attachTo: container,
+    })
+    await flushPromises()
+    await w.get('.rich-text__content').trigger('click')
+    await waitForEditorReactivity()
+    expect(document.activeElement).not.toBe(w.get('.ProseMirror').element)
+    w.unmount()
+    container.remove()
+  })
+
+  // Upstream only ever adds `is-editor-empty` to the current textblock, whatever tag it is — the
+  // old `p.is-editor-empty:first-child` selector silently excluded any other tag, so switching an
+  // empty document's block type to a heading made the placeholder vanish while still empty.
+  it('keeps the placeholder visible after changing an empty block to a heading', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="h2"]').trigger('click')
+    await flushPromises()
+    const node = w.get('.ProseMirror').element.firstElementChild as HTMLElement
+    expect(node.tagName).toBe('H2')
+    expect(node.classList.contains('is-editor-empty')).toBe(true)
+    expect(node.getAttribute('data-placeholder')).toBe('Write something…')
+    w.unmount()
+  })
+
+  // Spec §8 listed the disabled/read-only case as inferred from upstream, not observed. Upstream's
+  // `active = editor.isEditable || !showOnlyWhenEditable` (default `showOnlyWhenEditable: true`)
+  // means a disabled editor gets no placeholder decoration at all — no `is-editor-empty` class,
+  // no `data-placeholder` attribute — which this pins as attribute presence, not painting.
+  it('shows no placeholder while disabled', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '', disabled: true }, global: globalOpts })
+    await flushPromises()
+    const p = w.get('.ProseMirror p')
+    expect(p.classes()).not.toContain('is-editor-empty')
+    expect(p.attributes('data-placeholder')).toBeUndefined()
+    w.unmount()
   })
 })
