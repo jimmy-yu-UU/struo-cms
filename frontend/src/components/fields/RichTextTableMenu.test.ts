@@ -7,7 +7,7 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { fields: { richtext: {
     table: 'Table', customSize: 'Custom size…',
-    tableSize: '{cols} columns × {rows} rows',
+    tableSizeCols: '{count} column | {count} columns', tableSizeRows: '{count} row | {count} rows',
   } } } },
 })
 
@@ -21,13 +21,15 @@ describe('RichTextTableMenu', () => {
   // both the hook and the payload shape are gone now that the toolbar button opens a size-picker
   // grid instead. This test drives the grid itself (RichTextTableGrid is already unit-tested on
   // its own in RichTextTableGrid.test.ts) and asserts the richer `insert` payload the grid path
-  // now emits, plus that the popover still closes afterwards.
+  // now emits, plus that the popover still closes afterwards. A non-square pick (2 rows, 4
+  // cols), not 3x3: a rows/cols swap on the way into the emitted object would be invisible on a
+  // square pick.
   it('emits insert with the picked size and a header row, and closes', async () => {
     const w = mount(RichTextTableMenu, { ...opts })
     await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cell="3-3"]').trigger('click')
-    expect(w.emitted('insert')).toEqual([[{ rows: 3, cols: 3, withHeaderRow: true }]])
-    expect(w.find('[data-cell="3-3"]').exists()).toBe(false)
+    await w.get('[data-cell="2-4"]').trigger('click')
+    expect(w.emitted('insert')).toEqual([[{ rows: 2, cols: 4, withHeaderRow: true }]])
+    expect(w.find('[data-cell="2-4"]').exists()).toBe(false)
     w.unmount()
   })
 
@@ -48,5 +50,6 @@ describe('RichTextTableMenu', () => {
   it('disables the trigger when disabled', () => {
     const w = mount(RichTextTableMenu, { props: { disabled: true }, ...opts })
     expect(w.get('[data-cmd="table"]').attributes('disabled')).toBeDefined()
+    w.unmount()
   })
 })
