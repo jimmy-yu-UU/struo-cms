@@ -528,6 +528,9 @@ describe('RichTextInput', () => {
     const html = vm.editor.getHTML()
     expect(html).toContain('<table')
     expect((html.match(/<tr>/g) ?? []).length).toBe(3)
+    // 3 <tr> alone is true whether withHeaderRow is true or false -- this is what actually
+    // discriminates the dialog's default-checked header box reaching insertTable.
+    expect(html).toContain('<th')
     w.unmount()
   })
 })

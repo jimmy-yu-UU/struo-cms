@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -24,6 +24,13 @@ const withHeaderRow = ref(true)
 
 const min = TABLE_SIZE_MIN
 const max = TABLE_SIZE_MAX
+
+// One RichTextInput per field, and an item form can carry several -- these ids must not collide
+// across two dialogs mounted at once, the same reasoning RichTextTableGrid already applies.
+const rowsId = useId()
+const colsId = useId()
+const headerId = useId()
+const errorId = useId()
 
 function inBounds(n: number): boolean {
   return Number.isInteger(n) && n >= min && n <= max
@@ -52,24 +59,26 @@ defineExpose({ rows, cols, withHeaderRow, valid, submit })
 
 <template>
   <Dialog :open="props.open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-xs">
+    <DialogContent class="sm:max-w-xs">
       <DialogHeader>
         <DialogTitle>{{ t('fields.richtext.customSizeTitle') }}</DialogTitle>
       </DialogHeader>
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1.5">
-          <Label for="rt-table-rows">{{ t('fields.richtext.rows') }}</Label>
-          <Input id="rt-table-rows" v-model.number="rows" type="number" :min="min" :max="max" data-testid="rows" />
+          <Label :for="rowsId">{{ t('fields.richtext.rows') }}</Label>
+          <Input :id="rowsId" v-model.number="rows" type="number" :min="min" :max="max"
+            :aria-invalid="!valid" :aria-describedby="!valid ? errorId : undefined" data-testid="rows" />
         </div>
         <div class="flex flex-col gap-1.5">
-          <Label for="rt-table-cols">{{ t('fields.richtext.columns') }}</Label>
-          <Input id="rt-table-cols" v-model.number="cols" type="number" :min="min" :max="max" data-testid="cols" />
+          <Label :for="colsId">{{ t('fields.richtext.columns') }}</Label>
+          <Input :id="colsId" v-model.number="cols" type="number" :min="min" :max="max"
+            :aria-invalid="!valid" :aria-describedby="!valid ? errorId : undefined" data-testid="cols" />
         </div>
         <div class="flex items-center gap-2">
-          <Checkbox id="rt-table-header" v-model="withHeaderRow" />
-          <Label for="rt-table-header">{{ t('fields.richtext.withHeaderRow') }}</Label>
+          <Checkbox :id="headerId" v-model="withHeaderRow" />
+          <Label :for="headerId">{{ t('fields.richtext.withHeaderRow') }}</Label>
         </div>
-        <p v-if="!valid" class="text-sm text-destructive" role="alert">
+        <p v-if="!valid" :id="errorId" class="text-sm text-destructive" role="alert">
           {{ t('fields.richtext.sizeOutOfRange', { min, max }) }}
         </p>
       </div>
