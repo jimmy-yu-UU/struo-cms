@@ -23,6 +23,7 @@ import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
 import RichTextTableContextMenu from './RichTextTableContextMenu.vue'
+import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
 import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
 import { isInEditorTable, type TableAction } from './richTextTableActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
@@ -196,7 +197,7 @@ function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolea
     .insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: size.withHeaderRow }).run()
 }
 
-// Task 6 wires the custom-size dialog to this; declared here so the template below compiles.
+// Opened by the table menu's "custom size…" entry; RichTextTableSizeDialog below reads it.
 const sizeDialogOpen = ref(false)
 
 const contentRoot = ref<HTMLElement | null>(null)
@@ -352,6 +353,7 @@ defineExpose({ editor, insertImage })
         <MediaGrid :files="files" selectable @select="onImageSelected" />
       </DialogScrollContent>
     </Dialog>
+    <RichTextTableSizeDialog v-model:open="sizeDialogOpen" @insert="onTableInsert" />
   </div>
 </template>
 
