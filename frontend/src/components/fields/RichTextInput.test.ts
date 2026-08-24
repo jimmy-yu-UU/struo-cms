@@ -29,7 +29,8 @@ const i18n = createI18n({
       addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
       deleteRow: 'Delete row', deleteColumn: 'Delete column',
       toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
-      tableSize: '{cols} columns × {rows} rows', customSize: 'Custom size…',
+      tableSizeCols: '{count} column | {count} columns', tableSizeRows: '{count} row | {count} rows',
+      customSize: 'Custom size…',
       placeholder: 'Write something…',
     },
   } },
@@ -223,6 +224,24 @@ describe('RichTextInput', () => {
     const html = String(emitted!.at(-1)![0])
     expect(html).toContain('<table')
     expect(html).toContain('<th')
+  })
+
+  // A non-square pick, unlike the 3x3 test above: a rows/cols swap in onTableInsert, or
+  // hardcoding a size and ignoring the payload entirely, would still pass a 3x3 assertion (it's
+  // symmetric) but fails this one. Counts observed directly from TipTap's own output for a
+  // { rows: 2, cols: 4 } insert: 2 <tr> (one header row, one body row) and 4 <th> (the header
+  // row's cells; the body row's 4 cells are <td>, not <th>).
+  it('inserts a non-square table matching the picked rows and cols, not a fixed or swapped size', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cell="2-4"]').trigger('click')
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect((html.match(/<tr>/g) ?? []).length).toBe(2)
+    expect((html.match(/<th\b/g) ?? []).length).toBe(4)
+    w.unmount()
   })
 
   it('keeps every toolbar command reachable after the control swap', async () => {
