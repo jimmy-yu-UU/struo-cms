@@ -20,7 +20,9 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
 
         _sanitizer.AllowedTags.Clear();
         foreach (var tag in new[]
-                 { "p", "h2", "h3", "strong", "em", "s", "ul", "ol", "li",
+                 // h2-h6, deliberately not h1: the page title is the H1, so body content starts at
+                 // H2. GanssHtmlSanitizerTests.Strips_h1_and_its_text pins that choice.
+                 { "p", "h2", "h3", "h4", "h5", "h6", "strong", "em", "s", "ul", "ol", "li",
                    "blockquote", "pre", "code", "hr", "br", "a", "img",
                    // Basic tables + sub/superscript + the colour carrier tag.
                    "table", "thead", "tbody", "tr", "th", "td", "sub", "sup", "span" })
