@@ -36,9 +36,9 @@ function run(action: TableAction): void {
       <button type="button" data-cmd="tableInsert" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground" @click="run('insert')">
         Insert 3×3 table
       </button>
-      <button v-for="[action, labelKey] in inTableActions" :key="action" type="button"
+      <button v-for="action in inTableActions" :key="action" type="button"
         :data-cmd="`table-${action}`" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="!inTable"
-        @click="run(action)">{{ t(`fields.richtext.${labelKey}`) }}</button>
+        @click="run(action)">{{ t(`fields.richtext.${action}`) }}</button>
     </PopoverContent>
   </Popover>
 </template>

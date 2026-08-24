@@ -38,6 +38,19 @@ describe('isInEditorTable', () => {
     const { root } = build()
     expect(isInEditorTable(null, root)).toBe(false)
   })
+
+  // A real right-click inside a cell often reports the text node as event.target, which is why the
+  // signature takes Node rather than HTMLElement. Without this case, a naive `instanceof
+  // HTMLElement` guard would answer wrongly here and still pass every other test in this file.
+  it('is true for a text node inside a table cell', () => {
+    const { root, cell } = build()
+    expect(isInEditorTable(cell.firstChild, root)).toBe(true)
+  })
+
+  it('is false for a text node outside any table', () => {
+    const { root, para } = build()
+    expect(isInEditorTable(para.firstChild, root)).toBe(false)
+  })
 })
 
 describe('table size bounds', () => {

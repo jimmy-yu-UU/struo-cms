@@ -9,20 +9,22 @@ export type TableAction =
   | 'toggleHeaderRow'
   | 'deleteTable'
 
-// Second element is an i18n key under `fields.richtext.`, not a label: the call site translates it.
-export const IN_TABLE_ACTIONS: ReadonlyArray<readonly [TableAction, string]> = [
-  ['addRowBefore', 'addRowBefore'],
-  ['addRowAfter', 'addRowAfter'],
-  ['addColumnBefore', 'addColumnBefore'],
-  ['addColumnAfter', 'addColumnAfter'],
-  ['deleteRow', 'deleteRow'],
-  ['deleteColumn', 'deleteColumn'],
-  ['toggleHeaderRow', 'toggleHeaderRow'],
-  ['deleteTable', 'deleteTable'],
+// Each action's i18n key under `fields.richtext.` IS its action name, so the list carries the
+// action alone and the call site derives the key. Keeping them structurally identical is what
+// makes a mismatch impossible rather than merely unlikely.
+export const IN_TABLE_ACTIONS: ReadonlyArray<TableAction> = [
+  'addRowBefore',
+  'addRowAfter',
+  'addColumnBefore',
+  'addColumnAfter',
+  'deleteRow',
+  'deleteColumn',
+  'toggleHeaderRow',
+  'deleteTable',
 ]
 
-// Destructive entries are separated from the additive ones in the menu; this is where the split
-// lives so the menu component does not hard-code an index.
+// The context menu (a later slice) will place a separator before the first of these; the set
+// lives here so that menu does not hard-code an index.
 export const DESTRUCTIVE_TABLE_ACTIONS: ReadonlySet<TableAction> =
   new Set<TableAction>(['deleteRow', 'deleteColumn', 'deleteTable'])
 
