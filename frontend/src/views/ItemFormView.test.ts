@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import ItemFormView from './ItemFormView.vue'
@@ -65,11 +65,6 @@ const meta = { name: 'article', label: 'Article', fields: [
 // Vue's own Teleport) once opened; stubbed the same way UserMenu.test.ts / ChangePasswordDialog.test.ts
 // stub it, so a real teleport target absent from this test's jsdom tree never drops dialog content.
 const stubs = { ItemForm: true, Button: true, RevisionHistoryDrawer: true, teleport: true }
-
-// ChangePasswordDialog (mounted for real below) is a stateful component; without this, a wrapper
-// left over from an earlier test can keep reacting once a later test's spies are installed — the
-// exact hazard PR #35/#36 fixed for other view tests in this repo.
-enableAutoUnmount(afterEach)
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
