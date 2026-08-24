@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import UserMenu from './UserMenu.vue'
 import ChangePasswordDialog from '../account/ChangePasswordDialog.vue'
@@ -8,11 +8,6 @@ import { i18n } from '../../i18n'
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
-
-// UserMenu now mounts ChangePasswordDialog, a stateful component -- without this, a wrapper left
-// over from one test can keep reacting once the next test's spies/mocks are installed, the exact
-// hazard PR #35/#36 fixed for other view tests in this repo.
-enableAutoUnmount(afterEach)
 
 function mountMenu() {
   // reka-ui's DropdownMenu portal is itself named "Teleport" -- see vitest.setup.ts for why

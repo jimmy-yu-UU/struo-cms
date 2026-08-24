@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import ChangePasswordDialog from './ChangePasswordDialog.vue'
@@ -23,11 +23,6 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 function interpolate(template: string, params: Record<string, unknown>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(params[key]))
 }
-
-// Several tests below leave a submit() in flight or watch reactive state; without this, a wrapper
-// from an earlier test can still be reacting when a later test's spies are installed -- the exact
-// hazard PR #35/#36 fixed for other view tests in this repo.
-enableAutoUnmount(afterEach)
 
 function mountDialog(targetUserId: string) {
   return mount(ChangePasswordDialog, {

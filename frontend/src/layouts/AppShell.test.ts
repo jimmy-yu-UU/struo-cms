@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
 import AppShell from './AppShell.vue'
@@ -27,11 +27,6 @@ const stubs = {
 }
 
 const mountShell = () => mount(AppShell, { global: { plugins: [i18n], stubs } })
-
-// Do not delete this as unrelated boilerplate: every mount() below (across every describe block)
-// shares one module-level reactive `routeState`, so wrappers must unmount between tests or a
-// later test's writes leak into an earlier test's still-live instance.
-enableAutoUnmount(afterEach)
 
 describe('AppShell', () => {
   beforeEach(() => {
