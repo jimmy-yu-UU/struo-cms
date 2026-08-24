@@ -15,6 +15,8 @@ const i18n = createI18n({
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
       heading2: 'Heading 2', heading3: 'Heading 3',
+      heading4: 'Heading 4', heading5: 'Heading 5', heading6: 'Heading 6',
+      headings: 'Headings', paragraph: 'Body text',
       subscript: 'Subscript', superscript: 'Superscript',
       bulletList: 'Bullet list', numberedList: 'Numbered list',
       blockquote: 'Blockquote', codeBlock: 'Code block',
@@ -163,6 +165,23 @@ describe('RichTextInput', () => {
     expect(vm.editor.getAttributes('textStyle').color).toBe('#dc2626')
   })
 
+  it('offers heading levels 2 through 6 and can return to body text', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      editor: { commands: { selectAll: () => void }; isActive: (n: string, a?: Record<string, unknown>) => boolean }
+    }
+    await w.get('[data-cmd="headings"]').trigger('click')
+    for (const lvl of [2, 3, 4, 5, 6]) {
+      await w.get(`[data-cmd="h${lvl}"]`).trigger('click')
+      expect(vm.editor.isActive('heading', { level: lvl }), `level ${lvl}`).toBe(true)
+      await w.get('[data-cmd="headings"]').trigger('click')
+    }
+    await w.get('[data-cmd="paragraph"]').trigger('click')
+    expect(vm.editor.isActive('paragraph')).toBe(true)
+    w.unmount()
+  })
+
   it('inserts a 3x3 table with header row via the table menu', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -179,7 +198,7 @@ describe('RichTextInput', () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     const commands = ['bold', 'italic', 'strike', 'alignLeft', 'alignCenter', 'alignRight',
-      'alignJustify', 'h2', 'h3', 'subscript', 'superscript', 'bulletList', 'orderedList',
+      'alignJustify', 'headings', 'subscript', 'superscript', 'bulletList', 'orderedList',
       'blockquote', 'codeBlock', 'link', 'hr', 'image', 'undo', 'redo']
     for (const cmd of commands) {
       expect(w.find(`[data-cmd="${cmd}"]`).exists(), cmd).toBe(true)
@@ -375,6 +394,7 @@ describe('RichTextInput', () => {
   it('keeps the placeholder visible after changing an empty block to a heading', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '' }, global: globalOpts })
     await flushPromises()
+    await w.get('[data-cmd="headings"]').trigger('click')
     await w.get('[data-cmd="h2"]').trigger('click')
     await flushPromises()
     const node = w.get('.ProseMirror').element.firstElementChild as HTMLElement

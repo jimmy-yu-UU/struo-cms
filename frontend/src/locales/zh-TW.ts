@@ -305,6 +305,8 @@ export default {
       bold: '粗體', italic: '斜體', strikethrough: '刪除線',
       alignLeft: '靠左對齊', alignCenter: '置中對齊', alignRight: '靠右對齊', alignJustify: '兩端對齊',
       heading2: '標題 2', heading3: '標題 3',
+      heading4: '標題 4', heading5: '標題 5', heading6: '標題 6',
+      headings: '標題', paragraph: '正文',
       subscript: '下標', superscript: '上標',
       bulletList: '項目符號清單', numberedList: '編號清單',
       blockquote: '引用區塊', codeBlock: '程式碼區塊',

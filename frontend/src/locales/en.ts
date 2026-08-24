@@ -307,6 +307,8 @@ export default {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
       heading2: 'Heading 2', heading3: 'Heading 3',
+      heading4: 'Heading 4', heading5: 'Heading 5', heading6: 'Heading 6',
+      headings: 'Headings', paragraph: 'Body text',
       subscript: 'Subscript', superscript: 'Superscript',
       bulletList: 'Bullet list', numberedList: 'Numbered list',
       blockquote: 'Blockquote', codeBlock: 'Code block',
