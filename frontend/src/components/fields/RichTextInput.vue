@@ -179,7 +179,6 @@ function onTableAction(action: TableAction): void {
   if (!editor.value) return
   const chain = editor.value.chain().focus()
   const commands: Record<TableAction, () => void> = {
-    insert: () => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
     addRowBefore: () => chain.addRowBefore().run(),
     addRowAfter: () => chain.addRowAfter().run(),
     addColumnBefore: () => chain.addColumnBefore().run(),
@@ -191,6 +190,14 @@ function onTableAction(action: TableAction): void {
   }
   commands[action]()
 }
+
+function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolean }): void {
+  editor.value?.chain().focus()
+    .insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: size.withHeaderRow }).run()
+}
+
+// Task 6 wires the custom-size dialog to this; declared here so the template below compiles.
+const sizeDialogOpen = ref(false)
 
 const contentRoot = ref<HTMLElement | null>(null)
 
@@ -312,7 +319,7 @@ defineExpose({ editor, insertImage })
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
-      <RichTextTableMenu :disabled="disabled" :in-table="editor.isActive('table')" @action="onTableAction" />
+      <RichTextTableMenu :disabled="disabled" @insert="onTableInsert" @custom-size="sizeDialogOpen = true" />
       <Button type="button" variant="ghost" size="icon" data-cmd="undo" :disabled="disabled"
         :aria-label="t('fields.richtext.undo')" :title="t('fields.richtext.undo')" @click="editor!.chain().focus().undo().run()"><Undo2 /></Button>
       <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"

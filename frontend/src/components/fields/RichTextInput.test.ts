@@ -29,6 +29,7 @@ const i18n = createI18n({
       addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
       deleteRow: 'Delete row', deleteColumn: 'Delete column',
       toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
+      tableSize: '{cols} columns × {rows} rows', customSize: 'Custom size…',
       placeholder: 'Write something…',
     },
   } },
@@ -216,7 +217,7 @@ describe('RichTextInput', () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cmd="tableInsert"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
     await flushPromises()
     const emitted = w.emitted('update:modelValue')
     const html = String(emitted!.at(-1)![0])
@@ -465,7 +466,7 @@ describe('RichTextInput', () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cmd="tableInsert"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
     await flushPromises()
     const cell = w.get('.ProseMirror table td, .ProseMirror table th')
     const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })

@@ -4,20 +4,28 @@ import { useI18n } from 'vue-i18n'
 import { Table } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { IN_TABLE_ACTIONS, type TableAction } from './richTextTableActions'
+import RichTextTableGrid from './RichTextTableGrid.vue'
 
 defineOptions({ name: 'RichTextTableMenu' })
 
-defineProps<{ disabled?: boolean; inTable: boolean }>()
-const emit = defineEmits<{ (e: 'action', action: TableAction): void }>()
+defineProps<{ disabled?: boolean }>()
+const emit = defineEmits<{
+  (e: 'insert', size: { rows: number; cols: number; withHeaderRow: boolean }): void
+  (e: 'customSize'): void
+}>()
 
 const { t } = useI18n()
-
 const open = ref(false)
-const inTableActions = IN_TABLE_ACTIONS
 
-function run(action: TableAction): void {
-  emit('action', action)
+// The grid path is opinionated: a CMS table almost always wants a header row, and this keeps the
+// pre-RT-2 behaviour. The dialog path is where that becomes a choice.
+function onPick(size: { rows: number; cols: number }): void {
+  emit('insert', { ...size, withHeaderRow: true })
+  open.value = false
+}
+
+function onCustomSize(): void {
+  emit('customSize')
   open.value = false
 }
 </script>
@@ -25,20 +33,19 @@ function run(action: TableAction): void {
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <!-- type="button" is explicit even though PopoverTrigger (as-child) already merges its own
-           type="button" onto whatever it wraps: this sits inside ItemForm.vue's <form>, so the
-           Button doesn't rely on the merge behaviour of the component wrapping it. -->
-      <Button type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled" :aria-label="t('fields.richtext.table')" :title="t('fields.richtext.table')">
+      <!-- type="button" is explicit even though PopoverTrigger (as-child) merges its own
+           type="button" onto what it wraps: this sits inside ItemForm.vue's <form>, so the Button
+           does not rely on the merge behaviour of the component wrapping it. -->
+      <Button type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled"
+        :aria-label="t('fields.richtext.table')" :title="t('fields.richtext.table')">
         <Table />
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="flex w-auto min-w-40 flex-col gap-0.5 p-1">
-      <button type="button" data-cmd="tableInsert" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground" @click="run('insert')">
-        Insert 3×3 table
-      </button>
-      <button v-for="action in inTableActions" :key="action" type="button"
-        :data-cmd="`table-${action}`" class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="!inTable"
-        @click="run(action)">{{ t(`fields.richtext.${action}`) }}</button>
+    <PopoverContent class="flex w-auto flex-col gap-1 p-2">
+      <RichTextTableGrid @pick="onPick" />
+      <button type="button" data-cmd="tableCustomSize"
+        class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+        @click="onCustomSize">{{ t('fields.richtext.customSize') }}</button>
     </PopoverContent>
   </Popover>
 </template>

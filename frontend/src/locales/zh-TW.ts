@@ -318,6 +318,7 @@ export default {
       addColumnBefore: '在左方插入欄', addColumnAfter: '在右方插入欄',
       deleteRow: '刪除列', deleteColumn: '刪除欄',
       toggleHeaderRow: '切換表頭列', deleteTable: '刪除表格',
+      tableSize: '{cols} 欄 × {rows} 列', customSize: '自訂尺寸…',
       placeholder: '開始輸入…',
     },
   },

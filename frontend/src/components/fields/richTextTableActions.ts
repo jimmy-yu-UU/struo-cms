@@ -1,5 +1,4 @@
 export type TableAction =
-  | 'insert'
   | 'addRowBefore'
   | 'addRowAfter'
   | 'addColumnBefore'
