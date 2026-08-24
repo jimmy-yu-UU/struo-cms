@@ -210,4 +210,122 @@ public class GanssHtmlSanitizerTests
         var clean = _s.Sanitize("<p>H<sub>2</sub>O and x<sup>2</sup></p>");
         clean.Should().Contain("<sub>").And.Contain("<sup>");
     }
+
+    // TipTap's table extension has no <thead> node in its schema and its renderHTML is hard-coded to
+    // ["table", attrs, colgroup, ["tbody", 0]], so the admin SPA cannot emit a header section no
+    // matter what it does. The stored HTML is what every fork's frontend renders, and
+    // @tailwindcss/typography's header rules key off `thead th`, so the header row has to be wrapped
+    // server-side. Doing it here rather than in the SPA also covers the write paths that never touch
+    // TipTap at all -- an import tool, an ETL, a direct POST.
+    [Fact]
+    public void Wraps_an_all_th_first_row_in_thead()
+    {
+        var clean = _s.Sanitize(
+            "<table><tbody><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>");
+        clean.Should().Be(
+            "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>");
+    }
+
+    // A row that mixes th and td is not a header row -- wrapping it would change how a frontend
+    // renders content the author did not mark up as a header.
+    [Fact]
+    public void Leaves_a_mixed_first_row_alone()
+    {
+        var html = "<table><tbody><tr><th>A</th><td>1</td></tr></tbody></table>";
+        _s.Sanitize(html).Should().Be(html);
+    }
+
+    // Only the FIRST row is a candidate. A th row further down is something else (a sub-heading
+    // inside the body) and moving it would reorder the table.
+    [Fact]
+    public void Leaves_a_th_row_that_is_not_first_alone()
+    {
+        var html = "<table><tbody><tr><td>1</td></tr><tr><th>A</th></tr></tbody></table>";
+        _s.Sanitize(html).Should().Be(html);
+    }
+
+    // Content that already carries a thead (an import, or a second save of already-normalized
+    // content) must come through untouched -- this is the same property as idempotence, asserted
+    // from the input side.
+    [Fact]
+    public void Leaves_an_existing_thead_alone()
+    {
+        var html = "<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>";
+        _s.Sanitize(html).Should().Be(html);
+    }
+
+    // Sanitize runs on every write, so a value that round-trips through several saves must not
+    // accumulate changes.
+    [Fact]
+    public void Normalization_is_idempotent()
+    {
+        var once = _s.Sanitize(
+            "<table><tbody><tr><th>A</th></tr><tr><td>1</td></tr></tbody></table>");
+        _s.Sanitize(once).Should().Be(once);
+    }
+
+    // Real stored HTML is not minified. Whitespace between rows arrives as text nodes in the DOM,
+    // so "the first row" and "every cell is a th" must both be decided over ELEMENT children --
+    // a naive childNodes walk sees the newlines and decides the row is mixed.
+    [Fact]
+    public void Wraps_the_header_row_despite_whitespace_between_rows()
+    {
+        var clean = _s.Sanitize(
+            "<table>\n  <tbody>\n    <tr>\n      <th>A</th>\n    </tr>\n    <tr>\n      <td>1</td>\n    </tr>\n  </tbody>\n</table>");
+        clean.Should().Contain("<thead>").And.Contain("<th>A</th>");
+
+        // Structural, not textual: the input is never minified, so a substring check against an
+        // exact unminified fragment can never fail regardless of correctness. Assert instead that
+        // </thead> closes before <tbody> opens, and that the surviving row is still inside that
+        // tbody -- this is the assertion that would actually fail if the wrap misplaced the section.
+        var theadClose = clean.IndexOf("</thead>", StringComparison.Ordinal);
+        var tbodyOpen = clean.IndexOf("<tbody>", StringComparison.Ordinal);
+        theadClose.Should().BeGreaterThan(-1);
+        tbodyOpen.Should().BeGreaterThan(theadClose);
+        clean.Substring(tbodyOpen).Should().Contain("<td>1</td>").And.Contain("</tbody>");
+    }
+
+    // A header-only table leaves an empty tbody behind. Emitting <tbody></tbody> into every fork's
+    // stored content is noise, so it is removed -- but only when the wrap is what emptied it.
+    [Fact]
+    public void Removes_the_tbody_when_the_header_row_was_its_only_row()
+    {
+        var clean = _s.Sanitize("<table><tbody><tr><th>A</th><th>B</th></tr></tbody></table>");
+        clean.Should().Be("<table><thead><tr><th>A</th><th>B</th></tr></thead></table>");
+    }
+
+    // Each table is independent; a nested table must not be skipped or double-processed.
+    [Fact]
+    public void Normalizes_a_nested_table_independently()
+    {
+        var clean = _s.Sanitize(
+            "<table><tbody><tr><th>Outer</th></tr><tr><td>"
+          + "<table><tbody><tr><th>Inner</th></tr><tr><td>x</td></tr></tbody></table>"
+          + "</td></tr></tbody></table>");
+        clean.Should().Contain("<thead><tr><th>Outer</th></tr></thead>");
+        clean.Should().Contain("<thead><tr><th>Inner</th></tr></thead>");
+    }
+
+    // The 9 tests above all supply an explicit <tbody>, i.e. exactly what TipTap's renderHTML
+    // emits. But the reason this normalization lives on the server at all is the writers that are
+    // NOT TipTap -- imports, ETL, direct API POSTs -- which routinely hand-author
+    // <table><tr><th>...</tr></table> with no <tbody> at all. The HTML parser is expected to
+    // synthesize a tbody before the direct-children lookup ever runs, but that is a claim about
+    // AngleSharp's tree construction, not this normalizer's own logic, so it is asserted here
+    // rather than taken on trust.
+    [Fact]
+    public void Wraps_the_header_row_when_the_source_has_no_explicit_tbody()
+    {
+        var clean = _s.Sanitize("<table><tr><th>A</th></tr><tr><td>1</td></tr></table>");
+        clean.Should().Contain("<thead>").And.Contain("<th>A</th>");
+        clean.Should().Contain("<td>1</td>");
+    }
+
+    // Nothing table-shaped must be disturbed, and an empty table must not throw.
+    [Fact]
+    public void Leaves_non_table_content_and_empty_tables_alone()
+    {
+        _s.Sanitize("<p>plain</p>").Should().Be("<p>plain</p>");
+        _s.Sanitize("<table></table>").Should().Be("<table></table>");
+    }
 }
