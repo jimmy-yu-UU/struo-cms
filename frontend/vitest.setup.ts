@@ -1,4 +1,8 @@
-// Global test setup: jsdom gaps that Vue component libraries assume are present.
+import { enableAutoUnmount } from '@vue/test-utils'
+import { afterEach } from 'vitest'
+
+// Global test setup: jsdom gaps that Vue component libraries assume are present, plus the
+// cross-test isolation guarantee at the bottom of this file.
 //
 // reka-ui's floating components (Select, Combobox, DropdownMenu, Popover, Tooltip) and
 // the shadcn SidebarProvider all touch browser APIs jsdom does not implement. Stub them
@@ -54,4 +58,19 @@ if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView ??= () => {}
 }
 
-export {}
+// Every wrapper mounted with @vue/test-utils is unmounted after the test that mounted it.
+//
+// Without this, a component that schedules work outlives its test and fires into the NEXT one:
+//   - A debounced handler (FilePicker's and MediaLibraryView's 300ms search) stays armed on a
+//     wrapper nothing unmounts, then calls its API against whichever spy is installed by then.
+//     vi.restoreAllMocks() does NOT disarm a scheduled timer -- only unmounting lets the
+//     component's own onBeforeUnmount/onUnmounted cancel run.
+//   - A component still awaiting an in-flight submit (ChangePasswordDialog, mounted for real by
+//     ItemFormView's tests) keeps reacting after a later test installs its own spies.
+//   - Tests sharing module-level reactive state (AppShell.test.ts's `routeState`) let a later
+//     test's writes leak into an earlier test's still-live instance.
+//
+// This repository shipped that class of bug once already; PR #35/#36 fixed it per-file, and this
+// line generalises the fix. Do not remove it as unrelated boilerplate --
+// tests/testIsolation.test.ts fails immediately if it goes.
+enableAutoUnmount(afterEach)
