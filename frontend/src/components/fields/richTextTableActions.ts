@@ -12,6 +12,9 @@ export type TableAction =
 // Each action's i18n key under `fields.richtext.` IS its action name, so the list carries the
 // action alone and the call site derives the key. Keeping them structurally identical is what
 // makes a mismatch impossible rather than merely unlikely.
+//
+// Order is load-bearing: toggleHeaderRow sits BEFORE the three deletes so the destructive entries
+// stay contiguous and the context menu's separator predicate fires exactly once.
 export const IN_TABLE_ACTIONS: ReadonlyArray<TableAction> = [
   'addRowBefore',
   'addRowAfter',

@@ -213,16 +213,18 @@ const contentRoot = ref<HTMLElement | null>(null)
 //   - inside a table on an enabled field: move the selection into the clicked cell, then let the
 //     event bubble on so reka opens ours.
 //
-// stopPropagation, not driving reka's own `disabled` prop, because that prop is shaped for a
-// component-lifetime setting while this handler's decision is per-event (which cell, if any, was
-// clicked) -- routing every right-click through a ref this handler flips before dispatch would be
-// a more roundabout way to express what a synchronous stopPropagation already says directly.
-// (Checked the installed reka-ui@2.10.3 source directly: ContextMenuTrigger's handleContextMenu
-// reads `disabled.value` synchronously as its very first statement, before any `await` in the
-// function -- so even a same-tick ref write here would already be visible to it, since this
-// capture-phase handler always finishes before that bubble-phase handler starts for the same
-// event. There is no staleness to route around either way; the reason to prefer stopPropagation is
-// the shape mismatch above, not a timing race.)
+// Two independent reasons to prefer stopPropagation over driving reka's own `disabled` prop, not
+// one. Shape: `disabled` is a component-lifetime prop, while the decision here is per-event (which
+// cell, if any, was clicked) -- a prop is the wrong vehicle for that regardless of timing. Timing:
+// checked the installed reka-ui@2.10.3 source directly (ContextMenuTrigger.js) --
+// `handleContextMenu` reads `disabled.value` synchronously as its very first statement, before its
+// own `await nextTick()`. That value arrives as a PROP, forwarded through three component
+// boundaries (this file's `disabled` -> RichTextTableContextMenu's own `disabled` prop -> the
+// vendored ui/context-menu ContextMenuTrigger's `useForwardProps` -> reka's own `toRefs(props)`).
+// Vue applies prop updates to a child component on its job queue, a microtask -- and DOM event
+// dispatch from the capture phase to the bubble phase is synchronous, so no microtask can run in
+// between. A ref flipped in this handler would still read stale at reka's guard, for the same
+// event, every time. stopPropagation() sidesteps both problems at once.
 //
 // The handler MUST sit on an element outside RichTextTableContextMenu, not on the element reka
 // binds to. stopPropagation() does not stop other listeners on the SAME element -- only
