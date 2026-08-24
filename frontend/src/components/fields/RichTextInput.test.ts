@@ -10,7 +10,9 @@ import { cn } from '@/lib/utils'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: {
+  messages: { en: {
+    common: { cancel: 'Cancel', confirm: 'Confirm' },
+    fields: {
     searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.',
     richtext: {
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
@@ -31,6 +33,9 @@ const i18n = createI18n({
       toggleHeaderRow: 'Toggle header row', deleteTable: 'Delete table',
       tableSizeCols: '{count} column | {count} columns', tableSizeRows: '{count} row | {count} rows',
       customSize: 'Custom size…',
+      customSizeTitle: 'Insert table', rows: 'Rows', columns: 'Columns',
+      withHeaderRow: 'Include header row',
+      sizeOutOfRange: 'Rows and columns must be between {min} and {max}.',
       placeholder: 'Write something…',
     },
   } },
@@ -508,6 +513,21 @@ describe('RichTextInput', () => {
     await nextTick()
     expect(w.find('[data-cmd="table-deleteRow"]').exists()).toBe(true)
     expect(ev.defaultPrevented).toBe(true)
+    w.unmount()
+  })
+
+  it('inserts a custom-sized table from the dialog', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cmd="tableCustomSize"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-cmd="tableSizeConfirm"]').trigger('click')
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { getHTML: () => string } }
+    const html = vm.editor.getHTML()
+    expect(html).toContain('<table')
+    expect((html.match(/<tr>/g) ?? []).length).toBe(3)
     w.unmount()
   })
 })
