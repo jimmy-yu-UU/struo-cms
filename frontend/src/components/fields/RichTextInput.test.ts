@@ -633,9 +633,9 @@ describe('RichTextInput', () => {
 
   // Scoped to the menu's own root, not a bare `[data-cmd]`: the toolbar renders the same data-cmd
   // values while the menu is open, so an unscoped query would be ambiguous. Queries document.body,
-  // not the wrapper: RichTextBubbleMenu configures BubbleMenuPlugin with appendTo: () =>
-  // document.body, so once shown the menu's root is a child of body, not of anything mount()
-  // attached -- w.get() would never find it.
+  // not the wrapper: RichTextBubbleMenu appends its BubbleMenuPlugin element into a private
+  // container that is itself a child of document.body, so once shown the menu's root is a
+  // descendant of body, not of anything mount() attached -- w.get() would never find it.
   function bubbleRoot() {
     return new DOMWrapper(document.body).get('.rich-text__bubble')
   }
@@ -690,9 +690,10 @@ describe('RichTextInput', () => {
     await settleBubbleMenu()
 
     // document.body, not w: the container this test attaches (itself a child of document.body,
-    // see above) holds the toolbar's own button, while the bubble menu's is appended directly to
-    // document.body by RichTextBubbleMenu's appendTo -- both are within document.body's subtree,
-    // so querying it is what counts one of each rather than missing the bubble menu's entirely.
+    // see above) holds the toolbar's own button, while the bubble menu's is appended into
+    // RichTextBubbleMenu's own private container, itself a child of document.body -- both are
+    // within document.body's subtree, so querying it is what counts one of each rather than
+    // missing the bubble menu's entirely.
     expect(new DOMWrapper(document.body).findAll('[data-cmd="bold"]')).toHaveLength(2)
     await bubbleRoot().get('[data-cmd="bold"]').trigger('click')
     // Toggled ON, not on-and-off: a click that fired the command twice (once through each
