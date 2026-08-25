@@ -52,9 +52,14 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         _sanitizer.AllowedAtRules.Clear();
 
         // Harden every surviving anchor: rel is derived from target, never taken from the input.
-        // An un-allowlisted target never reaches this handler at all: PostProcessNode fires after
-        // attribute filtering, same as PostProcessDom (RT-3) -- remove "target" from
-        // AllowedAttributes above and Blank_target_survives_with_exactly_rel_noopener fails.
+        // An un-allowlisted target never reaches this handler at all -- remove "target" from
+        // AllowedAttributes above and Blank_target_survives_with_exactly_rel_noopener fails, but that
+        // test alone does not pin the ordering claim below: it fails the same way under either event
+        // ordering, so it only proves the allowlist entry is load-bearing. What actually pins
+        // PostProcessNode firing after attribute filtering (same as PostProcessDom, RT-3) is
+        // Anchor_with_rejected_href_does_not_keep_target: that test's href carries a rejected scheme,
+        // so it only passes if attribute filtering has already stripped it by the time
+        // HasAttribute("href") below is evaluated.
         //
         // Only an exact, case-sensitive "_blank" is an opt-in, and only alongside a surviving href
         // (an anchor with no href, whether because none was given or because its href was itself

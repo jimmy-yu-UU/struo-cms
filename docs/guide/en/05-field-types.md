@@ -91,9 +91,13 @@ The match is exact and case-sensitive: only the literal string `_blank` counts a
 `_Blank` or `_BLANK` — which a browser itself treats identically to `_blank` — is sanitized as same-tab
 instead, the opposite of what an unsanitized page would do with it; this is a deliberate fail-closed
 choice, not an oversight. `nofollow` and `noreferrer` never appear on a stored anchor, whatever was
-submitted, and an anchor whose `href` was itself rejected (a disallowed scheme) keeps neither attribute.
-The admin SPA's rich-text link dialog (chapter 14) is the one editor surface that sets `target`; a
-direct API write or an importer is bound by the same rule.
+submitted, and an anchor whose `href` was itself rejected (a disallowed scheme) keeps neither `target`
+nor `rel`. The admin SPA's rich-text link dialog (chapter 14) is the one editor surface that sets
+`target`; a direct API write or an importer is bound by the same rule.
+
+This `rel` derivation is a policy choice, not an invariant: `GanssHtmlSanitizer.cs`'s own handler
+spells out the reverse-tabnabbing reasoning behind it in full, and a fork whose site wants a different
+value (e.g. `noreferrer`) changes it there, not in the dialog or the sanitizer's allowlist.
 
 ## `MaxLength` behavior
 
