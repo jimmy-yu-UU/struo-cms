@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -470,10 +470,11 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // Spec §8 listed the disabled/read-only case as inferred from upstream, not observed. Upstream's
-  // `active = editor.isEditable || !showOnlyWhenEditable` (default `showOnlyWhenEditable: true`)
-  // means a disabled editor gets no placeholder decoration at all — no `is-editor-empty` class,
-  // no `data-placeholder` attribute — which this pins as attribute presence, not painting.
+  // This disabled/read-only case is read out of upstream's own source, not observed by running a
+  // real placeholder decoration first: upstream's `active = editor.isEditable ||
+  // !showOnlyWhenEditable` (default `showOnlyWhenEditable: true`) means a disabled editor gets no
+  // placeholder decoration at all — no `is-editor-empty` class, no `data-placeholder` attribute —
+  // which this pins as attribute presence, not painting.
   it('shows no placeholder while disabled', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '', disabled: true }, global: globalOpts })
     await flushPromises()
@@ -529,7 +530,7 @@ describe('RichTextInput', () => {
 
   // posAtCoords needs real layout to resolve accurate coordinates, and jsdom lays nothing out --
   // that half (does the reported position correspond to the cell actually under the cursor?)
-  // stays a live check per the plan's Task 7. What jsdom CAN pin, by stubbing posAtCoords itself,
+  // needs a live browser check, not a jsdom test. What jsdom CAN pin, by stubbing posAtCoords itself,
   // is the wiring around it: whatever position it resolves to must become the selection, because
   // that is what makes a table action apply to the cell the user actually right-clicked rather
   // than wherever the caret happened to be already. Tried first: letting jsdom's own
@@ -617,5 +618,91 @@ describe('RichTextInput', () => {
     // ...and TipTap re-serializes without the thead, which is exactly why Task 1 lives on the
     // server and why the editor needs its own tbody-th styling rule.
     expect(html).not.toContain('<thead')
+  })
+
+  // BubbleMenuPlugin's own update() (registered by RichTextBubbleMenu, mounted in RichTextInput's
+  // template) dispatches through window.setTimeout at updateDelay's default of 250ms whenever the
+  // selection is non-collapsed -- selectAll() below produces exactly that case, so a synchronous
+  // assertion right after selecting/focusing would still see the pre-selection (hidden) state.
+  // Real timers, not vitest's fake ones: the wait here is on that 250ms window.setTimeout inside
+  // handleDebouncedUpdate. Fake timers were not attempted. 300ms clears the 250ms window with margin.
+  async function settleBubbleMenu(): Promise<void> {
+    await new Promise((resolve) => { setTimeout(resolve, 300) })
+    await flushPromises()
+  }
+
+  // Scoped to the menu's own root, not a bare `[data-cmd]`: the toolbar renders the same data-cmd
+  // values while the menu is open, so an unscoped query would be ambiguous. Queries document.body,
+  // not the wrapper: RichTextBubbleMenu appends its BubbleMenuPlugin element into a private
+  // container that is itself a child of document.body, so once shown the menu's root is a
+  // descendant of body, not of anything mount() attached -- w.get() would never find it.
+  function bubbleRoot() {
+    return new DOMWrapper(document.body).get('.rich-text__bubble')
+  }
+
+  // Neither RichTextBubbleMenu.test.ts (no RichTextInput, no commandContext, no toolbar) nor this
+  // file's own toolbar tests above (which never select text or open the bubble menu) can see the
+  // two components actually wired together -- this proves the whole path once, for both a plain
+  // command and link, which is the one command in the inline group that depends on the context
+  // RichTextInput builds and does not export (richTextCommands.ts's RichTextCommandContext).
+  it('shows the bubble menu over a real selection, and a click through it runs the command on the document', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.selectAll()
+    vm.editor.commands.focus()
+    await settleBubbleMenu()
+
+    // A non-link command: toggling it is only observable if the click actually reached the real
+    // editor through RichTextBubbleMenu's `run` emit and RichTextInput's `runCommand` -- a wiring
+    // mistake that drops the emit, or that never calls `command.run`, leaves this false.
+    await bubbleRoot().get('[data-cmd="italic"]').trigger('click')
+    expect(vm.editor.isActive('italic')).toBe(true)
+
+    // link's own run() touches the editor first (editor.getAttributes('link'), to seed the prompt's
+    // default) and only then calls `ctx.t(...)` for the prompt's label (richTextCommands.ts) --
+    // asserting the exact call proves runCommand supplied the real,
+    // i18n-wired commandContext built in this file, not an empty stand-in that would either throw
+    // (ctx.t undefined) or pass some other string.
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('https://example.com')
+    await bubbleRoot().get('[data-cmd="link"]').trigger('click')
+    expect(promptSpy).toHaveBeenCalledWith('Link URL', 'https://')
+    expect(vm.editor.isActive('link')).toBe(true)
+
+    w.unmount()
+    container.remove()
+  })
+
+  // The toolbar and the bubble menu render the same data-cmd values while the menu is
+  // open. Neither component's own test can see the two coexisting -- RichTextBubbleMenu.test.ts
+  // mounts no toolbar, and the toolbar tests above never open the bubble menu -- so a wiring
+  // mistake that fires a command through both surfaces for one click (toggling bold back off), or
+  // that leaves the toolbar's own reactive state stale after a command run through the OTHER
+  // surface, is invisible anywhere else in this suite.
+  it('does not double-fire a command shared with the toolbar, and the toolbar reflects a change made through the menu', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.selectAll()
+    vm.editor.commands.focus()
+    await settleBubbleMenu()
+
+    // document.body, not w: the container this test attaches (itself a child of document.body,
+    // see above) holds the toolbar's own button, while the bubble menu's is appended into
+    // RichTextBubbleMenu's own private container, itself a child of document.body -- both are
+    // within document.body's subtree, so querying it is what counts one of each rather than
+    // missing the bubble menu's entirely.
+    expect(new DOMWrapper(document.body).findAll('[data-cmd="bold"]')).toHaveLength(2)
+    await bubbleRoot().get('[data-cmd="bold"]').trigger('click')
+    // Toggled ON, not on-and-off: a click that fired the command twice (once through each
+    // surface) would leave this false instead.
+    expect(vm.editor.isActive('bold')).toBe(true)
+    await waitForEditorReactivity()
+    expect(w.get('.rich-text__toolbar [data-cmd="bold"]').attributes('data-active')).toBe('true')
+
+    w.unmount()
+    container.remove()
   })
 })
