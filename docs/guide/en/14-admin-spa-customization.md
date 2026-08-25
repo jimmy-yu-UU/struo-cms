@@ -154,6 +154,28 @@ None of this makes the editor an exact preview of production rendering: a fronte
 customization of Tailwind, of the typography plugin, or a rendering stack that uses neither, is
 outside what this template controls.
 
+### The link dialog and pre-existing links
+
+The toolbar's and the bubble menu's Link button both open the same modal dialog
+(`RichTextLinkDialog.vue`) instead of the browser's own `window.prompt`, driven by one shared `link`
+command (`frontend/src/components/fields/richTextCommands.ts`) — there is exactly one dialog instance
+per editor, reused by both entry points. Besides the URL field, the dialog adds an "open in new tab"
+checkbox and, when the selection is already inside a link, a Remove button. Confirming the dialog sets
+the link mark's `target` to `_blank` or clears it; the dialog itself never sets `rel` — chapter 5's
+`RichText` contract table is what decides the stored `rel`, derived server-side from whatever `target`
+value reaches the sanitizer.
+
+That server-side derivation has a consequence for links stored before this dialog existed: they carry
+`rel="noopener noreferrer"` and no `target` at all. Sanitization runs on every write of a `RichText`
+field's full value, not only on the part a user actually touched, so the first time such an item is
+saved again — even if nobody edits that particular link — the sanitizer sees no `target` on it and
+applies the same rule as any other same-tab anchor, removing the `rel` it has no `target` to justify.
+The link silently becomes `<a href="…">`. Because those links already opened in the same tab,
+`noopener` was never doing anything for them; what actually changes is that they stop suppressing the
+Referer header on that click. There is no backfill — the same position this chapter already takes for
+`<thead>` above — so a fork with a large body of pre-existing links should expect this `rel` to
+disappear gradually, one save at a time, not all at once.
+
 ## Restyling a vendored `ui/` component
 
 **`frontend/src/components/ui/` is vendored, read-only generated output — never edit it, and never

@@ -74,6 +74,23 @@ Repeater 的子欄位被限制在一份較小、僅限純量 (scalar) 型別的�
 `Repeater`，以及 `RichText`/`File`/`Image`/`Files`/`Password`/`Hidden`/`Uuid`/`Divider`/`Json`/`KeyValue`
 子欄位，都會以同樣的方式被拒絕。
 
+**`RichText` 欄位裡連結的 `target` 屬性，也能有條件地在清理後存活。**
+清理器 `GanssHtmlSanitizer` (`src/Struo.Infrastructure/Security/GanssHtmlSanitizer.cs`) 從不採信
+client 提供的 `rel`——它每次寫入都會依 `target` 重新推導 `rel`，所以最後儲存下來的內容只由「這個
+連結要在哪個分頁開啟」這一件事決定:
+
+| 開啟方式 | 儲存下來的 HTML |
+|---|---|
+| 新分頁 | `<a href="…" target="_blank" rel="noopener">` |
+| 同分頁 | `<a href="…">` |
+
+比對方式是精確且區分大小寫的:只有字面上完全等於 `_blank` 的值才算新分頁。像 `_Blank` 或
+`_BLANK` 這種——瀏覽器自己會把它們當成跟 `_blank` 一樣——在這裡反而會被當成同分頁處理，跟一個
+未經清理的頁面實際上會有的行為正好相反;這是刻意選擇的保守 (fail-closed) 做法，不是疏漏。無論送
+進來的是什麼，儲存的連結上永遠不會出現 `nofollow` 或 `noreferrer`;`href` 本身就被拒絕 (不允許的
+scheme) 的連結，也不會保留這兩個屬性中的任何一個。後台 SPA 的富文本連結對話框 (見第 14 章) 是
+唯一會設定 `target` 的編輯器介面;直接呼叫 API 寫入或匯入內容，一樣受同一條規則約束。
+
 ## `MaxLength` 的行為
 
 `[CmsField(MaxLength = n)]` 是一個 **CMS 層級**的輸入長度上限 (以 UTF-16 code unit 計算)——與實際
