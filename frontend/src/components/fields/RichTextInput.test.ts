@@ -353,12 +353,12 @@ describe('RichTextInput', () => {
   // here because data-[active=true]:hover:… and dark:data-[active=true]:hover:… are each a
   // different modifier set than the vendored hover:… and dark:hover:…, so twMerge does not treat
   // them as conflicts in the same group; the win is then a CSS-specificity question (see the
-  // toolbar's own comment) rather than a class-list question, which is why this test only pins
-  // "both present", not "which one applies".
+  // comment above RICHTEXT_ACTIVE_BUTTON_CLASS in richTextCommands.ts) rather than a class-list
+  // question, which is why this test only pins "both present", not "which one applies".
   // RICHTEXT_ACTIVE_BUTTON_CLASS (imported above), not a retyped copy of the string: that way this
   // test exercises the exact class list the toolbar actually ships, and would fail if a future edit
   // changed what the constant contains. The expect(...).toContain(...) lines below stay hardcoded
-  // on purpose, rather than also being derived from the constant: Task 1's registry test already
+  // on purpose, rather than also being derived from the constant: richTextCommands.test.ts already
   // pins the constant's own exact value, so hardcoding the substrings here means the two tests
   // catch a bad edit from both directions — that test if the constant's value itself changes, this
   // one if cn() ever stops preserving those substrings even though the constant did not change.

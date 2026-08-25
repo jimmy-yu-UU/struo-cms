@@ -19,8 +19,8 @@ export interface RichTextCommand {
   // strikethrough/numberedList/horizontalRule/insertImage, so deriving the key would either be
   // wrong for these four or need its own exception list -- carrying the key plainly is simpler.
   labelKey: string
-  // Not consumed anywhere in this batch. It is the surface RT-5 (inline) and RT-7 (block + insert)
-  // read from, defined once here so neither batch has to invent its own partition.
+  // Not consumed by any production code in this batch. It is the surface RT-5 (inline) and RT-7
+  // (block + insert) read from, defined once here so neither batch has to invent its own partition.
   group: RichTextCommandGroup
   icon: Component | null
   glyph: string | null

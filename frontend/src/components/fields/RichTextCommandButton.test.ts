@@ -101,7 +101,7 @@ describe('RichTextCommandButton', () => {
     expect(enabled.get('[data-cmd]').attributes('disabled')).toBeUndefined()
   })
 
-  // Split from the disabled check above rather than combined, as the plan's draft had it: VTU's own
+  // Split from the disabled check above rather than combined: VTU's own
   // trigger() deliberately no-ops a 'click' on any element it considers disabled (BaseWrapper.trigger
   // checks isDisabled() before dispatching at all) -- a real, unstubbed <button disabled> would make
   // this assertion deterministically fail, so disabled and the emit have to be exercised on
