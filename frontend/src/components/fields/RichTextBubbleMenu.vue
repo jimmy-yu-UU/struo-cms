@@ -13,9 +13,9 @@ defineEmits<{ (e: 'run', command: RichTextCommand): void }>()
 
 const { t } = useI18n()
 
-// Derived, not a second hand-written list: this is what makes the four-surface separation (spec
-// §3) a property of the registry's own `group` rather than something this file could drift out of
-// sync with by hand.
+// Derived, not a second hand-written list: this menu carries inline text formatting and nothing
+// else, and deriving that from the registry's own `group` is what keeps it true, rather than a
+// hand-kept list here that could drift out of sync.
 const INLINE_COMMANDS = RICH_TEXT_COMMANDS.filter((c) => c.group === 'inline')
 
 // A named function, not an inline template arrow: Vue's template compiler resolves any bare
