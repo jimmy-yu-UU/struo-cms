@@ -81,22 +81,62 @@ public class GanssHtmlSanitizerTests
         bad.Should().NotContain("javascript").And.NotContain("data:");
     }
 
+    // rel is derived from target, not client-supplied (Global Constraints in the RT-5.5 plan): a
+    // same-tab anchor -- the common case, and what a bare href with no target means -- carries no
+    // rel at all. Asserted on the exact string, not Contain, because a same-tab anchor must NOT
+    // pick up any rel value.
     [Fact]
-    public void Adds_rel_noopener_to_anchors()
+    public void Bare_anchor_with_no_target_carries_no_rel()
     {
         var clean = _s.Sanitize("<a href=\"https://ok\">l</a>");
-        clean.Should().Contain("rel=").And.Contain("noopener");
+        clean.Should().Be("<a href=\"https://ok\">l</a>");
     }
 
-    // PostProcessNode must strip a client-supplied `target` from
-    // every surviving anchor, not just add rel=noopener — a lingering target="_blank" combined
-    // with a stripped rel is the classic reverse-tabnabbing gap.
+    // target="_blank" is the one value allowed through, and it is paired with exactly rel="noopener"
+    // -- not noreferrer, not nofollow, not both. That pairing is what makes narrowing the old
+    // absolute strip safe: noopener is set on exactly the links that keep target="_blank".
     [Fact]
-    public void Strips_target_from_anchors()
+    public void Blank_target_survives_with_exactly_rel_noopener()
     {
         var clean = _s.Sanitize("<a href=\"https://ok\" target=\"_blank\">l</a>");
+        clean.Should().Be("<a href=\"https://ok\" target=\"_blank\" rel=\"noopener\">l</a>");
+    }
+
+    // Any target value other than "_blank" is not a supported opt-in and is stripped along with its
+    // rel -- exactly the case Adds_rel_noopener_to_anchors used to gloss over by only checking
+    // Contain("rel=")/Contain("noopener"), which is why nobody noticed the old handler dropped
+    // TipTap's "nofollow" silently. This asserts the exact surviving attribute set instead.
+    [Fact]
+    public void Non_blank_target_is_stripped_along_with_its_rel()
+    {
+        var clean = _s.Sanitize("<a href=\"https://ok\" target=\"_top\">l</a>");
+        clean.Should().Be("<a href=\"https://ok\">l</a>");
+    }
+
+    // rel is backend-owned and derived from target: a client-supplied rel is overwritten, never
+    // merged or trusted, so the security property cannot go missing because a writer forgot it.
+    [Fact]
+    public void Client_supplied_rel_is_overwritten_by_the_derived_value()
+    {
+        var blank = _s.Sanitize("<a href=\"https://ok\" target=\"_blank\" rel=\"nofollow\">l</a>");
+        blank.Should().Be("<a href=\"https://ok\" target=\"_blank\" rel=\"noopener\">l</a>");
+
+        var sameTab = _s.Sanitize("<a href=\"https://ok\" rel=\"nofollow\">l</a>");
+        sameTab.Should().Be("<a href=\"https://ok\">l</a>");
+    }
+
+    // A rejected href (disallowed scheme) still leaves the <a> element itself in the tree with no
+    // href attribute -- measured directly (ProbeTests, deleted after use): the sanitizer strips only
+    // the offending attribute, not the whole element. So target must not survive on its own steam;
+    // the derivation runs unconditionally over whatever the anchor looks like after allowlist
+    // filtering, and a target with no href is not a link at all.
+    [Fact]
+    public void Anchor_with_rejected_href_does_not_keep_target()
+    {
+        var clean = _s.Sanitize("<a href=\"javascript:alert(1)\" target=\"_blank\">l</a>");
         clean.Should().NotContain("target");
-        clean.Should().Contain("rel=").And.Contain("noopener");
+        clean.Should().NotContain("rel=");
+        clean.Should().NotContain("javascript");
     }
 
     // Obfuscated/dangerous URL schemes in an anchor's href must not survive sanitization,
