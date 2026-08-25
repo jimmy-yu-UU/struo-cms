@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -631,9 +631,12 @@ describe('RichTextInput', () => {
   }
 
   // Scoped to the menu's own root, not a bare `[data-cmd]`: the toolbar renders the same data-cmd
-  // values while the menu is open, so an unscoped query would be ambiguous.
-  function bubbleRoot(w: VueWrapper) {
-    return w.get('.rich-text__bubble')
+  // values while the menu is open, so an unscoped query would be ambiguous. Queries document.body,
+  // not the wrapper: RichTextBubbleMenu configures BubbleMenuPlugin with appendTo: () =>
+  // document.body, so once shown the menu's root is a child of body, not of anything mount()
+  // attached -- w.get() would never find it.
+  function bubbleRoot() {
+    return new DOMWrapper(document.body).get('.rich-text__bubble')
   }
 
   // Neither RichTextBubbleMenu.test.ts (no RichTextInput, no commandContext, no toolbar) nor this
@@ -653,7 +656,7 @@ describe('RichTextInput', () => {
     // A non-link command: toggling it is only observable if the click actually reached the real
     // editor through RichTextBubbleMenu's `run` emit and RichTextInput's `runCommand` -- a wiring
     // mistake that drops the emit, or that never calls `command.run`, leaves this false.
-    await bubbleRoot(w).get('[data-cmd="italic"]').trigger('click')
+    await bubbleRoot().get('[data-cmd="italic"]').trigger('click')
     expect(vm.editor.isActive('italic')).toBe(true)
 
     // link's own run() touches the editor first (editor.getAttributes('link'), to seed the prompt's
@@ -662,7 +665,7 @@ describe('RichTextInput', () => {
     // i18n-wired commandContext built in this file, not an empty stand-in that would either throw
     // (ctx.t undefined) or pass some other string.
     const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('https://example.com')
-    await bubbleRoot(w).get('[data-cmd="link"]').trigger('click')
+    await bubbleRoot().get('[data-cmd="link"]').trigger('click')
     expect(promptSpy).toHaveBeenCalledWith('Link URL', 'https://')
     expect(vm.editor.isActive('link')).toBe(true)
 
@@ -685,8 +688,12 @@ describe('RichTextInput', () => {
     vm.editor.commands.focus()
     await settleBubbleMenu()
 
-    expect(w.findAll('[data-cmd="bold"]')).toHaveLength(2)
-    await bubbleRoot(w).get('[data-cmd="bold"]').trigger('click')
+    // document.body, not w: the container this test attaches (itself a child of document.body,
+    // see above) holds the toolbar's own button, while the bubble menu's is appended directly to
+    // document.body by RichTextBubbleMenu's appendTo -- both are within document.body's subtree,
+    // so querying it is what counts one of each rather than missing the bubble menu's entirely.
+    expect(new DOMWrapper(document.body).findAll('[data-cmd="bold"]')).toHaveLength(2)
+    await bubbleRoot().get('[data-cmd="bold"]').trigger('click')
     // Toggled ON, not on-and-off: a click that fired the command twice (once through each
     // surface) would leave this false instead.
     expect(vm.editor.isActive('bold')).toBe(true)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { useEditor, EditorContent, type Editor } from '@tiptap/vue-3'
@@ -108,8 +108,11 @@ async function settle(): Promise<void> {
   await flushPromises()
 }
 
-function bubbleRoot(w: VueWrapper) {
-  return w.find('.rich-text__bubble')
+// Queries document.body, not the wrapper: RichTextBubbleMenu configures BubbleMenuPlugin with
+// appendTo: () => document.body (see the component's own template comment), so once shown the menu's
+// root is a child of body, not of anything mount() attached -- a wrapper.find() would never see it.
+function bubbleRoot() {
+  return new DOMWrapper(document.body).find('.rich-text__bubble')
 }
 
 const INLINE_IDS = RICH_TEXT_COMMANDS.filter((c) => c.group === 'inline').map((c) => c.id)
@@ -118,7 +121,7 @@ describe('RichTextBubbleMenu', () => {
   it('is absent from the DOM before anything is selected', async () => {
     const { w, container } = mountHarness()
     await flushPromises()
-    expect(bubbleRoot(w).exists()).toBe(false)
+    expect(bubbleRoot().exists()).toBe(false)
     teardown(w, container)
   })
 
@@ -129,7 +132,7 @@ describe('RichTextBubbleMenu', () => {
     selectWord(editor, 'world')
     editor.commands.focus()
     await settle()
-    const root = bubbleRoot(w)
+    const root = bubbleRoot()
     expect(root.exists()).toBe(true)
     expect(root.attributes('role')).toBe('toolbar')
     expect(root.attributes('aria-label')).toBe('Text formatting')
@@ -151,7 +154,7 @@ describe('RichTextBubbleMenu', () => {
     selectWord(editor, 'world')
     editor.commands.focus()
     await settle()
-    const root = bubbleRoot(w)
+    const root = bubbleRoot()
     const ids = root.findAll('[data-cmd]').map((el) => el.attributes('data-cmd'))
     expect(ids).toEqual(INLINE_IDS)
     teardown(w, container)
@@ -170,7 +173,7 @@ describe('RichTextBubbleMenu', () => {
     selectWord(editor, 'world')
     editor.commands.focus()
     await settle()
-    const root = bubbleRoot(w)
+    const root = bubbleRoot()
     const ids = root.findAll('[data-cmd]').map((el) => el.attributes('data-cmd'))
     expect(ids.length).toBeGreaterThan(0)
     for (const id of ids) {
@@ -192,7 +195,7 @@ describe('RichTextBubbleMenu', () => {
     selectWord(editor, 'world')
     editor.commands.focus()
     await settle()
-    await bubbleRoot(w).get('[data-cmd="italic"]').trigger('click')
+    await bubbleRoot().get('[data-cmd="italic"]').trigger('click')
     const emitted = w.emitted('run') as RichTextCommand[][] | undefined
     expect(emitted).toHaveLength(1)
     expect(emitted![0][0]).toBe(RICH_TEXT_COMMANDS.find((c) => c.id === 'italic'))
@@ -211,7 +214,7 @@ describe('RichTextBubbleMenu', () => {
     selectWord(editor, 'world')
     editor.view.hasFocus = () => true
     await settle()
-    expect(bubbleRoot(w).exists()).toBe(false)
+    expect(bubbleRoot().exists()).toBe(false)
     teardown(w, container)
   })
 
@@ -235,7 +238,7 @@ describe('RichTextBubbleMenu', () => {
     expect(editor.state.doc.textBetween(from, to)).toBe('')
     editor.commands.focus()
     await settle()
-    expect(bubbleRoot(w).exists()).toBe(false)
+    expect(bubbleRoot().exists()).toBe(false)
     teardown(w, container)
   })
 })
