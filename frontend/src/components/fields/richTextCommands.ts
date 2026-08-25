@@ -25,7 +25,7 @@ export interface RichTextCommand {
   icon: Component | null
   glyph: string | null
   // Null for subscript/superscript: they render their glyph as bare text today with no wrapping
-  // element, unlike bold/italic/strike which wrap theirs in a wrapping tag.
+  // element, unlike bold/italic/strike, which wrap theirs in a tag.
   glyphTag: 'b' | 'i' | 's' | null
   isActive: ((editor: Editor) => boolean) | null
   run: (editor: Editor, ctx: RichTextCommandContext) => void
