@@ -14,6 +14,7 @@ import { Placeholder } from '@tiptap/extensions'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
+import RichTextBubbleMenu from './RichTextBubbleMenu.vue'
 import RichTextCommandButton from './RichTextCommandButton.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
@@ -241,8 +242,9 @@ function onContentContextMenu(e: MouseEvent): void {
   if (!isInEditorTable(e.target, root)) { e.stopPropagation(); return }
   if (props.disabled) return
   // Commands act on the current selection, so a right-click on a cell the caret is not in would
-  // otherwise apply to wherever the caret happens to be. posAtCoords needs layout, so this line
-  // cannot be proven in jsdom -- it is verified live (see the plan's Task 7).
+  // otherwise apply to wherever the caret happens to be. posAtCoords needs real layout to resolve
+  // accurate coordinates, and jsdom lays nothing out -- this line needs a live browser check, not a
+  // jsdom test, to confirm the resolved position really does land in the cell under the cursor.
   const at = ed.view.posAtCoords({ left: e.clientX, top: e.clientY })
   if (at) ed.commands.focus(at.pos)
 }
@@ -278,6 +280,15 @@ defineExpose({ editor, insertImage })
           @click.self="editor?.chain().focus().run()" />
       </RichTextTableContextMenu>
     </div>
+    <!--
+      Not inside .rich-text__toolbar: this is a floating overlay that stays out of the DOM until a
+      text selection shows it, not a persistent toolbar control -- and RichTextBubbleMenu configures
+      BubbleMenuPlugin to relocate its own root into a dedicated container that is itself a child of
+      document.body (escaping this column's overflow-x-clip, see AppShell.vue), regardless of where
+      it starts in the template, so its position here has no bearing on where -- or under what
+      ancestor's event handlers -- it renders once shown.
+    -->
+    <RichTextBubbleMenu v-if="editor" :editor="editor" :disabled="disabled" @run="runCommand" />
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain
