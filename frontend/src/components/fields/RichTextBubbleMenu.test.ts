@@ -92,6 +92,24 @@ function selectWord(editor: Editor, needle: string): void {
   editor.commands.setTextSelection({ from, to })
 }
 
+// Same walk as selectWord, but spanning from the start of `fromNeedle` to the end of `toNeedle` --
+// for building a selection that crosses a block boundary, which a single-needle selectWord cannot.
+function selectRange(editor: Editor, fromNeedle: string, toNeedle: string): void {
+  let from = -1
+  let to = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return
+    if (from === -1) {
+      const i = node.text.indexOf(fromNeedle)
+      if (i !== -1) from = pos + i
+    }
+    const j = node.text.indexOf(toNeedle)
+    if (j !== -1) to = pos + j + toNeedle.length
+  })
+  if (from === -1 || to === -1) throw new Error(`range "${fromNeedle}".."${toNeedle}" not found in document`)
+  editor.commands.setTextSelection({ from, to })
+}
+
 function teardown(w: VueWrapper, container: HTMLElement): void {
   w.unmount()
   container.remove()
@@ -244,12 +262,12 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The new rule in shouldShowBubbleMenu excludes a selection whose parent block disallows marks
-  // by testing $from.parent.type.spec.marks, but its own tests (richTextSelection.test.ts) fabricate
-  // that shape -- nothing before this proved a real code block actually presents that way. This
-  // settles it against a real editor and a real code block: first the raw claims (a real codeBlock
-  // node's spec really does declare `marks: ''`, and toggling bold really is unavailable with the
-  // selection inside one), then the composed behaviour (the mounted menu stays out of the DOM).
+  // shouldShowBubbleMenu excludes a selection whose range touches only mark-disallowing textblocks
+  // by walking state.doc.nodesBetween, but its own tests (richTextSelection.test.ts) fabricate that
+  // shape -- nothing before this proved a real code block actually presents that way. This settles it
+  // against a real editor and a real code block: first the raw claims (a real codeBlock node's spec
+  // really does declare `marks: ''`, and toggling bold really is unavailable with the selection
+  // inside one), then the composed behaviour (the mounted menu stays out of the DOM).
   it('never shows for a selection inside a code block, and a real code block really disallows all marks', async () => {
     const { w, container } = mountHarness('<pre><code>const x = 1</code></pre>')
     await flushPromises()
@@ -261,6 +279,43 @@ describe('RichTextBubbleMenu', () => {
     editor.commands.focus()
     await settle()
     expect(bubbleRoot().exists()).toBe(false)
+    teardown(w, container)
+  })
+
+  // The previous, $from.parent-keyed version of this rule was only narrowed, not closed: Mod-a's
+  // real command is editor.commands.selectAll(), which produces an AllSelection whose $from resolves
+  // at the doc itself (spec.marks undefined there), so it showed every button, inert, for a
+  // select-all inside a code-block-only field. Settles the fixed rule against a real editor, a real
+  // select-all and a real code block: the selection really is non-empty, and every command this menu
+  // offers really is unavailable, yet the old rule would have shown the menu regardless.
+  it('never shows for a real select-all whose entire document is a single code block', async () => {
+    const { w, container } = mountHarness('<pre><code>const x = 1</code></pre>')
+    await flushPromises()
+    const editor = getEditor(w)
+    editor.commands.selectAll()
+    expect(editor.state.selection.empty).toBe(false)
+    expect(editor.can().toggleBold()).toBe(false)
+    editor.commands.focus()
+    await settle()
+    expect(bubbleRoot().exists()).toBe(false)
+    teardown(w, container)
+  })
+
+  // The case the maintainer was willing to accept as over-hidden by the old rule: a selection
+  // starting inside a code block and ending in a following paragraph. $from.parent-keyed logic hid
+  // this (the selection "starts" in a mark-disallowing block), even though bold genuinely applies to
+  // the paragraph tail -- confirmed here directly via editor.can().toggleBold(). Walking the whole
+  // range instead of just where it starts is what makes this show correctly.
+  it('shows for a real selection spanning a code block into a following paragraph, where bold really does apply', async () => {
+    const { w, container } = mountHarness('<pre><code>const x = 1</code></pre><p>after</p>')
+    await flushPromises()
+    const editor = getEditor(w)
+    selectRange(editor, 'x', 'after')
+    expect(editor.state.selection.empty).toBe(false)
+    expect(editor.can().toggleBold()).toBe(true)
+    editor.commands.focus()
+    await settle()
+    expect(bubbleRoot().exists()).toBe(true)
     teardown(w, container)
   })
 
