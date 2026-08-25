@@ -470,10 +470,11 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // Spec §8 listed the disabled/read-only case as inferred from upstream, not observed. Upstream's
-  // `active = editor.isEditable || !showOnlyWhenEditable` (default `showOnlyWhenEditable: true`)
-  // means a disabled editor gets no placeholder decoration at all — no `is-editor-empty` class,
-  // no `data-placeholder` attribute — which this pins as attribute presence, not painting.
+  // This disabled/read-only case is read out of upstream's own source, not observed by running a
+  // real placeholder decoration first: upstream's `active = editor.isEditable ||
+  // !showOnlyWhenEditable` (default `showOnlyWhenEditable: true`) means a disabled editor gets no
+  // placeholder decoration at all — no `is-editor-empty` class, no `data-placeholder` attribute —
+  // which this pins as attribute presence, not painting.
   it('shows no placeholder while disabled', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '', disabled: true }, global: globalOpts })
     await flushPromises()
@@ -529,7 +530,7 @@ describe('RichTextInput', () => {
 
   // posAtCoords needs real layout to resolve accurate coordinates, and jsdom lays nothing out --
   // that half (does the reported position correspond to the cell actually under the cursor?)
-  // stays a live check per the plan's Task 7. What jsdom CAN pin, by stubbing posAtCoords itself,
+  // needs a live browser check, not a jsdom test. What jsdom CAN pin, by stubbing posAtCoords itself,
   // is the wiring around it: whatever position it resolves to must become the selection, because
   // that is what makes a table action apply to the cell the user actually right-clicked rather
   // than wherever the caret happened to be already. Tried first: letting jsdom's own

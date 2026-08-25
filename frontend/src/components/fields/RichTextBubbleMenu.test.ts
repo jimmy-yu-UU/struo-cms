@@ -118,9 +118,9 @@ function teardown(w: VueWrapper, container: HTMLElement): void {
 // The plugin's own update() routes a selection/doc change through `window.setTimeout` in
 // handleDebouncedUpdate, at updateDelay's default of 250ms (left unset here, so upstream's default
 // applies) -- that timer, not any Vue reactivity, is what gates whether show()/hide() has run by
-// the time an assertion reads the DOM. Real timers per the plan's Context (fake timers interact
-// awkwardly with tiptap/vue-3's own rAF pair elsewhere in this file); 300ms clears the 250ms window
-// with margin.
+// the time an assertion reads the DOM. Real timers, not vitest's fake ones: the wait here is on
+// that 250ms window.setTimeout. Fake timers were not attempted. 300ms clears the 250ms window with
+// margin.
 async function settle(): Promise<void> {
   await new Promise((resolve) => { setTimeout(resolve, 300) })
   await flushPromises()
