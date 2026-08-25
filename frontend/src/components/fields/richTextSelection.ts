@@ -6,7 +6,10 @@ export interface BubbleMenuShouldShowArgs {
   editor: { isEditable: boolean }
   element: HTMLElement
   view: { hasFocus: () => boolean }
-  state: { selection: { empty: boolean }; doc: { textBetween: (from: number, to: number) => string } }
+  state: {
+    selection: { empty: boolean; $from: { parent: { type: { spec: { marks?: string } } } } }
+    doc: { textBetween: (from: number, to: number) => string }
+  }
   from: number
   to: number
 }
@@ -29,6 +32,14 @@ export function shouldShowBubbleMenu(args: BubbleMenuShouldShowArgs): boolean {
   // needing nothing but the shape above -- classifying a ProseMirror selection would mean importing
   // its selection classes, which this module deliberately does not do.
   if (!state.doc.textBetween(from, to).trim()) return false
+
+  // A code block declares `marks: ""` (no marks allowed at all), which is exactly how
+  // codeBlock.spec.marks reads on a real editor -- confirmed directly against
+  // editor.schema.nodes.codeBlock.spec.marks, and editor.can().toggleBold() (and every other
+  // inline command this menu offers) returns false with the selection inside one. Written against
+  // spec.marks generally, rather than checking the node's name, so any other mark-free node in a
+  // fork's schema gets the same treatment without this rule needing to know its name.
+  if (state.selection.$from.parent.type.spec.marks === '') return false
 
   return true
 }
