@@ -77,6 +77,24 @@ Repeater sub-fields are restricted to a smaller, scalar-only allowlist —
 `Repeater`, and `RichText`/`File`/`Image`/`Files`/`Password`/`Hidden`/`Uuid`/`Divider`/`Json`/`KeyValue`
 sub-fields, are all rejected the same way.
 
+**A `RichText` anchor's `target` survives sanitization too, conditionally.**
+`GanssHtmlSanitizer` (`src/Struo.Infrastructure/Security/GanssHtmlSanitizer.cs`) never keeps a
+client-supplied `rel` — it derives the anchor's `rel` from `target` on every write, so which tab a link
+opens in is the only thing that decides what gets stored:
+
+| opened in | stored HTML |
+|---|---|
+| new tab | `<a href="…" target="_blank" rel="noopener">` |
+| same tab | `<a href="…">` |
+
+The match is exact and case-sensitive: only the literal string `_blank` counts as new-tab. A value like
+`_Blank` or `_BLANK` — which a browser itself treats identically to `_blank` — is sanitized as same-tab
+instead, the opposite of what an unsanitized page would do with it; this is a deliberate fail-closed
+choice, not an oversight. `nofollow` and `noreferrer` never appear on a stored anchor, whatever was
+submitted, and an anchor whose `href` was itself rejected (a disallowed scheme) keeps neither attribute.
+The admin SPA's rich-text link dialog (chapter 14) is the one editor surface that sets `target`; a
+direct API write or an importer is bound by the same rule.
+
 ## `MaxLength` behavior
 
 `[CmsField(MaxLength = n)]` is a **CMS-layer** input-length limit (UTF-16 code units) — independent of
