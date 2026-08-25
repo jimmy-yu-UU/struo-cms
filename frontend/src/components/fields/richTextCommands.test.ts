@@ -32,12 +32,38 @@ describe('richTextCommands', () => {
     ])
   })
 
+  // The group-partition test below pins order only WITHIN a group: moving the link literal above
+  // bulletList inside TOOLBAR_BEFORE_COLOR leaves idsOf('inline') and idsOf('block') both unchanged,
+  // and the concatenation test above is a tautology (RICH_TEXT_COMMANDS is defined as that
+  // concatenation, so it cannot fail). Neither test constrains the interleaving BETWEEN groups, which
+  // is exactly what the rendered toolbar order depends on. This is the one place that ordering is
+  // pinned end to end.
+  it('renders the eighteen commands in the exact frozen toolbar order', () => {
+    expect(RICH_TEXT_COMMANDS.map((c) => c.id)).toEqual([
+      'bold', 'italic', 'strike', 'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
+      'subscript', 'superscript', 'bulletList', 'orderedList', 'blockquote', 'codeBlock',
+      'link', 'hr', 'image', 'undo', 'redo',
+    ])
+  })
+
   // Four of these keys are not derivable from the id (strike/orderedList/hr/image), so a typo is a
   // realistic failure and would surface only as a missing tooltip and a missing accessible name.
   it('points every labelKey at a string that exists in the shipped en pack', () => {
     for (const c of RICH_TEXT_COMMANDS) {
       expect(typeof resolve(c.labelKey), c.id).toBe('string')
     }
+  })
+
+  // The loop above only proves each labelKey resolves to A string, not the RIGHT one -- strike
+  // pointed at fields.richtext.bold would still pass it. These four are exactly the keys that don't
+  // derive from the id, so they're the ones a copy-paste mistake would actually hit, and nothing
+  // downstream of this batch asserts an aria-label's value to catch it another way.
+  it('points the four non-derivable labelKeys at their correct entries', () => {
+    const byId = new Map(RICH_TEXT_COMMANDS.map((c) => [c.id, c.labelKey]))
+    expect(byId.get('strike')).toBe('fields.richtext.strikethrough')
+    expect(byId.get('orderedList')).toBe('fields.richtext.numberedList')
+    expect(byId.get('hr')).toBe('fields.richtext.horizontalRule')
+    expect(byId.get('image')).toBe('fields.richtext.insertImage')
   })
 
   // The groups are the contract RT-5 (inline) and RT-7 (block + insert) consume. Pinning the exact
