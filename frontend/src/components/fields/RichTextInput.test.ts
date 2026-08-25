@@ -193,6 +193,70 @@ describe('RichTextInput', () => {
     expect(ed.getHTML()).toBe('<p>old</p>')
   })
 
+  // The batch's headline behaviour, previously asserted nowhere in this suite: checking "open in new
+  // tab" must show up as target="_blank" on the stored mark, with no rel riding along (rel is
+  // backend-owned -- see richTextCommands.ts). Exact string, not toContain, so this also pins that
+  // HTMLAttributes: { rel: null } (RichTextInput.vue's Link.configure) is doing something on the one
+  // branch where it actually matters: a brand-new mark, not an edited one.
+  it('checking the new-tab box in the link dialog stores target="_blank" with no rel', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>hello world</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    let from = -1
+    let to = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (from !== -1 || !node.isText || !node.text) return
+      const i = node.text.indexOf('world')
+      if (i === -1) return
+      from = pos + i
+      to = from + 'world'.length
+    })
+    expect(from).toBeGreaterThan(-1)
+    ed.commands.setTextSelection({ from, to })
+
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid="href"]').setValue('https://example.com')
+    await w.get('[role="checkbox"]').trigger('click')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
+
+    expect(ed.getHTML()).toBe('<p>hello <a target="_blank" href="https://example.com">world</a></p>')
+  })
+
+  // The one direction setMark's attribute-merge semantics could plausibly break: @tiptap/core's
+  // setMark does `type.create({ ...mark.attrs, ...attributes })`, so unchecking an already-blank
+  // link must actually clear target in the new attributes object, not leave the existing mark's own
+  // target="_blank" merged back in underneath it.
+  it('unchecking the new-tab box on an existing target="_blank" link removes the target', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><a href="https://old.example" target="_blank">old</a></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    let caretPos = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (caretPos !== -1 || !node.isText || !node.text) return
+      const i = node.text.indexOf('old')
+      if (i === -1) return
+      caretPos = pos + i + 1
+    })
+    expect(caretPos).toBeGreaterThan(-1)
+    ed.commands.setTextSelection(caretPos)
+
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[role="checkbox"]').attributes('data-state')).toBe('checked')
+    await w.get('[role="checkbox"]').trigger('click')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
+
+    expect(ed.getHTML()).toBe('<p><a href="https://old.example">old</a></p>')
+  })
+
   it('renders initial HTML content', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>hello</p>' }, global: globalOpts })
     await flushPromises()
