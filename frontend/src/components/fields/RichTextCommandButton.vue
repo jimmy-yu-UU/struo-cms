@@ -15,10 +15,16 @@ const { t } = useI18n()
 <template>
   <!--
     The active state is read here rather than handed down as a prop, so that every surface rendering
-    a command -- the toolbar's three loops today, the bubble menu later -- gets it from one place.
-    Reading it during render is what subscribes this component to it: tiptap/vue-3's Editor holds
-    its state in a customRef that tracks on read, so isActive() re-runs on the next transaction
-    without the parent passing anything down.
+    a command gets it from one place instead of each re-deriving it. Reading it during render is what
+    subscribes this component to it: tiptap/vue-3's Editor holds its state in a customRef that tracks
+    on read, so isActive() re-runs without the parent passing anything down. That ref's trigger is
+    deferred by two nested requestAnimationFrames, so the re-render lands a couple of frames after
+    the transaction, not in the same tick -- a test that asserts data-active immediately after a
+    click sees the old value and reads as a false red. RichTextInput.test.ts's waitForEditorReactivity
+    is the wait that exists for this.
+
+    Running the command stays with the parent, deliberately: run() takes a context carrying
+    openImageDialog, which is the parent's own state and nothing this button should hold.
 
     Both bindings are gated on command.isActive being non-null, and that null is load-bearing.
     hr/image/undo/redo have no active state, and their buttons carry no data-active attribute at
