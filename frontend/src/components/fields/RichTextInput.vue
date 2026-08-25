@@ -14,6 +14,7 @@ import { Placeholder } from '@tiptap/extensions'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
+import RichTextBubbleMenu from './RichTextBubbleMenu.vue'
 import RichTextCommandButton from './RichTextCommandButton.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
@@ -278,6 +279,13 @@ defineExpose({ editor, insertImage })
           @click.self="editor?.chain().focus().run()" />
       </RichTextTableContextMenu>
     </div>
+    <!--
+      Not inside .rich-text__toolbar: this is a floating overlay that stays out of the DOM until a
+      text selection shows it, not a persistent toolbar control -- and BubbleMenuPlugin relocates
+      its own root to view.dom.parentElement on every show regardless of where it starts in the
+      template, so its position here has no bearing on where it renders once shown (fact 4).
+    -->
+    <RichTextBubbleMenu v-if="editor" :editor="editor" :disabled="disabled" @run="runCommand" />
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain
