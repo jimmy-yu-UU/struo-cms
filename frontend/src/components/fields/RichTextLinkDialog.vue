@@ -28,18 +28,21 @@ const hrefId = useId()
 const newTabId = useId()
 const errorId = useId()
 
-// Empty is simply not-yet-submittable, not an error to flash at someone who opened a fresh "add
-// link" dialog and has not typed anything yet. Only a non-empty, rejected value counts as an
-// error to surface.
-const rejected = computed(() => href.value.trim() !== '' && !isAllowedLinkUrl(href.value))
+// Every prefix of a valid URL is itself invalid ("h", "ht", "http", "http:/"...), so a live
+// computed would paint the field red on the very first keystroke of normal typing. The error
+// text is deferred until the field has been blurred at least once; Confirm staying disabled is
+// the live signal in the meantime, the error text is the explanation once the user is done.
+const touched = ref(false)
+const rejected = computed(() => touched.value && href.value.trim() !== '' && !isAllowedLinkUrl(href.value))
 const canSubmit = computed(() => isAllowedLinkUrl(href.value))
 
 // Reopening the dialog starts from the props again rather than from whatever the last rejected
-// attempt left behind.
+// attempt (including its touched state) left behind.
 watch(() => props.open, (isOpen) => {
   if (!isOpen) return
   href.value = props.href
   newTab.value = props.newTab
+  touched.value = false
 })
 
 // The guard lives here, not only on the button's `disabled`: a caller (or a test) that invokes
@@ -50,12 +53,16 @@ function submit(): void {
   emit('update:open', false)
 }
 
+// Same reasoning as submit()'s guard: canRemove gates the button's rendering, but a caller (or a
+// test) invoking remove() directly through defineExpose must get the same refusal, not a remove
+// the host never offered.
 function remove(): void {
+  if (!props.canRemove) return
   emit('remove')
   emit('update:open', false)
 }
 
-defineExpose({ href, newTab, canSubmit, submit, remove })
+defineExpose({ href, newTab, canSubmit, touched, submit, remove })
 </script>
 
 <template>
@@ -68,7 +75,7 @@ defineExpose({ href, newTab, canSubmit, submit, remove })
         <div class="flex flex-col gap-1.5">
           <Label :for="hrefId">{{ t('fields.richtext.linkPrompt') }}</Label>
           <Input :id="hrefId" v-model="href" type="text" :aria-invalid="rejected"
-            :aria-describedby="rejected ? errorId : undefined" data-testid="href" />
+            :aria-describedby="rejected ? errorId : undefined" data-testid="href" @blur="touched = true" />
         </div>
         <div class="flex items-center gap-2">
           <Checkbox :id="newTabId" v-model="newTab" />
