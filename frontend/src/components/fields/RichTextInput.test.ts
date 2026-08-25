@@ -8,6 +8,7 @@ import RichTextInput from './RichTextInput.vue'
 import { fileContentPath } from '../../lib/richTextImages'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { RICHTEXT_ACTIVE_BUTTON_CLASS } from './richTextCommands'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -269,7 +270,7 @@ describe('RichTextInput', () => {
     await flushPromises()
   }
 
-  it('flags active toolbar state via data-active on a hand-written control', async () => {
+  it('flags active toolbar state via data-active for a mark command (bold)', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     expect(w.get('[data-cmd="bold"]').attributes('data-active')).toBe('false')
@@ -278,15 +279,20 @@ describe('RichTextInput', () => {
     expect(w.get('[data-cmd="bold"]').attributes('data-active')).toBe('true')
   })
 
-  // alignCenter is one instance of the align v-for; a refactor that drops the data-active binding
-  // from the loop (rather than from a single hand-written button) would only be caught by
-  // asserting a templated control, not just hand-written ones. A fresh mount (rather than
-  // chaining onto the bold click above) sidesteps tiptap's stored-mark semantics: toggling bold
-  // with no text selected only stores it as a pending mark for the next typed character, and a
-  // later, unrelated command clears that pending mark — real editor behaviour, not something this
-  // migration changed, but it would make a combined assertion flaky for reasons unrelated to
+  // bold and alignCenter now render through the same RichTextCommandButton, from the same
+  // TOOLBAR_BEFORE_HEADINGS v-for (see richTextCommands.ts and RichTextInput.vue's template), so
+  // this pair no longer contrasts a hand-written control against a templated one -- that contrast
+  // no longer exists. What it still contrasts is the two commands' own isActive checks: bold's is
+  // editor.isActive('bold'), a mark check, while alignCenter's is
+  // editor.isActive({ textAlign: 'center' }), a node-attribute check -- two different TipTap
+  // active-state APIs feeding the same data-active binding, so a regression that broke one path
+  // without breaking the other would still be caught by keeping both tests. A fresh mount (rather
+  // than chaining onto the bold click above) sidesteps tiptap's stored-mark semantics: toggling
+  // bold with no text selected only stores it as a pending mark for the next typed character, and
+  // a later, unrelated command clears that pending mark — real editor behaviour, not something
+  // this migration changed, but it would make a combined assertion flaky for reasons unrelated to
   // data-active.
-  it('flags active toolbar state via data-active on a templated control', async () => {
+  it('flags active toolbar state via data-active for a node-attribute command (alignCenter)', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
     expect(w.get('[data-cmd="alignCenter"]').attributes('data-active')).toBe('false')
@@ -349,11 +355,15 @@ describe('RichTextInput', () => {
   // them as conflicts in the same group; the win is then a CSS-specificity question (see the
   // toolbar's own comment) rather than a class-list question, which is why this test only pins
   // "both present", not "which one applies".
+  // RICHTEXT_ACTIVE_BUTTON_CLASS (imported above), not a retyped copy of the string: that way this
+  // test exercises the exact class list the toolbar actually ships, and would fail if a future edit
+  // changed what the constant contains. The expect(...).toContain(...) lines below stay hardcoded
+  // on purpose, rather than also being derived from the constant: Task 1's registry test already
+  // pins the constant's own exact value, so hardcoding the substrings here means the two tests
+  // catch a bad edit from both directions — that test if the constant's value itself changes, this
+  // one if cn() ever stops preserving those substrings even though the constant did not change.
   it('keeps the active-hover override classes alongside the vendored ghost hover classes after cn()', () => {
-    const overrideClass = 'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground '
-      + 'data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground '
-      + 'dark:data-[active=true]:hover:bg-primary'
-    const merged = cn(buttonVariants({ variant: 'ghost', size: 'icon' }), overrideClass)
+    const merged = cn(buttonVariants({ variant: 'ghost', size: 'icon' }), RICHTEXT_ACTIVE_BUTTON_CLASS)
     expect(merged).toContain('hover:bg-accent')
     expect(merged).toContain('dark:hover:bg-accent/50')
     expect(merged).toContain('data-[active=true]:hover:bg-primary')
