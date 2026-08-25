@@ -326,6 +326,7 @@ export default {
       withHeaderRow: 'Include header row',
       sizeOutOfRange: 'Rows and columns must be between {min} and {max}.',
       placeholder: 'Write something…',
+      selectionToolbar: 'Text formatting',
     },
   },
   filterBuilder: {
