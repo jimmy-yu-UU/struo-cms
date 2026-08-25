@@ -241,4 +241,24 @@ describe('RichTextBubbleMenu', () => {
     expect(bubbleRoot().exists()).toBe(false)
     teardown(w, container)
   })
+
+  // The new rule in shouldShowBubbleMenu excludes a selection whose parent block disallows marks
+  // by testing $from.parent.type.spec.marks, but its own tests (richTextSelection.test.ts) fabricate
+  // that shape -- nothing before this proved a real code block actually presents that way. This
+  // settles it against a real editor and a real code block: first the raw claims (a real codeBlock
+  // node's spec really does declare `marks: ''`, and toggling bold really is unavailable with the
+  // selection inside one), then the composed behaviour (the mounted menu stays out of the DOM).
+  it('never shows for a selection inside a code block, and a real code block really disallows all marks', async () => {
+    const { w, container } = mountHarness('<pre><code>const x = 1</code></pre>')
+    await flushPromises()
+    const editor = getEditor(w)
+    expect(editor.schema.nodes.codeBlock.spec.marks).toBe('')
+    selectWord(editor, 'x')
+    expect(editor.state.selection.$from.parent.type.spec.marks).toBe('')
+    expect(editor.can().toggleBold()).toBe(false)
+    editor.commands.focus()
+    await settle()
+    expect(bubbleRoot().exists()).toBe(false)
+    teardown(w, container)
+  })
 })
