@@ -801,9 +801,12 @@ describe('RichTextInput', () => {
   // RT-5's own final review left this open: BubbleMenuPlugin arms `preventHide` on its own
   // mousedown, which swallows the very next blur, so the dialog's autofocus stealing DOM focus from
   // the editor would not, on its own, hide this menu -- it would linger beside the open dialog.
-  // Triggering only a bare 'click' here (no 'mousedown') means preventHide is never armed in this
-  // test either, so the menu still has to disappear -- it can only be openLinkDialog's own explicit
-  // hide() call (RichTextBubbleMenu.vue) doing the work, not a side effect of the click sequence.
+  // A bare VTU `.trigger('click')` dispatches only a 'click' event, no 'mousedown' -- so it does
+  // NOT arm preventHide, and the resulting blur hides the menu on its own regardless of whether
+  // openLinkDialog's hide() call exists at all (confirmed: deleting that call left this test green).
+  // Dispatching 'mousedown' first, as a real click does, is what arms preventHide and makes the
+  // blur path a no-op -- only then does reaching this assertion prove hide() (and the matching
+  // pluginKey string on both ends) is doing the work.
   it('hides the bubble menu when its own link button opens the dialog', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
@@ -814,9 +817,10 @@ describe('RichTextInput', () => {
     await settleBubbleMenu()
     // bubbleRoot() itself throws if the menu is absent, so reaching the next line already proves
     // it is showing.
-    bubbleRoot()
-
-    await bubbleRoot().get('[data-cmd="link"]').trigger('click')
+    const linkBtn = bubbleRoot().get('[data-cmd="link"]').element
+    linkBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    linkBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
     // bubbleRoot() itself uses .get(), which throws rather than reporting absence -- .find() is
     // what actually lets this assert the menu is gone, not merely still present.
     expect(new DOMWrapper(document.body).find('.rich-text__bubble').exists()).toBe(false)
