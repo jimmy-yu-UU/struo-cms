@@ -259,21 +259,18 @@ defineExpose({ editor, insertImage })
         them fall on rather than one flat list plus splice indices.
       -->
       <RichTextCommandButton v-for="cmd in TOOLBAR_BEFORE_HEADINGS" :key="cmd.id" :command="cmd"
-        :active="cmd.isActive ? cmd.isActive(editor) : undefined" :disabled="disabled"
-        @run="runCommand(cmd)" />
+        :editor="editor" :disabled="disabled" @run="runCommand(cmd)" />
       <RichTextHeadingMenu :disabled="disabled" :active-level="activeHeadingLevel()"
         @select="onHeadingSelect" />
       <RichTextCommandButton v-for="cmd in TOOLBAR_BEFORE_COLOR" :key="cmd.id" :command="cmd"
-        :active="cmd.isActive ? cmd.isActive(editor) : undefined" :disabled="disabled"
-        @run="runCommand(cmd)" />
+        :editor="editor" :disabled="disabled" @run="runCommand(cmd)" />
       <RichTextColorMenu :disabled="disabled"
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
       <RichTextTableMenu :disabled="disabled" @insert="onTableInsert" @custom-size="sizeDialogOpen = true" />
       <RichTextCommandButton v-for="cmd in TOOLBAR_AFTER_TABLE" :key="cmd.id" :command="cmd"
-        :active="cmd.isActive ? cmd.isActive(editor) : undefined" :disabled="disabled"
-        @run="runCommand(cmd)" />
+        :editor="editor" :disabled="disabled" @run="runCommand(cmd)" />
     </div>
     <div ref="contentRoot" @contextmenu.capture="onContentContextMenu">
       <RichTextTableContextMenu :disabled="disabled" @action="onTableAction">
