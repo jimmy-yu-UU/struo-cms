@@ -307,6 +307,13 @@ defineExpose({ editor, insertImage })
 </template>
 
 <style scoped>
+/* Vue propagates this file's own scope id to a child component's root element (so the toolbar's
+   <button>, RichTextCommandButton's root, still carries it), but not to elements further inside
+   that child's own template -- RichTextCommandButton has no <style scoped> of its own, so the
+   lucide <svg> it renders carries no data-v-* at all. Every rule below happens to target
+   `.rich-text__content :deep(...)`, none of them the toolbar, so this is inert today -- but a rule
+   added here to style a toolbar icon would silently fail to match it. */
+
 /* TipTap's own generated DOM, not a vendored ui/ component — styling it here is legitimate. */
 .rich-text__content :deep(.ProseMirror) { outline: none; min-height: 6rem; }
 
