@@ -18,7 +18,7 @@ const { t } = useI18n()
     through data-active, so handing it to those four would add extra tokens inside the class
     attribute they already render (buttonVariants' own ghost/icon output) for no visible effect.
 
-    :data-active is gated the same way, for a reason the brief's own draft missed: an absent
+    :data-active is gated the same way, for a reason that's easy to miss: an absent
     Boolean-typed prop resolves to `false` in Vue, not `undefined`, so an ungated binding would
     render data-active="false" on these four stateless commands instead of no attribute at all --
     gating on command.isActive keeps the attribute's presence tied to the command's own capability,
