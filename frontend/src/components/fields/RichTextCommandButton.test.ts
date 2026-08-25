@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { markRaw } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { List } from '@lucide/vue'
+import type { Editor } from '@tiptap/vue-3'
 import RichTextCommandButton from './RichTextCommandButton.vue'
 import { RICHTEXT_ACTIVE_BUTTON_CLASS, type RichTextCommand } from './richTextCommands'
 
@@ -24,9 +26,20 @@ function cmd(over: Partial<RichTextCommand> = {}): RichTextCommand {
   }
 }
 
+// The component only ever hands the editor to command.isActive; it calls nothing on it itself, so
+// every command here answers without looking at its argument and a bare sentinel is enough. The one
+// test that cares whether the editor arrives at all asserts identity against this exact object.
+//
+// markRaw, and not for tidiness: VTU mounts props through a reactive parent, so a plain object
+// arrives at the child as a reactive proxy and fails an identity assertion. tiptap/vue-3's own
+// Editor constructor ends with `return markRaw(this)`, so the real editor is never proxied either
+// -- marking the sentinel the same way makes this stub behave like production rather than papering
+// over the difference with toRaw at the assertion.
+const editor = markRaw({ __sentinel: 'editor' }) as unknown as Editor
+
 describe('RichTextCommandButton', () => {
   it('carries the command id, an explicit button type, and both accessible names', () => {
-    const w = mount(RichTextCommandButton, { props: { command: cmd() }, global: globalOpts })
+    const w = mount(RichTextCommandButton, { props: { command: cmd(), editor }, global: globalOpts })
     const btn = w.get('[data-cmd="bulletList"]')
     // ItemForm.vue wraps every field in <form @submit.prevent>, so a bare <button> here would
     // submit the whole record on its first click.
@@ -40,13 +53,27 @@ describe('RichTextCommandButton', () => {
   })
 
   it('renders data-active as the literal string, and omits it entirely when there is no active state', () => {
-    expect(mount(RichTextCommandButton, { props: { command: cmd(), active: false }, global: globalOpts })
+    expect(mount(RichTextCommandButton, { props: { command: cmd({ isActive: () => false }), editor }, global: globalOpts })
       .get('[data-cmd]').attributes('data-active')).toBe('false')
-    expect(mount(RichTextCommandButton, { props: { command: cmd(), active: true }, global: globalOpts })
+    expect(mount(RichTextCommandButton, { props: { command: cmd({ isActive: () => true }), editor }, global: globalOpts })
       .get('[data-cmd]').attributes('data-active')).toBe('true')
     // hr/image/undo/redo have no active state; their buttons carry no attribute at all today.
-    expect(mount(RichTextCommandButton, { props: { command: cmd({ isActive: null }) }, global: globalOpts })
+    expect(mount(RichTextCommandButton, { props: { command: cmd({ isActive: null }), editor }, global: globalOpts })
       .get('[data-cmd]').attributes('data-active')).toBeUndefined()
+  })
+
+  // The reason this component reads the active state instead of taking it as a prop is that it
+  // hands the editor to the command itself. A component that called isActive() with no argument
+  // would still render data-active correctly for every stub command in this file, since none of
+  // them look at what they are passed -- so the argument's identity is what has to be asserted,
+  // not the rendered result.
+  it('calls isActive with the editor it was given', () => {
+    const seen: unknown[] = []
+    mount(RichTextCommandButton, {
+      props: { command: cmd({ isActive: (e) => { seen.push(e); return false } }), editor },
+      global: globalOpts,
+    })
+    expect(seen).toContain(editor)
   })
 
   // The override only ever paints through data-active, so a command that cannot be active must not
@@ -56,14 +83,14 @@ describe('RichTextCommandButton', () => {
   // "first token only" check. The stateless case checks for the absence of the data-[active=true]
   // modifier itself, which is the maximally strict negative.
   it('applies the active-state override class only to commands that can be active', () => {
-    expect(mount(RichTextCommandButton, { props: { command: cmd() }, global: globalOpts })
+    expect(mount(RichTextCommandButton, { props: { command: cmd(), editor }, global: globalOpts })
       .get('[data-cmd]').attributes('class')).toContain(RICHTEXT_ACTIVE_BUTTON_CLASS)
-    expect(mount(RichTextCommandButton, { props: { command: cmd({ isActive: null }) }, global: globalOpts })
+    expect(mount(RichTextCommandButton, { props: { command: cmd({ isActive: null }), editor }, global: globalOpts })
       .get('[data-cmd]').attributes('class') ?? '').not.toContain('data-[active=true]')
   })
 
   it('renders a lucide icon when the command has one', () => {
-    const w = mount(RichTextCommandButton, { props: { command: cmd() }, global: globalOpts })
+    const w = mount(RichTextCommandButton, { props: { command: cmd(), editor }, global: globalOpts })
     expect(w.find('.lucide-list').exists()).toBe(true)
   })
 
@@ -73,7 +100,7 @@ describe('RichTextCommandButton', () => {
   // wrapper -- the text equality alone would not.
   it('wraps a glyph in its tag when given one, and leaves it bare when not', () => {
     const tagged = mount(RichTextCommandButton, {
-      props: { command: cmd({ id: 'bold', labelKey: 'fields.richtext.bold', icon: null, glyph: 'B', glyphTag: 'b' }) },
+      props: { command: cmd({ id: 'bold', labelKey: 'fields.richtext.bold', icon: null, glyph: 'B', glyphTag: 'b' }), editor },
       global: globalOpts,
     })
     const boldBtn = tagged.get('[data-cmd="bold"]')
@@ -85,7 +112,7 @@ describe('RichTextCommandButton', () => {
     expect(boldBtn.element.children[0]?.tagName).toBe('B')
 
     const bare = mount(RichTextCommandButton, {
-      props: { command: cmd({ id: 'subscript', labelKey: 'fields.richtext.subscript', icon: null, glyph: 'x₂', glyphTag: null }) },
+      props: { command: cmd({ id: 'subscript', labelKey: 'fields.richtext.subscript', icon: null, glyph: 'x₂', glyphTag: null }), editor },
       global: globalOpts,
     })
     const subBtn = bare.get('[data-cmd="subscript"]')
@@ -95,9 +122,9 @@ describe('RichTextCommandButton', () => {
   })
 
   it('forwards disabled to the rendered button, and omits the attribute when not disabled', () => {
-    const disabled = mount(RichTextCommandButton, { props: { command: cmd(), disabled: true }, global: globalOpts })
+    const disabled = mount(RichTextCommandButton, { props: { command: cmd(), disabled: true, editor }, global: globalOpts })
     expect(disabled.get('[data-cmd]').attributes('disabled')).toBeDefined()
-    const enabled = mount(RichTextCommandButton, { props: { command: cmd() }, global: globalOpts })
+    const enabled = mount(RichTextCommandButton, { props: { command: cmd(), editor }, global: globalOpts })
     expect(enabled.get('[data-cmd]').attributes('disabled')).toBeUndefined()
   })
 
@@ -107,7 +134,7 @@ describe('RichTextCommandButton', () => {
   // this assertion deterministically fail, so disabled and the emit have to be exercised on
   // separate mounts.
   it('emits run on click', async () => {
-    const w = mount(RichTextCommandButton, { props: { command: cmd() }, global: globalOpts })
+    const w = mount(RichTextCommandButton, { props: { command: cmd(), editor }, global: globalOpts })
     await w.get('[data-cmd]').trigger('click')
     expect(w.emitted('run')).toHaveLength(1)
   })
