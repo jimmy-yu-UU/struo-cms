@@ -97,10 +97,12 @@ function teardown(w: VueWrapper, container: HTMLElement): void {
   container.remove()
 }
 
-// tiptap/vue-3's own reactive state is debounced across two animation frames, and the bubble
-// menu's updateDelay defaults to 250ms on top of that -- both fire on real timers, and the plan's
-// Context notes fake timers interact awkwardly with the rAF pair, so this uses real ones. 300ms
-// was reliable across repeated local runs; nothing shorter reliably outlasted the 250ms debounce.
+// The plugin's own update() routes a selection/doc change through `window.setTimeout` in
+// handleDebouncedUpdate, at updateDelay's default of 250ms (left unset here, so upstream's default
+// applies) -- that timer, not any Vue reactivity, is what gates whether show()/hide() has run by
+// the time an assertion reads the DOM. Real timers per the plan's Context (fake timers interact
+// awkwardly with tiptap/vue-3's own rAF pair elsewhere in this file); 300ms clears the 250ms window
+// with margin.
 async function settle(): Promise<void> {
   await new Promise((resolve) => { setTimeout(resolve, 300) })
   await flushPromises()
@@ -135,8 +137,13 @@ describe('RichTextBubbleMenu', () => {
   })
 
   // Asserts the sequence within the menu root, not merely that each id exists -- and derives the
-  // expected sequence from RICH_TEXT_COMMANDS itself (INLINE_IDS above) so a later regrouping of
-  // the registry, not just a hand-typed list going stale, would be caught here.
+  // expected sequence from RICH_TEXT_COMMANDS itself (INLINE_IDS above) rather than a hand-typed
+  // list, so the component's own filter cannot drift from the registry's current `inline` group
+  // without this failing (confirmed: dropping the component's group filter fails this test). It
+  // does NOT guard the registry's grouping itself -- if a command's `group` changed, both this
+  // expectation and the component's filter would move together. That guard is
+  // richTextCommands.test.ts's job: it pins the `inline` group's exact membership and order
+  // directly against the registry, independent of this component.
   it('renders exactly the six inline commands, in registry order', async () => {
     const { w, container } = mountHarness('<p>Hello world</p>')
     await flushPromises()
@@ -150,10 +157,12 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The four-surface separation (spec §3) is the point of this test: every data-cmd inside the
-  // menu root must resolve back to a command whose own group is 'inline', derived from the same
-  // registry the toolbar reads -- a future regrouping mistake that widened this surface would show
-  // up here even if nobody hand-maintains a list of forbidden ids.
+  // The four-surface separation (spec §3) is the point of this test, and like the order test
+  // above it guards component-vs-registry drift, not the registry's own grouping: every data-cmd
+  // rendered here must resolve back to whatever RICH_TEXT_COMMANDS currently reports as 'inline'
+  // (confirmed: dropping the component's group filter fails this test too, on 'alignLeft'). If the
+  // registry's own grouping were ever wrong, richTextCommands.test.ts is what would catch it --
+  // this test would move in lockstep with a bad regrouping, not against it.
   it('renders no block, insert or history command', async () => {
     const { w, container } = mountHarness('<p>Hello world</p>')
     await flushPromises()
@@ -172,8 +181,10 @@ describe('RichTextBubbleMenu', () => {
   })
 
   // The emitted payload must be the exact command object the registry holds, not its id or index
-  // -- RichTextInput's runCommand takes a RichTextCommand and would silently no-op (or run the
-  // wrong command) if this component ever emitted anything else.
+  // -- RichTextInput.vue's runCommand calls `command.run(editor.value, commandContext)` on
+  // whatever this emits, so a wrong object (e.g. a different command) would run the wrong command,
+  // and a bare id string would throw a TypeError at that call site (`command.run` is undefined),
+  // not silently do nothing.
   it('clicking a command emits run with that exact command object', async () => {
     const { w, container } = mountHarness('<p>Hello world</p>')
     await flushPromises()
