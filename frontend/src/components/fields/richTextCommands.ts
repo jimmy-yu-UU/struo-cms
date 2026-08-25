@@ -25,13 +25,13 @@ export interface RichTextCommand {
   icon: Component | null
   glyph: string | null
   // Null for subscript/superscript: they render their glyph as bare text today with no wrapping
-  // element, unlike bold/italic/strike which wrap theirs in a semantic tag.
+  // element, unlike bold/italic/strike which wrap theirs in a wrapping tag.
   glyphTag: 'b' | 'i' | 's' | null
   isActive: ((editor: Editor) => boolean) | null
   run: (editor: Editor, ctx: RichTextCommandContext) => void
 }
 
-// Every active-state toolbar button re-supplies data-[active=true]:hover:bg-primary
+// Every active-state toolbar button carries data-[active=true]:hover:bg-primary
 // (and its dark:-prefixed form) alongside the plain data-[active=true]:bg-primary. The ghost
 // variant's own hover:bg-accent hover:text-accent-foreground carries just one modifier
 // (hover), so an override written with just one modifier (data-[active=true]) ties it on CSS
