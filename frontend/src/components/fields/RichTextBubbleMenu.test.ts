@@ -319,6 +319,28 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
+  // The zero-character boundary the textblock-keyed rule (this branch's own prior commit) missed: a
+  // selection that includes all of a code block's own text but reaches only to the very start of the
+  // following paragraph -- zero characters of the paragraph. Reachable in a real editor by
+  // Shift+Down out of a code block, or by dragging one position past the block boundary. Settles the
+  // inline-walk rule against a real editor: the raw claim first (this exact range's own text is the
+  // code block's content and nothing from the paragraph, and every command this menu offers is
+  // unavailable), then the composed behaviour (the menu, whose six buttons would otherwise all be
+  // dead, stays out of the DOM).
+  it('never shows for a selection that ends at the zero-character start of the following paragraph', async () => {
+    const { w, container } = mountHarness('<pre><code>abc</code></pre><p>after</p>')
+    await flushPromises()
+    const editor = getEditor(w)
+    editor.commands.setTextSelection({ from: 1, to: 6 })
+    expect(editor.state.selection.empty).toBe(false)
+    expect(editor.state.doc.textBetween(1, 6)).toBe('abc')
+    expect(editor.can().toggleBold()).toBe(false)
+    editor.commands.focus()
+    await settle()
+    expect(bubbleRoot().exists()).toBe(false)
+    teardown(w, container)
+  })
+
   // Regression test for the appendTo: () => document.body defect: BubbleMenuPlugin's blur guard is
   // `this.element.parentNode?.contains(event.relatedTarget)`, and document.body.contains(x) is true
   // for every element on the page, so that guard swallowed every blur and hide() was never reached
