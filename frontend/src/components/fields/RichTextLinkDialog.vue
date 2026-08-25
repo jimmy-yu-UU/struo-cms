@@ -69,11 +69,11 @@ defineExpose({ href, newTab, canSubmit, touched, submit, remove })
   <Dialog :open="props.open" @update:open="emit('update:open', $event)">
     <DialogContent class="sm:max-w-sm">
       <DialogHeader>
-        <DialogTitle>{{ t('fields.richtext.link') }}</DialogTitle>
+        <DialogTitle>{{ t('fields.richtext.linkDialogTitle') }}</DialogTitle>
       </DialogHeader>
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1.5">
-          <Label :for="hrefId">{{ t('fields.richtext.linkPrompt') }}</Label>
+          <Label :for="hrefId">{{ t('fields.richtext.linkUrlLabel') }}</Label>
           <Input :id="hrefId" v-model="href" type="text" :aria-invalid="rejected"
             :aria-describedby="rejected ? errorId : undefined" data-testid="href" @blur="touched = true" />
         </div>

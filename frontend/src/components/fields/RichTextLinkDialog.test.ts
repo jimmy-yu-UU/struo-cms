@@ -7,7 +7,7 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: {
     fields: { richtext: {
-      link: 'Link', linkPrompt: 'Link URL',
+      linkDialogTitle: 'Link settings', linkUrlLabel: 'Link URL',
       linkOpenInNewTab: 'Open in new tab', removeLink: 'Remove link',
       linkUrlInvalid: 'Enter a valid http(s) or mailto link.',
     } },

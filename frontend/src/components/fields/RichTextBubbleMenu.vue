@@ -9,10 +9,35 @@ import { shouldShowBubbleMenu } from './richTextSelection'
 
 defineOptions({ name: 'RichTextBubbleMenu' })
 
-defineProps<{ editor: Editor; disabled?: boolean }>()
+const props = defineProps<{ editor: Editor; disabled?: boolean }>()
 defineEmits<{ (e: 'run', command: RichTextCommand): void }>()
 
 const { t } = useI18n()
+
+// A plain string, not left to default to a PluginKey instance: BubbleMenuView's own
+// transactionHandler matches metadata with `tr.getMeta(this.pluginKey)`, and ProseMirror's
+// Transaction#setMeta/getMeta key on the exact value passed -- a string looks itself up directly,
+// while an object key looks up its own `.key` field, which PluginKey generates internally
+// ("name$", with a numeric suffix past the first use of that name anywhere on the page) and this
+// component never sees. Passing the same literal string here and in hide() below is what makes
+// them the same bucket; confirmed by reading @tiptap/vue-3/menus's BubbleMenu.js and
+// prosemirror-state's PluginKey/setMeta/getMeta directly, not assumed from the plugin's own
+// "pluginKey defaults to bubbleMenu" comment (which describes the string-shaped default case, not
+// this one).
+const BUBBLE_MENU_PLUGIN_KEY = 'richTextBubbleMenu'
+
+// Exposed for RichTextInput to force this menu away before opening a surface that steals DOM focus
+// (the link dialog): BubbleMenuPlugin arms `preventHide` on its own mousedown, which swallows the
+// very next blur, so the dialog's own autofocus landing on its href input would not otherwise hide
+// this menu (see RichTextInput.test.ts's 'hides the bubble menu...' test, which dispatches no
+// mousedown at all and still requires this). Dispatching the plugin's own documented external-hide
+// meta bypasses preventHide entirely, since that flag only guards the blur-driven path, not a
+// direct call. Carries no steps, so the editor's selection is untouched.
+function hide(): void {
+  props.editor.view.dispatch(props.editor.state.tr.setMeta(BUBBLE_MENU_PLUGIN_KEY, 'hide'))
+}
+
+defineExpose({ hide })
 
 // Derived, not a second hand-written list: this menu carries inline text formatting and nothing
 // else, and deriving that from the registry's own `group` is what keeps it true, rather than a
@@ -66,7 +91,8 @@ onBeforeUnmount(() => {
     ContextMenuContent) -- without it the menu has no z-index at all and Sidebar's fixed z-10 layer
     (Sidebar.vue) paints over it.
   -->
-  <BubbleMenu :editor="editor" :should-show="shouldShowBubbleMenu" :append-to="appendBubbleMenuTo"
+  <BubbleMenu :editor="editor" :plugin-key="BUBBLE_MENU_PLUGIN_KEY" :should-show="shouldShowBubbleMenu"
+    :append-to="appendBubbleMenuTo"
     class="rich-text__bubble z-50 flex gap-1 rounded-md border bg-popover p-1 shadow-md"
     role="toolbar" :aria-label="t('fields.richtext.selectionToolbar')">
     <RichTextCommandButton v-for="cmd in INLINE_COMMANDS" :key="cmd.id" :command="cmd"
