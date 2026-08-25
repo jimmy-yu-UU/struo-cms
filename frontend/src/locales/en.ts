@@ -315,6 +315,8 @@ export default {
       link: 'Link', horizontalRule: 'Horizontal rule', insertImage: 'Insert image',
       undo: 'Undo', redo: 'Redo',
       linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
+      linkOpenInNewTab: 'Open in new tab', removeLink: 'Remove link',
+      linkUrlInvalid: 'Enter a valid http(s) or mailto link.',
       table: 'Table',
       addRowBefore: 'Add row above', addRowAfter: 'Add row below',
       addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
