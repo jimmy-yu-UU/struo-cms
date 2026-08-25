@@ -623,16 +623,15 @@ describe('RichTextInput', () => {
   // template) dispatches through window.setTimeout at updateDelay's default of 250ms whenever the
   // selection is non-collapsed -- selectAll() below produces exactly that case, so a synchronous
   // assertion right after selecting/focusing would still see the pre-selection (hidden) state.
-  // Real timers, not vitest's fake ones: RichTextBubbleMenu.test.ts (Task 2) found fake timers
-  // interact awkwardly with tiptap/vue-3's own rAF-based reactivity, which this file's
-  // waitForEditorReactivity above also has to work around. 300ms clears the 250ms window with margin.
+  // Real timers, not vitest's fake ones: the wait here is on that 250ms window.setTimeout inside
+  // handleDebouncedUpdate. Fake timers were not attempted. 300ms clears the 250ms window with margin.
   async function settleBubbleMenu(): Promise<void> {
     await new Promise((resolve) => { setTimeout(resolve, 300) })
     await flushPromises()
   }
 
-  // Scoped to the menu's own root, not a bare `[data-cmd]`: fact 10 says the toolbar renders the
-  // same data-cmd values while the menu is open, so an unscoped query would be ambiguous.
+  // Scoped to the menu's own root, not a bare `[data-cmd]`: the toolbar renders the same data-cmd
+  // values while the menu is open, so an unscoped query would be ambiguous.
   function bubbleRoot(w: VueWrapper) {
     return w.get('.rich-text__bubble')
   }
@@ -657,8 +656,9 @@ describe('RichTextInput', () => {
     await bubbleRoot(w).get('[data-cmd="italic"]').trigger('click')
     expect(vm.editor.isActive('italic')).toBe(true)
 
-    // link's own run() calls `ctx.t(...)` for the prompt's label before it ever touches the editor
-    // (richTextCommands.ts) -- asserting the exact call proves runCommand supplied the real,
+    // link's own run() touches the editor first (editor.getAttributes('link'), to seed the prompt's
+    // default) and only then calls `ctx.t(...)` for the prompt's label (richTextCommands.ts) --
+    // asserting the exact call proves runCommand supplied the real,
     // i18n-wired commandContext built in this file, not an empty stand-in that would either throw
     // (ctx.t undefined) or pass some other string.
     const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('https://example.com')
@@ -670,7 +670,7 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // fact 10: the toolbar and the bubble menu render the same data-cmd values while the menu is
+  // The toolbar and the bubble menu render the same data-cmd values while the menu is
   // open. Neither component's own test can see the two coexisting -- RichTextBubbleMenu.test.ts
   // mounts no toolbar, and the toolbar tests above never open the bubble menu -- so a wiring
   // mistake that fires a command through both surfaces for one click (toggling bold back off), or
