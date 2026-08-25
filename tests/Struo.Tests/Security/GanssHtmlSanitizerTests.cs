@@ -126,10 +126,10 @@ public class GanssHtmlSanitizerTests
     }
 
     // A rejected href (disallowed scheme) still leaves the <a> element itself in the tree with no
-    // href attribute -- measured directly (ProbeTests, deleted after use): the sanitizer strips only
-    // the offending attribute, not the whole element. So target must not survive on its own steam;
-    // the derivation runs unconditionally over whatever the anchor looks like after allowlist
-    // filtering, and a target with no href is not a link at all.
+    // href attribute: the sanitizer strips only the offending attribute, not the whole element. This
+    // is not a security fix -- an unguarded rule would still pair target="_blank" with rel="noopener"
+    // here, so no reverse-tabnabbing gap opens either way -- it is hygiene: an anchor with no href is
+    // not a link, so it should not carry link-behaviour attributes regardless of what target it wears.
     [Fact]
     public void Anchor_with_rejected_href_does_not_keep_target()
     {
@@ -137,6 +137,38 @@ public class GanssHtmlSanitizerTests
         clean.Should().NotContain("target");
         clean.Should().NotContain("rel=");
         clean.Should().NotContain("javascript");
+    }
+
+    // target is allowlisted globally (needed so the anchor handler above can see it at all), which
+    // means it would otherwise ride through untouched on every other allowlisted tag -- inert today
+    // since no other allowed tag gives it meaning, but stored-HTML pollution that would matter the day
+    // AllowedTags grows a tag target does mean something on. Stripped from every non-anchor element.
+    [Theory]
+    [InlineData("<p target=\"_blank\">x</p>", "<p>x</p>")]
+    [InlineData("<span target=\"evil\">s</span>", "<span>s</span>")]
+    [InlineData("<img src=\"/a\" target=\"_blank\">", "<img src=\"/a\">")]
+    public void Strips_target_from_non_anchor_elements(string html, string expected)
+    {
+        _s.Sanitize(html).Should().Be(expected);
+    }
+
+    // The "_blank" match is exact-string and case-sensitive, deliberately fail-closed: the HTML
+    // Standard's browsing-context keyword matching is ASCII case-insensitive
+    // (https://html.spec.whatwg.org/multipage/links.html), so an unsanitized target="_BLANK" would
+    // still open a new tab in a real browser -- the opposite of what this handler does with it. A
+    // fork loosening this comparison to match the browser's own case-insensitivity would silently
+    // start granting rel="noopener" to values it does not today, with no other test catching it.
+    [Theory]
+    [InlineData("_Blank")]
+    [InlineData("_BLANK")]
+    [InlineData("_blank ")]
+    [InlineData("_top")]
+    [InlineData("_self")]
+    [InlineData("myframe")]
+    public void Non_exact_blank_values_are_treated_as_same_tab(string targetValue)
+    {
+        var clean = _s.Sanitize($"<a href=\"https://ok\" target=\"{targetValue}\">l</a>");
+        clean.Should().Be("<a href=\"https://ok\">l</a>");
     }
 
     // Obfuscated/dangerous URL schemes in an anchor's href must not survive sanitization,
