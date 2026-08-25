@@ -15,8 +15,14 @@ const { t } = useI18n()
   <!--
     The override class is applied only when the command HAS an active state (isActive !== null):
     hr/image/undo/redo carry no data-active binding at all today, and the override only ever paints
-    through data-active, so handing it to those four would add a class attribute the current
-    toolbar never emits for no visible effect.
+    through data-active, so handing it to those four would add extra tokens inside the class
+    attribute they already render (buttonVariants' own ghost/icon output) for no visible effect.
+
+    :data-active is gated the same way, for a reason the brief's own draft missed: an absent
+    Boolean-typed prop resolves to `false` in Vue, not `undefined`, so an ungated binding would
+    render data-active="false" on these four stateless commands instead of no attribute at all --
+    gating on command.isActive keeps the attribute's presence tied to the command's own capability,
+    not to whatever the active prop happens to resolve to.
   -->
   <Button type="button" variant="ghost" size="icon" :data-cmd="command.id"
     :data-active="command.isActive ? active : undefined"
