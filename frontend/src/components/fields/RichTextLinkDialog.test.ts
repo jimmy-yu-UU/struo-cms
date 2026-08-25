@@ -27,6 +27,12 @@ function build(props: Partial<{ open: boolean; href: string; newTab: boolean; ca
   })
 }
 
+function cancelButton(wrapper: VueWrapper) {
+  // Cancel carries no data-cmd -- it is the one footer action that must never look like a
+  // submit trigger, so find it by its rendered label instead.
+  return wrapper.findAll('button').find((b) => b.text() === 'Cancel')
+}
+
 describe('RichTextLinkDialog', () => {
   it('seeds the href input and the checkbox from the open props', () => {
     w = build({ href: 'https://example.com', newTab: true })
@@ -63,26 +69,49 @@ describe('RichTextLinkDialog', () => {
     expect(w.emitted('update:open')).toEqual([[false]])
   })
 
+  // Every prefix of a valid URL is itself invalid ("h", "ht", "http", ...), so a live-computed
+  // error would paint the field red on the very first keystroke of ordinary typing. Only a blur
+  // (or an attempted submit, covered separately below) should surface the message.
+  it('does not show an error while typing an incomplete URL, before the field is blurred', async () => {
+    w = build({ href: '' })
+    await w.get('[data-testid="href"]').setValue('ht')
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect(w.get('[data-testid="href"]').attributes('aria-invalid')).toBe('false')
+  })
+
+  it('shows the error once a rejected, non-empty value is blurred', async () => {
+    w = build({ href: '' })
+    const input = w.get('[data-testid="href"]')
+    await input.setValue('javascript:alert(1)')
+    expect(w.find('[role="alert"]').exists()).toBe(false) // not yet -- no blur
+    await input.trigger('blur')
+    const errorEl = w.get('[role="alert"]')
+    expect(errorEl.text().length).toBeGreaterThan(0)
+    expect(w.get('[data-testid="href"]').attributes('aria-invalid')).toBe('true')
+    expect(w.get('[data-testid="href"]').attributes('aria-describedby')).toBe(errorEl.attributes('id'))
+  })
+
   // Confirm is disabled for a rejected scheme, and the guard also lives in submit() itself
   // (mirroring RichTextTableSizeDialog's rationale) so a direct call gets the same refusal --
   // this is what actually proves the rejection, since a disabled button's click would already
   // be a no-op regardless of whether submit() itself refuses.
   it('rejects a disallowed scheme: no submit emitted, and an error tied to the input', async () => {
     w = build({ href: 'https://example.com' })
-    await w.get('[data-testid="href"]').setValue('javascript:alert(1)')
+    const input = w.get('[data-testid="href"]')
+    await input.setValue('javascript:alert(1)')
+    await input.trigger('blur')
     const vm = w.vm as unknown as { submit: () => void }
     vm.submit()
     await w.vm.$nextTick()
     expect(w.emitted('submit')).toBeUndefined()
     expect(w.get('[data-cmd="linkSubmit"]').attributes('disabled')).toBeDefined()
     const errorEl = w.get('[role="alert"]')
-    const input = w.get('[data-testid="href"]')
     expect(input.attributes('aria-invalid')).toBe('true')
     expect(input.attributes('aria-describedby')).toBe(errorEl.attributes('id'))
     expect(errorEl.text().length).toBeGreaterThan(0)
   })
 
-  it('does not emit submit for an empty href, and shows no error for it', async () => {
+  it('does not emit submit for an empty href, and points at no error element', async () => {
     w = build({ href: '' })
     const vm = w.vm as unknown as { submit: () => void }
     vm.submit()
@@ -90,6 +119,18 @@ describe('RichTextLinkDialog', () => {
     expect(w.emitted('submit')).toBeUndefined()
     expect(w.get('[data-cmd="linkSubmit"]').attributes('disabled')).toBeDefined()
     expect(w.find('[role="alert"]').exists()).toBe(false)
+    // Not just "no alert rendered" -- the input must stop referencing one. An aria-describedby
+    // pointing at an id nothing renders is its own accessibility defect.
+    expect(w.get('[data-testid="href"]').attributes('aria-describedby')).toBeUndefined()
+  })
+
+  it('Cancel closes without submitting, even with a valid href entered', async () => {
+    w = build({ href: 'https://example.com' })
+    const cancel = cancelButton(w)
+    expect(cancel).toBeDefined()
+    await cancel!.trigger('click')
+    expect(w.emitted('update:open')).toEqual([[false]])
+    expect(w.emitted('submit')).toBeUndefined()
   })
 
   it('offers Remove only when canRemove is true, and it emits remove', async () => {
@@ -103,6 +144,18 @@ describe('RichTextLinkDialog', () => {
     // Removing must not also fabricate a submit -- Task 3's command dispatches on which of the
     // two resolves, and a stray submit would apply a link the caller asked to remove.
     expect(w.emitted('submit')).toBeUndefined()
+  })
+
+  // Mirrors submit()'s own guard rationale (comment above it in the component): canRemove gates
+  // whether the button renders, but a direct call -- through defineExpose, or a future caller --
+  // must get the same refusal, not a remove the host never offered.
+  it('refuses remove() when canRemove is false, even called directly', async () => {
+    w = build({ href: 'https://example.com', canRemove: false })
+    const vm = w.vm as unknown as { remove: () => void }
+    vm.remove()
+    await w.vm.$nextTick()
+    expect(w.emitted('remove')).toBeUndefined()
+    expect(w.emitted('update:open')).toBeUndefined()
   })
 
   it('gives every rendered button an explicit type="button", so mounting inside ItemForm\'s <form> cannot trigger a submit', () => {
