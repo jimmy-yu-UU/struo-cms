@@ -11,26 +11,25 @@ import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { Placeholder } from '@tiptap/extensions'
-import {
-  AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
-  Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
-} from '@lucide/vue'
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
+import RichTextCommandButton from './RichTextCommandButton.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
 import RichTextTableContextMenu from './RichTextTableContextMenu.vue'
 import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
+import {
+  TOOLBAR_BEFORE_HEADINGS, TOOLBAR_BEFORE_COLOR, TOOLBAR_AFTER_TABLE,
+  type RichTextCommand, type RichTextCommandContext,
+} from './richTextCommands'
 import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
 import { isInEditorTable, type TableAction } from './richTextTableActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import { fileContentDisplayUrl, absolutizeImageSrc, relativizeImageSrc } from '../../lib/richTextImages'
-import { isAllowedLinkUrl } from '../../lib/linkUrl'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
 import { toFileRows } from '../../lib/toFileRow'
@@ -69,6 +68,17 @@ const debouncedLoadImages = debounce(loadImages, 300)
 async function openImageDialog(): Promise<void> {
   imageDialogOpen.value = true
   await loadImages()
+}
+
+const commandContext: RichTextCommandContext = {
+  // vue-i18n's t is heavily overloaded; the registry only ever needs the single-key form.
+  t: (key: string) => t(key),
+  openImageDialog: () => { void openImageDialog() },
+}
+
+function runCommand(command: RichTextCommand): void {
+  if (!editor.value) return
+  command.run(editor.value, commandContext)
 }
 
 // Re-derive data-file-id from managed src, then relativize before emitting.
@@ -144,21 +154,6 @@ onBeforeUnmount(() => {
   editor.value?.destroy()
   debouncedLoadImages.cancel()
 })
-
-const alignKey = {
-  left: 'alignLeft', center: 'alignCenter', right: 'alignRight', justify: 'alignJustify',
-} as const
-const alignIcon = { left: AlignLeft, center: AlignCenter, right: AlignRight, justify: AlignJustify } as const
-
-function setLink(): void {
-  if (!editor.value) return
-  const prev = editor.value.getAttributes('link').href as string | undefined
-  const url = window.prompt(t('fields.richtext.linkPrompt'), prev ?? 'https://')
-  if (url === null) return
-  if (url === '') { editor.value.chain().focus().unsetLink().run(); return }
-  if (!isAllowedLinkUrl(url)) return // defense-in-depth: silently reject javascript:/data:/etc.
-  editor.value.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-}
 
 function activeHeadingLevel(): HeadingLevel | null {
   const ed = editor.value
@@ -259,72 +254,26 @@ defineExpose({ editor, insertImage })
   <div class="rich-text rounded-md border">
     <div v-if="editor" class="rich-text__toolbar flex flex-wrap gap-1 border-b p-1.5">
       <!--
-        Every active-state toolbar button below re-supplies data-[active=true]:hover:bg-primary
-        (and its dark:-prefixed form) alongside the plain data-[active=true]:bg-primary. The ghost
-        variant's own hover:bg-accent hover:text-accent-foreground carries just one modifier
-        (hover), so an override written with just one modifier (data-[active=true]) ties it on CSS
-        specificity and the winner is whichever rule the stylesheet happens to emit later — not a
-        reliable outcome. Stacking data-[active=true] AND hover onto the override selector adds an
-        attribute-selector component that the plain hover rule lacks, so it wins on specificity
-        regardless of emission order. Dark mode needs a second, dark:-prefixed copy of the
-        background rule because the vendored ghost variant carries a dark:hover:bg-accent/50
-        override of its own: that selector's :is()-wrapped dark-mode wrapper is itself a
-        specificity component, so only a same-shape dark:-prefixed override outweighs it — the
-        undecorated data-[active=true]:hover:bg-primary rule would tie it, not beat it. The text
-        pairing has no such dark-only competitor (ghost never overrides hover text colour for
-        dark), so one undecorated override rule already wins in both colour schemes.
+        Three loops, not one: the heading, colour and table menus are their own components sitting
+        at fixed points in the toolbar order, so the registry carries the segments the seams between
+        them fall on rather than one flat list plus splice indices.
       -->
-      <Button type="button" variant="ghost" size="icon" data-cmd="bold" :data-active="editor.isActive('bold')"
-        :disabled="disabled" :aria-label="t('fields.richtext.bold')" :title="t('fields.richtext.bold')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleBold().run()"><b>B</b></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="italic" :data-active="editor.isActive('italic')"
-        :disabled="disabled" :aria-label="t('fields.richtext.italic')" :title="t('fields.richtext.italic')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleItalic().run()"><i>I</i></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="strike" :data-active="editor.isActive('strike')"
-        :disabled="disabled" :aria-label="t('fields.richtext.strikethrough')" :title="t('fields.richtext.strikethrough')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleStrike().run()"><s>S</s></Button>
-      <Button v-for="al in (['left', 'center', 'right', 'justify'] as const)" :key="al" type="button" variant="ghost" size="icon"
-        :data-cmd="`align${al.charAt(0).toUpperCase()}${al.slice(1)}`"
-        :data-active="editor.isActive({ textAlign: al })" :disabled="disabled"
-        :aria-label="t('fields.richtext.' + alignKey[al])" :title="t('fields.richtext.' + alignKey[al])"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary"
-        @click="editor!.chain().focus().setTextAlign(al).run()"><component :is="alignIcon[al]" /></Button>
+      <RichTextCommandButton v-for="cmd in TOOLBAR_BEFORE_HEADINGS" :key="cmd.id" :command="cmd"
+        :active="cmd.isActive ? cmd.isActive(editor) : undefined" :disabled="disabled"
+        @run="runCommand(cmd)" />
       <RichTextHeadingMenu :disabled="disabled" :active-level="activeHeadingLevel()"
         @select="onHeadingSelect" />
-      <Button type="button" variant="ghost" size="icon" data-cmd="subscript" :data-active="editor.isActive('subscript')"
-        :disabled="disabled" :aria-label="t('fields.richtext.subscript')" :title="t('fields.richtext.subscript')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleSubscript().run()">x₂</Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="superscript" :data-active="editor.isActive('superscript')"
-        :disabled="disabled" :aria-label="t('fields.richtext.superscript')" :title="t('fields.richtext.superscript')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleSuperscript().run()">x²</Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="bulletList" :data-active="editor.isActive('bulletList')"
-        :disabled="disabled" :aria-label="t('fields.richtext.bulletList')" :title="t('fields.richtext.bulletList')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleBulletList().run()"><List /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="orderedList" :data-active="editor.isActive('orderedList')"
-        :disabled="disabled" :aria-label="t('fields.richtext.numberedList')" :title="t('fields.richtext.numberedList')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleOrderedList().run()"><ListOrdered /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="blockquote" :data-active="editor.isActive('blockquote')"
-        :disabled="disabled" :aria-label="t('fields.richtext.blockquote')" :title="t('fields.richtext.blockquote')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleBlockquote().run()"><Quote /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="codeBlock" :data-active="editor.isActive('codeBlock')"
-        :disabled="disabled" :aria-label="t('fields.richtext.codeBlock')" :title="t('fields.richtext.codeBlock')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="editor!.chain().focus().toggleCodeBlock().run()"><Code2 /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="link" :data-active="editor.isActive('link')"
-        :disabled="disabled" :aria-label="t('fields.richtext.link')" :title="t('fields.richtext.link')"
-        class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground dark:data-[active=true]:hover:bg-primary" @click="setLink"><LinkIcon /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="hr" :disabled="disabled"
-        :aria-label="t('fields.richtext.horizontalRule')" :title="t('fields.richtext.horizontalRule')" @click="editor!.chain().focus().setHorizontalRule().run()"><Minus /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="image" :disabled="disabled"
-        :aria-label="t('fields.richtext.insertImage')" :title="t('fields.richtext.insertImage')" @click="openImageDialog"><ImageIcon /></Button>
+      <RichTextCommandButton v-for="cmd in TOOLBAR_BEFORE_COLOR" :key="cmd.id" :command="cmd"
+        :active="cmd.isActive ? cmd.isActive(editor) : undefined" :disabled="disabled"
+        @run="runCommand(cmd)" />
       <RichTextColorMenu :disabled="disabled"
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
       <RichTextTableMenu :disabled="disabled" @insert="onTableInsert" @custom-size="sizeDialogOpen = true" />
-      <Button type="button" variant="ghost" size="icon" data-cmd="undo" :disabled="disabled"
-        :aria-label="t('fields.richtext.undo')" :title="t('fields.richtext.undo')" @click="editor!.chain().focus().undo().run()"><Undo2 /></Button>
-      <Button type="button" variant="ghost" size="icon" data-cmd="redo" :disabled="disabled"
-        :aria-label="t('fields.richtext.redo')" :title="t('fields.richtext.redo')" @click="editor!.chain().focus().redo().run()"><Redo2 /></Button>
+      <RichTextCommandButton v-for="cmd in TOOLBAR_AFTER_TABLE" :key="cmd.id" :command="cmd"
+        :active="cmd.isActive ? cmd.isActive(editor) : undefined" :disabled="disabled"
+        @run="runCommand(cmd)" />
     </div>
     <div ref="contentRoot" @contextmenu.capture="onContentContextMenu">
       <RichTextTableContextMenu :disabled="disabled" @action="onTableAction">
