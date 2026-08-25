@@ -106,7 +106,7 @@ plain rule wins here too, while a layered override would silently lose. Those pr
 `@tailwindcss/typography`'s own mechanism (see that package's documentation), not a contract
 StruoCMS defines or guarantees.
 
-Four gaps between the editor and a rendered article are deliberately left as accepted trade-offs, not
+Three gaps between the editor and a rendered article are deliberately left as accepted trade-offs, not
 defects:
 
 - **Dark mode.** `dark:prose-invert` guarantees the dark editor stays readable; it is not tuned to
@@ -117,16 +117,38 @@ defects:
 - **Background.** The editing surface sits on the admin's card surface, not on a site's page
   background — the page chrome a frontend puts around an article is outside what this template
   controls.
-- **Table header cells.** TipTap's table extension stores header cells as `<th>` elements inside
-  `<tbody>`, with no `<thead>` element at all. The `@tailwindcss/typography` rules that supply
-  padding and header emphasis key off `thead th`, `tbody td`, `thead`, and `tbody tr`, so a header
-  cell in this markup matches none of them: it renders with no padding and no header emphasis,
-  while body cells keep their padding and every row keeps its rule. This is not a divergence
-  between the editor and the published article —
-  because the stored HTML is exactly what a frontend renders, a frontend that also uses
-  `@tailwindcss/typography` shows the identical header treatment. The gap lives in the markup
-  TipTap's table extension writes, not in this styling choice, and it is not something to fix with
-  extra CSS here.
+
+Table header cells used to be a fourth accepted gap here; they no longer are, and the reason is worth
+explaining because it is not "one plugin's defaults matching on both sides" the way the rest of this
+section is. TipTap's table extension has no `thead` node in its schema, so a header row always
+round-trips through the editor as `<th>` cells inside `<tbody>` — the editor cannot produce a `<thead>`
+no matter how the table was authored. StruoCMS closes that gap on the server instead, at write time:
+the sanitizer's post-processing step (`TableHeadNormalizer`, in
+`src/Struo.Infrastructure/Security/TableHeadNormalizer.cs`) wraps a table's first row in `<thead>`
+whenever every cell in that row is a `<th>` and the table has no `<thead>` already. Because this runs
+as part of sanitization, it covers every write of a `RichText` field that goes through StruoCMS's item
+write pipeline — the editor, a direct API POST, a GraphQL mutation, an importer that calls the API —
+not only content that passed through TipTap. From that point on, the stored HTML a frontend renders carries a real
+`<thead>`, and `@tailwindcss/typography`'s `thead th` rules match it the way they are meant to.
+Content saved before this normalizer existed keeps its old shape until it is next re-saved: there is
+no backfill.
+
+The editor still cannot display that `<thead>` — its schema has nowhere to put the node — so the admin
+SPA carries its own CSS rule mirroring the plugin's header treatment onto the `tbody`-nested `th`
+markup TipTap actually produces, scoped to the same first-row-all-`<th>` shape the server normalizes. The two
+sides now arrive at the same appearance through two separate mechanisms instead of one: this is
+consistency that is actively maintained, not a byproduct of the editor and the frontend rendering the
+same stored string. A fork that substantially restyles its own tables will not see the editor's header
+treatment follow along, because that CSS rule mirrors the typography plugin's own defaults, not
+whatever a fork replaces them with.
+
+One consequence follows from the "first row" condition being literal: the table right-click menu's
+header-row toggle can also mark any other row as a header row, and a header row that is not a table's
+first row is left inside `tbody` by the server. The normalizer deliberately never reorders a table's
+content, so wrapping a mid-table row in `<thead>` is not an option — that is why the published output
+still has no `<thead>` there, and it is why the editor's CSS, which only styles what the server also
+wraps, leaves that row unstyled too. The editor's plain rendering of that row is not a bug; it is
+accurate, because that is exactly how the row will render once published.
 
 None of this makes the editor an exact preview of production rendering: a frontend's own
 customization of Tailwind, of the typography plugin, or a rendering stack that uses neither, is

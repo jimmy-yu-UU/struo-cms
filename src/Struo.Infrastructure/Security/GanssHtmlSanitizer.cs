@@ -8,7 +8,9 @@ namespace Struo.Infrastructure.Security;
 /// constructor (tags/attributes/schemes) and never mutated afterward, so a single instance is
 /// safe to share across requests. The allowlist mirrors the TipTap editor output:
 /// basic formatting + anchors (http/https/mailto) + relative-src images carrying data-file-id,
-/// plus basic tables, text-align/colour styles, and sub/superscript.
+/// plus basic tables, text-align/colour styles, and sub/superscript. Beyond stripping, it also
+/// canonicalizes structure that TipTap cannot itself produce -- see <see cref="TableHeadNormalizer"/>
+/// for the table-header-row case.
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
@@ -55,6 +57,14 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
                 a.RemoveAttribute("target");
             }
         };
+
+        // Structural canonicalization, not stripping: see TableHeadNormalizer for why the header
+        // row has to be sectioned server-side. It rides this event rather than a second parse
+        // because the sanitizer has already built the DOM -- and rides this class rather than
+        // RichTextCleaner because this adapter *is* the RichText pipeline's sanitizer, not a
+        // second stage bolted onto it: a consumer added elsewhere would opt into normalization
+        // along with stripping, which IHtmlSanitizer's own interface doc now states plainly.
+        _sanitizer.PostProcessDom += (_, e) => TableHeadNormalizer.Normalize(e.Document);
     }
 
     public string Sanitize(string html) => _sanitizer.Sanitize(html);

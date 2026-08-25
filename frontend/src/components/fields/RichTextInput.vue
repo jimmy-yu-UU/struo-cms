@@ -370,4 +370,44 @@ defineExpose({ editor, insertImage })
   height: 0;
   pointer-events: none;
 }
+
+/* TipTap's table schema has no thead node: content the server normalized into <thead> is flattened
+   back to `tbody > th` the moment it is parsed into the editor, and getHTML() re-serializes it that
+   way too. So @tailwindcss/typography's `thead th` rules never match anything in here, and without
+   this the editor would show unstyled header cells for content that renders with full header
+   treatment once published.
+   The values mirror the plugin's own `base` modifier so the two agree. `tbody tr`'s own bottom-border
+   rule already fires on this row (it IS a tbody row), but it borrows the wrong token and the wrong
+   width: published output puts this row inside `<thead>`, whose bottom border reads
+   `--tw-prose-th-borders`, while `tbody tr` reads `--tw-prose-td-borders` instead -- and a
+   header-only table publishes as a `<thead>` that keeps its 1px bottom rule, while the same single
+   row here is also `tbody tr:last-child`, which zeroes that width to none. The two row-level rules
+   below correct both; the plugin puts this border on the row, not the cell, so they sit alongside
+   the cell rules rather than folded into them. Padding, colour, weight and alignment are mirrored on
+   the cells below. This does not chase every nested rule the plugin defines for table content (e.g.
+   `thead th strong`'s `color: inherit`) -- only the row- and cell-level treatment that governs the
+   header row's own appearance.
+   Scoped to the first row, not every `th`: the server only wraps a first row whose cells are ALL
+   `th` (see Task 1). A header row anywhere else -- reachable from the table context menu, since
+   prosemirror-tables' toggleHeaderRow toggles whatever row the caret is in, not row 0 -- stays
+   `tbody > th` once published, where typography's `thead th` matches nothing. Styling it here too
+   would make the editor lie about that: it would show padded, bold, bottom-aligned cells for a row
+   that renders unstyled once published. Mirroring the server's own condition keeps the editor
+   truthful instead. */
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td))) {
+  border-bottom-color: var(--tw-prose-th-borders);
+}
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)):last-child) {
+  border-bottom-width: 1px;
+}
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th) {
+  color: var(--tw-prose-headings);
+  font-weight: 600;
+  vertical-align: bottom;
+  padding-inline-end: 0.5714286em;
+  padding-bottom: 0.5714286em;
+  padding-inline-start: 0.5714286em;
+}
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:first-child) { padding-inline-start: 0; }
+.rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:last-child) { padding-inline-end: 0; }
 </style>
