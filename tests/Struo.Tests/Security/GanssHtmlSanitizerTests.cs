@@ -308,7 +308,7 @@ public class GanssHtmlSanitizerTests
         clean.Should().Contain("<thead><tr><th>Inner</th></tr></thead>");
     }
 
-    // Every test above supplies an explicit <tbody>, i.e. exactly what TipTap's renderHTML
+    // Every table test above supplies an explicit <tbody>, i.e. exactly what TipTap's renderHTML
     // emits. But the reason this normalization lives on the server at all is the writers that are
     // NOT TipTap -- imports, ETL, direct API POSTs -- which routinely hand-author
     // <table><tr><th>...</tr></table> with no <tbody> at all. The HTML parser is expected to
