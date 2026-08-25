@@ -108,9 +108,11 @@ async function settle(): Promise<void> {
   await flushPromises()
 }
 
-// Queries document.body, not the wrapper: RichTextBubbleMenu configures BubbleMenuPlugin with
-// appendTo: () => document.body (see the component's own template comment), so once shown the menu's
-// root is a child of body, not of anything mount() attached -- a wrapper.find() would never see it.
+// Queries document.body, not the wrapper: RichTextBubbleMenu appends its BubbleMenuPlugin element
+// into a private container that is itself a child of document.body (see the component's own script
+// setup), so once shown the menu's root is a descendant of body, not of anything mount() attached --
+// a wrapper.find() would never see it. find() searches descendants, so the extra container level
+// between body and the menu root does not matter here.
 function bubbleRoot() {
   return new DOMWrapper(document.body).find('.rich-text__bubble')
 }
@@ -259,6 +261,31 @@ describe('RichTextBubbleMenu', () => {
     editor.commands.focus()
     await settle()
     expect(bubbleRoot().exists()).toBe(false)
+    teardown(w, container)
+  })
+
+  // Regression test for the appendTo: () => document.body defect: BubbleMenuPlugin's blur guard is
+  // `this.element.parentNode?.contains(event.relatedTarget)`, and document.body.contains(x) is true
+  // for every element on the page, so that guard swallowed every blur and hide() was never reached
+  // (confirmed by running this test against that code: the menu survived). A blur to an unrelated,
+  // focusable element elsewhere in the document -- not to the menu itself, and not the null
+  // relatedTarget a click on dead space produces -- is exactly the case that guard was supposed to
+  // let through to hide().
+  it('hides once the editor blurs to a focusable element elsewhere in the document', async () => {
+    const { w, container } = mountHarness()
+    await flushPromises()
+    const editor = getEditor(w)
+    selectWord(editor, 'world')
+    editor.commands.focus()
+    await settle()
+    expect(bubbleRoot().exists()).toBe(true)
+
+    const elsewhere = document.body.appendChild(document.createElement('input'))
+    editor.view.dom.dispatchEvent(new FocusEvent('blur', { relatedTarget: elsewhere }))
+    await settle()
+
+    expect(bubbleRoot().exists()).toBe(false)
+    elsewhere.remove()
     teardown(w, container)
   })
 })
