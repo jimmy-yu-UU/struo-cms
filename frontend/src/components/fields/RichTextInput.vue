@@ -283,7 +283,7 @@ defineExpose({ editor, insertImage })
       Not inside .rich-text__toolbar: this is a floating overlay that stays out of the DOM until a
       text selection shows it, not a persistent toolbar control -- and BubbleMenuPlugin relocates
       its own root to view.dom.parentElement on every show regardless of where it starts in the
-      template, so its position here has no bearing on where it renders once shown (fact 4).
+      template, so its position here has no bearing on where it renders once shown.
     -->
     <RichTextBubbleMenu v-if="editor" :editor="editor" :disabled="disabled" @run="runCommand" />
     <!--

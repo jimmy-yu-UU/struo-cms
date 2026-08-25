@@ -21,8 +21,8 @@ const INLINE_COMMANDS = RICH_TEXT_COMMANDS.filter((c) => c.group === 'inline')
 
 <template>
   <!--
-    No updateDelay/options/appendTo: upstream's defaults already match spec §8, and each one set
-    here would be a decision needing its own justification. class lands on the plugin's own root
+    No updateDelay/options/appendTo: upstream's defaults already match what this bubble menu needs,
+    and each one set here would be a decision needing its own justification. class lands on the plugin's own root
     div (BubbleMenu forwards attrs there), so it is styled here directly -- but position/left/top
     are not touched, since the plugin writes those inline every time it repositions the menu.
   -->

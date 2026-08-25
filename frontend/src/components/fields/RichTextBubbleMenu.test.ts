@@ -157,7 +157,7 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The four-surface separation (spec §3) is the point of this test, and like the order test
+  // That the bubble menu carries inline text formatting and nothing else is the point of this test, and like the order test
   // above it guards component-vs-registry drift, not the registry's own grouping: every data-cmd
   // rendered here must resolve back to whatever RICH_TEXT_COMMANDS currently reports as 'inline'
   // (confirmed: dropping the component's group filter fails this test too, on 'alignLeft'). If the

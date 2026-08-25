@@ -18,7 +18,8 @@ export function shouldShowBubbleMenu(args: BubbleMenuShouldShowArgs): boolean {
 
   // A click on one of the menu's own buttons moves document.activeElement off the editor view --
   // so focus inside the menu's element has to count as focus too, or this predicate is asking the
-  // wrong question about where the user's attention is.
+  // wrong question about where the user's attention is. This is a browser-only failure mode with no
+  // coverage in this test suite, and none is possible here: jsdom's trigger('click') moves no focus.
   const hasFocus = view.hasFocus() || element.contains(document.activeElement)
   if (!hasFocus) return false
 
