@@ -313,6 +313,8 @@ export default {
       link: '連結', horizontalRule: '水平線', insertImage: '插入圖片',
       undo: '復原', redo: '重做',
       linkPrompt: '連結網址', insertImageTitle: '插入圖片',
+      linkOpenInNewTab: '在新分頁開啟', removeLink: '移除連結',
+      linkUrlInvalid: '請輸入有效的 http(s) 或 mailto 連結。',
       table: '表格',
       addRowBefore: '在上方插入列', addRowAfter: '在下方插入列',
       addColumnBefore: '在左方插入欄', addColumnAfter: '在右方插入欄',
