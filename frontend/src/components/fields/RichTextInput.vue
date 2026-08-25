@@ -83,7 +83,10 @@ const linkDialogCanRemove = ref(false)
 // Set for the lifetime of one open dialog; whichever of onLinkDialogSubmit/onLinkDialogRemove/
 // onLinkDialogOpenChange(false) runs first resolves it and clears it, so a second settle attempt
 // from whichever of those fires afterward (submit and remove both also emit update:open(false)
-// right after their own event, per RichTextLinkDialog.vue) is a harmless no-op.
+// right after their own event, per RichTextLinkDialog.vue) is a harmless no-op. That is the only
+// thing guaranteed by the three of them alone: neither a second openLinkDialog before this one
+// settles, nor unmounting while it is still open, is one of those three, so each is handled
+// explicitly below rather than left to this protocol.
 let resolveLinkDialog: ((value: { href: string; newTab: boolean } | 'remove' | null) => void) | null = null
 
 function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | null): void {
@@ -94,6 +97,10 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
 function openLinkDialog(
   initial: { href: string; newTab: boolean; canRemove: boolean },
 ): Promise<{ href: string; newTab: boolean } | 'remove' | null> {
+  // Not reachable today (only one link command can run at a time), but settle any still-pending
+  // prior call with null rather than letting the assignment below silently overwrite
+  // resolveLinkDialog and leave that earlier promise unresolved forever.
+  settleLinkDialog(null)
   // Force the bubble menu away first (a no-op if it was never showing -- BubbleMenuView.hide()
   // guards on its own isVisible): opening this dialog from its own link button is one of the two
   // entry points sharing this function, and the dialog's autofocus stealing DOM focus from the
@@ -129,9 +136,12 @@ function onLinkDialogOpenChange(open: boolean): void {
   if (!open) settleLinkDialog(null)
 }
 
+// Not reachable today either (nothing in this repo unmounts a field mid-edit), but unmounting with
+// the dialog still open would otherwise leave its promise pending forever -- resolving it with null
+// here is the same "cancelled" outcome a plain Cancel click already produces.
+onBeforeUnmount(() => settleLinkDialog(null))
+
 const commandContext: RichTextCommandContext = {
-  // vue-i18n's t is heavily overloaded; the registry only ever needs the single-key form.
-  t: (key: string) => t(key),
   openImageDialog: () => { void openImageDialog() },
   openLinkDialog,
 }

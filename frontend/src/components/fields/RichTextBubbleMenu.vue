@@ -27,12 +27,17 @@ const { t } = useI18n()
 const BUBBLE_MENU_PLUGIN_KEY = 'richTextBubbleMenu'
 
 // Exposed for RichTextInput to force this menu away before opening a surface that steals DOM focus
-// (the link dialog): BubbleMenuPlugin arms `preventHide` on its own mousedown, which swallows the
-// very next blur, so the dialog's own autofocus landing on its href input would not otherwise hide
-// this menu (see RichTextInput.test.ts's 'hides the bubble menu...' test, which dispatches no
-// mousedown at all and still requires this). Dispatching the plugin's own documented external-hide
-// meta bypasses preventHide entirely, since that flag only guards the blur-driven path, not a
-// direct call. Carries no steps, so the editor's selection is untouched.
+// (the link dialog): a real click arms BubbleMenuPlugin's own `preventHide` on mousedown, which
+// swallows the very next blur -- so once the dialog's autofocus moves DOM focus off the editor, the
+// blur path this menu would otherwise rely on is a no-op, and it would linger beside the open
+// dialog. Dispatching the plugin's own documented external-hide meta bypasses preventHide entirely,
+// since that flag only guards the blur-driven path, not a direct call. Carries no steps, so the
+// editor's selection is untouched. RichTextInput.test.ts's 'hides the bubble menu...' test
+// dispatches a real mousedown-then-click specifically to arm preventHide first, so that passing
+// actually proves this call (and the matching pluginKey string above) -- a bare VTU `.trigger`
+// click, with no mousedown, leaves the ordinary blur path open and hides the menu on its own
+// regardless of whether this function is ever called; that gap was caught by deleting this call and
+// watching the test stay green before the dispatch order was fixed.
 function hide(): void {
   props.editor.view.dispatch(props.editor.state.tr.setMeta(BUBBLE_MENU_PLUGIN_KEY, 'hide'))
 }

@@ -8,7 +8,6 @@ import {
 export type RichTextCommandGroup = 'inline' | 'block' | 'insert' | 'history'
 
 export interface RichTextCommandContext {
-  t: (key: string) => string
   openImageDialog: () => void
   // Resolves with the dialog's confirmed value, 'remove' if its Remove button was used, or null on
   // cancel. Validation (isAllowedLinkUrl) lives entirely in the dialog now, not here -- by the time
