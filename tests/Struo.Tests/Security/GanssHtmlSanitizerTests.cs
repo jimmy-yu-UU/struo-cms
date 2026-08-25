@@ -81,7 +81,7 @@ public class GanssHtmlSanitizerTests
         bad.Should().NotContain("javascript").And.NotContain("data:");
     }
 
-    // rel is derived from target, not client-supplied (Global Constraints in the RT-5.5 plan): a
+    // rel is derived from target, not client-supplied (chapter 5's RichText contract table): a
     // same-tab anchor -- the common case, and what a bare href with no target means -- carries no
     // rel at all. Asserted on the exact string, not Contain, because a same-tab anchor must NOT
     // pick up any rel value.
