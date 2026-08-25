@@ -26,9 +26,15 @@ const INLINE_COMMANDS = RICH_TEXT_COMMANDS.filter((c) => c.group === 'inline')
 // element on the page, so every blur was swallowed and hide() was never reached (confirmed: see
 // RichTextBubbleMenu.test.ts's blur test, which fails without this container). Routing through this
 // container instead restores the guard to its real meaning: true only for the menu's own subtree.
-// Created eagerly here (script setup body), not in onMounted: Vue mounts children before parents, so
-// BubbleMenu's own mount -- which can call show() synchronously if a selection is already present --
-// runs before this component's onMounted would fire. The container must already exist by then.
+// Created eagerly here (script setup body), not in onMounted: not because it has to be. Upstream's
+// own BubbleMenu.vue defers the actual work into a microtask -- its onMounted calls el.remove() and
+// then nextTick(() => editor.registerPlugin(BubbleMenuPlugin(...))), so the BubbleMenuView
+// constructor (and its own trailing `if (this.getShouldShow()) this.show()`) runs inside that
+// nextTick callback, which fires only after the whole synchronous mount flush -- including this
+// component's own onMounted -- has already completed (read directly from
+// @tiptap/vue-3/dist/menus/index.js). A container created in this component's onMounted would
+// already exist by the time BubbleMenuPlugin needs it. It is created here anyway because there is
+// no reason to defer it: nothing else in this component has to run first.
 // Deliberately left with no CSS of any kind (no position, no size): the menu itself is position:
 // absolute and Floating UI resolves that against this container's nearest positioned ancestor, so a
 // styled container could change where the menu lands. Left position: static (the default), it should
