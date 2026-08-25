@@ -16,9 +16,9 @@ export function shouldShowBubbleMenu(args: BubbleMenuShouldShowArgs): boolean {
 
   if (!editor.isEditable) return false
 
-  // A click on one of the menu's own buttons moves focus onto that button, which is not the editor
-  // view -- without also treating focus inside the menu's element as "focused", the predicate would
-  // go false on the same tick as the click and hide the menu before its command ran.
+  // A click on one of the menu's own buttons moves document.activeElement off the editor view --
+  // so focus inside the menu's element has to count as focus too, or this predicate is asking the
+  // wrong question about where the user's attention is.
   const hasFocus = view.hasFocus() || element.contains(document.activeElement)
   if (!hasFocus) return false
 

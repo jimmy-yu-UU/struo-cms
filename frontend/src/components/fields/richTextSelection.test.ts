@@ -43,8 +43,9 @@ describe('shouldShowBubbleMenu', () => {
     }))).toBe(false)
   })
 
-  // A selected image is a non-empty selection carrying no text. Excluding it is what keeps this
-  // surface to inline text formatting; RT-6's node view owns the image.
+  // This is the shape a text-free selection presents to this predicate: non-empty, no text.
+  // Excluding it is what keeps this surface to inline text formatting; whether a real selected
+  // image presents this shape is what Task 2 proves against a real editor, not this fabricated case.
   it('stays hidden for a non-empty selection that carries no text', () => {
     expect(shouldShowBubbleMenu(args({
       state: { selection: { empty: false }, doc: { textBetween: () => '' } },
