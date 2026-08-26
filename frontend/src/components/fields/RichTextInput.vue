@@ -126,6 +126,8 @@ function focusIfStillInDocument(el: HTMLElement): () => void {
 // holding focus right now is not a usable restore target for them.
 function blurActiveElementBeforeDialog(restore?: () => void): void {
   const active = document.activeElement
+  // `active !== document.body` so body is never stored as a restore target: nothing was
+  // meaningfully focused then, and a restore to it is indistinguishable from a genuine one.
   restoreFocusOnDialogCancel = restore
     ?? (active instanceof HTMLElement && active !== document.body ? focusIfStillInDocument(active) : null)
   if (active instanceof HTMLElement) active.blur()
@@ -155,7 +157,7 @@ function openLinkDialog(
   // Force the bubble menu away (a no-op if it was never showing -- BubbleMenuView.hide() guards
   // on its own isVisible): opening this dialog from its own link button is one of the two entry
   // points sharing this function, and the dialog's autofocus stealing DOM focus from the editor
-  // would otherwise leave that menu lingering beside it (RT-5's leftover; see
+  // would otherwise leave that menu lingering beside it (see
   // RichTextBubbleMenu.vue's hide() for the mechanism and why it does not depend on this ordering).
   bubbleMenuRef.value?.hide()
   return new Promise((resolve) => {
@@ -264,7 +266,9 @@ const editor = useEditor({
       HTMLAttributes: { target: null, rel: null },
     }),
     // `resize.enabled` swaps in @tiptap/core's ResizableNodeView, which is what supplies the drag
-    // handles. Upstream defaults: `directions` is the four corners alone, and the aspect ratio is
+    // handles. Upstream also declines to build the node view at all when `typeof document ===
+    // 'undefined'`, so an admin rendered server-side gets no handles however this is configured.
+    // Upstream defaults: `directions` is the four corners alone, and the aspect ratio is
     // preserved only while Shift is held -- `alwaysPreserveAspectRatio: true` removes that
     // per-drag override entirely, so no handle can free-stretch a published image.
     //
@@ -634,7 +638,7 @@ defineExpose({ editor, insertImage })
    `thead th strong`'s `color: inherit`) -- only the row- and cell-level treatment that governs the
    header row's own appearance.
    Scoped to the first row, not every `th`: the server only wraps a first row whose cells are ALL
-   `th` (see Task 1). A header row anywhere else -- reachable from the table context menu, since
+   `th` (see the sanitizer's header-row normalization). A header row anywhere else -- reachable from the table context menu, since
    prosemirror-tables' toggleHeaderRow toggles whatever row the caret is in, not row 0 -- stays
    `tbody > th` once published, where typography's `thead th` matches nothing. Styling it here too
    would make the editor lie about that: it would show padded, bold, bottom-aligned cells for a row

@@ -17,14 +17,8 @@ const i18n = createI18n({
 const opts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
 describe('RichTextTableMenu', () => {
-  // Replaces the old "emits insert and closes" test: that test drove a dedicated
-  // `[data-cmd="tableInsert"]` button and asserted `emitted('action')` equalled `[['insert']]` —
-  // both the hook and the payload shape are gone now that the toolbar button opens a size-picker
-  // grid instead. This test drives the grid itself (RichTextTableGrid is already unit-tested on
-  // its own in RichTextTableGrid.test.ts) and asserts the richer `insert` payload the grid path
-  // now emits, plus that the popover still closes afterwards. A non-square pick (2 rows, 4
-  // cols), not 3x3: a rows/cols swap on the way into the emitted object would be invisible on a
-  // square pick.
+  // A non-square pick (2 rows, 4 cols), not 3x3: a rows-cols swap on the way into the emitted
+  // object would be invisible on a square pick.
   it('emits insert with the picked size and a header row, and closes', async () => {
     const w = mount(RichTextTableMenu, { ...opts })
     await w.get('[data-cmd="table"]').trigger('click')
@@ -34,11 +28,6 @@ describe('RichTextTableMenu', () => {
     w.unmount()
   })
 
-  // Replaces "disables in-table actions when outside a table" and "emits in-table actions when
-  // inside a table": both pinned an `inTable` prop and a set of in-table action buttons
-  // (addRowAfter, deleteTable, …) that this task deliberately removes from this component — those
-  // eight operations moved to the table's own right-click menu in Task 4. This component is now
-  // insert-only, so its replacement coverage is the "custom size…" escape hatch instead.
   // Asserts the exact element in the payload, not just that something was emitted: that button is
   // the only focus target RichTextInput has left after the size dialog is cancelled.
   it('emits customSize with its own trigger button and closes when the custom-size entry is picked', async () => {
