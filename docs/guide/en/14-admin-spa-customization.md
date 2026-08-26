@@ -259,6 +259,21 @@ output already matches what the sanitizer would produce anyway — without it, t
 external-change comparison would see a phantom `height`-only difference on every update and reset the
 cursor for no reason.
 
+One upstream defect inside that node view is worth naming, because it looks alarming when found by
+accident. `ResizableNodeView` registers an editor `'update'` listener in its constructor as
+`this.editor.on('update', this.handleEditorUpdate.bind(this))` and removes one in `destroy()` as
+`this.editor.off('update', this.handleEditorUpdate.bind(this))` — read in the installed
+`@tiptap/core@3.30.2`, `src/lib/ResizableNodeView.ts`. Every `.bind()` call returns a new function
+object, and `off` filters the callback list by identity (`src/EventEmitter.ts`), so the listener it
+removes is never the one the constructor added: each image node view the editor creates leaves one
+`'update'` listener behind for the rest of that editor's life. A fork does not need to act on this.
+The accumulation is bounded by the editor rather than by the session — `Editor.destroy()` calls
+`removeAllListeners()`, which clears the callback map outright, and `RichTextInput.vue` destroys its
+editor in `onBeforeUnmount` — and a stale listener does nothing observable in the meantime, because
+`handleEditorUpdate` returns immediately unless the editable flag has changed and otherwise only
+touches its own, already-detached container. The one way to make it matter is to stop destroying the
+editor on unmount, which would turn this and every other listener the editor holds into a real leak.
+
 Right-clicking inside this field now opens one of two context menus depending on what was clicked. A
 right-click landing directly on an `<img>` opens an image menu (edit alt text, delete image); a
 right-click anywhere else inside a table opens the table's own right-click menu. The image check runs
