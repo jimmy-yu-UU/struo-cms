@@ -193,10 +193,14 @@ the left handle inward does not pin the right edge in place and grow leftward th
 tool's handles usually do. `minWidth` keeps a handle from shrinking the image into an unusably small
 target.
 
-Because the resize node view's own container is capped to the field's own text-measure column, an
-image can never be dragged past that column's width — the rendered (and, once released, the stored)
-width clamps there. That is ordinary WYSIWYG behavior for a field with a fixed reading measure, not a
-bug: what the editor shows during a drag is what publishing will render.
+An image can never be dragged past the width of the field's own text-measure column — the rendered
+(and, once released, the stored) width clamps there. Measured in the running admin: with the inline
+width forced to 2000px inside a ~603px column, the image renders at 603px and `offsetWidth`, which is
+the number `ResizableNodeView` commits, reads 603. What does the clamping is Tailwind preflight's own
+`img { max-width: 100% }`, not anything `RichTextInput.vue` declares — a fork that drops preflight, or
+overrides that rule for editor content, loses the clamp and will store the dragged number instead.
+Left in place, this is ordinary WYSIWYG behavior for a field with a fixed reading measure, not a bug:
+what the editor shows during a drag is what publishing will render.
 
 What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
 and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`
