@@ -372,24 +372,22 @@ const editor = useEditor({
     // A second, independent height defect this option does NOT address: ResizableNodeView's own
     // handleResize (verified in the installed @tiptap/core source) writes BOTH
     // `element.style.width` and `element.style.height` as inline pixel values on every mousemove,
-    // unconditionally. Tailwind preflight's `img { max-width: 100%; height: auto }` can clamp the
-    // rendered WIDTH once a drag passes the container's edge (max-width is a distinct property
-    // from width, so it always applies), but the inline height always beats preflight's
+    // unconditionally. Tailwind preflight's `img { max-width: 100%; height: auto }` does clamp the
+    // rendered WIDTH once a drag passes the column's edge (max-width is a distinct property from
+    // width, so it always applies) -- measured in the running admin, see the
+    // `[data-resize-container]` rule below -- but the inline height always beats preflight's
     // stylesheet height for that same property, so nothing was left to clamp the height to
     // match -- the image stretched vertically past that point. The style block below forces
     // height back to auto on this node view's own img (needing !important to outrank the inline
     // style), which is a CSS-only fix and belongs there, not here.
     //
-    // Confirmed only this much by reading the same source, not more: handleMouseUp's onCommit
-    // reads `this.element.offsetWidth`, a live layout measurement, not the drag's raw unclamped
-    // delta-based number. What that measurement actually EQUALS at the moment of a drag exceeding
-    // the container depends on layout this session has no browser to run -- see the
-    // `[data-resize-container]` rule below (the width: fit-content one) for a related risk to that
-    // same measurement that a plain reasoning-only pass over this file's own CSS missed the first
-    // time, and its own comment for the max-width fix that addresses it. Whether offsetWidth ends
-    // up equal to the clamped, on-column width (desirable: matches what publishing renders) or to
-    // the drag's own unclamped number (not desirable) is a live-browser question, not one this
-    // comment can settle by citing source alone.
+    // handleMouseUp's onCommit reads `this.element.offsetWidth` (same source), a live layout
+    // measurement rather than the drag's raw unclamped delta. What that reads at the moment of a
+    // drag past the column edge is settled, measured in the running admin this session: with the
+    // inline width forced to 2000px inside the ~603px `prose` column, that same element's
+    // offsetWidth reads 603 -- the clamped, on-column number, which is the desirable outcome
+    // because it is also what publishing renders. A drag past the edge therefore stores the column
+    // width, not the number the pointer travelled to.
     //
     // Known upstream defect, not introduced here: ResizableNodeView's constructor registers
     // `editor.on('update', this.handleEditorUpdate.bind(this))`, and its destroy() calls
@@ -936,34 +934,30 @@ defineExpose({ editor, insertImage })
    needed for the rule below. Shrinking the container to its single flex child (the wrapper) is
    what makes the outline and the handles agree on the same box.
 
-   max-width: 100% alongside it closes a cyclic-percentage risk `width: fit-content` alone can
-   raise on this element: this box's own preferred width, and its child img's `max-width: 100%`
-   (the rule further below), can each end up depending on the other's still-being-computed size.
-   max-width: 100% resolves against ITS OWN containing block instead (the `.ProseMirror` column, a
-   definite, ordinary width), giving this box an independent upper bound regardless of that cycle.
+   Measured live this session, in the running admin itself -- not a static reconstruction, which is
+   what two earlier rounds of this comment argued past each other over. Headless Chromium
+   (@playwright/test) against the dev server, a real article's image inside the real ~603px
+   `prose` column, injecting overrides and reading getComputedStyle back to confirm each one
+   actually applied before trusting the numbers:
 
-   Measured this session, not just reasoned about: loaded the actual compiled CSS for this
-   component and reconstructed ResizableNodeView's real container/wrapper/img/handle DOM shape in
-   headless Chromium (this repo's own @playwright/test), inside both a plain fixed-width column
-   and the real `.ProseMirror`/`prose` column (~603px, matching this editor's own default
-   typography). Re-measured a second time after a follow-up review reported the opposite result
-   (container clamped but wrapper/img/handle overflowing to the dragged width) for this exact
-   configuration: rebuilt the CSS fresh, read the scope hash out of that fresh file rather than
-   assuming one (a stale hash was the review's own suspected cause of a wrong measurement, on
-   either side), and added a getComputedStyle liveness check confirming the harness's rules
-   actually matched before trusting any result from it. Neutralized this max-width rule alone, the
-   wrapper's own min-width: 0 alone, and both together (down to literally the pre-any-of-these-
-   fixes state) -- confirmed via getComputedStyle each time that the neutralizing override had
-   actually taken effect. In every one of those configurations, at a 2000px-wide drag,
-   container/wrapper/img/handle all still measured bounded to the column in this session's own
-   harness. This still disagrees with the review's own reported numbers for the neutralized cases;
-   that disagreement is unresolved, reported as such rather than picked one way, and needs a human
-   at a live browser (not a static reconstruction on either side) to settle. min-width: 0 stays on
-   the wrapper below regardless -- it closes a real, well-established flex-layout mechanism (a flex
-   item's own automatic minimum size, which can floor a replaced element's flex item at its
-   intrinsic/specified size and let it overflow a sized ancestor) that this session's own harness
-   did not happen to trigger on either attempt, but that is cheap insurance if some other browser,
-   aspect ratio, real (non-static-harness) rendering path, or future edit does.
+     - `width: fit-content` above IS load-bearing, and this is what it does: with a 200px image the
+       container measures 200px and the selection outline hugs it; overridden to `width: auto` the
+       same container measures the full 603px column with the image at its left edge. That is the
+       outline/handle agreement described above, and nothing to do with clamping.
+     - What clamps an oversized image is Tailwind preflight's `img { max-width: 100% }`, and only
+       that. Overridden to `max-width: none` with everything else untouched, a 2000px inline width
+       renders at 2000px, and an image with a 3000px INTRINSIC width and no inline width at all
+       renders at 3000px. Left alone, both render at 603px.
+     - Two declarations this file used to carry, `max-width: 100%` on this container and
+       `min-width: 0` on the wrapper, measured inert and are gone. Neutralized singly and together,
+       against both the 2000px-inline-width and the 3000px-intrinsic-width cases -- the latter being
+       exactly the flex automatic-minimum-size / fit-content cyclic-percentage scenario each was
+       written against -- every box still measured 603px. They were not kept as insurance either,
+       because in the one configuration that does overflow (preflight neutralized) neither of them
+       prevents the overflow: with both still in place the image itself rendered at 2000px and
+       3000px respectively, and the only thing the container's own cap changed was whether this box
+       stayed at 603px while its image spilled out of it, or grew with it. There is no failure mode
+       left for them to insure against.
    */
 
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
@@ -972,25 +966,11 @@ defineExpose({ editor, insertImage })
 }
 .rich-text__content :deep([data-resize-container]) {
   width: fit-content;
-  max-width: 100%;
   /* Margin, not the outline/hugging rules above: see the comment on the img margin rule just
      below for why this box (not the wrapper, and not the img itself) is where `prose`'s own
      vertical image margin has to be re-applied. */
   margin-top: 2em;
   margin-bottom: 2em;
-}
-
-/* Defensive addition alongside the container's own max-width: 100% above -- see that rule's own
-   comment for what this session's own measurement did and did not reproduce. This one addresses
-   a different, well-established mechanism by name: a flex item's automatic minimum size (its
-   default min-width: auto) can floor it at its content's own min-content contribution rather
-   than letting it shrink to fit a sized ancestor, and for a replaced element like <img> with an
-   explicit width set, that min-content contribution is the specified width itself -- so this
-   wrapper, as the container's own flex item, could in principle be held at whatever width the
-   drag set regardless of the container's own cap. min-width: 0 removes that floor, letting the
-   wrapper shrink freely to whatever the container actually resolves to. */
-.rich-text__content :deep([data-resize-wrapper]) {
-  min-width: 0;
 }
 
 /* The wrapper (createWrapper(), same source) is a plain `display: block` div holding only the
