@@ -43,6 +43,25 @@ describe('RichTextImageAltDialog', () => {
     expect(w.emitted('update:open')).toEqual([[false]])
   })
 
+  // The invariant RichTextInput's alt guard rests on: it releases the captured image node when this
+  // dialog reports itself closed, so 'submit' must reach it first or the guard rejects the write.
+  // The test above cannot see this -- emitted() buckets the two events separately, so it passes
+  // under either order. Recording both through one listener is what makes the sequence observable.
+  it('emits submit strictly before its trailing update:open, which RichTextInput depends on', async () => {
+    const order: string[] = []
+    w = mount(RichTextImageAltDialog, {
+      props: {
+        open: true,
+        alt: 'A red bicycle',
+        onSubmit: () => { order.push('submit') },
+        'onUpdate:open': () => { order.push('update:open') },
+      },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await w.get('[data-cmd="altSubmit"]').trigger('click')
+    expect(order).toEqual(['submit', 'update:open'])
+  })
+
   // alt="" is the formal HTML way to mark an image as decorative, so an empty submit must go
   // through -- not be rejected as empty input the way RichTextLinkDialog's href field is.
   it('emits submit with an empty string when the field is cleared, and does not block it', async () => {
