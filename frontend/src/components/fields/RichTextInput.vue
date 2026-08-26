@@ -133,30 +133,48 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
 // `triggerElement` -- and because blurActiveElementBeforeDialog below empties
 // document.activeElement to <body> before `open` ever flips true, that guard fails every time,
 // leaving `triggerElement` permanently unset. Both of reka's own restore paths are therefore
-// `undefined?.focus()` no-ops for every dialog here; elementToRefocusOnDialogCancel and
+// `undefined?.focus()` no-ops for every dialog here; restoreFocusOnDialogCancel and
 // refocusAfterDialogCancel below are the only focus restoration actually happening on a cancel.
 //
 // Blurring synchronously, before the open flag flips, empties document.activeElement down to
 // <body> -- outside the subtree hideOthers is about to hide -- so there is nothing focused inside
-// <main> left for that check to catch. elementToRefocusOnDialogCancel is a capture of whatever
-// held focus right before that blur; refocusAfterDialogCancel is the matching restore. Every
-// dialog-close handler in this file calls refocusAfterDialogCancel() only on a plain cancel --
-// never on a submit/remove/insert/select close, which already runs its own deliberate
-// editor.chain().focus() and clears elementToRefocusOnDialogCancel itself instead, so the restore
-// is never fighting a focus target that was moved on purpose. settleLinkDialog above deliberately
-// has no focus side effect of its own: it is also called from two "not reachable today" defensive
-// spots (openLinkDialog's own top, and the onBeforeUnmount below) where a leftover, unconsumed
-// capture could otherwise schedule a stale focus() call landing inside whatever dialog opens next.
-// Only onLinkDialogOpenChange's own genuine-cancel branch pairs the two calls together.
-let elementToRefocusOnDialogCancel: HTMLElement | null = null
+// <main> left for that check to catch. restoreFocusOnDialogCancel holds the matching undo for
+// that blur; refocusAfterDialogCancel runs it. Every dialog-close handler in this file calls
+// refocusAfterDialogCancel() only on a plain cancel -- never on a submit/remove/insert/select
+// close, which already runs its own deliberate editor.chain().focus() and clears
+// restoreFocusOnDialogCancel itself instead, so the restore is never fighting a focus target that
+// was moved on purpose. settleLinkDialog above deliberately has no focus side effect of its own:
+// it is also called from two "not reachable today" defensive spots (openLinkDialog's own top, and
+// the onBeforeUnmount below) where a leftover, unconsumed capture could otherwise schedule a stale
+// focus() call landing inside whatever dialog opens next. Only onLinkDialogOpenChange's own
+// genuine-cancel branch pairs the two calls together.
+//
+// A callback rather than a plain element, because for two of the four dialogs the element that
+// held focus is the wrong thing to restore to -- see blurActiveElementBeforeDialog's own
+// parameter below.
+let restoreFocusOnDialogCancel: (() => void) | null = null
 
-function blurActiveElementBeforeDialog(): void {
+// Every restore derived from a captured activeElement goes through this guard: focusing a node
+// that has since left the document is a silent no-op that leaves focus on <body>.
+function focusIfStillInDocument(el: HTMLElement): () => void {
+  return () => { if (document.body.contains(el)) el.focus() }
+}
+
+// `restore`, when given, replaces the default "focus whatever was focused before" behaviour. Two
+// callers need that, and both were observed in the running admin landing on <body> after Escape
+// before this parameter existed: the alt dialog opens from a right-click context menu and the
+// table-size dialog from a toolbar popover, and in both cases the element holding focus at this
+// instant is a menu/popover item that is unmounted on the way into the dialog -- so by the time a
+// cancel runs there is nothing left for focusIfStillInDocument to focus. Each of those two passes
+// the destination it actually wants instead.
+function blurActiveElementBeforeDialog(restore?: () => void): void {
   const active = document.activeElement
   // Guards against storing document.body itself as "the target to restore": nothing was
   // meaningfully focused in that case, and treating body as a real target would make the
   // eventual restore in refocusAfterDialogCancel() indistinguishable from a genuine one, when it
   // is actually restoring nothing.
-  elementToRefocusOnDialogCancel = active instanceof HTMLElement && active !== document.body ? active : null
+  restoreFocusOnDialogCancel = restore
+    ?? (active instanceof HTMLElement && active !== document.body ? focusIfStillInDocument(active) : null)
   if (active instanceof HTMLElement) active.blur()
 }
 
@@ -171,22 +189,11 @@ function blurActiveElementBeforeDialog(): void {
 // `focus(lastFocusedElementRef.value)` -- refocusing back into the dialog and undoing the restore.
 // Waiting for nextTick() lets that teardown finish first, so this focus() call is the last one to
 // run.
-//
-// This calls the DOM's own `target.focus()` directly rather than routing through
-// `editor.commands.focus()` for the editor-as-target case (the image-alt-dialog cancel path):
-// whether a raw focus() call this way preserves the editor's own NodeSelection and its visible
-// outline, versus editor.commands.focus() re-deriving/re-applying it, is a real question this
-// session could not settle without a browser -- ProseMirror's own documentation says a plain DOM
-// focus() does not itself alter `state.selection`, only the view's own `focused` flag and CSS
-// state, but whether that is enough for the selection to still render as expected needs a live
-// check, stated here rather than assumed either way.
 function refocusAfterDialogCancel(): void {
-  const target = elementToRefocusOnDialogCancel
-  elementToRefocusOnDialogCancel = null
-  if (!target) return
-  void nextTick().then(() => {
-    if (document.body.contains(target)) target.focus()
-  })
+  const restore = restoreFocusOnDialogCancel
+  restoreFocusOnDialogCancel = null
+  if (!restore) return
+  void nextTick().then(restore)
 }
 
 function openLinkDialog(
@@ -228,18 +235,18 @@ function onLinkDialogSubmit(value: { href: string; newTab: boolean }): void {
   // richTextCommands.ts's own .then() chain runs editor.chain().focus() for this outcome --
   // clear the captured pre-dialog target so onLinkDialogOpenChange's own trailing
   // update:open(false) (RichTextLinkDialog's submit() emits both) finds nothing left to restore.
-  elementToRefocusOnDialogCancel = null
+  restoreFocusOnDialogCancel = null
 }
 
 function onLinkDialogRemove(): void {
   settleLinkDialog('remove')
   // Same reasoning as onLinkDialogSubmit above: the .then() chain's own unsetLink().focus() call
   // already refocuses deliberately for this outcome.
-  elementToRefocusOnDialogCancel = null
+  restoreFocusOnDialogCancel = null
 }
 
 // Fires for every close, including Cancel, Esc and an overlay click -- not only a plain cancel:
-// submit/remove already resolved the promise AND cleared elementToRefocusOnDialogCancel
+// submit/remove already resolved the promise AND cleared restoreFocusOnDialogCancel
 // themselves, by the time their own trailing update:open(false) reaches here, so settling with
 // null again is a no-op and refocusAfterDialogCancel() below finds nothing left to restore. Only
 // a genuine Cancel/Escape/overlay-click close reaches this with a live capture still in place.
@@ -302,7 +309,7 @@ function onImageSelected(id: string): void {
   insertImage(id)
   // insertImage() above already ran its own editor.chain().focus() -- clear the captured
   // pre-dialog target rather than leaving it to leak into a later, unrelated dialog's own cancel.
-  elementToRefocusOnDialogCancel = null
+  restoreFocusOnDialogCancel = null
   imageDialogOpen.value = false
 }
 
@@ -545,26 +552,28 @@ function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolea
   // The chain above already refocuses the editor -- shared with the grid-picker path (which never
   // opens a dialog at all, so this is a harmless no-op there): clear the captured pre-dialog
   // target rather than leaving it to leak into a later, unrelated dialog's own cancel.
-  elementToRefocusOnDialogCancel = null
+  restoreFocusOnDialogCancel = null
 }
 
 // Opened by the table menu's "custom size…" entry; RichTextTableSizeDialog below reads it.
 const sizeDialogOpen = ref(false)
 
-function openTableSizeDialog(): void {
+function openTableSizeDialog(restoreFocusTo: HTMLElement | null): void {
   // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) --
   // same mechanism, reached from a different click: the "Custom size..." entry inside
   // RichTextTableMenu's own reka Popover. Verified this session (see RichTextTableMenu.vue's own
   // onPopoverCloseAutoFocus comment for the source read): that Popover's own close-auto-focus
   // handler would otherwise refocus its `[data-cmd="table"]` trigger button -- a descendant of
   // <main> -- right after this dialog's own aria-hidden background applies, reintroducing the
-  // warning; RichTextTableMenu.vue now suppresses that one restore itself. What this blur call
-  // still does not fix: the target it captures here (whatever was focused inside the now-closing
-  // popover) is removed from the DOM before any cancel of THIS dialog can run, so
-  // refocusAfterDialogCancel()'s own document.body.contains(target) guard fails and that cancel
-  // restore is a no-op -- accepted for now, not fixed, and worth a live check alongside the other
-  // open items.
-  blurActiveElementBeforeDialog()
+  // warning; RichTextTableMenu.vue suppresses that one restore itself.
+  //
+  // Suppressing it is also why this needs an explicit restore. The element the default capture
+  // would take is the "Custom size..." button inside the popover, which unmounts with the popover,
+  // and nothing else puts focus back on the trigger -- so a cancel left focus on <body> (observed
+  // in the running admin). RichTextTableMenu hands over its own `[data-cmd="table"]` trigger with
+  // the event instead: that button is what opened this flow, it stays mounted throughout, and it
+  // is where the popover's own unsuppressed restore would have gone.
+  blurActiveElementBeforeDialog(restoreFocusTo ? focusIfStillInDocument(restoreFocusTo) : undefined)
   sizeDialogOpen.value = true
 }
 
@@ -698,7 +707,16 @@ function onImageAction(action: ImageAction): void {
   // itself focused (a right-click never blurs a contenteditable the way a left-click elsewhere
   // does), and this dialog's own aria-hidden background would otherwise be applied while that is
   // still true.
-  blurActiveElementBeforeDialog()
+  //
+  // The explicit restore is not the same element the blur captures. By the time this menu item is
+  // clicked, focus is on the reka context-menu item itself, which unmounts with the menu -- so the
+  // default capture restores nothing and a cancel left focus on <body> (observed in the running
+  // admin). editor.commands.focus() is the right destination instead: the image is still the
+  // NodeSelection this dialog was opened against, and the focus command leaves that selection
+  // exactly as it is -- read this session in the installed @tiptap/core source, where a call with
+  // position === null over a selection that is not a TextSelection takes the early `delayedFocus()`
+  // branch and never touches tr.setSelection at all.
+  blurActiveElementBeforeDialog(() => { editor.value?.commands.focus() })
   imageAltDialogOpen.value = true
 }
 
@@ -712,7 +730,7 @@ function onImageAltDialogSubmit(alt: string): void {
   // The chain above already refocuses the editor -- clear the captured pre-dialog target (here,
   // the editor itself) rather than have onImageAltDialogOpenChange's own trailing update:open(false)
   // restore it a second time, or a later, unrelated dialog's own cancel inherit a stale one.
-  elementToRefocusOnDialogCancel = null
+  restoreFocusOnDialogCancel = null
 }
 
 // Unlike the link dialog, this one has no third "remove" outcome and no async settle protocol to
@@ -720,7 +738,7 @@ function onImageAltDialogSubmit(alt: string): void {
 // cancel-close, which v-model:open sugar alone cannot do (RichTextImageAltDialog.submit() emits
 // 'submit' then its own trailing 'update:open'(false), same shape as RichTextLinkDialog's submit;
 // see that component's submit()). onImageAltDialogSubmit above always runs first and always clears
-// elementToRefocusOnDialogCancel, so by the time this runs for a submit-driven close there is
+// restoreFocusOnDialogCancel, so by the time this runs for a submit-driven close there is
 // nothing left to restore -- refocusAfterDialogCancel() is only ever a real restore for a plain
 // Cancel/Escape/overlay-click close.
 function onImageAltDialogOpenChange(open: boolean): void {

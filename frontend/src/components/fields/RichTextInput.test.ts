@@ -8,6 +8,7 @@ import RichTextInput from './RichTextInput.vue'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
 import RichTextLinkDialog from './RichTextLinkDialog.vue'
+import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
 import type { ImageAction } from './richTextImageActions'
 import { fileContentPath } from '../../lib/richTextImages'
 import { buttonVariants } from '@/components/ui/button'
@@ -1046,19 +1047,22 @@ describe('RichTextInput', () => {
   // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
   // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
   // fails every time here because of that same blur, leaving triggerElement permanently unset.
-  // RichTextInput.vue's own elementToRefocusOnDialogCancel/refocusAfterDialogCancel pair is the
+  // RichTextInput.vue's own restoreFocusOnDialogCancel/refocusAfterDialogCancel pair is the
   // only focus restoration actually happening on this path; this test pins that it lands
   // correctly, not reka's own (dead, for this case) mechanism.
-  // Captures document.activeElement itself right before the dialog opens, rather than
-  // assuming it is the editor specifically: runImage() below calls onImageAction() directly,
-  // bypassing reka's own ContextMenuItem @select handling entirely (deliberately, per
-  // RichTextContextMenu.vue's own comment on why runTable/runImage exist), so this does not also
-  // reproduce whatever focus-restoring that real menu-item interaction does on its own way out --
-  // only the mechanism this test actually targets, which is agnostic to what was focused going in.
+  //
+  // The destination asserted is the EDITOR specifically, not "whatever held focus before". In the
+  // running admin that element is the reka context-menu item the user clicked, which unmounts with
+  // the menu before any cancel can run -- observed live as a cancel leaving focus on <body>, which
+  // is why onImageAction now passes an explicit editor.commands.focus() restore instead of relying
+  // on the default capture. runImage() below calls onImageAction() directly, bypassing reka's own
+  // ContextMenuItem @select handling (deliberately, per RichTextContextMenu.vue's own comment on
+  // why runTable/runImage exist), so this test does not reproduce that unmount itself -- the test
+  // below it does.
   // Simulating the dialog's own trailing update:open(false) via $emit, rather than hunting for its
   // untagged Cancel button by text, since the mechanism under test is RichTextInput's OWN
   // close-change handler, not that button's wiring.
-  it('restores focus to whatever held it before the alt dialog opened, when the dialog is cancelled', async () => {
+  it('restores focus to the editor when the alt dialog is cancelled', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
@@ -1069,7 +1073,6 @@ describe('RichTextInput', () => {
     vm.editor.commands.focus()
     await waitForEditorReactivity()
     await dispatchContextMenu(w.get('.ProseMirror img').element)
-    const preOpenFocus = document.activeElement
     const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
       runImage: (action: ImageAction) => void
     }
@@ -1091,7 +1094,43 @@ describe('RichTextInput', () => {
     // actually flushes the `open` prop change that tears them down, and a synchronous focus() call
     // made before that would be immediately overridden by the still-active trap.
     await nextTick()
-    expect(document.activeElement).toBe(preOpenFocus)
+    // A second wait, unlike the link dialog's own test below: this restore is now
+    // editor.commands.focus(), whose real dom.focus() tiptap defers a further
+    // requestAnimationFrame (see waitForEditorReactivity's own comment above).
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
+    w.unmount()
+    container.remove()
+  })
+
+  // The live-observed defect the explicit restore exists for, reproduced directly: the element
+  // holding focus when the alt dialog opens is a context-menu item that is gone by the time the
+  // cancel runs, so a restore built from that capture focuses a detached node and leaves focus on
+  // <body>. Focusing a stand-in button that is then removed makes this test fail if onImageAction
+  // ever reverts to the default "focus whatever was focused before" capture.
+  it('restores focus to the editor even when the element focused before the alt dialog is unmounted', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
+      global: globalOpts, attachTo: container,
+    })
+    await flushPromises()
+    const menuItem = document.body.appendChild(document.createElement('button'))
+    menuItem.focus()
+    expect(document.activeElement).toBe(menuItem)
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    // Stand-in for reka's own context menu unmounting on its way out.
+    menuItem.remove()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    w.findComponent(RichTextImageAltDialog).vm.$emit('update:open', false)
+    await nextTick()
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
     container.remove()
   })
@@ -1381,7 +1420,7 @@ describe('RichTextInput', () => {
   // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
   // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
   // fails every time here because of that same blur, leaving triggerElement permanently unset.
-  // RichTextInput.vue's own elementToRefocusOnDialogCancel/refocusAfterDialogCancel pair is the
+  // RichTextInput.vue's own restoreFocusOnDialogCancel/refocusAfterDialogCancel pair is the
   // only focus restoration actually happening on this path. Simulating the dialog's own trailing
   // update:open(false) via $emit, matching what an Escape press or an overlay click would
   // trigger, since the mechanism under test is RichTextInput's OWN close-change handler
@@ -1408,6 +1447,36 @@ describe('RichTextInput', () => {
     // made before that would be immediately overridden by the still-active trap.
     await nextTick()
     expect(document.activeElement).toBe(editorEl)
+    w.unmount()
+    container.remove()
+  })
+
+  // The table-size dialog's own half of the same live-observed defect. Its pre-dialog focus is the
+  // "Custom size..." entry inside RichTextTableMenu's popover, which closes on the way into the
+  // dialog -- and that popover's own close-auto-focus restore is deliberately suppressed on this
+  // path (see RichTextTableMenu.vue), so nothing else puts focus back either: cancelling left
+  // focus on <body>. RichTextTableMenu hands its own `[data-cmd="table"]` trigger over with the
+  // event; this pins that RichTextInput restores to exactly that button.
+  //
+  // Button is un-stubbed for this one test, unlike every other mount in this file: the shared stub
+  // renders a `<button-stub>`, which is an HTMLUnknownElement and therefore not focusable in jsdom,
+  // so a focus() call on it silently leaves document.activeElement on <body> and the test would
+  // fail for a reason that has nothing to do with the code under test.
+  it('restores focus to the table toolbar button when the table-size dialog is cancelled', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p>a</p>' },
+      global: { ...globalOpts, stubs: { ...stubs, Button: false } },
+      attachTo: container,
+    })
+    await flushPromises()
+    const trigger = w.get('[data-cmd="table"]').element
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cmd="tableCustomSize"]').trigger('click')
+    await flushPromises()
+    w.findComponent(RichTextTableSizeDialog).vm.$emit('update:open', false)
+    await nextTick()
+    expect(document.activeElement).toBe(trigger)
     w.unmount()
     container.remove()
   })
