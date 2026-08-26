@@ -24,9 +24,31 @@ function onPick(size: { rows: number; cols: number }): void {
   open.value = false
 }
 
+// Set only for the custom-size path below, checked and cleared by onPopoverCloseAutoFocus --
+// never for onPick's own close, where restoring focus to this popover's own trigger button is
+// exactly the correct, wanted behaviour.
+let suppressCloseAutoFocus = false
+
 function onCustomSize(): void {
+  suppressCloseAutoFocus = true
   emit('customSize')
   open.value = false
+}
+
+// Verified this session in the installed reka-ui@2.10.3 source (Popover/PopoverContentNonModal.js
+// and Popover/PopoverTrigger.js): this popover's own onCloseAutoFocus handler, unless
+// preventDefault()'d here, calls rootContext.triggerElement.value?.focus() -- and
+// PopoverTrigger's own onMounted sets that ref unconditionally to its own template ref (no
+// document.body guard the way a reka Dialog's own fallback capture has), so it reliably points at
+// the `[data-cmd="table"]` button below. Left unguarded on the custom-size path specifically, that
+// restore runs after RichTextInput.vue's own openTableSizeDialog has already blurred focus away
+// and opened the size dialog -- refocusing this button (a descendant of <main>) while the size
+// dialog's own aria-hidden background is still applied, reintroducing the exact warning that
+// batch was fixing, on this one path.
+function onPopoverCloseAutoFocus(event: Event): void {
+  if (!suppressCloseAutoFocus) return
+  suppressCloseAutoFocus = false
+  event.preventDefault()
 }
 </script>
 
@@ -41,7 +63,7 @@ function onCustomSize(): void {
         <Table />
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="flex w-auto flex-col gap-1 p-2">
+    <PopoverContent class="flex w-auto flex-col gap-1 p-2" @close-auto-focus="onPopoverCloseAutoFocus">
       <RichTextTableGrid @pick="onPick" />
       <button type="button" data-cmd="tableCustomSize"
         class="rounded px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
