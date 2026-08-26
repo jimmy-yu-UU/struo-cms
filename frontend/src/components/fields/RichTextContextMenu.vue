@@ -26,7 +26,7 @@ defineOptions({ name: 'RichTextContextMenu' })
 // the time that `nextTick()` resolves, so `target` arrives in time for this render even though
 // `disabled` does not arrive in time for that earlier, synchronous read. Only a flip deferred past
 // that microtask boundary (a macrotask, e.g. `setTimeout`) would still be missed --
-// RichTextContextMenu.test.ts's capture-phase-routing-timing tests pin exactly this pair.
+// RichTextContextMenu.test.ts's `target routing timing` describe block pins exactly this pair.
 const props = defineProps<{ disabled?: boolean; target: 'table' | 'image' | null }>()
 const emit = defineEmits<{
   (e: 'tableAction', action: TableAction): void

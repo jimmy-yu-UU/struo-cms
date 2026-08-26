@@ -1009,6 +1009,44 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
+  // Defect 5 (RT-6 final review): onImageAltDialogSubmit used to justify itself with "the dialog
+  // offers no path back into the editor that could move the selection while it is open". This
+  // component's own watch(() => props.modelValue) -> setContent() is exactly such a path, and it
+  // is reachable with the dialog open -- an autosave round-trip, a revision revert, a language
+  // switch all push a new model value from outside.
+  //
+  // What that push actually does was measured here rather than assumed, and it is worse than the
+  // review predicted: the selection does NOT decay into a text selection, it stays a
+  // NodeSelection and ProseMirror maps it onto the REPLACEMENT document's image. So the obvious
+  // guard -- "is the selection still a NodeSelection on an image" -- passes, and the alt is
+  // written to the wrong picture. Confirmed by running this exact test against that weaker guard:
+  // the editor's HTML came back as
+  // <img src="https://example.com/dog.png" alt="new alt">. The shipped guard compares node
+  // identity instead, which is what makes this test fail without it.
+  it('does not write the alt onto a different image when an external model push replaces the content while the dialog is open', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="old"></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    await flushPromises()
+    // The external push, arriving while the dialog sits open.
+    await w.setProps({ modelValue: '<p><img src="https://example.com/dog.png" alt="old"></p>' })
+    await flushPromises()
+    await w.get('[data-testid="alt"]').setValue('new alt')
+    await w.get('[data-cmd="altSubmit"]').trigger('click')
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    expect(vm.editor.getHTML()).toContain('src="https://example.com/dog.png"')
+    expect(vm.editor.getHTML()).not.toContain('new alt')
+    w.unmount()
+  })
+
   // Defect 3 (RT-6 review fix), the image-alt-dialog half: a right-click never blurs a
   // contenteditable the way a left-click elsewhere does, so the ProseMirror editor is still
   // focused when the context menu's "edit alt" action runs -- reka's DialogContentModal applies
@@ -1041,12 +1079,17 @@ describe('RichTextInput', () => {
   })
 
   // The other half of the same review fix: blurring to <body> on its own leaves reka's own
-  // DialogContentModal.js unable to restore focus on a plain cancel -- verified this session that
-  // its own onCloseAutoFocus handler unconditionally preventDefault()s FocusScope's own restore
-  // (making that one dead code for a modal dialog), and instead calls
+  // DialogContentModal.js unable to restore focus on a plain cancel. Read this session in the
+  // installed reka-ui@2.10.3 source: its onCloseAutoFocus handler is
+  // `if (!event.defaultPrevented) { event.preventDefault(); triggerElement.value?.focus() }` --
+  // GUARDED, not unconditional as an earlier round of this comment claimed, though nothing here
+  // prevents that event first so it does still run every time, making FocusScope's own fallback
+  // restore dead for a modal dialog. What it then calls is
   // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
   // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
   // fails every time here because of that same blur, leaving triggerElement permanently unset.
+  // (DialogContentModal's own `watch(() => props.present, ...)` is a third path to that same
+  // unset-triggerElement no-op; see RichTextInput.vue's own comment for the full enumeration.)
   // RichTextInput.vue's own restoreFocusOnDialogCancel/refocusAfterDialogCancel pair is the
   // only focus restoration actually happening on this path; this test pins that it lands
   // correctly, not reka's own (dead, for this case) mechanism.
@@ -1463,12 +1506,17 @@ describe('RichTextInput', () => {
   })
 
   // The other half of the same review fix: blurring to <body> on its own leaves reka's own
-  // DialogContentModal.js unable to restore focus on a plain cancel -- verified this session that
-  // its own onCloseAutoFocus handler unconditionally preventDefault()s FocusScope's own restore
-  // (making that one dead code for a modal dialog), and instead calls
+  // DialogContentModal.js unable to restore focus on a plain cancel. Read this session in the
+  // installed reka-ui@2.10.3 source: its onCloseAutoFocus handler is
+  // `if (!event.defaultPrevented) { event.preventDefault(); triggerElement.value?.focus() }` --
+  // GUARDED, not unconditional as an earlier round of this comment claimed, though nothing here
+  // prevents that event first so it does still run every time, making FocusScope's own fallback
+  // restore dead for a modal dialog. What it then calls is
   // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
   // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
   // fails every time here because of that same blur, leaving triggerElement permanently unset.
+  // (DialogContentModal's own `watch(() => props.present, ...)` is a third path to that same
+  // unset-triggerElement no-op; see RichTextInput.vue's own comment for the full enumeration.)
   // RichTextInput.vue's own restoreFocusOnDialogCancel/refocusAfterDialogCancel pair is the
   // only focus restoration actually happening on this path. Simulating the dialog's own trailing
   // update:open(false) via $emit, matching what an Escape press or an overlay click would
