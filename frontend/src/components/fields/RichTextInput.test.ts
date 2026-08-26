@@ -305,6 +305,34 @@ describe('RichTextInput', () => {
     expect(html).toContain(`src="${fileContentPath('abc')}"`)
   })
 
+  it('serializes an image width set via setImage, so a resized image survives the round trip', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.setImage({ src: 'https://example.com/cat.png', width: 480, height: 320 })
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect(html).toContain('width="480"')
+  })
+
+  // Task 1's sanitizer allowlist has no `height` at all, so a naive reading of this test would
+  // pass even if the editor still emitted one -- the backend would just strip it on save. What
+  // this guards is different: getHTML() must already agree with the stored value *before* any
+  // round trip, because the `watch(() => props.modelValue)` comparison further down diffs the
+  // two directly. Proof this isn't vacuous: deleting the `rendered: false` override below turns
+  // this red (confirmed in this session -- see task-2-report.md).
+  it('never serializes height, even when the inserted node carries one', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.setImage({ src: 'https://example.com/cat.png', width: 480, height: 320 })
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect(html).not.toContain('height')
+  })
+
   it('sets text alignment via the toolbar', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
