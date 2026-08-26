@@ -20,7 +20,7 @@ import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
 import RichTextLinkDialog from './RichTextLinkDialog.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
-import RichTextTableContextMenu from './RichTextTableContextMenu.vue'
+import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
 import {
   TOOLBAR_BEFORE_HEADINGS, TOOLBAR_BEFORE_COLOR, TOOLBAR_AFTER_TABLE,
@@ -395,7 +395,7 @@ const contentRoot = ref<HTMLElement | null>(null)
 //     of suppressing that here is a possibly-stale native menu mid-composition -- nothing about
 //     table state.
 //   - inside a table on a disabled (read-only) field: let the event continue on its own, doing
-//     nothing here. RichTextTableContextMenu already forwards `disabled` to its own
+//     nothing here. RichTextContextMenu already forwards `disabled` to its own
 //     ContextMenuTrigger, which will decline to open ours and fall back to the native menu, so
 //     there is nothing left for this handler to add -- and a disabled/read-only editor should not
 //     have its selection moved at all, which is why the focus-the-cell step below is skipped too.
@@ -408,14 +408,14 @@ const contentRoot = ref<HTMLElement | null>(null)
 // checked the installed reka-ui@2.10.3 source directly (ContextMenuTrigger.js) --
 // `handleContextMenu` reads `disabled.value` synchronously as its very first statement, before its
 // own `await nextTick()`. That value arrives as a PROP, forwarded through three component
-// boundaries (this file's `disabled` -> RichTextTableContextMenu's own `disabled` prop -> the
+// boundaries (this file's `disabled` -> RichTextContextMenu's own `disabled` prop -> the
 // vendored ui/context-menu ContextMenuTrigger's `useForwardProps` -> reka's own `toRefs(props)`).
 // Vue applies prop updates to a child component on its job queue, a microtask -- and DOM event
 // dispatch from the capture phase to the bubble phase is synchronous, so no microtask can run in
 // between. A ref flipped in this handler would still read stale at reka's guard, for the same
 // event, every time. stopPropagation() sidesteps both problems at once.
 //
-// The handler MUST sit on an element outside RichTextTableContextMenu, not on the element reka
+// The handler MUST sit on an element outside RichTextContextMenu, not on the element reka
 // binds to. stopPropagation() does not stop other listeners on the SAME element -- only
 // stopImmediatePropagation() does, and at-target listeners fire in registration order, which is
 // not ours to control. From a strict ancestor, the capture listener always runs first and
@@ -460,10 +460,19 @@ defineExpose({ editor, insertImage })
         :editor="editor" :disabled="disabled" @run="runCommand(cmd)" />
     </div>
     <div ref="contentRoot" @contextmenu.capture="onContentContextMenu">
-      <RichTextTableContextMenu :disabled="disabled" @action="onTableAction">
+      <!--
+        `target` is pinned to the literal "table" here rather than driven by state: this task
+        (RT-6 task 4) only generalizes the menu component itself, and onContentContextMenu above
+        still only ever lets an event through when isInEditorTable says so (anything else gets
+        stopPropagation'd before reka ever sees it, per that function's own comment) -- so the
+        menu only ever actually opens for a table hit, exactly as before this change. Routing
+        `target` to 'image' (and resolving it from isEditorImage) is task 5's job; wiring it here
+        now would make that task's own diff unreviewable.
+      -->
+      <RichTextContextMenu :disabled="disabled" target="table" @table-action="onTableAction">
         <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
           @click.self="editor?.chain().focus().run()" />
-      </RichTextTableContextMenu>
+      </RichTextContextMenu>
     </div>
     <!--
       Not inside .rich-text__toolbar: this is a floating overlay that stays out of the DOM until a
