@@ -186,8 +186,12 @@ upstream, `@tiptap/extension-image`'s own `resize` option configured on the `Ima
 directions: [...all eight] }`), which swaps in `@tiptap/core`'s `ResizableNodeView` for every image
 node. `alwaysPreserveAspectRatio: true` locks every drag to the image's own ratio — upstream's own
 default only does that while Shift is held — and it applies the same way to all eight handles: which
-one is grabbed only decides which edge or corner the drag anchors to, not whether the ratio holds.
-`minWidth` keeps a handle from shrinking the image into an unusably small target.
+one is grabbed only decides which axis is primary for the ratio math, not whether the ratio holds.
+It does not decide anything about position, either: `ResizableNodeView` never repositions the
+element for any handle, so every drag grows or shrinks the image from its top-left corner — dragging
+the left handle inward does not pin the right edge in place and grow leftward the way a design
+tool's handles usually do. `minWidth` keeps a handle from shrinking the image into an unusably small
+target.
 
 What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
 and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`

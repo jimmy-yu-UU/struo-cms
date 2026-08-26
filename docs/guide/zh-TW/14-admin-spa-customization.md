@@ -161,8 +161,10 @@ StruoCMS 自己寫的專屬 node view:它完全來自上游——`@tiptap/extens
 alwaysPreserveAspectRatio: true, directions: [...全部八個] }`),換上 `@tiptap/core` 的
 `ResizableNodeView` 來處理每一個圖片節點。`alwaysPreserveAspectRatio: true` 讓每一次拖曳都鎖定
 圖片自己的長寬比——上游自己的預設值只有按住 Shift 時才會這樣做——而且這對八個控制點的效果完全
-一樣:抓住哪一個控制點只決定拖曳是以哪個邊或哪個角為錨點，不會決定長寬比要不要鎖定。`minWidth`
-則避免某個控制點把圖片拖成一個小到無法操作的目標。
+一樣:抓住哪一個控制點只決定長寬比計算時哪個軸是主軸，不會決定長寬比要不要鎖定。位置也一樣不
+受影響:`ResizableNodeView` 對任何一個控制點都不會重新定位元素本身，所以每一次拖曳都是從圖片的
+左上角開始放大或縮小——往內拖左邊的控制點,並不會把右邊固定住再往左長,不是一般設計工具那種控制
+點的行為。`minWidth` 則避免某個控制點把圖片拖成一個小到無法操作的目標。
 
 本 repo 提供的是控制點的外觀，不是它的行為。`ResizableNodeView` 無條件地附加並擺放每一個控制點——
 用絕對定位加上 `data-resize-handle` 屬性——但完全沒有設定它自己的大小、背景色或游標，所以沒有 CSS
