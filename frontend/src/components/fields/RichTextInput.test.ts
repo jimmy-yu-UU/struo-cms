@@ -5,6 +5,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import type { Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
+import richTextInputSource from './RichTextInput.vue?raw'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
 import RichTextLinkDialog from './RichTextLinkDialog.vue'
@@ -1475,4 +1476,52 @@ describe('RichTextInput', () => {
     w.unmount()
     container.remove()
   })
+})
+
+// A source-level assertion, deliberately, and this is the honest ceiling for it: the resize handles
+// are positioned entirely by CSS, jsdom performs no layout, and this component's scoped styles are
+// never even injected in the test environment (document.styleSheets is empty when it mounts), so
+// nothing here can measure where a handle lands. What it CAN pin is that the declarations which do
+// the positioning are still present and still on the right axis.
+//
+// The regression this exists for actually shipped: upstream writes both ends of an edge handle's
+// long axis as INLINE styles (left:0 and right:0 for top/bottom), which over-constrains a
+// fixed-size box, so the browser drops one end and the handle collapses onto a corner. Measured
+// against the compiled bundle, the eight directions produced four distinct positions -- the feature
+// looked complete because eight handle ELEMENTS existed. Auto margins on the over-constrained axis
+// are what separate them, and they are also the only fix that works from a stylesheet at all: an
+// inline style outranks any non-important rule, so overriding left/right here would be discarded
+// silently. Verifying the positions themselves needs a real browser.
+describe('RichTextInput resize handle positioning contract', () => {
+  // ?raw so the assertions read the file's own text: the compiled component carries no styles here.
+  // Comments are stripped first, and the slice starts at the FIRST <style scoped>, because the
+  // block's own prose mentions that tag and uses the word auto -- either would otherwise decide
+  // these assertions instead of the declarations doing.
+  const style = richTextInputSource
+    .slice(richTextInputSource.indexOf('<style scoped>'))
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+
+  function declarationsFor(direction: string): string {
+    const rule = style
+      .split('}')
+      .find((block: string) => block.includes(`[data-resize-handle="${direction}"]`))
+    return rule ?? ''
+  }
+
+  it.each(['top', 'bottom'])('centers the %s edge handle on its horizontal axis', (direction) => {
+    expect(declarationsFor(direction)).toContain('margin-inline: auto')
+  })
+
+  it.each(['left', 'right'])('centers the %s edge handle on its vertical axis', (direction) => {
+    expect(declarationsFor(direction)).toContain('margin-block: auto')
+  })
+
+  // The corners must stay pinned to their corners: an auto margin on either axis would centre them
+  // too, and the eight positions would collapse again from the other direction.
+  it.each(['top-left', 'top-right', 'bottom-left', 'bottom-right'])(
+    'leaves the %s corner handle uncentered',
+    (direction) => {
+      expect(declarationsFor(direction)).not.toContain('auto')
+    },
+  )
 })
