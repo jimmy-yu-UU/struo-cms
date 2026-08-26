@@ -210,15 +210,20 @@ admin's reading measure, there is no editor path to an image wider than that: a 
 past the column, so the only ways to get one are to widen the editor's own measure or to write the
 `width` attribute directly through the API.
 
-What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
-and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`
-attribute — but sets no size, background, or cursor of its own, so without CSS every handle exists in
-the DOM but is 0×0, invisible, and unclickable. `RichTextInput.vue`'s own `<style scoped>` block
-supplies that styling, keyed off the `[data-resize-handle]` attribute selector (size, background
-color, border radius, a cursor for each of the eight directions). Selecting the image adds nothing
-to the handles themselves — they are just as visible and draggable unselected — beyond a separate
+What this repo supplies is the handles' appearance, plus one part of their positioning.
+`ResizableNodeView` attaches every handle unconditionally — absolute positioning plus a
+`data-resize-handle` attribute — but sets no size, background, or cursor of its own, so without CSS
+every handle exists in the DOM but is 0×0, invisible, and unclickable. `RichTextInput.vue`'s own
+`<style scoped>` block supplies that styling, keyed off the `[data-resize-handle]` attribute
+selector (size, background color, border radius, a cursor for each of the eight directions), and
+also gives the four edge handles an `auto` margin, which is what places them on their midpoints.
+That margin is not cosmetic: upstream writes both ends of an edge handle's long axis as inline
+styles, so removing it collapses each of those four onto the corner beside it and the field offers
+four grabbable positions instead of eight. Selecting the image adds nothing to the handles
+themselves — they are just as visible and draggable unselected — beyond a separate
 outline rule on `[data-resize-container].ProseMirror-selectednode`. A fork that wants different
-handle styling edits those rules, in that file — there is no separate handle component to swap.
+handle styling edits those rules, in that file — there is no separate handle component to swap, and
+the auto margins have to survive the edit.
 
 One coupling to know about before editing that style block: it also hard-codes a `2em` vertical
 margin on `[data-resize-container]`, and zeroes the margin `@tailwindcss/typography` puts on the
@@ -241,9 +246,9 @@ this template ships rather than properties a fork has to keep. A fork can widen 
 changing the visual — a transparent `::before` on `[data-resize-handle]`, sized up and centered on the
 10px dot — and should check the result against a small image, since every handle is positioned on the
 image's own edges and enlarged zones have nothing keeping them apart once the image itself is not much
-bigger than they are. A fork can also add a width control
-to the image context menu. Neither substitutes for the other: enlarging a target does nothing for a
-keyboard user, and a menu control does nothing for target size.
+bigger than they are. A fork can also add a width control to the image context menu. Neither
+substitutes for the other: enlarging a target does nothing for a keyboard user, and a menu control
+does nothing for target size.
 
 `ResizableNodeView` also wraps the `<img>` in two container `<div>`s (`[data-resize-container]` around
 `[data-resize-wrapper]`, with the handle elements as siblings of the `<img>` inside the wrapper) to
