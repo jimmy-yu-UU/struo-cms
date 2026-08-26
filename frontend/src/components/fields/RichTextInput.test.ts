@@ -892,4 +892,24 @@ describe('RichTextInput', () => {
     w.unmount()
     container.remove()
   })
+
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference.
+  //
+  // Mounted attached, unlike most tests in this file, and that is load-bearing: reka resolves the
+  // id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
+  it('renders a description on the image dialog, so reka does not warn about a dangling aria-describedby', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    await w.get('[data-cmd="image"]').trigger('click')
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+    w.unmount()
+    container.remove()
+  })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { X } from '@lucide/vue'
@@ -168,6 +168,12 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
       <DialogScrollContent class="max-w-[min(78vw,1300px)] max-[960px]:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>{{ t('fields.selectFiles') }}</DialogTitle>
+          <!--
+            Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+            whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+            dialog without one leaves assistive tech following a dangling reference.
+          -->
+          <DialogDescription>{{ t('fields.selectFilesDescription') }}</DialogDescription>
         </DialogHeader>
         <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
         <Input v-model="search" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" />

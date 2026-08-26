@@ -24,6 +24,7 @@ function mockList(opts: { folders?: unknown[]; folderError?: boolean } = {}) {
 const enMessages = {
   fields: {
     noFileSelected: 'No file selected', selectFile: 'Select', clear: 'Clear', selectAFile: 'Select a file',
+    selectAFileDescription: 'Browse or search your uploaded files, then choose one to use for this field.',
     searchFiles: 'Search files…', loadFilesFailed: 'Failed to load files.', selectAFolder: 'Select a folder',
     namePairSeparator: ': ',
   },
@@ -381,6 +382,30 @@ describe('FilePicker', () => {
       await flushPromises()
       const search = w.get('.file-picker__search')
       expect(search.attributes('aria-label')).toBe(zhMessages.fields.searchFiles)
+    })
+
+    // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+    // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+    // not cosmetic: without a description, assistive tech follows a dangling reference.
+    //
+    // Mounted attached, unlike every other test in this file, and that is load-bearing: reka
+    // resolves the id with document.getElementById, which cannot see a detached wrapper. Mounted the
+    // usual way this assertion fails whether or not the description exists, so it would prove nothing.
+    it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
+      setupStores()
+      mockList()
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const container = document.body.appendChild(document.createElement('div'))
+      const w = mount(FilePicker, {
+        props: { modelValue: null },
+        global: globalDialogContent,
+        attachTo: container,
+      })
+      await (w.vm as unknown as { openDialog: () => Promise<void> }).openDialog()
+      await flushPromises()
+      const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+      expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+      container.remove()
     })
   })
 })

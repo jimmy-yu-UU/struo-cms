@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import MediaMoveDialog from './MediaMoveDialog.vue'
 import type { FolderRow } from '../../lib/folderTree'
@@ -9,7 +9,11 @@ const i18n = createI18n({
   legacy: false,
   locale: 'en',
   fallbackLocale: 'en',
-  messages: { en: { media: { moveTo: 'Move to…', moveRoot: 'Root', moveSubmit: 'Move' } } },
+  messages: { en: { media: {
+    moveTo: 'Move to…',
+    moveDescription: 'Choose a destination folder to move the selected item(s) into.',
+    moveRoot: 'Root', moveSubmit: 'Move',
+  } } },
 })
 
 // a is at root, b is a's child, c is b's child (so b's grandchild-of-root), d is a second root
@@ -121,5 +125,27 @@ describe('MediaMoveDialog', () => {
     })
     const ids = w.findAll('[data-test="move-option"]').map((o) => o.attributes('data-folder-id'))
     expect(ids).toEqual(['__root__', 'a', 'b', 'c', 'd'])
+  })
+
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference.
+  //
+  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
+  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
+  it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(MediaMoveDialog, {
+      props: { visible: true, folders, payload: { files: [], folders: [] } },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      attachTo: container,
+    })
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+    w.unmount()
+    container.remove()
   })
 })

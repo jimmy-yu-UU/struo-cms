@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { folderPath, type FolderRow } from '../../lib/folderTree'
 import { canMoveFolder, type MovePayload } from '../../lib/mediaMove'
@@ -101,6 +101,12 @@ defineExpose({ choose })
     <DialogContent class="max-w-[min(90vw,420px)] sm:max-w-[min(90vw,420px)]">
       <DialogHeader>
         <DialogTitle>{{ t('media.moveTo') }}</DialogTitle>
+        <!--
+          Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+          dialog without one leaves assistive tech following a dangling reference.
+        -->
+        <DialogDescription>{{ t('media.moveDescription') }}</DialogDescription>
       </DialogHeader>
       <ul class="move-option-list grid max-h-[60vh] gap-1 overflow-y-auto">
         <li v-for="opt in options" :key="opt.id ?? '__root__'">

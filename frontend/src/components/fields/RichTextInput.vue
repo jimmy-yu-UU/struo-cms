@@ -11,7 +11,7 @@ import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { Placeholder } from '@tiptap/extensions'
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextBubbleMenu from './RichTextBubbleMenu.vue'
@@ -382,6 +382,12 @@ defineExpose({ editor, insertImage })
       <DialogScrollContent class="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{{ t('fields.richtext.insertImageTitle') }}</DialogTitle>
+          <!--
+            Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+            whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+            dialog without one leaves assistive tech following a dangling reference.
+          -->
+          <DialogDescription>{{ t('fields.richtext.insertImageDescription') }}</DialogDescription>
         </DialogHeader>
         <p v-if="imageError" class="text-destructive" role="alert">{{ imageError }}</p>
         <Input v-model="imageSearch" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" class="my-1" @update:model-value="debouncedLoadImages" />

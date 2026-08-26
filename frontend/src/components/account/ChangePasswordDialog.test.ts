@@ -248,4 +248,47 @@ describe('ChangePasswordDialog', () => {
     await flushPromises()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: en.password.copyFailed }))
   })
+
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference. This dialog
+  // is the one case in this batch where a description already existed (resetDescription, for the
+  // admin-reset path) -- it was still v-if="!isSelf", so the self path (targetUserId === the
+  // signed-in user, the default case in beforeEach) rendered no description at all and warned.
+  //
+  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
+  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
+  it('renders a description in self mode too, so reka does not warn about a dangling aria-describedby', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(ChangePasswordDialog, {
+      props: { open: true, targetUserId: 'self-id' },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      attachTo: container,
+    })
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+    w.unmount()
+    container.remove()
+  })
+
+  // The admin-reset path's own DialogDescription (resetDescription) predates this batch, but it
+  // had never been checked against reka's actual warning under an attached mount -- this closes
+  // that gap for the other branch of the v-if/v-else pair.
+  it('renders a description in admin-reset mode too, so reka does not warn about a dangling aria-describedby', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(ChangePasswordDialog, {
+      props: { open: true, targetUserId: 'other-id' },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      attachTo: container,
+    })
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+    w.unmount()
+    container.remove()
+  })
 })
