@@ -4,7 +4,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import { Copy, Trash2 } from '@lucide/vue'
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -191,6 +191,12 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
     <DialogScrollContent class="max-w-[min(78vw,1100px)] max-[960px]:max-w-[95vw]">
       <DialogHeader>
         <DialogTitle>{{ $t('media.detailTitle') }}</DialogTitle>
+        <!--
+          Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+          dialog without one leaves assistive tech following a dangling reference.
+        -->
+        <DialogDescription>{{ $t('media.detailDescription') }}</DialogDescription>
       </DialogHeader>
 
       <div v-if="file" class="md-grid">

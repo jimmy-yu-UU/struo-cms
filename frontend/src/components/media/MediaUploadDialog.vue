@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import MediaUploadDropzone from './MediaUploadDropzone.vue'
 
 defineProps<{ visible: boolean; folderId?: string | null }>()
@@ -25,6 +25,12 @@ const emit = defineEmits<{
     <DialogScrollContent class="max-w-[min(78vw,1100px)] max-[960px]:max-w-[95vw]">
       <DialogHeader>
         <DialogTitle>{{ $t('media.uploadTitle') }}</DialogTitle>
+        <!--
+          Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+          dialog without one leaves assistive tech following a dangling reference.
+        -->
+        <DialogDescription>{{ $t('media.uploadDescription') }}</DialogDescription>
       </DialogHeader>
       <MediaUploadDropzone :folder-id="folderId" @done="emit('done')" />
     </DialogScrollContent>
