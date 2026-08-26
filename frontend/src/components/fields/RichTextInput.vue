@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { useEditor, EditorContent, type Editor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -120,21 +120,35 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
 // branch above), Chrome logs an aria-hidden-on-an-element-whose-descendant-retains-focus warning
 // against <main> before anything else moves focus off it.
 //
-// What DOES eventually move focus, for a modal reka dialog like the ones in this file, is NOT
-// FocusScope's own `previouslyFocusedElement` restore -- verified this session that
-// DialogContentModal.js's `onCloseAutoFocus` handler unconditionally calls `event.preventDefault()`
-// on the event FocusScope dispatches for that, which is exactly what FocusScope's own cleanup
-// checks before ever running its fallback (`if (!unmountEvent.defaultPrevented) focus(...)`) --
-// so that fallback is dead code for every dialog in this file. The operative mechanism is
-// DialogContentModal's OWN restore instead: `rootContext.triggerElement.value?.focus()`, where
-// `triggerElement` is captured by DialogContentImpl's `onMounted`, guarded by
-// `getActiveElement() !== document.body`. None of this file's dialogs use a reka `<DialogTrigger>`
-// (they are all driven imperatively via `:open`), so that capture is the ONLY thing that ever sets
-// `triggerElement` -- and because blurActiveElementBeforeDialog below empties
-// document.activeElement to <body> before `open` ever flips true, that guard fails every time,
-// leaving `triggerElement` permanently unset. Both of reka's own restore paths are therefore
-// `undefined?.focus()` no-ops for every dialog here; restoreFocusOnDialogCancel and
-// refocusAfterDialogCancel below are the only focus restoration actually happening on a cancel.
+// Nothing in reka moves focus back on its own for these dialogs. Read this session in the
+// installed reka-ui@2.10.3 source: there are THREE restore paths in play, and all three are inert
+// here for the same root cause -- blurActiveElementBeforeDialog below has already emptied
+// document.activeElement down to <body> before `open` ever flips true.
+//
+// That single fact defeats all three because it also defeats their shared precondition.
+// DialogContentImpl.js's `onMounted` is the only thing that ever sets `rootContext.triggerElement`
+// for these dialogs (the other writer is a reka `<DialogTrigger>`, and none of them use one --
+// they are all driven imperatively via `:open`), and it is guarded by
+// `getActiveElement() !== document.body`. With activeElement already <body>, that guard fails
+// every time and `triggerElement` stays permanently unset. The paths:
+//   1. DialogContentModal.js's `onCloseAutoFocus` handler:
+//      `if (!event.defaultPrevented) { event.preventDefault(); triggerElement.value?.focus() }`.
+//      Note the guard -- that preventDefault() is NOT unconditional, as an earlier round of this
+//      comment claimed. It does still run on every close here, because nothing in this file (or
+//      in DialogContentImpl, which forwards FocusScope's own `unmountAutoFocus` straight through
+//      as this event) prevents it first, so the conclusion is unchanged and only the stated
+//      evidence was wrong. The focus() it then makes is `undefined?.focus()`.
+//   2. DialogContentModal.js also runs `watch(() => props.present, (isPresent, wasPresent) => {
+//      if (!isPresent && wasPresent) triggerElement.value?.focus() })` -- the same
+//      `undefined?.focus()` no-op reached by a second door.
+//   3. FocusScope's own fallback, which path 1's preventDefault() is what actually disables:
+//      FocusScope.js's cleanup does `if (!unmountEvent.defaultPrevented)
+//      focus(previouslyFocusedElement ?? document.body)`. Even without that preventDefault it
+//      would restore nothing here -- its `previouslyFocusedElement` is read with that same
+//      getActiveElement() helper, on mount and before the dialog's own autofocus runs, so it is
+//      <body> too.
+// restoreFocusOnDialogCancel and refocusAfterDialogCancel below are therefore the only focus
+// restoration actually happening on a cancel.
 //
 // Blurring synchronously, before the open flag flips, empties document.activeElement down to
 // <body> -- outside the subtree hideOthers is about to hide -- so there is nothing focused inside
@@ -301,8 +315,8 @@ function withFileIds(html: string): string {
 }
 
 // Set around a setEditable() call so its resulting onUpdate -> emitNormalized() (below) is a
-// no-op -- see setEditableWithoutEmitting() further down for why setEditable() always triggers
-// that chain and why a synchronous flag is enough to bracket it.
+// no-op -- see the onCreate comment further down (on the useEditor() options) for why
+// setEditable() always triggers that chain and why a synchronous flag is enough to bracket it.
 let suppressEmit = false
 
 function emitNormalized(): void {
@@ -478,12 +492,14 @@ const editor = useEditor({
   // in @tiptap/core/src/EventEmitter.ts) is a plain synchronous `callbacks.forEach(...)`, no
   // queueing, so the flag is still set for the entire synchronous
   // setEditable -> emit('update') -> onUpdate -> emitNormalized chain and is cleared the
-  // instant setEditable() returns.
+  // instant setEditable() returns. try/finally, here and on the watch below, not because any
+  // throw is reachable today -- none is -- but because the failure mode if one ever were is
+  // silent and permanent: the flag is component-scoped, so a single escaping throw would leave
+  // every later real edit swallowed by emitNormalized()'s guard for the life of the field.
   onCreate: ({ editor: created }) => {
     if (!props.disabled) return
     suppressEmit = true
-    created.setEditable(false)
-    suppressEmit = false
+    try { created.setEditable(false) } finally { suppressEmit = false }
   },
 })
 
@@ -508,17 +524,11 @@ watch(() => props.modelValue, (val) => {
 // and a disabled<->enabled transition is exactly as real-world-reachable as a disabled mount --
 // RBAC changes, or a form re-rendering the same field after a permission check settles -- so
 // leaving this one call unguarded would just be the same defect reached through its other door.
-// Same suppression as onCreate above and for the identical reason: setEditable() here also
-// always emits 'update' (verified once, at the declaration of suppressEmit's rationale above),
-// and a disabled<->enabled transition is exactly as real-world-reachable as a disabled mount --
-// RBAC changes, or a form re-rendering the same field after a permission check settles -- so
-// leaving this one call unguarded would just be the same defect reached through its other door.
 watch(() => props.disabled, (d) => {
   const ed = editor.value
   if (!ed) return
   suppressEmit = true
-  ed.setEditable(!d)
-  suppressEmit = false
+  try { ed.setEditable(!d) } finally { suppressEmit = false }
 })
 
 onBeforeUnmount(() => {
@@ -659,7 +669,7 @@ function onContentContextMenu(e: MouseEvent): void {
 
   const img = isEditorImage(e.target, root)
   if (img) {
-    if (props.disabled) return
+    if (props.disabled) { contextMenuTarget.value = null; return }
     // posAtDOM, not posAtCoords: unlike the table branch below, this handler already holds the
     // <img> element itself, so resolving its ProseMirror position needs no layout at all --
     // confirmed this session in the installed prosemirror-view@1.42.2 source
@@ -696,6 +706,22 @@ function onContentContextMenu(e: MouseEvent): void {
 const imageAltDialogOpen = ref(false)
 const imageAltDialogAlt = ref('')
 
+// The exact ProseMirror node the alt dialog was opened against, captured while the dialog is open
+// so the submit can prove it is still writing to that same image -- see onImageAltDialogSubmit
+// for the defect this closes and the measurement behind it. Structurally typed rather than
+// imported: @tiptap/pm is not a direct dependency of this frontend, so ProseMirror's own Node type
+// is not nameable here. Only the object's identity is ever compared -- the single member below is
+// what keeps the cast in selectedNodeOf() from widening to a bare `object`.
+type SelectedNode = { type: { name: string } }
+let imageAltDialogNode: SelectedNode | null = null
+
+function selectedNodeOf(ed: Editor): SelectedNode | null {
+  // Duck-typed on `node` rather than an `instanceof NodeSelection` check, for the same
+  // not-a-direct-dependency reason: `node` is the only property of its kind in ProseMirror's
+  // built-in selection set, so its presence IS the NodeSelection signal.
+  return (ed.state.selection as { node?: SelectedNode }).node ?? null
+}
+
 function onImageAction(action: ImageAction): void {
   const ed = editor.value
   if (!ed) return
@@ -714,6 +740,10 @@ function onImageAction(action: ImageAction): void {
   // an empty string rather than passing a non-string through to the dialog's `alt: string` prop.
   const attrs = ed.getAttributes('image')
   imageAltDialogAlt.value = typeof attrs.alt === 'string' ? attrs.alt : ''
+  // Captured here, not re-derived on submit: onImageAltDialogSubmit needs to know WHICH image the
+  // dialog was opened against, and by the time it runs that is no longer answerable from the
+  // selection alone. Cleared by onImageAltDialogOpenChange on every close.
+  imageAltDialogNode = selectedNodeOf(ed)
   // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) for
   // why this call is here: the right-click that led to this action leaves the ProseMirror editor
   // itself focused (a right-click never blurs a contenteditable the way a left-click elsewhere
@@ -733,12 +763,37 @@ function onImageAction(action: ImageAction): void {
 }
 
 function onImageAltDialogSubmit(alt: string): void {
+  const ed = editor.value
+  if (!ed) return
   // updateAttributes('image', ...), not a fresh lookup of "the" image: it applies to whichever
   // node the CURRENT selection covers matching that type (verified this session in the installed
-  // @tiptap/core source), which is still the NodeSelection the context-menu handler set, on the
-  // same reasoning as deleteSelection() above -- the dialog offers no path back into the editor
-  // that could move the selection while it is open.
-  editor.value?.chain().focus().updateAttributes('image', { alt }).run()
+  // @tiptap/core source), normally still the NodeSelection the context-menu handler set, on the
+  // same reasoning as deleteSelection() above.
+  //
+  // "The dialog offers no path back into the editor that could move the selection while it is
+  // open" -- what an earlier round of this comment asserted -- is NOT true, and the guard below
+  // is here because of it. This component's own watch(() => props.modelValue) above calls
+  // setContent() on any external model push, which resets the selection, and such a push is
+  // perfectly reachable while this dialog sits open: an autosave round-trip, a revision revert, a
+  // language switch. Left ungoverned, the submit would then apply to whatever the new selection
+  // happens to cover -- another image, or nothing at all -- rather than the image the dialog was
+  // opened against.
+  //
+  // The guard compares NODE IDENTITY against the image captured when the dialog opened, not
+  // merely "is the selection still a NodeSelection on an image". Measured in jsdom while writing
+  // the test below, which is why the weaker check is not what shipped: after
+  // setProps({ modelValue }) pushes different content into an open alt dialog, the selection is
+  // STILL a NodeSelection, still on an image -- ProseMirror maps it onto the replacement
+  // document's own image -- so a type-name check passes and the alt lands on the NEW image. Only
+  // identity separates the two, and it separates them cleanly: ProseMirror nodes are persistent
+  // and immutable, so a transaction that leaves this image alone hands the same object back,
+  // while setContent() builds an entirely new tree from the incoming HTML.
+  //
+  // Bailing out is deliberately silent, matching what the ungoverned call already did whenever
+  // the replacement selection happened to cover no image at all -- the point of the guard is that
+  // it can no longer write the alt onto the WRONG one.
+  if (!imageAltDialogNode || selectedNodeOf(ed) !== imageAltDialogNode) return
+  ed.chain().focus().updateAttributes('image', { alt }).run()
   // The chain above already refocuses the editor -- clear the captured pre-dialog target (here,
   // the editor itself) rather than have onImageAltDialogOpenChange's own trailing update:open(false)
   // restore it a second time, or a later, unrelated dialog's own cancel inherit a stale one.
@@ -755,7 +810,14 @@ function onImageAltDialogSubmit(alt: string): void {
 // Cancel/Escape/overlay-click close.
 function onImageAltDialogOpenChange(open: boolean): void {
   imageAltDialogOpen.value = open
-  if (!open) refocusAfterDialogCancel()
+  if (!open) {
+    // Every close routes through here (submit-driven and cancel alike, per the comment above), so
+    // this is the one place the captured node has to be released -- leaving it set would let a
+    // later, unrelated alt dialog inherit a stale target the same way a stale
+    // restoreFocusOnDialogCancel would.
+    imageAltDialogNode = null
+    refocusAfterDialogCancel()
+  }
 }
 
 defineExpose({ editor, insertImage })
@@ -834,10 +896,12 @@ defineExpose({ editor, insertImage })
     -->
     <RichTextTableSizeDialog :open="sizeDialogOpen" @update:open="onTableSizeDialogOpenChange" @insert="onTableInsert" />
     <!--
-      Not v-model:open sugar: a plain Cancel/Esc/overlay-click close still has to settle the
-      pending openLinkDialog promise with null (which restores focus itself -- see
-      settleLinkDialog), which sugar's own `open = $event` has no way to also do -- update:open is
-      handled explicitly instead.
+      Not v-model:open sugar: a plain Cancel/Esc/overlay-click close still has to do two further
+      things sugar's own `open = $event` has no way to do -- settle the pending openLinkDialog
+      promise with null, and restore focus. Those are two separate calls, not one:
+      settleLinkDialog only resolves the promise and deliberately has no focus side effect of its
+      own (see its declaration), so the restore is refocusAfterDialogCancel(), which
+      onLinkDialogOpenChange calls alongside it. Deleting either one breaks this path.
     -->
     <RichTextLinkDialog :open="linkDialogOpen" :href="linkDialogHref" :new-tab="linkDialogNewTab"
       :can-remove="linkDialogCanRemove" @update:open="onLinkDialogOpenChange"
