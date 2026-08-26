@@ -11,9 +11,22 @@ defineOptions({ name: 'RichTextContextMenu' })
 
 // `target` says which content this menu shows for the CURRENT right-click: 'table' and 'image'
 // each render their own action list, and `null` renders nothing (used for a right-click that
-// landed on neither). It is a per-event decision, not a component-lifetime setting -- same shape
-// as `disabled` below, and RichTextInput.vue's own comment on why a ref flip in the capture phase
-// is (or is not) visible in time explains the constraint this prop lives under.
+// landed on neither). Unlike `disabled` below -- a component-lifetime setting, per
+// RichTextInput.vue's own comment -- this is a per-event decision.
+//
+// Verified this session (reka-ui@2.10.3, `ContextMenu/ContextMenuTrigger.js` and
+// `Menu/MenuContent.js`): the item list below is not rendered until reka's own `open` flips true,
+// because `MenuContent` wraps its slot in reka's `Presence`, gated on `forceMount || open.value`
+// (this component passes no `forceMount`) -- and `open` only flips inside
+// `ContextMenuTrigger.handleContextMenu`'s continuation AFTER its own `await nextTick()`, not
+// before. That `nextTick()` is a later point than `disabled.value`'s read, which is that same
+// handler's synchronous FIRST statement -- so the two props face different deadlines despite
+// coming from the same handler: a prop update queued during the synchronous capture-or-bubble
+// dispatch (any phase; there is no microtask boundary between them) has already been flushed by
+// the time that `nextTick()` resolves, so `target` arrives in time for this render even though
+// `disabled` does not arrive in time for that earlier, synchronous read. Only a flip deferred past
+// that microtask boundary (a macrotask, e.g. `setTimeout`) would still be missed --
+// RichTextContextMenu.test.ts's capture-phase-routing-timing tests pin exactly this pair.
 const props = defineProps<{ disabled?: boolean; target: 'table' | 'image' | null }>()
 const emit = defineEmits<{
   (e: 'tableAction', action: TableAction): void
