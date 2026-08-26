@@ -22,12 +22,14 @@ import RichTextLinkDialog from './RichTextLinkDialog.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
+import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
 import {
   TOOLBAR_BEFORE_HEADINGS, TOOLBAR_BEFORE_COLOR, TOOLBAR_AFTER_TABLE,
   type RichTextCommand, type RichTextCommandContext,
 } from './richTextCommands'
 import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
 import { isInEditorTable, type TableAction } from './richTextTableActions'
+import { isEditorImage, type ImageAction } from './richTextImageActions'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -381,31 +383,48 @@ function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolea
 // Opened by the table menu's "custom size…" entry; RichTextTableSizeDialog below reads it.
 const sizeDialogOpen = ref(false)
 
+// Which action list RichTextContextMenu shows for the CURRENT right-click -- see that component's
+// own `target` prop comment for why this is per-event state rather than something derived once.
+const contextMenuTarget = ref<'table' | 'image' | null>(null)
+
 const contentRoot = ref<HTMLElement | null>(null)
 
 // Runs in the CAPTURE phase on a wrapper that is a STRICT ANCESTOR of reka's own trigger element
-// (see the template below), and decides synchronously which menu the user gets:
+// (see the template below), and decides synchronously which menu the user gets. Checked in this
+// order:
 //
-//   - no editor yet, or outside a table: stopPropagation, so reka never sees the event and nothing
-//     calls preventDefault -- the browser's own menu (spellcheck, paste) appears untouched. This
-//     also stops ProseMirror's OWN contextmenu handler, which prosemirror-view registers on
-//     view.dom (a descendant of this wrapper) purely to force-flush a pending IME composition
-//     before the native menu opens (`handlers.contextmenu = view => forceDOMFlush(view)`, itself
-//     `endComposition(view)`, in prosemirror-view/dist/index.js). The narrow, accepted consequence
-//     of suppressing that here is a possibly-stale native menu mid-composition -- nothing about
-//     table state.
-//   - inside a table on a disabled (read-only) field: let the event continue on its own, doing
-//     nothing here. RichTextContextMenu already forwards `disabled` to its own
-//     ContextMenuTrigger, which will decline to open ours and fall back to the native menu, so
-//     there is nothing left for this handler to add -- and a disabled/read-only editor should not
-//     have its selection moved at all, which is why the focus-the-cell step below is skipped too.
-//   - inside a table on an enabled field: move the selection into the clicked cell, then let the
+//   1. no editor yet: stopPropagation, target null -- nothing to route to.
+//   2. an image: checked BEFORE the table, not after. `<td><img></td>` is legal content, and a
+//      right-click landing on the <img> itself targets the image, not the cell it happens to sit
+//      inside -- checking the table branch first would misroute that click to the table menu
+//      instead, since isInEditorTable would also match (the image's ancestor cell). Confirmed by
+//      actually swapping the two checks in this session and watching the table-cell-image test
+//      below go red, not just by reasoning about it.
+//   3. a table: existing behaviour, unchanged by this task.
+//   4. neither: stopPropagation, target null -- native menu.
+//
+// Within each of the image/table branches:
+//   - on a disabled (read-only) field: let the event continue on its own, doing nothing here.
+//     RichTextContextMenu already forwards `disabled` to its own ContextMenuTrigger, which will
+//     decline to open ours and fall back to the native menu, so there is nothing left for this
+//     handler to add -- and a disabled/read-only editor should not have its selection moved at
+//     all, which is why the selection-moving step is skipped too.
+//   - on an enabled field: move the selection to the clicked node/cell, set `target`, then let the
 //     event bubble on so reka opens ours.
+//
+// The stopPropagation branches (1 and 4) also matter for a reason unrelated to routing: reka's own
+// menu never sees the event, so nothing calls preventDefault -- the browser's own menu (spellcheck,
+// paste) appears untouched. This also stops ProseMirror's OWN contextmenu handler, which
+// prosemirror-view registers on view.dom (a descendant of this wrapper) purely to force-flush a
+// pending IME composition before the native menu opens (`handlers.contextmenu = view =>
+// forceDOMFlush(view)`, itself `endComposition(view)`, in prosemirror-view/dist/index.js). The
+// narrow, accepted consequence of suppressing that here is a possibly-stale native menu
+// mid-composition -- nothing about table or image state.
 //
 // Two independent reasons to prefer stopPropagation over driving reka's own `disabled` prop, not
 // one. Shape: `disabled` is a component-lifetime prop, while the decision here is per-event (which
-// cell, if any, was clicked) -- a prop is the wrong vehicle for that regardless of timing. Timing:
-// checked the installed reka-ui@2.10.3 source directly (ContextMenuTrigger.js) --
+// cell or image, if any, was clicked) -- a prop is the wrong vehicle for that regardless of timing.
+// Timing: checked the installed reka-ui@2.10.3 source directly (ContextMenuTrigger.js) --
 // `handleContextMenu` reads `disabled.value` synchronously as its very first statement, before its
 // own `await nextTick()`. That value arrives as a PROP, forwarded through three component
 // boundaries (this file's `disabled` -> RichTextContextMenu's own `disabled` prop -> the
@@ -413,7 +432,9 @@ const contentRoot = ref<HTMLElement | null>(null)
 // Vue applies prop updates to a child component on its job queue, a microtask -- and DOM event
 // dispatch from the capture phase to the bubble phase is synchronous, so no microtask can run in
 // between. A ref flipped in this handler would still read stale at reka's guard, for the same
-// event, every time. stopPropagation() sidesteps both problems at once.
+// event, every time. stopPropagation() sidesteps both problems at once. `target`, unlike
+// `disabled`, does not face that same deadline -- see RichTextContextMenu.vue's own comment on its
+// `target` prop for why a synchronous flip of it still arrives in time.
 //
 // The handler MUST sit on an element outside RichTextContextMenu, not on the element reka
 // binds to. stopPropagation() does not stop other listeners on the SAME element -- only
@@ -423,8 +444,30 @@ const contentRoot = ref<HTMLElement | null>(null)
 function onContentContextMenu(e: MouseEvent): void {
   const root = contentRoot.value
   const ed = editor.value
-  if (!root || !ed) { e.stopPropagation(); return }
-  if (!isInEditorTable(e.target, root)) { e.stopPropagation(); return }
+  if (!root || !ed) { e.stopPropagation(); contextMenuTarget.value = null; return }
+
+  const img = isEditorImage(e.target, root)
+  if (img) {
+    if (props.disabled) return
+    // posAtDOM, not posAtCoords: unlike the table branch below, this handler already holds the
+    // <img> element itself, so resolving its ProseMirror position needs no layout at all --
+    // confirmed this session in the installed prosemirror-view@1.42.2 source
+    // (EditorView.posAtDOM -> ViewDesc.posFromDOM/localPosFromDOM). Walking up from the <img> via
+    // parentNode finds the image's own node-view desc on the first ancestor carrying one -- its
+    // `dom` is the `[data-resize-container]` element (@tiptap/core's ResizableNodeView: `get dom()
+    // { return this.container }`), with the <img> itself as that container's own first descendant
+    // (ResizableNodeView.createWrapper() appends the element before attachHandles() appends any
+    // handle siblings) -- so `offset: 0` walking up from a node with no previous sibling resolves
+    // to the position right before the image node. NodeViewDesc.border is 0 for a leaf node (image
+    // has no content), so that position is exactly `doc.nodeAt(pos) === <the image node>`, which is
+    // what NodeSelection.create (and so setNodeSelection, its command form -- also verified in the
+    // installed @tiptap/core source) needs.
+    contextMenuTarget.value = 'image'
+    ed.commands.setNodeSelection(ed.view.posAtDOM(img, 0))
+    return
+  }
+
+  if (!isInEditorTable(e.target, root)) { e.stopPropagation(); contextMenuTarget.value = null; return }
   if (props.disabled) return
   // Commands act on the current selection, so a right-click on a cell the caret is not in would
   // otherwise apply to wherever the caret happens to be. posAtCoords needs real layout to resolve
@@ -432,6 +475,44 @@ function onContentContextMenu(e: MouseEvent): void {
   // jsdom test, to confirm the resolved position really does land in the cell under the cursor.
   const at = ed.view.posAtCoords({ left: e.clientX, top: e.clientY })
   if (at) ed.commands.focus(at.pos)
+  contextMenuTarget.value = 'table'
+}
+
+// Two outcomes, one caller in this same file -- unlike RichTextLinkDialog's three-outcome,
+// asynchronous-command promise protocol (see settleLinkDialog above), a plain ref pair
+// (imageAltDialogOpen/imageAltDialogAlt below) is enough here: nothing outside this component
+// needs to await the result, and there is no third "remove" outcome to distinguish from cancel.
+const imageAltDialogOpen = ref(false)
+const imageAltDialogAlt = ref('')
+
+function onImageAction(action: ImageAction): void {
+  const ed = editor.value
+  if (!ed) return
+  if (action === 'deleteImage') {
+    // The context-menu handler above already moved the selection onto the image node (a
+    // NodeSelection), so deleteSelection() removes exactly that node -- confirmed in the installed
+    // @tiptap/core source that deleteSelection() deletes whatever range the CURRENT selection
+    // covers, not a hardcoded assumption about node vs text selections.
+    ed.chain().focus().deleteSelection().run()
+    return
+  }
+  // editAlt: seed the dialog from the selected image's own current alt (getAttributes('image'),
+  // also verified this session, reads whichever node within the current selection's range matches
+  // the given type -- the NodeSelection set above makes that the image itself). alt legitimately
+  // has no default value once created via setImage() with no alt argument, so this falls back to
+  // an empty string rather than passing a non-string through to the dialog's `alt: string` prop.
+  const attrs = ed.getAttributes('image')
+  imageAltDialogAlt.value = typeof attrs.alt === 'string' ? attrs.alt : ''
+  imageAltDialogOpen.value = true
+}
+
+function onImageAltDialogSubmit(alt: string): void {
+  // updateAttributes('image', ...), not a fresh lookup of "the" image: it applies to whichever
+  // node the CURRENT selection covers matching that type (verified this session in the installed
+  // @tiptap/core source), which is still the NodeSelection the context-menu handler set, on the
+  // same reasoning as deleteSelection() above -- the dialog offers no path back into the editor
+  // that could move the selection while it is open.
+  editor.value?.chain().focus().updateAttributes('image', { alt }).run()
 }
 
 defineExpose({ editor, insertImage })
@@ -460,16 +541,8 @@ defineExpose({ editor, insertImage })
         :editor="editor" :disabled="disabled" @run="runCommand(cmd)" />
     </div>
     <div ref="contentRoot" @contextmenu.capture="onContentContextMenu">
-      <!--
-        `target` is pinned to the literal "table" here rather than driven by state: this task
-        (RT-6 task 4) only generalizes the menu component itself, and onContentContextMenu above
-        still only ever lets an event through when isInEditorTable says so (anything else gets
-        stopPropagation'd before reka ever sees it, per that function's own comment) -- so the
-        menu only ever actually opens for a table hit, exactly as before this change. Routing
-        `target` to 'image' (and resolving it from isEditorImage) is task 5's job; wiring it here
-        now would make that task's own diff unreviewable.
-      -->
-      <RichTextContextMenu :disabled="disabled" target="table" @table-action="onTableAction">
+      <RichTextContextMenu :disabled="disabled" :target="contextMenuTarget"
+        @table-action="onTableAction" @image-action="onImageAction">
         <EditorContent class="rich-text__content min-h-32 p-2.5" :editor="editor"
           @click.self="editor?.chain().focus().run()" />
       </RichTextContextMenu>
@@ -519,6 +592,10 @@ defineExpose({ editor, insertImage })
     <RichTextLinkDialog :open="linkDialogOpen" :href="linkDialogHref" :new-tab="linkDialogNewTab"
       :can-remove="linkDialogCanRemove" @update:open="onLinkDialogOpenChange"
       @submit="onLinkDialogSubmit" @remove="onLinkDialogRemove" />
+    <!-- v-model:open sugar is fine here, unlike the link dialog above: this one has only two
+         outcomes (submit/cancel), neither needing the extra settle step a Remove button would. -->
+    <RichTextImageAltDialog v-model:open="imageAltDialogOpen" :alt="imageAltDialogAlt"
+      @submit="onImageAltDialogSubmit" />
   </div>
 </template>
 
