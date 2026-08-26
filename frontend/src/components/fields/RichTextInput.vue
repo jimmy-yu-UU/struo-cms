@@ -199,7 +199,51 @@ const editor = useEditor({
       openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false,
       HTMLAttributes: { target: null, rel: null },
     }),
-    Image.configure({ inline: false }),
+    // `resize.enabled` swaps in @tiptap/core's ResizableNodeView (verified in its installed
+    // source: addNodeView() returns null unless this is true), which lets an editor drag an
+    // image's corner handles. `alwaysPreserveAspectRatio: true` locks every drag to the image's
+    // own ratio rather than upstream's default of only doing so while Shift is held: verified in
+    // ResizableNodeView.handleResize that `isShiftKeyPressed` is read at all only when
+    // `preserveAspectRatio` (this option) is false, so once this is true there is no per-drag
+    // override left to discover -- acceptable here because most editors of a general-purpose CMS
+    // have no design background, and an accidental free-drag silently stretches a published
+    // image with no visual cue that anything went wrong. minWidth keeps a handle from shrinking
+    // the image into an unusably small target.
+    //
+    // height is never rendered into the serialized HTML, via the addAttributes override below.
+    // This is NOT a duplicate of the backend's sanitizer: Task 1 already strips height there
+    // unconditionally (it was never in the allowlist), so that alone would already keep a
+    // stray height out of anything actually persisted. What this guards is local to the editor:
+    // ResizableNodeView's onCommit (upstream, in @tiptap/extension-image) always writes both
+    // width and height as node attributes after a drag, so without this override getHTML() would
+    // carry a height that the stored value never will. The watch(() => props.modelValue) below
+    // compares getHTML()'s output to the stored prop directly -- if the two disagree only because
+    // of a height neither side actually wants, that watch fires setContent() on every external
+    // update and resets the cursor for no reason.
+    //
+    // Known upstream defect, not introduced here: ResizableNodeView's constructor registers
+    // `editor.on('update', this.handleEditorUpdate.bind(this))`, and its destroy() calls
+    // `editor.off('update', this.handleEditorUpdate.bind(this))` -- but `.bind()` returns a new
+    // function object each time it's called, so the listener destroy() removes is never the one
+    // the constructor added. Every image node view this editor ever creates leaks one 'update'
+    // listener on the editor for the editor's own lifetime. We cannot fix this from an extension
+    // config; recorded here so it isn't mistaken for something introduced by this change.
+    Image.extend({
+      addAttributes() {
+        // Verified in the installed @tiptap/extension-image@3.30.2 source: the parent's
+        // addAttributes() returns { src: {...}, alt: {...}, title: {...}, width: { default:
+        // null }, height: { default: null } } -- a plain name-to-config map, one entry per
+        // attribute. Spreading it forward and then replacing only `height` keeps src/alt/
+        // title/width exactly as upstream defines them.
+        return {
+          ...this.parent?.(),
+          height: { default: null, rendered: false },
+        }
+      },
+    }).configure({
+      inline: false,
+      resize: { enabled: true, minWidth: 40, alwaysPreserveAspectRatio: true },
+    }),
     TableKit.configure({ table: { resizable: false } }),
     TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
     TextStyle,
@@ -466,4 +510,48 @@ defineExpose({ editor, insertImage })
 }
 .rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:first-child) { padding-inline-start: 0; }
 .rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:last-child) { padding-inline-end: 0; }
+
+/* @tiptap/core's ResizableNodeView (wired up above on the Image extension) builds its own DOM at
+   runtime via document.createElement, the same as the ProseMirror table markup styled above --
+   it is neither Vue-rendered nor scope-id-bearing either, for the same reason given in this
+   block's opening comment, so every rule below also goes through `:deep(...)`.
+
+   Handles: createHandle() (upstream, @tiptap/core/src/lib/ResizableNodeView.ts) sets only
+   `position: absolute` and the `data-resize-handle` attribute -- no size, no background, no
+   cursor (`classNames.handle` defaults to `''`, so there is no class to hook either). Without
+   the rules below every handle is a 0x0, invisible, unclickable div. */
+.rich-text__content :deep([data-resize-handle]) {
+  width: 0.625rem;
+  height: 0.625rem;
+  background-color: var(--primary);
+  border: 1px solid var(--background);
+  border-radius: 9999px;
+}
+.rich-text__content :deep([data-resize-handle="top-left"]),
+.rich-text__content :deep([data-resize-handle="bottom-right"]) { cursor: nwse-resize; }
+.rich-text__content :deep([data-resize-handle="top-right"]),
+.rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
+.rich-text__content :deep([data-resize-handle="top"]),
+.rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; }
+.rich-text__content :deep([data-resize-handle="left"]),
+.rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; }
+
+/* Selection outline: confirmed by reading prosemirror-view@1.42.2's source this session, not
+   assumed -- NodeViewDesc.create() (src/viewdesc.ts) sets `nodeDOM` to the exact DOM node a
+   custom node view returns as its `dom` (ResizableNodeView's own `get dom()` returns
+   `this.container`, the `[data-resize-container]` element), and CustomNodeViewDesc's
+   selectNode()/deselectNode() (same file) fall through to the base ViewDesc implementation --
+   since ResizableNodeView defines neither -- which toggles `.ProseMirror-selectednode` on that
+   same `nodeDOM`. So the container, not the wrapper or the <img> itself, is what carries the
+   class. */
+.rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* No rule needed to hide handles when the field is read-only: ResizableNodeView's own
+   handleEditorUpdate (same upstream file) calls removeHandles() -- which deletes the handle
+   elements outright, not just visually -- the moment editor.isEditable goes false, confirmed by
+   reading that method's source. Left unstyled deliberately; Task 7's live pass covers the
+   interactive behaviour this can't demonstrate from source alone. */
 </style>
