@@ -15,17 +15,9 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { RICHTEXT_ACTIVE_BUTTON_CLASS } from './richTextCommands'
 
-// tiptap's onCreate fires from a `window.setTimeout(fn, 0)` (@tiptap/core/src/Editor.ts's
-// mount()) -- a different queue from @vue/test-utils' flushPromises(), which resolves via
-// setImmediate (falling back to setTimeout only if setImmediate is undefined, per its own
-// source). setImmediate runs in Node's check phase while a plain setTimeout(0) runs in the
-// timers phase, and per Node's own docs the ordering between a check-phase and a timers-phase
-// callback queued from the same synchronous script is not guaranteed -- so flushPromises() alone
-// is not a reliable way to wait for onCreate. A second, explicit setTimeout(0) is: the JS event
-// loop always drains the full microtask queue (including every Vue nextTick in the chain) before
-// running ANY timer, and two timers scheduled for the same 0ms delay always fire in the order
-// they were registered -- and mounting a component always registers the editor's own onCreate
-// timer strictly before this helper's own call runs.
+// tiptap schedules onCreate on a setTimeout(0). flushPromises() resolves via setImmediate, whose
+// ordering against a timers-phase callback is not guaranteed, so it is not a reliable wait for it;
+// a second setTimeout(0) is, because same-delay timers fire in registration order.
 function waitForEditorCreate(): Promise<void> {
   return new Promise((resolve) => { setTimeout(resolve, 0) })
 }
@@ -336,12 +328,9 @@ describe('RichTextInput', () => {
     expect(html).toContain('width="480"')
   })
 
-  // Task 1's sanitizer allowlist has no `height` at all, so a naive reading of this test would
-  // pass even if the editor still emitted one -- the backend would just strip it on save. What
-  // this guards is different: getHTML() must already agree with the stored value *before* any
-  // round trip, because the `watch(() => props.modelValue)` comparison further down diffs the
-  // two directly. Proof this isn't vacuous: deleting the `rendered: false` override below turns
-  // this red (confirmed in this session, Task 2).
+  // Not a duplicate of the sanitizer's height strip: getHTML() must already agree with the stored
+  // value BEFORE any round trip, because watch(() => props.modelValue) diffs the two directly.
+  // Fails if the `rendered: false` override on the height attribute is dropped.
   it('never serializes height, even when the inserted node carries one', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -353,10 +342,9 @@ describe('RichTextInput', () => {
     expect(html).not.toContain('height')
   })
 
-  // Guards against a future edit dropping `resize.enabled` silently: if it were removed, the two
-  // tests above would still pass (width/height serialization doesn't depend on the node view at
-  // all -- confirmed this session that getHTML() serializes via schema.toDOM, never through a
-  // live node view), so nothing else in this file would go red.
+  // The only test that catches `resize.enabled` being dropped: getHTML() serializes via
+  // schema.toDOM, never through a live node view, so the width/height tests above stay green
+  // without it.
   it('constructs a resizable node view for an inserted image', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -366,11 +354,8 @@ describe('RichTextInput', () => {
     expect(w.find('[data-resize-container]').exists()).toBe(true)
   })
 
-  // Pins the `directions` option passed to the Image extension's `resize` config, not appearance:
-  // jsdom applies no CSS, so this cannot see whether a handle is visible or grabbable, only whether
-  // ResizableNodeView actually attached one per direction. Four corners plus the four edge
-  // midpoints, sorted before comparing since attachHandles() iterates `directions` in whatever
-  // order the array lists them, and that order isn't part of the contract being pinned here.
+  // Pins the `directions` option, not appearance -- jsdom applies no CSS, so this can only see
+  // that a handle element was attached per direction, never that it is visible or grabbable.
   it('renders all eight resize handles -- four corners and four edge midpoints -- for an inserted image', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -385,10 +370,8 @@ describe('RichTextInput', () => {
     )
   })
 
-  // Regression guard: a field that mounts already `disabled` must never grow live, draggable
-  // handles. This is an existence assertion (no [data-resize-handle] node at all), not an
-  // appearance one, so it holds even though jsdom applies no CSS. waitForEditorCreate() (not just
-  // flushPromises()) is what makes this deterministic -- see its own comment for why.
+  // A field that mounts already `disabled` must never grow live, draggable handles. Existence,
+  // not appearance -- jsdom applies no CSS.
   it('renders no resize handles when mounted already disabled', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
@@ -399,12 +382,8 @@ describe('RichTextInput', () => {
     expect(w.findAll('[data-resize-handle]').length).toBe(0)
   })
 
-  // Regression guard for the mechanism above: removing live handles from a disabled field relies
-  // on setEditable()'s 'update' event, which -- left unguarded -- is indistinguishable from a
-  // real content change to onUpdate -> emitNormalized() and would emit update:modelValue for
-  // every rich-text field the moment a read-only user opens an item (see RichTextInput.vue's
-  // onCreate comment for the full chain, including why the emitted value would legitimately
-  // differ from the stored one, ruling out an equality-based guard as a fix).
+  // The setEditable() that removes those handles emits 'update'. Unsuppressed, that reaches
+  // emitNormalized() and fakes an unsaved change for every rich-text field a read-only user opens.
   it('emits no update:modelValue when mounted already disabled', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
@@ -415,9 +394,7 @@ describe('RichTextInput', () => {
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })
 
-  // Same defect, the other door: watch(() => props.disabled) below the editor also calls
-  // setEditable() on a real transition, so it needs the identical suppression -- this guards
-  // that path independently of the mount-time one above.
+  // Same defect through the watch(() => props.disabled) door, which needs its own suppression.
   it('emits no update:modelValue when disabled turns on after mount', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: false },
@@ -658,10 +635,8 @@ describe('RichTextInput', () => {
     expect(w.get('input').attributes('aria-label')).toBe('Search files…')
   })
 
-  // Review-round finding: the insert-image dialog shares the exact same mechanism as the alt and
-  // link dialogs (same blurActiveElementBeforeDialog/refocusAfterDialogCancel helpers, same
-  // vendored Dialog underneath), reached from a plain toolbar button click same as the link
-  // dialog's own toolbar path. Asserts the same synchronous destination those two already pin.
+  // The insert-image dialog shares the alt/link dialogs' blur-then-restore helpers; this pins the
+  // same synchronous destination for its own entry point.
   it('blurs the editor before the insert-image dialog opens', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
@@ -862,15 +837,9 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // Helper shared by the image-routing tests below: a bare MouseEvent (bubbles/cancelable, no
-  // clientX/clientY -- posAtCoords is never reached on the image path, only posAtDOM) dispatched
-  // straight at the given element, with its own stopPropagation spy attached so callers can assert
-  // on it without re-wiring the spy each time. Awaits a tick afterward: `contextMenuTarget` is a
-  // Vue ref, and its own re-render of RichTextContextMenu's `target` prop is a job Vue schedules
-  // rather than applying synchronously -- the same reason RichTextCommandButton's own data-active
-  // needs waitForEditorReactivity above, though here it is Vue's own prop-update job, not tiptap's
-  // separately-debounced customRef, so a plain nextTick() is enough (confirmed: without it, every
-  // props('target') assertion below observed the PRE-dispatch value).
+  // Dispatches a bare contextmenu MouseEvent at an element with a stopPropagation spy attached.
+  // The nextTick is required: `target` reaches the child as a Vue prop update, so without it every
+  // props('target') assertion below reads the PRE-dispatch value.
   async function dispatchContextMenu(el: Element): Promise<ReturnType<typeof vi.spyOn>> {
     const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
     const stop = vi.spyOn(ev, 'stopPropagation')
@@ -893,11 +862,8 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // The routing-order lock: an <img> inside a table cell must route to the image menu, not the
-  // table menu, even though isInEditorTable would also match (the image's ancestor cell). Checked
-  // this session by actually swapping the image and table checks in onContentContextMenu and
-  // re-running this test -- it went red with target 'table' under that mutation, confirming the
-  // order, not just the presence, of the two checks is what this test pins.
+  // The routing-order lock: an <img> inside a table cell must route to the image menu even though
+  // isInEditorTable also matches it. Swapping the two checks in onContentContextMenu turns this red.
   it('routes a right-click on an image inside a table cell to the image menu, not the table menu', async () => {
     const w = mount(RichTextInput, {
       props: {
@@ -1009,20 +975,11 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // Defect 5 (RT-6 final review): onImageAltDialogSubmit used to justify itself with "the dialog
-  // offers no path back into the editor that could move the selection while it is open". This
-  // component's own watch(() => props.modelValue) -> setContent() is exactly such a path, and it
-  // is reachable with the dialog open -- an autosave round-trip, a revision revert, a language
-  // switch all push a new model value from outside.
-  //
-  // What that push actually does was measured here rather than assumed, and it is worse than the
-  // review predicted: the selection does NOT decay into a text selection, it stays a
-  // NodeSelection and ProseMirror maps it onto the REPLACEMENT document's image. So the obvious
-  // guard -- "is the selection still a NodeSelection on an image" -- passes, and the alt is
-  // written to the wrong picture. Confirmed by running this exact test against that weaker guard:
-  // the editor's HTML came back as
-  // <img src="https://example.com/dog.png" alt="new alt">. The shipped guard compares node
-  // identity instead, which is what makes this test fail without it.
+  // Catches the weaker guard as well as no guard at all. An external model push replaces the
+  // document via setContent() while the dialog is open, and ProseMirror maps the NodeSelection
+  // onto the REPLACEMENT document's image -- so "is the selection still a NodeSelection on an
+  // image" passes and the alt is written to the wrong picture. Only a node-identity comparison
+  // makes this test pass.
   it('does not write the alt onto a different image when an external model push replaces the content while the dialog is open', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="old"></p>' },
@@ -1047,16 +1004,10 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // Defect 3 (RT-6 review fix), the image-alt-dialog half: a right-click never blurs a
-  // contenteditable the way a left-click elsewhere does, so the ProseMirror editor is still
-  // focused when the context menu's "edit alt" action runs -- reka's DialogContentModal applies
-  // aria-hidden to the rest of the page on the same reactive flush that flips `open` true,
-  // strictly before its FocusScope's own deferred (`await nextTick()`) autofocus ever moves focus
-  // off whatever held it. This pins the mechanism jsdom CAN see (a synchronous blur before the
-  // dialog opens), not the console warning itself, which jsdom's DOM implementation never raises.
-  // Asserts the actual destination (document.body), not just "not the editor" -- the latter would
-  // also pass if blurActiveElementBeforeDialog moved focus somewhere else entirely, which would
-  // still leave a focused element inside whatever ends up hidden.
+  // A right-click never blurs a contenteditable, so the editor still holds focus when "edit alt"
+  // runs. Pins the synchronous blur, which is the part jsdom can see -- it never raises the
+  // aria-hidden console warning the blur exists for. The destination is asserted exactly:
+  // "not the editor" would also pass if focus moved somewhere else still inside the hidden subtree.
   it('blurs the editor before the alt dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
@@ -1078,38 +1029,13 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // The other half of the same review fix: blurring to <body> on its own leaves reka's own
-  // DialogContentModal.js unable to restore focus on a plain cancel. Read this session in the
-  // installed reka-ui@2.10.3 source: its onCloseAutoFocus handler is
-  // `if (!event.defaultPrevented) { event.preventDefault(); triggerElement.value?.focus() }` --
-  // GUARDED, not unconditional as an earlier round of this comment claimed, though nothing here
-  // prevents that event first so it does still run every time, making FocusScope's own fallback
-  // restore dead for a modal dialog. What it then calls is
-  // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
-  // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
-  // fails every time here because of that same blur, leaving triggerElement permanently unset.
-  // (DialogContentModal's own `watch(() => props.present, ...)` is a third path to that same
-  // unset-triggerElement no-op; see RichTextInput.vue's own comment for the full enumeration.)
-  // RichTextInput.vue's own restoreFocusOnDialogCancel/refocusAfterDialogCancel pair is the
-  // only focus restoration actually happening on this path; this test pins that it lands
-  // correctly, not reka's own (dead, for this case) mechanism.
+  // Pins the destination and the timing of the restore, NOT the explicit restore itself: this test
+  // focuses the editor before opening, so it still passes if onImageAction falls back to the
+  // default capture. The test below it, which focuses an element that is then unmounted, is the
+  // one that fails without it.
   //
-  // The destination asserted is the EDITOR specifically, not "whatever held focus before". In the
-  // running admin that element is the reka context-menu item the user clicked, which unmounts with
-  // the menu before any cancel can run -- observed live as a cancel leaving focus on <body>, which
-  // is why onImageAction now passes an explicit editor.commands.focus() restore instead of relying
-  // on the default capture. runImage() below calls onImageAction() directly, bypassing reka's own
-  // ContextMenuItem @select handling (deliberately, per RichTextContextMenu.vue's own comment on
-  // why runTable/runImage exist), so this test does not reproduce that unmount itself.
-  //
-  // Which means this test does NOT discriminate on its own: it focuses the editor before opening,
-  // so the default "restore whatever was focused" capture would land on the same element and this
-  // still passes with the explicit restore removed. It pins the destination and the timing; the
-  // test immediately below, which focuses an element that is then unmounted, is the one that fails
-  // without the fix.
-  // Simulating the dialog's own trailing update:open(false) via $emit, rather than hunting for its
-  // untagged Cancel button by text, since the mechanism under test is RichTextInput's OWN
-  // close-change handler, not that button's wiring.
+  // The close is simulated with $emit rather than a Cancel-button click: the mechanism under test
+  // is RichTextInput's own close-change handler, not that button's wiring.
   it('restores focus to the editor when the alt dialog is cancelled', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
@@ -1126,36 +1052,24 @@ describe('RichTextInput', () => {
     }
     menuVm.runImage('editAlt')
     expect(document.activeElement).toBe(document.body)
-    // The context menu itself is still mounted and open at this point -- runImage() above calls
-    // onImageAction() directly, the same intentional DOM bypass noted above, so nothing has told
-    // reka's ContextMenuContent to close the way a real @select interaction would. Left open, its
-    // own still-active focus trap would immediately steal back any focus() call landing outside
-    // its own container, fighting the alt dialog's restore below for a reason that has nothing to
-    // do with the mechanism this test targets. Escape is what a real menu-item selection would
-    // also result in (the menu closing), dispatched at the document level since that is where
-    // reka's own DismissableLayer registers its escape-key handling.
+    // runImage() bypasses the real @select interaction, so the context menu is still open and its
+    // focus trap would steal back any restore landing outside it. Escape closes it, as a real
+    // selection would.
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await nextTick()
     w.findComponent(RichTextImageAltDialog).vm.$emit('update:open', false)
-    // refocusAfterDialogCancel() defers its own restore one tick past this -- see its own comment
-    // for why: reka's FocusScope keeps its focus-trap listeners attached until Vue's reactivity
-    // actually flushes the `open` prop change that tears them down, and a synchronous focus() call
-    // made before that would be immediately overridden by the still-active trap.
+    // One tick for refocusAfterDialogCancel's own deferral, then a frame for tiptap's own
+    // deferred dom.focus().
     await nextTick()
-    // A second wait, unlike the link dialog's own test below: this restore is now
-    // editor.commands.focus(), whose real dom.focus() tiptap defers a further
-    // requestAnimationFrame (see waitForEditorReactivity's own comment above).
     await waitForEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
     container.remove()
   })
 
-  // The live-observed defect the explicit restore exists for, reproduced directly: the element
-  // holding focus when the alt dialog opens is a context-menu item that is gone by the time the
-  // cancel runs, so a restore built from that capture focuses a detached node and leaves focus on
-  // <body>. Focusing a stand-in button that is then removed makes this test fail if onImageAction
-  // ever reverts to the default "focus whatever was focused before" capture.
+  // The discriminating half: the element focused when the alt dialog opens is a context-menu item
+  // that is gone by the time the cancel runs, so a restore built from the default capture focuses
+  // a detached node and leaves focus on <body>. Fails if onImageAction drops its explicit restore.
   it('restores focus to the editor even when the element focused before the alt dialog is unmounted', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
@@ -1183,17 +1097,10 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // The failure mode the review round caught: without onImageAltDialogSubmit clearing the captured
-  // pre-dialog target itself, a successful submit's own editor.chain().focus() only "won" over the
-  // stale-target restore because document.body.focus() happens to be a no-op -- an unstated browser
-  // detail, not a real fix. refocusAfterDialogCancel() defers its own restore by one nextTick (see
-  // its own comment for why), so this awaits exactly one nextTick after the submit click -- enough
-  // for a wrongly-still-armed restore to have fired its synchronous target.focus() call, but not
-  // enough for tiptap's OWN real dom.focus() (deferred to a requestAnimationFrame, a different
-  // timing domain entirely -- see waitForEditorReactivity's own comment above) to have landed yet.
-  // So document.activeElement at this exact point can only reflect a stale-target restore actually
-  // firing, not tiptap's own eventual, legitimate refocus -- confirmed this session by running this
-  // test with onImageAltDialogSubmit's own clearing line removed and watching it fail.
+  // Fails if onImageAltDialogSubmit stops clearing the captured pre-dialog target. The single
+  // nextTick after the submit is exact and load-bearing: long enough for a wrongly-armed restore
+  // to have fired its synchronous focus(), too short for tiptap's own deferred dom.focus() to have
+  // landed -- so activeElement here can only reflect the stale restore.
   it('does not restore stale pre-dialog focus after a successful alt-dialog submit', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
@@ -1211,10 +1118,8 @@ describe('RichTextInput', () => {
     }
     menuVm.runImage('editAlt')
     expect(document.activeElement).toBe(document.body)
-    // Same reasoning as the cancel test above: the context menu is still mounted and open here
-    // (runImage() bypasses the real @select interaction that would have closed it), and its own
-    // still-active focus trap would otherwise fight any focus() call landing outside it -- Escape
-    // closes it before that can confound this test's own assertion.
+    // Same as the cancel test above: close the still-open context menu so its focus trap does not
+    // fight the restore under test.
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await nextTick()
     await flushPromises()
@@ -1226,11 +1131,8 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // Review-round finding: this dialog shares the exact same helpers as the alt/link/insert-image
-  // dialogs, reached through one more layer (RichTextTableMenu's own reka Popover) than any of
-  // those -- guarded the same way regardless of exactly where that Popover portals its own content
-  // or how its own close-focus-restore behaves, neither of which needed resolving to know blurring
-  // to <body> first is safe either way. Asserts the same synchronous destination they pin.
+  // The table-size dialog reaches the same helpers through one more layer (RichTextTableMenu's
+  // popover); this pins the same synchronous destination for that entry point.
   it('blurs the editor before the table-size dialog opens', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts, attachTo: container })
@@ -1422,18 +1324,13 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // The fifth path with the same unmounted-capture defect, and the only one where the DEFAULT
-  // capture is still the right thing to write down: the bubble menu's own link button is what held
-  // focus, and hide() above removes it from the DOM before the cancel runs -- counted in the
-  // running admin as `[data-cmd="link"]` going from two elements to one across the click, and the
-  // menu root disappearing is what the test above already pins here. So the capture is fine and
-  // the RESTORE is what has to cope: focusIfStillInDocument falls back to the editor. The toolbar's
-  // own link button, tested further below, must keep restoring to itself -- these two share
-  // openLinkDialog, so a fallback that fired unconditionally would regress that one.
+  // The bubble menu's link button is unmounted by hide() before the cancel runs, so this pins
+  // focusIfStillInDocument's editor fallback. The toolbar's link button shares openLinkDialog and
+  // must still restore to itself (tested below), so the fallback must not fire unconditionally.
   //
-  // Button is un-stubbed here for the same reason as the table-size test above: the shared stub's
-  // `<button-stub>` is an HTMLUnknownElement, which jsdom will not focus, so the bubble button
-  // could never be the captured activeElement and the test would not discriminate.
+  // Button is un-stubbed here: the shared stub renders an HTMLUnknownElement, which jsdom will not
+  // focus, so the button could never be the captured activeElement and the test would not
+  // discriminate.
   it('restores focus to the editor when the link dialog opened from the bubble menu is cancelled', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
@@ -1448,8 +1345,7 @@ describe('RichTextInput', () => {
     await settleBubbleMenu()
     const linkBtn = bubbleRoot().get('[data-cmd="link"]').element as HTMLElement
     // Focused explicitly: jsdom's synthetic click does not reproduce a native button's
-    // focus-follows-click default action (noted on the blur test below), and this test is
-    // specifically about the captured element being that button.
+    // focus-follows-click default action.
     linkBtn.focus()
     expect(document.activeElement).toBe(linkBtn)
     linkBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
@@ -1458,27 +1354,16 @@ describe('RichTextInput', () => {
     expect(document.body.contains(linkBtn)).toBe(false)
     w.findComponent(RichTextLinkDialog).vm.$emit('update:open', false)
     await nextTick()
-    // The fallback is editor.commands.focus(), whose real dom.focus() tiptap defers a further
-    // requestAnimationFrame -- see waitForEditorReactivity's own comment.
     await waitForEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
     container.remove()
   })
 
-  // Defect 3 (RT-6 review fix), the link-dialog half. In a real browser, clicking a toolbar or
-  // bubble-menu button focuses that button the same as clicking any other native button, and
-  // WITHOUT blurActiveElementBeforeDialog that button (still a descendant of <main>) would stay
-  // focused at the moment `open` flips true -- reka's DialogContentModal applies aria-hidden to
-  // the rest of the page on the same reactive flush that flip happens on, strictly before its
-  // FocusScope's own deferred (`await nextTick()`) autofocus ever moves focus off whatever holds
-  // it. jsdom's synthetic click does NOT reproduce that native focus-follows-click default
-  // action, though (confirmed this session against jsdom directly, outside this test file), so
-  // this test's own starting focus is instead put on the editor explicitly
-  // (vm.editor.commands.focus()) -- what this pins is that blurActiveElementBeforeDialog moves
-  // focus off WHATEVER held it, not specifically that a button held it here. Asserts the actual
-  // destination (document.body), not just "not the editor" -- the latter would also pass if focus
-  // had moved somewhere else that was still inside <main>.
+  // The link-dialog half of the same blur. jsdom's synthetic click does not reproduce a native
+  // button's focus-follows-click, so focus starts on the editor here: what this pins is that the
+  // blur moves focus off WHATEVER held it. The destination is asserted exactly, not as "not the
+  // editor", which would also pass for focus landing elsewhere inside the hidden subtree.
   it('blurs the editor before the link dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
@@ -1487,17 +1372,9 @@ describe('RichTextInput', () => {
     vm.editor.commands.focus()
     await waitForEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
-    // Not awaited before the assertion, deliberately: VTU's trigger() dispatches the click
-    // synchronously (our @click handler chain, including blurActiveElementBeforeDialog(), already
-    // ran by the time dispatchEvent() returns) and only THEN returns a promise that resolves after
-    // nextTick() -- and reka's own FocusScope autofocus is deferred behind its own internal
-    // `await nextTick()` from inside a watcher this same flush triggers, which (verified this
-    // session by running this exact test with the fix removed) resolves ahead of a nextTick()
-    // awaited from outside that flush, landing focus in the dialog before an awaited assertion here
-    // could tell that apart from our own fix ever having run. Checking synchronously, before
-    // awaiting the click's own settle promise, is what still catches a missing
-    // blurActiveElementBeforeDialog() call rather than only ever seeing reka's own (later, and
-    // real-bug-causing-in-between) autofocus having already cleaned up after it.
+    // Asserted BEFORE awaiting the click's settle promise, and that is what makes it discriminate:
+    // reka's own autofocus resolves ahead of a nextTick awaited from out here, so an awaited
+    // assertion would pass with the blur removed.
     const clicked = w.get('[data-cmd="link"]').trigger('click')
     expect(document.activeElement).toBe(document.body)
     await clicked
@@ -1505,25 +1382,9 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // The other half of the same review fix: blurring to <body> on its own leaves reka's own
-  // DialogContentModal.js unable to restore focus on a plain cancel. Read this session in the
-  // installed reka-ui@2.10.3 source: its onCloseAutoFocus handler is
-  // `if (!event.defaultPrevented) { event.preventDefault(); triggerElement.value?.focus() }` --
-  // GUARDED, not unconditional as an earlier round of this comment claimed, though nothing here
-  // prevents that event first so it does still run every time, making FocusScope's own fallback
-  // restore dead for a modal dialog. What it then calls is
-  // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
-  // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
-  // fails every time here because of that same blur, leaving triggerElement permanently unset.
-  // (DialogContentModal's own `watch(() => props.present, ...)` is a third path to that same
-  // unset-triggerElement no-op; see RichTextInput.vue's own comment for the full enumeration.)
-  // RichTextInput.vue's own restoreFocusOnDialogCancel/refocusAfterDialogCancel pair is the
-  // only focus restoration actually happening on this path. Simulating the dialog's own trailing
-  // update:open(false) via $emit, matching what an Escape press or an overlay click would
-  // trigger, since the mechanism under test is RichTextInput's OWN close-change handler
-  // (onLinkDialogOpenChange, which calls settleLinkDialog(null) and refocusAfterDialogCancel()
-  // together), not any particular button's wiring.
-
+  // The restore half. reka cannot do this itself once focus is on <body>, so onLinkDialogOpenChange
+  // is the only thing putting focus back. Closed via $emit, matching an Escape or overlay click,
+  // because the mechanism under test is that handler and not any button's wiring.
   it('restores focus to whatever held it before the link dialog opened, when the dialog is cancelled', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
@@ -1532,33 +1393,24 @@ describe('RichTextInput', () => {
     vm.editor.commands.focus()
     await waitForEditorReactivity()
     const editorEl = w.get('.ProseMirror').element
-    // Awaited here, unlike the blur test above: what this test pins is the RESTORE on close, not
-    // the blur itself, so letting reka's own autofocus fully settle first (rather than racing it)
-    // is what makes the dialog's state unambiguous before the cancel below.
+    // Awaited here, unlike the blur test above: this pins the restore, so reka's own autofocus
+    // has to settle first rather than be raced.
     await w.get('[data-cmd="link"]').trigger('click')
     await flushPromises()
     w.findComponent(RichTextLinkDialog).vm.$emit('update:open', false)
-    // refocusAfterDialogCancel() defers its own restore one tick past this -- see its own comment
-    // for why: reka's FocusScope keeps its focus-trap listeners attached until Vue's reactivity
-    // actually flushes the `open` prop change that tears them down, and a synchronous focus() call
-    // made before that would be immediately overridden by the still-active trap.
+    // One tick for refocusAfterDialogCancel's own deferral.
     await nextTick()
     expect(document.activeElement).toBe(editorEl)
     w.unmount()
     container.remove()
   })
 
-  // The table-size dialog's own half of the same live-observed defect. Its pre-dialog focus is the
-  // "Custom size..." entry inside RichTextTableMenu's popover, which closes on the way into the
-  // dialog -- and that popover's own close-auto-focus restore is deliberately suppressed on this
-  // path (see RichTextTableMenu.vue), so nothing else puts focus back either: cancelling left
-  // focus on <body>. RichTextTableMenu hands its own `[data-cmd="table"]` trigger over with the
-  // event; this pins that RichTextInput restores to exactly that button.
+  // The table-size dialog's own half. Its pre-dialog focus is the "Custom size..." entry, which
+  // unmounts with the popover, and that popover's own restore is suppressed on this path -- so the
+  // trigger RichTextTableMenu hands over is the only remaining target.
   //
-  // Button is un-stubbed for this one test, unlike every other mount in this file: the shared stub
-  // renders a `<button-stub>`, which is an HTMLUnknownElement and therefore not focusable in jsdom,
-  // so a focus() call on it silently leaves document.activeElement on <body> and the test would
-  // fail for a reason that has nothing to do with the code under test.
+  // Button is un-stubbed here: the shared stub renders an HTMLUnknownElement, which jsdom will not
+  // focus, so the test would fail for a reason unrelated to the code under test.
   it('restores focus to the table toolbar button when the table-size dialog is cancelled', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {

@@ -1,10 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { isEditorImage } from './richTextImageActions'
 
-// Mirrors the real DOM shape Task 2's image node view produces (verified against
-// @tiptap/core's ResizableNodeView source this session): a [data-resize-container] div wraps a
-// [data-resize-wrapper] div, which holds the <img> itself plus its resize-handle divs as siblings
-// of the image -- not descendants of it.
+// Mirrors the real DOM shape the image node view produces: a [data-resize-container] div wraps a
+// [data-resize-wrapper] div holding the <img> plus its resize handles as siblings of the image.
 function build(): {
   root: HTMLElement
   img: HTMLImageElement
@@ -45,9 +43,8 @@ describe('isEditorImage', () => {
     expect(isEditorImage(img, root)).toBe(img)
   })
 
-  // The node view wraps every image in two container divs. closest() would find the <img> from
-  // there too, but a click on the wrapper's own padding is not a click on the image -- only the
-  // exact event target matters, which is why this function must NOT walk up via closest().
+  // Fails if this predicate is rewritten with closest(): the node view's wrapper divs would then
+  // make a click beside the image count as a click on it.
   it('returns null for a click on the node view\'s wrapping container, not the <img> itself', () => {
     const { root, container, wrapper } = build()
     expect(isEditorImage(container, root)).toBeNull()
@@ -65,8 +62,8 @@ describe('isEditorImage', () => {
     expect(isEditorImage(null, root)).toBeNull()
   })
 
-  // Images win over tables: an <img> inside a <td> is still an image click, not a table click.
-  // Task 5's routing relies on this predicate-level fact to decide image-before-table priority.
+  // Images win over tables: an <img> inside a <td> is still an image click. RichTextInput's
+  // context-menu routing depends on this predicate matching there.
   it('returns the <img> even when it sits inside a table cell', () => {
     const { root, tableImg } = build()
     expect(isEditorImage(tableImg, root)).toBe(tableImg)

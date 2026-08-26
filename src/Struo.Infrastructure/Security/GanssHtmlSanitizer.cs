@@ -16,31 +16,20 @@ namespace Struo.Infrastructure.Security;
 /// was itself kept gets exactly <c>rel="noopener"</c>; anything else gets neither), so the one
 /// writer of that attribute is this class, not whatever produced the HTML. The same reasoning
 /// applies to <c>width</c>: <see cref="HtmlSanitizer.AllowedAttributes"/> has no per-tag concept,
-/// it is a single global set of attribute names, so an attribute that should only mean something on
-/// one tag has to be narrowed in this handler, not in that list. An image's <c>width</c> survives
-/// only when it is a bare positive integer with no leading zero -- the stored contract is a plain
-/// pixel count and nothing else, never a percentage, a decimal, or a value carrying a unit; every
-/// other element loses it unconditionally, allowlisted or not. <c>height</c> is never allowlisted
-/// at all -- a fork's
-/// front end is not guaranteed to pair a stored width with CSS <c>height: auto</c>, and shipping
-/// both dimensions into a renderer that only caps <c>max-width: 100%</c> would stretch the box
-/// the browser lays out while the image itself is scaled to fit the width, squashing its aspect
-/// ratio.
+/// so an attribute that should only mean something on one tag has to be narrowed in this handler,
+/// not in that list. An image's <c>width</c> survives only as a bare pixel count; every other
+/// element loses it unconditionally, allowlisted or not. <c>height</c> is never allowlisted at
+/// all: a fork's front end is not guaranteed to pair a stored width with CSS <c>height: auto</c>,
+/// and shipping both dimensions into a renderer that only caps <c>max-width: 100%</c> would
+/// squash the image's aspect ratio.
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
-    // One to five ASCII digits, no leading zero: the only shape a bare pixel count can take, and
-    // nothing else -- not "0" (meaningless as a width), not a percentage or any other unit, not a
-    // decimal, and not padded with leading/trailing whitespace. Anchored with \A and \z rather than
-    // ^ and $: in .NET, $ (without RegexOptions.Multiline) matches at end-of-string OR immediately
-    // before a single trailing '\n', so "480\n" -- reachable via an attribute value decoded from
-    // "480&#10;" -- would satisfy ^[1-9][0-9]{0,4}$ despite not being the bare digits the contract
-    // promises. \A and \z have no such exemption on either end (verified directly against the .NET
-    // regex engine: "480\n" no longer matches, "480" still does, and a leading "\n480" is rejected
-    // the same way under both anchor pairs, so \z is the only end that actually changes here). Five
-    // digits caps out at 99999px, comfortably above any real editor image while still rejecting
-    // pathological input. Pre-compiled and reused across every node this handler visits, rather
-    // than constructed per call.
+    // One to five ASCII digits, no leading zero: a bare pixel count and nothing else -- no unit, no
+    // percentage, no decimal, no surrounding whitespace. \A and \z, never ^ and $: in .NET, $
+    // (without RegexOptions.Multiline) also matches immediately before a single trailing '\n', so
+    // ^[1-9][0-9]{0,4}$ would accept "480\n" -- reachable from an attribute value written as
+    // "480&#10;".
     private static readonly Regex AllowedWidthPattern =
         new(@"\A[1-9][0-9]{0,4}\z", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
@@ -61,8 +50,8 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
             _sanitizer.AllowedTags.Add(tag);
 
         _sanitizer.AllowedAttributes.Clear();
-        // width is global here (see the class summary) and narrowed to <img>-only, integer-only
-        // in PostProcessNode below; height is deliberately never added.
+        // width is narrowed to <img>-only, integer-only in PostProcessNode below; height is
+        // deliberately never added (see the class summary).
         foreach (var attr in new[] { "href", "src", "alt", "rel", "target", "style", "width" })
             _sanitizer.AllowedAttributes.Add(attr);
 
@@ -104,17 +93,10 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         // would let it ride through the day AllowedTags grows a tag that gives it meaning -- so it is
         // stripped from every element except the anchor, unconditionally.
         //
-        // width gets the same global-allowlist -> per-tag narrowing treatment (see the class summary
-        // for why), but it is a second, independent concern from target above: an <img> is not an
-        // IHtmlAnchorElement and an <a> is not an IHtmlImageElement, so this is a second top-level
-        // "if / else if" pair rather than another branch threaded into the one above. Chaining it
-        // onto the existing if/else-if as more branches of the *same* chain would make the two
-        // concerns mutually exclusive per node -- an <img> would never reach a width check because
-        // it already satisfied the "not an anchor" branch and stopped there, and conversely giving
-        // <a> a width branch would require threading it through the anchor branch and disturbing the
-        // rel/target logic that branch owns. Two separate statements keep them orthogonal: every
-        // node is tested against both, in either order, with neither able to make the other's branch
-        // unreachable.
+        // width gets the same global-allowlist -> per-tag narrowing treatment (see the class
+        // summary). It MUST stay a separate top-level if/else-if rather than extra branches on the
+        // anchor chain: folded in, an <img> would stop at the "not an anchor" branch and never
+        // reach the width check at all.
         _sanitizer.PostProcessNode += (_, e) =>
         {
             if (e.Node is AngleSharp.Html.Dom.IHtmlAnchorElement a)
