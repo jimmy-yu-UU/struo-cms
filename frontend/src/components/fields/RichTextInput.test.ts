@@ -10,6 +10,21 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { RICHTEXT_ACTIVE_BUTTON_CLASS } from './richTextCommands'
 
+// tiptap's onCreate fires from a `window.setTimeout(fn, 0)` (@tiptap/core/src/Editor.ts's
+// mount()) -- a different queue from @vue/test-utils' flushPromises(), which resolves via
+// setImmediate (falling back to setTimeout only if setImmediate is undefined, per its own
+// source). setImmediate runs in Node's check phase while a plain setTimeout(0) runs in the
+// timers phase, and per Node's own docs the ordering between a check-phase and a timers-phase
+// callback queued from the same synchronous script is not guaranteed -- so flushPromises() alone
+// is not a reliable way to wait for onCreate. A second, explicit setTimeout(0) is: the JS event
+// loop always drains the full microtask queue (including every Vue nextTick in the chain) before
+// running ANY timer, and two timers scheduled for the same 0ms delay always fire in the order
+// they were registered -- and mounting a component always registers the editor's own onCreate
+// timer strictly before this helper's own call runs.
+function waitForEditorCreate(): Promise<void> {
+  return new Promise((resolve) => { setTimeout(resolve, 0) })
+}
+
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: {
@@ -348,14 +363,47 @@ describe('RichTextInput', () => {
 
   // Regression guard: a field that mounts already `disabled` must never grow live, draggable
   // handles. This is an existence assertion (no [data-resize-handle] node at all), not an
-  // appearance one, so it holds even though jsdom applies no CSS.
+  // appearance one, so it holds even though jsdom applies no CSS. waitForEditorCreate() (not just
+  // flushPromises()) is what makes this deterministic -- see its own comment for why.
   it('renders no resize handles when mounted already disabled', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
       global: globalOpts,
     })
     await flushPromises()
+    await waitForEditorCreate()
     expect(w.findAll('[data-resize-handle]').length).toBe(0)
+  })
+
+  // Regression guard for the mechanism above: removing live handles from a disabled field relies
+  // on setEditable()'s 'update' event, which -- left unguarded -- is indistinguishable from a
+  // real content change to onUpdate -> emitNormalized() and would emit update:modelValue for
+  // every rich-text field the moment a read-only user opens an item (see RichTextInput.vue's
+  // onCreate comment for the full chain, including why the emitted value would legitimately
+  // differ from the stored one, ruling out an equality-based guard as a fix).
+  it('emits no update:modelValue when mounted already disabled', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await waitForEditorCreate()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  // Same defect, the other door: watch(() => props.disabled) below the editor also calls
+  // setEditable() on a real transition, so it needs the identical suppression -- this guards
+  // that path independently of the mount-time one above.
+  it('emits no update:modelValue when disabled turns on after mount', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: false },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await waitForEditorCreate()
+    await w.setProps({ disabled: true })
+    await flushPromises()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
   })
 
   it('sets text alignment via the toolbar', async () => {
