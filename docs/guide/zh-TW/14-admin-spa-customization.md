@@ -152,6 +152,49 @@ mutation、透過 API 匯入——不只是經過 TipTap 產生的內容。從�
 跟本章前面談 `thead` 時的立場一樣——所以一個累積了大量既有連結的 fork，應該預期這個 `rel` 會一次
 存檔、一次存檔地逐漸消失，而不是一次性全部消失。
 
+### 在編輯器裡調整圖片大小
+
+`richText` 欄位裡插入的圖片，選取之後可以拖曳它的角落控制點來調整大小。這個行為不是 StruoCMS
+自己寫的專屬 node view:它完全來自上游——`@tiptap/extension-image` 自己的 `resize` 選項，在
+`RichTextInput.vue` 裡設定在 `Image` 擴充功能上(`resize: { enabled: true, minWidth: 40,
+alwaysPreserveAspectRatio: true }`),換上 `@tiptap/core` 的 `ResizableNodeView` 來處理每一個圖片
+節點。`alwaysPreserveAspectRatio: true` 讓每一次拖曳都鎖定圖片自己的長寬比——上游自己的預設值只有
+按住 Shift 時才會這樣做——`minWidth` 則避免某個控制點把圖片拖成一個小到無法操作的目標。
+
+本 repo 提供的是控制點的外觀，不是它的行為。`ResizableNodeView` 用絕對定位加上 `data-resize-handle`
+屬性去擺放每一個控制點，但完全沒有設定它自己的大小、背景色或游標——沒有 CSS 的話，每個控制點雖然
+存在於 DOM 裡，卻是 0×0、看不見也點不到。`RichTextInput.vue` 自己的 `<style scoped>` 區塊提供了那份
+樣式，鎖定 `[data-resize-handle]` 這個屬性選擇器(大小、背景色、圓角、每個角落各自的游標樣式)，並
+另外在 `[data-resize-container].ProseMirror-selectednode` 上加了選取狀態的外框線。fork 若想要不同
+的控制點樣式，就改那個檔案裡的那些規則——沒有另外一個獨立的控制點元件可以替換。
+
+`ResizableNodeView` 還會把 `<img>` 包進兩層容器 `<div>` 裡(`[data-resize-container]` 包住
+`[data-resize-wrapper]`,控制點元素則是 `<img>` 在 wrapper 裡的兄弟節點),用來容納控制點並在拖曳
+過程中管理版面。這只存在於運作中的 ProseMirror 檢視畫面裡——永遠不會出現在 `getHTML()` 的輸出中，
+也永遠不會出現在送進清理器、或最終儲存下來的 HTML 裡。儲存下來的 `RichText` 值裡的 `<img>` 從來
+不會被包起來。
+
+拖曳控制點也會把 `height` 寫進圖片節點自己的屬性裡——上游的 `onCommit` 每次調整大小之後都會同時
+設定兩個維度——但 `RichTextInput.vue` 把 `height` 的 `addAttributes()` 覆寫成 `rendered: false`，
+所以 `height` 從一開始就不會進到序列化後的 HTML 裡。這跟第 5 章清理器剝除 `height` 不是重複做同一
+件事:清理器的職責是在任何輸入路徑上拒絕 `height`，不論它是不是惡意送進來的;而這個覆寫存在的
+理由，是讓 `getHTML()` 的輸出本來就已經跟清理器最終會產生的結果一致——如果沒有它，這個欄位自己
+比對外部變更的邏輯，每次更新都會看到一個只差在 `height` 的假差異，然後毫無理由地重置游標位置。
+
+在這個欄位裡按右鍵，現在會依點擊位置開啟兩種不同的右鍵選單。直接點在 `<img>` 上得到的是圖片選單
+(編輯替代文字、刪除圖片);點在表格內其他任何地方得到的是前面說過的表格選單。圖片的判斷先於表格
+執行，所以即使圖片位於表格的儲存格裡，得到的仍然是圖片選單，不是那個儲存格的選單。兩種選單其實
+是同一個 `RichTextContextMenu.vue` 元件，只是渲染不同的動作清單——圖片的動作定義在
+`richTextImageActions.ts` 裡，跟表格的 `richTextTableActions.ts` 對應。
+
+還有一個值得明講的表格細節，因為不講清楚的話它看起來會像是個疏漏:TipTap 的表格擴充功能永遠都會
+渲染出一個 `<colgroup>`——它的 `renderHTML` 是寫死的 `["table", attrs, colgroup, ["tbody", 0]]`，
+不是依任何條件決定要不要輸出——而 `GanssHtmlSanitizer` 每次都會把它剝掉，因為 `colgroup` 從來沒有
+被加進標籤允許清單。這個表格擴充功能設定的是 `resizable: false`，所以這個編輯器本來就不會讓使用者
+設定每一欄各自的寬度;在這個設定下，TipTap 每次都吐出來的那個 `<colgroup>` 不承載任何資訊，剝掉它
+不會損失任何東西。這是刻意接受的現況，不是一個該靠把 `colgroup` 加進允許清單來「修好」的錯誤——
+真的加了，只會開始儲存這個編輯器根本沒有辦法有意義地產生出來的欄寬資料。
+
 ## 重新設計供應商 `ui/` 元件的樣式
 
 **`frontend/src/components/ui/` 是供應商生成的唯讀輸出——絕不編輯它，也絕不對它 `:deep()`。** 重新換
