@@ -39,11 +39,16 @@ describe('RichTextTableMenu', () => {
   // (addRowAfter, deleteTable, …) that this task deliberately removes from this component — those
   // eight operations moved to the table's own right-click menu in Task 4. This component is now
   // insert-only, so its replacement coverage is the "custom size…" escape hatch instead.
-  it('emits customSize and closes when the custom-size entry is picked', async () => {
+  // The payload is the trigger button itself, not a formality: it is the only way RichTextInput
+  // can restore focus after the size dialog is cancelled, because this component deliberately
+  // suppresses the popover's own close-auto-focus on this path and the entry that had focus
+  // unmounts with the popover. Asserting the exact element, not just that something was emitted.
+  it('emits customSize with its own trigger button and closes when the custom-size entry is picked', async () => {
     const w = mount(RichTextTableMenu, { ...opts })
+    const trigger = w.get('[data-cmd="table"]').element
     await w.get('[data-cmd="table"]').trigger('click')
     await w.get('[data-cmd="tableCustomSize"]').trigger('click')
-    expect(w.emitted('customSize')).toEqual([[]])
+    expect(w.emitted('customSize')).toEqual([[trigger]])
     expect(w.find('[data-cmd="tableCustomSize"]').exists()).toBe(false)
     w.unmount()
   })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Table } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
@@ -11,11 +11,14 @@ defineOptions({ name: 'RichTextTableMenu' })
 defineProps<{ disabled?: boolean }>()
 const emit = defineEmits<{
   (e: 'insert', size: { rows: number; cols: number; withHeaderRow: boolean }): void
-  (e: 'customSize'): void
+  // Carries this popover's own trigger button so RichTextInput can restore focus to it when the
+  // dialog this opens is cancelled -- see onCustomSize below.
+  (e: 'customSize', restoreFocusTo: HTMLElement | null): void
 }>()
 
 const { t } = useI18n()
 const open = ref(false)
+const triggerRef = ref<ComponentPublicInstance | null>(null)
 
 // The grid path is opinionated: a CMS table almost always wants a header row, and this keeps the
 // pre-RT-2 behaviour. The dialog path is where that becomes a choice.
@@ -29,9 +32,17 @@ function onPick(size: { rows: number; cols: number }): void {
 // exactly the correct, wanted behaviour.
 let suppressCloseAutoFocus = false
 
+// Hands the trigger button over with the event, because suppressCloseAutoFocus above means this
+// popover will NOT put focus back on it and the "Custom size..." button that currently holds focus
+// unmounts with the popover -- leaving the dialog's own cancel with nothing to restore to (observed
+// in the running admin as focus landing on <body>). The instance's $el is the <button>: Button
+// renders a single reka Primitive root, so there is no fragment for $el to resolve to a comment
+// node -- the instanceof check below is what keeps that an assumption this code tolerates being
+// wrong about rather than one it depends on.
 function onCustomSize(): void {
   suppressCloseAutoFocus = true
-  emit('customSize')
+  const el: unknown = triggerRef.value?.$el
+  emit('customSize', el instanceof HTMLElement ? el : null)
   open.value = false
 }
 
@@ -58,7 +69,7 @@ function onPopoverCloseAutoFocus(event: Event): void {
       <!-- type="button" is explicit even though PopoverTrigger (as-child) merges its own
            type="button" onto what it wraps: this sits inside ItemForm.vue's <form>, so the Button
            does not rely on the merge behaviour of the component wrapping it. -->
-      <Button type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled"
+      <Button ref="triggerRef" type="button" variant="ghost" size="icon" data-cmd="table" :disabled="disabled"
         :aria-label="t('fields.richtext.table')" :title="t('fields.richtext.table')">
         <Table />
       </Button>
