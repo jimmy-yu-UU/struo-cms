@@ -239,8 +239,9 @@ SC 2.5.8 (Target Size (Minimum), level AA) asks for, and with no keyboard or men
 nothing to fall back on; touch users get that same 10px target. Both are stated limitations of what
 this template ships rather than properties a fork has to keep. A fork can widen the grab area without
 changing the visual — a transparent `::before` on `[data-resize-handle]`, sized up and centered on the
-10px dot — though note that the four edge handles' enlarged zones would overlap each other at the 40px
-`minWidth`, so enlarging the four corners only is the safer shape. A fork can also add a width control
+10px dot — and should check the result against a small image, since every handle is positioned on the
+image's own edges and enlarged zones have nothing keeping them apart once the image itself is not much
+bigger than they are. A fork can also add a width control
 to the image context menu. Neither substitutes for the other: enlarging a target does nothing for a
 keyboard user, and a menu control does nothing for target size.
 
