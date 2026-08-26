@@ -204,6 +204,12 @@ past the `overflow-x-clip` `AppShell` puts on the content column, so an over-dra
 longer be dragged back. Left in place, this is ordinary WYSIWYG behavior for a field with a fixed
 reading measure, not a bug: what the editor shows during a drag is what publishing will render.
 
+The consequence of that clamp, for a fork, is that a stored `width` can never exceed the admin's own
+prose measure — about 603px at the default 65ch. If your published article template is wider than the
+admin's reading measure, there is no editor path to an image wider than that: a user cannot drag one
+past the column, so the only ways to get one are to widen the editor's own measure or to write the
+`width` attribute directly through the API.
+
 What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
 and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`
 attribute — but sets no size, background, or cursor of its own, so without CSS every handle exists in
@@ -213,6 +219,30 @@ color, border radius, a cursor for each of the eight directions). Selecting the 
 to the handles themselves — they are just as visible and draggable unselected — beyond a separate
 outline rule on `[data-resize-container].ProseMirror-selectednode`. A fork that wants different
 handle styling edits those rules, in that file — there is no separate handle component to swap.
+
+One coupling to know about before editing that style block: it also hard-codes a `2em` vertical
+margin on `[data-resize-container]`, and zeroes the margin `@tailwindcss/typography` puts on the
+`<img>` itself. That has to happen so the handles sit on the image's own corners instead of on a box
+inflated by the image's margin, and `2em` is the value the plugin's `base` modifier uses — which is
+what a bare `prose` class resolves to, and what the editor applies today. Switching the editor to a
+sized variant (`prose-sm`, `prose-lg`, …) changes the plugin's own image margin but not this
+hard-coded number, so the two silently drift apart and the editor starts showing image spacing that
+published output does not.
+
+Resizing is pointer-only, and there is no keyboard equivalent anywhere in the field. The handles are
+drag targets and nothing else — upstream binds `mousedown` and `touchstart` on each one, and the
+document-level `keydown` it adds exists only to track the Shift key during a drag already in flight —
+and neither the image context menu below, which offers only *Edit alt text* and *Delete image*, nor
+any dialog in this field accepts a width. A keyboard-only user therefore cannot set an image width at
+all. The handles are also small: 10px square (`0.625rem`), below the 24×24 CSS-pixel minimum WCAG 2.2
+SC 2.5.8 (Target Size (Minimum), level AA) asks for, and with no keyboard or menu equivalent there is
+nothing to fall back on; touch users get that same 10px target. Both are stated limitations of what
+this template ships rather than properties a fork has to keep. A fork can widen the grab area without
+changing the visual — a transparent `::before` on `[data-resize-handle]`, sized up and centered on the
+10px dot — though note that the four edge handles' enlarged zones would overlap each other at the 40px
+`minWidth`, so enlarging the four corners only is the safer shape. A fork can also add a width control
+to the image context menu. Neither substitutes for the other: enlarging a target does nothing for a
+keyboard user, and a menu control does nothing for target size.
 
 `ResizableNodeView` also wraps the `<img>` in two container `<div>`s (`[data-resize-container]` around
 `[data-resize-wrapper]`, with the handle elements as siblings of the `<img>` inside the wrapper) to
@@ -237,14 +267,27 @@ are the same `RichTextContextMenu.vue` component rendering a different action li
 themselves are declared in `richTextImageActions.ts`, mirroring `richTextTableActions.ts` for tables.
 
 One more detail worth recording explicitly, because it looks like an oversight otherwise: TipTap's
-table extension always renders a `<colgroup>` — its `renderHTML` is hard-coded to
-`["table", attrs, colgroup, ["tbody", 0]]`, not conditional on anything — and `GanssHtmlSanitizer`
-strips it every time, because `colgroup` was never added to the tag allowlist. The table extension is
+table extension renders a `<colgroup>` for every table this editor can produce, and
+`GanssHtmlSanitizer` strips it every time, because `colgroup` was never added to the tag allowlist.
+Under the configuration used here `renderHTML` returns `["table", attrs, colgroup, ["tbody", 0]]`.
+That shape is not literally unconditional — read in the installed `@tiptap/extension-table@3.30.2`,
+the return is wrapped in a `<div class="tableWrapper">` when the extension's `renderWrapper` option
+is on, and its `createColGroup` helper returns no colgroup at all for a table node with no first
+row — but both conditions are settled here: `renderWrapper` defaults to `false` and is left there,
+and the `table` node's own content expression is `tableRow+`, so a table in the document always has
+a first row. The table extension is
 configured with `resizable: false`, so this editor never lets a user set a per-column width in the
 first place; the `<colgroup>` TipTap always emits carries no information under that configuration, so
 losing it costs nothing. This is a deliberate acceptance, not a bug to fix by allowlisting
 `colgroup` — doing so would only start storing width data this editor has no way to produce
 meaningfully.
+
+That `renderWrapper` option deserves one explicit warning, because turning it on silently destroys
+content rather than merely changing markup. With `renderWrapper: true`, `getHTML()` emits a
+`<div class="tableWrapper">` around every table; `div` is not in `GanssHtmlSanitizer`'s `AllowedTags`,
+and the sanitizer leaves `KeepChildNodes` at its default `false`, which drops a disallowed element
+together with its entire subtree. Every table in the value would therefore be removed on save, not
+unwrapped. Leave `renderWrapper` off, or allowlist `div` first.
 
 ## Restyling a vendored `ui/` component
 
