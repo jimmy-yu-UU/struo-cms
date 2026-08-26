@@ -177,6 +177,11 @@ preflight、或是針對編輯器內容覆寫掉那條規則,就會失去這個�
 的話,對一個有固定閱讀欄寬的欄位來說,這是正常的 WYSIWYG 行為,不是 bug:編輯器在拖曳時顯示的
 樣子,就是發布之後會渲染出來的樣子。
 
+這個限制對 fork 造成的後果是:儲存下來的 `width` 永遠不可能超過後台自己的 prose 量測欄寬——在預設
+的 65ch 之下大約是 603px。如果你發布用的文章模板比後台的閱讀欄寬更寬,那就沒有任何一條編輯器上的
+路徑可以做出比那更寬的圖片:使用者拖不過那個欄寬,所以唯二的辦法是把編輯器自己的量測欄寬改寬,或
+是直接透過 API 寫入 `width` 屬性。
+
 本 repo 提供的是控制點的外觀，不是它的行為。`ResizableNodeView` 無條件地附加並擺放每一個控制點——
 用絕對定位加上 `data-resize-handle` 屬性——但完全沒有設定它自己的大小、背景色或游標，所以沒有 CSS
 的話，每個控制點雖然存在於 DOM 裡，卻是 0×0、看不見也點不到。`RichTextInput.vue` 自己的
@@ -185,6 +190,25 @@ preflight、或是針對編輯器內容覆寫掉那條規則,就會失去這個�
 看得到也拖得動——選取唯一多出來的，是另一條規則畫在 `[data-resize-container].ProseMirror-selectednode`
 上的外框線。fork 若想要不同的控制點樣式，就改那個檔案裡的那些規則——沒有另外一個獨立的控制點元件
 可以替換。
+
+在動那個樣式區塊之前，有一個耦合要先知道:它同時也把 `[data-resize-container]` 的上下外距寫死成
+`2em`，並且把 `@tailwindcss/typography` 加在 `<img>` 本身上的外距歸零。這是必要的，否則控制點會落
+在一個被圖片外距撐大的框上，而不是落在圖片自己的角上;而 `2em` 就是那個外掛 `base` modifier 的
+值——也就是一個沒有加尺寸後綴的 `prose` class 會解析到的值，正是這個編輯器今天套用的那一個。把編輯
+器換成帶尺寸的變體(`prose-sm`、`prose-lg`⋯)會改變外掛自己的圖片外距，卻不會改變這個寫死的數字，
+於是兩者會悄悄地對不起來，編輯器開始顯示發布後不會出現的圖片間距。
+
+縮放圖片是純指標操作，這個欄位裡任何地方都沒有等效的鍵盤路徑。控制點就只是拖曳目標而已——上游在
+每一個控制點上綁的是 `mousedown` 與 `touchstart`，而它另外加在 document 上的 `keydown` 只用來追蹤
+一次進行中的拖曳裡 Shift 鍵的狀態——而下面那個圖片右鍵選單只提供「編輯替代文字」與「刪除圖片」，
+這個欄位裡也沒有任何一個對話框接受寬度輸入。因此一個只用鍵盤的使用者根本無法設定圖片寬度。控制點
+也很小:10px 見方(`0.625rem`)，低於 WCAG 2.2 SC 2.5.8(Target Size (Minimum)，AA 等級)要求的
+24×24 CSS 像素下限，而且既沒有鍵盤路徑也沒有選單路徑可以退而求其次;觸控使用者拿到的也是同一個
+10px 的目標。這兩點都是本模板出貨現況的既述限制，不是 fork 必須沿用的性質。fork 可以在不改變視覺
+的前提下把可抓取範圍加大——在 `[data-resize-handle]` 上加一個透明的 `::before`，放大並對齊置中於那
+個 10px 的圓點——不過要注意，在 `minWidth` 為 40px 時，四個邊中點控制點放大後的範圍會彼此重疊，所
+以只放大四個角是比較安全的做法。fork 也可以在圖片右鍵選單裡加一個寬度控制項。這兩者不能互相取代:
+把目標加大對鍵盤使用者毫無幫助，而一個選單控制項也完全不改善目標尺寸。
 
 `ResizableNodeView` 還會把 `<img>` 包進兩層容器 `<div>` 裡(`[data-resize-container]` 包住
 `[data-resize-wrapper]`,控制點元素則是 `<img>` 在 wrapper 裡的兄弟節點),用來容納控制點並在拖曳
@@ -206,13 +230,23 @@ preflight、或是針對編輯器內容覆寫掉那條規則,就會失去這個�
 其實是同一個 `RichTextContextMenu.vue` 元件，只是渲染不同的動作清單——圖片的動作定義在
 `richTextImageActions.ts` 裡，跟表格的 `richTextTableActions.ts` 對應。
 
-還有一個值得明講的表格細節，因為不講清楚的話它看起來會像是個疏漏:TipTap 的表格擴充功能永遠都會
-渲染出一個 `<colgroup>`——它的 `renderHTML` 是寫死的 `["table", attrs, colgroup, ["tbody", 0]]`，
-不是依任何條件決定要不要輸出——而 `GanssHtmlSanitizer` 每次都會把它剝掉，因為 `colgroup` 從來沒有
-被加進標籤允許清單。這個表格擴充功能設定的是 `resizable: false`，所以這個編輯器本來就不會讓使用者
+還有一個值得明講的表格細節，因為不講清楚的話它看起來會像是個疏漏:TipTap 的表格擴充功能會替這個
+編輯器做得出來的每一個表格都渲染出一個 `<colgroup>`，而 `GanssHtmlSanitizer` 每次都會把它剝掉，因
+為 `colgroup` 從來沒有被加進標籤允許清單。在這裡的設定之下,`renderHTML` 回傳的是
+`["table", attrs, colgroup, ["tbody", 0]]`。這個形狀並不是字面上無條件的——實際讀了安裝的
+`@tiptap/extension-table@3.30.2`:當擴充功能的 `renderWrapper` 選項打開時，回傳值會再被包進一層
+`<div class="tableWrapper">`，而它的 `createColGroup` 輔助函式對一個沒有第一列的表格節點根本不會
+回傳 colgroup——但這兩個條件在這裡都已經被定死:`renderWrapper` 預設為 `false` 且維持預設，而
+`table` 節點自己的 content 運算式是 `tableRow+`，所以文件裡的表格永遠有第一列。這個表格擴充功能設定的是 `resizable: false`，所以這個編輯器本來就不會讓使用者
 設定每一欄各自的寬度;在這個設定下，TipTap 每次都吐出來的那個 `<colgroup>` 不承載任何資訊，剝掉它
 不會損失任何東西。這是刻意接受的現況，不是一個該靠把 `colgroup` 加進允許清單來「修好」的錯誤——
 真的加了，只會開始儲存這個編輯器根本沒有辦法有意義地產生出來的欄寬資料。
+
+那個 `renderWrapper` 選項值得一個明確的警告，因為把它打開不是改變標記而已，而是會安靜地摧毀內容。
+在 `renderWrapper: true` 之下，`getHTML()` 會在每個表格外面吐出一層 `<div class="tableWrapper">`;
+`div` 不在 `GanssHtmlSanitizer` 的 `AllowedTags` 裡，而清理器的 `KeepChildNodes` 維持在預設的
+`false`，那會把一個不被允許的元素連同它整個子樹一起丟掉。於是儲存時被移除的是值裡的每一個表格，
+而不只是那層外包裝。請維持 `renderWrapper` 關閉，或是先把 `div` 加進允許清單。
 
 ## 重新設計供應商 `ui/` 元件的樣式
 
