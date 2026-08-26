@@ -154,19 +154,21 @@ mutation、透過 API 匯入——不只是經過 TipTap 產生的內容。從�
 
 ### 在編輯器裡調整圖片大小
 
-`richText` 欄位裡插入的圖片，只要這個欄位是可編輯的，隨時都可以拖曳它的角落控制點來調整大小——
-調整大小不需要先選取圖片這個前提。這個行為不是 StruoCMS 自己寫的專屬 node view:它完全來自
-上游——`@tiptap/extension-image` 自己的 `resize` 選項，在 `RichTextInput.vue` 裡設定在 `Image`
-擴充功能上 (`resize: { enabled: true, minWidth: 40, alwaysPreserveAspectRatio: true }`),換上
-`@tiptap/core` 的 `ResizableNodeView` 來處理每一個圖片節點。`alwaysPreserveAspectRatio: true` 讓每
-一次拖曳都鎖定圖片自己的長寬比——上游自己的預設值只有按住 Shift 時才會這樣做——`minWidth` 則避免
-某個控制點把圖片拖成一個小到無法操作的目標。
+`richText` 欄位裡插入的圖片，只要這個欄位是可編輯的，隨時都可以拖曳它八個控制點中的任何一個
+來調整大小——四個角落，加上四個邊的中點。調整大小不需要先選取圖片這個前提。這個行為不是
+StruoCMS 自己寫的專屬 node view:它完全來自上游——`@tiptap/extension-image` 自己的 `resize`
+選項，在 `RichTextInput.vue` 裡設定在 `Image` 擴充功能上 (`resize: { enabled: true, minWidth: 40,
+alwaysPreserveAspectRatio: true, directions: [...全部八個] }`),換上 `@tiptap/core` 的
+`ResizableNodeView` 來處理每一個圖片節點。`alwaysPreserveAspectRatio: true` 讓每一次拖曳都鎖定
+圖片自己的長寬比——上游自己的預設值只有按住 Shift 時才會這樣做——而且這對八個控制點的效果完全
+一樣:抓住哪一個控制點只決定拖曳是以哪個邊或哪個角為錨點，不會決定長寬比要不要鎖定。`minWidth`
+則避免某個控制點把圖片拖成一個小到無法操作的目標。
 
 本 repo 提供的是控制點的外觀，不是它的行為。`ResizableNodeView` 無條件地附加並擺放每一個控制點——
 用絕對定位加上 `data-resize-handle` 屬性——但完全沒有設定它自己的大小、背景色或游標，所以沒有 CSS
 的話，每個控制點雖然存在於 DOM 裡，卻是 0×0、看不見也點不到。`RichTextInput.vue` 自己的
 `<style scoped>` 區塊提供了那份樣式，鎖定 `[data-resize-handle]` 這個屬性選擇器 (大小、背景色、
-圓角、每個角落各自的游標樣式)。選取圖片對控制點本身不會多加任何東西——不管有沒有選取，它們一樣
+圓角、八個方向各自的游標樣式)。選取圖片對控制點本身不會多加任何東西——不管有沒有選取，它們一樣
 看得到也拖得動——選取唯一多出來的，是另一條規則畫在 `[data-resize-container].ProseMirror-selectednode`
 上的外框線。fork 若想要不同的控制點樣式，就改那個檔案裡的那些規則——沒有另外一個獨立的控制點元件
 可以替換。

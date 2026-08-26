@@ -178,24 +178,26 @@ disappear gradually, one save at a time, not all at once.
 
 ### Resizing images in the editor
 
-An inserted image in the `richText` field can be resized by dragging its corner handles at any time
-while the field is editable — resizing has no selection prerequisite. That behavior is not a bespoke
-node view StruoCMS wrote: it comes from upstream, `@tiptap/extension-image`'s own `resize` option
-configured on the `Image` extension in `RichTextInput.vue` (`resize: { enabled: true, minWidth: 40,
-alwaysPreserveAspectRatio: true }`), which swaps in `@tiptap/core`'s `ResizableNodeView` for every
-image node. `alwaysPreserveAspectRatio: true` locks every drag to the image's own ratio — upstream's
-own default only does that while Shift is held — and `minWidth` keeps a handle from shrinking the
-image into an unusably small target.
+An inserted image in the `richText` field can be resized by dragging one of its eight handles — the
+four corners plus the four edge midpoints — at any time while the field is editable; resizing has no
+selection prerequisite. That behavior is not a bespoke node view StruoCMS wrote: it comes from
+upstream, `@tiptap/extension-image`'s own `resize` option configured on the `Image` extension in
+`RichTextInput.vue` (`resize: { enabled: true, minWidth: 40, alwaysPreserveAspectRatio: true,
+directions: [...all eight] }`), which swaps in `@tiptap/core`'s `ResizableNodeView` for every image
+node. `alwaysPreserveAspectRatio: true` locks every drag to the image's own ratio — upstream's own
+default only does that while Shift is held — and it applies the same way to all eight handles: which
+one is grabbed only decides which edge or corner the drag anchors to, not whether the ratio holds.
+`minWidth` keeps a handle from shrinking the image into an unusably small target.
 
 What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
 and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`
 attribute — but sets no size, background, or cursor of its own, so without CSS every handle exists in
 the DOM but is 0×0, invisible, and unclickable. `RichTextInput.vue`'s own `<style scoped>` block
 supplies that styling, keyed off the `[data-resize-handle]` attribute selector (size, background
-color, border radius, per-corner cursor). Selecting the image adds nothing to the handles themselves —
-they are just as visible and draggable unselected — beyond a separate outline rule on
-`[data-resize-container].ProseMirror-selectednode`. A fork that wants different handle styling edits
-those rules, in that file — there is no separate handle component to swap.
+color, border radius, a cursor for each of the eight directions). Selecting the image adds nothing
+to the handles themselves — they are just as visible and draggable unselected — beyond a separate
+outline rule on `[data-resize-container].ProseMirror-selectednode`. A fork that wants different
+handle styling edits those rules, in that file — there is no separate handle component to swap.
 
 `ResizableNodeView` also wraps the `<img>` in two container `<div>`s (`[data-resize-container]` around
 `[data-resize-wrapper]`, with the handle elements as siblings of the `<img>` inside the wrapper) to
