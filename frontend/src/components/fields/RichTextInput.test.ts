@@ -321,7 +321,7 @@ describe('RichTextInput', () => {
   // this guards is different: getHTML() must already agree with the stored value *before* any
   // round trip, because the `watch(() => props.modelValue)` comparison further down diffs the
   // two directly. Proof this isn't vacuous: deleting the `rendered: false` override below turns
-  // this red (confirmed in this session -- see task-2-report.md).
+  // this red (confirmed in this session, Task 2).
   it('never serializes height, even when the inserted node carries one', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -331,6 +331,31 @@ describe('RichTextInput', () => {
     const emitted = w.emitted('update:modelValue')
     const html = String(emitted!.at(-1)![0])
     expect(html).not.toContain('height')
+  })
+
+  // Guards against a future edit dropping `resize.enabled` silently: if it were removed, the two
+  // tests above would still pass (width/height serialization doesn't depend on the node view at
+  // all -- confirmed this session that getHTML() serializes via schema.toDOM, never through a
+  // live node view), so nothing else in this file would go red.
+  it('constructs a resizable node view for an inserted image', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.setImage({ src: 'https://example.com/cat.png' })
+    await flushPromises()
+    expect(w.find('[data-resize-container]').exists()).toBe(true)
+  })
+
+  // Regression guard: a field that mounts already `disabled` must never grow live, draggable
+  // handles. This is an existence assertion (no [data-resize-handle] node at all), not an
+  // appearance one, so it holds even though jsdom applies no CSS.
+  it('renders no resize handles when mounted already disabled', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
+      global: globalOpts,
+    })
+    await flushPromises()
+    expect(w.findAll('[data-resize-handle]').length).toBe(0)
   })
 
   it('sets text alignment via the toolbar', async () => {
