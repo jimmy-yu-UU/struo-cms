@@ -96,6 +96,27 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
   resolveLinkDialog = null
 }
 
+// Shared by both dialogs below that can open while the editor (or one of its own toolbar/menu
+// controls) still holds DOM focus. Verified this session in the installed reka-ui@2.10.3 source:
+// DialogContentModal.js's useHideOthers watcher calls the `aria-hidden` library's own hideOthers()
+// synchronously, with no await, the moment `open` flips true, while FocusScope.js's matching
+// present-watcher is declared `async` and does `await nextTick()` before it ever dispatches its
+// mount-autofocus event -- so whatever element holds focus at the instant `open` flips stays
+// focused through that entire first reactive flush, strictly before autofocus gets a chance to run.
+// If that element is still a descendant of the app shell's own <main> (true on both paths this
+// guards: a left-click on a toolbar or bubble-menu button focuses that button same as any native
+// button click, and a right-click on an image never blurs the contenteditable the way a left-click
+// elsewhere does -- see onContentContextMenu's own image branch above), Chrome logs an
+// aria-hidden-on-an-element-whose-descendant-retains-focus warning against <main> before autofocus
+// ever moves focus off it. Blurring here, synchronously and before the open flag flips, empties
+// document.activeElement down to <body> -- outside the subtree hideOthers is about to hide -- so
+// there is nothing focused inside <main> left for that check to catch. FocusScope's own deferred
+// autofocus still runs exactly as before once the flush settles, landing focus inside the dialog.
+function blurActiveElementBeforeDialog(): void {
+  const active = document.activeElement
+  if (active instanceof HTMLElement) active.blur()
+}
+
 function openLinkDialog(
   initial: { href: string; newTab: boolean; canRemove: boolean },
 ): Promise<{ href: string; newTab: boolean } | 'remove' | null> {
@@ -109,6 +130,7 @@ function openLinkDialog(
   // editor would otherwise leave that menu lingering beside it (RT-5's leftover; see
   // RichTextBubbleMenu.vue's hide() for the mechanism and why it does not depend on this ordering).
   bubbleMenuRef.value?.hide()
+  blurActiveElementBeforeDialog()
   return new Promise((resolve) => {
     resolveLinkDialog = resolve
     // Props set, then the open flip -- both in this same synchronous call, no await between them.
@@ -210,7 +232,7 @@ const editor = useEditor({
     // `resize.enabled` swaps in @tiptap/core's ResizableNodeView (verified in its installed
     // source: addNodeView() returns null unless this is true -- it also returns null when
     // `typeof document === 'undefined'`, an SSR guard that doesn't apply to this SPA), which lets
-    // an editor drag an image's corner handles. `alwaysPreserveAspectRatio: true` locks every
+    // an editor drag an image's resize handles. `alwaysPreserveAspectRatio: true` locks every
     // drag to the image's own ratio rather than upstream's default of only doing so while Shift
     // is held: verified in ResizableNodeView.handleResize that `isShiftKeyPressed` is read at all
     // only when `preserveAspectRatio` (this option) is false, so once this is true there is no
@@ -218,6 +240,17 @@ const editor = useEditor({
     // general-purpose CMS have no design background, and an accidental free-drag silently
     // stretches a published image with no visual cue that anything went wrong. minWidth keeps a
     // handle from shrinking the image into an unusably small target.
+    //
+    // directions requests all eight handles ResizableNodeViewDirection allows (verified in the
+    // installed @tiptap/core source: that's the full union, and `directions` defaults to the four
+    // corners alone when omitted) -- four corners plus the four edge midpoints the maintainer
+    // asked for. Every one of the eight still resizes proportionally: alwaysPreserveAspectRatio
+    // above is read once per drag from `this.preserveAspectRatio`, not branched on which
+    // direction is active (confirmed in the same handleResize/calculateNewDimensions read), so an
+    // edge handle locks the ratio exactly like a corner handle -- the handles differ only in which
+    // edge or corner the drag is anchored to. That is coherent with the storage contract: only
+    // `width` is ever persisted (see the addAttributes override below), so every direction's drag
+    // round-trips through the same single number regardless of which axis the user grabbed.
     //
     // height is never rendered into the serialized HTML, via the addAttributes override below.
     // This is NOT a duplicate of the backend's sanitizer: Task 1 already strips height there
@@ -229,6 +262,21 @@ const editor = useEditor({
     // compares getHTML()'s output to the stored prop directly -- if the two disagree only because
     // of a height neither side actually wants, that watch fires setContent() on every external
     // update and resets the cursor for no reason.
+    //
+    // A second, independent height defect this option does NOT address: ResizableNodeView's own
+    // handleResize (verified in the installed @tiptap/core source) writes BOTH
+    // `element.style.width` and `element.style.height` as inline pixel values on every mousemove,
+    // unconditionally. Tailwind preflight's `img { max-width: 100%; height: auto }` can clamp the
+    // rendered WIDTH once a drag passes the container's edge (max-width is a distinct property
+    // from width, so it always applies), but the inline height always beats preflight's
+    // stylesheet height for that same property, so nothing was left to clamp the height to
+    // match -- the image stretched vertically past that point. The style block below forces
+    // height back to auto on this node view's own img (needing !important to outrank the inline
+    // style), which is a CSS-only fix and belongs there, not here. Confirmed in the same source
+    // that handleMouseUp's onCommit reads `this.element.offsetWidth` -- the browser's own already-
+    // clamped layout value, not the drag's raw unclamped number -- so the stored width already
+    // matches what publishing renders, both before and after that CSS fix; only the height was
+    // ever wrong.
     //
     // Known upstream defect, not introduced here: ResizableNodeView's constructor registers
     // `editor.on('update', this.handleEditorUpdate.bind(this))`, and its destroy() calls
@@ -251,7 +299,12 @@ const editor = useEditor({
       },
     }).configure({
       inline: false,
-      resize: { enabled: true, minWidth: 40, alwaysPreserveAspectRatio: true },
+      resize: {
+        enabled: true,
+        minWidth: 40,
+        alwaysPreserveAspectRatio: true,
+        directions: ['top', 'right', 'bottom', 'left', 'top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      },
     }),
     TableKit.configure({ table: { resizable: false } }),
     TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
@@ -503,6 +556,12 @@ function onImageAction(action: ImageAction): void {
   // an empty string rather than passing a non-string through to the dialog's `alt: string` prop.
   const attrs = ed.getAttributes('image')
   imageAltDialogAlt.value = typeof attrs.alt === 'string' ? attrs.alt : ''
+  // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) for
+  // why this call is here: the right-click that led to this action leaves the ProseMirror editor
+  // itself focused (a right-click never blurs a contenteditable the way a left-click elsewhere
+  // does), and this dialog's own aria-hidden background would otherwise be applied while that is
+  // still true.
+  blurActiveElementBeforeDialog()
   imageAltDialogOpen.value = true
 }
 
@@ -682,10 +741,15 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep([data-resize-handle="bottom-right"]) { cursor: nwse-resize; }
 .rich-text__content :deep([data-resize-handle="top-right"]),
 .rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
-/* No rules for the 'top'/'bottom'/'left'/'right' edge directions: the `directions` resize option
-   is never passed above, so ResizableNodeView's own default (the four corners only) is what's
-   ever attached -- confirmed by reading its `directions` field default in the same source file.
-   Adding cursor rules for directions this config can't produce would be dead weight. */
+/* The `directions` resize option above now asks for the four edge midpoints too, alongside the
+   four corners -- these two rules are the edge-direction cursors that pairing needs. (An earlier
+   revision of this batch removed them as dead code on the grounds that `directions` was never
+   passed, so only corners could ever exist; that is no longer true, and these are back for the
+   same reason they were here originally.) */
+.rich-text__content :deep([data-resize-handle="top"]),
+.rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; }
+.rich-text__content :deep([data-resize-handle="left"]),
+.rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; }
 
 /* Selection outline: confirmed by reading prosemirror-view@1.42.2's source this session, not
    assumed -- NodeViewDesc.create() (src/viewdesc.ts) sets `nodeDOM` to the exact DOM node a
@@ -694,10 +758,70 @@ defineExpose({ editor, insertImage })
    selectNode()/deselectNode() (same file) fall through to the base ViewDesc implementation --
    since ResizableNodeView defines neither -- which toggles `.ProseMirror-selectednode` on that
    same `nodeDOM`. So the container, not the wrapper or the <img> itself, is what carries the
-   class. */
+   class.
+
+   Without the width rule just below, that outline would hug nothing: createContainer() (same
+   source) sets `element.style.display = 'flex'` (this image is configured `inline: false`, so
+   never 'inline-flex') on a plain <div>, and a block-level flex container with no other width
+   constraint fills the available line width the same as any other block box -- so the outline
+   would draw around the full line, with the image sitting at its left edge, while the handles
+   (positioned against the wrapper just below, which sizes to its own content) stay hugging the
+   image. `width: fit-content` is a plain CSS property this rule owns outright -- upstream's own
+   inline style on this element only ever sets `display`, so there is no inline-style conflict to
+   outrank and no !important needed. Shrinking the container to its single flex child (the
+   wrapper) is what makes the outline and the handles agree on the same box. */
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+.rich-text__content :deep([data-resize-container]) {
+  width: fit-content;
+}
+
+/* The wrapper (createWrapper(), same source) is a plain `display: block` div holding only the
+   <img> and its absolutely-positioned handles -- but it is also a flex ITEM of the container just
+   above, and a flex item's content is explicitly specified (CSS Flexible Box Layout) to form a new
+   formatting context for its own children, so a child's own vertical margins do not collapse
+   through it the way they normally would through an ordinary block parent. `prose` (this editor's
+   own typography class, applied above via editorProps) puts a vertical margin directly on every
+   `<img>` -- confirmed by reading the installed @tailwindcss/typography@0.5.20 source
+   (styles.js's `base` modifier, which is what an unmodified `prose` class resolves to): `margin-top`
+   and `margin-bottom` both `2em`. Uncollapsed, that margin sits inside the wrapper's own rendered
+   box, so the wrapper (and, through it, the fit-content container above) is taller than the image
+   by that margin on both edges -- which is exactly why the resize handles, positioned with
+   top:0/bottom:0 against the wrapper's own edges, previously sat on a box visibly taller than the
+   image rather than on the image's own corners.
+
+   Zeroing that margin here and re-adding it on the container's own margin (a real block box in
+   document flow, whose margin sits OUTSIDE its border box and so never inflates what the outline
+   above measures) keeps the same visual gap above and below an image that `prose` would otherwise
+   have provided, without inflating the box the outline and handles both key off. The `2em` below is
+   a hardcoded approximation of that same `base` modifier value, not a read of it: this editor's
+   `class="prose dark:prose-invert"` (no size suffix) always resolves to that modifier today, so the
+   two happen to agree, but this rule does not track the plugin's own theme value and would silently
+   drift if a future edit switched to `prose-sm`/`prose-lg`/etc. */
+.rich-text__content :deep([data-resize-wrapper] img) {
+  margin: 0;
+}
+.rich-text__content :deep([data-resize-container]) {
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
+
+/* Second, independent defect in the same drag path (see the `directions` comment on the Image
+   extension's own `resize` option above for the full mechanism): ResizableNodeView.handleResize
+   always writes an inline `height` in pixels on every mousemove, and that inline value always
+   outranks Tailwind preflight's stylesheet `height: auto` for the same property -- so once a drag
+   pushed the inline width past what `max-width: 100%` lets the image actually render at, nothing
+   was left to keep the rendered height in proportion, and the image stretched. `!important` here
+   is required, not decorative: only `!important` on a stylesheet rule can outrank an inline style
+   for the same property. Restoring `height: auto` makes the browser derive the rendered height
+   from the image's own natural aspect ratio and whatever width it actually rendered at (clamped or
+   not) -- the same ratio ResizableNodeView itself measured at mount (applyInitialSize() reads this
+   same element's offsetWidth/offsetHeight), so this does not fight alwaysPreserveAspectRatio's own
+   math, only the one place upstream still applies a size as an inline style unconditionally. */
+.rich-text__content :deep([data-resize-wrapper] img) {
+  height: auto !important;
 }
 
 /* Defense-in-depth alongside the editor's own onCreate option above (see the comment on it, next
