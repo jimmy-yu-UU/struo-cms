@@ -98,8 +98,6 @@ describe('RichTextInput', () => {
     i18n.global.locale.value = 'en'
   })
 
-  // Rewritten for RT-5.5: the link command opens RichTextLinkDialog instead of window.prompt, so
-  // driving it means interacting with the dialog's own fields rather than mocking window.prompt.
   it('rejects a javascript: URL entered in the link dialog (defense-in-depth)', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
     await flushPromises()
@@ -1195,7 +1193,7 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  // Task 1 makes the server wrap header rows in <thead>, so that is now what arrives in modelValue.
+  // The server wraps header rows in <thead>, so that is what arrives in modelValue.
   // TipTap's table schema has no thead node, so the parser must descend through it and keep the
   // cells as header cells -- if it instead dropped them or downgraded them to td, every save after
   // a load would destroy the header. ProseMirror's parser is documented to descend through
@@ -1226,8 +1224,8 @@ describe('RichTextInput', () => {
     // ...the header row still comes before the body row, not reordered -- `/<th[\s>]/` again so a
     // stray `<thead` (which this test already asserts is absent) could never be mistaken for it...
     expect(html.search(/<th[\s>]/)).toBeLessThan(html.indexOf('<td'))
-    // ...and TipTap re-serializes without the thead, which is exactly why Task 1 lives on the
-    // server and why the editor needs its own tbody-th styling rule.
+    // ...and TipTap re-serializes without the thead, which is exactly why that normalization lives
+    // on the server and why the editor needs its own tbody-th styling rule.
     expect(html).not.toContain('<thead')
   })
 
@@ -1321,7 +1319,7 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // RT-5's own final review left this open: BubbleMenuPlugin arms `preventHide` on its own
+  // BubbleMenuPlugin arms `preventHide` on its own
   // mousedown, which swallows the very next blur, so the dialog's autofocus stealing DOM focus from
   // the editor would not, on its own, hide this menu -- it would linger beside the open dialog.
   // A bare VTU `.trigger('click')` dispatches only a 'click' event, no 'mousedown' -- so it does

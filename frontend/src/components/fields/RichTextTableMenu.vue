@@ -20,8 +20,8 @@ const { t } = useI18n()
 const open = ref(false)
 const triggerRef = ref<ComponentPublicInstance | null>(null)
 
-// The grid path is opinionated: a CMS table almost always wants a header row, and this keeps the
-// pre-RT-2 behaviour. The dialog path is where that becomes a choice.
+// The grid path is opinionated: a CMS table almost always wants a header row. The dialog path is
+// where that becomes a choice.
 function onPick(size: { rows: number; cols: number }): void {
   emit('insert', { ...size, withHeaderRow: true })
   open.value = false
