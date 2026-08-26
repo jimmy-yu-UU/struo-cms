@@ -199,8 +199,10 @@ width forced to 2000px inside a ~603px column, the image renders at 603px and `o
 the number `ResizableNodeView` commits, reads 603. What does the clamping is Tailwind preflight's own
 `img { max-width: 100% }`, not anything `RichTextInput.vue` declares — a fork that drops preflight, or
 overrides that rule for editor content, loses the clamp and will store the dragged number instead.
-Left in place, this is ordinary WYSIWYG behavior for a field with a fixed reading measure, not a bug:
-what the editor shows during a drag is what publishing will render.
+Also measured, for a fork that goes that way: the eight resize handles travel out with the image,
+past the `overflow-x-clip` `AppShell` puts on the content column, so an over-dragged image can no
+longer be dragged back. Left in place, this is ordinary WYSIWYG behavior for a field with a fixed
+reading measure, not a bug: what the editor shows during a drag is what publishing will render.
 
 What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
 and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`

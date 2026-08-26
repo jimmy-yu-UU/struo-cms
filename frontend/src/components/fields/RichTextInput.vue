@@ -154,19 +154,27 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
 // parameter below.
 let restoreFocusOnDialogCancel: (() => void) | null = null
 
-// Every restore derived from a captured activeElement goes through this guard: focusing a node
-// that has since left the document is a silent no-op that leaves focus on <body>.
+// Every restore built around a specific element goes through this. Focusing a node that has since
+// left the document is a silent no-op that leaves focus on <body> -- observed in the running admin
+// on the bubble menu's own link button, which is removed from the DOM by the hide() that opening
+// the link dialog performs. The editor is the fallback because this is a rich-text field: if
+// whatever the user came from is gone, the text they were editing is where a keyboard user should
+// land, not <body>.
 function focusIfStillInDocument(el: HTMLElement): () => void {
-  return () => { if (document.body.contains(el)) el.focus() }
+  return () => {
+    if (document.body.contains(el)) el.focus()
+    else editor.value?.commands.focus()
+  }
 }
 
 // `restore`, when given, replaces the default "focus whatever was focused before" behaviour. Two
 // callers need that, and both were observed in the running admin landing on <body> after Escape
 // before this parameter existed: the alt dialog opens from a right-click context menu and the
 // table-size dialog from a toolbar popover, and in both cases the element holding focus at this
-// instant is a menu/popover item that is unmounted on the way into the dialog -- so by the time a
-// cancel runs there is nothing left for focusIfStillInDocument to focus. Each of those two passes
-// the destination it actually wants instead.
+// instant is a menu/popover item that is unmounted on the way into the dialog, so there is no
+// element left worth naming. A third path, the bubble menu's own link button, has the same
+// unmount but a usable default: it takes the plain capture and lets focusIfStillInDocument's own
+// editor fallback catch it.
 function blurActiveElementBeforeDialog(restore?: () => void): void {
   const active = document.activeElement
   // Guards against storing document.body itself as "the target to restore": nothing was
@@ -205,11 +213,15 @@ function openLinkDialog(
   // refocusAfterDialogCancel() call, unlike onLinkDialogOpenChange below -- see settleLinkDialog's
   // own comment for why the two are decoupled.
   settleLinkDialog(null)
-  // Capture before hiding, not after: the bubble menu's own link button is one of the two things
-  // that can hold focus when this runs (the toolbar's own link button is the other), and
-  // bubbleMenuRef.hide() just below is what makes BubbleMenuView remove/hide that button --
-  // capturing afterward would find it already gone and record whatever focus fell back to
-  // instead of the real target.
+  // Two entry points share this function, and they need different outcomes. From the TOOLBAR's
+  // link button the capture below is the whole story: that button stays mounted and a cancel
+  // refocuses it. From the BUBBLE MENU's link button it is not -- bubbleMenuRef.hide() just below
+  // removes that button from the DOM (counted in the running admin: `[data-cmd="link"]` goes from
+  // two elements to one across the click), so the captured element is detached by the time a
+  // cancel runs and focusing it does nothing. Capturing before the hide rather than after is still
+  // right -- capturing after would record whatever focus fell back to instead -- but it is not
+  // what makes that path work. What does is focusIfStillInDocument's own editor fallback: the
+  // bubble menu only exists over a text selection, so the editor is where that user came from.
   blurActiveElementBeforeDialog()
   // Force the bubble menu away (a no-op if it was never showing -- BubbleMenuView.hide() guards
   // on its own isVisible): opening this dialog from its own link button is one of the two entry
@@ -970,12 +982,14 @@ defineExpose({ editor, insertImage })
        `min-width: 0` on the wrapper, measured inert and are gone. Neutralized singly and together,
        against both the 2000px-inline-width and the 3000px-intrinsic-width cases -- the latter being
        exactly the flex automatic-minimum-size / fit-content cyclic-percentage scenario each was
-       written against -- every box still measured 603px. They were not kept as insurance either,
-       because in the one configuration that does overflow (preflight neutralized) neither of them
-       prevents the overflow: with both still in place the image itself rendered at 2000px and
-       3000px respectively, and the only thing the container's own cap changed was whether this box
-       stayed at 603px while its image spilled out of it, or grew with it. There is no failure mode
-       left for them to insure against.
+       written against -- every box still measured 603px. Nor were they kept as insurance: in the
+       one configuration that overflows at all (preflight neutralized) they never bounded the IMAGE,
+       which rendered at 2000px and 3000px with both still in place. Measured, they bounded the
+       container, the wrapper and the handles -- and only as a pair; either one alone did not --
+       which in that configuration would keep the handles reachable inside AppShell's own
+       overflow-x-clip on the content column. That is a real difference, but it exists only where
+       the clamp is already gone and the dragged width is already being stored -- a fork-only
+       configuration this repo does not ship, and one chapter 14 now names.
    */
 
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
