@@ -31,12 +31,18 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
 {
     // One to five ASCII digits, no leading zero: the only shape a bare pixel count can take, and
     // nothing else -- not "0" (meaningless as a width), not a percentage or any other unit, not a
-    // decimal, and not padded with leading/trailing whitespace (anchored both ends). Five digits
-    // caps out at 99999px, comfortably above any real editor image while still rejecting
+    // decimal, and not padded with leading/trailing whitespace. Anchored with \A and \z rather than
+    // ^ and $: in .NET, $ (without RegexOptions.Multiline) matches at end-of-string OR immediately
+    // before a single trailing '\n', so "480\n" -- reachable via an attribute value decoded from
+    // "480&#10;" -- would satisfy ^[1-9][0-9]{0,4}$ despite not being the bare digits the contract
+    // promises. \A and \z have no such exemption on either end (verified directly against the .NET
+    // regex engine: "480\n" no longer matches, "480" still does, and a leading "\n480" is rejected
+    // the same way under both anchor pairs, so \z is the only end that actually changes here). Five
+    // digits caps out at 99999px, comfortably above any real editor image while still rejecting
     // pathological input. Pre-compiled and reused across every node this handler visits, rather
     // than constructed per call.
     private static readonly Regex AllowedWidthPattern =
-        new(@"^[1-9][0-9]{0,4}$", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
+        new(@"\A[1-9][0-9]{0,4}\z", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
     private readonly HtmlSanitizer _sanitizer;
 
