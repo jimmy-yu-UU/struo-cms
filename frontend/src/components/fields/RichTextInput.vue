@@ -200,15 +200,16 @@ const editor = useEditor({
       HTMLAttributes: { target: null, rel: null },
     }),
     // `resize.enabled` swaps in @tiptap/core's ResizableNodeView (verified in its installed
-    // source: addNodeView() returns null unless this is true), which lets an editor drag an
-    // image's corner handles. `alwaysPreserveAspectRatio: true` locks every drag to the image's
-    // own ratio rather than upstream's default of only doing so while Shift is held: verified in
-    // ResizableNodeView.handleResize that `isShiftKeyPressed` is read at all only when
-    // `preserveAspectRatio` (this option) is false, so once this is true there is no per-drag
-    // override left to discover -- acceptable here because most editors of a general-purpose CMS
-    // have no design background, and an accidental free-drag silently stretches a published
-    // image with no visual cue that anything went wrong. minWidth keeps a handle from shrinking
-    // the image into an unusably small target.
+    // source: addNodeView() returns null unless this is true -- it also returns null when
+    // `typeof document === 'undefined'`, an SSR guard that doesn't apply to this SPA), which lets
+    // an editor drag an image's corner handles. `alwaysPreserveAspectRatio: true` locks every
+    // drag to the image's own ratio rather than upstream's default of only doing so while Shift
+    // is held: verified in ResizableNodeView.handleResize that `isShiftKeyPressed` is read at all
+    // only when `preserveAspectRatio` (this option) is false, so once this is true there is no
+    // per-drag override left to discover -- acceptable here because most editors of a
+    // general-purpose CMS have no design background, and an accidental free-drag silently
+    // stretches a published image with no visual cue that anything went wrong. minWidth keeps a
+    // handle from shrinking the image into an unusably small target.
     //
     // height is never rendered into the serialized HTML, via the addAttributes override below.
     // This is NOT a duplicate of the backend's sanitizer: Task 1 already strips height there
@@ -253,6 +254,28 @@ const editor = useEditor({
     Placeholder.configure({ placeholder: () => t('fields.richtext.placeholder') }),
   ],
   onUpdate: () => emitNormalized(),
+  // Closes a gap the watch(() => props.disabled) below cannot: that watch only fires on a
+  // *change*, so a field that mounts already disabled never runs it. Verified this session in
+  // @tiptap/core/src/lib/ResizableNodeView.ts -- every image node view's constructor calls
+  // attachHandles() unconditionally and starts `lastEditableState` as `undefined`, and the only
+  // thing that ever calls removeHandles() is handleEditorUpdate(), which only runs from the
+  // editor's own 'update' event. So a disabled-from-the-start field would otherwise get live,
+  // draggable handles that nothing ever tells to remove themselves -- and handleResizeStart has
+  // no isEditable guard of its own, so dragging one would emit update:modelValue from a
+  // read-only field. onCreate, not a plain Vue onMounted, is load-bearing here: verified this
+  // session that @tiptap/vue-3's EditorContent component reparents the editor's DOM into its own
+  // root element and then calls editor.createNodeViews() (-> view.setProps({ nodeViews })) inside
+  // its own nextTick() -- which recreates every node view from scratch, wiping out any earlier
+  // setEditable() call made from a plain onMounted before that reparenting has run. onCreate
+  // (verified in @tiptap/core/src/Editor.ts's mount()) fires from a `window.setTimeout(fn, 0)`
+  // queued after that reparenting starts, and macrotask timers never run until the microtask
+  // queue -- which is where Vue's nextTick chain lives -- is fully drained, so by the time this
+  // callback runs, createNodeViews()'s replacement node views already exist and are listening.
+  // setEditable() (verified in the same Editor.ts) unconditionally emits 'update' even when the
+  // value passed is one it already holds, which is exactly the signal handleEditorUpdate needs.
+  onCreate: ({ editor: created }) => {
+    if (props.disabled) created.setEditable(false)
+  },
 })
 
 // Placeholder text is delivered as a ProseMirror decoration, and decorations only recompute when
@@ -516,10 +539,12 @@ defineExpose({ editor, insertImage })
    it is neither Vue-rendered nor scope-id-bearing either, for the same reason given in this
    block's opening comment, so every rule below also goes through `:deep(...)`.
 
-   Handles: createHandle() (upstream, @tiptap/core/src/lib/ResizableNodeView.ts) sets only
-   `position: absolute` and the `data-resize-handle` attribute -- no size, no background, no
-   cursor (`classNames.handle` defaults to `''`, so there is no class to hook either). Without
-   the rules below every handle is a 0x0, invisible, unclickable div. */
+   Handles: createHandle() (upstream, @tiptap/core/src/lib/ResizableNodeView.ts) sets
+   `position: absolute` and the `data-resize-handle` attribute, and attachHandles() additionally
+   calls positionHandle() to place each one via `top`/`bottom`/`left`/`right`. Neither sets any
+   size, background, or cursor (`classNames.handle` defaults to `''`, so there is no class to
+   hook either). Without the rules below every handle is positioned but 0x0, invisible, and
+   unclickable. */
 .rich-text__content :deep([data-resize-handle]) {
   width: 0.625rem;
   height: 0.625rem;
@@ -531,10 +556,10 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep([data-resize-handle="bottom-right"]) { cursor: nwse-resize; }
 .rich-text__content :deep([data-resize-handle="top-right"]),
 .rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
-.rich-text__content :deep([data-resize-handle="top"]),
-.rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; }
-.rich-text__content :deep([data-resize-handle="left"]),
-.rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; }
+/* No rules for the 'top'/'bottom'/'left'/'right' edge directions: the `directions` resize option
+   is never passed above, so ResizableNodeView's own default (the four corners only) is what's
+   ever attached -- confirmed by reading its `directions` field default in the same source file.
+   Adding cursor rules for directions this config can't produce would be dead weight. */
 
 /* Selection outline: confirmed by reading prosemirror-view@1.42.2's source this session, not
    assumed -- NodeViewDesc.create() (src/viewdesc.ts) sets `nodeDOM` to the exact DOM node a
@@ -549,9 +574,17 @@ defineExpose({ editor, insertImage })
   outline-offset: 2px;
 }
 
-/* No rule needed to hide handles when the field is read-only: ResizableNodeView's own
-   handleEditorUpdate (same upstream file) calls removeHandles() -- which deletes the handle
-   elements outright, not just visually -- the moment editor.isEditable goes false, confirmed by
-   reading that method's source. Left unstyled deliberately; Task 7's live pass covers the
-   interactive behaviour this can't demonstrate from source alone. */
+/* Defense-in-depth alongside the editor's own onCreate option above (see the comment on it, next
+   to onUpdate) -- that fix removes the handle elements from the DOM outright when a field mounts
+   already disabled; this rule doesn't replace it, since CSS alone can never make a DOM node stop
+   existing. This rule exists for any node view this session's reasoning didn't anticipate --
+   e.g. a future edit that inserts content into a disabled field by some path other than the UI,
+   or an upstream version where removeHandles() doesn't run when expected. Confirmed this session
+   (not assumed) that the attribute this keys off is real: prosemirror-view@1.42.2's
+   computeDocDeco() (src/index.ts) sets `attrs.contenteditable = String(view.editable)` on the
+   decoration that becomes the `.ProseMirror` root element's own attributes -- so
+   `.ProseMirror[contenteditable="false"]` is exactly the read-only state, not a guess. */
+.rich-text__content :deep(.ProseMirror[contenteditable="false"] [data-resize-handle]) {
+  display: none;
+}
 </style>
