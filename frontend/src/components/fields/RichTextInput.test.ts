@@ -27,7 +27,9 @@ const i18n = createI18n({
       blockquote: 'Blockquote', codeBlock: 'Code block',
       link: 'Link', horizontalRule: 'Horizontal rule', insertImage: 'Insert image',
       undo: 'Undo', redo: 'Redo',
-      linkPrompt: 'Link URL', insertImageTitle: 'Insert image',
+      linkDialogTitle: 'Link settings', linkUrlLabel: 'Link URL', insertImageTitle: 'Insert image',
+      linkOpenInNewTab: 'Open in new tab', removeLink: 'Remove link',
+      linkUrlInvalid: 'Enter a valid http(s) or mailto link.',
       table: 'Table',
       addRowBefore: 'Add row above', addRowAfter: 'Add row below',
       addColumnBefore: 'Add column left', addColumnAfter: 'Add column right',
@@ -84,25 +86,175 @@ describe('RichTextInput', () => {
     i18n.global.locale.value = 'en'
   })
 
-  it('rejects a javascript: URL from the link prompt (defense-in-depth)', async () => {
+  // Rewritten for RT-5.5: the link command opens RichTextLinkDialog instead of window.prompt, so
+  // driving it means interacting with the dialog's own fields rather than mocking window.prompt.
+  it('rejects a javascript: URL entered in the link dialog (defense-in-depth)', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
     await flushPromises()
     const vm = w.vm as unknown as { editor: { chain: () => unknown } }
-    vi.spyOn(window, 'prompt').mockReturnValue('javascript:alert(1)')
     const chainSpy = vi.spyOn(vm.editor, 'chain')
     await w.get('[data-cmd="link"]').trigger('click')
-    // The guard returns before any editor command runs, so no chain is built.
+    await flushPromises()
+    await w.get('[data-testid="href"]').setValue('javascript:alert(1)')
+    await w.get('[data-testid="href"]').trigger('blur')
+    // The dialog's own guard (RichTextLinkDialog.vue's submit()) refuses to emit `submit` for a
+    // rejected scheme, so clicking the (disabled) confirm button never reaches the command, and no
+    // chain is ever built.
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
     expect(chainSpy).not.toHaveBeenCalled()
   })
 
-  it('applies an https: URL from the link prompt', async () => {
+  it('applies an https: URL entered in the link dialog', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
     await flushPromises()
     const vm = w.vm as unknown as { editor: { chain: () => unknown } }
-    vi.spyOn(window, 'prompt').mockReturnValue('https://example.com')
     const chainSpy = vi.spyOn(vm.editor, 'chain')
     await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid="href"]').setValue('https://example.com')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
     expect(chainSpy).toHaveBeenCalled()
+  })
+
+  // The regression a naive dialog-based rewrite can reintroduce: window.prompt was modal, so the
+  // selection could never move while it was up. A dialog is not modal -- if the command (or the
+  // dialog's own autofocus, which moves DOM focus off the editor) collapsed or moved the ProseMirror
+  // selection in that gap, the link would land on a caret or the wrong range instead of the text the
+  // user actually selected. This asserts the selection survives the gap, and that the mark applies
+  // to exactly the originally selected word once confirmed.
+  it('applies the link to the originally selected text, not a collapsed caret, after the async dialog resolves', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>hello world</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    let from = -1
+    let to = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (from !== -1 || !node.isText || !node.text) return
+      const i = node.text.indexOf('world')
+      if (i === -1) return
+      from = pos + i
+      to = from + 'world'.length
+    })
+    expect(from).toBeGreaterThan(-1)
+    ed.commands.setTextSelection({ from, to })
+
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    // Nothing here blocked -- unlike window.prompt, the click has already returned and the dialog
+    // is open. If opening it (or its own autofocus) had collapsed the selection, this would already
+    // have caught it before the dialog is even confirmed.
+    expect(ed.state.selection.empty).toBe(false)
+    expect(ed.state.doc.textBetween(ed.state.selection.from, ed.state.selection.to)).toBe('world')
+
+    await w.get('[data-testid="href"]').setValue('https://example.com')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
+
+    // Exact string, not just toContain: also proves the link wraps only "world" (not the whole
+    // paragraph, not a zero-width fragment) and carries no target/rel -- same-tab was the dialog's
+    // default (newTab seeded false), and this mark was never given a target at all.
+    expect(ed.getHTML()).toBe('<p>hello <a href="https://example.com">world</a></p>')
+  })
+
+  // The other half of what this task wires: editing an already-linked selection must seed the
+  // dialog from the EXISTING mark's own href/target (not blank fields) and offer Remove, and Remove
+  // must clear the whole link from a caret inside it, not just a zero-length fragment there --
+  // exactly what extendMarkRange('link') is for.
+  it('seeds the dialog from an existing link mark and removes it via the Remove button', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><a href="https://old.example" target="_blank">old</a></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    // A caret INSIDE the link, not a selection spanning it: proves extendMarkRange('link'), not an
+    // accidentally-wide manual selection, is what makes Remove take the whole mark.
+    let caretPos = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (caretPos !== -1 || !node.isText || !node.text) return
+      const i = node.text.indexOf('old')
+      if (i === -1) return
+      caretPos = pos + i + 1
+    })
+    expect(caretPos).toBeGreaterThan(-1)
+    ed.commands.setTextSelection(caretPos)
+
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    expect(w.get<HTMLInputElement>('[data-testid="href"]').element.value).toBe('https://old.example')
+    expect(w.get('[role="checkbox"]').attributes('data-state')).toBe('checked')
+    expect(w.find('[data-cmd="linkRemove"]').exists()).toBe(true)
+
+    await w.get('[data-cmd="linkRemove"]').trigger('click')
+    await flushPromises()
+    expect(ed.getHTML()).toBe('<p>old</p>')
+  })
+
+  // The batch's headline behaviour, previously asserted nowhere in this suite: checking "open in new
+  // tab" must show up as target="_blank" on the stored mark, with no rel riding along (rel is
+  // backend-owned -- see richTextCommands.ts). Exact string, not toContain, so this also pins that
+  // HTMLAttributes: { rel: null } (RichTextInput.vue's Link.configure) is doing something on the one
+  // branch where it actually matters: a brand-new mark, not an edited one.
+  it('checking the new-tab box in the link dialog stores target="_blank" with no rel', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>hello world</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    let from = -1
+    let to = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (from !== -1 || !node.isText || !node.text) return
+      const i = node.text.indexOf('world')
+      if (i === -1) return
+      from = pos + i
+      to = from + 'world'.length
+    })
+    expect(from).toBeGreaterThan(-1)
+    ed.commands.setTextSelection({ from, to })
+
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid="href"]').setValue('https://example.com')
+    await w.get('[role="checkbox"]').trigger('click')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
+
+    expect(ed.getHTML()).toBe('<p>hello <a target="_blank" href="https://example.com">world</a></p>')
+  })
+
+  // The one direction setMark's attribute-merge semantics could plausibly break: @tiptap/core's
+  // setMark does `type.create({ ...mark.attrs, ...attributes })`, so unchecking an already-blank
+  // link must actually clear target in the new attributes object, not leave the existing mark's own
+  // target="_blank" merged back in underneath it.
+  it('unchecking the new-tab box on an existing target="_blank" link removes the target', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><a href="https://old.example" target="_blank">old</a></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    let caretPos = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (caretPos !== -1 || !node.isText || !node.text) return
+      const i = node.text.indexOf('old')
+      if (i === -1) return
+      caretPos = pos + i + 1
+    })
+    expect(caretPos).toBeGreaterThan(-1)
+    ed.commands.setTextSelection(caretPos)
+
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[role="checkbox"]').attributes('data-state')).toBe('checked')
+    await w.get('[role="checkbox"]').trigger('click')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
+
+    expect(ed.getHTML()).toBe('<p><a href="https://old.example">old</a></p>')
   })
 
   it('renders initial HTML content', async () => {
@@ -660,14 +812,18 @@ describe('RichTextInput', () => {
     await bubbleRoot().get('[data-cmd="italic"]').trigger('click')
     expect(vm.editor.isActive('italic')).toBe(true)
 
-    // link's own run() touches the editor first (editor.getAttributes('link'), to seed the prompt's
-    // default) and only then calls `ctx.t(...)` for the prompt's label (richTextCommands.ts) --
-    // asserting the exact call proves runCommand supplied the real,
-    // i18n-wired commandContext built in this file, not an empty stand-in that would either throw
-    // (ctx.t undefined) or pass some other string.
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('https://example.com')
+    // link's own run() touches the editor first (editor.getAttributes('link')/isActive('link'), to
+    // seed the dialog) and only then calls ctx.openLinkDialog (richTextCommands.ts) -- asserting the
+    // seeded values proves runCommand supplied the real commandContext RichTextInput builds (a
+    // brand-new selection carrying no link mark: an empty href, no Remove button), not an empty
+    // stand-in that would either throw or leave the dialog showing whatever it last held.
     await bubbleRoot().get('[data-cmd="link"]').trigger('click')
-    expect(promptSpy).toHaveBeenCalledWith('Link URL', 'https://')
+    await flushPromises()
+    expect(w.get<HTMLInputElement>('[data-testid="href"]').element.value).toBe('')
+    expect(w.find('[data-cmd="linkRemove"]').exists()).toBe(false)
+    await w.get('[data-testid="href"]').setValue('https://example.com')
+    await w.get('[data-cmd="linkSubmit"]').trigger('click')
+    await flushPromises()
     expect(vm.editor.isActive('link')).toBe(true)
 
     w.unmount()
@@ -702,6 +858,57 @@ describe('RichTextInput', () => {
     await waitForEditorReactivity()
     expect(w.get('.rich-text__toolbar [data-cmd="bold"]').attributes('data-active')).toBe('true')
 
+    w.unmount()
+    container.remove()
+  })
+
+  // RT-5's own final review left this open: BubbleMenuPlugin arms `preventHide` on its own
+  // mousedown, which swallows the very next blur, so the dialog's autofocus stealing DOM focus from
+  // the editor would not, on its own, hide this menu -- it would linger beside the open dialog.
+  // A bare VTU `.trigger('click')` dispatches only a 'click' event, no 'mousedown' -- so it does
+  // NOT arm preventHide, and the resulting blur hides the menu on its own regardless of whether
+  // openLinkDialog's hide() call exists at all (confirmed: deleting that call left this test green).
+  // Dispatching 'mousedown' first, as a real click does, is what arms preventHide and makes the
+  // blur path a no-op -- only then does reaching this assertion prove hide() (and the matching
+  // pluginKey string on both ends) is doing the work.
+  it('hides the bubble menu when its own link button opens the dialog', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.selectAll()
+    vm.editor.commands.focus()
+    await settleBubbleMenu()
+    // bubbleRoot() itself throws if the menu is absent, so reaching the next line already proves
+    // it is showing.
+    const linkBtn = bubbleRoot().get('[data-cmd="link"]').element
+    linkBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    linkBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    // bubbleRoot() itself uses .get(), which throws rather than reporting absence -- .find() is
+    // what actually lets this assert the menu is gone, not merely still present.
+    expect(new DOMWrapper(document.body).find('.rich-text__bubble').exists()).toBe(false)
+
+    w.unmount()
+    container.remove()
+  })
+
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference.
+  //
+  // Mounted attached, unlike most tests in this file, and that is load-bearing: reka resolves the
+  // id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
+  it('renders a description on the image dialog, so reka does not warn about a dangling aria-describedby', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    await w.get('[data-cmd="image"]').trigger('click')
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
     w.unmount()
     container.remove()
   })

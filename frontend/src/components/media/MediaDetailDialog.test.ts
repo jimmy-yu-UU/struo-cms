@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import MediaDetailDialog from './MediaDetailDialog.vue'
@@ -17,7 +17,9 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { media: {
-    detailTitle: 'File details', fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
+    detailTitle: 'File details',
+    detailDescription: "Review this file's preview and metadata, and edit its title or alt text.",
+    fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
     copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL', status: 'Status',
     save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
@@ -472,5 +474,28 @@ describe('MediaDetailDialog', () => {
     await flushPromises()
     const payload = update.mock.calls[0][2] as Record<string, unknown>
     expect('folderId' in payload).toBe(false)
+  })
+
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference.
+  //
+  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
+  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
+  it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    const w: VueWrapper = mount(MediaDetailDialog, {
+      props: { file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 }, canWrite: true, canDelete: true },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      attachTo: container,
+    })
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+    w.unmount()
+    container.remove()
   })
 })

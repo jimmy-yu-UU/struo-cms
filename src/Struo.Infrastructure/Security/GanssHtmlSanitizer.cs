@@ -10,7 +10,10 @@ namespace Struo.Infrastructure.Security;
 /// basic formatting + anchors (http/https/mailto) + relative-src images carrying data-file-id,
 /// plus basic tables, text-align/colour styles, and sub/superscript. Beyond stripping, it also
 /// canonicalizes structure that TipTap cannot itself produce -- see <see cref="TableHeadNormalizer"/>
-/// for the table-header-row case.
+/// for the table-header-row case. An anchor's <c>rel</c> is never taken from the input: it is
+/// derived from <c>target</c> (a surviving anchor whose <c>target="_blank"</c> and whose <c>href</c>
+/// was itself kept gets exactly <c>rel="noopener"</c>; anything else gets neither), so the one
+/// writer of that attribute is this class, not whatever produced the HTML.
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
@@ -31,7 +34,7 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
             _sanitizer.AllowedTags.Add(tag);
 
         _sanitizer.AllowedAttributes.Clear();
-        foreach (var attr in new[] { "href", "src", "alt", "rel", "style" })
+        foreach (var attr in new[] { "href", "src", "alt", "rel", "target", "style" })
             _sanitizer.AllowedAttributes.Add(attr);
 
         // data-file-id: allow data-* attributes (inert; carry no script surface).
@@ -48,13 +51,46 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         _sanitizer.AllowedCssProperties.Add("text-align");
         _sanitizer.AllowedAtRules.Clear();
 
-        // Harden every surviving anchor.
+        // Harden every surviving anchor: rel is derived from target, never taken from the input.
+        // An un-allowlisted target never reaches this handler at all -- remove "target" from
+        // AllowedAttributes above and Blank_target_survives_with_exactly_rel_noopener fails, but that
+        // test alone does not pin the ordering claim below: it fails the same way under either event
+        // ordering, so it only proves the allowlist entry is load-bearing. What actually pins
+        // PostProcessNode firing after attribute filtering (same as PostProcessDom, RT-3) is
+        // Anchor_with_rejected_href_does_not_keep_target: that test's href carries a rejected scheme,
+        // so it only passes if attribute filtering has already stripped it by the time
+        // HasAttribute("href") below is evaluated.
+        //
+        // Only an exact, case-sensitive "_blank" is an opt-in, and only alongside a surviving href
+        // (an anchor with no href, whether because none was given or because its href was itself
+        // rejected -- href is stripped attribute-by-attribute, not by discarding the whole element --
+        // is not a link and gets no link attributes). Anything else, including an absent target, is
+        // treated as same-tab and gets neither attribute. This narrows the previous absolute strip
+        // rather than replacing it: the reverse-tabnabbing gap the old strip closed was a
+        // target="_blank" without a rel to go with it, and that gap cannot reopen here because
+        // rel="noopener" is set on exactly the links that keep target="_blank" -- never on any other.
+        //
+        // Every other allowlisted tag survives without a handler at all, so a target left on one of
+        // them (e.g. <p target="_blank">) is inert today, but "target" being allowlisted globally
+        // would let it ride through the day AllowedTags grows a tag that gives it meaning -- so it is
+        // stripped from every element except the anchor, unconditionally.
         _sanitizer.PostProcessNode += (_, e) =>
         {
             if (e.Node is AngleSharp.Html.Dom.IHtmlAnchorElement a)
             {
-                a.SetAttribute("rel", "noopener noreferrer");
-                a.RemoveAttribute("target");
+                if (a.GetAttribute("target") == "_blank" && a.HasAttribute("href"))
+                {
+                    a.SetAttribute("rel", "noopener");
+                }
+                else
+                {
+                    a.RemoveAttribute("target");
+                    a.RemoveAttribute("rel");
+                }
+            }
+            else if (e.Node is AngleSharp.Dom.IElement nonAnchor)
+            {
+                nonAnchor.RemoveAttribute("target");
             }
         };
 

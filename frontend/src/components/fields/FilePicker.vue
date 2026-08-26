@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import TreeSelect from '@/components/form/TreeSelect.vue'
@@ -144,6 +144,12 @@ defineExpose({ openDialog, onSelect, clear, resolveCurrent, loadOptions, files, 
       <DialogScrollContent class="max-w-[min(78vw,1300px)] max-[960px]:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>{{ t('fields.selectAFile') }}</DialogTitle>
+          <!--
+            Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+            whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+            dialog without one leaves assistive tech following a dangling reference.
+          -->
+          <DialogDescription>{{ t('fields.selectAFileDescription') }}</DialogDescription>
         </DialogHeader>
         <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
         <div v-if="folders.length" class="file-picker__folder">

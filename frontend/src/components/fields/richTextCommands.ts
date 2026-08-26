@@ -4,13 +4,17 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
   Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
 } from '@lucide/vue'
-import { isAllowedLinkUrl } from '../../lib/linkUrl'
 
 export type RichTextCommandGroup = 'inline' | 'block' | 'insert' | 'history'
 
 export interface RichTextCommandContext {
-  t: (key: string) => string
   openImageDialog: () => void
+  // Resolves with the dialog's confirmed value, 'remove' if its Remove button was used, or null on
+  // cancel. Validation (isAllowedLinkUrl) lives entirely in the dialog now, not here -- by the time
+  // this resolves with a value, the href has already passed it.
+  openLinkDialog: (
+    initial: { href: string; newTab: boolean; canRemove: boolean }
+  ) => Promise<{ href: string; newTab: boolean } | 'remove' | null>
 }
 
 export interface RichTextCommand {
@@ -105,13 +109,40 @@ export const TOOLBAR_BEFORE_COLOR: ReadonlyArray<RichTextCommand> = [
   {
     id: 'link', labelKey: 'fields.richtext.link', group: 'inline', icon: LinkIcon, glyph: null, glyphTag: null,
     isActive: (editor) => editor.isActive('link'),
+    // void-returning, like image's run() above: the dialog is not modal, so this cannot await its
+    // result without changing run()'s own return type, and RichTextCommand.run is declared void on
+    // purpose (RichTextCommandButton's @click has nothing to await either). The chain below runs
+    // once the promise resolves, whenever that turns out to be.
     run: (editor, ctx) => {
-      const prev = editor.getAttributes('link').href as string | undefined
-      const url = window.prompt(ctx.t('fields.richtext.linkPrompt'), prev ?? 'https://')
-      if (url === null) return
-      if (url === '') { editor.chain().focus().unsetLink().run(); return }
-      if (!isAllowedLinkUrl(url)) return // defense-in-depth: silently reject javascript:/data:/etc.
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+      const attrs = editor.getAttributes('link')
+      const canRemove = editor.isActive('link')
+      void ctx.openLinkDialog({
+        href: (attrs.href as string | undefined) ?? '',
+        newTab: attrs.target === '_blank',
+        canRemove,
+      }).then((result) => {
+        if (result === null) return // cancelled
+        if (result === 'remove') {
+          editor.chain().focus().extendMarkRange('link').unsetLink().run()
+          return
+        }
+        // extendMarkRange('link') re-targets the whole existing link when the call started from a
+        // caret inside one, rather than a zero-length fragment at that caret -- so this call is the
+        // edit-an-existing-link path whenever a link mark already sits there, not only the
+        // brand-new-link path.
+        // rel is never passed here -- the backend derives and owns it (chapter 5's RichText contract
+        // table). What the omission falls back to differs between those two cases, though: for a
+        // brand-new mark, @tiptap/core's setMark has no prior mark.attrs to merge in, so it falls
+        // back to the Link extension's own attribute default, which RichTextInput.vue's
+        // HTMLAttributes: { rel: null } makes exactly `null`. For an edited mark, setMark instead
+        // does `type.create({ ...mark.attrs, ...attributes })` -- and rel IS in mark.attrs for
+        // round-tripped content, because extension-link's own `rel` attribute declares no parseHTML,
+        // so TipTap injects one that just reads the DOM attribute; a stored rel="noopener" therefore
+        // survives into the mark and is emitted again, no fallback involved. Benign either way:
+        // GanssHtmlSanitizer.cs overwrites rel unconditionally on every write.
+        editor.chain().focus().extendMarkRange('link')
+          .setLink({ href: result.href, target: result.newTab ? '_blank' : null }).run()
+      })
     },
   },
   {

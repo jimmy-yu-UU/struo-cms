@@ -149,7 +149,13 @@ function handleFailure(e: unknown): void {
     <DialogScrollContent>
       <DialogHeader>
         <DialogTitle>{{ isSelf ? t('password.changeTitle') : t('password.resetTitle') }}</DialogTitle>
+        <!--
+          The v-if/v-else pair, not a single ternary DialogDescription, is load-bearing: reka warns
+          on mount when nothing carries DialogContent's aria-describedby id, so the self path needs
+          its own rendered description too, not only the admin-reset one that already existed here.
+        -->
         <DialogDescription v-if="!isSelf">{{ t('password.resetDescription') }}</DialogDescription>
+        <DialogDescription v-else>{{ t('password.changeDescription') }}</DialogDescription>
       </DialogHeader>
 
       <form class="cpd-form" @submit.prevent="onSubmit">

@@ -11,13 +11,14 @@ import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { Placeholder } from '@tiptap/extensions'
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import MediaGrid from '../media/MediaGrid.vue'
 import RichTextBubbleMenu from './RichTextBubbleMenu.vue'
 import RichTextCommandButton from './RichTextCommandButton.vue'
 import RichTextColorMenu from './RichTextColorMenu.vue'
 import RichTextHeadingMenu from './RichTextHeadingMenu.vue'
+import RichTextLinkDialog from './RichTextLinkDialog.vue'
 import RichTextTableMenu from './RichTextTableMenu.vue'
 import RichTextTableContextMenu from './RichTextTableContextMenu.vue'
 import RichTextTableSizeDialog from './RichTextTableSizeDialog.vue'
@@ -71,10 +72,78 @@ async function openImageDialog(): Promise<void> {
   await loadImages()
 }
 
+// Bound to RichTextBubbleMenu's own template ref so openLinkDialog can force it away before the
+// dialog takes DOM focus -- see the comment on that call below.
+const bubbleMenuRef = ref<InstanceType<typeof RichTextBubbleMenu> | null>(null)
+
+const linkDialogOpen = ref(false)
+const linkDialogHref = ref('')
+const linkDialogNewTab = ref(false)
+const linkDialogCanRemove = ref(false)
+// Set for the lifetime of one open dialog; whichever of onLinkDialogSubmit/onLinkDialogRemove/
+// onLinkDialogOpenChange(false) runs first resolves it and clears it, so a second settle attempt
+// from whichever of those fires afterward (submit and remove both also emit update:open(false)
+// right after their own event, per RichTextLinkDialog.vue) is a harmless no-op. That is the only
+// thing guaranteed by the three of them alone: neither a second openLinkDialog before this one
+// settles, nor unmounting while it is still open, is one of those three, so each is handled
+// explicitly below rather than left to this protocol.
+let resolveLinkDialog: ((value: { href: string; newTab: boolean } | 'remove' | null) => void) | null = null
+
+function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | null): void {
+  resolveLinkDialog?.(value)
+  resolveLinkDialog = null
+}
+
+function openLinkDialog(
+  initial: { href: string; newTab: boolean; canRemove: boolean },
+): Promise<{ href: string; newTab: boolean } | 'remove' | null> {
+  // Not reachable today (only one link command can run at a time), but settle any still-pending
+  // prior call with null rather than letting the assignment below silently overwrite
+  // resolveLinkDialog and leave that earlier promise unresolved forever.
+  settleLinkDialog(null)
+  // Force the bubble menu away first (a no-op if it was never showing -- BubbleMenuView.hide()
+  // guards on its own isVisible): opening this dialog from its own link button is one of the two
+  // entry points sharing this function, and the dialog's autofocus stealing DOM focus from the
+  // editor would otherwise leave that menu lingering beside it (RT-5's leftover; see
+  // RichTextBubbleMenu.vue's hide() for the mechanism and why it does not depend on this ordering).
+  bubbleMenuRef.value?.hide()
+  return new Promise((resolve) => {
+    resolveLinkDialog = resolve
+    // Props set, then the open flip -- both in this same synchronous call, no await between them.
+    // RichTextLinkDialog's own reset watch fires on `open` and reads href/newTab/canRemove at that
+    // moment; setting them after the flip (even one microtask later) is the one sequence its own
+    // watch cannot tell apart from a stale value left over from the previous link.
+    linkDialogHref.value = initial.href
+    linkDialogNewTab.value = initial.newTab
+    linkDialogCanRemove.value = initial.canRemove
+    linkDialogOpen.value = true
+  })
+}
+
+function onLinkDialogSubmit(value: { href: string; newTab: boolean }): void {
+  settleLinkDialog(value)
+}
+
+function onLinkDialogRemove(): void {
+  settleLinkDialog('remove')
+}
+
+// Fires for every close, including Cancel, Esc and an overlay click -- not only a plain cancel:
+// submit/remove already resolved (and cleared) the promise by the time their own trailing
+// update:open(false) reaches here, so settling with null again is the no-op described above.
+function onLinkDialogOpenChange(open: boolean): void {
+  linkDialogOpen.value = open
+  if (!open) settleLinkDialog(null)
+}
+
+// Not reachable today either (nothing in this repo unmounts a field mid-edit), but unmounting with
+// the dialog still open would otherwise leave its promise pending forever -- resolving it with null
+// here is the same "cancelled" outcome a plain Cancel click already produces.
+onBeforeUnmount(() => settleLinkDialog(null))
+
 const commandContext: RichTextCommandContext = {
-  // vue-i18n's t is heavily overloaded; the registry only ever needs the single-key form.
-  t: (key: string) => t(key),
   openImageDialog: () => { void openImageDialog() },
+  openLinkDialog,
 }
 
 function runCommand(command: RichTextCommand): void {
@@ -120,7 +189,16 @@ const editor = useEditor({
   editorProps: { attributes: { class: 'prose dark:prose-invert' } },
   extensions: [
     StarterKit.configure({ heading: { levels: [...HEADING_LEVELS] }, underline: false, link: false }),
-    Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false }),
+    // HTMLAttributes.target/rel: null, not omitted -- the Link extension's own upstream defaults
+    // are target: '_blank' and rel: 'noopener noreferrer nofollow' (its addAttributes() derives
+    // each mark attribute's default straight from this option), so every link setLink doesn't
+    // explicitly override would otherwise stamp both onto stored HTML. rel is backend-owned
+    // (chapter 5's RichText contract table) and target is now a dialog choice per link, not a
+    // blanket default.
+    Link.configure({
+      openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false,
+      HTMLAttributes: { target: null, rel: null },
+    }),
     Image.configure({ inline: false }),
     TableKit.configure({ table: { resizable: false } }),
     TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
@@ -288,7 +366,7 @@ defineExpose({ editor, insertImage })
       it starts in the template, so its position here has no bearing on where -- or under what
       ancestor's event handlers -- it renders once shown.
     -->
-    <RichTextBubbleMenu v-if="editor" :editor="editor" :disabled="disabled" @run="runCommand" />
+    <RichTextBubbleMenu v-if="editor" ref="bubbleMenuRef" :editor="editor" :disabled="disabled" @run="runCommand" />
     <!--
       DialogScrollContent, not DialogContent: same defect as FilePicker's file dialog — MediaGrid
       can run to several rows, reka's DialogRoot locks body scroll while open, and plain
@@ -304,6 +382,12 @@ defineExpose({ editor, insertImage })
       <DialogScrollContent class="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{{ t('fields.richtext.insertImageTitle') }}</DialogTitle>
+          <!--
+            Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+            whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+            dialog without one leaves assistive tech following a dangling reference.
+          -->
+          <DialogDescription>{{ t('fields.richtext.insertImageDescription') }}</DialogDescription>
         </DialogHeader>
         <p v-if="imageError" class="text-destructive" role="alert">{{ imageError }}</p>
         <Input v-model="imageSearch" :placeholder="t('fields.searchFiles')" :aria-label="t('fields.searchFiles')" class="my-1" @update:model-value="debouncedLoadImages" />
@@ -311,6 +395,14 @@ defineExpose({ editor, insertImage })
       </DialogScrollContent>
     </Dialog>
     <RichTextTableSizeDialog v-model:open="sizeDialogOpen" @insert="onTableInsert" />
+    <!--
+      Not v-model:open sugar (unlike the table-size dialog above): a plain Cancel/Esc/overlay-click
+      close still has to settle the pending openLinkDialog promise with null, which sugar's own
+      `open = $event` has no way to also do -- update:open is handled explicitly instead.
+    -->
+    <RichTextLinkDialog :open="linkDialogOpen" :href="linkDialogHref" :new-tab="linkDialogNewTab"
+      :can-remove="linkDialogCanRemove" @update:open="onLinkDialogOpenChange"
+      @submit="onLinkDialogSubmit" @remove="onLinkDialogRemove" />
   </div>
 </template>
 
