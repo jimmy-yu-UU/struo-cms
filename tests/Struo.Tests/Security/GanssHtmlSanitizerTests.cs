@@ -422,6 +422,17 @@ public class GanssHtmlSanitizerTests
     // dimensionally meaningless for a fixed pixel width (a percentage, zero, negative, a decimal).
     // src surviving alongside the stripped width is the proof this is attribute-level stripping,
     // not the whole <img> being dropped.
+    //
+    // The trailing "480\n" and "480\r\n" cases guard a real .NET regex pitfall: $ (without
+    // RegexOptions.Multiline) matches at end-of-string OR immediately before one trailing '\n', so
+    // an anchor pair of ^...$ lets "480\n" through -- reachable in real input via an attribute value
+    // decoded from "480&#10;". Confirmed directly by running both cases against the sanitizer with
+    // the old ^[1-9][0-9]{0,4}$ pattern still in place: BOTH failed (width survived) -- not only the
+    // bare "480\n" case but also "480\r\n", because the HTML5 input-stream preprocessing AngleSharp
+    // performs collapses a raw \r\n (and a lone \r) down to \n before the attribute value ever
+    // reaches this handler, so by the time the regex runs both inputs are the identical string
+    // "480\n". Both pass closed under \A/\z. Kept as two separate cases anyway since they exercise
+    // different input bytes even though they collapse to the same decoded value.
     [Theory]
     [InlineData("abc")]
     [InlineData("40%")]
@@ -431,6 +442,8 @@ public class GanssHtmlSanitizerTests
     [InlineData(" 480")]
     [InlineData("")]
     [InlineData("100000")]
+    [InlineData("480\n")]
+    [InlineData("480\r\n")]
     public void Strips_non_integer_width_on_an_image(string widthValue)
     {
         var clean = _s.Sanitize($"<img src=\"https://e.com/a.png\" width=\"{widthValue}\">");
