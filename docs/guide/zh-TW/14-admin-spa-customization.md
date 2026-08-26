@@ -224,6 +224,21 @@ preflight、或是針對編輯器內容覆寫掉那條規則,就會失去這個�
 欄位自己比對外部變更的邏輯，每次更新都會看到一個只差在 `height` 的假差異，然後毫無理由地重置
 游標位置。
 
+那個 node view 裡有一個上游的缺陷值得明講，因為不小心發現它的時候看起來會很嚇人。
+`ResizableNodeView` 在建構子裡以
+`this.editor.on('update', this.handleEditorUpdate.bind(this))` 註冊了一個編輯器的 `'update'`
+監聽器，又在 `destroy()` 裡以 `this.editor.off('update', this.handleEditorUpdate.bind(this))`
+移除一個——實際讀了安裝的 `@tiptap/core@3.30.2`，`src/lib/ResizableNodeView.ts`。每一次呼叫
+`.bind()` 都會回傳一個全新的函式物件，而 `off` 是以函式物件本身的識別 (identity) 來過濾回呼清單的
+(`src/EventEmitter.ts`)，所以它移除掉的永遠不會是建構子加上去的那一個:編輯器建立的每一個圖片
+node view，都會留下一個 `'update'` 監聽器直到那個編輯器生命週期結束為止。fork 不需要為此做任何
+處理。累積的範圍受限於單一編輯器而不是整個工作階段——`Editor.destroy()` 會呼叫
+`removeAllListeners()`，那會直接把整張回呼表清空，而 `RichTextInput.vue` 在 `onBeforeUnmount`
+裡就會銷毀它的編輯器——而在那之前，一個殘留的監聽器也不會造成任何可觀察到的結果，因為
+`handleEditorUpdate` 除非可編輯狀態真的改變了，否則會立刻返回，就算執行了也只會動到它自己那個
+早已從文件上卸下的容器。唯一會讓它變成問題的做法，是不再於卸載時銷毀編輯器——那會把這個監聽器、
+以及編輯器持有的其他每一個監聽器，都變成真正的洩漏。
+
 在這個欄位裡按右鍵，現在會依點擊位置開啟兩種不同的右鍵選單。直接點在 `<img>` 上得到的是圖片選單
 (編輯替代文字、刪除圖片);點在表格內其他任何地方，得到的是表格自己的右鍵選單。圖片的判斷先於
 表格執行，所以即使圖片位於表格的儲存格裡，得到的仍然是圖片選單，不是那個儲存格的選單。兩種選單
