@@ -178,22 +178,24 @@ disappear gradually, one save at a time, not all at once.
 
 ### Resizing images in the editor
 
-An inserted image in the `richText` field can be resized by dragging its corner handles once
-selected. That behavior is not a bespoke node view StruoCMS wrote: it comes from upstream,
-`@tiptap/extension-image`'s own `resize` option configured on the `Image` extension in
-`RichTextInput.vue` (`resize: { enabled: true, minWidth: 40, alwaysPreserveAspectRatio: true }`),
-which swaps in `@tiptap/core`'s `ResizableNodeView` for every image node. `alwaysPreserveAspectRatio:
-true` locks every drag to the image's own ratio — upstream's own default only does that while Shift is
-held — and `minWidth` keeps a handle from shrinking the image into an unusably small target.
+An inserted image in the `richText` field can be resized by dragging its corner handles at any time
+while the field is editable — resizing has no selection prerequisite. That behavior is not a bespoke
+node view StruoCMS wrote: it comes from upstream, `@tiptap/extension-image`'s own `resize` option
+configured on the `Image` extension in `RichTextInput.vue` (`resize: { enabled: true, minWidth: 40,
+alwaysPreserveAspectRatio: true }`), which swaps in `@tiptap/core`'s `ResizableNodeView` for every
+image node. `alwaysPreserveAspectRatio: true` locks every drag to the image's own ratio — upstream's
+own default only does that while Shift is held — and `minWidth` keeps a handle from shrinking the
+image into an unusably small target.
 
-What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` positions
-each handle with absolute positioning and a `data-resize-handle` attribute, but sets no size,
-background, or cursor of its own — without CSS every handle exists in the DOM but is 0×0, invisible,
-and unclickable. `RichTextInput.vue`'s own `<style scoped>` block supplies that styling, keyed off the
-`[data-resize-handle]` attribute selector (size, background colour, border radius, per-corner cursor),
-plus an outline on `[data-resize-container].ProseMirror-selectednode` for the selected state. A fork
-that wants different handle styling edits those rules, in that file — there is no separate handle
-component to swap.
+What this repo supplies is the handles' appearance, not their behavior. `ResizableNodeView` attaches
+and positions each handle unconditionally — absolute positioning plus a `data-resize-handle`
+attribute — but sets no size, background, or cursor of its own, so without CSS every handle exists in
+the DOM but is 0×0, invisible, and unclickable. `RichTextInput.vue`'s own `<style scoped>` block
+supplies that styling, keyed off the `[data-resize-handle]` attribute selector (size, background
+color, border radius, per-corner cursor). Selecting the image adds nothing to the handles themselves —
+they are just as visible and draggable unselected — beyond a separate outline rule on
+`[data-resize-container].ProseMirror-selectednode`. A fork that wants different handle styling edits
+those rules, in that file — there is no separate handle component to swap.
 
 `ResizableNodeView` also wraps the `<img>` in two container `<div>`s (`[data-resize-container]` around
 `[data-resize-wrapper]`, with the handle elements as siblings of the `<img>` inside the wrapper) to
@@ -201,18 +203,18 @@ host the handles and manage layout during a drag. This exists only inside the li
 never in `getHTML()`'s output, and never in the HTML that reaches the sanitizer or gets stored. A
 stored `RichText` value's `<img>` is never wrapped.
 
-Dragging a handle also writes `height` onto the image node's own attributes — upstream's `onCommit`
-always sets both dimensions after a resize — but `RichTextInput.vue` overrides `height`'s
-`addAttributes()` with `rendered: false`, so `height` never reaches the serialized HTML in the first
-place. This is not a duplicate of the sanitizer stripping `height` (chapter 5): the sanitizer's job is
-to reject a `height` on any input path, attacker-controlled or not, while this override exists so
-`getHTML()`'s output already matches what the sanitizer would produce anyway — without it, the field's
-own external-change comparison would see a phantom `height`-only difference on every update and reset
-the cursor for no reason.
+Dragging a handle also writes `height` onto the image node's own attributes, because upstream's
+`onCommit` always writes both dimensions after a resize. `RichTextInput.vue` keeps that out of stored
+HTML by overriding `height`'s `addAttributes()` with `rendered: false`, so `getHTML()` never
+serializes it. This is not a duplicate of the sanitizer's own `height` strip (chapter 5): that guards
+every input path against an attacker-controlled `height`, while this override exists so `getHTML()`'s
+output already matches what the sanitizer would produce anyway — without it, the field's own
+external-change comparison would see a phantom `height`-only difference on every update and reset the
+cursor for no reason.
 
 Right-clicking inside this field now opens one of two context menus depending on what was clicked. A
 right-click landing directly on an `<img>` opens an image menu (edit alt text, delete image); a
-right-click anywhere else inside a table opens the table menu described above. The image check runs
+right-click anywhere else inside a table opens the table's own right-click menu. The image check runs
 first, so an image sitting inside a table cell still gets the image menu, not the cell's. Both menus
 are the same `RichTextContextMenu.vue` component rendering a different action list — the image actions
 themselves are declared in `richTextImageActions.ts`, mirroring `richTextTableActions.ts` for tables.

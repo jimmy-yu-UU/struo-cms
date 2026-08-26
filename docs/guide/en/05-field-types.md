@@ -103,15 +103,15 @@ value (e.g. `noreferrer`) changes it there, not in the dialog or the sanitizer's
 `GanssHtmlSanitizer` allowlists `width` globally — `AllowedAttributes` has no per-tag concept, so the
 entry that makes the name available at all makes it available on every allowlisted tag — then narrows
 it in the same `PostProcessNode` handler that derives `rel` above: the attribute survives only on an
-`<img>`, and only when its value matches `^[1-9][0-9]{0,4}$` exactly, anchored at both ends. That
-accepts one to five ASCII digits with no leading zero — a bare pixel count from `1` through `99999` —
-and rejects everything else: `0` (meaningless as a width), a percentage (`40%`), a decimal (`480.5`), a
-negative number (`-5`), a value carrying leading or trailing whitespace (`" 480"`), an empty string, and
-a six-digit value (`100000`), even though a naive integer parser would accept some of those (leading
-whitespace, in particular). On any element other than `<img>` — a `<table>`, a `<td>`, a `<p>`, a
-`<span>`, even an `<a>` — `width` is stripped unconditionally, allowlisted or not, for the same reason
-`rel` needs a handler of its own: the allowlist can say a name is permitted, never that it is permitted
-only on one tag.
+`<img>`, and only when its value matches `\A[1-9][0-9]{0,4}\z` exactly. That accepts one to five ASCII
+digits with no leading zero — a bare pixel count from `1` through `99999` — and rejects everything
+else: `0` (meaningless as a width), a percentage (`40%`), a decimal (`480.5`), a negative number
+(`-5`), a value carrying leading or trailing whitespace (`" 480"`), an empty string, and a six-digit
+value (`100000`), even though a naive integer parser would accept some of those (leading whitespace, in
+particular). On any element other than `<img>` — a `<table>`, a `<td>`, a `<p>`, a `<span>`, even an
+`<a>` — `width` is stripped unconditionally, allowlisted or not. Like the `rel` derivation above, this
+binds every write path the same way: a direct API write or an importer that stores a raw `width` on an
+`<img>` is checked against the identical regex, not a looser one.
 
 `height` is never allowlisted at all, so it is never present in stored HTML, whatever value is sent —
 not from the editor, not from a direct API write, not from an importer; the rule is the same regardless
@@ -124,9 +124,9 @@ constrains `height`, so a stored `width` sets an upper bound and the browser's o
 scaling handles the rest.
 
 This narrowing is a policy choice enforced in one place, not an invariant: `GanssHtmlSanitizer.cs`'s own
-comments spell out the aspect-ratio reasoning behind it, and a fork that wants to accept a percentage
-width, or store `height` too, changes it there — the allowlist alone cannot express a per-tag or
-per-shape rule, so that file is the only place the change can go.
+class summary spells out the per-tag, pixel-count-only reasoning behind the width narrowing above, and,
+separately, the aspect-ratio reasoning behind excluding `height` altogether. A fork that wants to accept
+a percentage width, or store `height` too, changes it there.
 
 ## `MaxLength` behavior
 
