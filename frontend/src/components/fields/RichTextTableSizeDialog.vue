@@ -3,7 +3,7 @@ import { ref, computed, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TABLE_SIZE_MIN, TABLE_SIZE_MAX } from './richTextTableActions'
@@ -64,6 +64,12 @@ defineExpose({ rows, cols, withHeaderRow, valid, submit })
     <DialogContent class="sm:max-w-xs">
       <DialogHeader>
         <DialogTitle>{{ t('fields.richtext.customSizeTitle') }}</DialogTitle>
+        <!--
+          Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+          dialog without one leaves assistive tech following a dangling reference.
+        -->
+        <DialogDescription>{{ t('fields.richtext.customSizeDescription') }}</DialogDescription>
       </DialogHeader>
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1.5">

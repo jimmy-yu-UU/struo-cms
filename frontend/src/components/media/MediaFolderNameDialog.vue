@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
@@ -36,6 +36,14 @@ function onSubmit(): void {
     <DialogContent class="max-w-[min(90vw,420px)] sm:max-w-[min(90vw,420px)]">
       <DialogHeader>
         <DialogTitle>{{ header }}</DialogTitle>
+        <!--
+          Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+          dialog without one leaves assistive tech following a dangling reference. One generic
+          sentence covers both callers of this component (create and rename), since the actual verb
+          already lives in `header`.
+        -->
+        <DialogDescription>{{ $t('media.folderNameDescription') }}</DialogDescription>
       </DialogHeader>
       <label class="folder-name-field grid gap-1">
         <span class="text-xs font-medium text-muted-foreground">{{ $t('media.folderName') }}</span>
