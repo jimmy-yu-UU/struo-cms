@@ -402,4 +402,85 @@ public class GanssHtmlSanitizerTests
         _s.Sanitize("<p>plain</p>").Should().Be("<p>plain</p>");
         _s.Sanitize("<table></table>").Should().Be("<table></table>");
     }
+
+    // width is allowlisted globally (AllowedAttributes has no per-tag concept), so an integer-only
+    // shape check has to be applied in the PostProcessNode handler -- the same reasoning as target's
+    // anchor-only narrowing above. Ganss.Xss itself does not validate attribute VALUES once a name is
+    // on AllowedAttributes (verified directly: adding "width" to AllowedAttributes with no handler at
+    // all lets width="abc" survive untouched), so nothing upstream of this handler will ever reject
+    // a malformed width for us.
+    [Fact]
+    public void Keeps_integer_width_on_an_image()
+    {
+        var clean = _s.Sanitize("<img src=\"https://e.com/a.png\" width=\"480\">");
+        clean.Should().Be("<img src=\"https://e.com/a.png\" width=\"480\">");
+    }
+
+    // Anything that is not exactly one-to-five ASCII digits with no leading zero is rejected,
+    // including shapes a naive int.TryParse would accept (leading whitespace) or that are
+    // dimensionally meaningless for a fixed pixel width (a percentage, zero, negative, a decimal).
+    // src surviving alongside the stripped width is the proof this is attribute-level stripping,
+    // not the whole <img> being dropped.
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("40%")]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("480.5")]
+    [InlineData(" 480")]
+    [InlineData("")]
+    [InlineData("100000")]
+    public void Strips_non_integer_width_on_an_image(string widthValue)
+    {
+        var clean = _s.Sanitize($"<img src=\"https://e.com/a.png\" width=\"{widthValue}\">");
+        clean.Should().NotContain("width");
+        clean.Should().Contain("src=\"https://e.com/a.png\"");
+    }
+
+    // width surviving on anything other than <img> would let a fork's non-image renderer (a <td>,
+    // a <table>, a plain paragraph) receive a raw author-controlled pixel width it was never
+    // designed to defend against -- the img-only shape check is not enough by itself.
+    [Theory]
+    [InlineData("<td width=\"200\">c</td>")]
+    [InlineData("<table width=\"100%\"></table>")]
+    [InlineData("<p width=\"480\">t</p>")]
+    [InlineData("<span width=\"480\">s</span>")]
+    [InlineData("<a href=\"https://e.com\" width=\"480\">l</a>")]
+    public void Strips_width_from_non_image_elements(string html)
+    {
+        _s.Sanitize(html).Should().NotContain("width");
+    }
+
+    // Pins the deliberate absence of height from AllowedAttributes: a fork's frontend is not
+    // guaranteed to pair a stored width with height:auto, and width+height together on a container
+    // that only caps max-width:100% would squash the image's aspect ratio. This must fail under the
+    // mutation "add height to AllowedAttributes with no further handling" -- verified directly below
+    // by making that exact edit and re-running just this test before restoring the file.
+    [Fact]
+    public void Never_keeps_height_on_an_image()
+    {
+        var clean = _s.Sanitize("<img src=\"https://e.com/a.png\" width=\"480\" height=\"320\">");
+        clean.Should().Contain("width=\"480\"");
+        clean.Should().NotContain("height");
+    }
+
+    // Regression lock: the new width branch must not shadow the existing anchor-vs-non-anchor
+    // target handling. An <img> is not an IHtmlAnchorElement, so it must still fall into the
+    // "strip target" side of the handler.
+    [Fact]
+    public void Still_removes_target_from_an_image()
+    {
+        var clean = _s.Sanitize("<img src=\"https://e.com/a.png\" target=\"_blank\">");
+        clean.Should().NotContain("target");
+    }
+
+    // Confirms the existing anchor branch (rel derived from target) is unchanged by the handler
+    // restructuring this task performs. Covered above by Blank_target_survives_with_exactly_rel_noopener,
+    // re-asserted here as the task brief's own named regression check.
+    [Fact]
+    public void Blank_target_still_survives_with_exactly_rel_noopener()
+    {
+        var clean = _s.Sanitize("<a href=\"https://ok\" target=\"_blank\">l</a>");
+        clean.Should().Be("<a href=\"https://ok\" target=\"_blank\" rel=\"noopener\">l</a>");
+    }
 }
