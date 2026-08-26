@@ -28,11 +28,10 @@ export const DESTRUCTIVE_IMAGE_ACTIONS: ReadonlySet<ImageAction> = new Set<Image
  * element counts.
  */
 export function isEditorImage(target: EventTarget | null, root: HTMLElement): HTMLImageElement | null {
-  // Not load-bearing: `instanceof HTMLImageElement` below already rejects every non-Node value on
-  // its own, so this line never changes the return value. Kept only for structural parity with
-  // isInEditorTable's shape (which does need this check, since its own instanceof branches below
-  // it accept plain Nodes, not just elements).
-  if (!(target instanceof Node)) return null
+  // One check, not the two isInEditorTable opens with: `instanceof HTMLImageElement` already
+  // rejects null and every non-Node EventTarget on its own. isInEditorTable needs its separate
+  // `instanceof Node` line because it goes on to read `target.parentElement` off a plain Node;
+  // there is nothing here for a parity check to earn.
   if (!(target instanceof HTMLImageElement)) return null
   return root.contains(target) ? target : null
 }

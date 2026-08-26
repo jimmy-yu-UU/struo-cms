@@ -429,10 +429,18 @@ public class GanssHtmlSanitizerTests
     // decoded from "480&#10;". Confirmed directly by running both cases against the sanitizer with
     // the old ^[1-9][0-9]{0,4}$ pattern still in place: BOTH failed (width survived) -- not only the
     // bare "480\n" case but also "480\r\n", because the HTML5 input-stream preprocessing AngleSharp
-    // performs collapses a raw \r\n (and a lone \r) down to \n before the attribute value ever
-    // reaches this handler, so by the time the regex runs both inputs are the identical string
-    // "480\n". Both pass closed under \A/\z. Kept as two separate cases anyway since they exercise
-    // different input bytes even though they collapse to the same decoded value.
+    // performs collapses a raw \r\n down to \n before the attribute value ever reaches this
+    // handler, so by the time the regex runs both inputs are the identical string "480\n". Both
+    // pass closed under \A/\z. Kept as two separate cases anyway since they exercise different
+    // input bytes even though they collapse to the same decoded value.
+    //
+    // "480&#10;" and "480\r" are coverage of the two remaining shapes of that same vector rather
+    // than further evidence about it. The entity form is the one the paragraph above and chapter 5
+    // both NAME as how a newline reaches an attribute value in practice, so it is walked here
+    // end-to-end instead of being asserted only about the decoded bytes; the lone \r is the third
+    // line-ending shape a writer can send. Neither row can distinguish "decoded to a newline" from
+    // "decoded to something else that is also not five digits" -- both are rejected either way --
+    // so no claim is made here about what AngleSharp turns them into.
     [Theory]
     [InlineData("abc")]
     [InlineData("40%")]
@@ -444,6 +452,8 @@ public class GanssHtmlSanitizerTests
     [InlineData("100000")]
     [InlineData("480\n")]
     [InlineData("480\r\n")]
+    [InlineData("480\r")]
+    [InlineData("480&#10;")]
     public void Strips_non_integer_width_on_an_image(string widthValue)
     {
         var clean = _s.Sanitize($"<img src=\"https://e.com/a.png\" width=\"{widthValue}\">");
