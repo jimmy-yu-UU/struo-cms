@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -70,8 +70,18 @@ async function loadImages(): Promise<void> {
 const debouncedLoadImages = debounce(loadImages, 300)
 
 async function openImageDialog(): Promise<void> {
+  // See blurActiveElementBeforeDialog's own comment (declared below) for the mechanism this
+  // guards against. This dialog's own "cancel" close is @update:open below on a bare Dialog with
+  // no v-model sugar -- onImageSelected (the "submit" path) instead sets imageDialogOpen directly
+  // and never emits update:open at all, so the two never race over the same restore call.
+  blurActiveElementBeforeDialog()
   imageDialogOpen.value = true
   await loadImages()
+}
+
+function onImageDialogOpenChange(open: boolean): void {
+  imageDialogOpen.value = open
+  if (!open) refocusAfterDialogCancel()
 }
 
 // Bound to RichTextBubbleMenu's own template ref so openLinkDialog can force it away before the
@@ -94,27 +104,71 @@ let resolveLinkDialog: ((value: { href: string; newTab: boolean } | 'remove' | n
 function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | null): void {
   resolveLinkDialog?.(value)
   resolveLinkDialog = null
+  // null is the cancel outcome (from onLinkDialogOpenChange below, or the two "not reachable
+  // today" defensive calls): richTextCommands.ts's own .then() only calls editor.chain().focus()
+  // for the other two outcomes, submit and remove, so null is the one case nothing else is ever
+  // going to refocus anything, and the only one that should restore the pre-dialog target.
+  if (value === null) refocusAfterDialogCancel()
+  else elementToRefocusOnDialogCancel = null
 }
 
-// Shared by both dialogs below that can open while the editor (or one of its own toolbar/menu
-// controls) still holds DOM focus. Verified this session in the installed reka-ui@2.10.3 source:
-// DialogContentModal.js's useHideOthers watcher calls the `aria-hidden` library's own hideOthers()
-// synchronously, with no await, the moment `open` flips true, while FocusScope.js's matching
-// present-watcher is declared `async` and does `await nextTick()` before it ever dispatches its
-// mount-autofocus event -- so whatever element holds focus at the instant `open` flips stays
-// focused through that entire first reactive flush, strictly before autofocus gets a chance to run.
-// If that element is still a descendant of the app shell's own <main> (true on both paths this
-// guards: a left-click on a toolbar or bubble-menu button focuses that button same as any native
-// button click, and a right-click on an image never blurs the contenteditable the way a left-click
-// elsewhere does -- see onContentContextMenu's own image branch above), Chrome logs an
+// Shared by every dialog below that can open while the editor (or one of its own toolbar/menu
+// controls) still holds DOM focus: openLinkDialog, onImageAction's editAlt branch, openImageDialog,
+// and openTableSizeDialog. Verified this session in the installed reka-ui@2.10.3 source:
+// DialogContentModal.js's useHideOthers is a `watch(() => unrefElement(target), ...)` whose
+// callback calls the `aria-hidden` library's own hideOthers() directly, with no await inside it,
+// while FocusScope.js's matching present-watcher is declared `async` and does `await nextTick()`
+// before it ever dispatches its mount-autofocus event. So on the same reactive flush that flips a
+// dialog's `open` true, hideOthers' own DOM write happens with nothing async in the way, while the
+// actual `.focus()` call that would move focus into the dialog is deferred at least one further
+// microtask behind that internal nextTick() -- whatever element holds focus at the instant `open`
+// flips is still holding it when hideOthers runs. If that element is still a descendant of the app
+// shell's own <main> (true on every path this guards in a real browser: a left-click on a
+// toolbar/menu button focuses that button same as any native button click, and a right-click on an
+// image never blurs the contenteditable the way a left-click elsewhere does -- see
+// onContentContextMenu's own image branch above), Chrome logs an
 // aria-hidden-on-an-element-whose-descendant-retains-focus warning against <main> before autofocus
-// ever moves focus off it. Blurring here, synchronously and before the open flag flips, empties
-// document.activeElement down to <body> -- outside the subtree hideOthers is about to hide -- so
-// there is nothing focused inside <main> left for that check to catch. FocusScope's own deferred
-// autofocus still runs exactly as before once the flush settles, landing focus inside the dialog.
+// ever moves focus off it.
+//
+// Blurring synchronously, before the open flag flips, empties document.activeElement down to
+// <body> -- outside the subtree hideOthers is about to hide -- so there is nothing focused inside
+// <main> left for that check to catch. Left at that alone, though, it breaks something else: reka's
+// own FocusScope captures ITS idea of what to refocus when the dialog closes
+// (`previouslyFocusedElement`) from inside that same nextTick-deferred callback, which only ever
+// runs AFTER this blur -- so without capturing the real target ourselves first, reka would think
+// <body> was what held focus, and restore focus to <body> (a no-op) on every plain
+// Cancel/Escape/overlay-click close, dropping a keyboard user's focus into nowhere instead of back
+// where it was. elementToRefocusOnDialogCancel is that capture; refocusAfterDialogCancel is the
+// matching restore. Every dialog-close handler in this file calls refocusAfterDialogCancel() only
+// on a plain cancel -- never on a submit/remove/insert/select close, which already runs its own
+// deliberate editor.chain().focus() and clears elementToRefocusOnDialogCancel itself instead, so
+// the restore is never fighting a focus target that was moved on purpose.
+let elementToRefocusOnDialogCancel: HTMLElement | null = null
+
 function blurActiveElementBeforeDialog(): void {
   const active = document.activeElement
+  elementToRefocusOnDialogCancel = active instanceof HTMLElement ? active : null
   if (active instanceof HTMLElement) active.blur()
+}
+
+// Deferred one tick, not called synchronously here -- verified this session, by running exactly
+// this scenario and watching it fail without the deferral: reka's own FocusScope keeps its
+// document-level focusin/focusout trap listeners attached (from a `watchEffect` keyed on its own
+// `trapped` prop, itself driven by this same `open` flag) until Vue's reactivity actually flushes
+// that prop change and tears them down -- which has not happened yet at the exact synchronous
+// instant this function's caller (settleLinkDialog / the two dialog-close handlers below) runs, in
+// the very same tick that flips `open` false. A `target.focus()` call made in that window is
+// itself a native focusout from whatever was focused inside the dialog, and the still-attached
+// trap's own handleFocusOut immediately calls `focus(lastFocusedElementRef.value)` -- refocusing
+// back into the dialog and undoing the restore. Waiting for nextTick() lets that teardown finish
+// first, so this focus() call is the last one to run.
+function refocusAfterDialogCancel(): void {
+  const target = elementToRefocusOnDialogCancel
+  elementToRefocusOnDialogCancel = null
+  if (!target) return
+  void nextTick().then(() => {
+    if (document.body.contains(target)) target.focus()
+  })
 }
 
 function openLinkDialog(
@@ -206,6 +260,9 @@ function insertImage(id: string, alt = ''): void {
 
 function onImageSelected(id: string): void {
   insertImage(id)
+  // insertImage() above already ran its own editor.chain().focus() -- clear the captured
+  // pre-dialog target rather than leaving it to leak into a later, unrelated dialog's own cancel.
+  elementToRefocusOnDialogCancel = null
   imageDialogOpen.value = false
 }
 
@@ -245,12 +302,21 @@ const editor = useEditor({
     // installed @tiptap/core source: that's the full union, and `directions` defaults to the four
     // corners alone when omitted) -- four corners plus the four edge midpoints the maintainer
     // asked for. Every one of the eight still resizes proportionally: alwaysPreserveAspectRatio
-    // above is read once per drag from `this.preserveAspectRatio`, not branched on which
+    // above is re-read from `this.preserveAspectRatio` on every mousemove, not branched on which
     // direction is active (confirmed in the same handleResize/calculateNewDimensions read), so an
-    // edge handle locks the ratio exactly like a corner handle -- the handles differ only in which
-    // edge or corner the drag is anchored to. That is coherent with the storage contract: only
-    // `width` is ever persisted (see the addAttributes override below), so every direction's drag
-    // round-trips through the same single number regardless of which axis the user grabbed.
+    // edge handle locks the ratio exactly like a corner handle. That is coherent with the storage
+    // contract: only `width` is ever persisted (see the addAttributes override below), so every
+    // direction's drag round-trips through the same single number regardless of which axis the
+    // user grabbed.
+    //
+    // Not coherent with a claim this comment used to make, since corrected here: no handle
+    // "anchors" the opposite edge or corner in place. Confirmed by reading calculateNewDimensions
+    // and applyAspectRatio (same source) directly: neither ever sets `left`/`top`/`right`/`bottom`
+    // on the element itself, only `width`/`height` -- and the container's own
+    // `justify-content: flex-start` default (never overridden anywhere in this file) means the
+    // element's own top-left corner is what stays fixed for every direction. Dragging the left
+    // handle inward, for instance, does not pin the right edge and grow leftward the way a design
+    // tool's handles usually do -- it shrinks the same as every other handle, from the top-left.
     //
     // height is never rendered into the serialized HTML, via the addAttributes override below.
     // This is NOT a duplicate of the backend's sanitizer: Task 1 already strips height there
@@ -272,11 +338,18 @@ const editor = useEditor({
     // stylesheet height for that same property, so nothing was left to clamp the height to
     // match -- the image stretched vertically past that point. The style block below forces
     // height back to auto on this node view's own img (needing !important to outrank the inline
-    // style), which is a CSS-only fix and belongs there, not here. Confirmed in the same source
-    // that handleMouseUp's onCommit reads `this.element.offsetWidth` -- the browser's own already-
-    // clamped layout value, not the drag's raw unclamped number -- so the stored width already
-    // matches what publishing renders, both before and after that CSS fix; only the height was
-    // ever wrong.
+    // style), which is a CSS-only fix and belongs there, not here.
+    //
+    // Confirmed only this much by reading the same source, not more: handleMouseUp's onCommit
+    // reads `this.element.offsetWidth`, a live layout measurement, not the drag's raw unclamped
+    // delta-based number. What that measurement actually EQUALS at the moment of a drag exceeding
+    // the container depends on layout this session has no browser to run -- see the
+    // `[data-resize-container]` rule below (the width: fit-content one) for a related risk to that
+    // same measurement that a plain reasoning-only pass over this file's own CSS missed the first
+    // time, and its own comment for the max-width fix that addresses it. Whether offsetWidth ends
+    // up equal to the clamped, on-column width (desirable: matches what publishing renders) or to
+    // the drag's own unclamped number (not desirable) is a live-browser question, not one this
+    // comment can settle by citing source alone.
     //
     // Known upstream defect, not introduced here: ResizableNodeView's constructor registers
     // `editor.on('update', this.handleEditorUpdate.bind(this))`, and its destroy() calls
@@ -431,10 +504,30 @@ function onTableAction(action: TableAction): void {
 function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolean }): void {
   editor.value?.chain().focus()
     .insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: size.withHeaderRow }).run()
+  // The chain above already refocuses the editor -- shared with the grid-picker path (which never
+  // opens a dialog at all, so this is a harmless no-op there): clear the captured pre-dialog
+  // target rather than leaving it to leak into a later, unrelated dialog's own cancel.
+  elementToRefocusOnDialogCancel = null
 }
 
 // Opened by the table menu's "custom size…" entry; RichTextTableSizeDialog below reads it.
 const sizeDialogOpen = ref(false)
+
+function openTableSizeDialog(): void {
+  // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) --
+  // same mechanism, reached from a different click: the "Custom size…" entry inside
+  // RichTextTableMenu's own reka Popover. Guarded here regardless of exactly where that Popover
+  // portals its content or how its own close-focus-restore behaves (not verified this session,
+  // and not needed to be: blurring to <body> first is safe no matter which subtree would otherwise
+  // have ended up holding a stale focus when this dialog's own aria-hidden background applies).
+  blurActiveElementBeforeDialog()
+  sizeDialogOpen.value = true
+}
+
+function onTableSizeDialogOpenChange(open: boolean): void {
+  sizeDialogOpen.value = open
+  if (!open) refocusAfterDialogCancel()
+}
 
 // Which action list RichTextContextMenu shows for the CURRENT right-click -- see that component's
 // own `target` prop comment for why this is per-event state rather than something derived once.
@@ -572,6 +665,23 @@ function onImageAltDialogSubmit(alt: string): void {
   // same reasoning as deleteSelection() above -- the dialog offers no path back into the editor
   // that could move the selection while it is open.
   editor.value?.chain().focus().updateAttributes('image', { alt }).run()
+  // The chain above already refocuses the editor -- clear the captured pre-dialog target (here,
+  // the editor itself) rather than have onImageAltDialogOpenChange's own trailing update:open(false)
+  // restore it a second time, or a later, unrelated dialog's own cancel inherit a stale one.
+  elementToRefocusOnDialogCancel = null
+}
+
+// Unlike the link dialog, this one has no third "remove" outcome and no async settle protocol to
+// share the close signal with -- but it does need to tell a submit-then-close apart from a plain
+// cancel-close, which v-model:open sugar alone cannot do (RichTextImageAltDialog.submit() emits
+// 'submit' then its own trailing 'update:open'(false), same shape as RichTextLinkDialog's submit;
+// see that component's submit()). onImageAltDialogSubmit above always runs first and always clears
+// elementToRefocusOnDialogCancel, so by the time this runs for a submit-driven close there is
+// nothing left to restore -- refocusAfterDialogCancel() is only ever a real restore for a plain
+// Cancel/Escape/overlay-click close.
+function onImageAltDialogOpenChange(open: boolean): void {
+  imageAltDialogOpen.value = open
+  if (!open) refocusAfterDialogCancel()
 }
 
 defineExpose({ editor, insertImage })
@@ -595,7 +705,7 @@ defineExpose({ editor, insertImage })
         :active-color="(editor.getAttributes('textStyle').color as string | undefined) ?? null"
         @pick="(c: string) => editor!.chain().focus().setColor(c).run()"
         @clear="editor!.chain().focus().unsetColor().run()" />
-      <RichTextTableMenu :disabled="disabled" @insert="onTableInsert" @custom-size="sizeDialogOpen = true" />
+      <RichTextTableMenu :disabled="disabled" @insert="onTableInsert" @custom-size="openTableSizeDialog" />
       <RichTextCommandButton v-for="cmd in TOOLBAR_AFTER_TABLE" :key="cmd.id" :command="cmd"
         :editor="editor" :disabled="disabled" @run="runCommand(cmd)" />
     </div>
@@ -626,7 +736,7 @@ defineExpose({ editor, insertImage })
       so max-w-4xl below is unprefixed too — matching modifiers is what makes tailwind-merge drop
       the vendored default instead of leaving both classes to fight on source order.
     -->
-    <Dialog v-model:open="imageDialogOpen">
+    <Dialog :open="imageDialogOpen" @update:open="onImageDialogOpenChange">
       <DialogScrollContent class="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{{ t('fields.richtext.insertImageTitle') }}</DialogTitle>
@@ -642,18 +752,28 @@ defineExpose({ editor, insertImage })
         <MediaGrid :files="files" selectable @select="onImageSelected" />
       </DialogScrollContent>
     </Dialog>
-    <RichTextTableSizeDialog v-model:open="sizeDialogOpen" @insert="onTableInsert" />
     <!--
-      Not v-model:open sugar (unlike the table-size dialog above): a plain Cancel/Esc/overlay-click
-      close still has to settle the pending openLinkDialog promise with null, which sugar's own
-      `open = $event` has no way to also do -- update:open is handled explicitly instead.
+      Not v-model:open sugar: onTableSizeDialogOpenChange has to tell a submit-driven close (its
+      own @insert already ran editor.chain().focus(), see onTableInsert) apart from a plain
+      Cancel/Escape/overlay-click close, which needs refocusAfterDialogCancel() instead -- sugar's
+      own `open = $event` has no way to run that extra step.
+    -->
+    <RichTextTableSizeDialog :open="sizeDialogOpen" @update:open="onTableSizeDialogOpenChange" @insert="onTableInsert" />
+    <!--
+      Not v-model:open sugar: a plain Cancel/Esc/overlay-click close still has to settle the
+      pending openLinkDialog promise with null (which restores focus itself -- see
+      settleLinkDialog), which sugar's own `open = $event` has no way to also do -- update:open is
+      handled explicitly instead.
     -->
     <RichTextLinkDialog :open="linkDialogOpen" :href="linkDialogHref" :new-tab="linkDialogNewTab"
       :can-remove="linkDialogCanRemove" @update:open="onLinkDialogOpenChange"
       @submit="onLinkDialogSubmit" @remove="onLinkDialogRemove" />
-    <!-- v-model:open sugar is fine here, unlike the link dialog above: this one has only two
-         outcomes (submit/cancel), neither needing the extra settle step a Remove button would. -->
-    <RichTextImageAltDialog v-model:open="imageAltDialogOpen" :alt="imageAltDialogAlt"
+    <!--
+      Not v-model:open sugar here either, for the same reason as the table-size dialog above:
+      onImageAltDialogOpenChange has to tell a submit-driven close apart from a plain cancel-close
+      to know whether refocusAfterDialogCancel() should actually restore anything.
+    -->
+    <RichTextImageAltDialog :open="imageAltDialogOpen" @update:open="onImageAltDialogOpenChange" :alt="imageAltDialogAlt"
       @submit="onImageAltDialogSubmit" />
   </div>
 </template>
@@ -742,10 +862,7 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep([data-resize-handle="top-right"]),
 .rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
 /* The `directions` resize option above now asks for the four edge midpoints too, alongside the
-   four corners -- these two rules are the edge-direction cursors that pairing needs. (An earlier
-   revision of this batch removed them as dead code on the grounds that `directions` was never
-   passed, so only corners could ever exist; that is no longer true, and these are back for the
-   same reason they were here originally.) */
+   four corners -- these two rules are the edge-direction cursors that pairing needs. */
 .rich-text__content :deep([data-resize-handle="top"]),
 .rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; }
 .rich-text__content :deep([data-resize-handle="left"]),
@@ -766,16 +883,41 @@ defineExpose({ editor, insertImage })
    constraint fills the available line width the same as any other block box -- so the outline
    would draw around the full line, with the image sitting at its left edge, while the handles
    (positioned against the wrapper just below, which sizes to its own content) stay hugging the
-   image. `width: fit-content` is a plain CSS property this rule owns outright -- upstream's own
-   inline style on this element only ever sets `display`, so there is no inline-style conflict to
-   outrank and no !important needed. Shrinking the container to its single flex child (the
-   wrapper) is what makes the outline and the handles agree on the same box. */
+   image. `width: fit-content` is a plain CSS property this rule owns outright for THAT property --
+   upstream's own inline style on this same element also sets `visibility`/`pointerEvents`
+   (@tiptap/extension-image's addNodeView, to hide the node view until the image's onload fires),
+   but never `width`, so there is no inline-style conflict on width specifically and no !important
+   needed for the rule below. Shrinking the container to its single flex child (the wrapper) is
+   what makes the outline and the handles agree on the same box.
+
+   max-width: 100% alongside it is not decorative: without it, `width: fit-content` on its own
+   leaves this box's own sizing depending on its content's preferred width, while its child img's
+   `max-width: 100%` (the rule further below) depends on THIS box's width to resolve its own
+   percentage against -- a cycle. Per how a percentage resolves against a box whose own size is
+   still being computed, the img's percentage would not constrain anything in that pass, so the
+   fit-content computation could settle on however wide the drag pushed the img, defeating the
+   clamp defect 2 depends on and, per AppShell.vue's own overflow-x-clip on the content column,
+   clipping the container (and the right-hand handles with it) rather than letting anything scroll
+   back into view. Adding max-width: 100% here gives this box its own independent, non-cyclic upper
+   bound (it resolves against ITS OWN containing block -- the `.ProseMirror` column, a definite,
+   ordinary width, not this fit-content box's own still-being-computed one), which is what lets the
+   img's max-width clamp against a genuinely fixed number again once this box is capped.
+   Reasoned from how CSS percentage resolution and fit-content sizing are specified, not verified
+   against a live layout engine this session -- jsdom lays nothing out, so neither this cycle nor
+   the fix for it could be exercised here. A live drag past the column's right or bottom edge is
+   the check this still needs. */
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 .rich-text__content :deep([data-resize-container]) {
   width: fit-content;
+  max-width: 100%;
+  /* Margin, not the outline/hugging rules above: see the comment on the img margin rule just
+     below for why this box (not the wrapper, and not the img itself) is where `prose`'s own
+     vertical image margin has to be re-applied. */
+  margin-top: 2em;
+  margin-bottom: 2em;
 }
 
 /* The wrapper (createWrapper(), same source) is a plain `display: block` div holding only the
@@ -792,35 +934,31 @@ defineExpose({ editor, insertImage })
    top:0/bottom:0 against the wrapper's own edges, previously sat on a box visibly taller than the
    image rather than on the image's own corners.
 
-   Zeroing that margin here and re-adding it on the container's own margin (a real block box in
-   document flow, whose margin sits OUTSIDE its border box and so never inflates what the outline
-   above measures) keeps the same visual gap above and below an image that `prose` would otherwise
-   have provided, without inflating the box the outline and handles both key off. The `2em` below is
-   a hardcoded approximation of that same `base` modifier value, not a read of it: this editor's
-   `class="prose dark:prose-invert"` (no size suffix) always resolves to that modifier today, so the
-   two happen to agree, but this rule does not track the plugin's own theme value and would silently
-   drift if a future edit switched to `prose-sm`/`prose-lg`/etc. */
+   Zeroing that margin here and re-adding it on the container's own margin (declared on the rule
+   above, since it is a real block box in document flow whose margin sits OUTSIDE its border box
+   and so never inflates what the outline above measures) keeps the same visual gap above and
+   below an image that `prose` would otherwise have provided, without inflating the box the
+   outline and handles both key off. The `2em` above is a hardcoded approximation of that same
+   `base` modifier value, not a read of it: this editor's `class="prose dark:prose-invert"` (no
+   size suffix) always resolves to that modifier today, so the two happen to agree, but this rule
+   does not track the plugin's own theme value and would silently drift if a future edit switched
+   to `prose-sm`/`prose-lg`/etc. */
 .rich-text__content :deep([data-resize-wrapper] img) {
   margin: 0;
-}
-.rich-text__content :deep([data-resize-container]) {
-  margin-top: 2em;
-  margin-bottom: 2em;
-}
 
-/* Second, independent defect in the same drag path (see the `directions` comment on the Image
-   extension's own `resize` option above for the full mechanism): ResizableNodeView.handleResize
-   always writes an inline `height` in pixels on every mousemove, and that inline value always
-   outranks Tailwind preflight's stylesheet `height: auto` for the same property -- so once a drag
-   pushed the inline width past what `max-width: 100%` lets the image actually render at, nothing
-   was left to keep the rendered height in proportion, and the image stretched. `!important` here
-   is required, not decorative: only `!important` on a stylesheet rule can outrank an inline style
-   for the same property. Restoring `height: auto` makes the browser derive the rendered height
-   from the image's own natural aspect ratio and whatever width it actually rendered at (clamped or
-   not) -- the same ratio ResizableNodeView itself measured at mount (applyInitialSize() reads this
-   same element's offsetWidth/offsetHeight), so this does not fight alwaysPreserveAspectRatio's own
-   math, only the one place upstream still applies a size as an inline style unconditionally. */
-.rich-text__content :deep([data-resize-wrapper] img) {
+  /* Second, independent defect in the same drag path (see the `directions` comment on the Image
+     extension's own `resize` option above for the full mechanism): ResizableNodeView.handleResize
+     always writes an inline `height` in pixels on every mousemove, and that inline value always
+     outranks Tailwind preflight's stylesheet `height: auto` for the same property -- so once a
+     drag pushed the inline width past what `max-width: 100%` lets the image actually render at,
+     nothing was left to keep the rendered height in proportion, and the image stretched.
+     `!important` here is required, not decorative: only `!important` on a stylesheet rule can
+     outrank an inline style for the same property. Restoring `height: auto` makes the browser
+     derive the rendered height from the image's own natural aspect ratio and whatever width it
+     actually rendered at (clamped or not) -- the same ratio ResizableNodeView itself measured at
+     mount (applyInitialSize() reads this same element's offsetWidth/offsetHeight), so this does
+     not fight alwaysPreserveAspectRatio's own math, only the one place upstream still applies a
+     size as an inline style unconditionally. */
   height: auto !important;
 }
 

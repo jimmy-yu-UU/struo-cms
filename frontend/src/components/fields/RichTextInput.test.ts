@@ -7,6 +7,7 @@ import type { Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
+import RichTextLinkDialog from './RichTextLinkDialog.vue'
 import type { ImageAction } from './richTextImageActions'
 import { fileContentPath } from '../../lib/richTextImages'
 import { buttonVariants } from '@/components/ui/button'
@@ -656,6 +657,25 @@ describe('RichTextInput', () => {
     expect(w.get('input').attributes('aria-label')).toBe('Search files…')
   })
 
+  // Review-round finding: the insert-image dialog shares the exact same mechanism as the alt and
+  // link dialogs (same blurActiveElementBeforeDialog/refocusAfterDialogCancel helpers, same
+  // vendored Dialog underneath), reached from a plain toolbar button click same as the link
+  // dialog's own toolbar path. Asserts the same synchronous destination those two already pin.
+  it('blurs the editor before the insert-image dialog opens', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
+    const clicked = w.get('[data-cmd="image"]').trigger('click')
+    expect(document.activeElement).toBe(document.body)
+    await clicked
+    w.unmount()
+    container.remove()
+  })
+
   it('applies the typography prose classes to the editable surface', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
     await flushPromises()
@@ -991,10 +1011,13 @@ describe('RichTextInput', () => {
   // Defect 3 (RT-6 review fix), the image-alt-dialog half: a right-click never blurs a
   // contenteditable the way a left-click elsewhere does, so the ProseMirror editor is still
   // focused when the context menu's "edit alt" action runs -- reka's DialogContentModal applies
-  // aria-hidden to the rest of the page synchronously at the instant `open` flips true, strictly
-  // before its FocusScope's own deferred (`await nextTick()`) autofocus ever moves focus off
-  // whatever held it. This pins the mechanism jsdom CAN see (a synchronous blur before the dialog
-  // opens), not the console warning itself, which jsdom's DOM implementation never raises.
+  // aria-hidden to the rest of the page on the same reactive flush that flips `open` true,
+  // strictly before its FocusScope's own deferred (`await nextTick()`) autofocus ever moves focus
+  // off whatever held it. This pins the mechanism jsdom CAN see (a synchronous blur before the
+  // dialog opens), not the console warning itself, which jsdom's DOM implementation never raises.
+  // Asserts the actual destination (document.body), not just "not the editor" -- the latter would
+  // also pass if blurActiveElementBeforeDialog moved focus somewhere else entirely, which would
+  // still leave a focused element inside whatever ends up hidden.
   it('blurs the editor before the alt dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, {
@@ -1011,7 +1034,123 @@ describe('RichTextInput', () => {
       runImage: (action: ImageAction) => void
     }
     menuVm.runImage('editAlt')
-    expect(document.activeElement).not.toBe(w.get('.ProseMirror').element)
+    expect(document.activeElement).toBe(document.body)
+    w.unmount()
+    container.remove()
+  })
+
+  // The other half of the same review fix: blurring to <body> on its own would make reka's own
+  // FocusScope think <body> (not whatever was actually focused) was "previously focused", so a
+  // plain Cancel/Escape close would restore focus to <body> instead of back to where it was --
+  // verified this session in the installed FocusScope.js that its own capture of that value
+  // happens inside the same nextTick-deferred callback the blur above is specifically timed to run
+  // ahead of. Captures document.activeElement itself right before the dialog opens, rather than
+  // assuming it is the editor specifically: runImage() below calls onImageAction() directly,
+  // bypassing reka's own ContextMenuItem @select handling entirely (deliberately, per
+  // RichTextContextMenu.vue's own comment on why runTable/runImage exist), so this does not also
+  // reproduce whatever focus-restoring that real menu-item interaction does on its own way out --
+  // only the mechanism this test actually targets, which is agnostic to what was focused going in.
+  // Simulating the dialog's own trailing update:open(false) via $emit, rather than hunting for its
+  // untagged Cancel button by text, since the mechanism under test is RichTextInput's OWN
+  // close-change handler, not that button's wiring.
+  it('restores focus to whatever held it before the alt dialog opened, when the dialog is cancelled', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
+      global: globalOpts, attachTo: container,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const preOpenFocus = document.activeElement
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    expect(document.activeElement).toBe(document.body)
+    // The context menu itself is still mounted and open at this point -- runImage() above calls
+    // onImageAction() directly, the same intentional DOM bypass noted above, so nothing has told
+    // reka's ContextMenuContent to close the way a real @select interaction would. Left open, its
+    // own still-active focus trap would immediately steal back any focus() call landing outside
+    // its own container, fighting the alt dialog's restore below for a reason that has nothing to
+    // do with the mechanism this test targets. Escape is what a real menu-item selection would
+    // also result in (the menu closing), dispatched at the document level since that is where
+    // reka's own DismissableLayer registers its escape-key handling.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    w.findComponent(RichTextImageAltDialog).vm.$emit('update:open', false)
+    // refocusAfterDialogCancel() defers its own restore one tick past this -- see its own comment
+    // for why: reka's FocusScope keeps its focus-trap listeners attached until Vue's reactivity
+    // actually flushes the `open` prop change that tears them down, and a synchronous focus() call
+    // made before that would be immediately overridden by the still-active trap.
+    await nextTick()
+    expect(document.activeElement).toBe(preOpenFocus)
+    w.unmount()
+    container.remove()
+  })
+
+  // The failure mode the review round caught: without onImageAltDialogSubmit clearing the captured
+  // pre-dialog target itself, a successful submit's own editor.chain().focus() only "won" over the
+  // stale-target restore because document.body.focus() happens to be a no-op -- an unstated browser
+  // detail, not a real fix. refocusAfterDialogCancel() defers its own restore by one nextTick (see
+  // its own comment for why), so this awaits exactly one nextTick after the submit click -- enough
+  // for a wrongly-still-armed restore to have fired its synchronous target.focus() call, but not
+  // enough for tiptap's OWN real dom.focus() (deferred to a requestAnimationFrame, a different
+  // timing domain entirely -- see waitForEditorReactivity's own comment above) to have landed yet.
+  // So document.activeElement at this exact point can only reflect a stale-target restore actually
+  // firing, not tiptap's own eventual, legitimate refocus -- confirmed this session by running this
+  // test with onImageAltDialogSubmit's own clearing line removed and watching it fail.
+  it('does not restore stale pre-dialog focus after a successful alt-dialog submit', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="old"></p>' },
+      global: globalOpts, attachTo: container,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    const editorEl = w.get('.ProseMirror').element
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    expect(document.activeElement).toBe(document.body)
+    // Same reasoning as the cancel test above: the context menu is still mounted and open here
+    // (runImage() bypasses the real @select interaction that would have closed it), and its own
+    // still-active focus trap would otherwise fight any focus() call landing outside it -- Escape
+    // closes it before that can confound this test's own assertion.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    await flushPromises()
+    await w.get('[data-testid="alt"]').setValue('new alt')
+    await w.get('[data-cmd="altSubmit"]').trigger('click')
+    await nextTick()
+    expect(document.activeElement).not.toBe(editorEl)
+    w.unmount()
+    container.remove()
+  })
+
+  // Review-round finding: this dialog shares the exact same helpers as the alt/link/insert-image
+  // dialogs, reached through one more layer (RichTextTableMenu's own reka Popover) than any of
+  // those -- guarded the same way regardless of exactly where that Popover portals its own content
+  // or how its own close-focus-restore behaves, neither of which needed resolving to know blurring
+  // to <body> first is safe either way. Asserts the same synchronous destination they pin.
+  it('blurs the editor before the table-size dialog opens', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
+    await w.get('[data-cmd="table"]').trigger('click')
+    const clicked = w.get('[data-cmd="tableCustomSize"]').trigger('click')
+    expect(document.activeElement).toBe(document.body)
+    await clicked
     w.unmount()
     container.remove()
   })
@@ -1191,14 +1330,19 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // Defect 3 (RT-6 review fix), the link-dialog half: clicking a toolbar or bubble-menu button
-  // focuses that button the same as clicking any other native button, so without
-  // blurActiveElementBeforeDialog (openLinkDialog's own call, alongside its existing
-  // bubbleMenuRef.value?.hide()) the editor stays the focused element at the moment `open` flips
-  // true -- reka's DialogContentModal applies aria-hidden to the rest of the page synchronously at
-  // that instant, strictly before its FocusScope's own deferred (`await nextTick()`) autofocus ever
-  // moves focus off it. This pins the mechanism jsdom CAN see (a synchronous blur before the dialog
-  // opens), not the console warning itself, which jsdom's DOM implementation never raises.
+  // Defect 3 (RT-6 review fix), the link-dialog half. In a real browser, clicking a toolbar or
+  // bubble-menu button focuses that button the same as clicking any other native button, and
+  // WITHOUT blurActiveElementBeforeDialog that button (still a descendant of <main>) would stay
+  // focused at the moment `open` flips true -- reka's DialogContentModal applies aria-hidden to
+  // the rest of the page on the same reactive flush that flip happens on, strictly before its
+  // FocusScope's own deferred (`await nextTick()`) autofocus ever moves focus off whatever holds
+  // it. jsdom's synthetic click does NOT reproduce that native focus-follows-click default
+  // action, though (confirmed this session against jsdom directly, outside this test file), so
+  // this test's own starting focus is instead put on the editor explicitly
+  // (vm.editor.commands.focus()) -- what this pins is that blurActiveElementBeforeDialog moves
+  // focus off WHATEVER held it, not specifically that a button held it here. Asserts the actual
+  // destination (document.body), not just "not the editor" -- the latter would also pass if focus
+  // had moved somewhere else that was still inside <main>.
   it('blurs the editor before the link dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
@@ -1219,8 +1363,41 @@ describe('RichTextInput', () => {
     // blurActiveElementBeforeDialog() call rather than only ever seeing reka's own (later, and
     // real-bug-causing-in-between) autofocus having already cleaned up after it.
     const clicked = w.get('[data-cmd="link"]').trigger('click')
-    expect(document.activeElement).not.toBe(w.get('.ProseMirror').element)
+    expect(document.activeElement).toBe(document.body)
     await clicked
+    w.unmount()
+    container.remove()
+  })
+
+  // The other half of the same review fix: blurring to <body> on its own would make reka's own
+  // FocusScope think <body> (not whatever held focus before) was "previously focused", so a plain
+  // Cancel/Escape/overlay-click close would restore focus to <body> instead of back to where it
+  // was -- verified this session in the installed FocusScope.js that its own capture of that value
+  // happens inside the same nextTick-deferred callback the blur above is specifically timed to run
+  // ahead of. Simulating the dialog's own trailing update:open(false) via $emit, matching what an
+  // Escape press or an overlay click would trigger, since the mechanism under test is
+  // RichTextInput's OWN close-change handler (onLinkDialogOpenChange -> settleLinkDialog(null) ->
+  // refocusAfterDialogCancel()), not any particular button's wiring.
+  it('restores focus to whatever held it before the link dialog opened, when the dialog is cancelled', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    const editorEl = w.get('.ProseMirror').element
+    // Awaited here, unlike the blur test above: what this test pins is the RESTORE on close, not
+    // the blur itself, so letting reka's own autofocus fully settle first (rather than racing it)
+    // is what makes the dialog's state unambiguous before the cancel below.
+    await w.get('[data-cmd="link"]').trigger('click')
+    await flushPromises()
+    w.findComponent(RichTextLinkDialog).vm.$emit('update:open', false)
+    // refocusAfterDialogCancel() defers its own restore one tick past this -- see its own comment
+    // for why: reka's FocusScope keeps its focus-trap listeners attached until Vue's reactivity
+    // actually flushes the `open` prop change that tears them down, and a synchronous focus() call
+    // made before that would be immediately overridden by the still-active trap.
+    await nextTick()
+    expect(document.activeElement).toBe(editorEl)
     w.unmount()
     container.remove()
   })
