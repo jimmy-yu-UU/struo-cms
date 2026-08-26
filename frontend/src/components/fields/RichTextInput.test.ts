@@ -364,6 +364,25 @@ describe('RichTextInput', () => {
     expect(w.find('[data-resize-container]').exists()).toBe(true)
   })
 
+  // Pins the `directions` option passed to the Image extension's `resize` config, not appearance:
+  // jsdom applies no CSS, so this cannot see whether a handle is visible or grabbable, only whether
+  // ResizableNodeView actually attached one per direction. Four corners plus the four edge
+  // midpoints, sorted before comparing since attachHandles() iterates `directions` in whatever
+  // order the array lists them, and that order isn't part of the contract being pinned here.
+  it('renders all eight resize handles -- four corners and four edge midpoints -- for an inserted image', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.setImage({ src: 'https://example.com/cat.png' })
+    await flushPromises()
+    const handles = w.findAll('[data-resize-handle]')
+      .map((h) => h.attributes('data-resize-handle'))
+      .sort()
+    expect(handles).toEqual(
+      ['bottom', 'bottom-left', 'bottom-right', 'left', 'right', 'top', 'top-left', 'top-right'],
+    )
+  })
+
   // Regression guard: a field that mounts already `disabled` must never grow live, draggable
   // handles. This is an existence assertion (no [data-resize-handle] node at all), not an
   // appearance one, so it holds even though jsdom applies no CSS. waitForEditorCreate() (not just
@@ -969,6 +988,34 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
+  // Defect 3 (RT-6 review fix), the image-alt-dialog half: a right-click never blurs a
+  // contenteditable the way a left-click elsewhere does, so the ProseMirror editor is still
+  // focused when the context menu's "edit alt" action runs -- reka's DialogContentModal applies
+  // aria-hidden to the rest of the page synchronously at the instant `open` flips true, strictly
+  // before its FocusScope's own deferred (`await nextTick()`) autofocus ever moves focus off
+  // whatever held it. This pins the mechanism jsdom CAN see (a synchronous blur before the dialog
+  // opens), not the console warning itself, which jsdom's DOM implementation never raises.
+  it('blurs the editor before the alt dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
+      global: globalOpts, attachTo: container,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    expect(document.activeElement).not.toBe(w.get('.ProseMirror').element)
+    w.unmount()
+    container.remove()
+  })
+
   it('inserts a custom-sized table from the dialog', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
     await flushPromises()
@@ -1140,6 +1187,40 @@ describe('RichTextInput', () => {
     // what actually lets this assert the menu is gone, not merely still present.
     expect(new DOMWrapper(document.body).find('.rich-text__bubble').exists()).toBe(false)
 
+    w.unmount()
+    container.remove()
+  })
+
+  // Defect 3 (RT-6 review fix), the link-dialog half: clicking a toolbar or bubble-menu button
+  // focuses that button the same as clicking any other native button, so without
+  // blurActiveElementBeforeDialog (openLinkDialog's own call, alongside its existing
+  // bubbleMenuRef.value?.hide()) the editor stays the focused element at the moment `open` flips
+  // true -- reka's DialogContentModal applies aria-hidden to the rest of the page synchronously at
+  // that instant, strictly before its FocusScope's own deferred (`await nextTick()`) autofocus ever
+  // moves focus off it. This pins the mechanism jsdom CAN see (a synchronous blur before the dialog
+  // opens), not the console warning itself, which jsdom's DOM implementation never raises.
+  it('blurs the editor before the link dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.focus()
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
+    // Not awaited before the assertion, deliberately: VTU's trigger() dispatches the click
+    // synchronously (our @click handler chain, including blurActiveElementBeforeDialog(), already
+    // ran by the time dispatchEvent() returns) and only THEN returns a promise that resolves after
+    // nextTick() -- and reka's own FocusScope autofocus is deferred behind its own internal
+    // `await nextTick()` from inside a watcher this same flush triggers, which (verified this
+    // session by running this exact test with the fix removed) resolves ahead of a nextTick()
+    // awaited from outside that flush, landing focus in the dialog before an awaited assertion here
+    // could tell that apart from our own fix ever having run. Checking synchronously, before
+    // awaiting the click's own settle promise, is what still catches a missing
+    // blurActiveElementBeforeDialog() call rather than only ever seeing reka's own (later, and
+    // real-bug-causing-in-between) autofocus having already cleaned up after it.
+    const clicked = w.get('[data-cmd="link"]').trigger('click')
+    expect(document.activeElement).not.toBe(w.get('.ProseMirror').element)
+    await clicked
     w.unmount()
     container.remove()
   })
