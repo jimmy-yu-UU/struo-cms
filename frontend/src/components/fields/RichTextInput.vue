@@ -440,7 +440,9 @@ function onContentContextMenu(e: MouseEvent): void {
   }
 
   if (!isInEditorTable(e.target, root)) { e.stopPropagation(); contextMenuTarget.value = null; return }
-  if (props.disabled) return
+  // Both disabled branches clear `target` rather than leaving it, so a read-only field can never
+  // keep an action list armed from an earlier right-click made while it was still editable.
+  if (props.disabled) { contextMenuTarget.value = null; return }
   // Commands act on the current selection, so a right-click on a cell the caret is not in would
   // otherwise apply to wherever the caret happens to be. posAtCoords needs real layout to resolve
   // accurate coordinates, and jsdom lays nothing out -- this line needs a live browser check, not a
@@ -497,6 +499,11 @@ function onImageAltDialogSubmit(alt: string): void {
   restoreFocusOnDialogCancel = null
 }
 
+// Depends on RichTextImageAltDialog.submit() emitting 'submit' BEFORE its trailing
+// 'update:open'(false), so onImageAltDialogSubmit above always runs while the captured node is
+// still set. Invert that order, or move this clear any earlier, and the guard above rejects every
+// legitimate submit -- silently, since it bails without reporting. Pinned by the emit-order test in
+// RichTextImageAltDialog.test.ts.
 function onImageAltDialogOpenChange(open: boolean): void {
   imageAltDialogOpen.value = open
   if (!open) {

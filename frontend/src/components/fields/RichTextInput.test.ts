@@ -904,6 +904,30 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
+  // Both disabled branches clear `target`, and this pins that they agree. Arming the image menu
+  // while the field is still editable is what makes it discriminate: without the reset in the
+  // branch under test, the stale list survives the transition to read-only.
+  it.each([
+    ['image', '.ProseMirror img'],
+    ['table cell', '.ProseMirror table td'],
+  ])('clears the context-menu target for a right-click on a %s in a disabled field', async (_label, selector) => {
+    const w = mount(RichTextInput, {
+      props: {
+        modelValue: '<p><img src="https://example.com/cat.png"></p>'
+          + '<table><tbody><tr><td>c</td></tr></tbody></table>',
+      },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBe('image')
+    await w.setProps({ disabled: true })
+    await flushPromises()
+    await dispatchContextMenu(w.get(selector).element)
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBeNull()
+    w.unmount()
+  })
+
   it('does not move the selection or stop the event for a right-click on an image in a disabled field', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
@@ -954,6 +978,10 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
+  // Drives the dialog's real submit button, so this is also the test that fails if
+  // onImageAltDialogOpenChange's release of the captured image node ever runs before
+  // onImageAltDialogSubmit -- either by moving the clear earlier or by inverting the dialog's own
+  // emit order. Under that mutation the guard rejects the write and no alt is emitted at all.
   it('submitting the alt dialog updates the emitted HTML with the new alt', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="old"></p>' },

@@ -31,6 +31,10 @@ watch(() => props.open, (isOpen) => {
 
 // No validation, unlike RichTextLinkDialog's href field: alt="" is the formal HTML way to mark an
 // image as decorative, so an empty value is a legitimate submission, not an empty-input error.
+//
+// The emit order is load-bearing, not stylistic: RichTextInput releases the image node it captured
+// for this dialog on 'update:open'(false), and its submit handler needs that capture. Swap these
+// two lines and every alt edit is silently discarded.
 function submit(): void {
   emit('submit', alt.value)
   emit('update:open', false)
