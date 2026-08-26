@@ -405,10 +405,11 @@ public class GanssHtmlSanitizerTests
 
     // width is allowlisted globally (AllowedAttributes has no per-tag concept), so an integer-only
     // shape check has to be applied in the PostProcessNode handler -- the same reasoning as target's
-    // anchor-only narrowing above. Ganss.Xss itself does not validate attribute VALUES once a name is
-    // on AllowedAttributes (verified directly: adding "width" to AllowedAttributes with no handler at
-    // all lets width="abc" survive untouched), so nothing upstream of this handler will ever reject
-    // a malformed width for us.
+    // anchor-only narrowing above. Recorded observation from this task (RT-6 task 1): a throwaway
+    // HtmlSanitizer with "width" on AllowedAttributes and no PostProcessNode handler at all let
+    // width="abc" survive Sanitize() untouched, so Ganss.Xss does not itself validate attribute
+    // VALUES once a name is on AllowedAttributes -- nothing upstream of this handler will ever
+    // reject a malformed width for us.
     [Fact]
     public void Keeps_integer_width_on_an_image()
     {
@@ -440,8 +441,15 @@ public class GanssHtmlSanitizerTests
     // width surviving on anything other than <img> would let a fork's non-image renderer (a <td>,
     // a <table>, a plain paragraph) receive a raw author-controlled pixel width it was never
     // designed to defend against -- the img-only shape check is not enough by itself.
+    //
+    // The <td> case is wrapped in a real <table><tbody><tr>...</tr></tbody></table> rather than
+    // handed to Sanitize bare: a bare "<td width=\"200\">c</td>" is a parse error in body-context
+    // fragment parsing, so AngleSharp never materializes a <td> element from it at all and the row
+    // would pass even with the non-image width strip deleted. Verified directly (RT-6 task 1 fix
+    // round): with that strip temporarily commented out, the bare-<td> row alone still passed while
+    // the other four rows in this theory correctly failed -- confirming the bare form was vacuous.
     [Theory]
-    [InlineData("<td width=\"200\">c</td>")]
+    [InlineData("<table><tbody><tr><td width=\"200\">c</td></tr></tbody></table>")]
     [InlineData("<table width=\"100%\"></table>")]
     [InlineData("<p width=\"480\">t</p>")]
     [InlineData("<span width=\"480\">s</span>")]
@@ -454,8 +462,9 @@ public class GanssHtmlSanitizerTests
     // Pins the deliberate absence of height from AllowedAttributes: a fork's frontend is not
     // guaranteed to pair a stored width with height:auto, and width+height together on a container
     // that only caps max-width:100% would squash the image's aspect ratio. This must fail under the
-    // mutation "add height to AllowedAttributes with no further handling" -- verified directly below
-    // by making that exact edit and re-running just this test before restoring the file.
+    // mutation "add height to AllowedAttributes with no further handling" -- verified out of band
+    // (Task 1): that exact edit was made temporarily against this file, this test alone was re-run
+    // and failed on the height assertion, then the edit was reverted.
     [Fact]
     public void Never_keeps_height_on_an_image()
     {
@@ -474,13 +483,4 @@ public class GanssHtmlSanitizerTests
         clean.Should().NotContain("target");
     }
 
-    // Confirms the existing anchor branch (rel derived from target) is unchanged by the handler
-    // restructuring this task performs. Covered above by Blank_target_survives_with_exactly_rel_noopener,
-    // re-asserted here as the task brief's own named regression check.
-    [Fact]
-    public void Blank_target_still_survives_with_exactly_rel_noopener()
-    {
-        var clean = _s.Sanitize("<a href=\"https://ok\" target=\"_blank\">l</a>");
-        clean.Should().Be("<a href=\"https://ok\" target=\"_blank\" rel=\"noopener\">l</a>");
-    }
 }

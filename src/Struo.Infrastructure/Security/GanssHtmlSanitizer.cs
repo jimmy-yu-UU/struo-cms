@@ -18,9 +18,10 @@ namespace Struo.Infrastructure.Security;
 /// applies to <c>width</c>: <see cref="HtmlSanitizer.AllowedAttributes"/> has no per-tag concept,
 /// it is a single global set of attribute names, so an attribute that should only mean something on
 /// one tag has to be narrowed in this handler, not in that list. An image's <c>width</c> survives
-/// only when it is a bare positive integer with no leading zero (a pixel count TipTap itself would
-/// have written, never a percentage, a decimal, or something with a unit); every other element loses
-/// it unconditionally, allowlisted or not. <c>height</c> is never allowlisted at all -- a fork's
+/// only when it is a bare positive integer with no leading zero -- the stored contract is a plain
+/// pixel count and nothing else, never a percentage, a decimal, or a value carrying a unit; every
+/// other element loses it unconditionally, allowlisted or not. <c>height</c> is never allowlisted
+/// at all -- a fork's
 /// front end is not guaranteed to pair a stored width with CSS <c>height: auto</c>, and shipping
 /// both dimensions into a renderer that only caps <c>max-width: 100%</c> would stretch the box
 /// the browser lays out while the image itself is scaled to fit the width, squashing its aspect
@@ -28,12 +29,12 @@ namespace Struo.Infrastructure.Security;
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
-    // One to five ASCII digits, no leading zero: a plain pixel count, matching the shape TipTap's
-    // own image node writes and nothing else -- not "0" (meaningless as a width), not a percentage
-    // or any other unit, not a decimal, and not padded with leading/trailing whitespace (anchored
-    // both ends). Five digits caps out at 99999px, comfortably above any real editor image while
-    // still rejecting pathological input. Pre-compiled and reused across every node this handler
-    // visits, rather than constructed per call.
+    // One to five ASCII digits, no leading zero: the only shape a bare pixel count can take, and
+    // nothing else -- not "0" (meaningless as a width), not a percentage or any other unit, not a
+    // decimal, and not padded with leading/trailing whitespace (anchored both ends). Five digits
+    // caps out at 99999px, comfortably above any real editor image while still rejecting
+    // pathological input. Pre-compiled and reused across every node this handler visits, rather
+    // than constructed per call.
     private static readonly Regex AllowedWidthPattern =
         new(@"^[1-9][0-9]{0,4}$", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
