@@ -1057,8 +1057,13 @@ describe('RichTextInput', () => {
   // is why onImageAction now passes an explicit editor.commands.focus() restore instead of relying
   // on the default capture. runImage() below calls onImageAction() directly, bypassing reka's own
   // ContextMenuItem @select handling (deliberately, per RichTextContextMenu.vue's own comment on
-  // why runTable/runImage exist), so this test does not reproduce that unmount itself -- the test
-  // below it does.
+  // why runTable/runImage exist), so this test does not reproduce that unmount itself.
+  //
+  // Which means this test does NOT discriminate on its own: it focuses the editor before opening,
+  // so the default "restore whatever was focused" capture would land on the same element and this
+  // still passes with the explicit restore removed. It pins the destination and the timing; the
+  // test immediately below, which focuses an element that is then unmounted, is the one that fails
+  // without the fix.
   // Simulating the dialog's own trailing update:open(false) via $emit, rather than hunting for its
   // untagged Cancel button by text, since the mechanism under test is RichTextInput's OWN
   // close-change handler, not that button's wiring.
@@ -1370,6 +1375,50 @@ describe('RichTextInput', () => {
     // what actually lets this assert the menu is gone, not merely still present.
     expect(new DOMWrapper(document.body).find('.rich-text__bubble').exists()).toBe(false)
 
+    w.unmount()
+    container.remove()
+  })
+
+  // The fifth path with the same unmounted-capture defect, and the only one where the DEFAULT
+  // capture is still the right thing to write down: the bubble menu's own link button is what held
+  // focus, and hide() above removes it from the DOM before the cancel runs -- counted in the
+  // running admin as `[data-cmd="link"]` going from two elements to one across the click, and the
+  // menu root disappearing is what the test above already pins here. So the capture is fine and
+  // the RESTORE is what has to cope: focusIfStillInDocument falls back to the editor. The toolbar's
+  // own link button, tested further below, must keep restoring to itself -- these two share
+  // openLinkDialog, so a fallback that fired unconditionally would regress that one.
+  //
+  // Button is un-stubbed here for the same reason as the table-size test above: the shared stub's
+  // `<button-stub>` is an HTMLUnknownElement, which jsdom will not focus, so the bubble button
+  // could never be the captured activeElement and the test would not discriminate.
+  it('restores focus to the editor when the link dialog opened from the bubble menu is cancelled', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p>abc</p>' },
+      global: { ...globalOpts, stubs: { ...stubs, Button: false } },
+      attachTo: container,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.selectAll()
+    vm.editor.commands.focus()
+    await settleBubbleMenu()
+    const linkBtn = bubbleRoot().get('[data-cmd="link"]').element as HTMLElement
+    // Focused explicitly: jsdom's synthetic click does not reproduce a native button's
+    // focus-follows-click default action (noted on the blur test below), and this test is
+    // specifically about the captured element being that button.
+    linkBtn.focus()
+    expect(document.activeElement).toBe(linkBtn)
+    linkBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    linkBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.contains(linkBtn)).toBe(false)
+    w.findComponent(RichTextLinkDialog).vm.$emit('update:open', false)
+    await nextTick()
+    // The fallback is editor.commands.focus(), whose real dom.focus() tiptap defers a further
+    // requestAnimationFrame -- see waitForEditorReactivity's own comment.
+    await waitForEditorReactivity()
+    expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
     container.remove()
   })

@@ -172,8 +172,10 @@ alwaysPreserveAspectRatio: true, directions: [...全部八個] }`),換上 `@tipt
 `offsetWidth` 讀到的也是 603。真正做出這個限制的是 Tailwind preflight 自己的
 `img { max-width: 100% }`,不是 `RichTextInput.vue` 宣告的任何一條規則——一個 fork 如果拿掉
 preflight、或是針對編輯器內容覆寫掉那條規則,就會失去這個限制,並且會把拖曳出來的數字直接存
-下去。維持原狀的話,對一個有固定閱讀欄寬的欄位來說,這是正常的 WYSIWYG 行為,不是 bug:編輯器
-在拖曳時顯示的樣子,就是發布之後會渲染出來的樣子。
+下去。同樣量測過、給走上那條路的 fork 的資訊:八個縮放控制點會跟著圖片一起跑出去,超過
+`AppShell` 加在內容欄上的 `overflow-x-clip`,於是一張被拖過頭的圖片就再也拖不回來了。維持原狀
+的話,對一個有固定閱讀欄寬的欄位來說,這是正常的 WYSIWYG 行為,不是 bug:編輯器在拖曳時顯示的
+樣子,就是發布之後會渲染出來的樣子。
 
 本 repo 提供的是控制點的外觀，不是它的行為。`ResizableNodeView` 無條件地附加並擺放每一個控制點——
 用絕對定位加上 `data-resize-handle` 屬性——但完全沒有設定它自己的大小、背景色或游標，所以沒有 CSS
