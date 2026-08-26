@@ -5,6 +5,9 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import type { Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
+import RichTextContextMenu from './RichTextContextMenu.vue'
+import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
+import type { ImageAction } from './richTextImageActions'
 import { fileContentPath } from '../../lib/richTextImages'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -816,6 +819,153 @@ describe('RichTextInput', () => {
     const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
     cell.element.dispatchEvent(ev)
     expect(ed.state.selection.from).toBe(somePos)
+    w.unmount()
+  })
+
+  // Helper shared by the image-routing tests below: a bare MouseEvent (bubbles/cancelable, no
+  // clientX/clientY -- posAtCoords is never reached on the image path, only posAtDOM) dispatched
+  // straight at the given element, with its own stopPropagation spy attached so callers can assert
+  // on it without re-wiring the spy each time. Awaits a tick afterward: `contextMenuTarget` is a
+  // Vue ref, and its own re-render of RichTextContextMenu's `target` prop is a job Vue schedules
+  // rather than applying synchronously -- the same reason RichTextCommandButton's own data-active
+  // needs waitForEditorReactivity above, though here it is Vue's own prop-update job, not tiptap's
+  // separately-debounced customRef, so a plain nextTick() is enough (confirmed: without it, every
+  // props('target') assertion below observed the PRE-dispatch value).
+  async function dispatchContextMenu(el: Element): Promise<ReturnType<typeof vi.spyOn>> {
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    const stop = vi.spyOn(ev, 'stopPropagation')
+    el.dispatchEvent(ev)
+    await nextTick()
+    return stop
+  }
+
+  it('routes a right-click directly on an image to the image menu, not stopped', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    const stop = await dispatchContextMenu(w.get('.ProseMirror img').element)
+    expect(stop).not.toHaveBeenCalled()
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBe('image')
+    const vm = w.vm as unknown as { editor: Editor }
+    expect(vm.editor.state.selection.constructor.name).toBe('NodeSelection')
+    w.unmount()
+  })
+
+  // The routing-order lock: an <img> inside a table cell must route to the image menu, not the
+  // table menu, even though isInEditorTable would also match (the image's ancestor cell). Checked
+  // this session by actually swapping the image and table checks in onContentContextMenu and
+  // re-running this test -- it went red with target 'table' under that mutation, confirming the
+  // order, not just the presence, of the two checks is what this test pins.
+  it('routes a right-click on an image inside a table cell to the image menu, not the table menu', async () => {
+    const w = mount(RichTextInput, {
+      props: {
+        modelValue: '<table><tbody><tr><td><img src="https://example.com/cat.png"></td></tr></tbody></table>',
+      },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror table img').element)
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBe('image')
+    w.unmount()
+  })
+
+  it('routes a right-click on a non-image table cell to the table menu', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.get('[data-cmd="table"]').trigger('click')
+    await w.get('[data-cell="3-3"]').trigger('click')
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror table td, .ProseMirror table th').element)
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBe('table')
+    w.unmount()
+  })
+
+  it('routes a right-click on a plain paragraph to neither menu, and stops it', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p><p>abc</p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    // Arm the image menu first, so the assertion below actually pins that a later paragraph click
+    // resets `target` back to null rather than merely observing its untouched initial value.
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBe('image')
+    const stop = await dispatchContextMenu(w.findAll('.ProseMirror p').at(-1)!.element)
+    expect(stop).toHaveBeenCalled()
+    expect(w.findComponent(RichTextContextMenu).props('target')).toBeNull()
+    w.unmount()
+  })
+
+  it('does not move the selection or stop the event for a right-click on an image in a disabled field', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p>', disabled: true },
+      global: globalOpts,
+    })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: Editor }
+    const before = vm.editor.state.selection.from
+    const stop = await dispatchContextMenu(w.get('.ProseMirror img').element)
+    expect(stop).not.toHaveBeenCalled()
+    expect(vm.editor.state.selection.from).toBe(before)
+    w.unmount()
+  })
+
+  it('deleteImage removes the selected image from the emitted HTML', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png"></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menu = w.findComponent(RichTextContextMenu)
+    expect(menu.props('target')).toBe('image')
+    const menuVm = menu.vm as unknown as { runImage: (action: ImageAction) => void }
+    menuVm.runImage('deleteImage')
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect(html).not.toContain('<img')
+    w.unmount()
+  })
+
+  it('editAlt opens the alt dialog seeded with the right-clicked image\'s current alt', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    await flushPromises()
+    const dialog = w.findComponent(RichTextImageAltDialog)
+    expect(dialog.props('open')).toBe(true)
+    expect(dialog.props('alt')).toBe('a cat')
+    w.unmount()
+  })
+
+  it('submitting the alt dialog updates the emitted HTML with the new alt', async () => {
+    const w = mount(RichTextInput, {
+      props: { modelValue: '<p><img src="https://example.com/cat.png" alt="old"></p>' },
+      global: globalOpts,
+    })
+    await flushPromises()
+    await dispatchContextMenu(w.get('.ProseMirror img').element)
+    const menuVm = w.findComponent(RichTextContextMenu).vm as unknown as {
+      runImage: (action: ImageAction) => void
+    }
+    menuVm.runImage('editAlt')
+    await flushPromises()
+    await w.get('[data-testid="alt"]').setValue('new alt')
+    await w.get('[data-cmd="altSubmit"]').trigger('click')
+    await flushPromises()
+    const emitted = w.emitted('update:modelValue')
+    const html = String(emitted!.at(-1)![0])
+    expect(html).toContain('alt="new alt"')
     w.unmount()
   })
 
