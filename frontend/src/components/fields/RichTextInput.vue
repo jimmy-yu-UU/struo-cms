@@ -163,7 +163,13 @@ function withFileIds(html: string): string {
   return doc.body.innerHTML
 }
 
+// Set around a setEditable() call so its resulting onUpdate -> emitNormalized() (below) is a
+// no-op -- see setEditableWithoutEmitting() further down for why setEditable() always triggers
+// that chain and why a synchronous flag is enough to bracket it.
+let suppressEmit = false
+
 function emitNormalized(): void {
+  if (suppressEmit) return
   const html = editor.value?.getHTML() ?? ''
   emit('update:modelValue', relativizeImageSrc(withFileIds(html)))
 }
@@ -267,14 +273,32 @@ const editor = useEditor({
   // root element and then calls editor.createNodeViews() (-> view.setProps({ nodeViews })) inside
   // its own nextTick() -- which recreates every node view from scratch, wiping out any earlier
   // setEditable() call made from a plain onMounted before that reparenting has run. onCreate
-  // (verified in @tiptap/core/src/Editor.ts's mount()) fires from a `window.setTimeout(fn, 0)`
-  // queued after that reparenting starts, and macrotask timers never run until the microtask
-  // queue -- which is where Vue's nextTick chain lives -- is fully drained, so by the time this
-  // callback runs, createNodeViews()'s replacement node views already exist and are listening.
+  // (verified in @tiptap/core/src/Editor.ts's mount()) is scheduled via a `window.setTimeout(fn,
+  // 0)` that is queued *before* EditorContent's nextTick job even exists (mount() runs
+  // synchronously inside useEditor()'s own onMounted, earlier in the same tick that later
+  // triggers EditorContent's reactive watchEffect) -- but a macrotask timer never runs until the
+  // microtask queue, which is where that whole nextTick chain lives, is fully drained, so by the
+  // time this callback actually fires, createNodeViews()'s replacement node views already exist
+  // and are already listening.
+  //
   // setEditable() (verified in the same Editor.ts) unconditionally emits 'update' even when the
-  // value passed is one it already holds, which is exactly the signal handleEditorUpdate needs.
+  // value passed is one it already holds -- which is exactly the signal handleEditorUpdate needs,
+  // but it is also indistinguishable from a real content change to onUpdate -> emitNormalized()
+  // above, which has no guard of its own for a disabled field. Left unguarded, a read-only user
+  // opening an item would get update:modelValue emitted at mount for every rich-text field, with
+  // a normalized value that can legitimately differ from the stored one (e.g. withFileIds()
+  // above adds data-file-id to any managed image that arrives without one) -- producing a false
+  // unsaved-changes state the user never caused. suppressEmit (declared above emitNormalized())
+  // is bracketed tightly around the call for exactly this reason: emit() (verified this session
+  // in @tiptap/core/src/EventEmitter.ts) is a plain synchronous `callbacks.forEach(...)`, no
+  // queueing, so the flag is still set for the entire synchronous
+  // setEditable -> emit('update') -> onUpdate -> emitNormalized chain and is cleared the
+  // instant setEditable() returns.
   onCreate: ({ editor: created }) => {
-    if (props.disabled) created.setEditable(false)
+    if (!props.disabled) return
+    suppressEmit = true
+    created.setEditable(false)
+    suppressEmit = false
   },
 })
 
@@ -294,7 +318,23 @@ watch(() => props.modelValue, (val) => {
     editor.value.commands.setContent(absolutizeImageSrc(val || ''), { emitUpdate: false })
   }
 })
-watch(() => props.disabled, (d) => editor.value?.setEditable(!d))
+// Same suppression as onCreate above and for the identical reason: setEditable() here also
+// always emits 'update' (verified once, at the declaration of suppressEmit's rationale above),
+// and a disabled<->enabled transition is exactly as real-world-reachable as a disabled mount --
+// RBAC changes, or a form re-rendering the same field after a permission check settles -- so
+// leaving this one call unguarded would just be the same defect reached through its other door.
+// Same suppression as onCreate above and for the identical reason: setEditable() here also
+// always emits 'update' (verified once, at the declaration of suppressEmit's rationale above),
+// and a disabled<->enabled transition is exactly as real-world-reachable as a disabled mount --
+// RBAC changes, or a form re-rendering the same field after a permission check settles -- so
+// leaving this one call unguarded would just be the same defect reached through its other door.
+watch(() => props.disabled, (d) => {
+  const ed = editor.value
+  if (!ed) return
+  suppressEmit = true
+  ed.setEditable(!d)
+  suppressEmit = false
+})
 
 onBeforeUnmount(() => {
   editor.value?.destroy()
