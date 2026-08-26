@@ -1039,12 +1039,17 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // The other half of the same review fix: blurring to <body> on its own would make reka's own
-  // FocusScope think <body> (not whatever was actually focused) was "previously focused", so a
-  // plain Cancel/Escape close would restore focus to <body> instead of back to where it was --
-  // verified this session in the installed FocusScope.js that its own capture of that value
-  // happens inside the same nextTick-deferred callback the blur above is specifically timed to run
-  // ahead of. Captures document.activeElement itself right before the dialog opens, rather than
+  // The other half of the same review fix: blurring to <body> on its own leaves reka's own
+  // DialogContentModal.js unable to restore focus on a plain cancel -- verified this session that
+  // its own onCloseAutoFocus handler unconditionally preventDefault()s FocusScope's own restore
+  // (making that one dead code for a modal dialog), and instead calls
+  // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
+  // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
+  // fails every time here because of that same blur, leaving triggerElement permanently unset.
+  // RichTextInput.vue's own elementToRefocusOnDialogCancel/refocusAfterDialogCancel pair is the
+  // only focus restoration actually happening on this path; this test pins that it lands
+  // correctly, not reka's own (dead, for this case) mechanism.
+  // Captures document.activeElement itself right before the dialog opens, rather than
   // assuming it is the editor specifically: runImage() below calls onImageAction() directly,
   // bypassing reka's own ContextMenuItem @select handling entirely (deliberately, per
   // RichTextContextMenu.vue's own comment on why runTable/runImage exist), so this does not also
@@ -1369,15 +1374,20 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // The other half of the same review fix: blurring to <body> on its own would make reka's own
-  // FocusScope think <body> (not whatever held focus before) was "previously focused", so a plain
-  // Cancel/Escape/overlay-click close would restore focus to <body> instead of back to where it
-  // was -- verified this session in the installed FocusScope.js that its own capture of that value
-  // happens inside the same nextTick-deferred callback the blur above is specifically timed to run
-  // ahead of. Simulating the dialog's own trailing update:open(false) via $emit, matching what an
-  // Escape press or an overlay click would trigger, since the mechanism under test is
-  // RichTextInput's OWN close-change handler (onLinkDialogOpenChange -> settleLinkDialog(null) ->
-  // refocusAfterDialogCancel()), not any particular button's wiring.
+  // The other half of the same review fix: blurring to <body> on its own leaves reka's own
+  // DialogContentModal.js unable to restore focus on a plain cancel -- verified this session that
+  // its own onCloseAutoFocus handler unconditionally preventDefault()s FocusScope's own restore
+  // (making that one dead code for a modal dialog), and instead calls
+  // rootContext.triggerElement.value?.focus(), where triggerElement is captured by
+  // DialogContentImpl's onMounted guarded by getActiveElement() !== document.body -- a guard that
+  // fails every time here because of that same blur, leaving triggerElement permanently unset.
+  // RichTextInput.vue's own elementToRefocusOnDialogCancel/refocusAfterDialogCancel pair is the
+  // only focus restoration actually happening on this path. Simulating the dialog's own trailing
+  // update:open(false) via $emit, matching what an Escape press or an overlay click would
+  // trigger, since the mechanism under test is RichTextInput's OWN close-change handler
+  // (onLinkDialogOpenChange, which calls settleLinkDialog(null) and refocusAfterDialogCancel()
+  // together), not any particular button's wiring.
+
   it('restores focus to whatever held it before the link dialog opened, when the dialog is cancelled', async () => {
     const container = document.body.appendChild(document.createElement('div'))
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })

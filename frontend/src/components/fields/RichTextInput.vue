@@ -104,50 +104,59 @@ let resolveLinkDialog: ((value: { href: string; newTab: boolean } | 'remove' | n
 function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | null): void {
   resolveLinkDialog?.(value)
   resolveLinkDialog = null
-  // null is the cancel outcome (from onLinkDialogOpenChange below, or the two "not reachable
-  // today" defensive calls): richTextCommands.ts's own .then() only calls editor.chain().focus()
-  // for the other two outcomes, submit and remove, so null is the one case nothing else is ever
-  // going to refocus anything, and the only one that should restore the pre-dialog target.
-  if (value === null) refocusAfterDialogCancel()
-  else elementToRefocusOnDialogCancel = null
 }
 
 // Shared by every dialog below that can open while the editor (or one of its own toolbar/menu
 // controls) still holds DOM focus: openLinkDialog, onImageAction's editAlt branch, openImageDialog,
 // and openTableSizeDialog. Verified this session in the installed reka-ui@2.10.3 source:
 // DialogContentModal.js's useHideOthers is a `watch(() => unrefElement(target), ...)` whose
-// callback calls the `aria-hidden` library's own hideOthers() directly, with no await inside it,
-// while FocusScope.js's matching present-watcher is declared `async` and does `await nextTick()`
-// before it ever dispatches its mount-autofocus event. So on the same reactive flush that flips a
-// dialog's `open` true, hideOthers' own DOM write happens with nothing async in the way, while the
-// actual `.focus()` call that would move focus into the dialog is deferred at least one further
-// microtask behind that internal nextTick() -- whatever element holds focus at the instant `open`
-// flips is still holding it when hideOthers runs. If that element is still a descendant of the app
-// shell's own <main> (true on every path this guards in a real browser: a left-click on a
-// toolbar/menu button focuses that button same as any native button click, and a right-click on an
-// image never blurs the contenteditable the way a left-click elsewhere does -- see
-// onContentContextMenu's own image branch above), Chrome logs an
-// aria-hidden-on-an-element-whose-descendant-retains-focus warning against <main> before autofocus
-// ever moves focus off it.
+// callback calls the `aria-hidden` library's own hideOthers() directly, with no await inside it.
+// So on the same reactive flush that flips a dialog's `open` true, hideOthers' own DOM write
+// happens with nothing async in the way -- whatever element holds focus at that instant is still
+// holding it when hideOthers runs. If that element is still a descendant of the app shell's own
+// <main> (true on every path this guards in a real browser: a left-click on a toolbar/menu button
+// focuses that button same as any native button click, and a right-click on an image never blurs
+// the contenteditable the way a left-click elsewhere does -- see onContentContextMenu's own image
+// branch above), Chrome logs an aria-hidden-on-an-element-whose-descendant-retains-focus warning
+// against <main> before anything else moves focus off it.
+//
+// What DOES eventually move focus, for a modal reka dialog like the ones in this file, is NOT
+// FocusScope's own `previouslyFocusedElement` restore -- verified this session that
+// DialogContentModal.js's `onCloseAutoFocus` handler unconditionally calls `event.preventDefault()`
+// on the event FocusScope dispatches for that, which is exactly what FocusScope's own cleanup
+// checks before ever running its fallback (`if (!unmountEvent.defaultPrevented) focus(...)`) --
+// so that fallback is dead code for every dialog in this file. The operative mechanism is
+// DialogContentModal's OWN restore instead: `rootContext.triggerElement.value?.focus()`, where
+// `triggerElement` is captured by DialogContentImpl's `onMounted`, guarded by
+// `getActiveElement() !== document.body`. None of this file's dialogs use a reka `<DialogTrigger>`
+// (they are all driven imperatively via `:open`), so that capture is the ONLY thing that ever sets
+// `triggerElement` -- and because blurActiveElementBeforeDialog below empties
+// document.activeElement to <body> before `open` ever flips true, that guard fails every time,
+// leaving `triggerElement` permanently unset. Both of reka's own restore paths are therefore
+// `undefined?.focus()` no-ops for every dialog here; elementToRefocusOnDialogCancel and
+// refocusAfterDialogCancel below are the only focus restoration actually happening on a cancel.
 //
 // Blurring synchronously, before the open flag flips, empties document.activeElement down to
 // <body> -- outside the subtree hideOthers is about to hide -- so there is nothing focused inside
-// <main> left for that check to catch. Left at that alone, though, it breaks something else: reka's
-// own FocusScope captures ITS idea of what to refocus when the dialog closes
-// (`previouslyFocusedElement`) from inside that same nextTick-deferred callback, which only ever
-// runs AFTER this blur -- so without capturing the real target ourselves first, reka would think
-// <body> was what held focus, and restore focus to <body> (a no-op) on every plain
-// Cancel/Escape/overlay-click close, dropping a keyboard user's focus into nowhere instead of back
-// where it was. elementToRefocusOnDialogCancel is that capture; refocusAfterDialogCancel is the
-// matching restore. Every dialog-close handler in this file calls refocusAfterDialogCancel() only
-// on a plain cancel -- never on a submit/remove/insert/select close, which already runs its own
-// deliberate editor.chain().focus() and clears elementToRefocusOnDialogCancel itself instead, so
-// the restore is never fighting a focus target that was moved on purpose.
+// <main> left for that check to catch. elementToRefocusOnDialogCancel is a capture of whatever
+// held focus right before that blur; refocusAfterDialogCancel is the matching restore. Every
+// dialog-close handler in this file calls refocusAfterDialogCancel() only on a plain cancel --
+// never on a submit/remove/insert/select close, which already runs its own deliberate
+// editor.chain().focus() and clears elementToRefocusOnDialogCancel itself instead, so the restore
+// is never fighting a focus target that was moved on purpose. settleLinkDialog above deliberately
+// has no focus side effect of its own: it is also called from two "not reachable today" defensive
+// spots (openLinkDialog's own top, and the onBeforeUnmount below) where a leftover, unconsumed
+// capture could otherwise schedule a stale focus() call landing inside whatever dialog opens next.
+// Only onLinkDialogOpenChange's own genuine-cancel branch pairs the two calls together.
 let elementToRefocusOnDialogCancel: HTMLElement | null = null
 
 function blurActiveElementBeforeDialog(): void {
   const active = document.activeElement
-  elementToRefocusOnDialogCancel = active instanceof HTMLElement ? active : null
+  // Guards against storing document.body itself as "the target to restore": nothing was
+  // meaningfully focused in that case, and treating body as a real target would make the
+  // eventual restore in refocusAfterDialogCancel() indistinguishable from a genuine one, when it
+  // is actually restoring nothing.
+  elementToRefocusOnDialogCancel = active instanceof HTMLElement && active !== document.body ? active : null
   if (active instanceof HTMLElement) active.blur()
 }
 
@@ -156,12 +165,21 @@ function blurActiveElementBeforeDialog(): void {
 // document-level focusin/focusout trap listeners attached (from a `watchEffect` keyed on its own
 // `trapped` prop, itself driven by this same `open` flag) until Vue's reactivity actually flushes
 // that prop change and tears them down -- which has not happened yet at the exact synchronous
-// instant this function's caller (settleLinkDialog / the two dialog-close handlers below) runs, in
-// the very same tick that flips `open` false. A `target.focus()` call made in that window is
-// itself a native focusout from whatever was focused inside the dialog, and the still-attached
-// trap's own handleFocusOut immediately calls `focus(lastFocusedElementRef.value)` -- refocusing
-// back into the dialog and undoing the restore. Waiting for nextTick() lets that teardown finish
-// first, so this focus() call is the last one to run.
+// instant this function's caller runs, in the very same tick that flips `open` false. A
+// `target.focus()` call made in that window is itself a native focusout from whatever was focused
+// inside the dialog, and the still-attached trap's own handleFocusOut immediately calls
+// `focus(lastFocusedElementRef.value)` -- refocusing back into the dialog and undoing the restore.
+// Waiting for nextTick() lets that teardown finish first, so this focus() call is the last one to
+// run.
+//
+// This calls the DOM's own `target.focus()` directly rather than routing through
+// `editor.commands.focus()` for the editor-as-target case (the image-alt-dialog cancel path):
+// whether a raw focus() call this way preserves the editor's own NodeSelection and its visible
+// outline, versus editor.commands.focus() re-deriving/re-applying it, is a real question this
+// session could not settle without a browser -- ProseMirror's own documentation says a plain DOM
+// focus() does not itself alter `state.selection`, only the view's own `focused` flag and CSS
+// state, but whether that is enough for the selection to still render as expected needs a live
+// check, stated here rather than assumed either way.
 function refocusAfterDialogCancel(): void {
   const target = elementToRefocusOnDialogCancel
   elementToRefocusOnDialogCancel = null
@@ -176,15 +194,22 @@ function openLinkDialog(
 ): Promise<{ href: string; newTab: boolean } | 'remove' | null> {
   // Not reachable today (only one link command can run at a time), but settle any still-pending
   // prior call with null rather than letting the assignment below silently overwrite
-  // resolveLinkDialog and leave that earlier promise unresolved forever.
+  // resolveLinkDialog and leave that earlier promise unresolved forever. Not paired with a
+  // refocusAfterDialogCancel() call, unlike onLinkDialogOpenChange below -- see settleLinkDialog's
+  // own comment for why the two are decoupled.
   settleLinkDialog(null)
-  // Force the bubble menu away first (a no-op if it was never showing -- BubbleMenuView.hide()
-  // guards on its own isVisible): opening this dialog from its own link button is one of the two
-  // entry points sharing this function, and the dialog's autofocus stealing DOM focus from the
-  // editor would otherwise leave that menu lingering beside it (RT-5's leftover; see
+  // Capture before hiding, not after: the bubble menu's own link button is one of the two things
+  // that can hold focus when this runs (the toolbar's own link button is the other), and
+  // bubbleMenuRef.hide() just below is what makes BubbleMenuView remove/hide that button --
+  // capturing afterward would find it already gone and record whatever focus fell back to
+  // instead of the real target.
+  blurActiveElementBeforeDialog()
+  // Force the bubble menu away (a no-op if it was never showing -- BubbleMenuView.hide() guards
+  // on its own isVisible): opening this dialog from its own link button is one of the two entry
+  // points sharing this function, and the dialog's autofocus stealing DOM focus from the editor
+  // would otherwise leave that menu lingering beside it (RT-5's leftover; see
   // RichTextBubbleMenu.vue's hide() for the mechanism and why it does not depend on this ordering).
   bubbleMenuRef.value?.hide()
-  blurActiveElementBeforeDialog()
   return new Promise((resolve) => {
     resolveLinkDialog = resolve
     // Props set, then the open flip -- both in this same synchronous call, no await between them.
@@ -200,24 +225,39 @@ function openLinkDialog(
 
 function onLinkDialogSubmit(value: { href: string; newTab: boolean }): void {
   settleLinkDialog(value)
+  // richTextCommands.ts's own .then() chain runs editor.chain().focus() for this outcome --
+  // clear the captured pre-dialog target so onLinkDialogOpenChange's own trailing
+  // update:open(false) (RichTextLinkDialog's submit() emits both) finds nothing left to restore.
+  elementToRefocusOnDialogCancel = null
 }
 
 function onLinkDialogRemove(): void {
   settleLinkDialog('remove')
+  // Same reasoning as onLinkDialogSubmit above: the .then() chain's own unsetLink().focus() call
+  // already refocuses deliberately for this outcome.
+  elementToRefocusOnDialogCancel = null
 }
 
 // Fires for every close, including Cancel, Esc and an overlay click -- not only a plain cancel:
-// submit/remove already resolved (and cleared) the promise by the time their own trailing
-// update:open(false) reaches here, so settling with null again is the no-op described above.
+// submit/remove already resolved the promise AND cleared elementToRefocusOnDialogCancel
+// themselves, by the time their own trailing update:open(false) reaches here, so settling with
+// null again is a no-op and refocusAfterDialogCancel() below finds nothing left to restore. Only
+// a genuine Cancel/Escape/overlay-click close reaches this with a live capture still in place.
 function onLinkDialogOpenChange(open: boolean): void {
   linkDialogOpen.value = open
-  if (!open) settleLinkDialog(null)
+  if (!open) {
+    settleLinkDialog(null)
+    refocusAfterDialogCancel()
+  }
 }
 
 // Not reachable today either (nothing in this repo unmounts a field mid-edit), but unmounting with
 // the dialog still open would otherwise leave its promise pending forever -- resolving it with null
-// here is the same "cancelled" outcome a plain Cancel click already produces.
+// here is the same "cancelled" outcome a plain Cancel click already produces. Not paired with
+// refocusAfterDialogCancel() either, for the same reason noted on settleLinkDialog: the component
+// is unmounting, so a focus() call scheduled a tick later would run against a torn-down tree.
 onBeforeUnmount(() => settleLinkDialog(null))
+
 
 const commandContext: RichTextCommandContext = {
   openImageDialog: () => { void openImageDialog() },
@@ -515,11 +555,17 @@ const sizeDialogOpen = ref(false)
 
 function openTableSizeDialog(): void {
   // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) --
-  // same mechanism, reached from a different click: the "Custom size…" entry inside
-  // RichTextTableMenu's own reka Popover. Guarded here regardless of exactly where that Popover
-  // portals its content or how its own close-focus-restore behaves (not verified this session,
-  // and not needed to be: blurring to <body> first is safe no matter which subtree would otherwise
-  // have ended up holding a stale focus when this dialog's own aria-hidden background applies).
+  // same mechanism, reached from a different click: the "Custom size..." entry inside
+  // RichTextTableMenu's own reka Popover. Verified this session (see RichTextTableMenu.vue's own
+  // onPopoverCloseAutoFocus comment for the source read): that Popover's own close-auto-focus
+  // handler would otherwise refocus its `[data-cmd="table"]` trigger button -- a descendant of
+  // <main> -- right after this dialog's own aria-hidden background applies, reintroducing the
+  // warning; RichTextTableMenu.vue now suppresses that one restore itself. What this blur call
+  // still does not fix: the target it captures here (whatever was focused inside the now-closing
+  // popover) is removed from the DOM before any cancel of THIS dialog can run, so
+  // refocusAfterDialogCancel()'s own document.body.contains(target) guard fails and that cancel
+  // restore is a no-op -- accepted for now, not fixed, and worth a live check alongside the other
+  // open items.
   blurActiveElementBeforeDialog()
   sizeDialogOpen.value = true
 }
@@ -890,22 +936,26 @@ defineExpose({ editor, insertImage })
    needed for the rule below. Shrinking the container to its single flex child (the wrapper) is
    what makes the outline and the handles agree on the same box.
 
-   max-width: 100% alongside it is not decorative: without it, `width: fit-content` on its own
-   leaves this box's own sizing depending on its content's preferred width, while its child img's
-   `max-width: 100%` (the rule further below) depends on THIS box's width to resolve its own
-   percentage against -- a cycle. Per how a percentage resolves against a box whose own size is
-   still being computed, the img's percentage would not constrain anything in that pass, so the
-   fit-content computation could settle on however wide the drag pushed the img, defeating the
-   clamp defect 2 depends on and, per AppShell.vue's own overflow-x-clip on the content column,
-   clipping the container (and the right-hand handles with it) rather than letting anything scroll
-   back into view. Adding max-width: 100% here gives this box its own independent, non-cyclic upper
-   bound (it resolves against ITS OWN containing block -- the `.ProseMirror` column, a definite,
-   ordinary width, not this fit-content box's own still-being-computed one), which is what lets the
-   img's max-width clamp against a genuinely fixed number again once this box is capped.
-   Reasoned from how CSS percentage resolution and fit-content sizing are specified, not verified
-   against a live layout engine this session -- jsdom lays nothing out, so neither this cycle nor
-   the fix for it could be exercised here. A live drag past the column's right or bottom edge is
-   the check this still needs. */
+   max-width: 100% alongside it closes a cyclic-percentage risk `width: fit-content` alone can
+   raise on this element: this box's own preferred width, and its child img's `max-width: 100%`
+   (the rule further below), can each end up depending on the other's still-being-computed size.
+   max-width: 100% resolves against ITS OWN containing block instead (the `.ProseMirror` column, a
+   definite, ordinary width), giving this box an independent upper bound regardless of that cycle.
+
+   Measured this session, not just reasoned about: loaded the actual compiled CSS for this
+   component and reconstructed ResizableNodeView's real container/wrapper/img/handle DOM shape in
+   headless Chromium (this repo's own @playwright/test), inside both a plain fixed-width column
+   and the real `.ProseMirror`/`prose` column (~603px, matching this editor's own default
+   typography). At a 2000px-wide drag, container/wrapper/img/handle all measured bounded to the
+   column in every configuration tried, including with this max-width rule removed entirely --
+   this session's own measurement did not reproduce an overflow past the column from this rule's
+   absence. min-width: 0 is added on the wrapper below anyway, defensively: it closes a distinct,
+   well-established flex-layout mechanism (a flex item's own automatic minimum size, which can
+   floor a replaced element's flex item at its intrinsic/specified size and let it overflow a
+   sized ancestor) that this session's own probe did not happen to trigger, but that is cheap
+   insurance against if some other browser, aspect ratio, or future edit does.
+   */
+
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -918,6 +968,19 @@ defineExpose({ editor, insertImage })
      vertical image margin has to be re-applied. */
   margin-top: 2em;
   margin-bottom: 2em;
+}
+
+/* Defensive addition alongside the container's own max-width: 100% above -- see that rule's own
+   comment for what this session's own measurement did and did not reproduce. This one addresses
+   a different, well-established mechanism by name: a flex item's automatic minimum size (its
+   default min-width: auto) can floor it at its content's own min-content contribution rather
+   than letting it shrink to fit a sized ancestor, and for a replaced element like <img> with an
+   explicit width set, that min-content contribution is the specified width itself -- so this
+   wrapper, as the container's own flex item, could in principle be held at whatever width the
+   drag set regardless of the container's own cap. min-width: 0 removes that floor, letting the
+   wrapper shrink freely to whatever the container actually resolves to. */
+.rich-text__content :deep([data-resize-wrapper]) {
+  min-width: 0;
 }
 
 /* The wrapper (createWrapper(), same source) is a plain `display: block` div holding only the
