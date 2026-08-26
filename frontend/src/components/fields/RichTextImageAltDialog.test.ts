@@ -25,8 +25,7 @@ function build(props: Partial<{ open: boolean; alt: string }> = {}): VueWrapper 
 }
 
 function cancelButton(wrapper: VueWrapper) {
-  // Cancel carries no data-cmd -- it is the one footer action that must never look like a
-  // submit trigger, so find it by its rendered label instead (mirrors RichTextLinkDialog).
+  // Cancel deliberately carries no data-cmd, so it is found by label (mirrors RichTextLinkDialog).
   return wrapper.findAll('button').find((b) => b.text() === 'Cancel')
 }
 
@@ -44,9 +43,8 @@ describe('RichTextImageAltDialog', () => {
     expect(w.emitted('update:open')).toEqual([[false]])
   })
 
-  // alt="" is the formal HTML way to mark an image as decorative, not a missing value -- clearing
-  // the field and submitting must go through, not be treated as an empty-input rejection the way
-  // RichTextLinkDialog's href field is.
+  // alt="" is the formal HTML way to mark an image as decorative, so an empty submit must go
+  // through -- not be rejected as empty input the way RichTextLinkDialog's href field is.
   it('emits submit with an empty string when the field is cleared, and does not block it', async () => {
     w = build({ alt: 'A red bicycle' })
     await w.get('[data-testid="alt"]').setValue('')
@@ -64,10 +62,8 @@ describe('RichTextImageAltDialog', () => {
     expect(w.emitted('submit')).toBeUndefined()
   })
 
-  // build() always mounts with open: true, which a reset watch without `immediate` cannot cover --
-  // only a true->false->true transition on an already-mounted instance exercises it. Without this,
-  // text left over from editing one image would still be showing when a different image's dialog
-  // opens with a different alt prop.
+  // Needs the true->false->true transition: build() mounts with open: true, which the reset watch
+  // never sees. Without the reset, text typed for one image shows up in the next image's dialog.
   it('resets to the props when reopened, not to the last edited text', async () => {
     w = build({ alt: 'A red bicycle' })
     await w.get('[data-testid="alt"]').setValue('something typed but never submitted')
@@ -83,14 +79,9 @@ describe('RichTextImageAltDialog', () => {
     buttons.forEach((b) => expect(b.attributes('type')).toBe('button'))
   })
 
-  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
-  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
-  // not cosmetic: without a description, assistive tech follows a dangling reference.
-  //
-  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
-  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
-  // this assertion fails whether or not the description exists, so it would prove nothing (mirrors
-  // the last test in RichTextLinkDialog.test.ts).
+  // Attached mount, unlike every other test here, and load-bearing: reka resolves the described-by
+  // id with document.getElementById, which cannot see a detached wrapper -- mounted the usual way
+  // this assertion fails whether or not the description exists, proving nothing.
   it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const container = document.body.appendChild(document.createElement('div'))

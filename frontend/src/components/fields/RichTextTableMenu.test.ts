@@ -39,10 +39,8 @@ describe('RichTextTableMenu', () => {
   // (addRowAfter, deleteTable, …) that this task deliberately removes from this component — those
   // eight operations moved to the table's own right-click menu in Task 4. This component is now
   // insert-only, so its replacement coverage is the "custom size…" escape hatch instead.
-  // The payload is the trigger button itself, not a formality: it is the only way RichTextInput
-  // can restore focus after the size dialog is cancelled, because this component deliberately
-  // suppresses the popover's own close-auto-focus on this path and the entry that had focus
-  // unmounts with the popover. Asserting the exact element, not just that something was emitted.
+  // Asserts the exact element in the payload, not just that something was emitted: that button is
+  // the only focus target RichTextInput has left after the size dialog is cancelled.
   it('emits customSize with its own trigger button and closes when the custom-size entry is picked', async () => {
     const w = mount(RichTextTableMenu, { ...opts })
     const trigger = w.get('[data-cmd="table"]').element
@@ -59,18 +57,10 @@ describe('RichTextTableMenu', () => {
     w.unmount()
   })
 
-  // Review-round fix: verified this session in the installed reka-ui@2.10.3 source
-  // (Popover/PopoverContentNonModal.js) that this popover's own onCloseAutoFocus handler, unless
-  // preventDefault()'d, refocuses `[data-cmd="table"]` -- which RichTextInput.vue's own
-  // openTableSizeDialog has, by the time this fires for real, already both blurred away from and
-  // opened its OWN aria-hidden dialog over. The real close-auto-focus event PopoverContentNonModal
-  // dispatches is itself timer-deferred (FocusScope's own cleanup schedules it via
-  // `setTimeout(..., 0)`, a macrotask), so simulating it via $emit synchronously, right after the
-  // click and before awaiting that click's own settle promise, is what tests
-  // onPopoverCloseAutoFocus's own guard rather than racing the real one -- confirmed necessary by
-  // first awaiting the click before emitting, which let the real deferred event already consume
-  // (and correctly clear) the flag before this test's own simulated one ever ran, making the
-  // assertion pass for the wrong reason.
+  // The event is emitted synchronously, before the click's settle promise is awaited, and that
+  // ordering is load-bearing: reka's real close-auto-focus event is deferred to a macrotask, so
+  // awaiting the click first lets the real event consume and clear the flag, and this assertion
+  // then passes for the wrong reason.
   it('prevents the popover default close-auto-focus after picking custom size', async () => {
     const w = mount(RichTextTableMenu, { ...opts })
     await w.get('[data-cmd="table"]').trigger('click')
@@ -82,9 +72,8 @@ describe('RichTextTableMenu', () => {
     w.unmount()
   })
 
-  // The other half: the grid-pick path must NOT suppress this popover's own close-auto-focus --
-  // restoring focus to `[data-cmd="table"]` there is the correct, wanted behaviour (no dialog
-  // opens afterward to fight it over), so this must stay reka's own default, unprevented.
+  // The other half: the grid-pick path must NOT suppress the close-auto-focus -- no dialog opens
+  // afterward, so restoring focus to the trigger is the wanted behaviour there.
   it('does not prevent the popover default close-auto-focus after picking a grid size', async () => {
     const w = mount(RichTextTableMenu, { ...opts })
     await w.get('[data-cmd="table"]').trigger('click')

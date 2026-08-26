@@ -126,11 +126,9 @@ describe('RichTextContextMenu', () => {
 })
 
 // Mirrors RichTextInput.vue's real shape: a capture-phase listener on a STRICT ANCESTOR of reka's
-// own trigger element decides `target` for the event about to be dispatched (RichTextInput.vue
-// flips it based on isInEditorTable/isEditorImage; here it is flipped directly, since only the
-// TIMING question is under test, not the routing predicate). `deferred` selects between flipping
-// synchronously in that same capture-phase handler, and flipping in a macrotask (`setTimeout`)
-// queued from it.
+// trigger decides `target` for the event about to be dispatched. Only the TIMING is under test
+// here, not the routing predicate, so `target` is flipped directly. `deferred` selects between
+// flipping in that same capture-phase handler and flipping in a macrotask queued from it.
 function buildTimingHarness(deferred: boolean) {
   return defineComponent({
     setup() {
@@ -149,14 +147,10 @@ function buildTimingHarness(deferred: boolean) {
   })
 }
 
-// This pair guards the Step 1 finding recorded in RichTextContextMenu.vue's own comment above
-// `target`: content renders behind reka's `open`, which only flips after
-// `ContextMenuTrigger.handleContextMenu`'s own `await nextTick()` -- so a `target` update queued
-// during the synchronous capture/bubble dispatch (this session verified both phases arrive in
-// time; capture is used below because that is what RichTextInput.vue actually does) is visible by
-// then, while one deferred past that microtask boundary is not. Without the second test, the
-// first would also pass if reka read `target` at some ARBITRARY later point, proving no deadline
-// exists at all -- the second is what makes the first mean anything.
+// This pair pins the deadline described on RichTextContextMenu's `target` prop. The first test
+// alone would also pass if reka read `target` at some arbitrary later point, proving no deadline
+// exists at all; the second -- flipping past the microtask boundary and expecting nothing to
+// render -- is what makes the first mean anything.
 describe('target routing timing (guards the Step 1 finding pinned in RichTextContextMenu.vue)', () => {
   it('a target flip during synchronous capture-phase dispatch IS reflected in the rendered content', async () => {
     const hw = mount(buildTimingHarness(false), {

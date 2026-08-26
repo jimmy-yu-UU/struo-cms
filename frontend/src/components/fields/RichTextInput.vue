@@ -70,10 +70,6 @@ async function loadImages(): Promise<void> {
 const debouncedLoadImages = debounce(loadImages, 300)
 
 async function openImageDialog(): Promise<void> {
-  // See blurActiveElementBeforeDialog's own comment (declared below) for the mechanism this
-  // guards against. This dialog's own "cancel" close is @update:open below on a bare Dialog with
-  // no v-model sugar -- onImageSelected (the "submit" path) instead sets imageDialogOpen directly
-  // and never emits update:open at all, so the two never race over the same restore call.
   blurActiveElementBeforeDialog()
   imageDialogOpen.value = true
   await loadImages()
@@ -106,74 +102,18 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
   resolveLinkDialog = null
 }
 
-// Shared by every dialog below that can open while the editor (or one of its own toolbar/menu
-// controls) still holds DOM focus: openLinkDialog, onImageAction's editAlt branch, openImageDialog,
-// and openTableSizeDialog. Verified this session in the installed reka-ui@2.10.3 source:
-// DialogContentModal.js's useHideOthers is a `watch(() => unrefElement(target), ...)` whose
-// callback calls the `aria-hidden` library's own hideOthers() directly, with no await inside it.
-// So on the same reactive flush that flips a dialog's `open` true, hideOthers' own DOM write
-// happens with nothing async in the way -- whatever element holds focus at that instant is still
-// holding it when hideOthers runs. If that element is still a descendant of the app shell's own
-// <main> (true on every path this guards in a real browser: a left-click on a toolbar/menu button
-// focuses that button same as any native button click, and a right-click on an image never blurs
-// the contenteditable the way a left-click elsewhere does -- see onContentContextMenu's own image
-// branch above), Chrome logs an aria-hidden-on-an-element-whose-descendant-retains-focus warning
-// against <main> before anything else moves focus off it.
-//
-// Nothing in reka moves focus back on its own for these dialogs. Read this session in the
-// installed reka-ui@2.10.3 source: there are THREE restore paths in play, and all three are inert
-// here for the same root cause -- blurActiveElementBeforeDialog below has already emptied
-// document.activeElement down to <body> before `open` ever flips true.
-//
-// That single fact defeats all three because it also defeats their shared precondition.
-// DialogContentImpl.js's `onMounted` is the only thing that ever sets `rootContext.triggerElement`
-// for these dialogs (the other writer is a reka `<DialogTrigger>`, and none of them use one --
-// they are all driven imperatively via `:open`), and it is guarded by
-// `getActiveElement() !== document.body`. With activeElement already <body>, that guard fails
-// every time and `triggerElement` stays permanently unset. The paths:
-//   1. DialogContentModal.js's `onCloseAutoFocus` handler:
-//      `if (!event.defaultPrevented) { event.preventDefault(); triggerElement.value?.focus() }`.
-//      Note the guard -- that preventDefault() is NOT unconditional, as an earlier round of this
-//      comment claimed. It does still run on every close here, because nothing in this file (or
-//      in DialogContentImpl, which forwards FocusScope's own `unmountAutoFocus` straight through
-//      as this event) prevents it first, so the conclusion is unchanged and only the stated
-//      evidence was wrong. The focus() it then makes is `undefined?.focus()`.
-//   2. DialogContentModal.js also runs `watch(() => props.present, (isPresent, wasPresent) => {
-//      if (!isPresent && wasPresent) triggerElement.value?.focus() })` -- the same
-//      `undefined?.focus()` no-op reached by a second door.
-//   3. FocusScope's own fallback, which path 1's preventDefault() is what actually disables:
-//      FocusScope.js's cleanup does `if (!unmountEvent.defaultPrevented)
-//      focus(previouslyFocusedElement ?? document.body)`. Even without that preventDefault it
-//      would restore nothing here -- its `previouslyFocusedElement` is read with that same
-//      getActiveElement() helper, on mount and before the dialog's own autofocus runs, so it is
-//      <body> too.
-// restoreFocusOnDialogCancel and refocusAfterDialogCancel below are therefore the only focus
-// restoration actually happening on a cancel.
-//
-// Blurring synchronously, before the open flag flips, empties document.activeElement down to
-// <body> -- outside the subtree hideOthers is about to hide -- so there is nothing focused inside
-// <main> left for that check to catch. restoreFocusOnDialogCancel holds the matching undo for
-// that blur; refocusAfterDialogCancel runs it. Every dialog-close handler in this file calls
-// refocusAfterDialogCancel() only on a plain cancel -- never on a submit/remove/insert/select
-// close, which already runs its own deliberate editor.chain().focus() and clears
-// restoreFocusOnDialogCancel itself instead, so the restore is never fighting a focus target that
-// was moved on purpose. settleLinkDialog above deliberately has no focus side effect of its own:
-// it is also called from two "not reachable today" defensive spots (openLinkDialog's own top, and
-// the onBeforeUnmount below) where a leftover, unconsumed capture could otherwise schedule a stale
-// focus() call landing inside whatever dialog opens next. Only onLinkDialogOpenChange's own
-// genuine-cancel branch pairs the two calls together.
-//
-// A callback rather than a plain element, because for two of the four dialogs the element that
-// held focus is the wrong thing to restore to -- see blurActiveElementBeforeDialog's own
-// parameter below.
+// Focus handover for every dialog in this file. reka's modal Dialog applies aria-hidden to the
+// rest of the page on the same reactive flush that flips `open` true, so an element still holding
+// focus at that instant ends up inside the hidden subtree -- it must be blurred first.
+// Blurring to <body> also disables reka's own focus restore: it only captures a restore target
+// when activeElement is not <body>, so this pair is the only thing putting focus back on a cancel.
+// Paths that close by deliberately refocusing the editor (submit, remove, insert, select) clear
+// this themselves, so a restore never fights a focus move that was intended.
 let restoreFocusOnDialogCancel: (() => void) | null = null
 
-// Every restore built around a specific element goes through this. Focusing a node that has since
-// left the document is a silent no-op that leaves focus on <body> -- observed in the running admin
-// on the bubble menu's own link button, which is removed from the DOM by the hide() that opening
-// the link dialog performs. The editor is the fallback because this is a rich-text field: if
-// whatever the user came from is gone, the text they were editing is where a keyboard user should
-// land, not <body>.
+// Focusing a node that has since left the document is a silent no-op that leaves focus on <body>,
+// and several callers' captured elements (menu items, the bubble menu's link button) are unmounted
+// by the time a cancel runs -- so the editor is the fallback.
 function focusIfStillInDocument(el: HTMLElement): () => void {
   return () => {
     if (document.body.contains(el)) el.focus()
@@ -181,36 +121,20 @@ function focusIfStillInDocument(el: HTMLElement): () => void {
   }
 }
 
-// `restore`, when given, replaces the default "focus whatever was focused before" behaviour. Two
-// callers need that, and both were observed in the running admin landing on <body> after Escape
-// before this parameter existed: the alt dialog opens from a right-click context menu and the
-// table-size dialog from a toolbar popover, and in both cases the element holding focus at this
-// instant is a menu/popover item that is unmounted on the way into the dialog, so there is no
-// element left worth naming. A third path, the bubble menu's own link button, has the same
-// unmount but a usable default: it takes the plain capture and lets focusIfStillInDocument's own
-// editor fallback catch it.
+// `restore`, when given, replaces the default "focus whatever was focused before" capture: the alt
+// and table-size dialogs open from a menu/popover item that unmounts on the way in, so the element
+// holding focus right now is not a usable restore target for them.
 function blurActiveElementBeforeDialog(restore?: () => void): void {
   const active = document.activeElement
-  // Guards against storing document.body itself as "the target to restore": nothing was
-  // meaningfully focused in that case, and treating body as a real target would make the
-  // eventual restore in refocusAfterDialogCancel() indistinguishable from a genuine one, when it
-  // is actually restoring nothing.
   restoreFocusOnDialogCancel = restore
     ?? (active instanceof HTMLElement && active !== document.body ? focusIfStillInDocument(active) : null)
   if (active instanceof HTMLElement) active.blur()
 }
 
-// Deferred one tick, not called synchronously here -- verified this session, by running exactly
-// this scenario and watching it fail without the deferral: reka's own FocusScope keeps its
-// document-level focusin/focusout trap listeners attached (from a `watchEffect` keyed on its own
-// `trapped` prop, itself driven by this same `open` flag) until Vue's reactivity actually flushes
-// that prop change and tears them down -- which has not happened yet at the exact synchronous
-// instant this function's caller runs, in the very same tick that flips `open` false. A
-// `target.focus()` call made in that window is itself a native focusout from whatever was focused
-// inside the dialog, and the still-attached trap's own handleFocusOut immediately calls
-// `focus(lastFocusedElementRef.value)` -- refocusing back into the dialog and undoing the restore.
-// Waiting for nextTick() lets that teardown finish first, so this focus() call is the last one to
-// run.
+// The restore must be deferred a tick, not run synchronously. reka's FocusScope keeps its
+// document-level focus-trap listeners attached until Vue flushes the `open: false` prop change
+// that tears them down, and a focus() call made before that is caught by the still-active trap
+// and pulled straight back into the closing dialog.
 function refocusAfterDialogCancel(): void {
   const restore = restoreFocusOnDialogCancel
   restoreFocusOnDialogCancel = null
@@ -223,19 +147,10 @@ function openLinkDialog(
 ): Promise<{ href: string; newTab: boolean } | 'remove' | null> {
   // Not reachable today (only one link command can run at a time), but settle any still-pending
   // prior call with null rather than letting the assignment below silently overwrite
-  // resolveLinkDialog and leave that earlier promise unresolved forever. Not paired with a
-  // refocusAfterDialogCancel() call, unlike onLinkDialogOpenChange below -- see settleLinkDialog's
-  // own comment for why the two are decoupled.
+  // resolveLinkDialog and leave that earlier promise unresolved forever.
   settleLinkDialog(null)
-  // Two entry points share this function, and they need different outcomes. From the TOOLBAR's
-  // link button the capture below is the whole story: that button stays mounted and a cancel
-  // refocuses it. From the BUBBLE MENU's link button it is not -- bubbleMenuRef.hide() just below
-  // removes that button from the DOM (counted in the running admin: `[data-cmd="link"]` goes from
-  // two elements to one across the click), so the captured element is detached by the time a
-  // cancel runs and focusing it does nothing. Capturing before the hide rather than after is still
-  // right -- capturing after would record whatever focus fell back to instead -- but it is not
-  // what makes that path work. What does is focusIfStillInDocument's own editor fallback: the
-  // bubble menu only exists over a text selection, so the editor is where that user came from.
+  // Capture before the hide() below, not after: afterwards the captured element would be whatever
+  // focus fell back to once the bubble menu was torn down.
   blurActiveElementBeforeDialog()
   // Force the bubble menu away (a no-op if it was never showing -- BubbleMenuView.hide() guards
   // on its own isVisible): opening this dialog from its own link button is one of the two entry
@@ -258,24 +173,17 @@ function openLinkDialog(
 
 function onLinkDialogSubmit(value: { href: string; newTab: boolean }): void {
   settleLinkDialog(value)
-  // richTextCommands.ts's own .then() chain runs editor.chain().focus() for this outcome --
-  // clear the captured pre-dialog target so onLinkDialogOpenChange's own trailing
-  // update:open(false) (RichTextLinkDialog's submit() emits both) finds nothing left to restore.
   restoreFocusOnDialogCancel = null
 }
 
 function onLinkDialogRemove(): void {
   settleLinkDialog('remove')
-  // Same reasoning as onLinkDialogSubmit above: the .then() chain's own unsetLink().focus() call
-  // already refocuses deliberately for this outcome.
   restoreFocusOnDialogCancel = null
 }
 
 // Fires for every close, including Cancel, Esc and an overlay click -- not only a plain cancel:
-// submit/remove already resolved the promise AND cleared restoreFocusOnDialogCancel
-// themselves, by the time their own trailing update:open(false) reaches here, so settling with
-// null again is a no-op and refocusAfterDialogCancel() below finds nothing left to restore. Only
-// a genuine Cancel/Escape/overlay-click close reaches this with a live capture still in place.
+// submit/remove have already settled the promise and cleared the focus capture by the time their
+// own trailing update:open(false) reaches here, so both calls below are no-ops for those.
 function onLinkDialogOpenChange(open: boolean): void {
   linkDialogOpen.value = open
   if (!open) {
@@ -286,11 +194,9 @@ function onLinkDialogOpenChange(open: boolean): void {
 
 // Not reachable today either (nothing in this repo unmounts a field mid-edit), but unmounting with
 // the dialog still open would otherwise leave its promise pending forever -- resolving it with null
-// here is the same "cancelled" outcome a plain Cancel click already produces. Not paired with
-// refocusAfterDialogCancel() either, for the same reason noted on settleLinkDialog: the component
-// is unmounting, so a focus() call scheduled a tick later would run against a torn-down tree.
+// here is the same "cancelled" outcome a plain Cancel click already produces. No focus restore:
+// the component is unmounting, so a focus() call scheduled a tick later would hit a torn-down tree.
 onBeforeUnmount(() => settleLinkDialog(null))
-
 
 const commandContext: RichTextCommandContext = {
   openImageDialog: () => { void openImageDialog() },
@@ -314,9 +220,9 @@ function withFileIds(html: string): string {
   return doc.body.innerHTML
 }
 
-// Set around a setEditable() call so its resulting onUpdate -> emitNormalized() (below) is a
-// no-op -- see the onCreate comment further down (on the useEditor() options) for why
-// setEditable() always triggers that chain and why a synchronous flag is enough to bracket it.
+// setEditable() always emits 'update' -- even when passed the value the editor already holds --
+// which onUpdate cannot tell apart from a real edit. Bracket every setEditable() call in this flag
+// so it does not emit update:modelValue and fake an unsaved change the user never made.
 let suppressEmit = false
 
 function emitNormalized(): void {
@@ -333,8 +239,6 @@ function insertImage(id: string, alt = ''): void {
 
 function onImageSelected(id: string): void {
   insertImage(id)
-  // insertImage() above already ran its own editor.chain().focus() -- clear the captured
-  // pre-dialog target rather than leaving it to leak into a later, unrelated dialog's own cancel.
   restoreFocusOnDialogCancel = null
   imageDialogOpen.value = false
 }
@@ -359,83 +263,18 @@ const editor = useEditor({
       openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false,
       HTMLAttributes: { target: null, rel: null },
     }),
-    // `resize.enabled` swaps in @tiptap/core's ResizableNodeView (verified in its installed
-    // source: addNodeView() returns null unless this is true -- it also returns null when
-    // `typeof document === 'undefined'`, an SSR guard that doesn't apply to this SPA), which lets
-    // an editor drag an image's resize handles. `alwaysPreserveAspectRatio: true` locks every
-    // drag to the image's own ratio rather than upstream's default of only doing so while Shift
-    // is held: verified in ResizableNodeView.handleResize that `isShiftKeyPressed` is read at all
-    // only when `preserveAspectRatio` (this option) is false, so once this is true there is no
-    // per-drag override left to discover -- acceptable here because most editors of a
-    // general-purpose CMS have no design background, and an accidental free-drag silently
-    // stretches a published image with no visual cue that anything went wrong. minWidth keeps a
-    // handle from shrinking the image into an unusably small target.
+    // `resize.enabled` swaps in @tiptap/core's ResizableNodeView, which is what supplies the drag
+    // handles. Upstream defaults: `directions` is the four corners alone, and the aspect ratio is
+    // preserved only while Shift is held -- `alwaysPreserveAspectRatio: true` removes that
+    // per-drag override entirely, so no handle can free-stretch a published image.
     //
-    // directions requests all eight handles ResizableNodeViewDirection allows (verified in the
-    // installed @tiptap/core source: that's the full union, and `directions` defaults to the four
-    // corners alone when omitted) -- four corners plus the four edge midpoints the maintainer
-    // asked for. Every one of the eight still resizes proportionally: alwaysPreserveAspectRatio
-    // above is re-read from `this.preserveAspectRatio` on every mousemove, not branched on which
-    // direction is active (confirmed in the same handleResize/calculateNewDimensions read), so an
-    // edge handle locks the ratio exactly like a corner handle. That is coherent with the storage
-    // contract: only `width` is ever persisted (see the addAttributes override below), so every
-    // direction's drag round-trips through the same single number regardless of which axis the
-    // user grabbed.
-    //
-    // Not coherent with a claim this comment used to make, since corrected here: no handle
-    // "anchors" the opposite edge or corner in place. Confirmed by reading calculateNewDimensions
-    // and applyAspectRatio (same source) directly: neither ever sets `left`/`top`/`right`/`bottom`
-    // on the element itself, only `width`/`height` -- and the container's own
-    // `justify-content: flex-start` default (never overridden anywhere in this file) means the
-    // element's own top-left corner is what stays fixed for every direction. Dragging the left
-    // handle inward, for instance, does not pin the right edge and grow leftward the way a design
-    // tool's handles usually do -- it shrinks the same as every other handle, from the top-left.
-    //
-    // height is never rendered into the serialized HTML, via the addAttributes override below.
-    // This is NOT a duplicate of the backend's sanitizer: Task 1 already strips height there
-    // unconditionally (it was never in the allowlist), so that alone would already keep a
-    // stray height out of anything actually persisted. What this guards is local to the editor:
-    // ResizableNodeView's onCommit (upstream, in @tiptap/extension-image) always writes both
-    // width and height as node attributes after a drag, so without this override getHTML() would
-    // carry a height that the stored value never will. The watch(() => props.modelValue) below
-    // compares getHTML()'s output to the stored prop directly -- if the two disagree only because
-    // of a height neither side actually wants, that watch fires setContent() on every external
-    // update and resets the cursor for no reason.
-    //
-    // A second, independent height defect this option does NOT address: ResizableNodeView's own
-    // handleResize (verified in the installed @tiptap/core source) writes BOTH
-    // `element.style.width` and `element.style.height` as inline pixel values on every mousemove,
-    // unconditionally. Tailwind preflight's `img { max-width: 100%; height: auto }` does clamp the
-    // rendered WIDTH once a drag passes the column's edge (max-width is a distinct property from
-    // width, so it always applies) -- measured in the running admin, see the
-    // `[data-resize-container]` rule below -- but the inline height always beats preflight's
-    // stylesheet height for that same property, so nothing was left to clamp the height to
-    // match -- the image stretched vertically past that point. The style block below forces
-    // height back to auto on this node view's own img (needing !important to outrank the inline
-    // style), which is a CSS-only fix and belongs there, not here.
-    //
-    // handleMouseUp's onCommit reads `this.element.offsetWidth` (same source), a live layout
-    // measurement rather than the drag's raw unclamped delta. What that reads at the moment of a
-    // drag past the column edge is settled, measured in the running admin this session: with the
-    // inline width forced to 2000px inside the ~603px `prose` column, that same element's
-    // offsetWidth reads 603 -- the clamped, on-column number, which is the desirable outcome
-    // because it is also what publishing renders. A drag past the edge therefore stores the column
-    // width, not the number the pointer travelled to.
-    //
-    // Known upstream defect, not introduced here: ResizableNodeView's constructor registers
-    // `editor.on('update', this.handleEditorUpdate.bind(this))`, and its destroy() calls
-    // `editor.off('update', this.handleEditorUpdate.bind(this))` -- but `.bind()` returns a new
-    // function object each time it's called, so the listener destroy() removes is never the one
-    // the constructor added. Every image node view this editor ever creates leaks one 'update'
-    // listener on the editor for the editor's own lifetime. We cannot fix this from an extension
-    // config; recorded here so it isn't mistaken for something introduced by this change.
+    // `height: { rendered: false }` is not redundant with the backend's height strip. Upstream's
+    // onCommit writes both width and height as node attributes after a drag, so without this
+    // override getHTML() carries a height the stored value never will -- and the
+    // watch(() => props.modelValue) below diffs those two directly, so it would then fire
+    // setContent() on every external update and reset the cursor.
     Image.extend({
       addAttributes() {
-        // Verified in the installed @tiptap/extension-image@3.30.2 source: the parent's
-        // addAttributes() returns { src: {...}, alt: {...}, title: {...}, width: { default:
-        // null }, height: { default: null } } -- a plain name-to-config map, one entry per
-        // attribute. Spreading it forward and then replacing only `height` keeps src/alt/
-        // title/width exactly as upstream defines them.
         return {
           ...this.parent?.(),
           height: { default: null, rendered: false },
@@ -459,43 +298,14 @@ const editor = useEditor({
     Placeholder.configure({ placeholder: () => t('fields.richtext.placeholder') }),
   ],
   onUpdate: () => emitNormalized(),
-  // Closes a gap the watch(() => props.disabled) below cannot: that watch only fires on a
-  // *change*, so a field that mounts already disabled never runs it. Verified this session in
-  // @tiptap/core/src/lib/ResizableNodeView.ts -- every image node view's constructor calls
-  // attachHandles() unconditionally and starts `lastEditableState` as `undefined`, and the only
-  // thing that ever calls removeHandles() is handleEditorUpdate(), which only runs from the
-  // editor's own 'update' event. So a disabled-from-the-start field would otherwise get live,
-  // draggable handles that nothing ever tells to remove themselves -- and handleResizeStart has
-  // no isEditable guard of its own, so dragging one would emit update:modelValue from a
-  // read-only field. onCreate, not a plain Vue onMounted, is load-bearing here: verified this
-  // session that @tiptap/vue-3's EditorContent component reparents the editor's DOM into its own
-  // root element and then calls editor.createNodeViews() (-> view.setProps({ nodeViews })) inside
-  // its own nextTick() -- which recreates every node view from scratch, wiping out any earlier
-  // setEditable() call made from a plain onMounted before that reparenting has run. onCreate
-  // (verified in @tiptap/core/src/Editor.ts's mount()) is scheduled via a `window.setTimeout(fn,
-  // 0)` that is queued *before* EditorContent's nextTick job even exists (mount() runs
-  // synchronously inside useEditor()'s own onMounted, earlier in the same tick that later
-  // triggers EditorContent's reactive watchEffect) -- but a macrotask timer never runs until the
-  // microtask queue, which is where that whole nextTick chain lives, is fully drained, so by the
-  // time this callback actually fires, createNodeViews()'s replacement node views already exist
-  // and are already listening.
+  // A field that mounts already disabled never runs the watch(() => props.disabled) below, and
+  // upstream attaches image resize handles unconditionally, removing them only on the editor's own
+  // 'update' event -- so without this a read-only field keeps live handles, and handleResizeStart
+  // has no isEditable guard, meaning a drag would emit update:modelValue from it.
   //
-  // setEditable() (verified in the same Editor.ts) unconditionally emits 'update' even when the
-  // value passed is one it already holds -- which is exactly the signal handleEditorUpdate needs,
-  // but it is also indistinguishable from a real content change to onUpdate -> emitNormalized()
-  // above, which has no guard of its own for a disabled field. Left unguarded, a read-only user
-  // opening an item would get update:modelValue emitted at mount for every rich-text field, with
-  // a normalized value that can legitimately differ from the stored one (e.g. withFileIds()
-  // above adds data-file-id to any managed image that arrives without one) -- producing a false
-  // unsaved-changes state the user never caused. suppressEmit (declared above emitNormalized())
-  // is bracketed tightly around the call for exactly this reason: emit() (verified this session
-  // in @tiptap/core/src/EventEmitter.ts) is a plain synchronous `callbacks.forEach(...)`, no
-  // queueing, so the flag is still set for the entire synchronous
-  // setEditable -> emit('update') -> onUpdate -> emitNormalized chain and is cleared the
-  // instant setEditable() returns. try/finally, here and on the watch below, not because any
-  // throw is reachable today -- none is -- but because the failure mode if one ever were is
-  // silent and permanent: the flag is component-scoped, so a single escaping throw would leave
-  // every later real edit swallowed by emitNormalized()'s guard for the life of the field.
+  // onCreate rather than a Vue onMounted: @tiptap/vue-3's EditorContent recreates every node view
+  // inside its own nextTick() after reparenting the editor's DOM, which would discard a
+  // setEditable() call made any earlier.
   onCreate: ({ editor: created }) => {
     if (!props.disabled) return
     suppressEmit = true
@@ -519,11 +329,8 @@ watch(() => props.modelValue, (val) => {
     editor.value.commands.setContent(absolutizeImageSrc(val || ''), { emitUpdate: false })
   }
 })
-// Same suppression as onCreate above and for the identical reason: setEditable() here also
-// always emits 'update' (verified once, at the declaration of suppressEmit's rationale above),
-// and a disabled<->enabled transition is exactly as real-world-reachable as a disabled mount --
-// RBAC changes, or a form re-rendering the same field after a permission check settles -- so
-// leaving this one call unguarded would just be the same defect reached through its other door.
+// Same suppression as onCreate above, and required for the same reason: setEditable() emits
+// 'update' here too.
 watch(() => props.disabled, (d) => {
   const ed = editor.value
   if (!ed) return
@@ -571,9 +378,6 @@ function onTableAction(action: TableAction): void {
 function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolean }): void {
   editor.value?.chain().focus()
     .insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: size.withHeaderRow }).run()
-  // The chain above already refocuses the editor -- shared with the grid-picker path (which never
-  // opens a dialog at all, so this is a harmless no-op there): clear the captured pre-dialog
-  // target rather than leaving it to leak into a later, unrelated dialog's own cancel.
   restoreFocusOnDialogCancel = null
 }
 
@@ -581,20 +385,10 @@ function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolea
 const sizeDialogOpen = ref(false)
 
 function openTableSizeDialog(restoreFocusTo: HTMLElement | null): void {
-  // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) --
-  // same mechanism, reached from a different click: the "Custom size..." entry inside
-  // RichTextTableMenu's own reka Popover. Verified this session (see RichTextTableMenu.vue's own
-  // onPopoverCloseAutoFocus comment for the source read): that Popover's own close-auto-focus
-  // handler would otherwise refocus its `[data-cmd="table"]` trigger button -- a descendant of
-  // <main> -- right after this dialog's own aria-hidden background applies, reintroducing the
-  // warning; RichTextTableMenu.vue suppresses that one restore itself.
-  //
-  // Suppressing it is also why this needs an explicit restore. The element the default capture
-  // would take is the "Custom size..." button inside the popover, which unmounts with the popover,
-  // and nothing else puts focus back on the trigger -- so a cancel left focus on <body> (observed
-  // in the running admin). RichTextTableMenu hands over its own `[data-cmd="table"]` trigger with
-  // the event instead: that button is what opened this flow, it stays mounted throughout, and it
-  // is where the popover's own unsuppressed restore would have gone.
+  // The explicit restore is required, not decorative: the "Custom size..." entry that held focus
+  // unmounts with its popover, and RichTextTableMenu suppresses that popover's own close-auto-focus
+  // on this path (it would otherwise refocus its trigger under this dialog's aria-hidden
+  // background) -- so the trigger it hands over here is the only remaining restore target.
   blurActiveElementBeforeDialog(restoreFocusTo ? focusIfStillInDocument(restoreFocusTo) : undefined)
   sizeDialogOpen.value = true
 }
@@ -604,64 +398,29 @@ function onTableSizeDialogOpenChange(open: boolean): void {
   if (!open) refocusAfterDialogCancel()
 }
 
-// Which action list RichTextContextMenu shows for the CURRENT right-click -- see that component's
-// own `target` prop comment for why this is per-event state rather than something derived once.
+// Which action list RichTextContextMenu shows for the CURRENT right-click.
 const contextMenuTarget = ref<'table' | 'image' | null>(null)
 
 const contentRoot = ref<HTMLElement | null>(null)
 
 // Runs in the CAPTURE phase on a wrapper that is a STRICT ANCESTOR of reka's own trigger element
-// (see the template below), and decides synchronously which menu the user gets. Checked in this
-// order:
+// (see the template below), and decides synchronously which menu the user gets.
 //
-//   1. no editor yet: stopPropagation, target null -- nothing to route to.
-//   2. an image: checked BEFORE the table, not after. `<td><img></td>` is legal content, and a
-//      right-click landing on the <img> itself targets the image, not the cell it happens to sit
-//      inside -- checking the table branch first would misroute that click to the table menu
-//      instead, since isInEditorTable would also match (the image's ancestor cell). Confirmed by
-//      actually swapping the two checks in this session and watching the table-cell-image test
-//      below go red, not just by reasoning about it.
-//   3. a table: existing behaviour, unchanged by this task.
-//   4. neither: stopPropagation, target null -- native menu.
+// The handler MUST sit outside RichTextContextMenu, not on the element reka binds to:
+// stopPropagation() does not stop other listeners on the SAME element, and at-target listeners
+// fire in registration order, which is not ours to control. From a strict ancestor the capture
+// listener always runs first, so stopPropagation() reliably keeps the event away from reka.
 //
-// Within each of the image/table branches:
-//   - on a disabled (read-only) field: let the event continue on its own, doing nothing here.
-//     RichTextContextMenu already forwards `disabled` to its own ContextMenuTrigger, which will
-//     decline to open ours and fall back to the native menu, so there is nothing left for this
-//     handler to add -- and a disabled/read-only editor should not have its selection moved at
-//     all, which is why the selection-moving step is skipped too.
-//   - on an enabled field: move the selection to the clicked node/cell, set `target`, then let the
-//     event bubble on so reka opens ours.
+// stopPropagation() rather than driving reka's own `disabled` prop, because that prop can never
+// arrive in time: reka's handleContextMenu reads `disabled` synchronously as its first statement,
+// and Vue applies prop updates on a microtask, which cannot run between capture and bubble.
+// Suppressing the event this way also stops ProseMirror's own contextmenu handler, whose only job
+// is to flush a pending IME composition -- an accepted trade for a possibly-stale native menu
+// mid-composition.
 //
-// The stopPropagation branches (1 and 4) also matter for a reason unrelated to routing: reka's own
-// menu never sees the event, so nothing calls preventDefault -- the browser's own menu (spellcheck,
-// paste) appears untouched. This also stops ProseMirror's OWN contextmenu handler, which
-// prosemirror-view registers on view.dom (a descendant of this wrapper) purely to force-flush a
-// pending IME composition before the native menu opens (`handlers.contextmenu = view =>
-// forceDOMFlush(view)`, itself `endComposition(view)`, in prosemirror-view/dist/index.js). The
-// narrow, accepted consequence of suppressing that here is a possibly-stale native menu
-// mid-composition -- nothing about table or image state.
-//
-// Two independent reasons to prefer stopPropagation over driving reka's own `disabled` prop, not
-// one. Shape: `disabled` is a component-lifetime prop, while the decision here is per-event (which
-// cell or image, if any, was clicked) -- a prop is the wrong vehicle for that regardless of timing.
-// Timing: checked the installed reka-ui@2.10.3 source directly (ContextMenuTrigger.js) --
-// `handleContextMenu` reads `disabled.value` synchronously as its very first statement, before its
-// own `await nextTick()`. That value arrives as a PROP, forwarded through three component
-// boundaries (this file's `disabled` -> RichTextContextMenu's own `disabled` prop -> the
-// vendored ui/context-menu ContextMenuTrigger's `useForwardProps` -> reka's own `toRefs(props)`).
-// Vue applies prop updates to a child component on its job queue, a microtask -- and DOM event
-// dispatch from the capture phase to the bubble phase is synchronous, so no microtask can run in
-// between. A ref flipped in this handler would still read stale at reka's guard, for the same
-// event, every time. stopPropagation() sidesteps both problems at once. `target`, unlike
-// `disabled`, does not face that same deadline -- see RichTextContextMenu.vue's own comment on its
-// `target` prop for why a synchronous flip of it still arrives in time.
-//
-// The handler MUST sit on an element outside RichTextContextMenu, not on the element reka
-// binds to. stopPropagation() does not stop other listeners on the SAME element -- only
-// stopImmediatePropagation() does, and at-target listeners fire in registration order, which is
-// not ours to control. From a strict ancestor, the capture listener always runs first and
-// stopPropagation() reliably prevents the event from ever reaching reka.
+// The image check runs BEFORE the table check, and the order is load-bearing: `<td><img></td>` is
+// legal content and isInEditorTable would match it too, so the reverse order misroutes a click on
+// the image to the table menu.
 function onContentContextMenu(e: MouseEvent): void {
   const root = contentRoot.value
   const ed = editor.value
@@ -670,19 +429,11 @@ function onContentContextMenu(e: MouseEvent): void {
   const img = isEditorImage(e.target, root)
   if (img) {
     if (props.disabled) { contextMenuTarget.value = null; return }
-    // posAtDOM, not posAtCoords: unlike the table branch below, this handler already holds the
-    // <img> element itself, so resolving its ProseMirror position needs no layout at all --
-    // confirmed this session in the installed prosemirror-view@1.42.2 source
-    // (EditorView.posAtDOM -> ViewDesc.posFromDOM/localPosFromDOM). Walking up from the <img> via
-    // parentNode finds the image's own node-view desc on the first ancestor carrying one -- its
-    // `dom` is the `[data-resize-container]` element (@tiptap/core's ResizableNodeView: `get dom()
-    // { return this.container }`), with the <img> itself as that container's own first descendant
-    // (ResizableNodeView.createWrapper() appends the element before attachHandles() appends any
-    // handle siblings) -- so `offset: 0` walking up from a node with no previous sibling resolves
-    // to the position right before the image node. NodeViewDesc.border is 0 for a leaf node (image
-    // has no content), so that position is exactly `doc.nodeAt(pos) === <the image node>`, which is
-    // what NodeSelection.create (and so setNodeSelection, its command form -- also verified in the
-    // installed @tiptap/core source) needs.
+    // posAtDOM, not posAtCoords like the table branch below: this handler already holds the <img>,
+    // so the position needs no layout. The <img> is never the node view's own `dom` (that is the
+    // [data-resize-container] wrapper) but it is that container's first descendant, so offset 0
+    // resolves to the position immediately before the image node -- which is what
+    // setNodeSelection needs.
     contextMenuTarget.value = 'image'
     ed.commands.setNodeSelection(ed.view.posAtDOM(img, 0))
     return
@@ -699,26 +450,17 @@ function onContentContextMenu(e: MouseEvent): void {
   contextMenuTarget.value = 'table'
 }
 
-// Two outcomes, one caller in this same file -- unlike RichTextLinkDialog's three-outcome,
-// asynchronous-command promise protocol (see settleLinkDialog above), a plain ref pair
-// (imageAltDialogOpen/imageAltDialogAlt below) is enough here: nothing outside this component
-// needs to await the result, and there is no third "remove" outcome to distinguish from cancel.
 const imageAltDialogOpen = ref(false)
 const imageAltDialogAlt = ref('')
 
-// The exact ProseMirror node the alt dialog was opened against, captured while the dialog is open
-// so the submit can prove it is still writing to that same image -- see onImageAltDialogSubmit
-// for the defect this closes and the measurement behind it. Structurally typed rather than
-// imported: @tiptap/pm is not a direct dependency of this frontend, so ProseMirror's own Node type
-// is not nameable here. Only the object's identity is ever compared -- the single member below is
-// what keeps the cast in selectedNodeOf() from widening to a bare `object`.
+// The image node the alt dialog was opened against; onImageAltDialogSubmit compares against it.
+// Structurally typed, and selectedNodeOf duck-types on `node` rather than using
+// `instanceof NodeSelection`, because @tiptap/pm is not a direct dependency of this frontend and
+// ProseMirror's own types are therefore not nameable here.
 type SelectedNode = { type: { name: string } }
 let imageAltDialogNode: SelectedNode | null = null
 
 function selectedNodeOf(ed: Editor): SelectedNode | null {
-  // Duck-typed on `node` rather than an `instanceof NodeSelection` check, for the same
-  // not-a-direct-dependency reason: `node` is the only property of its kind in ProseMirror's
-  // built-in selection set, so its presence IS the NodeSelection signal.
   return (ed.state.selection as { node?: SelectedNode }).node ?? null
 }
 
@@ -726,38 +468,16 @@ function onImageAction(action: ImageAction): void {
   const ed = editor.value
   if (!ed) return
   if (action === 'deleteImage') {
-    // The context-menu handler above already moved the selection onto the image node (a
-    // NodeSelection), so deleteSelection() removes exactly that node -- confirmed in the installed
-    // @tiptap/core source that deleteSelection() deletes whatever range the CURRENT selection
-    // covers, not a hardcoded assumption about node vs text selections.
+    // The context-menu handler above put a NodeSelection on the image, so this deletes that node.
     ed.chain().focus().deleteSelection().run()
     return
   }
-  // editAlt: seed the dialog from the selected image's own current alt (getAttributes('image'),
-  // also verified this session, reads whichever node within the current selection's range matches
-  // the given type -- the NodeSelection set above makes that the image itself). alt legitimately
-  // has no default value once created via setImage() with no alt argument, so this falls back to
-  // an empty string rather than passing a non-string through to the dialog's `alt: string` prop.
   const attrs = ed.getAttributes('image')
   imageAltDialogAlt.value = typeof attrs.alt === 'string' ? attrs.alt : ''
-  // Captured here, not re-derived on submit: onImageAltDialogSubmit needs to know WHICH image the
-  // dialog was opened against, and by the time it runs that is no longer answerable from the
-  // selection alone. Cleared by onImageAltDialogOpenChange on every close.
   imageAltDialogNode = selectedNodeOf(ed)
-  // See blurActiveElementBeforeDialog's own comment (declared above, next to openLinkDialog) for
-  // why this call is here: the right-click that led to this action leaves the ProseMirror editor
-  // itself focused (a right-click never blurs a contenteditable the way a left-click elsewhere
-  // does), and this dialog's own aria-hidden background would otherwise be applied while that is
-  // still true.
-  //
-  // The explicit restore is not the same element the blur captures. By the time this menu item is
-  // clicked, focus is on the reka context-menu item itself, which unmounts with the menu -- so the
-  // default capture restores nothing and a cancel left focus on <body> (observed in the running
-  // admin). editor.commands.focus() is the right destination instead: the image is still the
-  // NodeSelection this dialog was opened against, and the focus command leaves that selection
-  // exactly as it is -- read this session in the installed @tiptap/core source, where a call with
-  // position === null over a selection that is not a TextSelection takes the early `delayedFocus()`
-  // branch and never touches tr.setSelection at all.
+  // The explicit restore is required: the reka context-menu item holding focus right now unmounts
+  // with the menu, so the default capture would restore to a detached node. focus() with no
+  // position is safe over a NodeSelection -- upstream leaves a non-text selection untouched.
   blurActiveElementBeforeDialog(() => { editor.value?.commands.focus() })
   imageAltDialogOpen.value = true
 }
@@ -765,56 +485,21 @@ function onImageAction(action: ImageAction): void {
 function onImageAltDialogSubmit(alt: string): void {
   const ed = editor.value
   if (!ed) return
-  // updateAttributes('image', ...), not a fresh lookup of "the" image: it applies to whichever
-  // node the CURRENT selection covers matching that type (verified this session in the installed
-  // @tiptap/core source), normally still the NodeSelection the context-menu handler set, on the
-  // same reasoning as deleteSelection() above.
-  //
-  // "The dialog offers no path back into the editor that could move the selection while it is
-  // open" -- what an earlier round of this comment asserted -- is NOT true, and the guard below
-  // is here because of it. This component's own watch(() => props.modelValue) above calls
-  // setContent() on any external model push, which resets the selection, and such a push is
-  // perfectly reachable while this dialog sits open: an autosave round-trip, a revision revert, a
-  // language switch. Left ungoverned, the submit would then apply to whatever the new selection
-  // happens to cover -- another image, or nothing at all -- rather than the image the dialog was
-  // opened against.
-  //
-  // The guard compares NODE IDENTITY against the image captured when the dialog opened, not
-  // merely "is the selection still a NodeSelection on an image". Measured in jsdom while writing
-  // the test below, which is why the weaker check is not what shipped: after
-  // setProps({ modelValue }) pushes different content into an open alt dialog, the selection is
-  // STILL a NodeSelection, still on an image -- ProseMirror maps it onto the replacement
-  // document's own image -- so a type-name check passes and the alt lands on the NEW image. Only
-  // identity separates the two, and it separates them cleanly: ProseMirror nodes are persistent
-  // and immutable, so a transaction that leaves this image alone hands the same object back,
-  // while setContent() builds an entirely new tree from the incoming HTML.
-  //
-  // Bailing out is deliberately silent, matching what the ungoverned call already did whenever
-  // the replacement selection happened to cover no image at all -- the point of the guard is that
-  // it can no longer write the alt onto the WRONG one.
+  // The guard must compare node IDENTITY, not "is the selection still a NodeSelection on an
+  // image". An external modelValue push is reachable while this dialog sits open (autosave,
+  // revision revert, language switch) and the watch above answers it with setContent(); ProseMirror
+  // then maps the NodeSelection onto the REPLACEMENT document's image, so a type check passes and
+  // the alt is written to the wrong picture. Identity separates them because ProseMirror nodes are
+  // immutable: an untouched image is handed back as the same object, a setContent() is a new tree.
+  // Bailing out silently is deliberate -- the point is only that the wrong image is never written.
   if (!imageAltDialogNode || selectedNodeOf(ed) !== imageAltDialogNode) return
   ed.chain().focus().updateAttributes('image', { alt }).run()
-  // The chain above already refocuses the editor -- clear the captured pre-dialog target (here,
-  // the editor itself) rather than have onImageAltDialogOpenChange's own trailing update:open(false)
-  // restore it a second time, or a later, unrelated dialog's own cancel inherit a stale one.
   restoreFocusOnDialogCancel = null
 }
 
-// Unlike the link dialog, this one has no third "remove" outcome and no async settle protocol to
-// share the close signal with -- but it does need to tell a submit-then-close apart from a plain
-// cancel-close, which v-model:open sugar alone cannot do (RichTextImageAltDialog.submit() emits
-// 'submit' then its own trailing 'update:open'(false), same shape as RichTextLinkDialog's submit;
-// see that component's submit()). onImageAltDialogSubmit above always runs first and always clears
-// restoreFocusOnDialogCancel, so by the time this runs for a submit-driven close there is
-// nothing left to restore -- refocusAfterDialogCancel() is only ever a real restore for a plain
-// Cancel/Escape/overlay-click close.
 function onImageAltDialogOpenChange(open: boolean): void {
   imageAltDialogOpen.value = open
   if (!open) {
-    // Every close routes through here (submit-driven and cancel alike, per the comment above), so
-    // this is the one place the captured node has to be released -- leaving it set would let a
-    // later, unrelated alt dialog inherit a stale target the same way a stale
-    // restoreFocusOnDialogCancel would.
     imageAltDialogNode = null
     refocusAfterDialogCancel()
   }
@@ -888,29 +573,17 @@ defineExpose({ editor, insertImage })
         <MediaGrid :files="files" selectable @select="onImageSelected" />
       </DialogScrollContent>
     </Dialog>
-    <!--
-      Not v-model:open sugar: onTableSizeDialogOpenChange has to tell a submit-driven close (its
-      own @insert already ran editor.chain().focus(), see onTableInsert) apart from a plain
-      Cancel/Escape/overlay-click close, which needs refocusAfterDialogCancel() instead -- sugar's
-      own `open = $event` has no way to run that extra step.
-    -->
+    <!-- Explicit @update:open, not v-model sugar: a cancel close also has to restore focus. -->
     <RichTextTableSizeDialog :open="sizeDialogOpen" @update:open="onTableSizeDialogOpenChange" @insert="onTableInsert" />
     <!--
-      Not v-model:open sugar: a plain Cancel/Esc/overlay-click close still has to do two further
-      things sugar's own `open = $event` has no way to do -- settle the pending openLinkDialog
-      promise with null, and restore focus. Those are two separate calls, not one:
-      settleLinkDialog only resolves the promise and deliberately has no focus side effect of its
-      own (see its declaration), so the restore is refocusAfterDialogCancel(), which
-      onLinkDialogOpenChange calls alongside it. Deleting either one breaks this path.
+      Explicit @update:open, not v-model sugar: a cancel close has to settle the pending
+      openLinkDialog promise with null AND restore focus. Both calls are required; dropping either
+      one breaks this path.
     -->
     <RichTextLinkDialog :open="linkDialogOpen" :href="linkDialogHref" :new-tab="linkDialogNewTab"
       :can-remove="linkDialogCanRemove" @update:open="onLinkDialogOpenChange"
       @submit="onLinkDialogSubmit" @remove="onLinkDialogRemove" />
-    <!--
-      Not v-model:open sugar here either, for the same reason as the table-size dialog above:
-      onImageAltDialogOpenChange has to tell a submit-driven close apart from a plain cancel-close
-      to know whether refocusAfterDialogCancel() should actually restore anything.
-    -->
+    <!-- Explicit @update:open, not v-model sugar: a cancel close also has to restore focus. -->
     <RichTextImageAltDialog :open="imageAltDialogOpen" @update:open="onImageAltDialogOpenChange" :alt="imageAltDialogAlt"
       @submit="onImageAltDialogSubmit" />
   </div>
@@ -977,17 +650,10 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:first-child) { padding-inline-start: 0; }
 .rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td)) th:last-child) { padding-inline-end: 0; }
 
-/* @tiptap/core's ResizableNodeView (wired up above on the Image extension) builds its own DOM at
-   runtime via document.createElement, the same as the ProseMirror table markup styled above --
-   it is neither Vue-rendered nor scope-id-bearing either, for the same reason given in this
-   block's opening comment, so every rule below also goes through `:deep(...)`.
-
-   Handles: createHandle() (upstream, @tiptap/core/src/lib/ResizableNodeView.ts) sets
-   `position: absolute` and the `data-resize-handle` attribute, and attachHandles() additionally
-   calls positionHandle() to place each one via `top`/`bottom`/`left`/`right`. Neither sets any
-   size, background, or cursor (`classNames.handle` defaults to `''`, so there is no class to
-   hook either). Without the rules below every handle is positioned but 0x0, invisible, and
-   unclickable. */
+/* Upstream positions each resize handle but gives it no size, background or cursor of its own --
+   without the rules below every handle exists in the DOM but is 0x0, invisible and unclickable.
+   ResizableNodeView builds its DOM at runtime, so it carries no scope id and needs `:deep(...)`
+   the same as the ProseMirror table markup above. */
 .rich-text__content :deep([data-resize-handle]) {
   width: 0.625rem;
   height: 0.625rem;
@@ -999,62 +665,18 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep([data-resize-handle="bottom-right"]) { cursor: nwse-resize; }
 .rich-text__content :deep([data-resize-handle="top-right"]),
 .rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
-/* The `directions` resize option above now asks for the four edge midpoints too, alongside the
-   four corners -- these two rules are the edge-direction cursors that pairing needs. */
 .rich-text__content :deep([data-resize-handle="top"]),
 .rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; }
 .rich-text__content :deep([data-resize-handle="left"]),
 .rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; }
 
-/* Selection outline: confirmed by reading prosemirror-view@1.42.2's source this session, not
-   assumed -- NodeViewDesc.create() (src/viewdesc.ts) sets `nodeDOM` to the exact DOM node a
-   custom node view returns as its `dom` (ResizableNodeView's own `get dom()` returns
-   `this.container`, the `[data-resize-container]` element), and CustomNodeViewDesc's
-   selectNode()/deselectNode() (same file) fall through to the base ViewDesc implementation --
-   since ResizableNodeView defines neither -- which toggles `.ProseMirror-selectednode` on that
-   same `nodeDOM`. So the container, not the wrapper or the <img> itself, is what carries the
-   class.
+/* `.ProseMirror-selectednode` lands on the [data-resize-container] element, not on the wrapper or
+   the <img>, because that container is what the node view returns as its `dom`.
 
-   Without the width rule just below, that outline would hug nothing: createContainer() (same
-   source) sets `element.style.display = 'flex'` (this image is configured `inline: false`, so
-   never 'inline-flex') on a plain <div>, and a block-level flex container with no other width
-   constraint fills the available line width the same as any other block box -- so the outline
-   would draw around the full line, with the image sitting at its left edge, while the handles
-   (positioned against the wrapper just below, which sizes to its own content) stay hugging the
-   image. `width: fit-content` is a plain CSS property this rule owns outright for THAT property --
-   upstream's own inline style on this same element also sets `visibility`/`pointerEvents`
-   (@tiptap/extension-image's addNodeView, to hide the node view until the image's onload fires),
-   but never `width`, so there is no inline-style conflict on width specifically and no !important
-   needed for the rule below. Shrinking the container to its single flex child (the wrapper) is
-   what makes the outline and the handles agree on the same box.
-
-   Measured live this session, in the running admin itself -- not a static reconstruction, which is
-   what two earlier rounds of this comment argued past each other over. Headless Chromium
-   (@playwright/test) against the dev server, a real article's image inside the real ~603px
-   `prose` column, injecting overrides and reading getComputedStyle back to confirm each one
-   actually applied before trusting the numbers:
-
-     - `width: fit-content` above IS load-bearing, and this is what it does: with a 200px image the
-       container measures 200px and the selection outline hugs it; overridden to `width: auto` the
-       same container measures the full 603px column with the image at its left edge. That is the
-       outline/handle agreement described above, and nothing to do with clamping.
-     - What clamps an oversized image is Tailwind preflight's `img { max-width: 100% }`, and only
-       that. Overridden to `max-width: none` with everything else untouched, a 2000px inline width
-       renders at 2000px, and an image with a 3000px INTRINSIC width and no inline width at all
-       renders at 3000px. Left alone, both render at 603px.
-     - Two declarations this file used to carry, `max-width: 100%` on this container and
-       `min-width: 0` on the wrapper, measured inert and are gone. Neutralized singly and together,
-       against both the 2000px-inline-width and the 3000px-intrinsic-width cases -- the latter being
-       exactly the flex automatic-minimum-size / fit-content cyclic-percentage scenario each was
-       written against -- every box still measured 603px. Nor were they kept as insurance: in the
-       one configuration that overflows at all (preflight neutralized) they never bounded the IMAGE,
-       which rendered at 2000px and 3000px with both still in place. Measured, they bounded the
-       container, the wrapper and the handles -- and only as a pair; either one alone did not --
-       which in that configuration would keep the handles reachable inside AppShell's own
-       overflow-x-clip on the content column. That is a real difference, but it exists only where
-       the clamp is already gone and the dragged width is already being stored -- a fork-only
-       configuration this repo does not ship, and one chapter 14 now names.
-   */
+   `width: fit-content` is load-bearing: upstream makes the container a block-level flex box, which
+   otherwise fills the whole line, so the outline would draw around the full column while the
+   handles stay hugging the image. It does nothing to clamp an oversized image -- what clamps one
+   is Tailwind preflight's `img { max-width: 100% }`, and only that. */
 
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
   outline: 2px solid var(--primary);
@@ -1062,65 +684,30 @@ defineExpose({ editor, insertImage })
 }
 .rich-text__content :deep([data-resize-container]) {
   width: fit-content;
-  /* Margin, not the outline/hugging rules above: see the comment on the img margin rule just
-     below for why this box (not the wrapper, and not the img itself) is where `prose`'s own
-     vertical image margin has to be re-applied. */
+  /* `prose`'s own image margin, re-applied here -- see the img rule below for why it has to move. */
   margin-top: 2em;
   margin-bottom: 2em;
 }
 
-/* The wrapper (createWrapper(), same source) is a plain `display: block` div holding only the
-   <img> and its absolutely-positioned handles -- but it is also a flex ITEM of the container just
-   above, and a flex item's content is explicitly specified (CSS Flexible Box Layout) to form a new
-   formatting context for its own children, so a child's own vertical margins do not collapse
-   through it the way they normally would through an ordinary block parent. `prose` (this editor's
-   own typography class, applied above via editorProps) puts a vertical margin directly on every
-   `<img>` -- confirmed by reading the installed @tailwindcss/typography@0.5.20 source
-   (styles.js's `base` modifier, which is what an unmodified `prose` class resolves to): `margin-top`
-   and `margin-bottom` both `2em`. Uncollapsed, that margin sits inside the wrapper's own rendered
-   box, so the wrapper (and, through it, the fit-content container above) is taller than the image
-   by that margin on both edges -- which is exactly why the resize handles, positioned with
-   top:0/bottom:0 against the wrapper's own edges, previously sat on a box visibly taller than the
-   image rather than on the image's own corners.
-
-   Zeroing that margin here and re-adding it on the container's own margin (declared on the rule
-   above, since it is a real block box in document flow whose margin sits OUTSIDE its border box
-   and so never inflates what the outline above measures) keeps the same visual gap above and
-   below an image that `prose` would otherwise have provided, without inflating the box the
-   outline and handles both key off. The `2em` above is a hardcoded approximation of that same
-   `base` modifier value, not a read of it: this editor's `class="prose dark:prose-invert"` (no
-   size suffix) always resolves to that modifier today, so the two happen to agree, but this rule
-   does not track the plugin's own theme value and would silently drift if a future edit switched
-   to `prose-sm`/`prose-lg`/etc. */
+/* `prose` puts a 2em vertical margin on every <img>, and the wrapper around it is a flex item, so
+   that margin cannot collapse out -- it inflates the box the handles and the selection outline are
+   both positioned against, leaving the handles off the image's own corners. Zeroing it here and
+   re-applying it as the container's margin (outside its border box) keeps the same visual gap.
+   The 2em above is hardcoded, not read from the plugin: switching this editor to `prose-sm` /
+   `prose-lg` would change the plugin's value and silently drift from it. */
 .rich-text__content :deep([data-resize-wrapper] img) {
   margin: 0;
 
-  /* Second, independent defect in the same drag path (see the `directions` comment on the Image
-     extension's own `resize` option above for the full mechanism): ResizableNodeView.handleResize
-     always writes an inline `height` in pixels on every mousemove, and that inline value always
-     outranks Tailwind preflight's stylesheet `height: auto` for the same property -- so once a
-     drag pushed the inline width past what `max-width: 100%` lets the image actually render at,
-     nothing was left to keep the rendered height in proportion, and the image stretched.
-     `!important` here is required, not decorative: only `!important` on a stylesheet rule can
-     outrank an inline style for the same property. Restoring `height: auto` makes the browser
-     derive the rendered height from the image's own natural aspect ratio and whatever width it
-     actually rendered at (clamped or not) -- the same ratio ResizableNodeView itself measured at
-     mount (applyInitialSize() reads this same element's offsetWidth/offsetHeight), so this does
-     not fight alwaysPreserveAspectRatio's own math, only the one place upstream still applies a
-     size as an inline style unconditionally. */
+  /* Upstream writes an inline pixel `height` on the <img> on every mousemove of a drag, which
+     outranks Tailwind preflight's `height: auto` -- so once the width clamps at the column edge
+     nothing keeps the height in proportion and the image stretches. `!important` is required:
+     only an important stylesheet declaration can outrank an inline style. */
   height: auto !important;
 }
 
-/* Defense-in-depth alongside the editor's own onCreate option above (see the comment on it, next
-   to onUpdate) -- that fix removes the handle elements from the DOM outright when a field mounts
-   already disabled; this rule doesn't replace it, since CSS alone can never make a DOM node stop
-   existing. This rule exists for any node view this session's reasoning didn't anticipate --
-   e.g. a future edit that inserts content into a disabled field by some path other than the UI,
-   or an upstream version where removeHandles() doesn't run when expected. Confirmed this session
-   (not assumed) that the attribute this keys off is real: prosemirror-view@1.42.2's
-   computeDocDeco() (src/index.ts) sets `attrs.contenteditable = String(view.editable)` on the
-   decoration that becomes the `.ProseMirror` root element's own attributes -- so
-   `.ProseMirror[contenteditable="false"]` is exactly the read-only state, not a guess. */
+/* Belt-and-braces alongside the onCreate setEditable() above, which is what actually removes the
+   handle elements. `contenteditable` on the `.ProseMirror` root is prosemirror-view's own
+   rendering of the editable flag, so this selector is exactly the read-only state. */
 .rich-text__content :deep(.ProseMirror[contenteditable="false"] [data-resize-handle]) {
   display: none;
 }

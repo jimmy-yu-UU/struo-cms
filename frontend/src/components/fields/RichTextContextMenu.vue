@@ -9,24 +9,11 @@ import { IMAGE_ACTIONS, DESTRUCTIVE_IMAGE_ACTIONS, type ImageAction } from './ri
 
 defineOptions({ name: 'RichTextContextMenu' })
 
-// `target` says which content this menu shows for the CURRENT right-click: 'table' and 'image'
-// each render their own action list, and `null` renders nothing (used for a right-click that
-// landed on neither). Unlike `disabled` below -- a component-lifetime setting, per
-// RichTextInput.vue's own comment -- this is a per-event decision.
-//
-// Verified this session (reka-ui@2.10.3, `ContextMenu/ContextMenuTrigger.js` and
-// `Menu/MenuContent.js`): the item list below is not rendered until reka's own `open` flips true,
-// because `MenuContent` wraps its slot in reka's `Presence`, gated on `forceMount || open.value`
-// (this component passes no `forceMount`) -- and `open` only flips inside
-// `ContextMenuTrigger.handleContextMenu`'s continuation AFTER its own `await nextTick()`, not
-// before. That `nextTick()` is a later point than `disabled.value`'s read, which is that same
-// handler's synchronous FIRST statement -- so the two props face different deadlines despite
-// coming from the same handler: a prop update queued during the synchronous capture-or-bubble
-// dispatch (any phase; there is no microtask boundary between them) has already been flushed by
-// the time that `nextTick()` resolves, so `target` arrives in time for this render even though
-// `disabled` does not arrive in time for that earlier, synchronous read. Only a flip deferred past
-// that microtask boundary (a macrotask, e.g. `setTimeout`) would still be missed --
-// RichTextContextMenu.test.ts's `target routing timing` describe block pins exactly this pair.
+// `target` picks the action list for the CURRENT right-click; `null` renders nothing. Unlike
+// `disabled`, it may be flipped from the contextmenu handler itself: reka reads `disabled`
+// synchronously at the top of its own handler, but does not render this content until after an
+// `await nextTick()`, by which time a prop update queued during event dispatch has flushed. Only
+// a flip deferred past that microtask boundary (a `setTimeout`, say) would arrive too late.
 const props = defineProps<{ disabled?: boolean; target: 'table' | 'image' | null }>()
 const emit = defineEmits<{
   (e: 'tableAction', action: TableAction): void
@@ -35,10 +22,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// Two independent emits rather than one discriminated-union emit: the two action types are
-// unrelated enums with unrelated command handlers on the caller's side (see RichTextInput.vue's
-// onTableAction), so a caller that only cares about one of them can listen to exactly that one
-// event instead of narrowing a union on every payload.
 type MenuEntry =
   | { kind: 'table'; action: TableAction }
   | { kind: 'image'; action: ImageAction }
@@ -55,11 +38,8 @@ function isDestructive(entry: MenuEntry): boolean {
     : DESTRUCTIVE_IMAGE_ACTIONS.has(entry.action)
 }
 
-// The separator sits before the first destructive entry of the CURRENT list, wherever that list
-// puts it. This relies on the same constraint richTextTableActions.ts documents for
-// IN_TABLE_ACTIONS and richTextImageActions.ts documents for IMAGE_ACTIONS: the destructive
-// entries must stay contiguous within their list, or this predicate fires more than once. That
-// constraint is not specific to tables -- it holds for whichever action list is active here.
+// The separator sits before the first destructive entry of the CURRENT list. Every action list
+// rendered here must keep its destructive entries contiguous, or this fires more than once.
 function needsSeparator(index: number): boolean {
   const list = entries.value
   const entry = list[index]
@@ -67,11 +47,9 @@ function needsSeparator(index: number): boolean {
   return !!entry && !!previous && isDestructive(entry) && !isDestructive(previous)
 }
 
-// This re-check is the actual guard, not the `disabled` forwarded below. reka's ContextMenuItem
-// already refuses to fire when disabled, but this component must not depend on that third-party
-// behaviour as its only line of defence -- the same reasoning MediaContextMenu records. Both
-// action kinds get their own guarded runner rather than sharing one, so each stays a plain
-// single-argument function exposed for a test to call directly, bypassing the DOM.
+// This re-check is the actual guard, not the `disabled` forwarded below: reka's ContextMenuItem
+// already refuses to fire when disabled, but that third-party behaviour must not be the only line
+// of defence -- the same reasoning MediaContextMenu records.
 function runTable(action: TableAction): void {
   if (props.disabled) return
   emit('tableAction', action)

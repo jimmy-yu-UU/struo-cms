@@ -403,13 +403,9 @@ public class GanssHtmlSanitizerTests
         _s.Sanitize("<table></table>").Should().Be("<table></table>");
     }
 
-    // width is allowlisted globally (AllowedAttributes has no per-tag concept), so an integer-only
-    // shape check has to be applied in the PostProcessNode handler -- the same reasoning as target's
-    // anchor-only narrowing above. Recorded observation from this task (RT-6 task 1): a throwaway
-    // HtmlSanitizer with "width" on AllowedAttributes and no PostProcessNode handler at all let
-    // width="abc" survive Sanitize() untouched, so Ganss.Xss does not itself validate attribute
-    // VALUES once a name is on AllowedAttributes -- nothing upstream of this handler will ever
-    // reject a malformed width for us.
+    // Ganss.Xss does not validate attribute VALUES once a name is on AllowedAttributes -- with
+    // "width" allowlisted and no PostProcessNode handler, width="abc" survives untouched. The
+    // integer-only shape check in that handler is the only thing rejecting a malformed width.
     [Fact]
     public void Keeps_integer_width_on_an_image()
     {
@@ -418,29 +414,13 @@ public class GanssHtmlSanitizerTests
     }
 
     // Anything that is not exactly one-to-five ASCII digits with no leading zero is rejected,
-    // including shapes a naive int.TryParse would accept (leading whitespace) or that are
-    // dimensionally meaningless for a fixed pixel width (a percentage, zero, negative, a decimal).
-    // src surviving alongside the stripped width is the proof this is attribute-level stripping,
-    // not the whole <img> being dropped.
+    // including shapes a naive int.TryParse would accept (leading whitespace). src surviving
+    // alongside the stripped width proves this is attribute-level stripping, not the <img> being
+    // dropped.
     //
-    // The trailing "480\n" and "480\r\n" cases guard a real .NET regex pitfall: $ (without
-    // RegexOptions.Multiline) matches at end-of-string OR immediately before one trailing '\n', so
-    // an anchor pair of ^...$ lets "480\n" through -- reachable in real input via an attribute value
-    // decoded from "480&#10;". Confirmed directly by running both cases against the sanitizer with
-    // the old ^[1-9][0-9]{0,4}$ pattern still in place: BOTH failed (width survived) -- not only the
-    // bare "480\n" case but also "480\r\n", because the HTML5 input-stream preprocessing AngleSharp
-    // performs collapses a raw \r\n down to \n before the attribute value ever reaches this
-    // handler, so by the time the regex runs both inputs are the identical string "480\n". Both
-    // pass closed under \A/\z. Kept as two separate cases anyway since they exercise different
-    // input bytes even though they collapse to the same decoded value.
-    //
-    // "480&#10;" and "480\r" are coverage of the two remaining shapes of that same vector rather
-    // than further evidence about it. The entity form is the one the paragraph above and chapter 5
-    // both NAME as how a newline reaches an attribute value in practice, so it is walked here
-    // end-to-end instead of being asserted only about the decoded bytes; the lone \r is the third
-    // line-ending shape a writer can send. Neither row can distinguish "decoded to a newline" from
-    // "decoded to something else that is also not five digits" -- both are rejected either way --
-    // so no claim is made here about what AngleSharp turns them into.
+    // The trailing-newline rows catch the .NET regex pitfall the pattern's \A/\z anchors exist for:
+    // under ^...$ they all pass, because $ also matches before one trailing '\n' and AngleSharp
+    // collapses \r\n to \n before the value reaches the handler.
     [Theory]
     [InlineData("abc")]
     [InlineData("40%")]
@@ -465,12 +445,9 @@ public class GanssHtmlSanitizerTests
     // a <table>, a plain paragraph) receive a raw author-controlled pixel width it was never
     // designed to defend against -- the img-only shape check is not enough by itself.
     //
-    // The <td> case is wrapped in a real <table><tbody><tr>...</tr></tbody></table> rather than
-    // handed to Sanitize bare: a bare "<td width=\"200\">c</td>" is a parse error in body-context
-    // fragment parsing, so AngleSharp never materializes a <td> element from it at all and the row
-    // would pass even with the non-image width strip deleted. Verified directly (RT-6 task 1 fix
-    // round): with that strip temporarily commented out, the bare-<td> row alone still passed while
-    // the other four rows in this theory correctly failed -- confirming the bare form was vacuous.
+    // The <td> case must stay wrapped in a real <table><tbody><tr>: a bare "<td>" is a parse error
+    // in body-context fragment parsing, so AngleSharp never materializes the element and that row
+    // passes even with the non-image width strip deleted.
     [Theory]
     [InlineData("<table><tbody><tr><td width=\"200\">c</td></tr></tbody></table>")]
     [InlineData("<table width=\"100%\"></table>")]
@@ -484,10 +461,7 @@ public class GanssHtmlSanitizerTests
 
     // Pins the deliberate absence of height from AllowedAttributes: a fork's frontend is not
     // guaranteed to pair a stored width with height:auto, and width+height together on a container
-    // that only caps max-width:100% would squash the image's aspect ratio. This must fail under the
-    // mutation "add height to AllowedAttributes with no further handling" -- verified out of band
-    // (Task 1): that exact edit was made temporarily against this file, this test alone was re-run
-    // and failed on the height assertion, then the edit was reverted.
+    // that only caps max-width:100% would squash the image's aspect ratio.
     [Fact]
     public void Never_keeps_height_on_an_image()
     {

@@ -29,9 +29,8 @@ watch(() => props.open, (isOpen) => {
   alt.value = props.alt
 })
 
-// alt="" is the formal HTML way to mark an image as decorative, not a missing value -- there is
-// no validation here, unlike RichTextLinkDialog's href field. Any string the field holds,
-// including an empty one, is a legitimate value to submit.
+// No validation, unlike RichTextLinkDialog's href field: alt="" is the formal HTML way to mark an
+// image as decorative, so an empty value is a legitimate submission, not an empty-input error.
 function submit(): void {
   emit('submit', alt.value)
   emit('update:open', false)
@@ -47,10 +46,8 @@ defineExpose({ alt, submit })
         <DialogTitle>{{ t('fields.richtext.altDialogTitle') }}</DialogTitle>
         <!--
           Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
-          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
-          dialog without one leaves assistive tech following a dangling reference, and leaves a
-          console warning in every fork that opens it. The text says what the dialog is for, which
-          the title alone does not.
+          whether or not one is rendered, so a dialog without one leaves assistive tech following
+          a dangling reference (and warns on mount).
         -->
         <DialogDescription>{{ t('fields.richtext.altDialogDescription') }}</DialogDescription>
       </DialogHeader>
