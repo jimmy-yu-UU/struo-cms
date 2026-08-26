@@ -946,14 +946,24 @@ defineExpose({ editor, insertImage })
    component and reconstructed ResizableNodeView's real container/wrapper/img/handle DOM shape in
    headless Chromium (this repo's own @playwright/test), inside both a plain fixed-width column
    and the real `.ProseMirror`/`prose` column (~603px, matching this editor's own default
-   typography). At a 2000px-wide drag, container/wrapper/img/handle all measured bounded to the
-   column in every configuration tried, including with this max-width rule removed entirely --
-   this session's own measurement did not reproduce an overflow past the column from this rule's
-   absence. min-width: 0 is added on the wrapper below anyway, defensively: it closes a distinct,
-   well-established flex-layout mechanism (a flex item's own automatic minimum size, which can
-   floor a replaced element's flex item at its intrinsic/specified size and let it overflow a
-   sized ancestor) that this session's own probe did not happen to trigger, but that is cheap
-   insurance against if some other browser, aspect ratio, or future edit does.
+   typography). Re-measured a second time after a follow-up review reported the opposite result
+   (container clamped but wrapper/img/handle overflowing to the dragged width) for this exact
+   configuration: rebuilt the CSS fresh, read the scope hash out of that fresh file rather than
+   assuming one (a stale hash was the review's own suspected cause of a wrong measurement, on
+   either side), and added a getComputedStyle liveness check confirming the harness's rules
+   actually matched before trusting any result from it. Neutralized this max-width rule alone, the
+   wrapper's own min-width: 0 alone, and both together (down to literally the pre-any-of-these-
+   fixes state) -- confirmed via getComputedStyle each time that the neutralizing override had
+   actually taken effect. In every one of those configurations, at a 2000px-wide drag,
+   container/wrapper/img/handle all still measured bounded to the column in this session's own
+   harness. This still disagrees with the review's own reported numbers for the neutralized cases;
+   that disagreement is unresolved, reported as such rather than picked one way, and needs a human
+   at a live browser (not a static reconstruction on either side) to settle. min-width: 0 stays on
+   the wrapper below regardless -- it closes a real, well-established flex-layout mechanism (a flex
+   item's own automatic minimum size, which can floor a replaced element's flex item at its
+   intrinsic/specified size and let it overflow a sized ancestor) that this session's own harness
+   did not happen to trigger on either attempt, but that is cheap insurance if some other browser,
+   aspect ratio, real (non-static-harness) rendering path, or future edit does.
    */
 
 .rich-text__content :deep([data-resize-container].ProseMirror-selectednode) {
