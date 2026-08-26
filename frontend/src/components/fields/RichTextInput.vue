@@ -638,12 +638,12 @@ defineExpose({ editor, insertImage })
    `thead th strong`'s `color: inherit`) -- only the row- and cell-level treatment that governs the
    header row's own appearance.
    Scoped to the first row, not every `th`: the server only wraps a first row whose cells are ALL
-   `th` (see the sanitizer's header-row normalization). A header row anywhere else -- reachable from the table context menu, since
-   prosemirror-tables' toggleHeaderRow toggles whatever row the caret is in, not row 0 -- stays
-   `tbody > th` once published, where typography's `thead th` matches nothing. Styling it here too
-   would make the editor lie about that: it would show padded, bold, bottom-aligned cells for a row
-   that renders unstyled once published. Mirroring the server's own condition keeps the editor
-   truthful instead. */
+   `th` (see the sanitizer's header-row normalization). A header row anywhere else -- reachable
+   from the table context menu, since prosemirror-tables' toggleHeaderRow toggles whatever row the
+   caret is in, not row 0 -- stays `tbody > th` once published, where typography's `thead th`
+   matches nothing. Styling it here too would make the editor lie about that: it would show padded,
+   bold, bottom-aligned cells for a row that renders unstyled once published. Mirroring the server's
+   own condition keeps the editor truthful instead. */
 .rich-text__content :deep(.ProseMirror tbody tr:first-child:not(:has(td))) {
   border-bottom-color: var(--tw-prose-th-borders);
 }

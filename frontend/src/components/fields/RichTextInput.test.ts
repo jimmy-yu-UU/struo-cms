@@ -1320,9 +1320,9 @@ describe('RichTextInput', () => {
     container.remove()
   })
 
-  // BubbleMenuPlugin arms `preventHide` on its own
-  // mousedown, which swallows the very next blur, so the dialog's autofocus stealing DOM focus from
-  // the editor would not, on its own, hide this menu -- it would linger beside the open dialog.
+  // BubbleMenuPlugin arms `preventHide` on its own mousedown, which swallows the very next blur, so
+  // the dialog's autofocus stealing DOM focus from the editor would not, on its own, hide this
+  // menu -- it would linger beside the open dialog.
   // A bare VTU `.trigger('click')` dispatches only a 'click' event, no 'mousedown' -- so it does
   // NOT arm preventHide, and the resulting blur hides the menu on its own regardless of whether
   // openLinkDialog's hide() call exists at all (confirmed: deleting that call left this test green).
