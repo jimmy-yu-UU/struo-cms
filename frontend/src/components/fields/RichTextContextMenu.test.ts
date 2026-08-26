@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import { defineComponent, h, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import { IN_TABLE_ACTIONS } from './richTextTableActions'
@@ -116,7 +117,64 @@ describe('RichTextContextMenu', () => {
   it('renders no items at all when target is null', async () => {
     w = build(null)
     await w.find('.target').trigger('contextmenu')
+    // Positive anchor first: the menu itself did open (its content region is present), so the
+    // absence checks below mean "target: null renders zero items", not "the menu never opened".
+    expect(w.find('[data-slot="context-menu-content"]').exists()).toBe(true)
     expect(w.findAll('[data-cmd]')).toHaveLength(0)
     expect(w.find('[role="separator"]').exists()).toBe(false)
+  })
+})
+
+// Mirrors RichTextInput.vue's real shape: a capture-phase listener on a STRICT ANCESTOR of reka's
+// own trigger element decides `target` for the event about to be dispatched (RichTextInput.vue
+// flips it based on isInEditorTable/isEditorImage; here it is flipped directly, since only the
+// TIMING question is under test, not the routing predicate). `deferred` selects between flipping
+// synchronously in that same capture-phase handler, and flipping in a macrotask (`setTimeout`)
+// queued from it.
+function buildTimingHarness(deferred: boolean) {
+  return defineComponent({
+    setup() {
+      const target = ref<'table' | 'image'>('table')
+      function flipToImage(): void { target.value = 'image' }
+      function onCapture(): void {
+        if (deferred) setTimeout(flipToImage, 0)
+        else flipToImage()
+      }
+      return () => h('div', { onContextmenuCapture: onCapture }, [
+        h(RichTextContextMenu, { target: target.value }, {
+          default: () => h('div', { class: 'target' }, 'cell'),
+        }),
+      ])
+    },
+  })
+}
+
+// This pair guards the Step 1 finding recorded in RichTextContextMenu.vue's own comment above
+// `target`: content renders behind reka's `open`, which only flips after
+// `ContextMenuTrigger.handleContextMenu`'s own `await nextTick()` -- so a `target` update queued
+// during the synchronous capture/bubble dispatch (this session verified both phases arrive in
+// time; capture is used below because that is what RichTextInput.vue actually does) is visible by
+// then, while one deferred past that microtask boundary is not. Without the second test, the
+// first would also pass if reka read `target` at some ARBITRARY later point, proving no deadline
+// exists at all -- the second is what makes the first mean anything.
+describe('target routing timing (guards the Step 1 finding pinned in RichTextContextMenu.vue)', () => {
+  it('a target flip during synchronous capture-phase dispatch IS reflected in the rendered content', async () => {
+    const hw = mount(buildTimingHarness(false), {
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await hw.find('.target').trigger('contextmenu')
+    expect(hw.find('[data-cmd="image-editAlt"]').exists()).toBe(true)
+    expect(hw.find('[data-cmd="table-addRowBefore"]').exists()).toBe(false)
+    hw.unmount()
+  })
+
+  it('a target flip deferred to a macrotask is NOT reflected -- content renders the stale value', async () => {
+    const hw = mount(buildTimingHarness(true), {
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await hw.find('.target').trigger('contextmenu')
+    expect(hw.find('[data-cmd="table-addRowBefore"]').exists()).toBe(true)
+    expect(hw.find('[data-cmd="image-editAlt"]').exists()).toBe(false)
+    hw.unmount()
   })
 })
