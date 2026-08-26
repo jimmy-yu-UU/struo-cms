@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import RichTextLinkDialog from './RichTextLinkDialog.vue'
 
@@ -163,5 +163,28 @@ describe('RichTextLinkDialog', () => {
     const buttons = w.findAll('button')
     expect(buttons.length).toBeGreaterThan(0)
     buttons.forEach((b) => expect(b.attributes('type')).toBe('button'))
+  })
+
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference. Asserting on
+  // reka's own warning rather than on our element is deliberate: reka owns the id wiring, so this
+  // pins the outcome it actually checks instead of our guess at how it wires it.
+  //
+  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
+  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
+  it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const container = document.body.appendChild(document.createElement('div'))
+    w = mount(RichTextLinkDialog, {
+      props: { open: true, href: 'https://example.com', newTab: false, canRemove: false },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+      attachTo: container,
+    })
+    await flushPromises()
+    const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
+    expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
+    container.remove()
   })
 })
