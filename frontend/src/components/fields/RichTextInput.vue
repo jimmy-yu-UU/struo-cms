@@ -676,10 +676,20 @@ defineExpose({ editor, insertImage })
 .rich-text__content :deep([data-resize-handle="bottom-right"]) { cursor: nwse-resize; }
 .rich-text__content :deep([data-resize-handle="top-right"]),
 .rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
+/* The auto margins are what put the four edge handles ON their edge midpoints, and removing them
+   stacks each one back onto a corner -- upstream positions an edge handle by writing BOTH ends of
+   its long axis inline (left:0 and right:0 for top/bottom, top:0 and bottom:0 for left/right),
+   intending it to span that edge, while the fixed 10px box above leaves the position
+   over-constrained. A browser resolves that by ignoring one end, so the handle collapses to the
+   start corner: measured against the compiled bundle, top/left/top-left all landed on the same
+   point and the field offered four grabbable positions, not eight. Auto margins on the
+   over-constrained axis are the one fix that does not need !important, because upstream sets the
+   insets inline (which outrank any stylesheet) but never sets a margin -- so an override of
+   left/right here is silently discarded, while this is not. Re-measured: 8 distinct positions. */
 .rich-text__content :deep([data-resize-handle="top"]),
-.rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; }
+.rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; margin-inline: auto; }
 .rich-text__content :deep([data-resize-handle="left"]),
-.rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; }
+.rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; margin-block: auto; }
 
 /* `.ProseMirror-selectednode` lands on the [data-resize-container] element, not on the wrapper or
    the <img>, because that container is what the node view returns as its `dom`.
