@@ -3,7 +3,7 @@ import { ref, computed, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { isAllowedLinkUrl } from '@/lib/linkUrl'
@@ -70,6 +70,14 @@ defineExpose({ href, newTab, canSubmit, touched, submit, remove })
     <DialogContent class="sm:max-w-sm">
       <DialogHeader>
         <DialogTitle>{{ t('fields.richtext.linkDialogTitle') }}</DialogTitle>
+        <!--
+          Not decoration. reka points DialogContent's aria-describedby at a DialogDescription id
+          whether or not one is rendered, and warns on mount when nothing carries that id -- so a
+          dialog without one leaves assistive tech following a dangling reference, and leaves a
+          console warning in every fork that opens it. The text says what the dialog is for, which
+          the title alone does not.
+        -->
+        <DialogDescription>{{ t('fields.richtext.linkDialogDescription') }}</DialogDescription>
       </DialogHeader>
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1.5">

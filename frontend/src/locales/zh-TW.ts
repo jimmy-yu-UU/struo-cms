@@ -314,6 +314,7 @@ export default {
       undo: '復原', redo: '重做',
       linkUrlLabel: '連結網址', insertImageTitle: '插入圖片',
       linkDialogTitle: '連結設定',
+      linkDialogDescription: '輸入這段文字要連往的網址。',
       linkOpenInNewTab: '在新分頁開啟', removeLink: '移除連結',
       linkUrlInvalid: '請輸入有效的 http(s) 或 mailto 連結。',
       table: '表格',

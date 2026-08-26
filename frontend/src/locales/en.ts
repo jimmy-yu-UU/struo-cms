@@ -316,6 +316,7 @@ export default {
       undo: 'Undo', redo: 'Redo',
       linkUrlLabel: 'Link URL', insertImageTitle: 'Insert image',
       linkDialogTitle: 'Link settings',
+      linkDialogDescription: 'Enter the address this text should link to.',
       linkOpenInNewTab: 'Open in new tab', removeLink: 'Remove link',
       linkUrlInvalid: 'Enter a valid http(s) or mailto link.',
       table: 'Table',
