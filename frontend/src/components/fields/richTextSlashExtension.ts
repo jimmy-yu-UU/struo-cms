@@ -5,16 +5,29 @@ import { buildSlashItems, filterSlashItems, type RichTextSlashItem } from './ric
 import type { RichTextCommandContext } from './richTextCommands'
 
 export interface RichTextSlashOptions {
-  context: RichTextCommandContext | null
+  context: RichTextCommandContext
   t: (key: string) => string
   idPrefix: string
+}
+
+// Only the image item reaches into the command context, so an unconfigured extension would
+// otherwise give a fork a menu whose other twelve items work and whose image item deletes the
+// typed query and then does nothing at all. No type can require the option -- Extension.configure()
+// takes a Partial -- so this default is the enforcement, and it names what is missing.
+const UNCONFIGURED_CONTEXT: RichTextCommandContext = {
+  openImageDialog: () => {
+    throw new Error('RichTextSlashExtension: configure({ context }) before using the image item')
+  },
+  openLinkDialog: () => {
+    throw new Error('RichTextSlashExtension: configure({ context }) before using the link item')
+  },
 }
 
 export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
   name: 'richTextSlash',
 
   addOptions() {
-    return { context: null, t: (key: string) => key, idPrefix: 'richtext-slash' }
+    return { context: UNCONFIGURED_CONTEXT, t: (key: string) => key, idPrefix: 'richtext-slash' }
   },
 
   addProseMirrorPlugins() {
@@ -22,9 +35,8 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
     const editor = this.editor as Editor
 
     // The same string RichTextSlashMenu.vue renders as each option's own id, rebuilt here rather
-    // than shared through a helper. The duplication is the contract, and each side pins it: a
-    // change to one alone fails there instead of quietly producing an aria-activedescendant that
-    // points at nothing.
+    // than shared through a helper. The duplication is the contract: this formula and the
+    // component's have to stay identical, or aria-activedescendant points at nothing.
     const optionId = (item: RichTextSlashItem): string => `${idPrefix}-${item.id}`
     // The listbox's own id. Free of collision only because no slash item is called 'listbox';
     // adding one would make this exact string an option id too.
@@ -35,14 +47,18 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
         editor,
         char: '/',
         // allowedPrefixes is deliberately left at its upstream default of [' ']: the rule that a
-        // slash triggers only at the start of a line or after a space is upstream's, not ours, and
-        // it is what keeps "and/or" and URL paths from opening the menu. One boundary comes with
-        // it that we inherit rather than choose -- upstream measures that prefix inside the single
-        // text node before the caret (findSuggestionMatch reads $position.nodeBefore.text), so a
-        // slash typed right after a mark ends, as in "<strong>bold</strong>/", sits at offset 0 of
-        // a fresh text node, has no prefix character to reject, and does open the menu.
-        allow: ({ editor: ed, state, range }) =>
-          ed.isEditable && state.doc.resolve(range.from).parent.type.name !== 'codeBlock',
+        // slash triggers only where a space or nothing at all precedes it is upstream's, not ours,
+        // and it is what keeps "and/or" and URL paths from opening the menu. "Nothing at all" is
+        // narrower than it sounds, and that is the boundary we inherit rather than choose --
+        // upstream measures the prefix inside the single text node before the caret
+        // (findSuggestionMatch reads $position.nodeBefore.text) and not the block, so a slash typed
+        // right after a mark ends, as in "<strong>bold</strong>/", sits at offset 0 of a fresh text
+        // node, has no prefix character to reject, and does open the menu. startOfLine stays false.
+        //
+        // No isEditable clause here: upstream's apply() wraps its whole match-and-allow block in
+        // one, so this is unreachable for a read-only editor and the check could never be false.
+        allow: ({ state, range }) =>
+          state.doc.resolve(range.from).parent.type.name !== 'codeBlock',
         // buildSlashItems runs per query rather than once when the extension is built: an
         // extension is constructed a single time with the editor, while the UI locale changes
         // during its lifetime and every label here comes from t().
@@ -56,7 +72,7 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
           // block under the caret, and those positions then no longer describe that text -- the
           // delete would take out part of what was just inserted.
           editor.chain().focus().deleteRange(range).run()
-          if (context) props.run(editor, context)
+          props.run(editor, context)
         },
         render: () => {
           let renderer: VueRenderer | null = null
@@ -75,8 +91,9 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
             const id = optionId(active)
             editor.view.dom.setAttribute('aria-activedescendant', id)
             // The menu is height-capped and scrolls, so without this the selection walks out of
-            // sight a few rows down -- on the editor's only keyboard-driven surface. jsdom
-            // implements no scrollIntoView at all, hence the optional call.
+            // sight a few rows down -- on the editor's only keyboard-driven surface. Called
+            // optionally because scrollIntoView is not universally implemented: bare jsdom has no
+            // such method.
             document.getElementById(id)?.scrollIntoView?.({ block: 'nearest' })
           }
 
@@ -148,6 +165,11 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
             onExit: () => {
               editor.view.dom.removeAttribute('aria-activedescendant')
               editor.view.dom.removeAttribute('aria-owns')
+              // Both calls are needed even though either one on its own already takes the menu out
+              // of the document. Only props.mount()'s returned function stops floating-ui's
+              // autoUpdate loop and removes the capture-phase document pointerdown listener
+              // upstream registers for dismissOnOutsideClick; only destroy() releases the Vue
+              // component instance.
               unmount?.(); unmount = null
               renderer?.destroy(); renderer = null
               commit = null
