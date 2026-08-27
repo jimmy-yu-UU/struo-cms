@@ -23,9 +23,12 @@ export interface RichTextCommand {
   // strikethrough/numberedList/horizontalRule/insertImage, so deriving the key would either be
   // wrong for these four or need its own exception list -- carrying the key plainly is simpler.
   labelKey: string
-  // RichTextBubbleMenu.vue filters on 'inline' to build its floating toolbar; the slash-command menu
-  // filters on 'block' and 'insert'. Defined once here so neither surface has to invent its own
-  // partition.
+  // Each value names a semantic slice of the registry, not a specific consumer: 'inline' is
+  // formatting marks (RichTextBubbleMenu.vue's floating toolbar filters on it), 'align' is
+  // paragraph alignment, 'block' is block-transform commands (list/quote/code), 'insert' adds new
+  // content (rule/image), 'history' is undo/redo. Headings and tables never entered this registry,
+  // so no group covers them. Defined once here so any surface that wants a slice filters on its
+  // group, the same way the bubble menu already does.
   group: RichTextCommandGroup
   icon: Component | null
   glyph: string | null

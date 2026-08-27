@@ -76,9 +76,11 @@ describe('richTextCommands', () => {
     expect(byId.get('image')).toBe('fields.richtext.insertImage')
   })
 
-  // RT-5's bubble menu reads 'inline'; RT-7's slash menu reads 'block' + 'insert' (plus headings and
-  // tables, which never entered this registry). Pinning the exact membership here is what makes a
-  // later batch's surface change visible in THIS file's diff.
+  // Each group is a semantic slice of the registry, not a claim about who currently reads it --
+  // 'inline' is what RichTextBubbleMenu.vue's floating toolbar filters on; the other groups are
+  // available to whichever surface wants that slice. Headings and tables never entered this
+  // registry, so no group covers them. Pinning the exact membership here is what makes any such
+  // surface's contract change visible in THIS file's diff.
   it('partitions the commands into the groups the later batches consume', () => {
     expect(idsOf('inline')).toEqual(['bold', 'italic', 'strike', 'subscript', 'superscript', 'link'])
     expect(idsOf('align')).toEqual(['alignLeft', 'alignCenter', 'alignRight', 'alignJustify'])
