@@ -354,13 +354,16 @@ text node 裡，而不是另外開一個新的，所以單靠這樣不會打開�
 `inclusive` 設定共同帶來的結果，不是 StruoCMS 這個 extension 加上去的規則。這個限制目前就是照現狀
 接受，沒有被繞掉——如果 fork 想要拿掉它，可以把 extension 自己的 `allow` callback 改成去檢查那個 `/`
 自己所在位置、在「區塊」裡前面那個字元（`state.doc.resolve(range.from)` 本身就同時帶著那個區塊，以及
-那個位置在裡面的 offset——`range.from` 是 `/` 所在的位置，不是游標，一旦後面開始輸入查詢字串，兩者
-就會分開），而不是只依靠上游那個以 text node 為範圍的前綴檢查，但 StruoCMS 目前沒有這樣做。
+那個位置在裡面的 offset）。這兩個位置永遠不會重合：從 `findSuggestionMatch` 自己的門檻
+（`from < $position.pos`）就看得出來，游標所在的位置是 `range.from + 1 + query.length`——至少比
+`/` 多一個位置，查詢字串打得愈多就差得愈多——所以一個區塊層級的檢查該測的是 `range.from` 前面那個
+字元，不是游標前面那個字元——而不是只依靠上游那個以 text node 為範圍的前綴檢查，但 StruoCMS 目前
+沒有這樣做。
 
 **項目清單從哪裡來。** `buildSlashItems`（`richTextSlashCommands.ts`）依序從三個來源組出這份選單：
 `richTextHeadings.ts` 的 `HEADING_LEVELS`（H2 到 H6）；`richTextCommands.ts` 指令登記表裡篩選出
 `group: 'block'` 的項目（項目符號清單、編號清單、引用區塊、程式碼區塊）；以及一個手寫的表格項目之
-後，同一份登記表篩選出 `group: 'insert'` 的項目（水平線、圖片）。這個表格項目——它插入的是一張帶
+後，同一份登記表篩選出 `group: 'insert'` 的項目（水平線、插入圖片）。這個表格項目——它插入的是一張帶
 表頭列的 3×3 表格，`insertTable({ rows: 3, cols: 3, withHeaderRow: true })`——必須手寫，是因為工具列
 上的表格控制項是一個帶尺寸的網格彈出視窗加上一個自訂尺寸對話框，不是單一一個指令，所以它從來沒有
 加進另外兩個來源讀取的那份登記表裡。這樣選單總共有十二個項目，順序固定為：標題 2 到標題 6、項目符號
