@@ -112,6 +112,14 @@ describe('RichTextInput', () => {
     vi.restoreAllMocks()
     // restoreMocks/clearMocks (vite.config.ts) reset spies but not the clock, so the tests that
     // call useBubbleMenuClock() below need this to hand the real one back.
+    //
+    // Ordering hazard if a clocked test ever mounts a component that cancels a timer on unmount:
+    // this suite-level hook runs BEFORE vitest.setup.ts's file-level enableAutoUnmount, so on a
+    // thrown assertion the unmount happens with the real clock already restored, and a
+    // clearTimeout() holding a fake id would hand the real clearTimeout a small integer that can
+    // collide with an unrelated live timer. RichTextInput.vue's onBeforeUnmount is that shape
+    // (debouncedLoadImages.cancel()); none of the clocked tests below reach it today, because none
+    // of them opens the image dialog whose search input arms that debounce.
     vi.useRealTimers()
     attachedContainers.splice(0).forEach((el) => { el.remove() })
     i18n.global.locale.value = 'en'
@@ -1248,24 +1256,40 @@ describe('RichTextInput', () => {
   // requestAnimationFrame (@tiptap/core's focus.ts), and the plugin's own focusHandler then
   // schedules a zero-delay setTimeout, so ~266ms of chained deferrals gate the assertion.
   //
-  // Advanced on vitest's fake clock, not waited out on the real one. A real-clock wait over that
-  // chain is only ever a margin, and a margin is a race: with this suite run concurrently against
-  // itself, so the timers land late, the previous real 300ms wait failed here repeatedly. Virtual
-  // time removes the margin instead of widening it. Same approach as RichTextBubbleMenu.test.ts,
-  // which states the rest of the constraint; the clock is installed per test rather than file-wide
-  // only because most tests in THIS file are not bubble-menu tests and wait on real
-  // requestAnimationFrames (waitForEditorReactivity), which a fake clock would strand.
+  // Advanced on vitest's fake clock, not waited out on the real one: a real-clock wait over that
+  // chain is only ever a margin, and a margin is a race a loaded machine can win. Virtual time
+  // removes the margin instead of widening it. Same approach as RichTextBubbleMenu.test.ts, which
+  // states the rest of the constraint. The clock is installed per test here, not file-wide as it
+  // is there, because the fourteen waitForEditorReactivity() call sites and three
+  // waitForEditorCreate() ones elsewhere in this file AWAIT a real frame or timer rather than
+  // advancing one, and a fake clock would strand every one of them.
   const BUBBLE_MENU_SETTLE_MS = 300
 
   // Call as the first statement of a test, before mount: the fake clock has to be in place before
-  // the editor schedules any of the deferrals above. vi.useRealTimers() runs in this describe's
-  // afterEach, so it is restored even when an assertion throws.
+  // the editor schedules any of the deferrals above, or they stay on the real clock,
+  // settleBubbleMenu() advances nothing, and the test is silently vacuous. The attached-host
+  // assertion is what enforces that ordering rather than merely documenting it -- every mount in
+  // this describe that the bubble menu needs goes through attachContainer(). vi.useRealTimers()
+  // runs in this describe's afterEach, so the clock is handed back even when an assertion throws.
   function useBubbleMenuClock(): void {
+    expect(attachedContainers).toHaveLength(0)
     vi.useFakeTimers()
   }
 
   async function settleBubbleMenu(): Promise<void> {
     await vi.advanceTimersByTimeAsync(BUBBLE_MENU_SETTLE_MS)
+    await flushPromises()
+  }
+
+  // The fake-clock counterpart of waitForEditorReactivity, for the clocked tests above: same two
+  // animation frames, advanced rather than awaited, since useBubbleMenuClock() put
+  // requestAnimationFrame on the virtual clock. Exactly two, not a blanket advance -- tiptap's
+  // reactive editor state is a customRef whose trigger() sits behind a nested double
+  // requestAnimationFrame (@tiptap/vue-3's useDebouncedRef), and an advance wider than that would
+  // stop discriminating a regression that stretched it.
+  async function advanceEditorReactivity(): Promise<void> {
+    vi.advanceTimersToNextFrame()
+    vi.advanceTimersToNextFrame()
     await flushPromises()
   }
 
@@ -1342,10 +1366,9 @@ describe('RichTextInput', () => {
     // Toggled ON, not on-and-off: a click that fired the command twice (once through each
     // surface) would leave this false instead.
     expect(vm.editor.isActive('bold')).toBe(true)
-    // settleBubbleMenu, not waitForEditorReactivity: useBubbleMenuClock() faked
-    // requestAnimationFrame too, so the frames that helper awaits only run when the virtual clock
-    // is advanced -- which advancing past the debounce window already does, several times over.
-    await settleBubbleMenu()
+    // advanceEditorReactivity, not waitForEditorReactivity: same two frames, but this test's clock
+    // is virtual, so they have to be advanced rather than awaited.
+    await advanceEditorReactivity()
     expect(w.get('.rich-text__toolbar [data-cmd="bold"]').attributes('data-active')).toBe('true')
 
     w.unmount()
@@ -1413,9 +1436,9 @@ describe('RichTextInput', () => {
     expect(document.body.contains(linkBtn)).toBe(false)
     w.findComponent(RichTextLinkDialog).vm.$emit('update:open', false)
     await nextTick()
-    // settleBubbleMenu, not waitForEditorReactivity: see the note in the double-fire test above --
-    // requestAnimationFrame is on the virtual clock here, so it has to be advanced, not awaited.
-    await settleBubbleMenu()
+    // advanceEditorReactivity, not waitForEditorReactivity: see the note in the double-fire test
+    // above -- requestAnimationFrame is on the virtual clock here, so it is advanced, not awaited.
+    await advanceEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
   })
