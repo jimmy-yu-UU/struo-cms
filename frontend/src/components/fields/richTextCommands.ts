@@ -5,7 +5,7 @@ import {
   Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
 } from '@lucide/vue'
 
-export type RichTextCommandGroup = 'inline' | 'block' | 'insert' | 'history'
+export type RichTextCommandGroup = 'inline' | 'align' | 'block' | 'insert' | 'history'
 
 export interface RichTextCommandContext {
   openImageDialog: () => void
@@ -23,8 +23,9 @@ export interface RichTextCommand {
   // strikethrough/numberedList/horizontalRule/insertImage, so deriving the key would either be
   // wrong for these four or need its own exception list -- carrying the key plainly is simpler.
   labelKey: string
-  // Not consumed by any production code in this batch. It is the surface RT-5 (inline) and RT-7
-  // (block + insert) read from, defined once here so neither batch has to invent its own partition.
+  // RichTextBubbleMenu.vue filters on 'inline' to build its floating toolbar; the slash-command menu
+  // filters on 'block' and 'insert'. Defined once here so neither surface has to invent its own
+  // partition.
   group: RichTextCommandGroup
   icon: Component | null
   glyph: string | null
@@ -70,7 +71,7 @@ function align(
 ): RichTextCommand {
   const id = `align${dir.charAt(0).toUpperCase()}${dir.slice(1)}`
   return {
-    id, labelKey: `fields.richtext.${id}`, group: 'block', icon, glyph: null, glyphTag: null,
+    id, labelKey: `fields.richtext.${id}`, group: 'align', icon, glyph: null, glyphTag: null,
     isActive: (editor) => editor.isActive({ textAlign: dir }),
     run: (editor) => { editor.chain().focus().setTextAlign(dir).run() },
   }
