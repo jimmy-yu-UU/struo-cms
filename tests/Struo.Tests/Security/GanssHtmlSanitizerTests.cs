@@ -402,4 +402,82 @@ public class GanssHtmlSanitizerTests
         _s.Sanitize("<p>plain</p>").Should().Be("<p>plain</p>");
         _s.Sanitize("<table></table>").Should().Be("<table></table>");
     }
+
+    // Ganss.Xss does not validate attribute VALUES once a name is on AllowedAttributes -- with
+    // "width" allowlisted and no PostProcessNode handler, width="abc" survives untouched. The
+    // integer-only shape check in that handler is the only thing rejecting a malformed width.
+    [Fact]
+    public void Keeps_integer_width_on_an_image()
+    {
+        var clean = _s.Sanitize("<img src=\"https://e.com/a.png\" width=\"480\">");
+        clean.Should().Be("<img src=\"https://e.com/a.png\" width=\"480\">");
+    }
+
+    // Anything that is not exactly one-to-five ASCII digits with no leading zero is rejected,
+    // including shapes a naive int.TryParse would accept (leading whitespace). src surviving
+    // alongside the stripped width proves this is attribute-level stripping, not the <img> being
+    // dropped.
+    //
+    // The trailing-newline rows catch the .NET regex pitfall the pattern's \A/\z anchors exist for:
+    // under ^...$ they all pass, because $ also matches before one trailing '\n' and AngleSharp
+    // collapses \r\n to \n before the value reaches the handler.
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("40%")]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("480.5")]
+    [InlineData(" 480")]
+    [InlineData("")]
+    [InlineData("100000")]
+    [InlineData("480\n")]
+    [InlineData("480\r\n")]
+    [InlineData("480\r")]
+    [InlineData("480&#10;")]
+    public void Strips_non_integer_width_on_an_image(string widthValue)
+    {
+        var clean = _s.Sanitize($"<img src=\"https://e.com/a.png\" width=\"{widthValue}\">");
+        clean.Should().NotContain("width");
+        clean.Should().Contain("src=\"https://e.com/a.png\"");
+    }
+
+    // width surviving on anything other than <img> would let a fork's non-image renderer (a <td>,
+    // a <table>, a plain paragraph) receive a raw author-controlled pixel width it was never
+    // designed to defend against -- the img-only shape check is not enough by itself.
+    //
+    // The <td> case must stay wrapped in a real <table><tbody><tr>: a bare "<td>" is a parse error
+    // in body-context fragment parsing, so AngleSharp never materializes the element and that row
+    // passes even with the non-image width strip deleted.
+    [Theory]
+    [InlineData("<table><tbody><tr><td width=\"200\">c</td></tr></tbody></table>")]
+    [InlineData("<table width=\"100%\"></table>")]
+    [InlineData("<p width=\"480\">t</p>")]
+    [InlineData("<span width=\"480\">s</span>")]
+    [InlineData("<a href=\"https://e.com\" width=\"480\">l</a>")]
+    public void Strips_width_from_non_image_elements(string html)
+    {
+        _s.Sanitize(html).Should().NotContain("width");
+    }
+
+    // Pins the deliberate absence of height from AllowedAttributes: a fork's frontend is not
+    // guaranteed to pair a stored width with height:auto, and width+height together on a container
+    // that only caps max-width:100% would squash the image's aspect ratio.
+    [Fact]
+    public void Never_keeps_height_on_an_image()
+    {
+        var clean = _s.Sanitize("<img src=\"https://e.com/a.png\" width=\"480\" height=\"320\">");
+        clean.Should().Contain("width=\"480\"");
+        clean.Should().NotContain("height");
+    }
+
+    // Regression lock: the new width branch must not shadow the existing anchor-vs-non-anchor
+    // target handling. An <img> is not an IHtmlAnchorElement, so it must still fall into the
+    // "strip target" side of the handler.
+    [Fact]
+    public void Still_removes_target_from_an_image()
+    {
+        var clean = _s.Sanitize("<img src=\"https://e.com/a.png\" target=\"_blank\">");
+        clean.Should().NotContain("target");
+    }
+
 }

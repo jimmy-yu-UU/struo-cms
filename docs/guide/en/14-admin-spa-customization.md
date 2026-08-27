@@ -176,6 +176,166 @@ Referer header on that click. There is no backfill — the same position this ch
 `<thead>` above — so a fork with a large body of pre-existing links should expect this `rel` to
 disappear gradually, one save at a time, not all at once.
 
+### Resizing images in the editor
+
+Resizing an inserted image in the `richText` field takes two steps: select the image — clicking it
+is enough — and then drag one of the eight handles that appear, the four corners plus the four edge
+midpoints. The handles are shown only while that image is the editor's current selection; with the
+caret anywhere else the image carries none. That gate is this repo's CSS rather than upstream
+behavior, and the rule doing it is described below. The dragging itself is not a bespoke node view
+StruoCMS wrote: it comes from upstream, `@tiptap/extension-image`'s own `resize` option configured
+on the `Image` extension in `RichTextInput.vue` (`resize: { enabled: true, minWidth: 40,
+alwaysPreserveAspectRatio: true, directions: [...all eight] }`), which swaps in `@tiptap/core`'s
+`ResizableNodeView` for every image node. `alwaysPreserveAspectRatio: true` locks every drag to the
+image's own ratio — upstream's own default only does that while Shift is held — and it applies the
+same way to all eight handles: which one is grabbed only decides which axis is primary for the ratio
+math, not whether the ratio holds. It does not decide anything about position, either:
+`ResizableNodeView` never repositions the element for any handle, so every drag grows or shrinks the
+image from its top-left corner — dragging the left handle inward does not pin the right edge in
+place and grow leftward the way a design tool's handles usually do. `minWidth` keeps a handle from
+shrinking the image into an unusably small target.
+
+An image can never be dragged past the width of the field's own text-measure column — the rendered
+(and, once released, the stored) width clamps there. Measured in the running admin: with the inline
+width forced to 2000px inside a ~603px column, the image renders at 603px and `offsetWidth`, which is
+the number `ResizableNodeView` commits, reads 603. What does the clamping is Tailwind preflight's own
+`img { max-width: 100% }`, not anything `RichTextInput.vue` declares — a fork that drops preflight, or
+overrides that rule for editor content, loses the clamp and will store the dragged number instead.
+Also measured, for a fork that goes that way: the eight resize handles travel out with the image,
+past the `overflow-x-clip` `AppShell` puts on the content column, so an over-dragged image can no
+longer be dragged back. Left in place, this is ordinary WYSIWYG behavior for a field with a fixed
+reading measure, not a bug: what the editor shows during a drag is what publishing will render.
+
+The consequence of that clamp, for a fork, is that a stored `width` can never exceed the admin's own
+prose measure — about 603px at the default 65ch. If your published article template is wider than the
+admin's reading measure, there is no editor path to an image wider than that: a user cannot drag one
+past the column, so the only ways to get one are to widen the editor's own measure or to write the
+`width` attribute directly through the API.
+
+What this repo supplies is the handles' appearance, when they are shown, and part of their
+positioning. `ResizableNodeView` attaches every handle from its constructor and removes them only
+when the editor stops being editable — absolute positioning plus a `data-resize-handle` attribute —
+but sets no size, background, or cursor of its own, so without CSS every handle exists in the DOM
+but is 0×0, invisible, and unclickable. `RichTextInput.vue`'s own `<style scoped>` block supplies
+that styling, keyed off the `[data-resize-handle]` attribute selector (size, background color,
+border radius, a cursor for each of the eight directions). Three rules in that block do more than
+decorate, and a fork should know what each one holds up.
+
+The first hides every handle whose `[data-resize-container]` does not carry
+`.ProseMirror-selectednode` — the selection prerequisite described above. It is `display: none` and
+not a transparency, deliberately: the hidden state has to be out of hit testing and not merely
+invisible, and removing the box is what achieves that — a handle that shows nothing but still
+answers a hit test at its own centre would be worse than the visual defect. Delete this rule and
+every image in an editable field goes back to carrying eight live handles whatever the caret is
+doing.
+
+The second gives the four edge handles an `auto` margin on their long axis, which is what places
+them on their midpoints. That margin is not cosmetic: upstream writes both ends of an edge handle's
+long axis as inline styles, so removing it collapses each of those four onto the corner beside it
+and the field offers four grabbable positions instead of eight.
+
+The third pulls each handle outward by half its own size, so it straddles the edge it grabs rather
+than floating inside the picture — a negative margin of `calc(var(--resize-handle-size) / -2)` on
+whichever sides that handle is pinned to. Corner handles take it on both axes; edge handles take it
+only on their short axis. Writing one on an edge handle's long axis instead would replace the `auto`
+margin from the previous rule and collapse that handle back onto a corner, which is the trap worth
+naming because the edit looks symmetric.
+
+Selecting the image also draws an outline, from a separate rule on
+`[data-resize-container].ProseMirror-selectednode`. A fork that wants different handle styling edits
+those rules, in that file — there is no separate handle component to swap, and the auto margins have
+to survive the edit.
+
+One coupling to know about before editing that style block: it also hard-codes a `2em` vertical
+margin on `[data-resize-container]`, and zeroes the margin `@tailwindcss/typography` puts on the
+`<img>` itself. That has to happen so the handles sit on the image's own corners instead of on a box
+inflated by the image's margin, and `2em` is the value the plugin's `base` modifier uses — which is
+what a bare `prose` class resolves to, and what the editor applies today. Switching the editor to a
+sized variant (`prose-sm`, `prose-lg`, …) changes the plugin's own image margin but not this
+hard-coded number, so the two silently drift apart and the editor starts showing image spacing that
+published output does not.
+
+Resizing is pointer-only, and there is no keyboard equivalent anywhere in the field. The selection
+step is not what shuts a keyboard user out — arrowing onto the image from the paragraph above does
+put it in the node-selected state and the handles do appear, verified in the running admin. The drag
+is. The handles are drag targets and nothing else — upstream binds `mousedown` and `touchstart` on
+each one, and the document-level `keydown` it adds exists only to track the Shift key during a drag
+already in flight — and neither the image context menu below, which offers only *Edit alt text* and
+*Delete image*, nor any dialog in this field accepts a width. A keyboard-only user therefore cannot
+set an image width at all. The handles are also small: 10px square (`0.625rem`), below the 24×24
+CSS-pixel minimum WCAG 2.2 SC 2.5.8 (Target Size (Minimum), level AA) asks for, and with no keyboard
+or menu equivalent there is nothing to fall back on; touch users get that same 10px target.
+Straddling the edge does not change that number — the box is the same size wherever it is centered —
+but it does move half of it off the picture, so about 5px of each target overlaps the image and the
+other 5px sits on the page beside it. Both are stated limitations of what this template ships rather
+than properties a fork has to keep. A fork can widen the grab area without changing the visual — a
+transparent `::before` on `[data-resize-handle]`, sized up and centered on the 10px dot — and should
+check the result against a small image, since every handle is centered on the image's own edges and
+enlarged zones have nothing keeping them apart once the image itself is not much bigger than they
+are. A fork can also add a width control to the image context menu. Neither substitutes for the
+other: enlarging a target does nothing for a keyboard user, and a menu control does nothing for
+target size.
+
+`ResizableNodeView` also wraps the `<img>` in two container `<div>`s (`[data-resize-container]` around
+`[data-resize-wrapper]`, with the handle elements as siblings of the `<img>` inside the wrapper) to
+host the handles and manage layout during a drag. This exists only inside the live ProseMirror view —
+never in `getHTML()`'s output, and never in the HTML that reaches the sanitizer or gets stored. A
+stored `RichText` value's `<img>` is never wrapped.
+
+Dragging a handle also writes `height` onto the image node's own attributes, because upstream's
+`onCommit` always writes both dimensions after a resize. `RichTextInput.vue` keeps that out of stored
+HTML by overriding `height`'s `addAttributes()` with `rendered: false`, so `getHTML()` never
+serializes it. This is not a duplicate of the sanitizer's own `height` strip (chapter 5): that guards
+every input path against an attacker-controlled `height`, while this override exists so `getHTML()`'s
+output already matches what the sanitizer would produce anyway — without it, the field's own
+external-change comparison would see a phantom `height`-only difference on every update and reset the
+cursor for no reason.
+
+One upstream defect inside that node view is worth naming, because it looks alarming when found by
+accident. `ResizableNodeView` registers an editor `'update'` listener in its constructor as
+`this.editor.on('update', this.handleEditorUpdate.bind(this))` and removes one in `destroy()` as
+`this.editor.off('update', this.handleEditorUpdate.bind(this))` — read in the installed
+`@tiptap/core@3.30.2`, `src/lib/ResizableNodeView.ts`. Every `.bind()` call returns a new function
+object, and `off` filters the callback list by identity (`src/EventEmitter.ts`), so the listener it
+removes is never the one the constructor added: each image node view the editor creates leaves one
+`'update'` listener behind for the rest of that editor's life. A fork does not need to act on this.
+The accumulation is bounded by the editor rather than by the session — `Editor.destroy()` calls
+`removeAllListeners()`, which clears the callback map outright, and `RichTextInput.vue` destroys its
+editor in `onBeforeUnmount` — and a stale listener does nothing observable in the meantime, because
+`handleEditorUpdate` returns immediately unless the editable flag has changed and otherwise only
+touches its own, already-detached container. The one way to make it matter is to stop destroying the
+editor on unmount, which would turn this and every other listener the editor holds into a real leak.
+
+Right-clicking inside this field now opens one of two context menus depending on what was clicked. A
+right-click landing directly on an `<img>` opens an image menu (edit alt text, delete image); a
+right-click anywhere else inside a table opens the table's own right-click menu. The image check runs
+first, so an image sitting inside a table cell still gets the image menu, not the cell's. Both menus
+are the same `RichTextContextMenu.vue` component rendering a different action list — the image actions
+themselves are declared in `richTextImageActions.ts`, mirroring `richTextTableActions.ts` for tables.
+
+One more detail worth recording explicitly, because it looks like an oversight otherwise: TipTap's
+table extension renders a `<colgroup>` for every table this editor can produce, and
+`GanssHtmlSanitizer` strips it every time, because `colgroup` was never added to the tag allowlist.
+Under the configuration used here `renderHTML` returns `["table", attrs, colgroup, ["tbody", 0]]`.
+That shape is not literally unconditional — read in the installed `@tiptap/extension-table@3.30.2`,
+the return is wrapped in a `<div class="tableWrapper">` when the extension's `renderWrapper` option
+is on, and its `createColGroup` helper returns no colgroup at all for a table node with no first
+row — but both conditions are settled here: `renderWrapper` defaults to `false` and is left there,
+and the `table` node's own content expression is `tableRow+`, so a table in the document always has
+a first row. The table extension is
+configured with `resizable: false`, so this editor never lets a user set a per-column width in the
+first place; the `<colgroup>` TipTap always emits carries no information under that configuration, so
+losing it costs nothing. This is a deliberate acceptance, not a bug to fix by allowlisting
+`colgroup` — doing so would only start storing width data this editor has no way to produce
+meaningfully.
+
+That `renderWrapper` option deserves one explicit warning, because turning it on silently destroys
+content rather than merely changing markup. With `renderWrapper: true`, `getHTML()` emits a
+`<div class="tableWrapper">` around every table; `div` is not in `GanssHtmlSanitizer`'s `AllowedTags`,
+and the sanitizer leaves `KeepChildNodes` at its default `false`, which drops a disallowed element
+together with its entire subtree. Every table in the value would therefore be removed on save, not
+unwrapped. Leave `renderWrapper` off, or allowlist `div` first.
+
 ## Restyling a vendored `ui/` component
 
 **`frontend/src/components/ui/` is vendored, read-only generated output — never edit it, and never

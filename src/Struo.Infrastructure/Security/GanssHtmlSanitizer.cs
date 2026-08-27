@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Ganss.Xss;
 using Struo.Application.Security;
 
@@ -13,10 +14,25 @@ namespace Struo.Infrastructure.Security;
 /// for the table-header-row case. An anchor's <c>rel</c> is never taken from the input: it is
 /// derived from <c>target</c> (a surviving anchor whose <c>target="_blank"</c> and whose <c>href</c>
 /// was itself kept gets exactly <c>rel="noopener"</c>; anything else gets neither), so the one
-/// writer of that attribute is this class, not whatever produced the HTML.
+/// writer of that attribute is this class, not whatever produced the HTML. The same reasoning
+/// applies to <c>width</c>: <see cref="HtmlSanitizer.AllowedAttributes"/> has no per-tag concept,
+/// so an attribute that should only mean something on one tag has to be narrowed in this handler,
+/// not in that list. An image's <c>width</c> survives only as a bare pixel count; every other
+/// element loses it unconditionally, allowlisted or not. <c>height</c> is never allowlisted at
+/// all: a fork's front end is not guaranteed to pair a stored width with CSS <c>height: auto</c>,
+/// and shipping both dimensions into a renderer that only caps <c>max-width: 100%</c> would
+/// squash the image's aspect ratio.
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
+    // One to five ASCII digits, no leading zero: a bare pixel count and nothing else -- no unit, no
+    // percentage, no decimal, no surrounding whitespace. \A and \z, never ^ and $: in .NET, $
+    // (without RegexOptions.Multiline) also matches immediately before a single trailing '\n', so
+    // ^[1-9][0-9]{0,4}$ would accept "480\n" -- reachable from an attribute value written as
+    // "480&#10;".
+    private static readonly Regex AllowedWidthPattern =
+        new(@"\A[1-9][0-9]{0,4}\z", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
+
     private readonly HtmlSanitizer _sanitizer;
 
     public GanssHtmlSanitizer()
@@ -34,7 +50,9 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
             _sanitizer.AllowedTags.Add(tag);
 
         _sanitizer.AllowedAttributes.Clear();
-        foreach (var attr in new[] { "href", "src", "alt", "rel", "target", "style" })
+        // width is narrowed to <img>-only, integer-only in PostProcessNode below; height is
+        // deliberately never added (see the class summary).
+        foreach (var attr in new[] { "href", "src", "alt", "rel", "target", "style", "width" })
             _sanitizer.AllowedAttributes.Add(attr);
 
         // data-file-id: allow data-* attributes (inert; carry no script surface).
@@ -74,6 +92,11 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         // them (e.g. <p target="_blank">) is inert today, but "target" being allowlisted globally
         // would let it ride through the day AllowedTags grows a tag that gives it meaning -- so it is
         // stripped from every element except the anchor, unconditionally.
+        //
+        // width gets the same global-allowlist -> per-tag narrowing treatment (see the class
+        // summary). It MUST stay a separate top-level if/else-if rather than extra branches on the
+        // anchor chain: folded in, an <img> would stop at the "not an anchor" branch and never
+        // reach the width check at all.
         _sanitizer.PostProcessNode += (_, e) =>
         {
             if (e.Node is AngleSharp.Html.Dom.IHtmlAnchorElement a)
@@ -91,6 +114,19 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
             else if (e.Node is AngleSharp.Dom.IElement nonAnchor)
             {
                 nonAnchor.RemoveAttribute("target");
+            }
+
+            if (e.Node is AngleSharp.Html.Dom.IHtmlImageElement img)
+            {
+                var width = img.GetAttribute("width");
+                if (width is null || !AllowedWidthPattern.IsMatch(width))
+                {
+                    img.RemoveAttribute("width");
+                }
+            }
+            else if (e.Node is AngleSharp.Dom.IElement nonImage)
+            {
+                nonImage.RemoveAttribute("width");
             }
         };
 
