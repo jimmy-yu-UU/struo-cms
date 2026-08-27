@@ -347,10 +347,6 @@ export default {
       selectionToolbar: 'Text formatting',
       slashMenu: 'Insert block',
       slashNoResults: 'No matching commands',
-      // Distinct from horizontalRule (the toolbar button's tooltip): that string lowercases to
-      // something containing 'ul', which would surface it for a slash query meant to reach only
-      // bulletList's 'ul' alias.
-      slashDivider: 'Divider',
     },
   },
   filterBuilder: {

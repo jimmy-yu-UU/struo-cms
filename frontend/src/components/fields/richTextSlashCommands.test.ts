@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import en from '../../locales/en'
+import { RICH_TEXT_COMMANDS } from './richTextCommands'
 import { buildSlashItems, filterSlashItems } from './richTextSlashCommands'
 
 function resolve(key: string): string {
@@ -49,15 +50,31 @@ describe('filterSlashItems', () => {
 
   it('matches an alias', () => {
     expect(filterSlashItems(items, 'h3').map((i) => i.id)).toEqual(['heading3'])
-    expect(filterSlashItems(items, 'ul').map((i) => i.id)).toEqual(['bulletList'])
+    // Not a full-equality check: 'ul' is also a genuine substring of hr's own 'rule' alias (and of
+    // hr's "Horizontal rule" label), so both items legitimately match. What matters for a
+    // candidate list is that the item the alias exists for ranks first.
+    expect(filterSlashItems(items, 'ul')[0]?.id).toBe('bulletList')
   })
 
-  it('matches the translated label, case-insensitively', () => {
-    expect(filterSlashItems(items, 'BLOCKQUOTE').map((i) => i.id)).toEqual(['blockquote'])
-  })
-
+  // 'ockquote' is a strict interior substring of blockquote's own label and alias (neither starts
+  // with it) -- unlike the earlier 'quote' query this replaces, which is also a full alias, so a
+  // prefix-only implementation would have passed it undetected.
   it('matches a substring, not only a prefix', () => {
-    expect(filterSlashItems(items, 'quote').map((i) => i.id)).toEqual(['blockquote'])
+    expect(filterSlashItems(items, 'ockquote').map((i) => i.id)).toEqual(['blockquote'])
+  })
+
+  // 'insert' appears only inside image's label ("Insert image") and in no item's alias list, so
+  // this only passes if filterSlashItems' label branch runs -- every other test in this file
+  // happens to resolve through the alias branch instead.
+  it('matches on label text alone, with no alias involved', () => {
+    expect(filterSlashItems(items, 'insert').map((i) => i.id)).toEqual(['image'])
+  })
+
+  // Reuses the same alias-free word as above, uppercased, so this pins the label branch's own
+  // case-insensitivity specifically -- 'BLOCKQUOTE' would have resolved through the alias
+  // 'blockquote' instead and proven nothing about the label branch.
+  it('matches the translated label, case-insensitively', () => {
+    expect(filterSlashItems(items, 'INSERT').map((i) => i.id)).toEqual(['image'])
   })
 
   // The whole point of the alias table: a zh-TW operator has just typed "/" and the IME is still
@@ -88,11 +105,23 @@ describe('item commands', () => {
     const editor = { chain: () => chain } as never
     items.find((i) => i.id === 'table')!.run(editor, {} as never)
     expect(chain.insertTable).toHaveBeenCalledWith({ rows: 3, cols: 3, withHeaderRow: true })
+    expect(run).toHaveBeenCalled()
+  })
+
+  it('inserts a horizontal rule', () => {
+    const run = vi.fn()
+    const chain = { focus: () => chain, setHorizontalRule: vi.fn(() => chain), run }
+    const editor = { chain: () => chain } as never
+    items.find((i) => i.id === 'hr')!.run(editor, {} as never)
+    expect(chain.setHorizontalRule).toHaveBeenCalled()
+    expect(run).toHaveBeenCalled()
   })
 
   it('reuses the registry command for an item derived from it', () => {
     const ctx = { openImageDialog: vi.fn(), openLinkDialog: vi.fn() }
     items.find((i) => i.id === 'image')!.run({} as never, ctx as never)
     expect(ctx.openImageDialog).toHaveBeenCalledTimes(1)
+    expect(items.find((i) => i.id === 'image')!.run)
+      .toBe(RICH_TEXT_COMMANDS.find((c) => c.id === 'image')!.run)
   })
 })
