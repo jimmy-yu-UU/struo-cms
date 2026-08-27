@@ -11,15 +11,18 @@ export interface RichTextSlashOptions {
 }
 
 // Only the image item reaches into the command context, so an unconfigured extension would
-// otherwise give a fork a menu whose other twelve items work and whose image item deletes the
-// typed query and then does nothing at all. No type can require the option -- Extension.configure()
-// takes a Partial -- so this default is the enforcement, and it names what is missing.
+// otherwise give a fork a menu where every other item works and the image item deletes the typed
+// query and then does nothing at all. No type can require the option -- Extension.configure() takes
+// a Partial -- so this default is the enforcement, and it names what is missing.
+//
+// openLinkDialog is here for the interface only: `link` is a group: 'inline' command and this menu
+// builds headings, 'block', 'insert' and table, so no slash item can reach it.
 const UNCONFIGURED_CONTEXT: RichTextCommandContext = {
   openImageDialog: () => {
     throw new Error('RichTextSlashExtension: configure({ context }) before using the image item')
   },
   openLinkDialog: () => {
-    throw new Error('RichTextSlashExtension: configure({ context }) before using the link item')
+    throw new Error('RichTextSlashExtension: configure({ context }) before opening the link dialog')
   },
 }
 
@@ -166,10 +169,15 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
               editor.view.dom.removeAttribute('aria-activedescendant')
               editor.view.dom.removeAttribute('aria-owns')
               // Both calls are needed even though either one on its own already takes the menu out
-              // of the document. Only props.mount()'s returned function stops floating-ui's
-              // autoUpdate loop and removes the capture-phase document pointerdown listener
-              // upstream registers for dismissOnOutsideClick; only destroy() releases the Vue
-              // component instance.
+              // of the document. props.mount()'s returned function is the only thing that stops
+              // floating-ui's autoUpdate loop AND removes the capture-phase document pointerdown
+              // listener upstream registers for dismissOnOutsideClick; destroy() is the only thing
+              // that releases the Vue component instance.
+              //
+              // Those two teardowns live in one closure upstream, and only the listener half can be
+              // asserted from jsdom -- floating-ui's loop is not observable there. So the autoUpdate
+              // teardown is pinned by coupling, not by an assertion of its own: if upstream ever
+              // splits the returned function in two, that half stops being covered.
               unmount?.(); unmount = null
               renderer?.destroy(); renderer = null
               commit = null

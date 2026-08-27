@@ -1684,6 +1684,30 @@ describe('RichTextInput', () => {
     expect(activeOption()?.textContent?.trim()).toBe(labels[0])
   })
 
+  // A tripwire on upstream, not a specification of ours. @tiptap/suggestion dispatches an
+  // intermediate update carrying items: [] before it awaits items(), so onUpdate's
+  // `selected >= items.length` guard fires on every keystroke and the selection returns to the top
+  // -- which is the behaviour a person expects, arrived at by accident. This fails if upstream ever
+  // skips that loading pass, or if anyone here sets initialItems or minQueryLength. The failure it
+  // guards is visible rather than silent (both data-active and aria-activedescendant follow the
+  // index, so a stale highlight is on screen), which is why a test is the whole remedy.
+  it('puts the selection back on the first option when the query changes', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor)
+    slashKey(w, 'ArrowDown')
+    slashKey(w, 'ArrowDown')
+    slashKey(w, 'ArrowDown')
+    expect(activeOption()?.textContent?.trim()).toBe('Heading 5')
+
+    editor.commands.insertContent('h')
+    await flushPromises()
+    // The narrowed list has to stay longer than the index we moved to, or the length guard would
+    // reset the selection on its own and this would prove nothing.
+    expect(slashOptions().length).toBeGreaterThan(3)
+    expect(activeOption()?.textContent?.trim()).toBe('Heading 2')
+  })
+
   it('runs the selected item on Enter and removes the typed query', async () => {
     const w = await mountSlash()
     const editor = editorOf(w)
