@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEditor, EditorContent, type Editor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -31,6 +31,7 @@ import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
 import { isInEditorTable, type TableAction } from './richTextTableActions'
 import { isEditorImage, type ImageAction } from './richTextImageActions'
 import { createDialogFocus } from './richTextDialogFocus'
+import { RichTextSlashExtension } from './richTextSlashExtension'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -167,6 +168,10 @@ const commandContext: RichTextCommandContext = {
   openLinkDialog,
 }
 
+// The slash menu mounts into document.body, outside this component's tree, so its option ids have
+// to be unique across every RichTextInput on the page for aria-activedescendant to resolve.
+const slashIdPrefix = `${useId()}-slash`
+
 function runCommand(command: RichTextCommand): void {
   if (!editor.value) return
   command.run(editor.value, commandContext)
@@ -262,6 +267,13 @@ const editor = useEditor({
     Subscript.extend({ excludes: 'superscript' }),
     Superscript.extend({ excludes: 'subscript' }),
     Placeholder.configure({ placeholder: () => t('fields.richtext.placeholder') }),
+    RichTextSlashExtension.configure({
+      context: commandContext,
+      // Wrapped rather than passed straight through: vue-i18n's `t` is an overloaded function whose
+      // signature does not assign to the plain (key: string) => string this option declares.
+      t: (key: string) => t(key),
+      idPrefix: slashIdPrefix,
+    }),
   ],
   onUpdate: () => emitNormalized(),
   // A field that mounts already disabled never runs the watch(() => props.disabled) below, and
