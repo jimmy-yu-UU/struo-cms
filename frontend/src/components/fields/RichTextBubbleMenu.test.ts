@@ -66,15 +66,20 @@ const Harness = defineComponent({
   },
 })
 
-// Every host this file attaches to, so afterEach can take them back out. teardown() below still
-// removes the container on the happy path, but a body-level teardown is skipped the moment an
-// assertion above it throws -- and this file's assertions read document.body, so one leaked
-// container would put a second, stale `.rich-text__bubble` in front of every later test's query.
-const attachedContainers: HTMLElement[] = []
+// Everything this file puts into document.body, so afterEach can take it back out. The test bodies
+// below still remove theirs on the happy path, but a body-level teardown is skipped the moment an
+// assertion above it throws -- and every assertion in this file queries document.body, so one
+// leaked host would put a second, stale `.rich-text__bubble` in front of every later query.
+const attachedToBody: HTMLElement[] = []
+
+function attachToBody<T extends HTMLElement>(el: T): T {
+  document.body.appendChild(el)
+  attachedToBody.push(el)
+  return el
+}
 
 function mountHarness(content = '<p>Hello world</p>', disabled = false): { w: VueWrapper; container: HTMLElement } {
-  const container = document.body.appendChild(document.createElement('div'))
-  attachedContainers.push(container)
+  const container = attachToBody(document.createElement('div'))
   const w = mount(Harness, { props: { content, disabled }, global: globalOpts, attachTo: container })
   return { w, container }
 }
@@ -131,12 +136,12 @@ function teardown(w: VueWrapper, container: HTMLElement): void {
 // roughly 266ms of chained deferrals stand between an editor.commands.focus() and a settled DOM.
 //
 // Advanced on vitest's fake clock rather than waited out on the real one. A real-clock wait long
-// enough to cover that chain is still only a margin, and a margin is a race: with this suite run
-// concurrently against itself, so the timers land late, the previous real 300ms wait failed here
-// repeatedly. Virtual time has no margin to lose -- the timers cannot fire after the assertion.
-// advanceTimersByTimeAsync, not the synchronous form, because each hop needs the microtask queue
-// drained for ProseMirror's and Vue's own promise work in between. @vue/test-utils' flushPromises
-// keeps working under the fake clock: it captures the real setImmediate at module load.
+// enough to cover that chain is still only a margin, and a margin is a race a loaded machine can
+// win -- the timers then fire after the assertion has already read the DOM. Virtual time has no
+// margin to lose. advanceTimersByTimeAsync, not the synchronous form, because each hop needs the
+// microtask queue drained for ProseMirror's and Vue's own promise work in between.
+// @vue/test-utils' flushPromises keeps working under the fake clock: it captures the real
+// setImmediate at module load.
 const BUBBLE_MENU_SETTLE_MS = 300
 
 async function settle(): Promise<void> {
@@ -163,7 +168,7 @@ describe('RichTextBubbleMenu', () => {
   beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => {
     vi.useRealTimers()
-    attachedContainers.splice(0).forEach((el) => { el.remove() })
+    attachedToBody.splice(0).forEach((el) => { el.remove() })
   })
 
   it('is absent from the DOM before anything is selected', async () => {
@@ -385,7 +390,7 @@ describe('RichTextBubbleMenu', () => {
     await settle()
     expect(bubbleRoot().exists()).toBe(true)
 
-    const elsewhere = document.body.appendChild(document.createElement('input'))
+    const elsewhere = attachToBody(document.createElement('input'))
     editor.view.dom.dispatchEvent(new FocusEvent('blur', { relatedTarget: elsewhere }))
     await settle()
 
