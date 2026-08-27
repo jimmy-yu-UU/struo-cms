@@ -132,8 +132,9 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
           // A blur does not tear down the suggestion plugin's state -- that is recomputed only
           // inside apply(), and a blur dispatches no transaction -- so leaving the editor by any
           // route other than a click outside would strand the menu on screen, still owned by an
-          // editable that no longer has focus. Safe against the mouse path because the menu's rows
-          // use @mousedown.prevent, so choosing an item never blurs the editor to begin with.
+          // editable that no longer has focus. Safe against the mouse path because the menu's ROOT
+          // carries @mousedown.prevent (RichTextSlashMenu.vue -- the rows themselves do not), so
+          // choosing an item, or slipping onto the padding around one, never blurs the editor at all.
           const onEditorBlur = (): void => {
             exitIsFromBlur = true
             exitSuggestion(editor.view)

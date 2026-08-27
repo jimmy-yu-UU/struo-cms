@@ -38,7 +38,11 @@ const { t } = useI18n()
          p-1 band around them belongs to this element too, and a mousedown landing in it would blur
          the editor just the same -- which the extension now reads as "close the menu". Cancelling
          from the root's bubble phase is still inside the dispatch, so it is still ahead of the
-         default action. -->
+         default action -- and it holds even when a row's own handler has already unmounted this
+         element mid-dispatch, because the propagation path is fixed when dispatch begins and
+         preventDefault raises a flag on the event rather than on any node. Only that first half is
+         observable in a test: jsdom implements no default action for mousedown at all, so the focus
+         it protects rests on the standard, not on a green assertion. -->
     <div v-for="(item, i) in items" :id="`${idPrefix}-${item.id}`" :key="item.id" role="option"
       :aria-selected="i === selectedIndex" :data-active="i === selectedIndex"
       class="cursor-pointer rounded px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
