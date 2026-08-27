@@ -345,7 +345,6 @@ export default {
       selectionToolbar: '文字格式',
       slashMenu: '插入區塊',
       slashNoResults: '沒有符合的指令',
-      slashDivider: '分隔線',
     },
   },
   filterBuilder: {

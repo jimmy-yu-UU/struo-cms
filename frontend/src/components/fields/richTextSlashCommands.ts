@@ -17,18 +17,8 @@ const SLASH_ALIASES: Readonly<Record<string, ReadonlyArray<string>>> = {
   orderedList: ['ol', 'number', 'ordered'],
   blockquote: ['quote', 'blockquote'],
   codeBlock: ['code', 'pre'],
-  // Not 'rule': it contains 'ul' as a substring, which would make filterSlashItems' plain
-  // .includes() match this item for a query meant to reach only bulletList's 'ul' alias.
-  hr: ['hr', 'divider', 'separator'],
+  hr: ['hr', 'divider', 'rule'],
   image: ['img', 'image', 'picture'],
-}
-
-// hr's toolbar tooltip key (horizontalRule -> "Horizontal rule") lowercases to a string that
-// itself contains 'ul' (from "rule"), which would surface this item for a slash query meant to
-// reach only bulletList's 'ul' alias via filterSlashItems' plain substring match. The slash menu
-// uses its own, shorter label instead; the toolbar button keeps its own tooltip untouched.
-const SLASH_LABEL_KEYS: Readonly<Record<string, string>> = {
-  hr: 'fields.richtext.slashDivider',
 }
 
 function fromRegistry(
@@ -38,7 +28,7 @@ function fromRegistry(
     .filter((c) => c.group === group)
     .map((c) => ({
       id: c.id,
-      label: t(SLASH_LABEL_KEYS[c.id] ?? c.labelKey),
+      label: t(c.labelKey),
       aliases: SLASH_ALIASES[c.id] ?? [],
       run: c.run,
     }))
@@ -75,6 +65,9 @@ export function filterSlashItems(
   return items.filter(
     // No .toLowerCase() on the alias side: SLASH_ALIASES is pinned lowercase ASCII by
     // richTextSlashCommands.test.ts, so q (already lowercased above) compares correctly as-is.
+    // Substring matching (not prefix, not exact) is intended here, the same as the label branch
+    // above -- 'ul' matching both bulletList's own alias and hr's 'rule' alias is accepted
+    // over-matching for a candidate list navigated with arrow keys, not a bug to eliminate.
     (item) => item.label.toLowerCase().includes(q) || item.aliases.some((a) => a.includes(q)),
   )
 }
