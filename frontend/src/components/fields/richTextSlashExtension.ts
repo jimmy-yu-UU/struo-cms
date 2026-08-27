@@ -63,7 +63,7 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
         // here overrides that, so it falls back to the true default -- "<strong>bold</strong>/" stays
         // part of the same, still-bold text node and does NOT open the menu on its own. Link is the
         // mark that actually reaches this repo's boundary case, because it is configured
-        // non-inclusive below (autolink: false, and extension-link's own inclusive() returns that
+        // non-inclusive (autolink: false, and extension-link's own inclusive() returns that
         // option verbatim) -- see RichTextInput.vue's Link.configure(). startOfLine stays false.
         //
         // No isEditable clause here: upstream's apply() wraps its whole match-and-allow block in

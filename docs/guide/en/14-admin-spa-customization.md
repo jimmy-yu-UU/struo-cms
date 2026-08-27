@@ -417,9 +417,11 @@ follows from how `@tiptap/suggestion` matches prefixes and from each mark's own 
 it is not something StruoCMS's extension adds. The limitation is accepted as it stands today, not
 worked around — a fork that wants it gone would tighten the extension's own `allow` callback to check
 the character preceding the `/`'s own position within the *block* (`state.doc.resolve(range.from)`
-already carries both the block and that position's offset inside it — `range.from` is where the `/`
-sits, not the caret, and the two diverge as soon as a query is typed after it), rather than relying
-only on upstream's text-node-scoped prefix check, but StruoCMS does not do this.
+already carries both the block and that position's offset inside it). The two positions never
+coincide: from `findSuggestionMatch`'s own gate (`from < $position.pos`), the caret sits at
+`range.from + 1 + query.length` — one position past the `/` at minimum, more once a query is typed —
+so a block-level clause has to test the character before `range.from`, never before the caret,
+rather than relying only on upstream's text-node-scoped prefix check, but StruoCMS does not do this.
 
 **Where the item list comes from.** `buildSlashItems` (`richTextSlashCommands.ts`) assembles the menu
 from three sources, in this order: the heading levels in `richTextHeadings.ts`'s `HEADING_LEVELS`
@@ -448,7 +450,8 @@ sits outside the alias table described next.
 
 **Aliases.** The query typed after `/` is matched as a substring against both an item's translated
 label and its aliases (`filterSlashItems`), so an item is reachable by its label alone even with no
-alias typed — `/numbered` finds "Numbered list" purely through the label, for instance. Aliases exist
+alias typed — `/numbered` finds "Numbered list" purely through the label, for instance, even though
+none of `orderedList`'s own aliases (`ol`, `number`, `ordered`) contain "numbered". Aliases exist
 to shorten that further. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`); the table
 item's single alias (`table`) is hand-authored alongside it in `buildSlashItems`; every other
 registry-derived item's aliases come from `richTextSlashCommands.ts`'s own alias table:
