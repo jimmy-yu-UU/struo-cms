@@ -39,9 +39,11 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
 
     // The same string RichTextSlashMenu.vue renders as each option's own id, built independently
     // here rather than through a shared helper -- richTextSlashCommands.ts is imported by both
-    // sides and would be the obvious home for one, but no such helper exists today. A test on each
-    // side pins its own copy of the formula, so the two staying identical is enforced by those
-    // tests, not by this comment; if they ever diverge, aria-activedescendant points at nothing.
+    // sides and would be the obvious home for one, but no such helper exists today.
+    // RichTextSlashMenu.test.ts pins the menu side's own copy as a literal id; this side carries no
+    // literal pin of its own and is instead checked by cross-equality against the rendered menu id
+    // in RichTextInput.test.ts, which catches the two formulas diverging without needing two
+    // independent literals to do it -- if they ever diverge, aria-activedescendant points at nothing.
     const optionId = (item: RichTextSlashItem): string => `${idPrefix}-${item.id}`
     // The listbox's own id. Free of collision only because no slash item is called 'listbox';
     // adding one would make this exact string an option id too.

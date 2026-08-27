@@ -57,7 +57,7 @@ describe('filterSlashItems', () => {
   })
 
   // 'ockquote' is a strict interior substring of blockquote's own label and alias (neither starts
-  // with it), so a prefix-only implementation would have passed it undetected.
+  // with it), so a prefix-only implementation finds nothing here and this test fails.
   it('matches a substring, not only a prefix', () => {
     expect(filterSlashItems(items, 'ockquote').map((i) => i.id)).toEqual(['blockquote'])
   })
