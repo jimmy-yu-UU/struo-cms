@@ -61,6 +61,16 @@ describe('RichTextSlashMenu', () => {
     expect(w.emitted('select')).toEqual([[1]])
   })
 
+  // The rows are not the whole target: a mousedown that lands on the p-1 band around them must not
+  // blur the editor either, because the extension closes the menu on that blur.
+  it('prevents the default for a mousedown on its own chrome, and selects nothing', () => {
+    const w = mountMenu()
+    const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    w.element.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(w.emitted('select')).toBeUndefined()
+  })
+
   it('reports hover so the caller can move the selection', async () => {
     const w = mountMenu()
     await w.findAll('[role="option"]')[1].trigger('mouseenter')

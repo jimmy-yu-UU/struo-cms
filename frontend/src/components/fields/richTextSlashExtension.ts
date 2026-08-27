@@ -45,6 +45,25 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
     // adding one would make this exact string an option id too.
     const menuId = `${idPrefix}-listbox`
 
+    // Escape means "no", and upstream makes that stick: exiting records the range in its own
+    // dismissedRange, and typing more of the same query does not reopen the menu. A blur does not
+    // mean "no" -- Tab, a click into another field, and in Chrome the window itself losing focus all
+    // fire one -- so a blur-driven exit must not leave the query dismissed.
+    //
+    // Two flags rather than one, because the answer has to be paired to a particular dismissal and
+    // not merely set: onEditorBlur arms `exitIsFromBlur` for the single dispatch it is about to
+    // make, and onExit hands that to `lastExitWasBlur` and clears it. The pairing is what makes this
+    // self-healing -- onExit re-derives on EVERY deactivation, so a stale true cannot survive to
+    // defeat a later Escape.
+    //
+    // It rests on onExit running synchronously inside the exit dispatch. Upstream's plugin view is
+    // an async function, but its "stopped" branch has no await ahead of it, so the transaction that
+    // records the dismissal and the onExit that labels it are one synchronous turn. If upstream ever
+    // puts an await before that branch the label lands a turn late and a blur dismissal is treated
+    // as an Escape one -- which is the behaviour before this existed, not a corrupt state.
+    let exitIsFromBlur = false
+    let lastExitWasBlur = false
+
     return [
       Suggestion<RichTextSlashItem, RichTextSlashItem>({
         editor,
@@ -70,6 +89,11 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
         // one, so this is unreachable for a read-only editor and the check could never be false.
         allow: ({ state, range }) =>
           state.doc.resolve(range.from).parent.type.name !== 'codeBlock',
+        // Clearing the dismissal here brings the menu back when the caret RETURNS to the dismissed
+        // query, not only on the next keystroke, because upstream re-evaluates on any transaction
+        // and a selection change is one. That is what a query which was never dismissed already
+        // does, so it is the consistent outcome rather than an accident of this hook.
+        shouldResetDismissed: () => lastExitWasBlur,
         // buildSlashItems runs per query rather than once when the extension is built: an
         // extension is constructed a single time with the editor, while the UI locale changes
         // during its lifetime and every label here comes from t().
@@ -110,7 +134,11 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
           // route other than a click outside would strand the menu on screen, still owned by an
           // editable that no longer has focus. Safe against the mouse path because the menu's rows
           // use @mousedown.prevent, so choosing an item never blurs the editor to begin with.
-          const onEditorBlur = (): void => { exitSuggestion(editor.view) }
+          const onEditorBlur = (): void => {
+            exitIsFromBlur = true
+            exitSuggestion(editor.view)
+            exitIsFromBlur = false
+          }
 
           function sync(): void {
             renderer?.updateProps({ items, selectedIndex: selected })
@@ -218,6 +246,11 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
               if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 const step = event.key === 'ArrowDown' ? 1 : items.length - 1
                 selected = (selected + step) % items.length
+                // Disarmed BEFORE sync(), not after, and the order is load-bearing: sync() is what
+                // scrolls the list, and a scroll makes the browser re-evaluate hover under a pointer
+                // that never moved. Disarming first means the mouseenter that recomputation fires
+                // arrives with hover already untrusted, instead of being honoured against whatever
+                // movement the user made before this key press.
                 pointerMoved = false
                 sync()
                 return true
@@ -229,6 +262,8 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
             },
 
             onExit: () => {
+              lastExitWasBlur = exitIsFromBlur
+              exitIsFromBlur = false
               editor.view.dom.removeAttribute('aria-activedescendant')
               editor.view.dom.removeAttribute('aria-owns')
               document.removeEventListener('pointermove', onPointerMove)

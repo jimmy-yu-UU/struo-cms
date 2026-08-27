@@ -1578,8 +1578,15 @@ describe('RichTextInput', () => {
   // so the menu's geometry is supplied here. scrollTop is the one piece that is real: jsdom stores
   // what is written to it, which is what makes the assertion below possible. The numbers are the
   // ones a browser reports for this menu: 32px rows, eight of the twelve fully visible.
+  //
+  // The 1px border is modelled rather than zeroed: the rect a browser returns is the BORDER box,
+  // while scrollTop and clientHeight describe the content box inside it. Setting clientTop to 0 and
+  // the rect height equal to clientHeight would make both of those terms inert here while they stay
+  // load-bearing in a browser.
   const SLASH_ROW = 32
   const SLASH_VISIBLE_ROWS = 8
+  const SLASH_BORDER = 1
+  const SLASH_CONTENT_HEIGHT = SLASH_ROW * SLASH_VISIBLE_ROWS
 
   function fakeRect(top: number, height: number): DOMRect {
     return {
@@ -1589,13 +1596,13 @@ describe('RichTextInput', () => {
   }
 
   function layOutSlashMenu(menu: HTMLElement, options: HTMLElement[]): void {
-    Object.defineProperty(menu, 'clientTop', { configurable: true, value: 0 })
-    Object.defineProperty(menu, 'clientHeight', {
-      configurable: true, value: SLASH_ROW * SLASH_VISIBLE_ROWS,
-    })
-    menu.getBoundingClientRect = () => fakeRect(0, SLASH_ROW * SLASH_VISIBLE_ROWS)
+    Object.defineProperty(menu, 'clientTop', { configurable: true, value: SLASH_BORDER })
+    Object.defineProperty(menu, 'clientHeight', { configurable: true, value: SLASH_CONTENT_HEIGHT })
+    menu.getBoundingClientRect = () => fakeRect(0, SLASH_CONTENT_HEIGHT + SLASH_BORDER * 2)
     options.forEach((option, i) => {
-      option.getBoundingClientRect = () => fakeRect(i * SLASH_ROW - menu.scrollTop, SLASH_ROW)
+      option.getBoundingClientRect = () => (
+        fakeRect(SLASH_BORDER + i * SLASH_ROW - menu.scrollTop, SLASH_ROW)
+      )
     })
   }
 
@@ -1826,7 +1833,12 @@ describe('RichTextInput', () => {
     await openSlash(editor)
     const third = slashOptions()[2]
     expect(third.textContent?.trim()).toBe('Heading 4')
-    third.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+    const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    third.dispatchEvent(mousedown)
+    // The row's own handler unmounts the menu before the event reaches the root that cancels the
+    // default -- which still runs, because the propagation path is fixed when dispatch begins.
+    // Without the cancel the editor blurs, and a blur now closes the menu and drops the query.
+    expect(mousedown.defaultPrevented).toBe(true)
     await flushPromises()
     expect(editor.getHTML()).toContain('<h4')
     expect(editor.getText().trim()).toBe('')
@@ -1877,6 +1889,78 @@ describe('RichTextInput', () => {
     slashKey(w, 'Escape')
     await flushPromises()
     expect(removed.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(1)
+  })
+
+  // The pointermove and blur listeners this extension adds itself. Neither removal changes anything
+  // observable about the menu, so nothing else here can catch a missing one -- and a surviving blur
+  // handler would dispatch an exit transaction on every later blur of that editor for its whole
+  // life, on an element it merely assumes is still the same node.
+  it('releases the pointer and blur listeners it added when the menu closes', async () => {
+    const w = await mountSlash()
+    const editable = editableOf(w)
+    const docAdd = vi.spyOn(document, 'addEventListener')
+    const docRemove = vi.spyOn(document, 'removeEventListener')
+    const editableAdd = vi.spyOn(editable, 'addEventListener')
+    const editableRemove = vi.spyOn(editable, 'removeEventListener')
+
+    await openSlash(editorOf(w))
+    expect(docAdd.mock.calls.filter((c) => c[0] === 'pointermove')).toHaveLength(1)
+    expect(editableAdd.mock.calls.filter((c) => c[0] === 'blur')).toHaveLength(1)
+    expect(docRemove.mock.calls.filter((c) => c[0] === 'pointermove')).toHaveLength(0)
+    expect(editableRemove.mock.calls.filter((c) => c[0] === 'blur')).toHaveLength(0)
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(docRemove.mock.calls.filter((c) => c[0] === 'pointermove')).toHaveLength(1)
+    expect(editableRemove.mock.calls.filter((c) => c[0] === 'blur')).toHaveLength(1)
+  })
+
+  // Escape is an explicit "no" and upstream makes it stick. A blur is not a "no": Tab, a click into
+  // another field and, in Chrome, the window itself losing focus all produce one, and none of them
+  // should cost the writer the query they had half typed.
+  it('reopens on the same query after the editor was blurred', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'ta')
+    editableOf(w).dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+
+    editor.commands.insertContent('b')
+    await flushPromises()
+    expect(slashMenu()).not.toBeNull()
+  })
+
+  it('stays dismissed on the same query after Escape', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'ta')
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+
+    editor.commands.insertContent('b')
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+  })
+
+  // The pairing, not just the flag: whatever the last exit was has to be re-derived on every
+  // deactivation, so that a blur earlier in the session cannot make a later Escape reopen.
+  it('does not let an earlier blur make a later Escape reopen the menu', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'ta')
+    editableOf(w).dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+    editor.commands.insertContent('b')
+    await flushPromises()
+    expect(slashMenu()).not.toBeNull()
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    editor.commands.insertContent('l')
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
   })
 
   // ...and this one covers the other call: nothing else releases the Vue component instance.
