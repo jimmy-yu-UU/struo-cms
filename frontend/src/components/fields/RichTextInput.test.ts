@@ -1574,6 +1574,31 @@ describe('RichTextInput', () => {
     return document.querySelector('[role="option"][aria-selected="true"]')
   }
 
+  // jsdom performs no layout -- getBoundingClientRect, clientTop and clientHeight all read 0 --
+  // so the menu's geometry is supplied here. scrollTop is the one piece that is real: jsdom stores
+  // what is written to it, which is what makes the assertion below possible. The numbers are the
+  // ones a browser reports for this menu: 32px rows, eight of the twelve fully visible.
+  const SLASH_ROW = 32
+  const SLASH_VISIBLE_ROWS = 8
+
+  function fakeRect(top: number, height: number): DOMRect {
+    return {
+      top, bottom: top + height, height, y: top, left: 0, right: 0, width: 0, x: 0,
+      toJSON: () => undefined,
+    } as unknown as DOMRect
+  }
+
+  function layOutSlashMenu(menu: HTMLElement, options: HTMLElement[]): void {
+    Object.defineProperty(menu, 'clientTop', { configurable: true, value: 0 })
+    Object.defineProperty(menu, 'clientHeight', {
+      configurable: true, value: SLASH_ROW * SLASH_VISIBLE_ROWS,
+    })
+    menu.getBoundingClientRect = () => fakeRect(0, SLASH_ROW * SLASH_VISIBLE_ROWS)
+    options.forEach((option, i) => {
+      option.getBoundingClientRect = () => fakeRect(i * SLASH_ROW - menu.scrollTop, SLASH_ROW)
+    })
+  }
+
   function slashKey(w: VueWrapper, key: string): boolean {
     const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
     editableOf(w).dispatchEvent(ev)
@@ -1732,11 +1757,13 @@ describe('RichTextInput', () => {
     expect(slashMenu()).toBeNull()
   })
 
+  // Not intercepted, so the browser moves focus itself -- and the menu then goes away with the
+  // blur that follows, which a dispatched keydown does not produce here. The blur test below is
+  // what covers the second half.
   it('leaves Tab to the form, so the field keeps its place in the tab order', async () => {
     const w = await mountSlash()
     await openSlash(editorOf(w))
     expect(slashKey(w, 'Tab')).toBe(false)
-    expect(slashMenu()).not.toBeNull()
   })
 
   it('points aria-activedescendant at the selected option', async () => {
@@ -1790,21 +1817,6 @@ describe('RichTextInput', () => {
     expect(editable.hasAttribute('aria-owns')).toBe(false)
   })
 
-  // The menu is height-capped, so a selection the arrow keys have walked past the fold is a
-  // selection the keyboard user cannot see. jsdom lays nothing out and its scrollIntoView is a
-  // stub, so this can only assert the call reaches the newly selected option.
-  it('scrolls the newly selected option into view', async () => {
-    const w = await mountSlash()
-    await openSlash(editorOf(w))
-    const scrolled = vi.fn()
-    const second = slashOptions()[1]
-    second.scrollIntoView = scrolled
-
-    slashKey(w, 'ArrowDown')
-    expect(activeOption()).toBe(second)
-    expect(scrolled).toHaveBeenCalledTimes(1)
-  })
-
   // The two tests below are the only thing joining the extension's onSelect/onHover props to the
   // component's select/hover emits. Each side pins its own half; rename either prop and the whole
   // mouse path dies without a single keyboard test noticing.
@@ -1824,11 +1836,28 @@ describe('RichTextInput', () => {
   it('moves the selection to the option under the pointer', async () => {
     const w = await mountSlash()
     await openSlash(editorOf(w))
+    // Hover counts only after real pointer movement -- see the test after this one.
+    document.dispatchEvent(new Event('pointermove'))
     const fourth = slashOptions()[3]
     // mouseenter does not bubble; dispatched on the element the listener is bound to.
     fourth.dispatchEvent(new MouseEvent('mouseenter'))
     expect(activeOption()).toBe(fourth)
     expect(editableOf(w).getAttribute('aria-activedescendant')).toBe(fourth.id)
+  })
+
+  // A cursor left resting over the list must not steal the arrow keys. In a browser the rows
+  // themselves move under the stationary pointer once the list scrolls, the browser re-evaluates
+  // hover, and mouseenter arrives with no pointer movement behind it.
+  it('ignores hover that no pointer movement caused', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    document.dispatchEvent(new Event('pointermove'))
+    slashKey(w, 'ArrowDown')
+    const chosenByKeyboard = activeOption()
+    expect(chosenByKeyboard?.textContent?.trim()).toBe('Heading 3')
+
+    slashOptions()[7].dispatchEvent(new MouseEvent('mouseenter'))
+    expect(activeOption()).toBe(chosenByKeyboard)
   })
 
   // The next two tests exist because onExit's two teardown calls are mutually redundant as far as
@@ -1858,6 +1887,45 @@ describe('RichTextInput', () => {
     slashKey(w, 'Escape')
     await flushPromises()
     expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  // The menu is its own scroll container, and it is the ONLY thing that may scroll. Element
+  // .scrollIntoView walks every scrollable ancestor up to the document, and the first sync() of an
+  // open runs before floating-ui has positioned the menu -- so it scrolled the page to its maximum
+  // and took the editor and the menu off-screen with it.
+  it('scrolls the menu itself past the fold, and never the page', async () => {
+    const w = await mountSlash()
+    const pageScroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+    await openSlash(editorOf(w))
+    const menu = slashMenu()
+    expect(menu).not.toBeNull()
+    layOutSlashMenu(menu as HTMLElement, slashOptions())
+
+    for (let i = 0; i < SLASH_VISIBLE_ROWS - 1; i += 1) slashKey(w, 'ArrowDown')
+    expect(activeOption()).toBe(slashOptions()[SLASH_VISIBLE_ROWS - 1])
+    expect(menu?.scrollTop).toBe(0)
+
+    slashKey(w, 'ArrowDown')
+    expect(menu?.scrollTop).toBe(SLASH_ROW)
+    slashKey(w, 'ArrowDown')
+    expect(menu?.scrollTop).toBe(SLASH_ROW * 2)
+
+    expect(pageScroll).not.toHaveBeenCalled()
+  })
+
+  // Tabbing away, or focus leaving by any route other than a click outside, used to leave the menu
+  // floating over the form indefinitely with the unfocused editable still advertising it.
+  it('closes the menu and drops both ARIA references when the editor loses focus', async () => {
+    const w = await mountSlash()
+    const editable = editableOf(w)
+    await openSlash(editorOf(w))
+    expect(slashMenu()).not.toBeNull()
+
+    editable.dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+    expect(editable.hasAttribute('aria-activedescendant')).toBe(false)
+    expect(editable.hasAttribute('aria-owns')).toBe(false)
   })
 
   // Extension.configure() takes a Partial, so nothing at the type level stops a fork from mounting

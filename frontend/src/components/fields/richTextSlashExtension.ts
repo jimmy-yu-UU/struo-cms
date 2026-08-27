@@ -1,5 +1,5 @@
 import { Extension, VueRenderer, type Editor } from '@tiptap/vue-3'
-import Suggestion from '@tiptap/suggestion'
+import Suggestion, { exitSuggestion } from '@tiptap/suggestion'
 import RichTextSlashMenu from './RichTextSlashMenu.vue'
 import { buildSlashItems, filterSlashItems, type RichTextSlashItem } from './richTextSlashCommands'
 import type { RichTextCommandContext } from './richTextCommands'
@@ -88,9 +88,29 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
         render: () => {
           let renderer: VueRenderer | null = null
           let unmount: (() => void) | null = null
+          let menuEl: HTMLElement | null = null
           let items: RichTextSlashItem[] = []
           let selected = 0
           let commit: ((item: RichTextSlashItem) => void) | null = null
+
+          // Hover is trusted only once the pointer has actually moved, and every keyboard move
+          // withdraws that trust again. Without it a cursor left resting over the list hijacks the
+          // arrow keys: past the fold the rows scroll under a stationary pointer, the browser
+          // re-evaluates hover, and mouseenter fires on whichever row slid underneath -- which
+          // walks the selection backwards and leaves the last rows unreachable from the keyboard.
+          //
+          // The flag lives here rather than in the component because this is the only side that
+          // sees both inputs: keys are delivered to the editor, never to the menu. The component
+          // stays stateless and keeps emitting hover for every mouseenter.
+          let pointerMoved = false
+          const onPointerMove = (): void => { pointerMoved = true }
+
+          // A blur does not tear down the suggestion plugin's state -- that is recomputed only
+          // inside apply(), and a blur dispatches no transaction -- so leaving the editor by any
+          // route other than a click outside would strand the menu on screen, still owned by an
+          // editable that no longer has focus. Safe against the mouse path because the menu's rows
+          // use @mousedown.prevent, so choosing an item never blurs the editor to begin with.
+          const onEditorBlur = (): void => { exitSuggestion(editor.view) }
 
           function sync(): void {
             renderer?.updateProps({ items, selectedIndex: selected })
@@ -101,11 +121,33 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
             }
             const id = optionId(active)
             editor.view.dom.setAttribute('aria-activedescendant', id)
-            // The menu is height-capped and scrolls, so without this the selection walks out of
-            // sight a few rows down -- on the editor's only keyboard-driven surface. Called
-            // optionally because scrollIntoView is not universally implemented: bare jsdom has no
-            // such method.
-            document.getElementById(id)?.scrollIntoView?.({ block: 'nearest' })
+            const option = document.getElementById(id)
+            if (option) scrollSelectedIntoView(option)
+          }
+
+          // The menu is height-capped and scrolls, so without this the selection walks out of
+          // sight a few rows down -- on the editor's only keyboard-driven surface.
+          //
+          // Emphatically NOT Element.scrollIntoView. That walks every scrollable ancestor up to the
+          // document, and the first sync() of an open runs while upstream has appended the menu to
+          // <body> but floating-ui has not positioned it yet -- so the option is still in normal
+          // flow at the end of the document, and scrolling it into view throws the page to its
+          // maximum, taking the caret, the editor and the menu off-screen. Deferring the call does
+          // not fix that; a later scrollIntoView can still reach the document. The menu is its own
+          // max-h-72 overflow-y-auto scroll container, so that is the only thing scrolled here.
+          //
+          // Measured against the list's content box and adjusted RELATIVELY, which assumes no
+          // coordinate space of its own and so is correct both before and after floating-ui
+          // positions the menu -- unlike offsetTop, whose frame of reference changes at that moment.
+          function scrollSelectedIntoView(option: HTMLElement): void {
+            const list = menuEl
+            if (!list) return
+            const optionBox = option.getBoundingClientRect()
+            const listBox = list.getBoundingClientRect()
+            const visibleTop = listBox.top + list.clientTop
+            const visibleBottom = visibleTop + list.clientHeight
+            if (optionBox.top < visibleTop) list.scrollTop -= visibleTop - optionBox.top
+            else if (optionBox.bottom > visibleBottom) list.scrollTop += optionBox.bottom - visibleBottom
           }
 
           function pick(index: number): void {
@@ -132,12 +174,20 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
                   selectedIndex: selected,
                   idPrefix,
                   onSelect: pick,
-                  onHover: (i: number) => { selected = i; sync() },
+                  onHover: (i: number) => {
+                    if (!pointerMoved) return
+                    selected = i
+                    sync()
+                  },
                 },
               })
               const el = renderer.element as HTMLElement | null
               if (el) {
                 el.id = menuId
+                menuEl = el
+                pointerMoved = false
+                document.addEventListener('pointermove', onPointerMove, { passive: true })
+                editor.view.dom.addEventListener('blur', onEditorBlur)
                 unmount = props.mount(el)
                 // aria-activedescendant alone cannot resolve from here: props.mount() appends the
                 // menu into the configured container, which defaults to document.body
@@ -165,8 +215,13 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
             // empty-list early return below cannot swallow it.
             onKeyDown: ({ event }) => {
               if (items.length === 0) return false
-              if (event.key === 'ArrowDown') { selected = (selected + 1) % items.length; sync(); return true }
-              if (event.key === 'ArrowUp') { selected = (selected - 1 + items.length) % items.length; sync(); return true }
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                const step = event.key === 'ArrowDown' ? 1 : items.length - 1
+                selected = (selected + step) % items.length
+                pointerMoved = false
+                sync()
+                return true
+              }
               if (event.key === 'Enter') { pick(selected); return true }
               // Tab among them: letting it through is what keeps the field's place in the form's
               // tab order.
@@ -176,6 +231,9 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
             onExit: () => {
               editor.view.dom.removeAttribute('aria-activedescendant')
               editor.view.dom.removeAttribute('aria-owns')
+              document.removeEventListener('pointermove', onPointerMove)
+              editor.view.dom.removeEventListener('blur', onEditorBlur)
+              menuEl = null
               // Both calls are needed even though either one on its own already takes the menu out
               // of the document. props.mount()'s returned function is the only thing that stops
               // floating-ui's autoUpdate loop AND removes the capture-phase document pointerdown
