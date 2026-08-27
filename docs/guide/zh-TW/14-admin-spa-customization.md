@@ -338,11 +338,11 @@ node view，都會留下一個 `'update'` 監聽器直到那個編輯器生命�
 在 `richText` 欄位裡輸入 `/`，會打開一份鍵盤驅動的可插入區塊清單，實作在 `richTextSlashExtension.ts`
 裡，建立在上游自己的 `@tiptap/suggestion` 之上。觸發規則是上游的，不是 StruoCMS 自己訂的：只有當 `/`
 前面那個字元——在結束於游標位置的那一個 text node 裡面，而不是整個區塊裡——是空白或什麼都沒有時，
-`/` 才會打開選單（`allowedPrefixes` 維持上游預設值 `[' ']`，沒有動它）。這正是為什麼 "and/or" 或正在
+`/` 才會打開選單（`allowedPrefixes` 維持上游預設值 `[' ']`，沒有動它）。這正是為什麼「and/or」或正在
 輸入中的一段 URL 路徑不會打開選單：緊接在 `/` 前面的那個字元，兩種情況下都是一個普通字元，不是空白，
 也不是一個 text node 的開頭。
 
-"什麼都沒有"這件事，比聽起來還要窄，而且值得明講成一個已知限制，而不是刻意設計：因為上游量測的邊界
+「什麼都沒有」這件事，比聽起來還要窄，而且值得明講成一個已知限制，而不是刻意設計：因為上游量測的邊界
 是 text node 而不是區塊，一個剛好打在某個「非 inclusive」的 mark 結束、普通文字接續起來那個位置的
 `/`，一樣會打開選單，因為那個位置正是一個全新 text node 的 offset 0，前面沒有任何字元可以讓前綴檢查
 拒絕它。連結是真正會踩到這一點的例子：緊接在 `<a>閱讀更多</a>` 之後、中間沒有空格地輸入 `/`，會打開
@@ -352,9 +352,10 @@ ProseMirror 自己的預設值 `inclusive: true`：緊接在粗體文字之後�
 text node 裡，而不是另外開一個新的，所以單靠這樣不會打開選單——只有先把 mark 解除、再輸入 `/`，才會
 碰到連結會直接碰到的那種情況。這是 `@tiptap/suggestion` 比對前綴的方式，加上每個 mark 自己的
 `inclusive` 設定共同帶來的結果，不是 StruoCMS 這個 extension 加上去的規則。這個限制目前就是照現狀
-接受，沒有被繞掉——如果 fork 想要拿掉它，可以把 extension 自己的 `allow` callback 改成去檢查游標在
-「區塊」裡前面那個字元（`state.doc.resolve(range.from)` 本身就同時帶著那個區塊，以及游標在裡面的
-offset），而不是只依靠上游那個以 text node 為範圍的前綴檢查，但 StruoCMS 目前沒有這樣做。
+接受，沒有被繞掉——如果 fork 想要拿掉它，可以把 extension 自己的 `allow` callback 改成去檢查那個 `/`
+自己所在位置、在「區塊」裡前面那個字元（`state.doc.resolve(range.from)` 本身就同時帶著那個區塊，以及
+那個位置在裡面的 offset——`range.from` 是 `/` 所在的位置，不是游標，一旦後面開始輸入查詢字串，兩者
+就會分開），而不是只依靠上游那個以 text node 為範圍的前綴檢查，但 StruoCMS 目前沒有這樣做。
 
 **項目清單從哪裡來。** `buildSlashItems`（`richTextSlashCommands.ts`）依序從三個來源組出這份選單：
 `richTextHeadings.ts` 的 `HEADING_LEVELS`（H2 到 H6）；`richTextCommands.ts` 指令登記表裡篩選出
@@ -362,14 +363,14 @@ offset），而不是只依靠上游那個以 text node 為範圍的前綴檢查
 後，同一份登記表篩選出 `group: 'insert'` 的項目（水平線、圖片）。這個表格項目——它插入的是一張帶
 表頭列的 3×3 表格，`insertTable({ rows: 3, cols: 3, withHeaderRow: true })`——必須手寫，是因為工具列
 上的表格控制項是一個帶尺寸的網格彈出視窗加上一個自訂尺寸對話框，不是單一一個指令，所以它從來沒有
-加進另外兩個來源讀取的那份登記表裡。這樣選單總共有十二個項目，順序固定為：Heading 2 到 Heading 6、
-Bullet list、Numbered list、Blockquote、Code block、Table、Horizontal rule、Insert image。
+加進另外兩個來源讀取的那份登記表裡。這樣選單總共有十二個項目，順序固定為：標題 2 到標題 6、項目符號
+清單、編號清單、引用區塊、程式碼區塊、表格、水平線、插入圖片。
 
 fork 要新增一個項目，該改哪個檔案取決於它屬於哪個來源：多一個標題層級，改 `HEADING_LEVELS`——但光這
 樣還不夠讓它安全上線：`HeadingLevel` 是一個 `2 | 3 | 4 | 5 | 6` 的 union，需要先放寬；它的 label 來自
 一個 `fields.richtext.heading${level}` 的 locale key，兩份語言檔都要跟著補上；而 heading 1 更是完全
-不能這樣加——`GanssHtmlSanitizer` 的標籤允許清單特意從 `h2` 開始，正是因為頁面標題本身就是 H1（見上面
-〈富文本編輯器的排版樣式〉），而 `KeepChildNodes` 維持在預設的 `false`，所以透過這個欄位寫進去的
+不能這樣加——`GanssHtmlSanitizer` 的標籤允許清單特意從 `h2` 開始，正是因為頁面標題本身就是 H1，而
+`KeepChildNodes` 維持在預設的 `false`，所以透過這個欄位寫進去的
 `h1` 存檔時會連同它的文字一起被剝掉，而不只是被拆開標籤。相對地，一個新的區塊轉換或插入指令，乾淨地
 加進 `richTextCommands.ts` 的登記表、標上 `group: 'block'` 或 `group: 'insert'`，就會自動被選單撿起
 來，`richTextSlashCommands.ts` 完全不用動。像表格項目那樣沒辦法表達成單一登記表指令的東西，就得直接
@@ -377,8 +378,9 @@ fork 要新增一個項目，該改哪個檔案取決於它屬於哪個來源：
 範圍內。
 
 **別名。** 輸入在 `/` 後面的查詢字串，是以子字串比對同時比對項目翻譯後的 label 與它的別名
-（`filterSlashItems`），所以就算完全不輸入別名，光靠 label 本身也能搆到一個項目——例如 `/numbered`
-單靠 label 就能找到「Numbered list」。別名存在的目的是讓這件事更快。標題的別名是就地寫的（`h2`…
+（`filterSlashItems`），所以就算完全不輸入別名，光靠 label 本身也能搆到一個項目——例如 `/編號`
+單靠 label 就能找到「編號清單」，即使它的三個別名（`ol`、`number`、`ordered`）沒有一個包含這個查詢
+字串。別名存在的目的是讓這件事更快。標題的別名是就地寫的（`h2`…
 `h6`、`heading2`…`heading6`）；表格項目唯一的別名（`table`）也是跟著它一起手寫在 `buildSlashItems`
 裡；其他每個從登記表衍生出來的項目，別名都來自 `richTextSlashCommands.ts` 自己的別名表：
 
