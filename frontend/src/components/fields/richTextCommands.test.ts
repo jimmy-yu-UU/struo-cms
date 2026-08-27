@@ -76,14 +76,13 @@ describe('richTextCommands', () => {
     expect(byId.get('image')).toBe('fields.richtext.insertImage')
   })
 
-  // The groups are the contract RT-5 (inline) and RT-7 (block + insert) consume. Pinning the exact
-  // membership here is what makes a later batch's surface change visible in THIS file's diff.
+  // RT-5's bubble menu reads 'inline'; RT-7's slash menu reads 'block' + 'insert' (plus headings and
+  // tables, which never entered this registry). Pinning the exact membership here is what makes a
+  // later batch's surface change visible in THIS file's diff.
   it('partitions the commands into the groups the later batches consume', () => {
     expect(idsOf('inline')).toEqual(['bold', 'italic', 'strike', 'subscript', 'superscript', 'link'])
-    expect(idsOf('block')).toEqual([
-      'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
-      'bulletList', 'orderedList', 'blockquote', 'codeBlock',
-    ])
+    expect(idsOf('align')).toEqual(['alignLeft', 'alignCenter', 'alignRight', 'alignJustify'])
+    expect(idsOf('block')).toEqual(['bulletList', 'orderedList', 'blockquote', 'codeBlock'])
     expect(idsOf('insert')).toEqual(['hr', 'image'])
     expect(idsOf('history')).toEqual(['undo', 'redo'])
   })
