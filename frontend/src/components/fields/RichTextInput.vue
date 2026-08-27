@@ -666,30 +666,90 @@ defineExpose({ editor, insertImage })
    ResizableNodeView builds its DOM at runtime, so it carries no scope id and needs `:deep(...)`
    the same as the ProseMirror table markup above. */
 .rich-text__content :deep([data-resize-handle]) {
-  width: 0.625rem;
-  height: 0.625rem;
+  /* One source for the box and for the half-size straddle offsets below: change the size alone and
+     the offsets would no longer land the handles on the edge. */
+  --resize-handle-size: 0.625rem;
+  --resize-handle-offset: calc(var(--resize-handle-size) / -2);
+
+  width: var(--resize-handle-size);
+  height: var(--resize-handle-size);
   background-color: var(--primary);
   border: 1px solid var(--background);
   border-radius: 9999px;
 }
-.rich-text__content :deep([data-resize-handle="top-left"]),
-.rich-text__content :deep([data-resize-handle="bottom-right"]) { cursor: nwse-resize; }
-.rich-text__content :deep([data-resize-handle="top-right"]),
-.rich-text__content :deep([data-resize-handle="bottom-left"]) { cursor: nesw-resize; }
-/* The auto margins are what put the four edge handles ON their edge midpoints, and removing them
-   stacks each one back onto a corner -- upstream positions an edge handle by writing BOTH ends of
-   its long axis inline (left:0 and right:0 for top/bottom, top:0 and bottom:0 for left/right),
-   intending it to span that edge, while the fixed 10px box above leaves the position
-   over-constrained. A browser resolves that by ignoring one end, so the handle collapses to the
-   start corner: measured against the compiled bundle, top/left/top-left all landed on the same
-   point and the field offered four grabbable positions, not eight. Auto margins on the
-   over-constrained axis are the one fix that does not need !important, because upstream sets the
-   insets inline (which outrank any stylesheet) but never sets a margin -- so an override of
-   left/right here is silently discarded, while this is not. Re-measured: 8 distinct positions. */
-.rich-text__content :deep([data-resize-handle="top"]),
-.rich-text__content :deep([data-resize-handle="bottom"]) { cursor: ns-resize; margin-inline: auto; }
-.rich-text__content :deep([data-resize-handle="left"]),
-.rich-text__content :deep([data-resize-handle="right"]) { cursor: ew-resize; margin-block: auto; }
+
+/* Handles appear only while the image is the current selection. Upstream's ResizableNodeView
+   attaches them from its constructor and removes them only when the editor stops being editable,
+   so without this rule every image in an editable field carries eight live handles whatever the
+   caret is doing.
+
+   `display: none` rather than a transparency: the hidden state has to be out of hit testing, not
+   merely invisible, and removing the box is what achieves that. A handle that shows nothing but
+   still answers a hit test at its own centre would be a worse defect than the visual one.
+
+   `.ProseMirror-selectednode` lands on the [data-resize-container], not on the wrapper or the
+   <img> -- see the outline rule below for why. */
+.rich-text__content :deep([data-resize-container]:not(.ProseMirror-selectednode) [data-resize-handle]) {
+  display: none;
+}
+
+/* Each handle straddles the edge it grabs -- half inside the image, half outside -- via a negative
+   margin of half its own size, pushed OUTWARD from whichever insets upstream wrote for it.
+   Corner handles carry the offset on both axes; edge handles carry it only on their short axis.
+
+   Which axis takes what is not interchangeable. Upstream positions an edge handle by writing BOTH
+   ends of its long axis inline (left:0 and right:0 for top/bottom, top:0 and bottom:0 for
+   left/right), intending it to span that edge, while the fixed box above leaves the position
+   over-constrained; a browser resolves that by ignoring one end, so without the auto margin the
+   handle collapses onto the start corner and the field offers four grabbable positions instead of
+   eight. So the auto margin must stay, and a straddle offset must never be written on that same
+   axis -- a length there would replace the auto and re-collapse the handle. The corners are not
+   over-constrained (one inset per axis), which is why they take a length on both axes and no auto
+   margin at all.
+
+   Margins rather than inset overrides: upstream sets the insets inline, and an inline style
+   outranks any non-important stylesheet declaration, so a `left`/`top` override here would be
+   discarded silently while a margin -- which upstream never sets -- is not. */
+.rich-text__content :deep([data-resize-handle="top-left"]) {
+  cursor: nwse-resize;
+  margin-top: var(--resize-handle-offset);
+  margin-left: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="bottom-right"]) {
+  cursor: nwse-resize;
+  margin-bottom: var(--resize-handle-offset);
+  margin-right: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="top-right"]) {
+  cursor: nesw-resize;
+  margin-top: var(--resize-handle-offset);
+  margin-right: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="bottom-left"]) {
+  cursor: nesw-resize;
+  margin-bottom: var(--resize-handle-offset);
+  margin-left: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="top"]) {
+  cursor: ns-resize;
+  margin-inline: auto;
+  margin-top: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="bottom"]) {
+  cursor: ns-resize;
+  margin-inline: auto;
+  margin-bottom: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="left"]) {
+  cursor: ew-resize;
+  margin-block: auto;
+  margin-left: var(--resize-handle-offset);
+}
+.rich-text__content :deep([data-resize-handle="right"]) {
+  cursor: ew-resize;
+  margin-block: auto;
+  margin-right: var(--resize-handle-offset);
+}
 
 /* `.ProseMirror-selectednode` lands on the [data-resize-container] element, not on the wrapper or
    the <img>, because that container is what the node view returns as its `dom`.

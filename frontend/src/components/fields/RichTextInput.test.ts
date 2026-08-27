@@ -1478,36 +1478,151 @@ describe('RichTextInput', () => {
   })
 })
 
-// A source-level assertion, deliberately, and this is the honest ceiling for it: the resize handles
-// are positioned entirely by CSS, jsdom performs no layout, and this component's scoped styles are
-// never even injected in the test environment (document.styleSheets is empty when it mounts), so
-// nothing here can measure where a handle lands. What it CAN pin is that the declarations which do
-// the positioning are still present and still on the right axis.
+// The resize handles are positioned and revealed entirely by CSS, jsdom performs no layout, and
+// this component's scoped styles are never injected in the test environment (document.styleSheets
+// is empty when it mounts), so nothing here can measure where a handle lands or whether a person
+// could see it. Two things ARE decidable without layout, and this suite pins both:
+//   - which of the stylesheet's rules SELECT a given handle in a given editor state, answered by
+//     running the component's own selectors back over the real mounted DOM with element.matches();
+//   - that the declarations doing the positioning are present and on the axis they have to be on.
+// Whether the handles then look right, and whether a drag from one resizes the image, needs a real
+// browser.
 //
-// The regression this exists for actually shipped: upstream writes both ends of an edge handle's
-// long axis as INLINE styles (left:0 and right:0 for top/bottom), which over-constrains a
-// fixed-size box, so the browser drops one end and the handle collapses onto a corner. Measured
-// against the compiled bundle, the eight directions produced four distinct positions -- the feature
-// looked complete because eight handle ELEMENTS existed. Auto margins on the over-constrained axis
-// are what separate them, and they are also the only fix that works from a stylesheet at all: an
-// inline style outranks any non-important rule, so overriding left/right here would be discarded
-// silently. Verifying the positions themselves needs a real browser.
-describe('RichTextInput resize handle positioning contract', () => {
-  // ?raw so the assertions read the file's own text: the compiled component carries no styles here.
-  // Comments are stripped first, and the slice starts at the FIRST <style scoped>, because the
-  // block's own prose mentions that tag and uses the word auto -- either would otherwise decide
-  // these assertions instead of the declarations doing.
-  const style = richTextInputSource
-    .slice(richTextInputSource.indexOf('<style scoped>'))
-    .replace(/\/\*[\s\S]*?\*\//g, '')
+// The regressions these exist for both shipped. Upstream writes both ends of an edge handle's long
+// axis as INLINE styles (left:0 and right:0 for top/bottom), which over-constrains a fixed-size
+// box, so the browser drops one end and the handle collapses onto a corner -- the feature looked
+// complete because eight handle ELEMENTS existed while only four positions were reachable. And
+// upstream attaches the handles from the node view's constructor and removes them only when the
+// editor stops being editable, so an image nobody has selected still carried eight of them.
+// ?raw so the assertions read the file's own text: the compiled component carries no styles here.
+// The slice starts after the FIRST <style scoped> and stops at </style>, and comments are stripped,
+// because the template above and the block's own prose both use words like `auto` and `display` --
+// any of which would otherwise decide these assertions instead of the declarations doing.
+const STYLE_OPEN = '<style scoped>'
+const styleBlock = richTextInputSource
+  .slice(richTextInputSource.indexOf(STYLE_OPEN) + STYLE_OPEN.length)
+  .split('</style>')[0]
+  .replace(/\/\*[\s\S]*?\*\//g, '')
 
-  function declarationsFor(direction: string): string {
-    const rule = style
-      .split('}')
-      .find((block: string) => block.includes(`[data-resize-handle="${direction}"]`))
-    return rule ?? ''
+type StyleRule = { selectors: string[]; body: string }
+
+// Sound only because this block contains no at-rules and no nesting; both would need a real parser.
+const styleRules: StyleRule[] = styleBlock
+  .split('}')
+  .map((chunk) => chunk.split('{'))
+  .filter((parts) => parts.length === 2)
+  .map(([selector, body]) => ({
+    selectors: selector.split(',').map((s) => runtimeSelector(s.trim())).filter(Boolean),
+    body: body.trim(),
+  }))
+
+// `A :deep(B)` compiles to `A[data-v-hash] B`. The scope attribute never reaches the test build, so
+// dropping the `:deep(...)` wrapper leaves exactly the selector the browser would match on. Written
+// as a paren-counting scan rather than a regex because the hide rule's argument contains `:not(…)`.
+function runtimeSelector(selector: string): string {
+  const marker = ':deep('
+  let out = ''
+  let i = 0
+  for (;;) {
+    const at = selector.indexOf(marker, i)
+    if (at === -1) return out + selector.slice(i)
+    out += selector.slice(i, at)
+    let depth = 1
+    let j = at + marker.length
+    const start = j
+    for (; j < selector.length && depth > 0; j++) {
+      if (selector[j] === '(') depth += 1
+      else if (selector[j] === ')') depth -= 1
+    }
+    out += selector.slice(start, j - 1)
+    i = j
   }
+}
 
+/** Every `display` value the component's own stylesheet would apply to `el`, in source order. */
+function displayValuesFor(el: Element): string[] {
+  return styleRules
+    .filter((rule) => rule.selectors.some((s) => el.matches(s)))
+    .map((rule) => /display\s*:\s*([^;]+)/.exec(rule.body)?.[1].trim())
+    .filter((value): value is string => value !== undefined)
+}
+
+/** The one rule block whose selector list targets exactly this handle direction. */
+function declarationsFor(direction: string): string {
+  const rule = styleRules.find((r) =>
+    r.selectors.some((s) => s.endsWith(`[data-resize-handle="${direction}"]`)),
+  )
+  return rule?.body ?? ''
+}
+
+async function mountWithImage(): Promise<VueWrapper> {
+  const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+  await flushPromises()
+  const vm = w.vm as unknown as { editor: Editor }
+  vm.editor.commands.setImage({ src: 'https://example.com/cat.png' })
+  await flushPromises()
+  return w
+}
+
+function selectImageNode(w: VueWrapper): void {
+  const vm = w.vm as unknown as { editor: Editor }
+  const img = w.get('[data-resize-wrapper] img').element
+  vm.editor.commands.setNodeSelection(vm.editor.view.posAtDOM(img, 0))
+}
+
+describe('RichTextInput resize handle visibility contract', () => {
+  beforeEach(() => { setActivePinia(createPinia()) })
+
+  it('hides every handle while the image is not the selection', async () => {
+    const w = await mountWithImage()
+    const vm = w.vm as unknown as { editor: Editor }
+    vm.editor.commands.setTextSelection(1)
+    await flushPromises()
+
+    // The precondition and the consequence, in that order: without the first assertion the second
+    // would also pass if the class simply never appeared anywhere.
+    expect(w.get('[data-resize-container]').classes()).not.toContain('ProseMirror-selectednode')
+    const handles = w.findAll('[data-resize-handle]')
+    expect(handles.length).toBe(8)
+    for (const handle of handles) {
+      expect(displayValuesFor(handle.element)).toEqual(['none'])
+    }
+    w.unmount()
+  })
+
+  it('leaves every handle unhidden once the image is node-selected', async () => {
+    const w = await mountWithImage()
+    selectImageNode(w)
+    await flushPromises()
+
+    expect(w.get('[data-resize-container]').classes()).toContain('ProseMirror-selectednode')
+    const handles = w.findAll('[data-resize-handle]')
+    expect(handles.length).toBe(8)
+    for (const handle of handles) {
+      expect(displayValuesFor(handle.element)).toEqual([])
+    }
+    w.unmount()
+  })
+
+  // Read-only is checked against a constructed DOM rather than a disabled mount, because a disabled
+  // field has no handle elements left to select -- upstream removes them when the editor stops
+  // being editable, and "renders no resize handles when mounted already disabled" above pins that.
+  // What this adds is the belt-and-braces stylesheet rule: were a handle present anyway, a
+  // read-only field must hide it even while the node carries the selection class.
+  it('hides a handle in a read-only field even when the image is node-selected', () => {
+    const root = document.createElement('div')
+    root.className = 'rich-text__content'
+    root.innerHTML =
+      '<div class="ProseMirror" contenteditable="false">' +
+      '<div data-resize-container class="ProseMirror-selectednode">' +
+      '<div data-resize-wrapper><img><div data-resize-handle="top-left"></div></div>' +
+      '</div></div>'
+    const handle = root.querySelector('[data-resize-handle]')!
+    expect(displayValuesFor(handle)).toContain('none')
+  })
+})
+
+describe('RichTextInput resize handle positioning contract', () => {
   it.each(['top', 'bottom'])('centers the %s edge handle on its horizontal axis', (direction) => {
     expect(declarationsFor(direction)).toContain('margin-inline: auto')
   })
@@ -1524,4 +1639,43 @@ describe('RichTextInput resize handle positioning contract', () => {
       expect(declarationsFor(direction)).not.toContain('auto')
     },
   )
+
+  // Each handle straddles its edge by half its own size. The offset has to be a negative length
+  // derived from the size, and it has to sit on the side the handle is pinned to.
+  const OFFSET = 'var(--resize-handle-offset)'
+  it.each([
+    ['top-left', ['margin-top', 'margin-left']],
+    ['top-right', ['margin-top', 'margin-right']],
+    ['bottom-left', ['margin-bottom', 'margin-left']],
+    ['bottom-right', ['margin-bottom', 'margin-right']],
+    ['top', ['margin-top']],
+    ['bottom', ['margin-bottom']],
+    ['left', ['margin-left']],
+    ['right', ['margin-right']],
+  ] as const)('offsets the %s handle outward on %s', (direction, properties) => {
+    for (const property of properties) {
+      expect(declarationsFor(direction)).toContain(`${property}: ${OFFSET}`)
+    }
+  })
+
+  it('derives the straddle offset from the handle size so the two cannot drift apart', () => {
+    const base = styleRules.find((r) => r.selectors.includes('.rich-text__content [data-resize-handle]'))
+    expect(base?.body).toContain('--resize-handle-offset: calc(var(--resize-handle-size) / -2)')
+    expect(base?.body).toContain('width: var(--resize-handle-size)')
+    expect(base?.body).toContain('height: var(--resize-handle-size)')
+  })
+
+  // The one edit that looks safe and is not: an outward offset written on an edge handle's LONG
+  // axis replaces the auto margin that resolves upstream's over-constrained inline insets, and the
+  // handle collapses back onto a corner.
+  it.each([
+    ['top', ['margin-left', 'margin-right']],
+    ['bottom', ['margin-left', 'margin-right']],
+    ['left', ['margin-top', 'margin-bottom']],
+    ['right', ['margin-top', 'margin-bottom']],
+  ] as const)('writes no length on the %s handle\'s auto-margin axis', (direction, properties) => {
+    for (const property of properties) {
+      expect(declarationsFor(direction)).not.toContain(property)
+    }
+  })
 })
