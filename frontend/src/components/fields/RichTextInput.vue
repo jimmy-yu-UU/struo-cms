@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEditor, EditorContent, type Editor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -30,6 +30,7 @@ import {
 import { HEADING_LEVELS, type HeadingLevel } from './richTextHeadings'
 import { isInEditorTable, type TableAction } from './richTextTableActions'
 import { isEditorImage, type ImageAction } from './richTextImageActions'
+import { createDialogFocus } from './richTextDialogFocus'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -102,47 +103,8 @@ function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | 
   resolveLinkDialog = null
 }
 
-// Focus handover for every dialog in this file. reka's modal Dialog applies aria-hidden to the
-// rest of the page on the same reactive flush that flips `open` true, so an element still holding
-// focus at that instant ends up inside the hidden subtree -- it must be blurred first.
-// Blurring to <body> also disables reka's own focus restore: it only captures a restore target
-// when activeElement is not <body>, so this pair is the only thing putting focus back on a cancel.
-// Paths that close by deliberately refocusing the editor (submit, remove, insert, select) clear
-// this themselves, so a restore never fights a focus move that was intended.
-let restoreFocusOnDialogCancel: (() => void) | null = null
-
-// Focusing a node that has since left the document is a silent no-op that leaves focus on <body>,
-// and several callers' captured elements (menu items, the bubble menu's link button) are unmounted
-// by the time a cancel runs -- so the editor is the fallback.
-function focusIfStillInDocument(el: HTMLElement): () => void {
-  return () => {
-    if (document.body.contains(el)) el.focus()
-    else editor.value?.commands.focus()
-  }
-}
-
-// `restore`, when given, replaces the default "focus whatever was focused before" capture: the alt
-// and table-size dialogs open from a menu/popover item that unmounts on the way in, so the element
-// holding focus right now is not a usable restore target for them.
-function blurActiveElementBeforeDialog(restore?: () => void): void {
-  const active = document.activeElement
-  // `active !== document.body` so body is never stored as a restore target: nothing was
-  // meaningfully focused then, and a restore to it is indistinguishable from a genuine one.
-  restoreFocusOnDialogCancel = restore
-    ?? (active instanceof HTMLElement && active !== document.body ? focusIfStillInDocument(active) : null)
-  if (active instanceof HTMLElement) active.blur()
-}
-
-// The restore must be deferred a tick, not run synchronously. reka's FocusScope keeps its
-// document-level focus-trap listeners attached until Vue flushes the `open: false` prop change
-// that tears them down, and a focus() call made before that is caught by the still-active trap
-// and pulled straight back into the closing dialog.
-function refocusAfterDialogCancel(): void {
-  const restore = restoreFocusOnDialogCancel
-  restoreFocusOnDialogCancel = null
-  if (!restore) return
-  void nextTick().then(restore)
-}
+const { focusIfStillInDocument, blurActiveElementBeforeDialog, refocusAfterDialogCancel, clearRestore } =
+  createDialogFocus(() => { editor.value?.commands.focus() })
 
 function openLinkDialog(
   initial: { href: string; newTab: boolean; canRemove: boolean },
@@ -175,12 +137,12 @@ function openLinkDialog(
 
 function onLinkDialogSubmit(value: { href: string; newTab: boolean }): void {
   settleLinkDialog(value)
-  restoreFocusOnDialogCancel = null
+  clearRestore()
 }
 
 function onLinkDialogRemove(): void {
   settleLinkDialog('remove')
-  restoreFocusOnDialogCancel = null
+  clearRestore()
 }
 
 // Fires for every close, including Cancel, Esc and an overlay click -- not only a plain cancel:
@@ -241,7 +203,7 @@ function insertImage(id: string, alt = ''): void {
 
 function onImageSelected(id: string): void {
   insertImage(id)
-  restoreFocusOnDialogCancel = null
+  clearRestore()
   imageDialogOpen.value = false
 }
 
@@ -382,7 +344,7 @@ function onTableAction(action: TableAction): void {
 function onTableInsert(size: { rows: number; cols: number; withHeaderRow: boolean }): void {
   editor.value?.chain().focus()
     .insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: size.withHeaderRow }).run()
-  restoreFocusOnDialogCancel = null
+  clearRestore()
 }
 
 // Opened by the table menu's "custom size…" entry; RichTextTableSizeDialog below reads it.
@@ -500,7 +462,7 @@ function onImageAltDialogSubmit(alt: string): void {
   // Bailing out silently is deliberate -- the point is only that the wrong image is never written.
   if (!imageAltDialogNode || selectedNodeOf(ed) !== imageAltDialogNode) return
   ed.chain().focus().updateAttributes('image', { alt }).run()
-  restoreFocusOnDialogCancel = null
+  clearRestore()
 }
 
 // Depends on RichTextImageAltDialog.submit() emitting 'submit' BEFORE its trailing
