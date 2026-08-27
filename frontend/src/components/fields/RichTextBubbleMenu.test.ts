@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createI18n } from 'vue-i18n'
@@ -66,8 +66,20 @@ const Harness = defineComponent({
   },
 })
 
+// Everything this file puts into document.body, so afterEach can take it back out. The test bodies
+// below still remove theirs on the happy path, but a body-level teardown is skipped the moment an
+// assertion above it throws -- and every assertion in this file queries document.body, so one
+// leaked host would put a second, stale `.rich-text__bubble` in front of every later query.
+const attachedToBody: HTMLElement[] = []
+
+function attachToBody<T extends HTMLElement>(el: T): T {
+  document.body.appendChild(el)
+  attachedToBody.push(el)
+  return el
+}
+
 function mountHarness(content = '<p>Hello world</p>', disabled = false): { w: VueWrapper; container: HTMLElement } {
-  const container = document.body.appendChild(document.createElement('div'))
+  const container = attachToBody(document.createElement('div'))
   const w = mount(Harness, { props: { content, disabled }, global: globalOpts, attachTo: container })
   return { w, container }
 }
@@ -118,11 +130,22 @@ function teardown(w: VueWrapper, container: HTMLElement): void {
 // The plugin's own update() routes a selection/doc change through `window.setTimeout` in
 // handleDebouncedUpdate, at updateDelay's default of 250ms (left unset here, so upstream's default
 // applies) -- that timer, not any Vue reactivity, is what gates whether show()/hide() has run by
-// the time an assertion reads the DOM. Real timers, not vitest's fake ones: the wait here is on
-// that 250ms window.setTimeout. Fake timers were not attempted. 300ms clears the 250ms window with
-// margin.
+// the time an assertion reads the DOM. Reaching it costs more than those 250ms alone: tiptap's
+// focus command defers view.focus() into a requestAnimationFrame (@tiptap/core's focus.ts), and
+// the plugin's own focusHandler then schedules a zero-delay setTimeout before the 250ms one, so
+// roughly 266ms of chained deferrals stand between an editor.commands.focus() and a settled DOM.
+//
+// Advanced on vitest's fake clock rather than waited out on the real one. A real-clock wait long
+// enough to cover that chain is still only a margin, and a margin is a race a loaded machine can
+// win -- the timers then fire after the assertion has already read the DOM. Virtual time has no
+// margin to lose. advanceTimersByTimeAsync, not the synchronous form, because each hop needs the
+// microtask queue drained for ProseMirror's and Vue's own promise work in between.
+// @vue/test-utils' flushPromises keeps working under the fake clock: it captures the real
+// setImmediate at module load.
+const BUBBLE_MENU_SETTLE_MS = 300
+
 async function settle(): Promise<void> {
-  await new Promise((resolve) => { setTimeout(resolve, 300) })
+  await vi.advanceTimersByTimeAsync(BUBBLE_MENU_SETTLE_MS)
   await flushPromises()
 }
 
@@ -138,6 +161,16 @@ function bubbleRoot() {
 const INLINE_IDS = RICH_TEXT_COMMANDS.filter((c) => c.group === 'inline').map((c) => c.id)
 
 describe('RichTextBubbleMenu', () => {
+  // File-wide, because every test here is gated on the plugin's debounce (see settle above), and
+  // installed before mount so the fake clock owns the whole chain of deferrals the editor sets up.
+  // Restored in afterEach rather than left to the suite's restoreMocks/clearMocks settings, which
+  // reset spies but not the clock.
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => {
+    vi.useRealTimers()
+    attachedToBody.splice(0).forEach((el) => { el.remove() })
+  })
+
   it('is absent from the DOM before anything is selected', async () => {
     const { w, container } = mountHarness()
     await flushPromises()
@@ -357,7 +390,7 @@ describe('RichTextBubbleMenu', () => {
     await settle()
     expect(bubbleRoot().exists()).toBe(true)
 
-    const elsewhere = document.body.appendChild(document.createElement('input'))
+    const elsewhere = attachToBody(document.createElement('input'))
     editor.view.dom.dispatchEvent(new FocusEvent('blur', { relatedTarget: elsewhere }))
     await settle()
 
