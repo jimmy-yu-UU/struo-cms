@@ -40,10 +40,12 @@ describe('createDialogFocus', () => {
 
   it('captures nothing when only body was focused', async () => {
     const focusEditor = vi.fn()
+    const bodyFocus = vi.spyOn(document.body, 'focus')
     const focus = createDialogFocus(focusEditor)
     focus.blurActiveElementBeforeDialog()
     focus.refocusAfterDialogCancel()
     await nextTick()
+    expect(bodyFocus).not.toHaveBeenCalled()
     expect(focusEditor).not.toHaveBeenCalled()
   })
 

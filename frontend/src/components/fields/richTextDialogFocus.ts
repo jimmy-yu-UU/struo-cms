@@ -8,7 +8,7 @@ export interface DialogFocus {
 }
 
 export function createDialogFocus(focusEditor: () => void): DialogFocus {
-  // Focus handover for every dialog in this file. reka's modal Dialog applies aria-hidden to the
+  // Focus handover for every dialog in RichTextInput.vue. reka's modal Dialog applies aria-hidden to the
   // rest of the page on the same reactive flush that flips `open` true, so an element still holding
   // focus at that instant ends up inside the hidden subtree -- it must be blurred first.
   // Blurring to <body> also disables reka's own focus restore: it only captures a restore target
@@ -32,6 +32,8 @@ export function createDialogFocus(focusEditor: () => void): DialogFocus {
   // holding focus right now is not a usable restore target for them.
   function blurActiveElementBeforeDialog(restore?: () => void): void {
     const active = document.activeElement
+    // `active !== document.body` so body is never stored as a restore target: nothing was
+    // meaningfully focused then, and a restore to it is indistinguishable from a genuine one.
     restoreFocusOnDialogCancel = restore
       ?? (active instanceof HTMLElement && active !== document.body ? focusIfStillInDocument(active) : null)
     if (active instanceof HTMLElement) active.blur()
@@ -48,8 +50,8 @@ export function createDialogFocus(focusEditor: () => void): DialogFocus {
     void nextTick().then(restore)
   }
 
-  // `restoreFocusOnDialogCancel` is a module-scope closure variable, not reachable from
-  // RichTextInput.vue -- callers that need to cancel a pending restore (submit, remove, insert,
+  // `restoreFocusOnDialogCancel` is a closure variable scoped to this factory call, not reachable
+  // from RichTextInput.vue -- callers that need to cancel a pending restore (submit, remove, insert,
   // select) go through this instead of assigning to it directly.
   function clearRestore(): void {
     restoreFocusOnDialogCancel = null
