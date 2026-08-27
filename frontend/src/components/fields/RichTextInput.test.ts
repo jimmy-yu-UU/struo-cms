@@ -3,8 +3,9 @@ import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-uti
 import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import type { Editor } from '@tiptap/vue-3'
+import { VueRenderer, type Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
+import { RichTextSlashExtension } from './richTextSlashExtension'
 import richTextInputSource from './RichTextInput.vue?raw'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
@@ -1590,6 +1591,9 @@ describe('RichTextInput', () => {
     const w = await mountSlash()
     editorOf(w).commands.insertContent('and/or')
     await flushPromises()
+    // Asserted first, and on the text rather than the markup: without it this passes for the wrong
+    // reason the moment the slash stops reaching the document at all.
+    expect(editorOf(w).getText()).toBe('and/or')
     expect(slashMenu()).toBeNull()
   })
 
@@ -1615,12 +1619,17 @@ describe('RichTextInput', () => {
     expect(slashMenu()).toBeNull()
   })
 
+  // Nothing in this repository enforces this. @tiptap/suggestion's apply() gates its whole
+  // match-and-allow block on editor.isEditable, so the plugin never gets far enough to consider
+  // opening -- which is why the extension carries no isEditable clause of its own. Kept as a
+  // tripwire on that upstream guarantee, to fire when a TipTap family bump comes up for review.
   it('does not open the menu when the field is read-only', async () => {
     const w = await mountSlash({ disabled: true })
     await flushPromises()
     const editor = editorOf(w)
     expect(editor.isEditable).toBe(false)
     await openSlash(editor)
+    expect(editor.getText()).toBe('/')
     expect(slashMenu()).toBeNull()
   })
 
@@ -1653,6 +1662,9 @@ describe('RichTextInput', () => {
     expect(slashOptions()).toHaveLength(0)
     expect(slashMenu()?.textContent).toContain('No matching commands')
     expect(editableOf(w).hasAttribute('aria-activedescendant')).toBe(false)
+    // aria-owns is not the option reference and must NOT come off here: the menu is still open,
+    // and the empty state it is showing is what the owning reference makes reachable.
+    expect(editableOf(w).hasAttribute('aria-owns')).toBe(true)
   })
 
   it('moves the selection with the arrow keys and wraps', async () => {
@@ -1685,6 +1697,7 @@ describe('RichTextInput', () => {
     // the new block. Asserted on the text rather than the markup, which carries the query's own
     // letters inside its tags either way.
     expect(editor.getText().trim()).toBe('')
+    expect(slashMenu()).toBeNull()
   })
 
   it('closes on Escape', async () => {
@@ -1766,6 +1779,68 @@ describe('RichTextInput', () => {
     slashKey(w, 'ArrowDown')
     expect(activeOption()).toBe(second)
     expect(scrolled).toHaveBeenCalledTimes(1)
+  })
+
+  // The two tests below are the only thing joining the extension's onSelect/onHover props to the
+  // component's select/hover emits. Each side pins its own half; rename either prop and the whole
+  // mouse path dies without a single keyboard test noticing.
+  it('runs the item under the pointer on mousedown', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor)
+    const third = slashOptions()[2]
+    expect(third.textContent?.trim()).toBe('Heading 4')
+    third.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+    await flushPromises()
+    expect(editor.getHTML()).toContain('<h4')
+    expect(editor.getText().trim()).toBe('')
+    expect(slashMenu()).toBeNull()
+  })
+
+  it('moves the selection to the option under the pointer', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    const fourth = slashOptions()[3]
+    // mouseenter does not bubble; dispatched on the element the listener is bound to.
+    fourth.dispatchEvent(new MouseEvent('mouseenter'))
+    expect(activeOption()).toBe(fourth)
+    expect(editableOf(w).getAttribute('aria-activedescendant')).toBe(fourth.id)
+  })
+
+  // The next two tests exist because onExit's two teardown calls are mutually redundant as far as
+  // the DOM is concerned -- either one alone removes the menu, so "the menu is gone" is no evidence
+  // that both ran, and the resources they release are different.
+  //
+  // This one covers props.mount()'s returned function: upstream registers a capture-phase
+  // pointerdown listener on document for dismissOnOutsideClick, and nothing else takes it off.
+  it('removes the outside-click listener when the menu closes', async () => {
+    const w = await mountSlash()
+    const added = vi.spyOn(document, 'addEventListener')
+    const removed = vi.spyOn(document, 'removeEventListener')
+    await openSlash(editorOf(w))
+    expect(added.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(1)
+    expect(removed.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(0)
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(removed.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(1)
+  })
+
+  // ...and this one covers the other call: nothing else releases the Vue component instance.
+  it('destroys the menu renderer when the menu closes', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    const destroy = vi.spyOn(VueRenderer.prototype, 'destroy')
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  // Extension.configure() takes a Partial, so nothing at the type level stops a fork from mounting
+  // this without a command context.
+  it('fails by name when the extension is used without a command context', () => {
+    expect(() => RichTextSlashExtension.options.context.openImageDialog())
+      .toThrow(/configure\(\{ context \}\)/)
   })
 })
 
