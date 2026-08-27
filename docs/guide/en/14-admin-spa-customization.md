@@ -416,15 +416,16 @@ part of that same bold text node instead of starting a new one, and does not ope
 follows from how `@tiptap/suggestion` matches prefixes and from each mark's own `inclusive` setting;
 it is not something StruoCMS's extension adds. The limitation is accepted as it stands today, not
 worked around — a fork that wants it gone would tighten the extension's own `allow` callback to check
-the character preceding the caret within the *block* (`state.doc.resolve(range.from)` already carries
-both the block and the caret's offset inside it), rather than relying only on upstream's
-text-node-scoped prefix check, but StruoCMS does not do this.
+the character preceding the `/`'s own position within the *block* (`state.doc.resolve(range.from)`
+already carries both the block and that position's offset inside it — `range.from` is where the `/`
+sits, not the caret, and the two diverge as soon as a query is typed after it), rather than relying
+only on upstream's text-node-scoped prefix check, but StruoCMS does not do this.
 
 **Where the item list comes from.** `buildSlashItems` (`richTextSlashCommands.ts`) assembles the menu
 from three sources, in this order: the heading levels in `richTextHeadings.ts`'s `HEADING_LEVELS`
-(H2 through H6); `richTextCommands.ts`'s command registry filtered to `group: 'block'` (bullet list,
-ordered list, blockquote, code block); and, after one hand-authored table item, that same registry
-filtered to `group: 'insert'` (horizontal rule, image). The table item — which inserts a 3×3 table
+(H2 through H6); `richTextCommands.ts`'s command registry filtered to `group: 'block'` (Bullet list,
+Numbered list, Blockquote, Code block); and, after one hand-authored table item, that same registry
+filtered to `group: 'insert'` (Horizontal rule, Insert image). The table item — which inserts a 3×3 table
 with a header row, `insertTable({ rows: 3, cols: 3, withHeaderRow: true })` — has to be hand-authored
 because the toolbar's own table control is a sized-grid popover and a custom-size dialog, not a single
 command, so it never joined the registry the other two sources read from. That gives the menu twelve
@@ -436,9 +437,9 @@ A fork adding an item edits whichever of those sources fits: another heading lev
 5 | 6` union that would need widening, its label comes from a `fields.richtext.heading${level}` locale
 key that both language files would need to gain, and heading 1 specifically cannot be added at all
 without a matching change to the sanitizer: `GanssHtmlSanitizer`'s tag allowlist starts at `h2`
-precisely because the page title is the H1 (see "The rich-text editor's typography" above), and with
-`KeepChildNodes` left at its default `false`, an `h1` written through this field would be stripped
-together with all of its text on save, not merely unwrapped. A new block-transform or insert command,
+precisely because the page title is the H1, and with `KeepChildNodes` left at its default `false`, an
+`h1` written through this field would be stripped together with all of its text on save, not merely
+unwrapped. A new block-transform or insert command,
 by contrast, goes cleanly into `richTextCommands.ts`'s registry with `group: 'block'` or `group:
 'insert'` and is picked up automatically, with nothing to change in `richTextSlashCommands.ts`.
 Anything that, like the table item, cannot be expressed as a single registry command needs its own

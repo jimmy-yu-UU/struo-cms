@@ -55,8 +55,16 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
         // narrower than it sounds, and that is the boundary we inherit rather than choose --
         // upstream measures the prefix inside the single text node before the caret
         // (findSuggestionMatch reads $position.nodeBefore.text) and not the block, so a slash typed
-        // right after a mark ends, as in "<strong>bold</strong>/", sits at offset 0 of a fresh text
-        // node, has no prefix character to reject, and does open the menu. startOfLine stays false.
+        // right after a NON-inclusive mark ends, as in "<a>read more</a>/", sits at offset 0 of a
+        // fresh text node, has no prefix character to reject, and does open the menu. An inclusive
+        // mark does not hit this: ProseMirror only drops a mark at a boundary when its own spec sets
+        // inclusive: false (read in prosemirror-model's ResolvedPos#marks(), which is what decides
+        // which marks a freshly typed character picks up), and neither Bold nor any other mark used
+        // here overrides that, so it falls back to the true default -- "<strong>bold</strong>/" stays
+        // part of the same, still-bold text node and does NOT open the menu on its own. Link is the
+        // mark that actually reaches this repo's boundary case, because it is configured
+        // non-inclusive below (autolink: false, and extension-link's own inclusive() returns that
+        // option verbatim) -- see RichTextInput.vue's Link.configure(). startOfLine stays false.
         //
         // No isEditable clause here: upstream's apply() wraps its whole match-and-allow block in
         // one, so this is unreachable for a read-only editor and the check could never be false.
