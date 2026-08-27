@@ -66,7 +66,7 @@ export function filterSlashItems(
     // No .toLowerCase() on the alias side: SLASH_ALIASES is pinned lowercase ASCII by
     // richTextSlashCommands.test.ts, so q (already lowercased above) compares correctly as-is.
     // Substring matching (not prefix, not exact) is intended here, the same as the label branch
-    // above -- 'ul' matching both bulletList's own alias and hr's 'rule' alias is accepted
+    // below -- 'ul' matching both bulletList's own alias and hr's 'rule' alias is accepted
     // over-matching for a candidate list navigated with arrow keys, not a bug to eliminate.
     (item) => item.label.toLowerCase().includes(q) || item.aliases.some((a) => a.includes(q)),
   )

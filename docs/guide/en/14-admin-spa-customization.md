@@ -418,8 +418,9 @@ it is not something StruoCMS's extension adds. The limitation is accepted as it 
 worked around — a fork that wants it gone would tighten the extension's own `allow` callback to check
 the character preceding the `/`'s own position within the *block* (`state.doc.resolve(range.from)`
 already carries both the block and that position's offset inside it). The two positions never
-coincide: from `findSuggestionMatch`'s own gate (`from < $position.pos`), the caret sits at
-`range.from + 1 + query.length` — one position past the `/` at minimum, more once a query is typed —
+coincide: from `findSuggestionMatch`'s own gate (`from < $position.pos && to >= $position.pos`), the
+caret sits at `range.from + 1 + query.length` — one position past the `/` at minimum, more once a
+query is typed —
 so a block-level clause has to test the character before `range.from`, never before the caret,
 rather than relying only on upstream's text-node-scoped prefix check, but StruoCMS does not do this.
 
@@ -490,6 +491,13 @@ ever dispatch a second, redundant exit, never change whether the menu closes. Ta
 alone — the extension's key handler returns `false` for it — so it falls through to ordinary tab
 behavior instead of being captured as a way to confirm the selection. Intercepting it would have
 pulled the field out of the form's normal tab order the moment a `/` happened to be on screen.
+
+**Dismissal.** Escape and an outside click — clicking into another field, say — both leave the
+query dismissed: retyping more of it does not reopen the menu, though a fresh `/` typed elsewhere
+still works normally. A blur instead — Tab, or in Chrome the window itself losing focus — closes the
+menu but releases the query, so returning to it and typing more of it reopens the menu; the
+distinction runs through upstream's own `shouldResetDismissed` suggestion option, wired here to fire
+only for a blur-driven exit.
 
 ## Restyling a vendored `ui/` component
 
