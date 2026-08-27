@@ -15,7 +15,24 @@ const i18n = createI18n({
 })
 
 let w: VueWrapper | null = null
-afterEach(() => { w?.unmount(); w = null })
+
+// The one attached test below (see its own comment) needs a real host in the document. Torn down
+// here rather than at the end of that test body, because a body-level teardown is skipped the
+// moment an assertion above it throws, leaving the dialog's DOM in the document for every later
+// test in the file to see.
+let attachedContainer: HTMLElement | null = null
+
+function attachContainer(): HTMLElement {
+  attachedContainer = document.body.appendChild(document.createElement('div'))
+  return attachedContainer
+}
+
+afterEach(() => {
+  w?.unmount()
+  w = null
+  attachedContainer?.remove()
+  attachedContainer = null
+})
 
 function build(props: Partial<{ open: boolean; alt: string }> = {}): VueWrapper {
   return mount(RichTextImageAltDialog, {
@@ -103,7 +120,7 @@ describe('RichTextImageAltDialog', () => {
   // this assertion fails whether or not the description exists, proving nothing.
   it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     w = mount(RichTextImageAltDialog, {
       props: { open: true, alt: 'A red bicycle' },
       global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
@@ -112,6 +129,5 @@ describe('RichTextImageAltDialog', () => {
     await flushPromises()
     const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
     expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
-    container.remove()
   })
 })

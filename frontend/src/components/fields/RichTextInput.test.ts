@@ -91,11 +91,29 @@ if (!document.elementFromPoint) {
 }
 
 describe('RichTextInput', () => {
+  // A handful of tests below need `attachTo` a real, document-attached host (document.activeElement
+  // never moves for a detached tree, and reka resolves ids with document.getElementById). Torn down
+  // from afterEach rather than at the end of the test body, because a body-level teardown is skipped
+  // the moment an assertion above it throws -- which would leave that test's whole editor DOM in the
+  // document for every later test in the file to match against. Same reason vitest.setup.ts unmounts
+  // wrappers from a global afterEach instead of trusting each test to do it.
+  const attachedContainers: HTMLElement[] = []
+
+  function attachContainer(): HTMLElement {
+    const el = document.body.appendChild(document.createElement('div'))
+    attachedContainers.push(el)
+    return el
+  }
+
   beforeEach(() => {
     setActivePinia(createPinia())
   })
   afterEach(() => {
     vi.restoreAllMocks()
+    // restoreMocks/clearMocks (vite.config.ts) reset spies but not the clock, so the tests that
+    // call useBubbleMenuClock() below need this to hand the real one back.
+    vi.useRealTimers()
+    attachedContainers.splice(0).forEach((el) => { el.remove() })
     i18n.global.locale.value = 'en'
   })
 
@@ -637,7 +655,7 @@ describe('RichTextInput', () => {
   // The insert-image dialog shares the alt/link dialogs' blur-then-restore helpers; this pins the
   // same synchronous destination for its own entry point.
   it('blurs the editor before the insert-image dialog opens', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -648,7 +666,6 @@ describe('RichTextInput', () => {
     expect(document.activeElement).toBe(document.body)
     await clicked
     w.unmount()
-    container.remove()
   })
 
   it('applies the typography prose classes to the editable surface', async () => {
@@ -697,7 +714,7 @@ describe('RichTextInput', () => {
   // disabled case below) needs `attachTo: document.body` — every other test in this file mounts
   // detached, which is fine for them but would make a focus assertion vacuously pass on `body`.
   it('focuses the editor when a click lands on the padded wrapper, not the editable', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     await w.get('.rich-text__content').trigger('click')
@@ -706,13 +723,12 @@ describe('RichTextInput', () => {
     await waitForEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
-    container.remove()
   })
 
   // ProseMirror's own EditorView.focus() only calls dom.focus() when the view is editable, so the
   // click handoff on a disabled editor is a verified no-op, not a guess — this pins that.
   it('does not focus a disabled editor when the padded wrapper is clicked', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p>abc</p>', disabled: true }, global: globalOpts, attachTo: container,
     })
@@ -721,7 +737,6 @@ describe('RichTextInput', () => {
     await waitForEditorReactivity()
     expect(document.activeElement).not.toBe(w.get('.ProseMirror').element)
     w.unmount()
-    container.remove()
   })
 
   // Upstream only ever adds `is-editor-empty` to the current textblock, whatever tag it is — the
@@ -1036,7 +1051,7 @@ describe('RichTextInput', () => {
   // aria-hidden console warning the blur exists for. The destination is asserted exactly:
   // "not the editor" would also pass if focus moved somewhere else still inside the hidden subtree.
   it('blurs the editor before the alt dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
       global: globalOpts, attachTo: container,
@@ -1053,7 +1068,6 @@ describe('RichTextInput', () => {
     menuVm.runImage('editAlt')
     expect(document.activeElement).toBe(document.body)
     w.unmount()
-    container.remove()
   })
 
   // Pins the destination and the timing of the restore, NOT the explicit restore itself: this test
@@ -1064,7 +1078,7 @@ describe('RichTextInput', () => {
   // The close is simulated with $emit rather than a Cancel-button click: the mechanism under test
   // is RichTextInput's own close-change handler, not that button's wiring.
   it('restores focus to the editor when the alt dialog is cancelled', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
       global: globalOpts, attachTo: container,
@@ -1091,14 +1105,13 @@ describe('RichTextInput', () => {
     await waitForEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
-    container.remove()
   })
 
   // The discriminating half: the element focused when the alt dialog opens is a context-menu item
   // that is gone by the time the cancel runs, so a restore built from the default capture focuses
   // a detached node and leaves focus on <body>. Fails if onImageAction drops its explicit restore.
   it('restores focus to the editor even when the element focused before the alt dialog is unmounted', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="a cat"></p>' },
       global: globalOpts, attachTo: container,
@@ -1121,7 +1134,6 @@ describe('RichTextInput', () => {
     await waitForEditorReactivity()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
-    container.remove()
   })
 
   // Fails if onImageAltDialogSubmit stops clearing the captured pre-dialog target. The single
@@ -1129,7 +1141,7 @@ describe('RichTextInput', () => {
   // to have fired its synchronous focus(), too short for tiptap's own deferred dom.focus() to have
   // landed -- so activeElement here can only reflect the stale restore.
   it('does not restore stale pre-dialog focus after a successful alt-dialog submit', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p><img src="https://example.com/cat.png" alt="old"></p>' },
       global: globalOpts, attachTo: container,
@@ -1155,13 +1167,12 @@ describe('RichTextInput', () => {
     await nextTick()
     expect(document.activeElement).not.toBe(editorEl)
     w.unmount()
-    container.remove()
   })
 
   // The table-size dialog reaches the same helpers through one more layer (RichTextTableMenu's
   // popover); this pins the same synchronous destination for that entry point.
   it('blurs the editor before the table-size dialog opens', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -1173,7 +1184,6 @@ describe('RichTextInput', () => {
     expect(document.activeElement).toBe(document.body)
     await clicked
     w.unmount()
-    container.remove()
   })
 
   it('inserts a custom-sized table from the dialog', async () => {
@@ -1234,10 +1244,28 @@ describe('RichTextInput', () => {
   // template) dispatches through window.setTimeout at updateDelay's default of 250ms whenever the
   // selection is non-collapsed -- selectAll() below produces exactly that case, so a synchronous
   // assertion right after selecting/focusing would still see the pre-selection (hidden) state.
-  // Real timers, not vitest's fake ones: the wait here is on that 250ms window.setTimeout inside
-  // handleDebouncedUpdate. Fake timers were not attempted. 300ms clears the 250ms window with margin.
+  // Two more deferrals sit in front of that one: tiptap's focus command defers view.focus() into a
+  // requestAnimationFrame (@tiptap/core's focus.ts), and the plugin's own focusHandler then
+  // schedules a zero-delay setTimeout, so ~266ms of chained deferrals gate the assertion.
+  //
+  // Advanced on vitest's fake clock, not waited out on the real one. A real-clock wait over that
+  // chain is only ever a margin, and a margin is a race: with this suite run concurrently against
+  // itself, so the timers land late, the previous real 300ms wait failed here repeatedly. Virtual
+  // time removes the margin instead of widening it. Same approach as RichTextBubbleMenu.test.ts,
+  // which states the rest of the constraint; the clock is installed per test rather than file-wide
+  // only because most tests in THIS file are not bubble-menu tests and wait on real
+  // requestAnimationFrames (waitForEditorReactivity), which a fake clock would strand.
+  const BUBBLE_MENU_SETTLE_MS = 300
+
+  // Call as the first statement of a test, before mount: the fake clock has to be in place before
+  // the editor schedules any of the deferrals above. vi.useRealTimers() runs in this describe's
+  // afterEach, so it is restored even when an assertion throws.
+  function useBubbleMenuClock(): void {
+    vi.useFakeTimers()
+  }
+
   async function settleBubbleMenu(): Promise<void> {
-    await new Promise((resolve) => { setTimeout(resolve, 300) })
+    await vi.advanceTimersByTimeAsync(BUBBLE_MENU_SETTLE_MS)
     await flushPromises()
   }
 
@@ -1256,7 +1284,8 @@ describe('RichTextInput', () => {
   // command and link, which is the one command in the inline group that depends on the context
   // RichTextInput builds and does not export (richTextCommands.ts's RichTextCommandContext).
   it('shows the bubble menu over a real selection, and a click through it runs the command on the document', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    useBubbleMenuClock()
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -1285,7 +1314,6 @@ describe('RichTextInput', () => {
     expect(vm.editor.isActive('link')).toBe(true)
 
     w.unmount()
-    container.remove()
   })
 
   // The toolbar and the bubble menu render the same data-cmd values while the menu is
@@ -1295,7 +1323,8 @@ describe('RichTextInput', () => {
   // that leaves the toolbar's own reactive state stale after a command run through the OTHER
   // surface, is invisible anywhere else in this suite.
   it('does not double-fire a command shared with the toolbar, and the toolbar reflects a change made through the menu', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    useBubbleMenuClock()
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -1313,11 +1342,13 @@ describe('RichTextInput', () => {
     // Toggled ON, not on-and-off: a click that fired the command twice (once through each
     // surface) would leave this false instead.
     expect(vm.editor.isActive('bold')).toBe(true)
-    await waitForEditorReactivity()
+    // settleBubbleMenu, not waitForEditorReactivity: useBubbleMenuClock() faked
+    // requestAnimationFrame too, so the frames that helper awaits only run when the virtual clock
+    // is advanced -- which advancing past the debounce window already does, several times over.
+    await settleBubbleMenu()
     expect(w.get('.rich-text__toolbar [data-cmd="bold"]').attributes('data-active')).toBe('true')
 
     w.unmount()
-    container.remove()
   })
 
   // BubbleMenuPlugin arms `preventHide` on its own mousedown, which swallows the very next blur, so
@@ -1330,7 +1361,8 @@ describe('RichTextInput', () => {
   // blur path a no-op -- only then does reaching this assertion prove hide() (and the matching
   // pluginKey string on both ends) is doing the work.
   it('hides the bubble menu when its own link button opens the dialog', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    useBubbleMenuClock()
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -1348,7 +1380,6 @@ describe('RichTextInput', () => {
     expect(new DOMWrapper(document.body).find('.rich-text__bubble').exists()).toBe(false)
 
     w.unmount()
-    container.remove()
   })
 
   // The bubble menu's link button is unmounted by hide() before the cancel runs, so this pins
@@ -1359,7 +1390,8 @@ describe('RichTextInput', () => {
   // focus, so the button could never be the captured activeElement and the test would not
   // discriminate.
   it('restores focus to the editor when the link dialog opened from the bubble menu is cancelled', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    useBubbleMenuClock()
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p>abc</p>' },
       global: { ...globalOpts, stubs: { ...stubs, Button: false } },
@@ -1381,10 +1413,11 @@ describe('RichTextInput', () => {
     expect(document.body.contains(linkBtn)).toBe(false)
     w.findComponent(RichTextLinkDialog).vm.$emit('update:open', false)
     await nextTick()
-    await waitForEditorReactivity()
+    // settleBubbleMenu, not waitForEditorReactivity: see the note in the double-fire test above --
+    // requestAnimationFrame is on the virtual clock here, so it has to be advanced, not awaited.
+    await settleBubbleMenu()
     expect(document.activeElement).toBe(w.get('.ProseMirror').element)
     w.unmount()
-    container.remove()
   })
 
   // The link-dialog half of the same blur. jsdom's synthetic click does not reproduce a native
@@ -1392,7 +1425,7 @@ describe('RichTextInput', () => {
   // blur moves focus off WHATEVER held it. The destination is asserted exactly, not as "not the
   // editor", which would also pass for focus landing elsewhere inside the hidden subtree.
   it('blurs the editor before the link dialog opens, so focus is not left behind for an aria-hidden ancestor to catch', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -1406,14 +1439,13 @@ describe('RichTextInput', () => {
     expect(document.activeElement).toBe(document.body)
     await clicked
     w.unmount()
-    container.remove()
   })
 
   // The restore half. reka cannot do this itself once focus is on <body>, so onLinkDialogOpenChange
   // is the only thing putting focus back. Closed via $emit, matching an Escape or overlay click,
   // because the mechanism under test is that handler and not any button's wiring.
   it('restores focus to whatever held it before the link dialog opened, when the dialog is cancelled', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     const vm = w.vm as unknown as { editor: Editor }
@@ -1429,7 +1461,6 @@ describe('RichTextInput', () => {
     await nextTick()
     expect(document.activeElement).toBe(editorEl)
     w.unmount()
-    container.remove()
   })
 
   // The table-size dialog's own half. Its pre-dialog focus is the "Custom size..." entry, which
@@ -1439,7 +1470,7 @@ describe('RichTextInput', () => {
   // Button is un-stubbed here: the shared stub renders an HTMLUnknownElement, which jsdom will not
   // focus, so the test would fail for a reason unrelated to the code under test.
   it('restores focus to the table toolbar button when the table-size dialog is cancelled', async () => {
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, {
       props: { modelValue: '<p>a</p>' },
       global: { ...globalOpts, stubs: { ...stubs, Button: false } },
@@ -1454,7 +1485,6 @@ describe('RichTextInput', () => {
     await nextTick()
     expect(document.activeElement).toBe(trigger)
     w.unmount()
-    container.remove()
   })
 
   // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
@@ -1466,7 +1496,7 @@ describe('RichTextInput', () => {
   // this assertion fails whether or not the description exists, so it would prove nothing.
   it('renders a description on the image dialog, so reka does not warn about a dangling aria-describedby', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const container = document.body.appendChild(document.createElement('div'))
+    const container = attachContainer()
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts, attachTo: container })
     await flushPromises()
     await w.get('[data-cmd="image"]').trigger('click')
@@ -1474,7 +1504,6 @@ describe('RichTextInput', () => {
     const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
     expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
     w.unmount()
-    container.remove()
   })
 })
 
