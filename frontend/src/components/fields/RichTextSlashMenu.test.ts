@@ -44,7 +44,7 @@ describe('RichTextSlashMenu', () => {
     expect(opts[1].attributes('data-active')).toBe('true')
   })
 
-  // Task 6 sets aria-activedescendant on the editor to this exact id; the two must agree.
+  // richTextSlashExtension.ts sets aria-activedescendant on the editor to this exact id; the two must agree.
   it('gives each option the id the extension will point at', () => {
     const w = mountMenu({ idPrefix: 'abc' })
     expect(w.findAll('[role="option"]')[1].attributes('id')).toBe('abc-table')

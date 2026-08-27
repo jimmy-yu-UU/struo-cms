@@ -81,7 +81,7 @@ describe('richTextCommands', () => {
   // available to whichever surface wants that slice. Headings and tables never entered this
   // registry, so no group covers them. Pinning the exact membership here is what makes any such
   // surface's contract change visible in THIS file's diff.
-  it('partitions the commands into the groups the later batches consume', () => {
+  it('partitions the commands into groups by the contract each one carries', () => {
     expect(idsOf('inline')).toEqual(['bold', 'italic', 'strike', 'subscript', 'superscript', 'link'])
     expect(idsOf('align')).toEqual(['alignLeft', 'alignCenter', 'alignRight', 'alignJustify'])
     expect(idsOf('block')).toEqual(['bulletList', 'orderedList', 'blockquote', 'codeBlock'])

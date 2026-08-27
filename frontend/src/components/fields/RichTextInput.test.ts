@@ -1629,16 +1629,29 @@ describe('RichTextInput', () => {
     expect(slashMenu()).toBeNull()
   })
 
-  // The upstream boundary the prefix rule comes with, pinned so it is a known limitation rather
-  // than a surprise: the prefix is measured inside the single text node before the caret, and a
-  // slash typed right after a mark ends starts a new one.
-  it('opens the menu for a slash that starts a text node just after a mark', async () => {
+  // Bold carries no inclusive override, so it falls back to ProseMirror's own default of
+  // inclusive: true: without clearing the mark first, a slash typed right after bold text joins
+  // the existing bold text node instead of starting a fresh one, and the menu does not open.
+  it('opens the menu for a slash typed once the bold mark is cleared first', async () => {
     const w = await mountSlash({ modelValue: '<p><strong>bold</strong></p>' })
     const editor = editorOf(w)
     editor.commands.focus('end')
     editor.commands.unsetMark('bold')
     await openSlash(editor)
     expect(editor.getHTML()).toBe('<p><strong>bold</strong>/</p>')
+    expect(slashMenu()).not.toBeNull()
+  })
+
+  // Link is the mark that actually reaches this in production, with no unsetMark needed first: it
+  // is configured non-inclusive (Link.configure({ autolink: false }) in RichTextInput.vue, and
+  // extension-link's own inclusive() returns that option verbatim), so a slash typed with no space
+  // right after a link already sits at offset 0 of a fresh text node.
+  it('opens the menu for a slash typed immediately after a link, with no space', async () => {
+    const w = await mountSlash({ modelValue: '<p><a href="https://example.com">read more</a></p>' })
+    const editor = editorOf(w)
+    editor.commands.focus('end')
+    await openSlash(editor)
+    expect(editor.getHTML()).toBe('<p><a href="https://example.com">read more</a>/</p>')
     expect(slashMenu()).not.toBeNull()
   })
 
@@ -1997,8 +2010,9 @@ describe('RichTextInput', () => {
     expect(pageScroll).not.toHaveBeenCalled()
   })
 
-  // Tabbing away, or focus leaving by any route other than a click outside, used to leave the menu
-  // floating over the form indefinitely with the unfocused editable still advertising it.
+  // A blur dispatches no transaction, so nothing in the suggestion plugin's own state would
+  // otherwise notice focus leaving -- without this, tabbing away, or any route out other than a
+  // click outside, would leave the menu on screen with an unfocused editable still advertising it.
   it('closes the menu and drops both ARIA references when the editor loses focus', async () => {
     const w = await mountSlash()
     const editable = editableOf(w)
