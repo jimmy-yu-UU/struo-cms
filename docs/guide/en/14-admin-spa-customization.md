@@ -102,10 +102,11 @@ a new feature belongs.
 
 The **toolbar** is the comprehensive surface: it renders `richTextCommands.ts`'s entire command
 registry as buttons, in order — every inline mark, alignment, block conversion, the link command,
-horizontal rule, image, and undo/redo — plus a heading-level dropdown and a table-insert popover
-that sit between two of the registry's own segments without ever joining it, because a dropdown and a
-sized-grid popover need UI a single `run(editor, ctx)` function cannot express. It is always on
-screen and never depends on a selection existing.
+horizontal rule, image, and undo/redo — plus three controls that never joined that registry at all: a
+heading-level dropdown, a text-color picker (`RichTextColorMenu.vue`), and a table-insert popover with
+its own sized grid and custom-size dialog. None of the three fits the registry's single `run(editor,
+ctx)` shape — a dropdown, a color palette, and a sized grid each need UI of their own. The toolbar is
+always on screen and never depends on a selection existing.
 
 The **bubble menu** is deliberately narrower: it filters that same registry down to the commands whose
 `group` is `'inline'` (`RichTextBubbleMenu.vue`'s `INLINE_COMMANDS`), so it can never carry a command
@@ -397,39 +398,59 @@ Typing `/` inside the `richText` field opens a keyboard-driven menu of blocks to
 in `richTextSlashExtension.ts` on top of upstream's own `@tiptap/suggestion`. The trigger rule is
 upstream's, not one StruoCMS wrote: a `/` opens the menu only where the character right before it —
 inside the single text node ending at the caret, not the surrounding block — is a space or nothing at
-all (`allowedPrefixes` is left at its upstream default, `[' ']`). That is what keeps `and/or` and a
-URL path from opening it: in both cases the `/` sits between two ordinary characters of the same text
-node.
+all (`allowedPrefixes` is left at its upstream default, `[' ']`). That is what keeps `and/or` and a URL
+path being typed from opening it: in both cases the character immediately before the `/` is an
+ordinary one, not a space and not the start of a text node.
 
 "Nothing at all" is narrower than it sounds, and it is worth stating plainly as a known limitation
 rather than a design choice: because the boundary upstream measures is the text node and not the
-block, a `/` typed exactly where a mark such as bold or a link ends and plain text resumes also opens
-the menu — that position is offset 0 of a brand-new text node, with no character before it for the
-prefix check to reject. A user who types `/` immediately after some bold text, with no space in
-between, will see the menu open, which can be surprising. This follows from how `@tiptap/suggestion`
-matches prefixes; it is not something StruoCMS's extension adds, and there is no workaround that would
-not also break the "start of a line" case the same rule exists to allow.
+block, a `/` typed exactly where a *non-inclusive* mark ends and plain text resumes also opens the
+menu, because that position is offset 0 of a brand-new text node, with no character before it for the
+prefix check to reject. A link is the case that actually reaches this: typing `/` right after
+`<a>read more</a>`, with no space in between, opens the menu, because this editor's `Link` mark is
+configured non-inclusive (its `autolink` option is `false`, and the extension's own `inclusive()`
+returns that option verbatim). Bold behaves differently, because it carries no such override and so
+falls back to ProseMirror's own default of `inclusive: true`: a `/` typed right after bold text stays
+part of that same bold text node instead of starting a new one, and does not open the menu on its own
+— only clearing the mark first, then typing `/`, reaches the same case a link reaches directly. This
+follows from how `@tiptap/suggestion` matches prefixes and from each mark's own `inclusive` setting;
+it is not something StruoCMS's extension adds. The limitation is accepted as it stands today, not
+worked around — a fork that wants it gone would tighten the extension's own `allow` callback to check
+the character preceding the caret within the *block* (`state.doc.resolve(range.from)` already carries
+both the block and the caret's offset inside it), rather than relying only on upstream's
+text-node-scoped prefix check, but StruoCMS does not do this.
 
 **Where the item list comes from.** `buildSlashItems` (`richTextSlashCommands.ts`) assembles the menu
 from three sources, in this order: the heading levels in `richTextHeadings.ts`'s `HEADING_LEVELS`
 (H2 through H6); `richTextCommands.ts`'s command registry filtered to `group: 'block'` (bullet list,
 ordered list, blockquote, code block); and, after one hand-authored table item, that same registry
-filtered to `group: 'insert'` (horizontal rule, image). The table item has to be hand-authored because
-the toolbar's own table control is a sized-grid popover and a custom-size dialog, not a single
+filtered to `group: 'insert'` (horizontal rule, image). The table item — which inserts a 3×3 table
+with a header row, `insertTable({ rows: 3, cols: 3, withHeaderRow: true })` — has to be hand-authored
+because the toolbar's own table control is a sized-grid popover and a custom-size dialog, not a single
 command, so it never joined the registry the other two sources read from. That gives the menu twelve
-items in total, always in this order: Heading 2 through Heading 6, Bullet List, Ordered List,
-Blockquote, Code Block, Table, Horizontal Rule, Insert Image.
+items in total, always in this order: Heading 2 through Heading 6, Bullet list, Numbered list,
+Blockquote, Code block, Table, Horizontal rule, Insert image.
 
 A fork adding an item edits whichever of those sources fits: another heading level goes into
-`HEADING_LEVELS`; a new block-transform or insert command goes into `richTextCommands.ts`'s registry
-with `group: 'block'` or `group: 'insert'` and is picked up automatically, with nothing to change in
-`richTextSlashCommands.ts`; anything that, like the table item, cannot be expressed as a single
-registry command needs its own entry written directly into `buildSlashItems`.
+`HEADING_LEVELS`, though that alone is not enough to ship one safely — `HeadingLevel` is a `2 | 3 | 4 |
+5 | 6` union that would need widening, its label comes from a `fields.richtext.heading${level}` locale
+key that both language files would need to gain, and heading 1 specifically cannot be added at all
+without a matching change to the sanitizer: `GanssHtmlSanitizer`'s tag allowlist starts at `h2`
+precisely because the page title is the H1 (see "The rich-text editor's typography" above), and with
+`KeepChildNodes` left at its default `false`, an `h1` written through this field would be stripped
+together with all of its text on save, not merely unwrapped. A new block-transform or insert command,
+by contrast, goes cleanly into `richTextCommands.ts`'s registry with `group: 'block'` or `group:
+'insert'` and is picked up automatically, with nothing to change in `richTextSlashCommands.ts`.
+Anything that, like the table item, cannot be expressed as a single registry command needs its own
+entry written directly into `buildSlashItems` — including its own alias, since a hand-authored item
+sits outside the alias table described next.
 
-**Aliases.** Every item needs at least one alias to be reachable by typing: the query typed after `/`
-is matched as a case-insensitive substring against both the item's translated label and its aliases.
-Headings carry their aliases inline (`h2`…`h6`, `heading2`…`heading6`); every other registry-derived
-item's aliases come from `richTextSlashCommands.ts`'s own alias table:
+**Aliases.** The query typed after `/` is matched as a substring against both an item's translated
+label and its aliases (`filterSlashItems`), so an item is reachable by its label alone even with no
+alias typed — `/numbered` finds "Numbered list" purely through the label, for instance. Aliases exist
+to shorten that further. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`); the table
+item's single alias (`table`) is hand-authored alongside it in `buildSlashItems`; every other
+registry-derived item's aliases come from `richTextSlashCommands.ts`'s own alias table:
 
 | Item | Aliases |
 |---|---|
@@ -443,7 +464,10 @@ item's aliases come from `richTextSlashCommands.ts`'s own alias table:
 Aliases are deliberately lowercase ASCII identifiers, not translated strings, and that is on purpose:
 they exist so a command can be reached by typing right after `/`, and for a zh-TW input method that is
 exactly the moment nothing has been composed yet — the input is still plain ASCII. Translating an
-alias would remove the one thing it exists for.
+alias would remove the one thing it exists for. The match is case-insensitive only on the label and
+query side — the typed query is lowercased before comparing, but an alias itself is compared as
+written — so the table above is a real constraint on any alias a fork adds: it has to be lowercase
+already, or an upper-case query would never match it.
 
 **What does not trigger it.** Inside a code block, the menu never opens: the extension's own `allow`
 callback checks whether the caret's parent node is a `codeBlock` and refuses the match there — a rule
@@ -454,12 +478,14 @@ even considering whether to open the menu. StruoCMS's extension carries no read-
 own — none is needed.
 
 **Keyboard model.** With the menu open, Arrow Down and Arrow Up move the highlighted item, wrapping
-past either end of the list; Enter runs the highlighted item; Escape closes the menu, handled entirely
-by `@tiptap/suggestion` itself before the extension's own key handler is even consulted. Tab is
-deliberately left alone — the extension's key handler returns `false` for it — so it falls through to
-ordinary tab behavior instead of being captured as a way to confirm the selection. Intercepting it
-would have pulled the field out of the form's normal tab order the moment a `/` happened to be on
-screen.
+past either end of the list; Enter runs the highlighted item. Escape closes the menu: upstream's own
+`handleKeyDown` still calls the extension's own key handler first on Escape, the same as it does for
+any other key, but then dispatches the exit transaction and returns `true` regardless of what that
+handler returned — so an Escape branch added to the extension's own handler would run, but could only
+ever dispatch a second, redundant exit, never change whether the menu closes. Tab is deliberately left
+alone — the extension's key handler returns `false` for it — so it falls through to ordinary tab
+behavior instead of being captured as a way to confirm the selection. Intercepting it would have
+pulled the field out of the form's normal tab order the moment a `/` happened to be on screen.
 
 ## Restyling a vendored `ui/` component
 
