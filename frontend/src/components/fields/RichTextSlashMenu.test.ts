@@ -38,6 +38,10 @@ describe('RichTextSlashMenu', () => {
     const opts = w.findAll('[role="option"]')
     expect(opts[0].attributes('aria-selected')).toBe('false')
     expect(opts[1].attributes('aria-selected')).toBe('true')
+    // aria-selected is the a11y-tree signal; data-active is the sighted-user equivalent that the
+    // styling hooks into. Both must move together or a keyboard user sees no visible selection.
+    expect(opts[0].attributes('data-active')).toBe('false')
+    expect(opts[1].attributes('data-active')).toBe('true')
   })
 
   // Task 6 sets aria-activedescendant on the editor to this exact id; the two must agree.
@@ -46,8 +50,9 @@ describe('RichTextSlashMenu', () => {
     expect(w.findAll('[role="option"]')[1].attributes('id')).toBe('abc-table')
   })
 
-  // A click that lets its mousedown through blurs the editor, and the suggestion state dies with
-  // the focus -- so the emit would land on a menu that is already gone.
+  // preventDefault on mousedown keeps DOM focus (and the live ProseMirror selection) in the editor
+  // instead of letting the browser's default mousedown behaviour blur it, so the range the caller's
+  // command later reads is still valid at the time the emit is handled.
   it('selects on mousedown and prevents the default', async () => {
     const w = mountMenu()
     const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
@@ -60,6 +65,10 @@ describe('RichTextSlashMenu', () => {
     const w = mountMenu()
     await w.findAll('[role="option"]')[1].trigger('mouseenter')
     expect(w.emitted('hover')).toEqual([[1]])
+    // The component is stateless: hover only emits, it never moves the selection itself. That stays
+    // the caller's job (selectedIndex is a prop) -- the hovered option must not become selected on
+    // its own just because it was hovered.
+    expect(w.findAll('[role="option"]')[1].attributes('aria-selected')).toBe('false')
   })
 
   it('does not emit select on a plain click', async () => {
