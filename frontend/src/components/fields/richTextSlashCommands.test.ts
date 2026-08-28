@@ -19,6 +19,18 @@ const resolve = resolveFrom(en)
 
 const items = buildSlashItems(resolve)
 
+// Maps a built item's id back to the labelKey buildSlashItems resolved it from, so a test can read
+// an item's true English label straight from the English catalogue -- independently of the item's
+// own enLabel field, which is what's under test below and so cannot be trusted as the source of it.
+function labelKeyFor(id: string): string {
+  const heading = /^heading(\d)$/.exec(id)
+  if (heading) return `fields.richtext.heading${heading[1]}`
+  if (id === 'table') return 'fields.richtext.table'
+  const command = RICH_TEXT_COMMANDS.find((c) => c.id === id)
+  if (!command) throw new Error(`no labelKey mapping for slash item id: ${id}`)
+  return command.labelKey
+}
+
 describe('buildSlashItems', () => {
   it('lists headings, then block conversions, then the inserts', () => {
     expect(items.map((i) => i.id)).toEqual([
@@ -32,25 +44,6 @@ describe('buildSlashItems', () => {
     expect(items.find((i) => i.id === 'heading2')?.label).toBe('Heading 2')
     expect(items.find((i) => i.id === 'table')?.label).toBe('Table')
     expect(items.every((i) => i.label.length > 0)).toBe(true)
-  })
-
-  // A registry command with no SLASH_ALIASES entry is still reachable now, through enLabel --
-  // this is the invariant that actually protects a future addition, replacing the old "every item
-  // has an alias" check whose premise (no alias means unreachable) this fix removed.
-  it('reaches an item through its English label alone, with an empty alias list', () => {
-    const synthetic: RichTextSlashItem = {
-      id: 'synthetic', label: '合成指令', enLabel: 'synthetic command', aliases: [], run: () => {},
-    }
-    expect(filterSlashItems([synthetic], 'synthetic').map((i) => i.id)).toEqual(['synthetic'])
-  })
-
-  // Unchanged by this fix: SLASH_ALIASES itself is untouched (enLabel is a separate field, matched
-  // separately in filterSlashItems), so this invariant still protects the same thing it always did
-  // -- an upper-case query would never match an alias that wasn't already lowercase.
-  it('keeps every alias lowercase ASCII', () => {
-    for (const item of items) {
-      for (const alias of item.aliases) expect(alias, `${item.id}/${alias}`).toMatch(/^[a-z0-9]+$/)
-    }
   })
 })
 
@@ -95,15 +88,34 @@ describe('filterSlashItems', () => {
     expect(filterSlashItems(zh, 'table').map((i) => i.id)).toEqual(['table'])
   })
 
+  it('reaches an item through its English label alone, with an empty alias list', () => {
+    const synthetic: RichTextSlashItem = {
+      id: 'synthetic', label: '合成指令', enLabel: 'synthetic command', aliases: [], run: () => {},
+    }
+    expect(filterSlashItems([synthetic], 'synthetic').map((i) => i.id)).toEqual(['synthetic'])
+  })
+
+  it('keeps enLabel lowercase', () => {
+    for (const item of items) expect(item.enLabel, item.id).toBe(item.enLabel.toLowerCase())
+  })
+
+  // An upper-case query would never match an alias that wasn't already lowercase.
+  it('keeps every alias lowercase ASCII', () => {
+    for (const item of items) {
+      for (const alias of item.aliases) expect(alias, `${item.id}/${alias}`).toMatch(/^[a-z0-9]+$/)
+    }
+  })
+
   it('returns an empty list when nothing matches', () => {
     expect(filterSlashItems(items, 'zzzz')).toEqual([])
   })
 })
 
-// Every test above builds items from the English bundle, so a query that only ever matched through
-// a translated label would still pass here even under a locale where that label carries no ASCII at
-// all. These build from zh-TW instead, the locale the defect was found under.
-describe('filterSlashItems (zh-TW build, English-label queries)', () => {
+// The describe block above resolves every item's translated label through the English bundle, a
+// synthetic stand-in, or the label-of-one stub above -- never the zh-TW catalogue -- so a query
+// that only matched because the translated label happened to carry ASCII would still pass there.
+// These build from zh-TW instead, the locale the defect was found under.
+describe('filterSlashItems (zh-TW build)', () => {
   const zhItems = buildSlashItems(resolveFrom(zhTW))
 
   it.each([
@@ -121,6 +133,18 @@ describe('filterSlashItems (zh-TW build, English-label queries)', () => {
 
   it('reaches both block commands, not only the one carrying a matching alias', () => {
     expect(filterSlashItems(zhItems, 'block').map((i) => i.id)).toEqual(['blockquote', 'codeBlock'])
+  })
+
+  // The query here is read from the English catalogue directly (labelKeyFor + resolve), not from
+  // the item's own enLabel -- deriving it from enLabel itself could never catch enLabel being
+  // computed wrong, since a wrong enLabel and a query derived from that same wrong value would
+  // still agree with each other. This is what actually protects a future registry or hand-authored
+  // entry whose enLabel silently stops being the English catalogue (translated by mistake, say).
+  it('reaches every item through the full text of its own English label', () => {
+    for (const item of zhItems) {
+      const query = resolve(labelKeyFor(item.id)).toLowerCase()
+      expect(filterSlashItems(zhItems, query).map((i) => i.id), item.id).toContain(item.id)
+    }
   })
 })
 

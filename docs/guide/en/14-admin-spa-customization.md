@@ -447,8 +447,12 @@ by contrast, goes cleanly into `richTextCommands.ts`'s registry with `group: 'bl
 'insert'` and is picked up automatically, with nothing to change in `richTextSlashCommands.ts`.
 Anything that, like the table item, cannot be expressed as a single registry command needs its own
 entry written directly into `buildSlashItems`, outside the alias table described next — but, like
-everything else, it is reachable by its English name with no alias needed at all; an alias there is
-only for a shorter form on top of that, the same as it is everywhere else.
+everything else, it is reachable by its English name with no alias needed at all, on one condition:
+its `enLabel` has to be resolved from the English catalogue specifically, the same way the table
+item's own is, not from whichever translator built the rest of the entry. `enLabel: t(key)` sits
+right next to `label: t(key)` and looks like the obvious way to fill it in, but it ties the value to
+whichever locale is active rather than to English, and silently loses English-name reachability for
+that one entry under every locale but English itself.
 
 **Aliases.** The query typed after `/` is matched as a substring against three things: an item's
 translated label, that item's English label, and its aliases (`filterSlashItems`). The English-label
@@ -456,10 +460,12 @@ match holds regardless of which language the admin SPA is showing, so a command 
 is reachable by its own English name with no alias entry at all — `/numbered` finds "Numbered list"
 this way even under a zh-TW UI, where the label rendered on screen is "編號清單" and contains no
 "numbered" substring of its own, and even though none of `orderedList`'s own aliases (`ol`, `number`,
-`ordered`) contain "numbered" either. Aliases exist to shorten that further, mostly into abbreviations
-no English word supplies on its own. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`);
-the table item's single alias (`table`) is hand-authored alongside it in `buildSlashItems`; every
-other registry-derived item's aliases come from `richTextSlashCommands.ts`'s own alias table:
+`ordered`) contain "numbered" either. Aliases exist to shorten that further for some entries, into an
+abbreviation or synonym the label doesn't already spell out; several of the table's own entries below
+are already substrings of their item's own English label and would be reachable without being listed
+at all. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`); the table item's single
+alias (`table`) is hand-authored alongside it in `buildSlashItems`; every other registry-derived
+item's aliases come from `richTextSlashCommands.ts`'s own alias table:
 
 | Item | Aliases |
 |---|---|
