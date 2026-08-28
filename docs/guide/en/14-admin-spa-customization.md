@@ -446,16 +446,20 @@ unwrapped. A new block-transform or insert command,
 by contrast, goes cleanly into `richTextCommands.ts`'s registry with `group: 'block'` or `group:
 'insert'` and is picked up automatically, with nothing to change in `richTextSlashCommands.ts`.
 Anything that, like the table item, cannot be expressed as a single registry command needs its own
-entry written directly into `buildSlashItems` — including its own alias, since a hand-authored item
-sits outside the alias table described next.
+entry written directly into `buildSlashItems`, outside the alias table described next — but, like
+everything else, it is reachable by its English name with no alias needed at all; an alias there is
+only for a shorter form on top of that, the same as it is everywhere else.
 
-**Aliases.** The query typed after `/` is matched as a substring against both an item's translated
-label and its aliases (`filterSlashItems`), so an item is reachable by its label alone even with no
-alias typed — `/numbered` finds "Numbered list" purely through the label, for instance, even though
-none of `orderedList`'s own aliases (`ol`, `number`, `ordered`) contain "numbered". Aliases exist
-to shorten that further. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`); the table
-item's single alias (`table`) is hand-authored alongside it in `buildSlashItems`; every other
-registry-derived item's aliases come from `richTextSlashCommands.ts`'s own alias table:
+**Aliases.** The query typed after `/` is matched as a substring against three things: an item's
+translated label, that item's English label, and its aliases (`filterSlashItems`). The English-label
+match holds regardless of which language the admin SPA is showing, so a command added to the registry
+is reachable by its own English name with no alias entry at all — `/numbered` finds "Numbered list"
+this way even under a zh-TW UI, where the label rendered on screen is "編號清單" and contains no
+"numbered" substring of its own, and even though none of `orderedList`'s own aliases (`ol`, `number`,
+`ordered`) contain "numbered" either. Aliases exist to shorten that further, mostly into abbreviations
+no English word supplies on its own. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`);
+the table item's single alias (`table`) is hand-authored alongside it in `buildSlashItems`; every
+other registry-derived item's aliases come from `richTextSlashCommands.ts`'s own alias table:
 
 | Item | Aliases |
 |---|---|
@@ -469,10 +473,10 @@ registry-derived item's aliases come from `richTextSlashCommands.ts`'s own alias
 Aliases are deliberately lowercase ASCII identifiers, not translated strings, and that is on purpose:
 they exist so a command can be reached by typing right after `/`, and for a zh-TW input method that is
 exactly the moment nothing has been composed yet — the input is still plain ASCII. Translating an
-alias would remove the one thing it exists for. The match is case-insensitive only on the label and
-query side — the typed query is lowercased before comparing, but an alias itself is compared as
-written — so the table above is a real constraint on any alias a fork adds: it has to be lowercase
-already, or an upper-case query would never match it.
+alias would remove the one thing it exists for. The match is case-insensitive on the translated label
+and the English label — the typed query is lowercased before comparing against either — but an alias
+itself is compared as written, so the table above is a real constraint on any alias a fork adds: it
+has to be lowercase already, or an upper-case query would never match it.
 
 **What does not trigger it.** Inside a code block, the menu never opens: the extension's own `allow`
 callback checks whether the caret's parent node is a `codeBlock` and refuses the match there — a rule

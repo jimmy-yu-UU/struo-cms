@@ -1,16 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
 import en from '../../locales/en'
+import zhTW from '../../locales/zh-TW'
 import { RICH_TEXT_COMMANDS } from './richTextCommands'
-import { buildSlashItems, filterSlashItems } from './richTextSlashCommands'
+import { buildSlashItems, filterSlashItems, type RichTextSlashItem } from './richTextSlashCommands'
 
-function resolve(key: string): string {
-  const v = key.split('.').reduce<unknown>(
-    (acc, part) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[part] : undefined),
-    en as unknown,
-  )
-  if (typeof v !== 'string') throw new Error(`missing locale key: ${key}`)
-  return v
+function resolveFrom(dict: unknown): (key: string) => string {
+  return (key) => {
+    const v = key.split('.').reduce<unknown>(
+      (acc, part) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[part] : undefined),
+      dict,
+    )
+    if (typeof v !== 'string') throw new Error(`missing locale key: ${key}`)
+    return v
+  }
 }
+
+const resolve = resolveFrom(en)
 
 const items = buildSlashItems(resolve)
 
@@ -29,12 +34,19 @@ describe('buildSlashItems', () => {
     expect(items.every((i) => i.label.length > 0)).toBe(true)
   })
 
-  // A block/insert command added to the registry with no alias entry would silently arrive here
-  // unreachable by any ASCII query, which is the only way a zh-TW user reaches it.
-  it('gives every item at least one alias', () => {
-    for (const item of items) expect(item.aliases.length, item.id).toBeGreaterThan(0)
+  // A registry command with no SLASH_ALIASES entry is still reachable now, through enLabel --
+  // this is the invariant that actually protects a future addition, replacing the old "every item
+  // has an alias" check whose premise (no alias means unreachable) this fix removed.
+  it('reaches an item through its English label alone, with an empty alias list', () => {
+    const synthetic: RichTextSlashItem = {
+      id: 'synthetic', label: '合成指令', enLabel: 'synthetic command', aliases: [], run: () => {},
+    }
+    expect(filterSlashItems([synthetic], 'synthetic').map((i) => i.id)).toEqual(['synthetic'])
   })
 
+  // Unchanged by this fix: SLASH_ALIASES itself is untouched (enLabel is a separate field, matched
+  // separately in filterSlashItems), so this invariant still protects the same thing it always did
+  // -- an upper-case query would never match an alias that wasn't already lowercase.
   it('keeps every alias lowercase ASCII', () => {
     for (const item of items) {
       for (const alias of item.aliases) expect(alias, `${item.id}/${alias}`).toMatch(/^[a-z0-9]+$/)
@@ -85,6 +97,30 @@ describe('filterSlashItems', () => {
 
   it('returns an empty list when nothing matches', () => {
     expect(filterSlashItems(items, 'zzzz')).toEqual([])
+  })
+})
+
+// Every test above builds items from the English bundle, so a query that only ever matched through
+// a translated label would still pass here even under a locale where that label carries no ASCII at
+// all. These build from zh-TW instead, the locale the defect was found under.
+describe('filterSlashItems (zh-TW build, English-label queries)', () => {
+  const zhItems = buildSlashItems(resolveFrom(zhTW))
+
+  it.each([
+    'horizontal', 'numbered', 'insert', 'list', 'block',
+  ])('/%s reaches the same items as it does when built from English', (query) => {
+    expect(filterSlashItems(zhItems, query).map((i) => i.id))
+      .toEqual(filterSlashItems(items, query).map((i) => i.id))
+  })
+
+  // /list and /block are the sharper case: unfixed, they returned one matching item instead of an
+  // empty list, which reads as a working (if short) menu rather than a broken one.
+  it('reaches both list commands, not only the one carrying a matching alias', () => {
+    expect(filterSlashItems(zhItems, 'list').map((i) => i.id)).toEqual(['bulletList', 'orderedList'])
+  })
+
+  it('reaches both block commands, not only the one carrying a matching alias', () => {
+    expect(filterSlashItems(zhItems, 'block').map((i) => i.id)).toEqual(['blockquote', 'codeBlock'])
   })
 })
 
