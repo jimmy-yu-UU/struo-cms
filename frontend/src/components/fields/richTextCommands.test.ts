@@ -76,14 +76,15 @@ describe('richTextCommands', () => {
     expect(byId.get('image')).toBe('fields.richtext.insertImage')
   })
 
-  // The groups are the contract RT-5 (inline) and RT-7 (block + insert) consume. Pinning the exact
-  // membership here is what makes a later batch's surface change visible in THIS file's diff.
-  it('partitions the commands into the groups the later batches consume', () => {
+  // Each group is a semantic slice of the registry, not a claim about who currently reads it --
+  // 'inline' is what RichTextBubbleMenu.vue's floating toolbar filters on; the other groups are
+  // available to whichever surface wants that slice. Headings and tables never entered this
+  // registry, so no group covers them. Pinning the exact membership here is what makes any such
+  // surface's contract change visible in THIS file's diff.
+  it('partitions the commands into groups by the contract each one carries', () => {
     expect(idsOf('inline')).toEqual(['bold', 'italic', 'strike', 'subscript', 'superscript', 'link'])
-    expect(idsOf('block')).toEqual([
-      'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
-      'bulletList', 'orderedList', 'blockquote', 'codeBlock',
-    ])
+    expect(idsOf('align')).toEqual(['alignLeft', 'alignCenter', 'alignRight', 'alignJustify'])
+    expect(idsOf('block')).toEqual(['bulletList', 'orderedList', 'blockquote', 'codeBlock'])
     expect(idsOf('insert')).toEqual(['hr', 'image'])
     expect(idsOf('history')).toEqual(['undo', 'redo'])
   })

@@ -345,6 +345,8 @@ export default {
       sizeOutOfRange: 'Rows and columns must be between {min} and {max}.',
       placeholder: 'Write something…',
       selectionToolbar: 'Text formatting',
+      slashMenu: 'Insert block',
+      slashNoResults: 'No matching commands',
     },
   },
   filterBuilder: {

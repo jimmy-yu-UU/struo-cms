@@ -343,6 +343,8 @@ export default {
       sizeOutOfRange: '列數與欄數必須在 {min} 到 {max} 之間。',
       placeholder: '開始輸入…',
       selectionToolbar: '文字格式',
+      slashMenu: '插入區塊',
+      slashNoResults: '沒有符合的指令',
     },
   },
   filterBuilder: {

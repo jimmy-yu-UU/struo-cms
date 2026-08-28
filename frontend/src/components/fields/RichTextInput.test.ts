@@ -3,8 +3,9 @@ import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-uti
 import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import type { Editor } from '@tiptap/vue-3'
+import { VueRenderer, type Editor } from '@tiptap/vue-3'
 import RichTextInput from './RichTextInput.vue'
+import { RichTextSlashExtension } from './richTextSlashExtension'
 import richTextInputSource from './RichTextInput.vue?raw'
 import RichTextContextMenu from './RichTextContextMenu.vue'
 import RichTextImageAltDialog from './RichTextImageAltDialog.vue'
@@ -54,9 +55,12 @@ const i18n = createI18n({
       withHeaderRow: 'Include header row',
       sizeOutOfRange: 'Rows and columns must be between {min} and {max}.',
       placeholder: 'Write something…',
+      slashMenu: 'Insert block', slashNoResults: 'No matching commands',
     },
   } },
-  'zh-TW': { fields: { richtext: { placeholder: '開始輸入…' } } } },
+  // Only the keys the slash tests need translated: fallbackLocale 'en' supplies the rest, and the
+  // alias test below is only a test of the alias path while the zh-TW label carries no ASCII.
+  'zh-TW': { fields: { richtext: { placeholder: '開始輸入…', table: '表格' } } } },
 })
 
 // Dialog/Popover are reka compound components: DialogContent/PopoverContent inject context that
@@ -1527,6 +1531,506 @@ describe('RichTextInput', () => {
     const messages = warn.mock.calls.map((c) => c.map(String).join(' '))
     expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
     w.unmount()
+  })
+
+  // ---- slash commands -------------------------------------------------------------------
+  //
+  // The menu is not part of the mounted tree: @tiptap/suggestion's props.mount() appends it to
+  // document.body, so every query below goes through `document`, and it is reachable even though
+  // most of these mount detached. The editable, by contrast, is only reachable through the
+  // wrapper for a detached mount -- hence slashKey() taking one.
+
+  async function mountSlash(props: Record<string, unknown> = {}): Promise<VueWrapper> {
+    const w = mount(RichTextInput, { props: { modelValue: '<p></p>', ...props }, global: globalOpts })
+    await waitForEditorCreate()
+    return w
+  }
+
+  function editorOf(w: VueWrapper): Editor {
+    return (w.vm as unknown as { editor: Editor }).editor
+  }
+
+  function editableOf(w: VueWrapper): Element {
+    return w.get('.ProseMirror').element
+  }
+
+  async function openSlash(editor: Editor, query = ''): Promise<void> {
+    editor.commands.insertContent(`/${query}`)
+    // The plugin's view awaits its own items() call before dispatching the update that carries the
+    // list, so the options are two microtask turns behind the transaction that opened the menu --
+    // a single nextTick() sees the menu but no options in it.
+    await flushPromises()
+  }
+
+  function slashMenu(): HTMLElement | null {
+    return document.querySelector('[role="listbox"]')
+  }
+
+  function slashOptions(): HTMLElement[] {
+    return Array.from(document.querySelectorAll('[role="option"]'))
+  }
+
+  function activeOption(): HTMLElement | null {
+    return document.querySelector('[role="option"][aria-selected="true"]')
+  }
+
+  // jsdom performs no layout -- getBoundingClientRect, clientTop and clientHeight all read 0 --
+  // so the menu's geometry is supplied here. scrollTop is the one piece that is real: jsdom stores
+  // what is written to it, which is what makes the assertion below possible. The numbers are the
+  // ones a browser reports for this menu: 32px rows, eight of the twelve fully visible.
+  //
+  // The 1px border is modelled rather than zeroed: the rect a browser returns is the BORDER box,
+  // while scrollTop and clientHeight describe the content box inside it. Setting clientTop to 0 and
+  // the rect height equal to clientHeight would make both of those terms inert here while they stay
+  // load-bearing in a browser.
+  const SLASH_ROW = 32
+  const SLASH_VISIBLE_ROWS = 8
+  const SLASH_BORDER = 1
+  const SLASH_CONTENT_HEIGHT = SLASH_ROW * SLASH_VISIBLE_ROWS
+
+  function fakeRect(top: number, height: number): DOMRect {
+    return {
+      top, bottom: top + height, height, y: top, left: 0, right: 0, width: 0, x: 0,
+      toJSON: () => undefined,
+    } as unknown as DOMRect
+  }
+
+  function layOutSlashMenu(menu: HTMLElement, options: HTMLElement[]): void {
+    Object.defineProperty(menu, 'clientTop', { configurable: true, value: SLASH_BORDER })
+    Object.defineProperty(menu, 'clientHeight', { configurable: true, value: SLASH_CONTENT_HEIGHT })
+    menu.getBoundingClientRect = () => fakeRect(0, SLASH_CONTENT_HEIGHT + SLASH_BORDER * 2)
+    options.forEach((option, i) => {
+      option.getBoundingClientRect = () => (
+        fakeRect(SLASH_BORDER + i * SLASH_ROW - menu.scrollTop, SLASH_ROW)
+      )
+    })
+  }
+
+  function slashKey(w: VueWrapper, key: string): boolean {
+    const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    editableOf(w).dispatchEvent(ev)
+    return ev.defaultPrevented
+  }
+
+  it('opens the slash menu when a slash is typed', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    expect(slashMenu()).not.toBeNull()
+    expect(slashOptions().length).toBeGreaterThan(0)
+  })
+
+  it('does not open the menu for a slash inside a word', async () => {
+    const w = await mountSlash()
+    editorOf(w).commands.insertContent('and/or')
+    await flushPromises()
+    // Asserted first, and on the text rather than the markup: without it this passes for the wrong
+    // reason the moment the slash stops reaching the document at all.
+    expect(editorOf(w).getText()).toBe('and/or')
+    expect(slashMenu()).toBeNull()
+  })
+
+  // Bold carries no inclusive override, so it falls back to ProseMirror's own default of
+  // inclusive: true: without clearing the mark first, a slash typed right after bold text joins
+  // the existing bold text node instead of starting a fresh one, and the menu does not open.
+  it('opens the menu for a slash typed once the bold mark is cleared first', async () => {
+    const w = await mountSlash({ modelValue: '<p><strong>bold</strong></p>' })
+    const editor = editorOf(w)
+    editor.commands.focus('end')
+    editor.commands.unsetMark('bold')
+    await openSlash(editor)
+    expect(editor.getHTML()).toBe('<p><strong>bold</strong>/</p>')
+    expect(slashMenu()).not.toBeNull()
+  })
+
+  // Link is the mark that actually reaches this in production, with no unsetMark needed first: it
+  // is configured non-inclusive (Link.configure({ autolink: false }) in RichTextInput.vue, and
+  // extension-link's own inclusive() returns that option verbatim), so a slash typed with no space
+  // right after a link already sits at offset 0 of a fresh text node.
+  it('opens the menu for a slash typed immediately after a link, with no space', async () => {
+    const w = await mountSlash({ modelValue: '<p><a href="https://example.com">read more</a></p>' })
+    const editor = editorOf(w)
+    editor.commands.focus('end')
+    await openSlash(editor)
+    expect(editor.getHTML()).toBe('<p><a href="https://example.com">read more</a>/</p>')
+    expect(slashMenu()).not.toBeNull()
+  })
+
+  it('does not open the menu inside a code block', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    editor.commands.setCodeBlock()
+    await openSlash(editor)
+    expect(editor.getHTML()).toContain('<code>/</code>')
+    expect(slashMenu()).toBeNull()
+  })
+
+  // Nothing in this repository enforces this. @tiptap/suggestion's apply() gates its whole
+  // match-and-allow block on editor.isEditable, so the plugin never gets far enough to consider
+  // opening -- which is why the extension carries no isEditable clause of its own. Kept as a
+  // tripwire on that upstream guarantee, to fire when a TipTap family bump comes up for review.
+  it('does not open the menu when the field is read-only', async () => {
+    const w = await mountSlash({ disabled: true })
+    await flushPromises()
+    const editor = editorOf(w)
+    expect(editor.isEditable).toBe(false)
+    await openSlash(editor)
+    expect(editor.getText()).toBe('/')
+    expect(slashMenu()).toBeNull()
+  })
+
+  it('narrows the list as the query is typed', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w), 'h3')
+    expect(slashOptions().map((o) => o.textContent?.trim())).toEqual(['Heading 3'])
+  })
+
+  // The locale flips AFTER the editor is built, which is the point: an extension is constructed
+  // once, so a list built at construction time would still be the English one here.
+  it('finds an item by its ascii alias under a translated locale', async () => {
+    const w = await mountSlash()
+    i18n.global.locale.value = 'zh-TW'
+    await nextTick()
+    await openSlash(editorOf(w), 'table')
+    expect(slashOptions().map((o) => o.textContent?.trim())).toEqual(['表格'])
+  })
+
+  it('shows the empty state without closing, and drops the stale option reference', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'h')
+    expect(editableOf(w).hasAttribute('aria-activedescendant')).toBe(true)
+    // Narrowed to nothing rather than opened on nothing: dropping the reference is only a
+    // transition the code can get wrong once there is a reference to drop.
+    editor.commands.insertContent('zzzz')
+    await flushPromises()
+    expect(slashMenu()).not.toBeNull()
+    expect(slashOptions()).toHaveLength(0)
+    expect(slashMenu()?.textContent).toContain('No matching commands')
+    expect(editableOf(w).hasAttribute('aria-activedescendant')).toBe(false)
+    // aria-owns is not the option reference and must NOT come off here: the menu is still open,
+    // and the empty state it is showing is what the owning reference makes reachable.
+    expect(editableOf(w).hasAttribute('aria-owns')).toBe(true)
+  })
+
+  it('moves the selection with the arrow keys and wraps', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    const labels = slashOptions().map((o) => o.textContent?.trim())
+    expect(activeOption()?.textContent?.trim()).toBe(labels[0])
+
+    expect(slashKey(w, 'ArrowDown')).toBe(true)
+    expect(activeOption()?.textContent?.trim()).toBe(labels[1])
+
+    expect(slashKey(w, 'ArrowUp')).toBe(true)
+    expect(slashKey(w, 'ArrowUp')).toBe(true)
+    expect(activeOption()?.textContent?.trim()).toBe(labels[labels.length - 1])
+
+    expect(slashKey(w, 'ArrowDown')).toBe(true)
+    expect(activeOption()?.textContent?.trim()).toBe(labels[0])
+  })
+
+  // A tripwire on upstream, not a specification of ours. @tiptap/suggestion dispatches an
+  // intermediate update carrying items: [] before it awaits items(), so onUpdate's
+  // `selected >= items.length` guard fires on every keystroke and the selection returns to the top
+  // -- which is the behaviour a person expects, arrived at by accident. This fails if upstream ever
+  // skips that loading pass, or if anyone here sets initialItems or minQueryLength. The failure it
+  // guards is visible rather than silent (both data-active and aria-activedescendant follow the
+  // index, so a stale highlight is on screen), which is why a test is the whole remedy.
+  it('puts the selection back on the first option when the query changes', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor)
+    slashKey(w, 'ArrowDown')
+    slashKey(w, 'ArrowDown')
+    slashKey(w, 'ArrowDown')
+    expect(activeOption()?.textContent?.trim()).toBe('Heading 5')
+
+    editor.commands.insertContent('h')
+    await flushPromises()
+    // The narrowed list has to stay longer than the index we moved to, or the length guard would
+    // reset the selection on its own and this would prove nothing.
+    expect(slashOptions().length).toBeGreaterThan(3)
+    expect(activeOption()?.textContent?.trim()).toBe('Heading 2')
+  })
+
+  it('runs the selected item on Enter and removes the typed query', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'quote')
+    expect(slashKey(w, 'Enter')).toBe(true)
+    await flushPromises()
+    expect(editor.getHTML()).toContain('<blockquote>')
+    // Both halves are required, and a wrapping command is what makes the second one bite: running
+    // the item before the delete shifts every position after the wrapper's opening tokens, so the
+    // range no longer covers the text it was measured against and part of "/quote" survives inside
+    // the new block. Asserted on the text rather than the markup, which carries the query's own
+    // letters inside its tags either way.
+    expect(editor.getText().trim()).toBe('')
+    expect(slashMenu()).toBeNull()
+  })
+
+  it('closes on Escape', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    expect(slashKey(w, 'Escape')).toBe(true)
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+  })
+
+  // Not intercepted, so the browser moves focus itself -- and the menu then goes away with the
+  // blur that follows, which a dispatched keydown does not produce here. The blur test below is
+  // what covers the second half.
+  it('leaves Tab to the form, so the field keeps its place in the tab order', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    expect(slashKey(w, 'Tab')).toBe(false)
+  })
+
+  it('points aria-activedescendant at the selected option', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w), 'h')
+    const editable = editableOf(w)
+    expect(editable.getAttribute('aria-activedescendant')).toBe(activeOption()?.id)
+    // Half of the cross-task id contract: RichTextSlashMenu.vue builds the same string from the
+    // same prefix and the item's own id, and pins it from its own side.
+    expect(activeOption()?.id.endsWith('-slash-heading2')).toBe(true)
+
+    slashKey(w, 'ArrowDown')
+    expect(editable.getAttribute('aria-activedescendant')).toBe(activeOption()?.id)
+    expect(activeOption()?.id.endsWith('-slash-heading3')).toBe(true)
+  })
+
+  // aria-activedescendant on its own names an element that is neither a DOM descendant of the
+  // editable nor owned by it, and a reference like that is not required to resolve at all. This
+  // is the assertion that the announcement has somewhere to come from.
+  it('owns the mounted menu from the editable, so the referenced option is a logical descendant', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    const editable = editableOf(w)
+    const menu = slashMenu()
+    expect(menu).not.toBeNull()
+    expect(menu?.id).toBeTruthy()
+    expect(editable.getAttribute('aria-owns')).toBe(menu?.id)
+    expect(menu?.parentElement).toBe(document.body)
+    expect(editable.contains(menu)).toBe(false)
+    const referenced = document.getElementById(editable.getAttribute('aria-activedescendant') ?? '')
+    expect(menu?.contains(referenced)).toBe(true)
+
+    // Attributes written straight onto view.dom survive ProseMirror's own attribute patching only
+    // because it removes just the ones a previous decoration put there. Typing another character
+    // is the cheapest way to keep that true.
+    editorOf(w).commands.insertContent('h')
+    await flushPromises()
+    expect(editable.getAttribute('aria-owns')).toBe(menu?.id)
+  })
+
+  it('clears aria-activedescendant and aria-owns when the menu closes', async () => {
+    const w = await mountSlash()
+    const editable = editableOf(w)
+    await openSlash(editorOf(w))
+    expect(editable.hasAttribute('aria-activedescendant')).toBe(true)
+    expect(editable.hasAttribute('aria-owns')).toBe(true)
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(editable.hasAttribute('aria-activedescendant')).toBe(false)
+    expect(editable.hasAttribute('aria-owns')).toBe(false)
+  })
+
+  // The two tests below are the only thing joining the extension's onSelect/onHover props to the
+  // component's select/hover emits. Each side pins its own half; rename either prop and the whole
+  // mouse path dies without a single keyboard test noticing.
+  it('runs the item under the pointer on mousedown', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor)
+    const third = slashOptions()[2]
+    expect(third.textContent?.trim()).toBe('Heading 4')
+    const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    third.dispatchEvent(mousedown)
+    // The row's own handler unmounts the menu before the event reaches the root that cancels the
+    // default -- which still runs, because the propagation path is fixed when dispatch begins.
+    // Without the cancel the editor blurs, and a blur now closes the menu and drops the query.
+    expect(mousedown.defaultPrevented).toBe(true)
+    await flushPromises()
+    expect(editor.getHTML()).toContain('<h4')
+    expect(editor.getText().trim()).toBe('')
+    expect(slashMenu()).toBeNull()
+  })
+
+  it('moves the selection to the option under the pointer', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    // Hover counts only after real pointer movement -- see the test after this one.
+    document.dispatchEvent(new Event('pointermove'))
+    const fourth = slashOptions()[3]
+    // mouseenter does not bubble; dispatched on the element the listener is bound to.
+    fourth.dispatchEvent(new MouseEvent('mouseenter'))
+    expect(activeOption()).toBe(fourth)
+    expect(editableOf(w).getAttribute('aria-activedescendant')).toBe(fourth.id)
+  })
+
+  // A cursor left resting over the list must not steal the arrow keys. In a browser the rows
+  // themselves move under the stationary pointer once the list scrolls, the browser re-evaluates
+  // hover, and mouseenter arrives with no pointer movement behind it.
+  it('ignores hover that no pointer movement caused', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    document.dispatchEvent(new Event('pointermove'))
+    slashKey(w, 'ArrowDown')
+    const chosenByKeyboard = activeOption()
+    expect(chosenByKeyboard?.textContent?.trim()).toBe('Heading 3')
+
+    slashOptions()[7].dispatchEvent(new MouseEvent('mouseenter'))
+    expect(activeOption()).toBe(chosenByKeyboard)
+  })
+
+  // The next two tests exist because onExit's two teardown calls are mutually redundant as far as
+  // the DOM is concerned -- either one alone removes the menu, so "the menu is gone" is no evidence
+  // that both ran, and the resources they release are different.
+  //
+  // This one covers props.mount()'s returned function: upstream registers a capture-phase
+  // pointerdown listener on document for dismissOnOutsideClick, and nothing else takes it off.
+  it('removes the outside-click listener when the menu closes', async () => {
+    const w = await mountSlash()
+    const added = vi.spyOn(document, 'addEventListener')
+    const removed = vi.spyOn(document, 'removeEventListener')
+    await openSlash(editorOf(w))
+    expect(added.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(1)
+    expect(removed.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(0)
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(removed.mock.calls.filter((c) => c[0] === 'pointerdown' && c[2] === true)).toHaveLength(1)
+  })
+
+  // The pointermove and blur listeners this extension adds itself. Neither removal changes anything
+  // observable about the menu, so nothing else here can catch a missing one -- and a surviving blur
+  // handler would dispatch an exit transaction on every later blur of that editor for its whole
+  // life, on an element it merely assumes is still the same node.
+  it('releases the pointer and blur listeners it added when the menu closes', async () => {
+    const w = await mountSlash()
+    const editable = editableOf(w)
+    const docAdd = vi.spyOn(document, 'addEventListener')
+    const docRemove = vi.spyOn(document, 'removeEventListener')
+    const editableAdd = vi.spyOn(editable, 'addEventListener')
+    const editableRemove = vi.spyOn(editable, 'removeEventListener')
+
+    await openSlash(editorOf(w))
+    expect(docAdd.mock.calls.filter((c) => c[0] === 'pointermove')).toHaveLength(1)
+    expect(editableAdd.mock.calls.filter((c) => c[0] === 'blur')).toHaveLength(1)
+    expect(docRemove.mock.calls.filter((c) => c[0] === 'pointermove')).toHaveLength(0)
+    expect(editableRemove.mock.calls.filter((c) => c[0] === 'blur')).toHaveLength(0)
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(docRemove.mock.calls.filter((c) => c[0] === 'pointermove')).toHaveLength(1)
+    expect(editableRemove.mock.calls.filter((c) => c[0] === 'blur')).toHaveLength(1)
+  })
+
+  // Escape is an explicit "no" and upstream makes it stick. A blur is not a "no": Tab, a click into
+  // another field and, in Chrome, the window itself losing focus all produce one, and none of them
+  // should cost the writer the query they had half typed.
+  it('reopens on the same query after the editor was blurred', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'ta')
+    editableOf(w).dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+
+    editor.commands.insertContent('b')
+    await flushPromises()
+    expect(slashMenu()).not.toBeNull()
+  })
+
+  it('stays dismissed on the same query after Escape', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'ta')
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+
+    editor.commands.insertContent('b')
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+  })
+
+  // The pairing, not just the flag: whatever the last exit was has to be re-derived on every
+  // deactivation, so that a blur earlier in the session cannot make a later Escape reopen.
+  it('does not let an earlier blur make a later Escape reopen the menu', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    await openSlash(editor, 'ta')
+    editableOf(w).dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+    editor.commands.insertContent('b')
+    await flushPromises()
+    expect(slashMenu()).not.toBeNull()
+
+    slashKey(w, 'Escape')
+    await flushPromises()
+    editor.commands.insertContent('l')
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+  })
+
+  // ...and this one covers the other call: nothing else releases the Vue component instance.
+  it('destroys the menu renderer when the menu closes', async () => {
+    const w = await mountSlash()
+    await openSlash(editorOf(w))
+    const destroy = vi.spyOn(VueRenderer.prototype, 'destroy')
+    slashKey(w, 'Escape')
+    await flushPromises()
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  // The menu is its own scroll container, and it is the ONLY thing that may scroll. Element
+  // .scrollIntoView walks every scrollable ancestor up to the document, and the first sync() of an
+  // open runs before floating-ui has positioned the menu -- so it scrolled the page to its maximum
+  // and took the editor and the menu off-screen with it.
+  it('scrolls the menu itself past the fold, and never the page', async () => {
+    const w = await mountSlash()
+    const pageScroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+    await openSlash(editorOf(w))
+    const menu = slashMenu()
+    expect(menu).not.toBeNull()
+    layOutSlashMenu(menu as HTMLElement, slashOptions())
+
+    for (let i = 0; i < SLASH_VISIBLE_ROWS - 1; i += 1) slashKey(w, 'ArrowDown')
+    expect(activeOption()).toBe(slashOptions()[SLASH_VISIBLE_ROWS - 1])
+    expect(menu?.scrollTop).toBe(0)
+
+    slashKey(w, 'ArrowDown')
+    expect(menu?.scrollTop).toBe(SLASH_ROW)
+    slashKey(w, 'ArrowDown')
+    expect(menu?.scrollTop).toBe(SLASH_ROW * 2)
+
+    expect(pageScroll).not.toHaveBeenCalled()
+  })
+
+  // A blur dispatches no transaction, so nothing in the suggestion plugin's own state would
+  // otherwise notice focus leaving -- without this, tabbing away, or any route out other than a
+  // click outside, would leave the menu on screen with an unfocused editable still advertising it.
+  it('closes the menu and drops both ARIA references when the editor loses focus', async () => {
+    const w = await mountSlash()
+    const editable = editableOf(w)
+    await openSlash(editorOf(w))
+    expect(slashMenu()).not.toBeNull()
+
+    editable.dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+    expect(slashMenu()).toBeNull()
+    expect(editable.hasAttribute('aria-activedescendant')).toBe(false)
+    expect(editable.hasAttribute('aria-owns')).toBe(false)
+  })
+
+  // Extension.configure() takes a Partial, so nothing at the type level stops a fork from mounting
+  // this without a command context.
+  it('fails by name when the extension is used without a command context', () => {
+    expect(() => RichTextSlashExtension.options.context.openImageDialog())
+      .toThrow(/configure\(\{ context \}\)/)
   })
 })
 
