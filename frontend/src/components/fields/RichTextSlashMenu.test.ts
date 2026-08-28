@@ -12,7 +12,7 @@ const i18n = createI18n({
 })
 
 function item(id: string, label: string): RichTextSlashItem {
-  return { id, label, aliases: [id], run: () => {} }
+  return { id, label, enLabel: label.toLowerCase(), aliases: [id], run: () => {} }
 }
 
 const items = [item('heading2', 'Heading 2'), item('table', 'Table')]
