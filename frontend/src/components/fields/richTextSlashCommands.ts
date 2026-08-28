@@ -59,9 +59,10 @@ function resolveEnglish(key: string): string {
   return v
 }
 
-// Every labelKey the slash menu can ever use, resolved once here rather than lazily per item --
-// see resolveEnglish above for why. Keyed by labelKey so fromRegistry and the two hand-authored
-// call sites below (headings, table) can all share one lookup instead of each resolving their own.
+// Every labelKey this file's own sources know about statically (HEADING_LEVELS, RICH_TEXT_COMMANDS,
+// the table entry's own key), resolved once here rather than lazily per item -- see resolveEnglish
+// above for why. A hand-authored entry outside those three sources needs its own key added here
+// too, the same way the table item's is, or enLabelFor below has nothing to find for it.
 const EN_LABELS: ReadonlyMap<string, string> = new Map([
   ...HEADING_LEVELS.map(
     (level) => [headingLabelKey(level), resolveEnglish(headingLabelKey(level)).toLowerCase()] as const,

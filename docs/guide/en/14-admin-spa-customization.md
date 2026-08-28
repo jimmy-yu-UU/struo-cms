@@ -447,12 +447,14 @@ by contrast, goes cleanly into `richTextCommands.ts`'s registry with `group: 'bl
 'insert'` and is picked up automatically, with nothing to change in `richTextSlashCommands.ts`.
 Anything that, like the table item, cannot be expressed as a single registry command needs its own
 entry written directly into `buildSlashItems`, outside the alias table described next — but, like
-everything else, it is reachable by its English name with no alias needed at all, on one condition:
-its `enLabel` has to be resolved from the English catalogue specifically, the same way the table
-item's own is, not from whichever translator built the rest of the entry. `enLabel: t(key)` sits
-right next to `label: t(key)` and looks like the obvious way to fill it in, but it ties the value to
-whichever locale is active rather than to English, and silently loses English-name reachability for
-that one entry under every locale but English itself.
+everything else, it is reachable by its English name with no alias needed at all, on two
+conditions. Its `enLabel` has to come from `enLabelFor`, the same way the table item's own does, not
+from whichever translator built the rest of the entry: `enLabel: t(key)` sits right next to `label:
+t(key)` and looks like the obvious way to fill it in, but it ties the value to whichever locale is
+active rather than to English. And its labelKey has to be added to `EN_LABELS`'s own construction
+alongside the table item's — `enLabelFor` only looks up keys resolved there at module load, so a new
+key that skips this step throws every time the slash menu is asked to open, not at import time the
+way a missing key elsewhere in this same file does.
 
 **Aliases.** The query typed after `/` is matched as a substring against three things: an item's
 translated label, that item's English label, and its aliases (`filterSlashItems`). The English-label
