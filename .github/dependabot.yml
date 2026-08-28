@@ -49,6 +49,20 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
     groups:
+      # @tiptap/* packages in this family pin their peerDependencies to each
+      # other by exact version, not a range - @tiptap/suggestion@3.30.2 depends
+      # on '@tiptap/core': '3.30.2' and '@tiptap/pm': '3.30.2' verbatim, no
+      # caret. A group that only covers minor/patch would let Dependabot open
+      # one PR per package, and any PR that lands with the rest still on the
+      # old patch leaves an unsatisfiable peer graph until the others catch up
+      # - the exact failure mode that split this project's extension registry
+      # in two before. Grouping the whole family, majors included, is what
+      # makes "arrives as one PR or not at all" true; it has to come before
+      # frontend-minor-patch below, since Dependabot assigns a dependency to
+      # the first group whose patterns match it and frontend-minor-patch's
+      # `patterns: ["*"]` would otherwise claim these first.
+      tiptap:
+        patterns: ["@tiptap/*"]
       frontend-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]

@@ -85,6 +85,62 @@ touches first-party chrome such as the sidebar or breadcrumb, the corresponding 
 Chapter 3's `Branding:Name`/`Branding:LogoUrl` reach only the product name and logo, never the color
 palette — the palette is a template default edited in source, not a per-deployment configuration key.
 
+### The editor's interaction surfaces
+
+The `richText` field (`frontend/src/components/fields/RichTextInput.vue` and its neighbors) has five
+separate interaction surfaces. Each owns exactly one job, and the sections below walk through what
+each one does and why — knowing the division up front is what makes it possible, later, to tell where
+a new feature belongs.
+
+| Surface | Owns |
+|---|---|
+| Toolbar | The complete, always-visible command set |
+| Bubble menu | Inline formatting, offered at the current text selection |
+| Context menu | Structural operations on the table or image under the pointer |
+| Node views | The object's own direct-manipulation affordances |
+| Slash menu | Keyboard-driven block insertion |
+
+The **toolbar** is the comprehensive surface: it renders `richTextCommands.ts`'s entire command
+registry as buttons, in order — every inline mark, alignment, block conversion, the link command,
+horizontal rule, image, and undo/redo — plus three controls that never joined that registry at all: a
+heading-level dropdown, a text-color picker (`RichTextColorMenu.vue`), and a table-insert popover with
+its own sized grid and custom-size dialog. None of the three fits the registry's single `run(editor,
+ctx)` shape — a dropdown, a color palette, and a sized grid each need UI of their own. The toolbar is
+always on screen and never depends on a selection existing.
+
+The **bubble menu** is deliberately narrower: it filters that same registry down to the commands whose
+`group` is `'inline'` (`RichTextBubbleMenu.vue`'s `INLINE_COMMANDS`), so it can never carry a command
+the toolbar does not also have, and it appears only while a text selection exists, floating at that
+selection instead of asking the user to look away from it. It exists purely for convenience — reaching
+a mark without a trip to the toolbar — not to offer anything the toolbar lacks.
+
+The **context menu**, opened by right-click, is the odd one out: it never reads the general command
+registry at all. A right-click on a table offers row/column/header/delete actions from
+`richTextTableActions.ts`; a right-click directly on an image offers alt-text/delete actions from
+`richTextImageActions.ts`. Which menu appears is decided by what was actually clicked — an image
+sitting inside a table cell still gets the image menu — not by a broader notion of "current block."
+
+**Node views** are the object's own affordances, rendered as part of the object rather than as a menu
+or a button anywhere else. The image's eight resize handles are the only example today: dragging one
+is a direct pointer gesture on the image itself, with no command dispatched from a toolbar, menu, or
+extension. See "Resizing images in the editor" below for the mechanism.
+
+The **slash menu**, covered in its own section after image resizing below, is the keyboard path: typing
+`/` opens a list of blocks to insert without leaving the keyboard. It is not a filtered view of the
+toolbar — it carries its own separately assembled item list, because the set of things worth reaching
+by keyboard while writing (headings, block conversions, a table, an inserted rule or image) is not the
+same shape as "every button the toolbar has."
+
+Keeping these five apart is what makes "where does a new feature go" a mechanical question rather than
+a judgment call. A new formatting mark added to the registry with `group: 'inline'` reaches the
+toolbar and the bubble menu at once, with neither edited by hand. A new operation on an existing table
+or image cell belongs in that object's own action list, not in the general registry. A new kind of
+direct manipulation on the object itself belongs in a node view. A block a user should be able to
+reach without lifting a hand from the keyboard belongs in the slash menu's own item list, covered next
+after the image-resizing section. Adding a feature to the wrong surface either duplicates one that
+already exists elsewhere, or leaves it reachable only by mouse when a keyboard path was the actual
+point.
+
 ### The rich-text editor's typography
 
 The `richText` field's editable surface (`frontend/src/components/fields/RichTextInput.vue`) carries
@@ -335,6 +391,125 @@ content rather than merely changing markup. With `renderWrapper: true`, `getHTML
 and the sanitizer leaves `KeepChildNodes` at its default `false`, which drops a disallowed element
 together with its entire subtree. Every table in the value would therefore be removed on save, not
 unwrapped. Leave `renderWrapper` off, or allowlist `div` first.
+
+### Slash commands
+
+Typing `/` inside the `richText` field opens a keyboard-driven menu of blocks to insert, implemented
+in `richTextSlashExtension.ts` on top of upstream's own `@tiptap/suggestion`. The trigger rule is
+upstream's, not one StruoCMS wrote: a `/` opens the menu only where the character right before it —
+inside the single text node ending at the caret, not the surrounding block — is a space or nothing at
+all (`allowedPrefixes` is left at its upstream default, `[' ']`). That is what keeps `and/or` and a URL
+path being typed from opening it: in both cases the character immediately before the `/` is an
+ordinary one, not a space and not the start of a text node.
+
+"Nothing at all" is narrower than it sounds, and it is worth stating plainly as a known limitation
+rather than a design choice: because the boundary upstream measures is the text node and not the
+block, a `/` typed exactly where a *non-inclusive* mark ends and plain text resumes also opens the
+menu, because that position is offset 0 of a brand-new text node, with no character before it for the
+prefix check to reject. A link is the case that actually reaches this: typing `/` right after
+`<a>read more</a>`, with no space in between, opens the menu, because this editor's `Link` mark is
+configured non-inclusive (its `autolink` option is `false`, and the extension's own `inclusive()`
+returns that option verbatim). Bold behaves differently, because it carries no such override and so
+falls back to ProseMirror's own default of `inclusive: true`: a `/` typed right after bold text stays
+part of that same bold text node instead of starting a new one, and does not open the menu on its own
+— only clearing the mark first, then typing `/`, reaches the same case a link reaches directly. This
+follows from how `@tiptap/suggestion` matches prefixes and from each mark's own `inclusive` setting;
+it is not something StruoCMS's extension adds. The limitation is accepted as it stands today, not
+worked around — a fork that wants it gone would tighten the extension's own `allow` callback to check
+the character preceding the `/`'s own position within the *block* (`state.doc.resolve(range.from)`
+already carries both the block and that position's offset inside it). The two positions never
+coincide: from `findSuggestionMatch`'s own gate (`from < $position.pos && to >= $position.pos`), the
+caret sits at `range.from + 1 + query.length` — one position past the `/` at minimum, more once a
+query is typed —
+so a block-level clause has to test the character before `range.from`, never before the caret,
+rather than relying only on upstream's text-node-scoped prefix check, but StruoCMS does not do this.
+
+**Where the item list comes from.** `buildSlashItems` (`richTextSlashCommands.ts`) assembles the menu
+from three sources, in this order: the heading levels in `richTextHeadings.ts`'s `HEADING_LEVELS`
+(H2 through H6); `richTextCommands.ts`'s command registry filtered to `group: 'block'` (Bullet list,
+Numbered list, Blockquote, Code block); and, after one hand-authored table item, that same registry
+filtered to `group: 'insert'` (Horizontal rule, Insert image). The table item — which inserts a 3×3 table
+with a header row, `insertTable({ rows: 3, cols: 3, withHeaderRow: true })` — has to be hand-authored
+because the toolbar's own table control is a sized-grid popover and a custom-size dialog, not a single
+command, so it never joined the registry the other two sources read from. That gives the menu twelve
+items in total, always in this order: Heading 2 through Heading 6, Bullet list, Numbered list,
+Blockquote, Code block, Table, Horizontal rule, Insert image.
+
+A fork adding an item edits whichever of those sources fits: another heading level goes into
+`HEADING_LEVELS`, though that alone is not enough to ship one safely — `HeadingLevel` is a `2 | 3 | 4 |
+5 | 6` union that would need widening, its label comes from a `fields.richtext.heading${level}` locale
+key that both language files would need to gain, and heading 1 specifically cannot be added at all
+without a matching change to the sanitizer: `GanssHtmlSanitizer`'s tag allowlist starts at `h2`
+precisely because the page title is the H1, and with `KeepChildNodes` left at its default `false`, an
+`h1` written through this field would be stripped together with all of its text on save, not merely
+unwrapped. A new block-transform or insert command,
+by contrast, goes cleanly into `richTextCommands.ts`'s registry with `group: 'block'` or `group:
+'insert'` and is picked up automatically, with nothing to change in `richTextSlashCommands.ts`.
+Anything that, like the table item, cannot be expressed as a single registry command needs its own
+entry written directly into `buildSlashItems`, outside the alias table described next — but, like
+everything else, it is reachable by its English name with no alias needed at all, on two
+conditions. Its `enLabel` has to come from `enLabelFor`, the same way the table item's own does, not
+from whichever translator built the rest of the entry: `enLabel: t(key)` sits right next to `label:
+t(key)` and looks like the obvious way to fill it in, but it ties the value to whichever locale is
+active rather than to English. And its labelKey has to be added to `EN_LABELS`'s own construction
+alongside the table item's — `enLabelFor` only looks up keys resolved there at module load, so a new
+key that skips this step throws every time the slash menu is asked to open, not at import time the
+way a missing key elsewhere in this same file does.
+
+**Aliases.** The query typed after `/` is matched as a substring against three things: an item's
+translated label, that item's English label, and its aliases (`filterSlashItems`). The English-label
+match holds regardless of which language the admin SPA is showing, so a command added to the registry
+is reachable by its own English name with no alias entry at all — `/numbered` finds "Numbered list"
+this way even under a zh-TW UI, where the label rendered on screen is "編號清單" and contains no
+"numbered" substring of its own, and even though none of `orderedList`'s own aliases (`ol`, `number`,
+`ordered`) contain "numbered" either. Aliases exist to shorten that further for some entries, into an
+abbreviation or synonym the label doesn't already spell out; several of the table's own entries below
+are already substrings of their item's own English label and would be reachable without being listed
+at all. Headings carry theirs inline (`h2`…`h6`, `heading2`…`heading6`); the table item's single
+alias (`table`) is hand-authored alongside it in `buildSlashItems`; every other registry-derived
+item's aliases come from `richTextSlashCommands.ts`'s own alias table:
+
+| Item | Aliases |
+|---|---|
+| `bulletList` | `ul`, `bullet`, `list` |
+| `orderedList` | `ol`, `number`, `ordered` |
+| `blockquote` | `quote`, `blockquote` |
+| `codeBlock` | `code`, `pre` |
+| `hr` | `hr`, `divider`, `rule` |
+| `image` | `img`, `image`, `picture` |
+
+Aliases are deliberately lowercase ASCII identifiers, not translated strings, and that is on purpose:
+they exist so a command can be reached by typing right after `/`, and for a zh-TW input method that is
+exactly the moment nothing has been composed yet — the input is still plain ASCII. Translating an
+alias would remove the one thing it exists for. The match is case-insensitive on the translated label
+and the English label — the typed query is lowercased before comparing against either — but an alias
+itself is compared as written, so the table above is a real constraint on any alias a fork adds: it
+has to be lowercase already, or an upper-case query would never match it.
+
+**What does not trigger it.** Inside a code block, the menu never opens: the extension's own `allow`
+callback checks whether the caret's parent node is a `codeBlock` and refuses the match there — a rule
+StruoCMS added, not something upstream does on its own. In a read-only field, the menu also never
+opens, but for a different reason: `@tiptap/suggestion`'s own `apply()` gates its entire
+match-and-open logic on `editor.isEditable`, so a disabled field's editor never reaches the point of
+even considering whether to open the menu. StruoCMS's extension carries no read-only check of its
+own — none is needed.
+
+**Keyboard model.** With the menu open, Arrow Down and Arrow Up move the highlighted item, wrapping
+past either end of the list; Enter runs the highlighted item. Escape closes the menu: upstream's own
+`handleKeyDown` still calls the extension's own key handler first on Escape, the same as it does for
+any other key, but then dispatches the exit transaction and returns `true` regardless of what that
+handler returned — so an Escape branch added to the extension's own handler would run, but could only
+ever dispatch a second, redundant exit, never change whether the menu closes. Tab is deliberately left
+alone — the extension's key handler returns `false` for it — so it falls through to ordinary tab
+behavior instead of being captured as a way to confirm the selection. Intercepting it would have
+pulled the field out of the form's normal tab order the moment a `/` happened to be on screen.
+
+**Dismissal.** Escape and an outside click — clicking into another field, say — both leave the
+query dismissed: retyping more of it does not reopen the menu, though a fresh `/` typed elsewhere
+still works normally. A blur instead — Tab, or in Chrome the window itself losing focus — closes the
+menu but releases the query, so returning to it and typing more of it reopens the menu; the
+distinction runs through upstream's own `shouldResetDismissed` suggestion option, wired here to fire
+only for a blur-driven exit.
 
 ## Restyling a vendored `ui/` component
 

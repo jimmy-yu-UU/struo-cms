@@ -5,7 +5,7 @@ import {
   Quote, Code2, Link as LinkIcon, Minus, Image as ImageIcon, Undo2, Redo2,
 } from '@lucide/vue'
 
-export type RichTextCommandGroup = 'inline' | 'block' | 'insert' | 'history'
+export type RichTextCommandGroup = 'inline' | 'align' | 'block' | 'insert' | 'history'
 
 export interface RichTextCommandContext {
   openImageDialog: () => void
@@ -23,8 +23,12 @@ export interface RichTextCommand {
   // strikethrough/numberedList/horizontalRule/insertImage, so deriving the key would either be
   // wrong for these four or need its own exception list -- carrying the key plainly is simpler.
   labelKey: string
-  // Not consumed by any production code in this batch. It is the surface RT-5 (inline) and RT-7
-  // (block + insert) read from, defined once here so neither batch has to invent its own partition.
+  // Each value names a semantic slice of the registry, not a specific consumer: 'inline' is
+  // formatting marks (RichTextBubbleMenu.vue's floating toolbar filters on it), 'align' is
+  // paragraph alignment, 'block' is block-transform commands (list/quote/code), 'insert' adds new
+  // content (rule/image), 'history' is undo/redo. Headings and tables never entered this registry,
+  // so no group covers them. Defined once here so any surface that wants a slice filters on its
+  // group, the same way the bubble menu already does.
   group: RichTextCommandGroup
   icon: Component | null
   glyph: string | null
@@ -70,7 +74,7 @@ function align(
 ): RichTextCommand {
   const id = `align${dir.charAt(0).toUpperCase()}${dir.slice(1)}`
   return {
-    id, labelKey: `fields.richtext.${id}`, group: 'block', icon, glyph: null, glyphTag: null,
+    id, labelKey: `fields.richtext.${id}`, group: 'align', icon, glyph: null, glyphTag: null,
     isActive: (editor) => editor.isActive({ textAlign: dir }),
     run: (editor) => { editor.chain().focus().setTextAlign(dir).run() },
   }
