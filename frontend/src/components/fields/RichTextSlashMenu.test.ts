@@ -24,6 +24,18 @@ function mountMenu(props: Partial<{ items: RichTextSlashItem[]; selectedIndex: n
   })
 }
 
+// @vue/runtime-dom's own event invoker skips calling a listener when the dispatched event's
+// timestamp doesn't exceed the moment that listener was attached -- both are stamped with
+// Date.now(), whose millisecond resolution this component's mount is fast enough to stay inside,
+// so a MouseEvent built and dispatched right after mountMenu() in the same test can silently never
+// reach the listener under test, indistinguishable here from the listener being missing. Neither a
+// microtask (awaiting nextTick()) nor a zero-delay timer reliably moves the clock past that
+// boundary -- both were measured still landing in the same millisecond often enough to reproduce
+// this. A few real milliseconds of timer delay did not, across a much larger repeated run.
+function afterRealTick(): Promise<void> {
+  return new Promise((resolve) => { setTimeout(resolve, 4) })
+}
+
 describe('RichTextSlashMenu', () => {
   it('renders one option per item, labelled', () => {
     const w = mountMenu()
@@ -55,6 +67,7 @@ describe('RichTextSlashMenu', () => {
   // command later reads is still valid at the time the emit is handled.
   it('selects on mousedown and prevents the default', async () => {
     const w = mountMenu()
+    await afterRealTick()
     const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     w.findAll('[role="option"]')[1].element.dispatchEvent(ev)
     expect(ev.defaultPrevented).toBe(true)
@@ -63,8 +76,9 @@ describe('RichTextSlashMenu', () => {
 
   // The rows are not the whole target: a mousedown that lands on the p-1 band around them must not
   // blur the editor either, because the extension closes the menu on that blur.
-  it('prevents the default for a mousedown on its own chrome, and selects nothing', () => {
+  it('prevents the default for a mousedown on its own chrome, and selects nothing', async () => {
     const w = mountMenu()
+    await afterRealTick()
     const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     w.element.dispatchEvent(ev)
     expect(ev.defaultPrevented).toBe(true)
