@@ -138,12 +138,20 @@ describe('filterSlashItems (zh-TW build)', () => {
   // The query here is read from the English catalogue directly (labelKeyFor + resolve), not from
   // the item's own enLabel -- deriving it from enLabel itself could never catch enLabel being
   // computed wrong, since a wrong enLabel and a query derived from that same wrong value would
-  // still agree with each other. This is what actually protects a future registry or hand-authored
-  // entry whose enLabel silently stops being the English catalogue (translated by mistake, say).
+  // still agree with each other. This does not cover every item, though: table's only alias is
+  // 'table', identical to its own English label, so it (and blockquote, whose 'blockquote' alias
+  // is the same) matches through the alias branch regardless of what enLabel holds -- the direct
+  // equality check below is what actually covers those two.
   it('reaches every item through the full text of its own English label', () => {
     for (const item of zhItems) {
       const query = resolve(labelKeyFor(item.id)).toLowerCase()
       expect(filterSlashItems(zhItems, query).map((i) => i.id), item.id).toContain(item.id)
+    }
+  })
+
+  it('keeps enLabel equal to the English catalogue value for every item, regardless of locale', () => {
+    for (const item of zhItems) {
+      expect(item.enLabel, item.id).toBe(resolve(labelKeyFor(item.id)).toLowerCase())
     }
   })
 })

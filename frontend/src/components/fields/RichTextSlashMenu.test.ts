@@ -24,14 +24,12 @@ function mountMenu(props: Partial<{ items: RichTextSlashItem[]; selectedIndex: n
   })
 }
 
-// @vue/runtime-dom's own event invoker skips calling a listener when the dispatched event's
-// timestamp doesn't exceed the moment that listener was attached -- both are stamped with
-// Date.now(), whose millisecond resolution this component's mount is fast enough to stay inside,
-// so a MouseEvent built and dispatched right after mountMenu() in the same test can silently never
-// reach the listener under test, indistinguishable here from the listener being missing. Neither a
-// microtask (awaiting nextTick()) nor a zero-delay timer reliably moves the clock past that
-// boundary -- both were measured still landing in the same millisecond often enough to reproduce
-// this. A few real milliseconds of timer delay did not, across a much larger repeated run.
+// @vue/runtime-dom's own event invoker stamps e._vts (Date.now()) the first time any Vue-managed
+// listener handles a given event, and calls that first listener unconditionally -- only a second
+// (or later) invoker on the same event's path checks e._vts against its own attached-at-mount
+// timestamp (also Date.now()) and is skipped when the two don't differ, both being
+// millisecond-grained. A microtask does not move Date.now() forward past that boundary; a real
+// timer does.
 function afterRealTick(): Promise<void> {
   return new Promise((resolve) => { setTimeout(resolve, 4) })
 }
@@ -65,6 +63,10 @@ describe('RichTextSlashMenu', () => {
   // preventDefault on mousedown keeps DOM focus (and the live ProseMirror selection) in the editor
   // instead of letting the browser's default mousedown behaviour blur it, so the range the caller's
   // command later reads is still valid at the time the emit is handled.
+  //
+  // Dispatched on the row, this bubbles through two Vue listeners: the row's own (first on the
+  // path, unconditional) and the root's @mousedown.prevent (second, the one afterRealTick's
+  // comment above is about) -- so this is the assertion that needs the delay.
   it('selects on mousedown and prevents the default', async () => {
     const w = mountMenu()
     await afterRealTick()
@@ -76,9 +78,12 @@ describe('RichTextSlashMenu', () => {
 
   // The rows are not the whole target: a mousedown that lands on the p-1 band around them must not
   // blur the editor either, because the extension closes the menu on that blur.
-  it('prevents the default for a mousedown on its own chrome, and selects nothing', async () => {
+  //
+  // Dispatched directly on the root rather than a descendant that bubbles to it, so the root's own
+  // listener is the first (and only) invoker this event reaches -- exempt from the timing guard
+  // afterRealTick exists for, so no delay is needed here.
+  it('prevents the default for a mousedown on its own chrome, and selects nothing', () => {
     const w = mountMenu()
-    await afterRealTick()
     const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     w.element.dispatchEvent(ev)
     expect(ev.defaultPrevented).toBe(true)
