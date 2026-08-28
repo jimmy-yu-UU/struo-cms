@@ -16,6 +16,13 @@ export interface RichTextSlashItem {
   run: (editor: Editor, ctx: RichTextCommandContext) => void
 }
 
+// The DOM id of one rendered option. RichTextSlashMenu.vue puts it on the element and
+// richTextSlashExtension.ts points aria-activedescendant at it; sharing the formula is what keeps
+// that reference from dangling.
+export function slashOptionId(idPrefix: string, itemId: string): string {
+  return `${idPrefix}-${itemId}`
+}
+
 // Aliases are identifiers, not copy -- translating them would break the one thing they exist for:
 // reaching a command by typing ASCII right after "/", which is exactly where a zh-TW input method
 // still is (it hasn't composed anything yet). They stay out of the locale files on purpose.

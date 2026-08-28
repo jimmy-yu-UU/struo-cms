@@ -395,34 +395,23 @@ unwrapped. Leave `renderWrapper` off, or allowlist `div` first.
 ### Slash commands
 
 Typing `/` inside the `richText` field opens a keyboard-driven menu of blocks to insert, implemented
-in `richTextSlashExtension.ts` on top of upstream's own `@tiptap/suggestion`. The trigger rule is
-upstream's, not one StruoCMS wrote: a `/` opens the menu only where the character right before it —
-inside the single text node ending at the caret, not the surrounding block — is a space or nothing at
-all (`allowedPrefixes` is left at its upstream default, `[' ']`). That is what keeps `and/or` and a URL
-path being typed from opening it: in both cases the character immediately before the `/` is an
-ordinary one, not a space and not the start of a text node.
+in `richTextSlashExtension.ts` on top of upstream's own `@tiptap/suggestion`. A `/` opens the menu
+only where the character before it *within the same block* is a space, or where the `/` begins the
+block. That is what keeps `and/or` and a URL path being typed from opening it: in both cases the
+character immediately before the `/` is an ordinary one.
 
-"Nothing at all" is narrower than it sounds, and it is worth stating plainly as a known limitation
-rather than a design choice: because the boundary upstream measures is the text node and not the
-block, a `/` typed exactly where a *non-inclusive* mark ends and plain text resumes also opens the
-menu, because that position is offset 0 of a brand-new text node, with no character before it for the
-prefix check to reject. A link is the case that actually reaches this: typing `/` right after
-`<a>read more</a>`, with no space in between, opens the menu, because this editor's `Link` mark is
-configured non-inclusive (its `autolink` option is `false`, and the extension's own `inclusive()`
-returns that option verbatim). Bold behaves differently, because it carries no such override and so
-falls back to ProseMirror's own default of `inclusive: true`: a `/` typed right after bold text stays
-part of that same bold text node instead of starting a new one, and does not open the menu on its own
-— only clearing the mark first, then typing `/`, reaches the same case a link reaches directly. This
-follows from how `@tiptap/suggestion` matches prefixes and from each mark's own `inclusive` setting;
-it is not something StruoCMS's extension adds. The limitation is accepted as it stands today, not
-worked around — a fork that wants it gone would tighten the extension's own `allow` callback to check
-the character preceding the `/`'s own position within the *block* (`state.doc.resolve(range.from)`
-already carries both the block and that position's offset inside it). The two positions never
-coincide: from `findSuggestionMatch`'s own gate (`from < $position.pos && to >= $position.pos`), the
-caret sits at `range.from + 1 + query.length` — one position past the `/` at minimum, more once a
-query is typed —
-so a block-level clause has to test the character before `range.from`, never before the caret,
-rather than relying only on upstream's text-node-scoped prefix check, but StruoCMS does not do this.
+That rule is the extension's own `allow` callback, not upstream's `allowedPrefixes` — which is left
+at its default of `[' ']` and enforces the same idea one scope too narrowly. `findSuggestionMatch`
+reads `$position.nodeBefore.text`, so it measures the prefix inside the single text node ending at
+the caret rather than the block. A `/` typed exactly where a *non-inclusive* mark ends and plain text
+resumes therefore sits at offset 0 of a brand-new text node, with no character before it for that
+check to reject. `Link` is the mark that reaches this in practice, because it is configured
+non-inclusive (its `autolink` option is `false`, and the extension's own `inclusive()` returns that
+option verbatim): without the block-scoped clause, typing `/` immediately after `<a>read more</a>`
+would open the menu. Resolving `range.from` — the `/`'s own position — rather than the caret is what
+makes the clause correct once a query has been typed, since `findSuggestionMatch`'s gate
+(`from < $position.pos`) leaves the caret at least one position further along. A fork that drops the
+callback falls back to the narrower upstream rule.
 
 **Where the item list comes from.** `buildSlashItems` (`richTextSlashCommands.ts`) assembles the menu
 from three sources, in this order: the heading levels in `richTextHeadings.ts`'s `HEADING_LEVELS`
