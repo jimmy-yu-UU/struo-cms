@@ -161,7 +161,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, serviceStore, snapshotBuilder);
+            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public static PurgeIntegrityHarness Create(bool failDeleteRevision = false) => new(failDeleteRevision);

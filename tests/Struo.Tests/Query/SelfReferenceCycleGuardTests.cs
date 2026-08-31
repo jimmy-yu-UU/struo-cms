@@ -77,7 +77,7 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
 
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, revisionStore, snapshotBuilder);
+            currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public void Dispose() => _file.Dispose();

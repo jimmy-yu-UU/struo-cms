@@ -77,7 +77,7 @@ public class ItemServiceRepeaterTests : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder);
+            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public void Dispose() => _file.Dispose();

@@ -168,9 +168,9 @@ scans exactly three sources of assemblies:
 
 1. **The framework's own assembly** (`Struo.Infrastructure`) — always appended, so the framework's
    own `[CmsCollection]`-attributed types (`Language`, `File`, `MediaFolder`, `User`, `Role`,
-   `Permission`, `UserRole` — seven of the ten framework entity types listed in chapter 1;
-   `FileTranslation`, `Revision` and `SiteSettings` are framework tables but not collections) are
-   always discovered.
+   `Permission`, `UserRole` — seven of the eleven framework entity types listed in chapter 1;
+   `FileTranslation`, `Revision`, `SiteSettings` and `UserSession` are framework tables but not
+   collections) are always discovered.
 2. **The host assembly** — `Struo.Api` itself (`typeof(Program).Assembly`, passed explicitly from
    `Program.cs`).
 3. **Every assembly named in `Struo:ContentAssemblies`** — read from `builder.Configuration` *before*

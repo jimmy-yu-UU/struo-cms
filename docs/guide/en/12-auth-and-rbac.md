@@ -65,6 +65,22 @@ server-side ticket store rather than encoding claims straight into the cookie is
 revocation possible: `AuthController.Logout` (`SignOutAsync`) removes the ticket from the store, so a
 logged-out cookie is dead immediately rather than merely expiring on its own schedule.
 
+Logout is not the only trigger. `DistributedCacheTicketStore` also maintains a `user_sessions` index
+table (`UserSession`, `src/Struo.Infrastructure/Identity/UserSession.cs`) mapping each ticket key to the
+user it belongs to — needed because `IDistributedCache` itself has no key-scan or set operation, so
+there is no other way to answer "every live session for user X". A password change (`PUT
+/api/users/{id}/password`, both the self-service and admin-reset branches share the one action) reads
+that index and revokes every session it finds for the target user via `IUserSessionRevocationService`
+(`UserSessionRevocationService`, `src/Struo.Infrastructure/Identity/UserSessionRevocationService.cs`),
+right after the password write itself succeeds; a failure to revoke does not roll back the already-
+successful password change. Deactivating an account (`isActive = false`, by whatever path — the generic
+item-update endpoint or a direct database write) is covered independently, without relying on the index:
+the cookie scheme's `OnValidatePrincipal` event (`AuthWiring.cs`) re-checks `IsActive` via
+`IUserCredentialStore.FindByIdAsync` on every request and, on failure, both rejects the principal and
+signs the caller out — the sign-out is what makes the ticket actually disappear from the store, not just
+refuses that one request. Stale index rows are swept opportunistically at login: each successful login
+deletes that same user's own already-expired rows, never a full-table scan.
+
 ## Bearer tokens
 
 The **bearer** scheme (`AuthSchemes.Bearer`, constant `"Bearer"`) is verified by

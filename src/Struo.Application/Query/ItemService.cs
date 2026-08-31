@@ -32,7 +32,8 @@ public sealed class ItemService(
     IHtmlSanitizer sanitizer,
     ICurrentUserAccessor currentUser,
     IRevisionStore revisions,
-    RevisionSnapshotBuilder snapshotBuilder) : IItemUseCases
+    RevisionSnapshotBuilder snapshotBuilder,
+    IUserSessionRevocationService sessionRevocation) : IItemUseCases
 {
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     private readonly ItemWriteSideSync writeSync = new(repository, m2mSource, languages, new(sanitizer));
@@ -309,6 +310,7 @@ public sealed class ItemService(
                 if (softDeletedNow)
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
             }, ct);
+            await RevokeSessionsIfUserAsync(collection, id);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
@@ -317,7 +319,37 @@ public sealed class ItemService(
         {
             existed = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), ct);
         }, ct);
+        if (existed) await RevokeSessionsIfUserAsync(collection, id);
         return existed;
+    }
+
+    /// <summary>
+    /// Deleting a `user` row (soft-delete or purge) must clear that user's <c>user_sessions</c> rows
+    /// proactively: the per-request cookie-liveness check only catches a deleted user's session
+    /// reactively, on its next use, so a session that is never presented again would otherwise leave
+    /// its row (and cache entry) around until that user's next login — which, for a deleted user,
+    /// never happens. Placed here (both DELETE branches share it), not in the REST controller, so REST
+    /// and the GraphQL <c>deleteUser</c> mutation — which calls straight into this method — are both
+    /// covered. Fires only after the delete has actually taken effect; the delete stays committed
+    /// regardless of what happens next. CancellationToken.None: the delete already committed, so a
+    /// disconnecting caller must not also skip revoking the now-deleted user's sessions. A revocation
+    /// failure surfaces as a distinct, client-safe error rather than an indistinguishable success.
+    /// </summary>
+    private async Task RevokeSessionsIfUserAsync(string collection, string id)
+    {
+        if (!string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase)) return;
+        if (!Guid.TryParse(id, out var userId)) return;
+
+        try
+        {
+            await sessionRevocation.RevokeAllForUserAsync(userId, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            throw new SessionRevocationFailedException(
+                "The user was deleted, but revoking their existing sessions failed. " +
+                "Some sessions may still be active.", ex);
+        }
     }
 
     /// <summary>

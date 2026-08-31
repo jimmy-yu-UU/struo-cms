@@ -13,12 +13,12 @@ actual project.
 
 ## Core vs. sample boundary
 
-**Core** = `src/Struo.*` plus the ten `FrameworkEntityTypes.All` types
+**Core** = `src/Struo.*` plus the eleven `FrameworkEntityTypes.All` types
 (`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`): `Language`, `File`, `FileTranslation`,
-`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `Revision`, `SiteSettings`. Of these, seven
-carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`, `User`,
-`Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, and `SiteSettings` are framework
-tables but not collections. If you're unsure whether something is core, it's core only if it lives in
+`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `Revision`, `SiteSettings`, `UserSession`. Of
+these, seven carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`,
+`User`, `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, `SiteSettings`, and
+`UserSession` are framework tables but not collections. If you're unsure whether something is core, it's core only if it lives in
 `src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` among
 them. `db/migrations/` is **not** one of them: only its `README.md` — documenting the mechanism — is
 core; the template ships no scripts, and any script a fork adds there is that fork's own content, not
