@@ -1,6 +1,7 @@
 // src/Struo.Application/Query/Read/DeepExpansionCoordinator.cs
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
@@ -19,7 +20,8 @@ public sealed class DeepExpansionCoordinator(
     IMetadataProvider metadata,
     IEntityRegistry registry,
     IRelationExpander expander,
-    ItemProjector projector)
+    ItemProjector projector,
+    IPermissionService permissions)
 {
     /// <inheritdoc cref="DeepExpansionCoordinator"/>
     public async Task ExpandAsync(
@@ -29,11 +31,17 @@ public sealed class DeepExpansionCoordinator(
     {
         if (deep is null || deep.Relations.Count == 0) return;
 
+        // Pruning precedes validation on purpose: a nested filter/sort on an unreadable relation is
+        // never validated against that collection's metadata, so its error messages cannot be used
+        // to probe which fields exist there.
+        var visible = PruneUnreadable(collection, deep);
+        if (visible.Relations.Count == 0) return;
+
         // Validate the whole nested tree: nesting depth <= MaxRelationDepth, and every relation
         // name resolves against its own level's collection. Runs before any query executes,
         // and independent of row count — an over-depth/unknown-relation request must be
         // rejected even when the parent query matched zero rows.
-        ValidateDeepTree(collection, deep, depth: 1);
+        ValidateDeepTree(collection, visible, depth: 1);
         if (entities.Count == 0) return;
 
         var parentDesc = registry.Get(collection)!;
@@ -43,7 +51,7 @@ public sealed class DeepExpansionCoordinator(
             ?? throw new QueryException($"Cannot expand relations: a '{collection}' row has no id.");
 
         var nested = await expander.ExpandAsync(
-            collection, entities, deep, projector.ProjectFor, ParentId, PropertyAccessorCache.Read, locale, ct);
+            collection, entities, visible, projector.ProjectFor, ParentId, PropertyAccessorCache.Read, locale, ct);
 
         for (var i = 0; i < entities.Count; i++)
         {
@@ -52,6 +60,28 @@ public sealed class DeepExpansionCoordinator(
             var dict = (Dictionary<string, object?>)rows[i];
             foreach (var (relName, value) in relMap) dict[relName] = value;
         }
+    }
+
+    /// <summary>
+    /// Recursively drops every requested relation whose target collection the caller has no read
+    /// grant on. Dropping rather than refusing: an expansion is a convenience, and refusing would
+    /// fail the entire read — the admin SPA's item form requests <c>deep</c> for every editable
+    /// relation it finds in metadata, so one unreadable target would break the form on every
+    /// collection for every narrowly-granted role. A relation that does not resolve is kept, so
+    /// <see cref="ValidateDeepTree"/> still rejects it by name.
+    /// </summary>
+    private DeepSpec PruneUnreadable(string coll, DeepSpec spec)
+    {
+        var kept = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (relName, relSpec) in spec.Relations)
+        {
+            var rel = graph.Resolve(coll, relName);
+            if (rel is not null && !permissions.CanRead(rel.TargetCollection)) continue;
+            kept[relName] = rel is not null && relSpec.Deep is not null
+                ? relSpec with { Deep = PruneUnreadable(rel.TargetCollection, relSpec.Deep) }
+                : relSpec;
+        }
+        return new DeepSpec(kept);
     }
 
     /// <summary>
@@ -87,7 +117,7 @@ public sealed class DeepExpansionCoordinator(
             if (relSpec.Filter is not null)
                 QueryValidator.Validate(
                     new QueryModel(null, relSpec.Filter, [], 0, 0, null),
-                    targetMeta, options, graph, metadata);
+                    targetMeta, options, graph, metadata, permissions);
 
             if (relSpec.Sort is not null)
                 foreach (var s in relSpec.Sort)
@@ -97,7 +127,7 @@ public sealed class DeepExpansionCoordinator(
                             $"Sort across relations is not supported for nested lists: '{s.Field}'.");
                     QueryValidator.Validate(
                         new QueryModel(null, null, [s], 0, 0, null),
-                        targetMeta, options, graph, metadata);
+                        targetMeta, options, graph, metadata, permissions);
                 }
 
             if (relSpec.Deep is not null)

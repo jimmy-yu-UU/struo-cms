@@ -3,6 +3,7 @@ using AwesomeAssertions;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
@@ -60,11 +61,32 @@ public class QueryValidatorTests
     private static readonly IRelationshipGraph Graph = new FakeGraph();
     private static readonly IMetadataProvider Md = new FakeMeta();
 
+    // Most cases here pin shape validation, not RBAC, so they run with a caller who can read
+    // everything. The relation-permission gate has its own cases at the end of the file.
+    private sealed class AllowAllPermissions : IPermissionService
+    {
+        public bool CanRead(string collection) => true;
+        public bool CanWrite(string collection) => true;
+        public bool CanDelete(string collection) => true;
+        public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
+    }
+
+    private sealed class DenyReadOf(string denied) : IPermissionService
+    {
+        public bool CanRead(string collection) =>
+            !string.Equals(collection, denied, StringComparison.OrdinalIgnoreCase);
+        public bool CanWrite(string collection) => true;
+        public bool CanDelete(string collection) => true;
+        public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
+    }
+
+    private static readonly IPermissionService Perms = new AllowAllPermissions();
+
     [Fact]
     public void Unknown_filter_field_throws()
     {
         var q = new QueryModel(null, new ComparisonFilter("nope", QueryOperator.Eq, "x"), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*nope*");
     }
 
@@ -72,7 +94,7 @@ public class QueryValidatorTests
     public void Dotted_relation_path_is_accepted_when_valid()
     {
         var q = new QueryModel(null, new ComparisonFilter("category.name", QueryOperator.Eq, "x"), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().NotThrow();
     }
 
@@ -80,7 +102,7 @@ public class QueryValidatorTests
     public void Sort_across_to_many_throws()
     {
         var q = new QueryModel(null, null, [new SortField("tags.name", false)], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*to-many*");
     }
 
@@ -88,21 +110,21 @@ public class QueryValidatorTests
     public void Unknown_sort_or_field_throws()
     {
         var q1 = new QueryModel(null, null, [new SortField("ghost", false)], 0, 0, null);
-        var a1 = () => QueryValidator.Validate(q1, Meta(), Opts, Graph, Md);
+        var a1 = () => QueryValidator.Validate(q1, Meta(), Opts, Graph, Md, Perms);
         a1.Should().Throw<QueryException>();
 
         var q2 = new QueryModel(["ghost"], null, [], 0, 0, null);
-        var a2 = () => QueryValidator.Validate(q2, Meta(), Opts, Graph, Md);
+        var a2 = () => QueryValidator.Validate(q2, Meta(), Opts, Graph, Md, Perms);
         a2.Should().Throw<QueryException>();
     }
 
     [Fact]
     public void Limit_is_clamped_and_defaulted()
     {
-        var zero = QueryValidator.Validate(new QueryModel(null, null, [], 0, 0, null), Meta(), Opts, Graph, Md);
+        var zero = QueryValidator.Validate(new QueryModel(null, null, [], 0, 0, null), Meta(), Opts, Graph, Md, Perms);
         zero.Limit.Should().Be(Opts.DefaultLimit);
 
-        var over = QueryValidator.Validate(new QueryModel(null, null, [], 9999, 0, null), Meta(), Opts, Graph, Md);
+        var over = QueryValidator.Validate(new QueryModel(null, null, [], 9999, 0, null), Meta(), Opts, Graph, Md, Perms);
         over.Limit.Should().Be(Opts.MaxLimit);
     }
 
@@ -112,7 +134,7 @@ public class QueryValidatorTests
         var many = Enumerable.Range(0, Opts.MaxFilterConditions + 1)
             .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x")).ToList();
         var q = new QueryModel(null, new LogicalFilter(LogicalOperator.And, many), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*conditions*");
     }
 
@@ -131,7 +153,7 @@ public class QueryValidatorTests
     public void Hidden_field_filter_throws()
     {
         var q = new QueryModel(null, new ComparisonFilter("secret", QueryOperator.StartsWith, "$argon2"), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*secret*");
     }
 
@@ -139,7 +161,7 @@ public class QueryValidatorTests
     public void Hidden_field_sort_throws()
     {
         var q = new QueryModel(null, null, [new SortField("secret", false)], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*secret*");
     }
 
@@ -147,7 +169,7 @@ public class QueryValidatorTests
     public void Hidden_field_in_field_selection_throws()
     {
         var q = new QueryModel(["secret"], null, [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*secret*");
     }
 
@@ -162,7 +184,7 @@ public class QueryValidatorTests
     [Fact]
     public void Negative_offset_is_clamped_to_zero()
     {
-        var result = QueryValidator.Validate(new QueryModel(null, null, [], 0, -5, null), Meta(), Opts, Graph, Md);
+        var result = QueryValidator.Validate(new QueryModel(null, null, [], 0, -5, null), Meta(), Opts, Graph, Md, Perms);
         result.Offset.Should().Be(0);
     }
 
@@ -173,7 +195,7 @@ public class QueryValidatorTests
             .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
             .ToList();
         var q = new QueryModel(null, new LogicalFilter(LogicalOperator.And, many), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*conditions*");
     }
 
@@ -184,7 +206,7 @@ public class QueryValidatorTests
             [new ComparisonFilter("title", QueryOperator.Eq, "x")]);
         var outer = new LogicalFilter(LogicalOperator.And, [inner]);
         var q = new QueryModel(null, outer, [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*Nested*");
     }
 
@@ -192,7 +214,7 @@ public class QueryValidatorTests
     public void Relation_path_in_fields_throws()
     {
         var q = new QueryModel(["category.name"], null, [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*field selection*");
     }
 
@@ -239,7 +261,7 @@ public class QueryValidatorTests
         var path = string.Concat(Enumerable.Repeat("parent.", 5)) + "name";
         var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
         var act = () => QueryValidator.Validate(q, CategoryRoot(), new StruoQueryOptions(),
-            new SelfRefGraph(), new CategoryMeta());
+            new SelfRefGraph(), new CategoryMeta(), Perms);
         act.Should().NotThrow();
     }
 
@@ -252,7 +274,7 @@ public class QueryValidatorTests
         var path = string.Concat(Enumerable.Repeat("parent.", 6)) + "name";
         var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
         var act = () => QueryValidator.Validate(q, CategoryRoot(), new StruoQueryOptions(),
-            new SelfRefGraph(), new CategoryMeta());
+            new SelfRefGraph(), new CategoryMeta(), Perms);
         act.Should().NotThrow();
     }
 
@@ -263,7 +285,75 @@ public class QueryValidatorTests
         var path = string.Concat(Enumerable.Repeat("parent.", 7)) + "name"; // 7 hops > 6
         var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
         var act = () => QueryValidator.Validate(q, CategoryRoot(), opts,
-            new SelfRefGraph(), new CategoryMeta());
+            new SelfRefGraph(), new CategoryMeta(), Perms);
         act.Should().Throw<QueryException>();
+    }
+
+    // A read grant on the root collection does not carry across a relation hop. Without this,
+    // meta.total on a relation filter is a blind-extraction oracle over a collection the caller
+    // cannot read.
+    [Fact]
+    public void Relation_filter_path_into_an_unreadable_collection_throws_PermissionDenied()
+    {
+        var q = new QueryModel(null, new ComparisonFilter("category.name", QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("category"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Relation_sort_path_into_an_unreadable_collection_throws_PermissionDenied()
+    {
+        var q = new QueryModel(null, null, [new SortField("category.name", false)], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("category"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    // The counterpart that keeps the gate honest: with the grant, the same path still validates.
+    [Fact]
+    public void Relation_path_into_a_readable_collection_is_accepted()
+    {
+        var q = new QueryModel(null, new ComparisonFilter("category.name", QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().NotThrow();
+    }
+
+    // The permission check must run before the leaf is resolved. If it did not, a real field and an
+    // invented one on an unreadable collection would come back with different messages, which
+    // enumerates that collection's field names — reachable anonymously, since the item read
+    // endpoints carry no [Authorize] and /api/schema is the authenticated-only surface.
+    [Fact]
+    public void Unreadable_hop_is_refused_before_the_leaf_field_is_resolved()
+    {
+        var denied = new DenyReadOf("category");
+        var real = new QueryModel(null, new ComparisonFilter("category.name", QueryOperator.Eq, "x"), [], 0, 0, null);
+        var invented = new QueryModel(null, new ComparisonFilter("category.zzz", QueryOperator.Eq, "x"), [], 0, 0, null);
+
+        var onReal = Record.Exception(() => QueryValidator.Validate(real, Meta(), Opts, Graph, Md, denied));
+        var onInvented = Record.Exception(() => QueryValidator.Validate(invented, Meta(), Opts, Graph, Md, denied));
+
+        onReal.Should().BeOfType<PermissionDeniedException>();
+        onInvented.Should().BeOfType<PermissionDeniedException>();
+        onInvented!.Message.Should().Be(onReal!.Message);
+        onInvented.Message.Should().NotContain("zzz");
+    }
+
+    // Same guarantee one hop further out: an invented relation name beyond an unreadable hop must
+    // not be distinguishable from a real one.
+    [Fact]
+    public void Unreadable_hop_is_refused_before_a_deeper_relation_name_is_resolved()
+    {
+        var q = new QueryModel(null, new ComparisonFilter("category.ghostRel.name", QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("category"));
+        act.Should().Throw<PermissionDeniedException>().Which.Message.Should().NotContain("ghostRel");
+    }
+
+    // An unresolvable hop on a collection the caller CAN read keeps its original QueryException:
+    // the permission walk must not swallow the existing "unknown relation" message.
+    [Fact]
+    public void Unknown_relation_on_a_readable_collection_still_reports_the_query_error()
+    {
+        var q = new QueryModel(null, new ComparisonFilter("ghostRel.name", QueryOperator.Eq, "x"), [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*ghostRel*");
     }
 }

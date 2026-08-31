@@ -39,9 +39,10 @@ public sealed class ItemService(
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
-    private readonly TranslationOverlay overlay = new(repository, registry, new(registry, permissions, metadata));
+    private readonly TranslationOverlay overlay =
+        new(repository, registry, new(registry, permissions, metadata), permissions);
     private readonly DeepExpansionCoordinator deepExpansion =
-        new(options, graph, metadata, registry, expander, new(registry, permissions, metadata));
+        new(options, graph, metadata, registry, expander, new(registry, permissions, metadata), permissions);
 
     public async Task<PagedResult> QueryAsync(
         string collection, QueryModel raw, string? locale = null,
@@ -57,7 +58,7 @@ public sealed class ItemService(
             ? (locale ?? languages.DefaultCode())
             : null;
 
-        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata);
+        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions);
         validated = validated with
         {
             Filter = await relationFilter.RewriteAsync(collection, validated.Filter, queryLocale, ct)
