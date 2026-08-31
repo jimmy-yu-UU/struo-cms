@@ -1,7 +1,9 @@
 import { Extension, VueRenderer, type Editor } from '@tiptap/vue-3'
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion'
 import RichTextSlashMenu from './RichTextSlashMenu.vue'
-import { buildSlashItems, filterSlashItems, type RichTextSlashItem } from './richTextSlashCommands'
+import {
+  buildSlashItems, filterSlashItems, slashOptionId, type RichTextSlashItem,
+} from './richTextSlashCommands'
 import type { RichTextCommandContext } from './richTextCommands'
 
 export interface RichTextSlashOptions {
@@ -37,14 +39,6 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
     const { context, t, idPrefix } = this.options
     const editor = this.editor as Editor
 
-    // The same string RichTextSlashMenu.vue renders as each option's own id, built independently
-    // here rather than through a shared helper -- richTextSlashCommands.ts is imported by both
-    // sides and would be the obvious home for one, but no such helper exists today.
-    // RichTextSlashMenu.test.ts pins the menu side's own copy as a literal id; this side carries no
-    // literal pin of its own and is instead checked by cross-equality against the rendered menu id
-    // in RichTextInput.test.ts, which catches the two formulas diverging without needing two
-    // independent literals to do it -- if they ever diverge, aria-activedescendant points at nothing.
-    const optionId = (item: RichTextSlashItem): string => `${idPrefix}-${item.id}`
     // The listbox's own id. Free of collision only because no slash item is called 'listbox';
     // adding one would make this exact string an option id too.
     const menuId = `${idPrefix}-listbox`
@@ -72,27 +66,30 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
       Suggestion<RichTextSlashItem, RichTextSlashItem>({
         editor,
         char: '/',
-        // allowedPrefixes is deliberately left at its upstream default of [' ']: the rule that a
-        // slash triggers only where a space or nothing at all precedes it is upstream's, not ours,
-        // and it is what keeps "and/or" and URL paths from opening the menu. "Nothing at all" is
-        // narrower than it sounds, and that is the boundary we inherit rather than choose --
-        // upstream measures the prefix inside the single text node before the caret
-        // (findSuggestionMatch reads $position.nodeBefore.text) and not the block, so a slash typed
-        // right after a NON-inclusive mark ends, as in "<a>read more</a>/", sits at offset 0 of a
-        // fresh text node, has no prefix character to reject, and does open the menu. An inclusive
-        // mark does not hit this: ProseMirror only drops a mark at a boundary when its own spec sets
-        // inclusive: false (read in prosemirror-model's ResolvedPos#marks(), which is what decides
-        // which marks a freshly typed character picks up), and neither Bold nor any other mark used
-        // here overrides that, so it falls back to the true default -- "<strong>bold</strong>/" stays
-        // part of the same, still-bold text node and does NOT open the menu on its own. Link is the
-        // mark that actually reaches this repo's boundary case, because it is configured
-        // non-inclusive (autolink: false, and extension-link's own inclusive() returns that
-        // option verbatim) -- see RichTextInput.vue's Link.configure(). startOfLine stays false.
+        // A slash opens the menu only where a space or the start of the block precedes it, which is
+        // what keeps "and/or" and a URL path being typed from opening it. upstream's own
+        // allowedPrefixes is left at its default of [' '] and enforces the same rule one scope too
+        // narrowly: findSuggestionMatch reads $position.nodeBefore.text, so it measures the prefix
+        // inside the single text node ending at the caret rather than the block. A slash typed
+        // exactly where a NON-inclusive mark ends, as in "<a>read more</a>/", starts a fresh text
+        // node and so has no character before it for upstream to reject. The clause below closes
+        // that: parentOffset is the slash's own offset within the block, so the character it tests
+        // is the one visibly before the slash whether or not a mark boundary sits between them.
+        // Resolving range.from -- the slash's position -- and not the caret is what makes that hold
+        // once a query is typed: findSuggestionMatch's own gate (from < $position.pos) puts the
+        // caret at least one position further on. startOfLine stays false.
+        //
+        // Anything upstream rejects this rejects too, so the trigger rule is now this one. A leaf
+        // inline node before the slash yields '' from textBetween and is rejected as well.
         //
         // No isEditable clause here: upstream's apply() wraps its whole match-and-allow block in
         // one, so this is unreachable for a read-only editor and the check could never be false.
-        allow: ({ state, range }) =>
-          state.doc.resolve(range.from).parent.type.name !== 'codeBlock',
+        allow: ({ state, range }) => {
+          const $slash = state.doc.resolve(range.from)
+          if ($slash.parent.type.name === 'codeBlock') return false
+          const offset = $slash.parentOffset
+          return offset === 0 || $slash.parent.textBetween(offset - 1, offset) === ' '
+        },
         // Clearing the dismissal here brings the menu back when the caret RETURNS to the dismissed
         // query, not only on the next keystroke, because upstream re-evaluates on any transaction
         // and a selection change is one. That is what a query which was never dismissed already
@@ -152,7 +149,7 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
               editor.view.dom.removeAttribute('aria-activedescendant')
               return
             }
-            const id = optionId(active)
+            const id = slashOptionId(idPrefix, active.id)
             editor.view.dom.setAttribute('aria-activedescendant', id)
             const option = document.getElementById(id)
             if (option) scrollSelectedIntoView(option)

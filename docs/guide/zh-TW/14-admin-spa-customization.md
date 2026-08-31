@@ -336,30 +336,20 @@ node view，都會留下一個 `'update'` 監聽器直到那個編輯器生命�
 ### Slash 指令
 
 在 `richText` 欄位裡輸入 `/`，會打開一份鍵盤驅動的可插入區塊清單，實作在 `richTextSlashExtension.ts`
-裡，建立在上游自己的 `@tiptap/suggestion` 之上。觸發規則是上游的，不是 StruoCMS 自己訂的：只有當 `/`
-前面那個字元——在結束於游標位置的那一個 text node 裡面，而不是整個區塊裡——是空白或什麼都沒有時，
-`/` 才會打開選單（`allowedPrefixes` 維持上游預設值 `[' ']`，沒有動它）。這正是為什麼「and/or」或正在
-輸入中的一段 URL 路徑不會打開選單：緊接在 `/` 前面的那個字元，兩種情況下都是一個普通字元，不是空白，
-也不是一個 text node 的開頭。
+裡，建立在上游自己的 `@tiptap/suggestion` 之上。只有當 `/` 在「同一個區塊裡」前面那個字元是空白時，
+或者這個 `/` 本身就是該區塊的開頭時，它才會打開選單。這正是為什麼「and/or」或正在輸入中的一段 URL
+路徑不會打開選單：緊接在 `/` 前面的那個字元，兩種情況下都是一個普通字元。
 
-「什麼都沒有」這件事，比聽起來還要窄，而且值得明講成一個已知限制，而不是刻意設計：因為上游量測的邊界
-是 text node 而不是區塊，一個剛好打在某個「非 inclusive」的 mark 結束、普通文字接續起來那個位置的
-`/`，一樣會打開選單，因為那個位置正是一個全新 text node 的 offset 0，前面沒有任何字元可以讓前綴檢查
-拒絕它。連結是真正會踩到這一點的例子：緊接在 `<a>閱讀更多</a>` 之後、中間沒有空格地輸入 `/`，會打開
-選單，因為這個編輯器設定的 `Link` mark 是非 inclusive 的（它的 `autolink` 選項是 `false`，而
-`inclusive()` 原封不動回傳這個選項的值）。粗體的行為不一樣，因為它沒有覆寫這個設定，於是落回
-ProseMirror 自己的預設值 `inclusive: true`：緊接在粗體文字之後輸入 `/`，那個 `/` 會留在同一個粗體
-text node 裡，而不是另外開一個新的，所以單靠這樣不會打開選單——只有先把 mark 解除、再輸入 `/`，才會
-碰到連結會直接碰到的那種情況。這是 `@tiptap/suggestion` 比對前綴的方式，加上每個 mark 自己的
-`inclusive` 設定共同帶來的結果，不是 StruoCMS 這個 extension 加上去的規則。這個限制目前就是照現狀
-接受，沒有被繞掉——如果 fork 想要拿掉它，可以把 extension 自己的 `allow` callback 改成去檢查那個 `/`
-自己所在位置、在「區塊」裡前面那個字元（`state.doc.resolve(range.from)` 本身就同時帶著那個區塊，以及
-那個位置在裡面的 offset）。這兩個位置永遠不會重合：從 `findSuggestionMatch` 自己的門檻
-（`from < $position.pos && to >= $position.pos`）就看得出來，游標所在的位置是
-`range.from + 1 + query.length`——至少比
-`/` 多一個位置，查詢字串打得愈多就差得愈多——所以一個區塊層級的檢查該測的是 `range.from` 前面那個
-字元，不是游標前面那個字元——而不是只依靠上游那個以 text node 為範圍的前綴檢查，但 StruoCMS 目前
-沒有這樣做。
+這條規則來自 extension 自己的 `allow` callback，不是上游的 `allowedPrefixes`——後者維持在預設值
+`[' ']`，它想表達的是同一件事，但量測的範圍窄了一層：`findSuggestionMatch` 讀的是
+`$position.nodeBefore.text`，所以它量的是結束於游標位置的那一個 text node 裡的前綴，而不是整個區塊。
+於是一個剛好打在某個「非 inclusive」的 mark 結束、普通文字接續起來那個位置的 `/`，會落在一個全新
+text node 的 offset 0，前面沒有任何字元可以讓那個檢查拒絕它。連結是實務上真正會踩到這一點的
+mark，因為它被設定成非 inclusive（它的 `autolink` 選項是 `false`，而 `inclusive()` 原封不動回傳這個
+選項的值）：少了這個以區塊為範圍的判斷，緊接在 `<a>閱讀更多</a>` 之後輸入 `/` 就會打開選單。這個判斷
+解析的是 `range.from`——也就是 `/` 自己的位置——而不是游標位置，這正是它在使用者已經打了查詢字串之後
+仍然正確的原因：從 `findSuggestionMatch` 自己的門檻（`from < $position.pos`）就看得出來，游標至少會
+再往後一個位置。fork 若把這個 callback 拿掉，就會退回上游那條比較窄的規則。
 
 **項目清單從哪裡來。** `buildSlashItems`（`richTextSlashCommands.ts`）依序從三個來源組出這份選單：
 `richTextHeadings.ts` 的 `HEADING_LEVELS`（H2 到 H6）；`richTextCommands.ts` 指令登記表裡篩選出
