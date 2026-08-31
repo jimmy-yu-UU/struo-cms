@@ -1,6 +1,7 @@
 // src/Struo.Application/Query/Read/TranslationOverlay.cs
 using Struo.Application.Files;
 using Struo.Application.Metadata;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 
@@ -12,7 +13,9 @@ namespace Struo.Application.Query;
 /// the parent FK, and attaches a <c>translations</c> map
 /// (<c>{ locale: { camelField: value } }</c>) onto each projected row.
 /// </summary>
-public sealed class TranslationOverlay(IItemRepository repository, IEntityRegistry registry, ItemProjector projector)
+public sealed class TranslationOverlay(
+    IItemRepository repository, IEntityRegistry registry, ItemProjector projector,
+    IPermissionService permissions)
 {
     /// <inheritdoc cref="TranslationOverlay"/>
     public async Task ApplyAsync(
@@ -99,7 +102,11 @@ public sealed class TranslationOverlay(IItemRepository repository, IEntityRegist
                 .ToList();
 
             var byId = new Dictionary<Guid, IReadOnlyDictionary<string, object?>>();
-            if (imageIds.Count > 0)
+            // Resolving a translatable Image/File field hands back a projected 'file' row, so it
+            // needs a read grant on 'file' the same way a relation hop does. Without the grant the
+            // nested object resolves to null below and the raw '<name>Id' still comes through —
+            // omitting rather than refusing, so a narrowly-granted role keeps its item.
+            if (imageIds.Count > 0 && permissions.CanRead(FileCollection.Name))
             {
                 var files = await repository.QueryWhereInAsync(FileCollection.Name, "id", imageIds, ct);
                 foreach (var f in files)
