@@ -5,6 +5,7 @@ using Struo.Application.Configuration;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Files;
+using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Settings;
@@ -53,6 +54,8 @@ public class ColumnTypeMapTests
         yield return [typeof(MediaFolder), nameof(MediaFolder.CreatedAt)];
         yield return [typeof(MediaFolder), nameof(MediaFolder.UpdatedAt)];
         yield return [typeof(SiteSettings), nameof(SiteSettings.UpdatedAt)];
+        yield return [typeof(UserSession), nameof(UserSession.CreatedAt)];
+        yield return [typeof(UserSession), nameof(UserSession.ExpiresAt)];
     }
 
     [Theory]

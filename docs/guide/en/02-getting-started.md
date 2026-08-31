@@ -128,11 +128,11 @@ so do not rely on the log going unnoticed as a safety net.
 
 This is the important expectation to set: with the shipped default — no entry in
 `Struo:ContentAssemblies` — the admin SPA's sidebar has **no "Content" navigation group at all**.
-Verified directly against this checkout: the database contains exactly the ten framework tables
+Verified directly against this checkout: the database contains exactly the eleven framework tables
 (`languages`, `files`, `file_translations`, `media_folders`, `users`, `roles`, `permissions`,
-`user_roles`, `revisions`, `site_settings`) and nothing else, and the sidebar shows only Dashboard,
-Media Library, Settings and System (Language/Role/User) — because there is genuinely no content
-collection to list yet.
+`user_roles`, `revisions`, `site_settings`, `user_sessions`) and nothing else, and the sidebar shows
+only Dashboard, Media Library, Settings and System (Language/Role/User) — because there is genuinely no
+content collection to list yet.
 
 **This is correct, not a bug.** A blank Content section is exactly what a template with zero business
 collections looks like. Chapter 4 shows how to add your first collection and make that group appear;
