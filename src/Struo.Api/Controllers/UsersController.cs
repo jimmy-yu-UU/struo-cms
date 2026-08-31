@@ -22,8 +22,7 @@ public sealed record ChangePasswordRequest(string NewPassword, string? CurrentPa
 public sealed class UsersController(
     IUserAccountStore accounts, IPasswordHasher hasher, IUserCredentialStore store,
     ICurrentPermissions permissions, ICurrentUserAccessor currentUser,
-    IOptions<PasswordPolicyOptions> passwordPolicy,
-    IUserSessionRevocationService sessionRevocation, ILogger<UsersController> logger) : ControllerBase
+    IOptions<PasswordPolicyOptions> passwordPolicy) : ControllerBase
 {
     private IActionResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
@@ -50,7 +49,11 @@ public sealed class UsersController(
     // verify on a caller-supplied value, and being behind authentication puts it outside the login
     // policy entirely. Partitioned per user — see PasswordRateLimitOptions.
     [EnableRateLimiting("password")]
-    public async Task<IActionResult> ChangePassword(Guid id, [FromBody] ChangePasswordRequest body, CancellationToken ct)
+    public async Task<IActionResult> ChangePassword(
+        Guid id, [FromBody] ChangePasswordRequest body,
+        [FromServices] IUserSessionRevocationService sessionRevocation,
+        [FromServices] ILogger<UsersController> logger,
+        CancellationToken ct)
     {
         if (PasswordPolicy.Validate(body.NewPassword, passwordPolicy.Value) is { } policyError)
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, policyError);

@@ -38,7 +38,7 @@ public class DistributedCacheTicketStoreTests
     private sealed class Harness : IDisposable
     {
         public readonly SqliteTestDatabase Db = new();
-        public readonly ISqlSugarClient Client;
+        public readonly SqlSugarClient Client;
         public readonly IServiceScopeFactory ScopeFactory;
         public readonly IDistributedCache Cache = MemoryCache();
         public readonly ListLogger<DistributedCacheTicketStore> Logger = new();
@@ -52,7 +52,7 @@ public class DistributedCacheTicketStoreTests
                 DbType = DbType.Sqlite,
                 IsAutoCloseConnection = true,
             });
-            Client.CodeFirst.InitTables(typeof(UserSession));
+            Client.CodeFirst.InitTables<UserSession>();
 
             var services = new ServiceCollection();
             services.AddScoped<ISqlSugarClient>(_ => Client);
@@ -76,7 +76,7 @@ public class DistributedCacheTicketStoreTests
     /// <summary>Stands in for an unreachable session-index dependency (DB down, etc.).</summary>
     private sealed class ThrowingUserSessionStore : IUserSessionStore
     {
-        private static Exception Failure() => new InvalidOperationException("session index unreachable");
+        private static InvalidOperationException Failure() => new("session index unreachable");
         public Task RecordAsync(Guid userId, string ticketKey, DateTime createdAtUtc, DateTime expiresAtUtc, CancellationToken ct = default) =>
             throw Failure();
         public Task<bool> RenewAsync(string ticketKey, DateTime expiresAtUtc, CancellationToken ct = default) =>
