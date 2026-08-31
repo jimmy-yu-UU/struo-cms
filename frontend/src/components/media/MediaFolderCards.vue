@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<{
   // independently, per their own RBAC grants.
   canRename?: boolean
   canDelete?: boolean
-  // Task 9 batch selection: the same MovePayload the view shares across all four media surfaces.
+  // Batch selection: the same MovePayload the view shares across all four media surfaces.
   selection?: MovePayload
 }>(), { selection: () => ({ files: [], folders: [] }) })
 const emit = defineEmits<{

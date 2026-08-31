@@ -57,7 +57,7 @@ describe('MediaContextMenu', () => {
     expect(w.find('[data-test="menu-rename"]').exists()).toBe(false)
   })
 
-  // Fix for review finding 3: `variant="destructive"` alone resolves to
+  // `variant="destructive"` alone resolves to
   // `data-[variant=destructive]:text-destructive-foreground`, and tokens.css deliberately leaves
   // `--color-destructive-foreground` undeclared -- verified against the actual `pnpm build`
   // output that Tailwind v4 never emits ANY rule for that utility (zero occurrences of

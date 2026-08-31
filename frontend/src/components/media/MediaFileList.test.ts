@@ -245,7 +245,7 @@ describe('MediaFileList', () => {
     expect(row.attributes('data-dropping')).toBeUndefined()
   })
 
-  // Right-click context menu (Task 8): folder rows get Open/Rename/Move/Delete, file rows get
+  // Right-click context menu: folder rows get Open/Rename/Move/Delete, file rows get
   // Open/Move/Delete, and trash mode suppresses the file-row menu entirely (mirrors MediaGrid).
   describe('context menu', () => {
     it('always offers Open on a file row, regardless of grants', async () => {
@@ -369,7 +369,7 @@ describe('MediaFileList', () => {
       expect(w.emitted('removeFolder')).toBeUndefined()
     })
 
-    // Fix for review finding 2: reka's ContextMenuTrigger also opens on a still touch/pen press,
+    // reka's ContextMenuTrigger also opens on a still touch/pen press,
     // armed by its OWN @pointerdown listener (reka-ui/src/ContextMenu/ContextMenuTrigger.vue:70-79,
     // bound at line 115) -- not a `contextmenu` event, so `@contextmenu.stop` alone never sees
     // that path. Without an equivalent `.stop` on pointerdown, a long press on a row would arm the
@@ -407,7 +407,7 @@ describe('MediaFileList', () => {
     })
   })
 
-  // Task 9: batch selection, both row kinds.
+  // Batch selection, both row kinds.
   describe('batch selection', () => {
     const empty: MovePayload = { files: [], folders: [] }
 

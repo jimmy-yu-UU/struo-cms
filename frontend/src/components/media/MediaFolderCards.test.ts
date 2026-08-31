@@ -210,7 +210,7 @@ describe('MediaFolderCards', () => {
     expect(card.attributes('data-dropping')).toBeUndefined()
   })
 
-  // Right-click context menu (Task 8): folder cards additionally offer Rename, gated separately
+  // Right-click context menu: folder cards additionally offer Rename, gated separately
   // from Move/Delete.
   describe('context menu', () => {
     it('always offers Open, regardless of grants', async () => {
@@ -276,7 +276,7 @@ describe('MediaFolderCards', () => {
       expect(w.emitted('remove')).toBeUndefined()
     })
 
-    // Fix for review finding 2: reka's ContextMenuTrigger also opens on a still touch/pen press,
+    // reka's ContextMenuTrigger also opens on a still touch/pen press,
     // armed by its OWN @pointerdown listener (reka-ui/src/ContextMenu/ContextMenuTrigger.vue:70-79,
     // bound at line 115) -- not a `contextmenu` event, so `@contextmenu.stop` alone never sees
     // that path. Without an equivalent `.stop` on pointerdown, a long press on a card would arm
@@ -305,7 +305,7 @@ describe('MediaFolderCards', () => {
     })
   })
 
-  // Task 9: batch selection.
+  // Batch selection.
   describe('batch selection', () => {
     const empty: MovePayload = { files: [], folders: [] }
 

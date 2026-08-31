@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
   // mode). true forwards straight to reka's own ContextMenuTrigger `disabled`, which also
   // restores the native browser menu.
   trashMode?: boolean
-  // Task 9 batch selection: a single MovePayload the view shares across all four media surfaces.
+  // Batch selection: a single MovePayload the view shares across all four media surfaces.
   // Defaults to empty so MediaGrid's other callers (FilePicker/FilesField/RichTextInput -- all
   // selectable/multiple pickers, never the batch-move browse mode) don't have to pass one.
   selection?: MovePayload

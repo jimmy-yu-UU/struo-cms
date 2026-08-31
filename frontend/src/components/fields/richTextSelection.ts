@@ -1,7 +1,7 @@
 // The structural minimum TipTap's shouldShow argument object satisfies -- declared here rather than
 // importing Editor/EditorView/EditorState so this module stays a plain function testable with
 // fabricated arguments (see richTextSelection.test.ts). TipTap's real argument object satisfies this
-// shape; Task 2 passes it straight through.
+// shape; the caller passes it straight through.
 
 // The node shape this module needs from ProseMirror's Node#nodesBetween walk: only whether the node
 // is inline. isInline is false for every block-level node (paragraph, codeBlock, table, blockquote,
