@@ -261,7 +261,7 @@ internal sealed class TrashRevisionHarness : IDisposable
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, serviceStore, snapshotBuilder);
+            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public static TrashRevisionHarness Create(bool failCaptureRevision = false) => new(failCaptureRevision);

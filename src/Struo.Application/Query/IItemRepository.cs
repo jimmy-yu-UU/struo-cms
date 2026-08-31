@@ -37,6 +37,12 @@ public interface IItemRepository
     Task InTransactionAsync(Func<Task> body, CancellationToken ct = default);
 
     /// <summary>
+    /// Same transaction semantics as <see cref="InTransactionAsync(Func{Task},CancellationToken)"/>,
+    /// but flows <paramref name="body"/>'s result out instead of requiring a captured mutable.
+    /// </summary>
+    Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all rows of <paramref name="collection"/> whose <paramref name="property"/>
     /// (a camelCase field name, e.g. <c>"id"</c>) is in <paramref name="values"/>.
     /// Empty <paramref name="values"/> returns an empty list without issuing a query.

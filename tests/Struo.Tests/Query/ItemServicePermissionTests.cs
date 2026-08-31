@@ -141,7 +141,7 @@ public class ItemServicePermissionTests : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         return new ItemService(repo, provider, registry, permissions,
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder);
+            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public void Dispose() => _file.Dispose();

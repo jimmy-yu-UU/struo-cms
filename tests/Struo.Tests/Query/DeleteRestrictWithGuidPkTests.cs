@@ -69,6 +69,7 @@ public class DeleteRestrictWithGuidPkTests
         public Task<bool> RestoreAsync(string c, string id, CancellationToken ct) =>
             Task.FromResult(true);
         public Task InTransactionAsync(Func<Task> body, CancellationToken ct) => body();
+        public Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct) => body();
         public Task<IReadOnlyList<object>> QueryWhereInAsync(string c, string prop, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([new GuidEntity()]);
         public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(string c, string prop, IReadOnlyList<object> vals, FilterNode? extraFilter, CancellationToken ct) =>
@@ -173,7 +174,7 @@ public class DeleteRestrictWithGuidPkTests
             new StubFilterResolver(), new StubLanguages(),
             new StruoQueryOptions(), new GanssHtmlSanitizer(),
             new TestCurrentUserAccessor(Guid.Empty),
-            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()));
+            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()), new NoopUserSessionRevocationService());
 
         // Act: delete a Guid-keyed row that is still referenced — must throw RelationConflictException
         // (conflict / 409), NOT a QueryException from a failed Convert.ChangeType (spurious 400).

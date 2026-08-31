@@ -112,7 +112,7 @@ internal sealed class M2MRevertHarness : IDisposable
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, realStore, snapshotBuilder);
+            currentUser, realStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public static M2MRevertHarness Create() => new();
