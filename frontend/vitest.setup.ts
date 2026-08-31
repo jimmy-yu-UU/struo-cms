@@ -70,7 +70,7 @@ if (typeof Element !== 'undefined') {
 //   - Tests sharing module-level reactive state (AppShell.test.ts's `routeState`) let a later
 //     test's writes leak into an earlier test's still-live instance.
 //
-// This repository shipped that class of bug once already; PR #35/#36 fixed it per-file, and this
+// This repository shipped that class of bug once already; it was fixed per-file, and this
 // line generalises the fix. Do not remove it as unrelated boilerplate --
 // tests/testIsolation.test.ts fails immediately if it goes.
 enableAutoUnmount(afterEach)

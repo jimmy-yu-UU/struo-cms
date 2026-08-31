@@ -271,7 +271,7 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // Task 1's predicate excludes a selected image by testing "the selected range carries no text",
+  // The predicate excludes a selected image by testing "the selected range carries no text",
   // but its own tests fabricate textBetween -- nothing before this proved that a real selected
   // image actually presents that way. This settles it against a real editor and a real image node:
   // first the raw claim (textBetween is actually empty over a NodeSelection's own range), then the

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { fieldVariants } from '@/components/ui/field'
 
-// The actual bug this whole batch fixed (Role's Super Admin, User's Active, Language's
+// The bug this guards: (Role's Super Admin, User's Active, Language's
 // Default/Enabled rendering as a control stretched across the whole form) traces to a single rule:
 // `ui/field`'s `vertical` orientation applies `[&>*]:w-full` to every direct child of a <Field>.
 // BooleanField.vue now works around that by wrapping its Switch in a plain div, so that wrapper

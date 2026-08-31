@@ -67,7 +67,7 @@ describe('richTextCommands', () => {
   // The loop above only proves each labelKey resolves to A string, not the RIGHT one -- strike
   // pointed at fields.richtext.bold would still pass it. These four are exactly the keys that don't
   // derive from the id, so they're the ones a copy-paste mistake would actually hit, and nothing
-  // downstream of this batch asserts an aria-label's value to catch it another way.
+  // else in the suite asserts an aria-label's value to catch it another way.
   it('points the four non-derivable labelKeys at their correct entries', () => {
     const byId = new Map(RICH_TEXT_COMMANDS.map((c) => [c.id, c.labelKey]))
     expect(byId.get('strike')).toBe('fields.richtext.strikethrough')

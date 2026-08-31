@@ -234,7 +234,7 @@ describe('RichTextInput', () => {
     expect(ed.getHTML()).toBe('<p>old</p>')
   })
 
-  // The batch's headline behaviour, previously asserted nowhere in this suite: checking "open in new
+  // Checking "open in new
   // tab" must show up as target="_blank" on the stored mark, with no rel riding along (rel is
   // backend-owned -- see richTextCommands.ts). Exact string, not toContain, so this also pins that
   // HTMLAttributes: { rel: null } (RichTextInput.vue's Link.configure) is doing something on the one
@@ -572,8 +572,8 @@ describe('RichTextInput', () => {
   // without breaking the other would still be caught by keeping both tests. A fresh mount (rather
   // than chaining onto the bold click above) sidesteps tiptap's stored-mark semantics: toggling
   // bold with no text selected only stores it as a pending mark for the next typed character, and
-  // a later, unrelated command clears that pending mark — real editor behaviour, not something
-  // this migration changed, but it would make a combined assertion flaky for reasons unrelated to
+  // a later, unrelated command clears that pending mark — real editor behaviour, not an artifact
+  // introduced here, but it would make a combined assertion flaky for reasons unrelated to
   // data-active.
   it('flags active toolbar state via data-active for a node-attribute command (alignCenter)', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })

@@ -39,7 +39,7 @@ describe('tokens.css', () => {
     }
   })
 
-  // The single most dangerous mistake in this migration: shadcn's --accent is the
+  // The single most dangerous mistake here: shadcn's --accent is the
   // hover/active surface, NOT the brand colour. Brand sky belongs to --primary.
   it('binds brand sky to --primary and leaves --accent as a neutral hover surface', () => {
     expect(block(':root')).toContain('--primary: #0284c7')
