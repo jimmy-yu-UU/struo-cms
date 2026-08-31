@@ -373,7 +373,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         var service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, revisionStore, snapshotBuilder);
+            currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
 
         return new SoftDeleteRepositoryHarness(file, db, repo, service);
     }

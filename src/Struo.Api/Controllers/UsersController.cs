@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Api.Http;
@@ -21,7 +22,8 @@ public sealed record ChangePasswordRequest(string NewPassword, string? CurrentPa
 public sealed class UsersController(
     IUserAccountStore accounts, IPasswordHasher hasher, IUserCredentialStore store,
     ICurrentPermissions permissions, ICurrentUserAccessor currentUser,
-    IOptions<PasswordPolicyOptions> passwordPolicy) : ControllerBase
+    IOptions<PasswordPolicyOptions> passwordPolicy,
+    IUserSessionRevocationService sessionRevocation, ILogger<UsersController> logger) : ControllerBase
 {
     private IActionResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
@@ -78,7 +80,28 @@ public sealed class UsersController(
 
         var updated = await accounts.SetPasswordAsync(
             id, hasher.Hash(body.NewPassword), currentUser.GetCurrentUserId(), DateTime.UtcNow, ct);
-        return updated ? NoContent() : NotFound();
+        if (!updated) return NotFound();
+
+        // The password write above already committed — there is nothing left to roll back. Revocation
+        // uses CancellationToken.None deliberately: a client that disconnects right after the write
+        // must not also cause its now-superseded sessions to go un-revoked. A revocation failure is a
+        // real caller-visible signal (SessionRevocationFailedException -> a distinct error code), not
+        // silently swallowed as success — the caller (and the SPA/operator) needs to know some of this
+        // user's sessions might still be alive.
+        try
+        {
+            await sessionRevocation.RevokeAllForUserAsync(id, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Password change for user {UserId} succeeded, but revoking their existing sessions failed.",
+                id);
+            throw new SessionRevocationFailedException(
+                "Password was changed, but revoking existing sessions failed. Some sessions may still be active.",
+                ex);
+        }
+        return NoContent();
     }
 
     [HttpPost("{id:guid}/access-token")]

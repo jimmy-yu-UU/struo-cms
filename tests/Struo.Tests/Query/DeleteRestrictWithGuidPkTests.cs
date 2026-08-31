@@ -173,7 +173,7 @@ public class DeleteRestrictWithGuidPkTests
             new StubFilterResolver(), new StubLanguages(),
             new StruoQueryOptions(), new GanssHtmlSanitizer(),
             new TestCurrentUserAccessor(Guid.Empty),
-            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()));
+            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()), new NoopUserSessionRevocationService());
 
         // Act: delete a Guid-keyed row that is still referenced — must throw RelationConflictException
         // (conflict / 409), NOT a QueryException from a failed Convert.ChangeType (spurious 400).

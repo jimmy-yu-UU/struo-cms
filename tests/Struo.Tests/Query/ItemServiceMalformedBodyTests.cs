@@ -69,7 +69,7 @@ internal sealed class MalformedBodyHarness : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder);
+            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public static MalformedBodyHarness Create() => new();
