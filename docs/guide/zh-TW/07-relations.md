@@ -168,6 +168,10 @@ in '{relation}' do not exist in '{target}'."`，而一個重複的 id 會被靜�
 
 ## 用 `deep` 讀取關聯資料
 
+`deep` 與下方帶點號的 filter/sort 路徑，都需要對路徑經過的**每一個**集合具備讀取授權，而不只是被
+查詢的那一個。`deep` 會略過你無權讀取的關聯;帶點號的 filter 或 sort 路徑則會直接被拒絕。完整規則
+以及它對開放匿名讀取部署的遷移影響，見第 8 章 [查詢 DSL](08-query-dsl.md) 的驗證一節。
+
 `deep` 會要求在讀取時，把一個關聯展開到它的父資料列上，由 `RelationExpander`
 (`src/Struo.Infrastructure/Query/RelationExpander.cs`) 逐關聯、逐頁批次處理 (每個關聯只發一次
 後續查詢，不是每一列都發一次——不會有 N+1 問題)。單純的查詢字串形式，只需要指名要展開哪些關聯:

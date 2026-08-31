@@ -250,6 +250,28 @@ message — all three live-verified in chapter 7. `fields=` additionally disallo
 entirely (`allowRelation: false`) — projection only ever selects a collection's own scalar fields,
 never a nested relation's.
 
+A read grant does not travel across a relation hop. Every collection a dotted path traverses needs
+its own read permission, so a role granted `article` but not `user` cannot reach user rows through
+`author.email`: the request is refused (`FORBIDDEN`, or `UNAUTHORIZED` for an anonymous caller).
+Refusing rather than ignoring the condition is deliberate — dropping it would answer with rows that
+do not match the filter that was sent, and `meta.total` over an unreadable collection is a
+character-at-a-time extraction oracle even when no row is ever returned. `deep=` follows the same
+rule with the opposite failure mode: a relation whose target you cannot read is omitted from the
+response rather than failing it, so a narrowly-granted role still gets its item, just without that
+nested object. A translatable Image/File field resolves through the same grant — without read on
+`file` the nested object comes back `null` and the raw `<name>Id` still does not.
+
+The permission check runs *before* the path's leaf is resolved, so the field names of a collection
+you may not read are not probeable through validation errors: you cannot tell a real field on an
+unreadable collection from an invented one, because both stop at the hop. The many-to-one foreign
+key itself (`categoryId`) does stay filterable — it is a column on a row you are already permitted
+to read, and exposes an opaque id rather than anything from the target collection.
+
+**This is a breaking change for an anonymous-read deployment.** If `Rbac:PublicReadCollections`
+lists a collection whose public filters or `deep=` traverse into a second collection, that second
+collection now needs its own entry, or those requests will start failing (filters) or returning
+without the nested object (`deep=`).
+
 ## Worked end-to-end example
 
 Putting several pieces together in one request — a comparison filter, descending sort, pagination,
