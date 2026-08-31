@@ -16,7 +16,7 @@ namespace Struo.Tests.Identity;
 /// </summary>
 public class SqlSugarUserSessionStoreTests
 {
-    private static ISqlSugarClient NewDb(SqliteTestDatabase db)
+    private static SqlSugarClient NewDb(SqliteTestDatabase db)
     {
         var client = new SqlSugarClient(new ConnectionConfig
         {
@@ -24,7 +24,7 @@ public class SqlSugarUserSessionStoreTests
             DbType = DbType.Sqlite,
             IsAutoCloseConnection = true,
         });
-        client.CodeFirst.InitTables(typeof(UserSession));
+        client.CodeFirst.InitTables<UserSession>();
         return client;
     }
 

@@ -58,7 +58,7 @@ public class PasswordChangeRevocationFailureTests(ApiFactory factory)
         return (email, password, userId);
     }
 
-    private async Task<HttpClient> LoginOnAsync(WebApplicationFactory<Program> host, string email, string password)
+    private static async Task<HttpClient> LoginOnAsync(WebApplicationFactory<Program> host, string email, string password)
     {
         var client = host.CreateClient();
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
