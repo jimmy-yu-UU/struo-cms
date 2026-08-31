@@ -74,7 +74,7 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         // AllowedAttributes above and Blank_target_survives_with_exactly_rel_noopener fails, but that
         // test alone does not pin the ordering claim below: it fails the same way under either event
         // ordering, so it only proves the allowlist entry is load-bearing. What actually pins
-        // PostProcessNode firing after attribute filtering (same as PostProcessDom, RT-3) is
+        // PostProcessNode firing after attribute filtering (same as PostProcessDom) is
         // Anchor_with_rejected_href_does_not_keep_target: that test's href carries a rejected scheme,
         // so it only passes if attribute filtering has already stripped it by the time
         // HasAttribute("href") below is evaluated.

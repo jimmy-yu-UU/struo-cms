@@ -151,7 +151,7 @@ function buildTimingHarness(deferred: boolean) {
 // alone would also pass if reka read `target` at some arbitrary later point, proving no deadline
 // exists at all; the second -- flipping past the microtask boundary and expecting nothing to
 // render -- is what makes the first mean anything.
-describe('target routing timing (guards the Step 1 finding pinned in RichTextContextMenu.vue)', () => {
+describe('target routing timing (guards the deadline documented on the target prop)', () => {
   it('a target flip during synchronous capture-phase dispatch IS reflected in the rendered content', async () => {
     const hw = mount(buildTimingHarness(false), {
       global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },

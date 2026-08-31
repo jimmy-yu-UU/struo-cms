@@ -64,7 +64,7 @@ describe('MediaMoveDialog', () => {
     expect(w.get('[data-test="move-option"][data-folder-id="__root__"]').attributes('disabled')).toBeUndefined()
   })
 
-  // Task 9 made multi-folder batch selections reachable: the docblock promises an option is
+  // With multi-folder batch selections, the docblock promises an option is
   // disabled when moving ANY of the dragged folders there would create a cycle, not just the
   // first one. 'a' and 'd' are both selected; 'a' -> 'b' is a cycle even though 'd' alone would
   // not make 'b' cyclic, so 'b' must still come out disabled.
