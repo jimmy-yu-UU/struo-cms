@@ -314,11 +314,8 @@ public sealed class ItemService(
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
-        var existed = false;
-        await repository.InTransactionAsync(async () =>
-        {
-            existed = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), ct);
-        }, ct);
+        var existed = await repository.InTransactionAsync(
+            () => this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), ct), ct);
         if (existed) await RevokeSessionsIfUserAsync(collection, id);
         return existed;
     }
