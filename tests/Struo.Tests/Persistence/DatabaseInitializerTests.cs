@@ -165,7 +165,7 @@ public class DatabaseInitializerTests
     {
         // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 SQLite 上，欄位沒有被刪掉。
         // 因此「InitTables 會 DROP COLUMN」這個架構前提無法用 SQLite 測套件證明；PostgreSQL 端的量測
-        // 已經完成（batch A 的 Task 2）：同一組探針型別在真 PostgreSQL 上跑出相反的結果——Doomed 欄位
+        // 已經完成：同一組探針型別在真 PostgreSQL 上跑出相反的結果——Doomed 欄位
         // 被 DROP 掉了，見 Struo.Tests.Query.PostgresIntegrationTests
         // .Unfiltered_InitTables_drops_a_removed_column_on_postgres（opt-in，僅在設定 PG 連線時執行）。
         // 已知成因，不是「SQLite 做不到」：SqlSugar 的 SqliteCodeFirst.ExistLogic（上游 tag 5.1.4.197，

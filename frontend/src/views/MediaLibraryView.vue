@@ -67,12 +67,12 @@ const folders = ref<FolderRow[]>([])
 const currentFolderId = ref<string | null>(null)
 const createOpen = ref(false)
 const renameTarget = ref<FolderRow | null>(null)
-// Move-to dialog: opened via onRequestMove (the context menu's "Move to…" entry) and, later, the
-// Task 9 selection toolbar -- both just set movePayload and flip moveDialogOpen.
+// Move-to dialog: opened via onRequestMove (the context menu's "Move to…" entry) and the
+// selection toolbar -- both just set movePayload and flip moveDialogOpen.
 const moveDialogOpen = ref(false)
 const movePayload = ref<MovePayload>({ files: [], folders: [] })
 
-// Task 9 batch selection: one MovePayload shared (as a prop) across all four media surfaces
+// Batch selection: one MovePayload shared (as a prop) across all four media surfaces
 // (MediaGrid, MediaFolderCards, MediaFileList's two row kinds). Invariant: a selection must not
 // outlive the listing it was built against, so every handler below that reloads `files.value`
 // also calls clearSelection() on its way in (see :165-168 for the reasoning at one such call
@@ -166,7 +166,7 @@ function onModeToggle(value: unknown): void {
 function onViewToggle(value: unknown): void {
   if (value === 'grid' || value === 'list') view.value = value
 }
-// Review fix (Finding 1): these two reload `files.value` exactly like search/page/mode already
+// These two reload `files.value` exactly like search/page/mode already
 // do, so a stale selection surviving one of them is not just staleness -- it is a SILENT SUCCESS
 // hazard: the toolbar would keep reading "N selected" after a filter change hides all of them,
 // and Move to… would then move items the user can no longer see with no error at all.
@@ -209,7 +209,7 @@ async function loadClampingToLastValidPage(): Promise<void> {
     await load()
   }
 }
-// Review fix (Finding 3): removes just the ONE affected id from `selection` rather than clearing
+// Removes just the ONE affected id from `selection` rather than clearing
 // it wholesale -- the user's other selected items are still perfectly valid. This matters because
 // a ghost id (one deleted/purged/removed out from under an active selection) makes performMove
 // throw AFTER its sibling writes have already settled (mediaMoveActions.ts's Promise.allSettled +
@@ -337,7 +337,7 @@ async function onDropOn(targetFolderId: string | null, payload: MovePayload): Pr
 // Routes the move-to dialog's choice through the same perform/toast/reload path as a drag-drop,
 // rather than duplicating any of that here.
 //
-// Review fix (Finding 2): clearing lives HERE, not inside onDropOn's own finally. onDropOn also
+// Clearing lives HERE, not inside onDropOn's own finally. onDropOn also
 // serves plain drags and context-menu moves that never touch `selection` at all, and clearing an
 // unrelated in-progress selection there would be a surprising side effect of an unconnected move.
 // onMoveSubmit is specifically the move-DIALOG path -- both the toolbar's batch move and a
@@ -348,8 +348,8 @@ function onMoveSubmit(targetFolderId: string | null): void {
   void onDropOn(targetFolderId, movePayload.value)
 }
 
-// The context menu's "Move to…" entry (Task 8) is the first real UI trigger for the move dialog
-// Task 7 only wired internally -- both single-file and single-folder payloads land here.
+// The context menu's "Move to…" entry is a UI trigger for the move dialog --
+// both single-file and single-folder payloads land here.
 function onRequestMove(payload: MovePayload): void {
   movePayload.value = payload
   moveDialogOpen.value = true
@@ -465,7 +465,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       </template>
     </ListToolbar>
 
-    <!-- Task 9's selection toolbar: a second trigger onto the same moveDialogOpen/movePayload
+    <!-- The selection toolbar: a second trigger onto the same moveDialogOpen/movePayload
          state the context menu's "Move to…" entry (onRequestMove) already opens -- see that
          handler's own comment. `mode === 'active'` is belt-and-braces here (the selection is
          already guaranteed empty while browsing the trash by onToggleSelect's own refusal and by
@@ -516,7 +516,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
     <!--
-      Right-click empty space (Task 8): New folder / Upload, gated the same as the header's own
+      Right-click empty space: New folder / Upload, gated the same as the header's own
       buttons above (not additionally restricted by mode/search -- matching those buttons, which
       also aren't). Each item-level context menu (MediaFolderCards/MediaGrid/MediaFileList) stops
       contextmenu propagation on its own tile/card/row specifically so a right-click ON an item
@@ -643,8 +643,8 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
     <MediaFolderNameDialog :visible="renameTarget !== null" :header="t('media.folderRename')"
                            :initial-name="renameTarget?.name" @update:visible="(v: boolean) => { if (!v) renameTarget = null }"
                            @submit="onRenameFolder" />
-    <!-- Reachable via the context menu's "Move to…" entry (onRequestMove); Task 9's selection
-         toolbar will be a second trigger onto the same moveDialogOpen/movePayload state. -->
+    <!-- Reachable via the context menu's "Move to…" entry (onRequestMove); the selection
+         toolbar is a second trigger onto the same moveDialogOpen/movePayload state. -->
     <MediaMoveDialog v-model:visible="moveDialogOpen" :folders="folders" :payload="movePayload" @submit="onMoveSubmit" />
   </section>
 </template>

@@ -143,8 +143,7 @@ public static class SqlSugarClientFactory
                     // an explicit [ColumnShape] already returned above, before this convention runs;
                     // a third-party fork's own [SugarColumn(ColumnDataType = ...)] is also
                     // respected here and wins over this convention. Plain Text fields keep
-                    // SqlSugar's default varchar(255) for now, pending the dedicated MaxLength
-                    // feature.
+                    // SqlSugar's default varchar(255).
                     if (property.PropertyType == typeof(string))
                     {
                         var explicitDataType = property.GetCustomAttribute<SugarColumn>()?.ColumnDataType;

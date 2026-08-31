@@ -82,7 +82,7 @@ describe('shouldShowBubbleMenu', () => {
 
   // This is the shape a text-free selection presents to this predicate: non-empty, no text.
   // Excluding it is what keeps this surface to inline text formatting; whether a real selected
-  // image presents this shape is what Task 2 proves against a real editor, not this fabricated case.
+  // image presents this shape is proven against a real editor elsewhere, not this fabricated case.
   it('stays hidden for a non-empty selection that carries no text', () => {
     expect(shouldShowBubbleMenu(args({
       state: { selection: { empty: false }, doc: { textBetween: () => '', nodesBetween: nodesBetweenOf(ORDINARY_ENTRY) } },

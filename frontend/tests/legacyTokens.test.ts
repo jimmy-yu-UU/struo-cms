@@ -20,7 +20,7 @@ const files = walk(SRC).filter((f) => !f.endsWith('tokens.css'))
 // carries equal specificity, so every name it re-declares silently wins for the whole document
 // — including --accent (which would render brand sky as every hover surface) and --radius
 // (which would make rounded-sm 4.8px instead of the contracted 6px). --radius-lg was measured
-// (Step 0) to also be emitted into :root by Tailwind v4's `@theme inline`, so it collides too.
+// to also be emitted into :root by Tailwind v4's `@theme inline`, so it collides too.
 const RENAMED = ['accent', 'muted', 'radius', 'radius-lg'] as const   // meaning differs -> tokens.css owns it exclusively
 const SURRENDERED = ['border', 'success'] as const        // meaning matches -> tokens.css owns it
 
