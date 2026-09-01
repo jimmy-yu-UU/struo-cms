@@ -284,6 +284,16 @@ $ curl -s -X PUT http://localhost:5221/api/items/file/<id> -H "Content-Type: app
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
 ```
 
+## `POST`/`PUT` 請求本文能設定什麼
+
+`ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) 由建立與更新
+共用，它會依允許清單來繫結請求本文，而不是繫結到整個 CLR entity 型別:清單只包含已宣告、可寫入的
+`[CmsField]`;已宣告的 `ManyToOne` 關聯外鍵 (例如 `categoryId`);`translations` 附掛承載;以及多對多
+關聯鍵 (例如 `tags`)。其餘每一個頂層鍵——包括 `id`、`version`，以及軟刪除/稽核欄位 (`deletedAt`、
+`deletedBy`、`createdAt`、`createdBy`、`updatedAt`、`updatedBy`)——都會被靜默捨棄，而不是被拒絕:寫入
+仍會成功，只是那個鍵不會生效。`POST` 與 `PUT` 共用同一份允許清單，因此建立請求無法設定客戶端指定的
+id，也無法竄改樂觀並行控制版本號，就跟更新請求做不到一樣。
+
 ## 端點參考，依 controller 分類
 
 下方的「必要權限」永遠是指 `ItemService`/`FileAccessPolicy` 所檢查的逐集合 RBAC 授權
@@ -327,7 +337,7 @@ Content-Length: 0
 | `GET /api/items/{collection}` | `filter[...]`、`sort`、`limit`、`offset`、`fields`、`deep`、`search`、`locale`、`deleted` | — | `200`，清單 + `meta` | 無 (不帶 `[Authorize]`;但若請求帶有 cookie 或 bearer 憑證，`Adaptive` 仍會驗證它——見上文) | `CanRead` |
 | `POST /api/items/{collection}/query` | `locale`、`deleted` (即使在這裡也是從 URL 讀取) | JSON 信封 (第 8 章) | `200`，清單 + `meta` | 無 (同上) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`、`locale`、`deleted` | — | `200` 項目，或 `404` | 無 (同上) | `CanRead` (`deleted=only\|with` 額外需要 `CanDelete`) |
-| `POST /api/items/{collection}` | — | 可寫入欄位組成的 JSON 物件 | `201` 已建立的項目，`Location: /api/items/{collection}/{id}` (見上方的「狀態碼慣例」) | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
+| `POST /api/items/{collection}` | — | 可寫入欄位組成的 JSON 物件 (經過允許清單過濾——見上方) | `201` 已建立的項目，`Location: /api/items/{collection}/{id}` (見上方的「狀態碼慣例」) | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `PUT /api/items/{collection}/{id}` | — | JSON 物件，部分更新 (只有送出的鍵值會疊加——但請見上方 `Required` 欄位的但書) | `200` 已更新的項目，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool，預設 `false`) | — | `204`，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` 已還原的項目，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |

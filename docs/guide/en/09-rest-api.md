@@ -292,6 +292,17 @@ $ curl -s -X PUT http://localhost:5221/api/items/file/<id> -H "Content-Type: app
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
 ```
 
+## What a `POST`/`PUT` body may set
+
+`ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`), shared by
+create and update, binds a request body against an allowlist rather than the whole CLR entity type:
+declared, writable `[CmsField]`s; declared `ManyToOne` relation foreign keys (e.g. `categoryId`); the
+`translations` sidecar payload; and M2M relation keys (e.g. `tags`). Every other top-level key —
+including `id`, `version`, and the soft-delete/audit columns (`deletedAt`, `deletedBy`, `createdAt`,
+`createdBy`, `updatedAt`, `updatedBy`) — is silently dropped, not rejected: the write still succeeds,
+just without that key taking effect. `POST` and `PUT` share this allowlist, so a create request cannot
+set a client-chosen id or seed the optimistic-concurrency version any more than an update request can.
+
 ## Endpoint reference, by controller
 
 Required permission below always means the per-collection RBAC grant checked by `ItemService`/
@@ -337,7 +348,7 @@ The generic CRUD surface over every `[CmsCollection]` — `language`, `permissio
 | `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted` | — | `200`, list + `meta` | none (`[Authorize]`-absent; `Adaptive` still authenticates a cookie or bearer credential if present — see above) | `CanRead` |
 | `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8) | `200`, list + `meta` | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`, `locale`, `deleted` | — | `200` item, or `404` | none (same caveat) | `CanRead` (`deleted=only\|with` additionally needs `CanDelete`) |
-| `POST /api/items/{collection}` | — | JSON object of writable fields | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
+| `POST /api/items/{collection}` | — | JSON object of writable fields (allowlisted — see above) | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` restored item, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
