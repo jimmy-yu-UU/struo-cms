@@ -66,7 +66,12 @@ Ticket 存放——也就是 cookie 那組不透明金鑰背後真正的 session
 與管理者重設兩條分支共用同一個 action)會讀取這張索引表，透過 `IUserSessionRevocationService`
 (`UserSessionRevocationService`，`src/Struo.Infrastructure/Identity/UserSessionRevocationService.cs`)
 撤銷該目標使用者所有找得到的 session——在密碼本身成功寫入之後才執行；撤銷失敗不會讓已經成功的密碼變更
-回滾。停用帳號(`isActive = false`，無論透過哪條路徑——泛用的 item 更新端點，或直接寫入資料庫)則獨立
+回滾。刪除一筆 `user` 資料列使用相同的、以索引表為基礎的撤銷機制：`ItemService.RevokeSessionsIfUserAsync`
+(`src/Struo.Application/Query/ItemService.cs`)會在兩條 DELETE 分支——軟刪除與清除(purge)——上都觸發，
+就在刪除本身提交之後執行；之所以放在 `ItemService` 而非 REST controller 中，是為了讓 GraphQL 的
+`deleteUser` mutation 也一併涵蓋，而不只是 `DELETE /api/items/user/{id}`。這兩個觸發點的撤銷失敗，都會
+回傳同樣的 `SESSION_REVOCATION_FAILED` 錯誤代碼(第 9 章，訊息內容則依觸發點而異),而不是讓已經成功的寫入被回滾。停用帳號
+(`isActive = false`，無論透過哪條路徑——泛用的 item 更新端點，或直接寫入資料庫)則獨立
 於這張索引表另外處理：cookie scheme 的 `OnValidatePrincipal` 事件(`AuthWiring.cs`)會在每一個請求上透過
 `IUserCredentialStore.FindByIdAsync` 重新檢查 `IsActive`，一旦失敗就同時拒絕該 principal 並將呼叫端
 登出——登出這個動作才是讓 ticket 真正從存放區中消失的原因，而不只是拒絕這一次請求。過期的索引列則在登入

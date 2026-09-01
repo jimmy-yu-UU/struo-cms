@@ -59,7 +59,7 @@ identical regardless of which layer answered:
 
 ## Error codes
 
-`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) declares exactly these thirteen stable `code` values. This
+`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) declares exactly these fourteen stable `code` values. This
 is the same catalog GraphQL's `StruoErrorFilter` uses (chapter 10) — a `PermissionDeniedException`
 maps to the identical code on both protocols, for example — so a client that already handles GraphQL
 errors recognizes REST errors by the same string.
@@ -79,6 +79,7 @@ errors recognizes REST errors by the same string.
 | `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password`, self-service branch: the caller supplied a missing or wrong `currentPassword`. Deliberately not `401` — the caller already holds a valid session, and the SPA's global 401 handler clears the session on every `401` it sees, so reusing `UNAUTHORIZED` here would log the caller out on a plain typo. |
 | `NO_LOCAL_PASSWORD` | 400 | Self-service password change attempted on an account provisioned entirely through external OIDC, whose stored hash is the empty string because it never had a local password. |
 | `ACCOUNT_INACTIVE` | 401 | `POST /api/auth/login` with a *correct* password on a deactivated account. Only reachable after a successful hash verify, so surfacing it leaks nothing the caller hadn't already proven — unlike splitting "wrong password" from "no such account", which stays merged under `UNAUTHORIZED` above (chapter 12 covers why). |
+| `SESSION_REVOCATION_FAILED` | 500 | `SessionRevocationFailedException` — a password change or a user delete already committed successfully, but the follow-up session-revocation step then failed, so some of that user's existing sessions may still be live (chapter 12). `DomainErrorMap.StatusFor` has no dedicated arm for this code, so it falls through to the default 500 status even though the code and message are specific, not the masked generic string `INTERNAL_SERVER_ERROR` otherwise carries. |
 
 `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) is the single source of the exception→code
 mapping, shared verbatim with GraphQL's error filter:
@@ -87,10 +88,12 @@ mapping, shared verbatim with GraphQL's error filter:
 PermissionDeniedException when !authenticated => (ErrorCodes.Unauthorized, exception.Message),
 PermissionDeniedException => (ErrorCodes.Forbidden, exception.Message),
 CollectionNotFoundException => (ErrorCodes.NotFound, exception.Message),
+FileBlobNotFoundException => (ErrorCodes.NotFound, exception.Message),
 ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
 RelationConflictException => (ErrorCodes.Conflict, exception.Message),
 QueryException => (ErrorCodes.BadUserInput, exception.Message),
 PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
+SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
