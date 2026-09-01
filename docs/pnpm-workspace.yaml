@@ -1,0 +1,5 @@
+# Transitive dependency overrides for advisories the packages pulling them in
+# have not picked up yet. See frontend/pnpm-workspace.yaml for why every entry
+# carries an upper bound — the same rule applies here.
+overrides:
+  nanoid@<3.3.18: '>=3.3.18 <4'
