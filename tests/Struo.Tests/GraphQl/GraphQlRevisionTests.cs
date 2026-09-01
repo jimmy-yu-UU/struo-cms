@@ -74,7 +74,7 @@ public class GraphQlRevisionTests(ApiFactory factory)
         revisions2[0].GetProperty("revisionNumber").GetInt64().Should().Be(3);
     }
 
-    /// <summary>Task 3: <c>sourceRevisionNumber</c> must round-trip through both the
+    /// <summary><c>sourceRevisionNumber</c> must round-trip through both the
     /// <c>articleRevisions</c> list and the <c>articleRevision</c> single-node query, mirroring the
     /// REST assertions in <see cref="Struo.Tests.Api.RevisionEndpointTests"/>.</summary>
     [Fact]

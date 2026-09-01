@@ -120,11 +120,11 @@ IPv6 loopback，導致 Chromium 系瀏覽器連不到 IPv4 位址。在瀏覽器
 ## 尚無集合時你會看到什麼
 
 這是必須先建立的重要預期心理:在出貨預設狀態下——`Struo:ContentAssemblies` 沒有任何項目——管理後台
-SPA 的側欄**完全沒有「Content」導覽群組**。已直接針對此份 checkout 驗證過:資料庫中恰好只有十張框架
+SPA 的側欄**完全沒有「Content」導覽群組**。已直接針對此份 checkout 驗證過:資料庫中恰好只有十一張框架
 資料表 (`languages`、`files`、`file_translations`、`media_folders`、`users`、`roles`、
-`permissions`、`user_roles`、`revisions`、`site_settings`)，別無其他;側欄只顯示 Dashboard
-(儀表板)、Media Library (媒體庫)、Settings (設定) 與 System (Language/Role/User)——因為現在確實
-還沒有任何內容集合可列出。
+`permissions`、`user_roles`、`revisions`、`site_settings`、`user_sessions`)，別無其他;側欄只顯示
+Dashboard (儀表板)、Media Library (媒體庫)、Settings (設定) 與 System (Language/Role/User)——因為
+現在確實還沒有任何內容集合可列出。
 
 **這是正確的，不是 bug。** 一個空白的 Content 區塊，正是一個零業務集合的樣板該有的樣子。
 第 4 章會示範如何新增你的第一個集合，讓這個群組出現;第 16 章則示範同樣的事，若你想在設計自己

@@ -64,6 +64,9 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     public Task InTransactionAsync(Func<Task> body, CancellationToken ct = default) =>
         inner.InTransactionAsync(body, ct);
 
+    public Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct = default) =>
+        inner.InTransactionAsync(body, ct);
+
     public Task<IReadOnlyList<object>> QueryIdsAsync(
         string collection, FilterNode leafCondition, CancellationToken ct = default) =>
         inner.QueryIdsAsync(collection, leafCondition, ct);

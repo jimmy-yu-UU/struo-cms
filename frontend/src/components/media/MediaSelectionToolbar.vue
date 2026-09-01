@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button'
 import { selectionCount } from '../../lib/mediaSelection'
 import type { MovePayload } from '../../lib/mediaMove'
 
-// Task 9's selection toolbar: shown only while the shared batch selection (owned by
+// The selection toolbar: shown only while the shared batch selection (owned by
 // MediaLibraryView, the same MovePayload passed to MediaGrid/MediaFolderCards/MediaFileList) is
-// non-empty. Renders the count, a Move to… trigger onto the existing Task 7 dialog (via the same
+// non-empty. Renders the count, a Move to… trigger onto the existing move dialog (via the same
 // `requestMove` event name MediaGrid/MediaFolderCards/MediaFileList already use for their own
 // context-menu "Move to…" entries, so the view wires this the exact same way), and a clear button.
 const props = defineProps<{

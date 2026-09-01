@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { RichTextSlashItem } from './richTextSlashCommands'
+import { slashOptionId, type RichTextSlashItem } from './richTextSlashCommands'
 
 defineOptions({ name: 'RichTextSlashMenu' })
 
@@ -43,7 +43,7 @@ const { t } = useI18n()
          preventDefault raises a flag on the event rather than on any node. Only that first half is
          observable in a test: jsdom implements no default action for mousedown at all, so the focus
          it protects rests on the standard, not on a green assertion. -->
-    <div v-for="(item, i) in items" :id="`${idPrefix}-${item.id}`" :key="item.id" role="option"
+    <div v-for="(item, i) in items" :id="slashOptionId(idPrefix, item.id)" :key="item.id" role="option"
       :aria-selected="i === selectedIndex" :data-active="i === selectedIndex"
       class="cursor-pointer rounded px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
       @mousedown="$emit('select', i)"
