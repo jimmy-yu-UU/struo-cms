@@ -85,7 +85,8 @@ public static class SchemaGuard
 
     private static async Task<bool> TableExistsAsync(ISqlSugarClient db, DbType dbType, string table)
     {
-        // Table name is a hardcoded literal (never user input); scoped to one read-only catalog query.
+        // Table name comes from scanned entity metadata or a fixed literal, never request input;
+        // scoped to one read-only catalog query.
         var query = dbType == DbType.PostgreSQL
             ? $"SELECT count(*) FROM pg_tables WHERE tablename = '{table}'"
             : $"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '{table}'";
@@ -95,7 +96,8 @@ public static class SchemaGuard
 
     // Reading index metadata is the one place a raw catalog query is unavoidable: SqlSugar's ORM surface
     // does not expose "is there a UNIQUE index covering these columns". Scoped to a single read-only
-    // catalog query per table; no user input is interpolated (table name is a hardcoded literal).
+    // catalog query per table; the table name comes from scanned entity metadata or a fixed literal,
+    // never from request input.
     private static async Task<bool> HasUniqueCoverAsync(
         ISqlSugarClient db, DbType dbType, string table, string[] requiredColumns)
     {

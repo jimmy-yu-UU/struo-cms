@@ -88,7 +88,7 @@ reimplementing the interface.
 ### `IEntityRegistry`
 
 `src/Struo.Application/Metadata/IEntityRegistry.cs`, alongside the `EntityDescriptor` record (CLR
-type, field→property map, id property name, lazily-built property-accessor cache) it operates over.
+type, field→property map, id property name, eagerly-built property-accessor cache) it operates over.
 `Get(collection)` resolves case-insensitively. Implementation:
 `EntityRegistry` (`src/Struo.Infrastructure/Metadata/EntityRegistry.cs`), built from
 `MetadataScanner.ScanDescriptors`. Registered as a singleton, same construction pattern:
