@@ -57,7 +57,7 @@ $ curl -s http://localhost:5221/api/languages
 
 ## 錯誤代碼
 
-`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) 恰好宣告了以下這十三個穩定的 `code` 值。這正是
+`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) 恰好宣告了以下這十四個穩定的 `code` 值。這正是
 GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉例來說，一個
 `PermissionDeniedException` 在兩種協定上都會對應到相同的代碼——所以一個已經處理過 GraphQL 錯誤的
 客戶端，也能透過同一組字串辨識出 REST 的錯誤。
@@ -78,6 +78,7 @@ GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉
 | `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password` 的自助式分支:呼叫端送出的 `currentPassword` 缺漏或錯誤。刻意不是 `401`——呼叫端本來就持有一個有效的 session，而 SPA 的全域 401 處理器只要看到 `401` 就會清除 session，所以沿用 `UNAUTHORIZED` 會讓呼叫端因為一個單純的打字錯誤而被登出。 |
 | `NO_LOCAL_PASSWORD` | 400 | 在一個完全透過外部 OIDC 建立的帳號上，嘗試自助式變更密碼——它儲存的雜湊值是空字串，因為它從來沒有本機密碼。 |
 | `ACCOUNT_INACTIVE` | 401 | `POST /api/auth/login` 以*正確*密碼登入一個已停用的帳號。只有在雜湊驗證成功之後才會抵達這裡，所以揭露它並不會洩漏呼叫端尚未證明過的任何資訊——不同於把「密碼錯誤」與「沒有這個帳號」拆開，那兩者仍合併在上方的 `UNAUTHORIZED` 之下 (原因見第 12 章)。 |
+| `SESSION_REVOCATION_FAILED` | 500 | `SessionRevocationFailedException`——變更密碼或刪除使用者已經成功提交，但後續撤銷 session 的步驟卻失敗了，因此該使用者原有的部分 session 可能仍然存活 (第 12 章)。`DomainErrorMap.StatusFor` 並沒有為這個代碼準備專屬分支，所以會落到預設的 500 狀態；即便如此，代碼與訊息本身仍是專屬的，而不是 `INTERNAL_SERVER_ERROR` 通常帶有的那個遮蔽用通用字串。 |
 
 `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) 是例外對應到代碼的唯一來源，與 GraphQL
 的錯誤過濾器逐字共用:
@@ -86,10 +87,12 @@ GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉
 PermissionDeniedException when !authenticated => (ErrorCodes.Unauthorized, exception.Message),
 PermissionDeniedException => (ErrorCodes.Forbidden, exception.Message),
 CollectionNotFoundException => (ErrorCodes.NotFound, exception.Message),
+FileBlobNotFoundException => (ErrorCodes.NotFound, exception.Message),
 ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
 RelationConflictException => (ErrorCodes.Conflict, exception.Message),
 QueryException => (ErrorCodes.BadUserInput, exception.Message),
 PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
+SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 

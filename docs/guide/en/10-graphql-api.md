@@ -343,9 +343,10 @@ form there too.
 `StruoExceptionHandler`: it maps a **resolver** exception through the same `DomainErrorMap` and stamps
 the result's `extensions.code` with the identical stable code string REST uses (`UNAUTHORIZED`,
 `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VERSION_CONFLICT`, `BAD_USER_INPUT`, `PAYLOAD_TOO_LARGE`,
-`INTERNAL_SERVER_ERROR` — `DomainErrorMap.Map` makes no distinction between REST and GraphQL callers,
-so every mapped exception type, `PayloadTooLargeException` included, stamps the same code regardless of
-which protocol's resolver/action threw it). This case — an exception thrown while a resolver is
+`SESSION_REVOCATION_FAILED`, `INTERNAL_SERVER_ERROR` — `DomainErrorMap.Map` makes no distinction
+between REST and GraphQL callers, so every mapped exception type, `PayloadTooLargeException` included,
+stamps the same code regardless of which protocol's resolver/action threw it). This case — an
+exception thrown while a resolver is
 actually running against a syntactically/structurally valid request — keeps the transport HTTP status
 at `200`; the caller is expected to inspect `extensions.code` per error rather than the status line:
 
