@@ -234,7 +234,7 @@ describe('RichTextInput', () => {
     expect(ed.getHTML()).toBe('<p>old</p>')
   })
 
-  // The batch's headline behaviour, previously asserted nowhere in this suite: checking "open in new
+  // Checking "open in new
   // tab" must show up as target="_blank" on the stored mark, with no rel riding along (rel is
   // backend-owned -- see richTextCommands.ts). Exact string, not toContain, so this also pins that
   // HTMLAttributes: { rel: null } (RichTextInput.vue's Link.configure) is doing something on the one
@@ -572,8 +572,8 @@ describe('RichTextInput', () => {
   // without breaking the other would still be caught by keeping both tests. A fresh mount (rather
   // than chaining onto the bold click above) sidesteps tiptap's stored-mark semantics: toggling
   // bold with no text selected only stores it as a pending mark for the next typed character, and
-  // a later, unrelated command clears that pending mark — real editor behaviour, not something
-  // this migration changed, but it would make a combined assertion flaky for reasons unrelated to
+  // a later, unrelated command clears that pending mark — real editor behaviour, not an artifact
+  // introduced here, but it would make a combined assertion flaky for reasons unrelated to
   // data-active.
   it('flags active toolbar state via data-active for a node-attribute command (alignCenter)', async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
@@ -1629,30 +1629,43 @@ describe('RichTextInput', () => {
     expect(slashMenu()).toBeNull()
   })
 
-  // Bold carries no inclusive override, so it falls back to ProseMirror's own default of
-  // inclusive: true: without clearing the mark first, a slash typed right after bold text joins
-  // the existing bold text node instead of starting a fresh one, and the menu does not open.
-  it('opens the menu for a slash typed once the bold mark is cleared first', async () => {
+  it('opens the menu for a slash typed after a space', async () => {
+    const w = await mountSlash()
+    const editor = editorOf(w)
+    editor.commands.insertContent('see ')
+    await openSlash(editor)
+    expect(editor.getText()).toBe('see /')
+    expect(slashMenu()).not.toBeNull()
+  })
+
+  // The two cases below are the reason the extension measures the character before the slash
+  // against the BLOCK rather than trusting upstream's text-node-scoped prefix check alone. Both
+  // put the slash at offset 0 of a brand-new text node, where upstream finds no character to
+  // reject; only a block-scoped check sees the letter that is plainly there on screen.
+
+  // Link reaches this in production with no setup: it is configured non-inclusive
+  // (Link.configure({ autolink: false }) in RichTextInput.vue, and extension-link's own
+  // inclusive() returns that option verbatim), so the slash never joins the link's text node.
+  it('does not open the menu for a slash typed immediately after a link', async () => {
+    const w = await mountSlash({ modelValue: '<p><a href="https://example.com">read more</a></p>' })
+    const editor = editorOf(w)
+    editor.commands.focus('end')
+    await openSlash(editor)
+    expect(editor.getHTML()).toBe('<p><a href="https://example.com">read more</a>/</p>')
+    expect(slashMenu()).toBeNull()
+  })
+
+  // Bold overrides nothing and so is inclusive by ProseMirror's default: the slash would join the
+  // bold text node and be rejected on the same character either way. Clearing the mark first is
+  // what forces the fresh text node, making this the same shape as the link case by hand.
+  it('does not open the menu for a slash typed after text whose mark was just cleared', async () => {
     const w = await mountSlash({ modelValue: '<p><strong>bold</strong></p>' })
     const editor = editorOf(w)
     editor.commands.focus('end')
     editor.commands.unsetMark('bold')
     await openSlash(editor)
     expect(editor.getHTML()).toBe('<p><strong>bold</strong>/</p>')
-    expect(slashMenu()).not.toBeNull()
-  })
-
-  // Link is the mark that actually reaches this in production, with no unsetMark needed first: it
-  // is configured non-inclusive (Link.configure({ autolink: false }) in RichTextInput.vue, and
-  // extension-link's own inclusive() returns that option verbatim), so a slash typed with no space
-  // right after a link already sits at offset 0 of a fresh text node.
-  it('opens the menu for a slash typed immediately after a link, with no space', async () => {
-    const w = await mountSlash({ modelValue: '<p><a href="https://example.com">read more</a></p>' })
-    const editor = editorOf(w)
-    editor.commands.focus('end')
-    await openSlash(editor)
-    expect(editor.getHTML()).toBe('<p><a href="https://example.com">read more</a>/</p>')
-    expect(slashMenu()).not.toBeNull()
+    expect(slashMenu()).toBeNull()
   })
 
   it('does not open the menu inside a code block', async () => {

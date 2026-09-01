@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
   // duplicate that. Folder rows never appear in trash mode (the view always passes an empty
   // folders array there), so this only needs to gate the file-row menu.
   trashMode?: boolean
-  // Task 9 batch selection: the same MovePayload the view shares across all four media surfaces.
+  // Batch selection: the same MovePayload the view shares across all four media surfaces.
   selection?: MovePayload
 }>(), {
   folders: () => [], canManageFolders: false, canMoveFiles: false, canMoveFolders: false,

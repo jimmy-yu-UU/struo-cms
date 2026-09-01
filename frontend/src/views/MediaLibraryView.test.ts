@@ -1041,7 +1041,7 @@ describe('MediaLibraryView', () => {
     expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
   })
 
-  // Breadcrumb segments are drop targets too (Task 5's second half): dropping onto an ancestor
+  // Breadcrumb segments are drop targets too: dropping onto an ancestor
   // crumb moves the payload there via the same onDropOn path, exercised here through a real DOM
   // drop event rather than a $vm call, to also cover the template wiring itself.
   it('drops a payload onto the root breadcrumb and moves it there', async () => {
@@ -1128,8 +1128,7 @@ describe('MediaLibraryView', () => {
     expect((w.vm as unknown as { currentFolderId: string | null }).currentFolderId).toBe(null)
   })
 
-  // Task 7 only builds and wires the move-to dialog; nothing in the UI opens it yet (Task 8's
-  // context menu and Task 9's selection toolbar do that later). Exercise the wiring directly
+  // The move-to dialog's submit is wired to the existing move path. Exercise the wiring directly
   // through the exposed state, the same way createOpen/renameTarget are driven elsewhere here.
   it('routes the move-to dialog\'s submit into the existing move path', async () => {
     const folders: FolderRow[] = [{ id: 'a', name: 'A', parentId: null }]
@@ -1143,8 +1142,7 @@ describe('MediaLibraryView', () => {
     expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
   })
 
-  // Task 8: the context menu's "Move to…" entry is the first real UI trigger for the move
-  // dialog Task 7 only wired internally.
+  // The context menu's "Move to…" entry is a UI trigger for the move dialog.
   describe('context menu wiring', () => {
     it('sets movePayload and opens the move dialog when onRequestMove runs', async () => {
       makeListMock([{ data: rows, total: 1 }])
@@ -1286,7 +1284,7 @@ describe('MediaLibraryView', () => {
       const w = mountView()
       await flushPromises()
       // Default view is grid: MediaGrid's own trashMode binding must be pinned here too, not just
-      // MediaFileList's -- see the Task 5 review finding this test failed to catch.
+      // MediaFileList's.
       expect(w.findComponent(MediaGrid).props('trashMode')).toBe(false)
       ;(w.vm as unknown as { onViewToggle: (v: unknown) => void }).onViewToggle('list')
       await flushPromises()
@@ -1381,7 +1379,7 @@ describe('MediaLibraryView', () => {
     })
   })
 
-  // Task 9: batch selection wiring and the clear-on-listing-change requirement. A selection that
+  // Batch selection wiring and the clear-on-listing-change requirement. A selection that
   // survives a listing change would let a later batch move act on items the user can no longer
   // see -- and canMoveFolder (mediaMove.ts) returns true for a source id absent from its folders
   // list, so a stale selection assembled before a reload could pass the cycle guard on a folder
@@ -1566,7 +1564,7 @@ describe('MediaLibraryView', () => {
       expect((w.vm as unknown as { selection: MovePayload }).selection).toEqual({ files: [], folders: [] })
     })
 
-    // Review fix (Finding 1): onType/onSort also reload `files.value` just like search/page/mode
+    // onType/onSort also reload `files.value` just like search/page/mode
     // do -- a selection surviving one of those is a SILENT SUCCESS hazard, not just staleness:
     // "3 selected" would still show after switching the type filter to something that hides all
     // three, and Move to… would then move items the user can no longer see without any error at
@@ -1598,7 +1596,7 @@ describe('MediaLibraryView', () => {
       expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({ sort: 'fileName' }))
     })
 
-    // Review fix (Finding 2): onMoveSubmit is the move-DIALOG path (both the toolbar's batch
+    // onMoveSubmit is the move-DIALOG path (both the toolbar's batch
     // move and a single-item context-menu move funnel through it) as distinct from onDropOn's
     // raw drag-and-drop path. After a submitted move, the selection's ids may no longer be in
     // the current listing (they were just moved elsewhere) -- clear here specifically, not inside
@@ -1617,7 +1615,7 @@ describe('MediaLibraryView', () => {
       expect(itemsApi.update).toHaveBeenCalledWith('file', 'f1', { folderId: 'a' })
     })
 
-    // Review fix (Finding 3): a ghost id (one just deleted/purged/removed) makes performMove
+    // A ghost id (one just deleted/purged/removed) makes performMove
     // throw AFTER its sibling writes have already settled (mediaMoveActions.ts's
     // Promise.allSettled + "first rejection wins" re-throw), so a later batch move on a selection
     // containing that ghost id would report "Move failed" even though every other file in the

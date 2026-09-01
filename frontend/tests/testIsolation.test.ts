@@ -5,7 +5,7 @@ import { defineComponent, onUnmounted } from 'vue'
 // This file pins the GLOBAL test-isolation configuration itself -- vite.config.ts's restoreMocks /
 // clearMocks and vitest.setup.ts's enableAutoUnmount -- rather than any component's behaviour.
 // Turning restoreMocks/clearMocks off silently reintroduces the cross-test leakage class this
-// repository already paid for once in PR #35/#36, and the symptom then is an unrelated test
+// repository already paid for once, and the symptom then is an unrelated test
 // failing somewhere else entirely. It fails here instead.
 //
 // The auto-unmount switch has a second failure mode beyond being deleted: it can be mis-wired to

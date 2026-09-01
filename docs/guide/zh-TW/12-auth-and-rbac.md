@@ -59,6 +59,19 @@ Ticket 存放——也就是 cookie 那組不透明金鑰背後真正的 session
 `AuthController.Logout`(`SignOutAsync`)會把該 ticket 從存放區中移除，因此一個已登出的 cookie 會立即
 失效，而不是只依照自己的排程逐漸過期。
 
+登出並非唯一的觸發點。`DistributedCacheTicketStore` 還維護著一張 `user_sessions` 索引表
+(`UserSession`，`src/Struo.Infrastructure/Identity/UserSession.cs`)，把每一個 ticket key 對應到它所屬
+的使用者——之所以需要這張表，是因為 `IDistributedCache` 本身沒有 key 掃描或集合運算能力，沒有其他方法
+能回答「使用者 X 目前所有存活中的 session」這個問題。變更密碼時(`PUT /api/users/{id}/password`，自助
+與管理者重設兩條分支共用同一個 action)會讀取這張索引表，透過 `IUserSessionRevocationService`
+(`UserSessionRevocationService`，`src/Struo.Infrastructure/Identity/UserSessionRevocationService.cs`)
+撤銷該目標使用者所有找得到的 session——在密碼本身成功寫入之後才執行；撤銷失敗不會讓已經成功的密碼變更
+回滾。停用帳號(`isActive = false`，無論透過哪條路徑——泛用的 item 更新端點，或直接寫入資料庫)則獨立
+於這張索引表另外處理：cookie scheme 的 `OnValidatePrincipal` 事件(`AuthWiring.cs`)會在每一個請求上透過
+`IUserCredentialStore.FindByIdAsync` 重新檢查 `IsActive`，一旦失敗就同時拒絕該 principal 並將呼叫端
+登出——登出這個動作才是讓 ticket 真正從存放區中消失的原因，而不只是拒絕這一次請求。過期的索引列則在登入
+時順手清理：每一次成功登入都會刪除該使用者自己已過期的列，而不是整張表的掃描。
+
 ## Bearer token
 
 **bearer** 機制(`AuthSchemes.Bearer`，常數為 `"Bearer"`)由 `BearerTokenAuthenticationHandler`

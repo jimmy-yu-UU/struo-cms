@@ -103,7 +103,7 @@ describe('MediaGrid', () => {
     expect(setData).not.toHaveBeenCalled()
   })
 
-  // Right-click context menu (Task 8): Open is unconditional, Move/Delete follow their own grants.
+  // Right-click context menu: Open is unconditional, Move/Delete follow their own grants.
   describe('context menu', () => {
     it('always offers Open, regardless of grants', async () => {
       const w = mountGrid({})
@@ -174,7 +174,7 @@ describe('MediaGrid', () => {
       expect(w.emitted('remove')).toBeUndefined()
     })
 
-    // Fix for review finding 1: MediaGrid has three other callers besides MediaLibraryView --
+    // MediaGrid has three other callers besides MediaLibraryView --
     // FilePicker (selectable), FilesField (multiple) and RichTextInput (selectable) -- none of
     // which listens for `open`, and a menu there would both do nothing on select AND eat the
     // native browser context menu (reka's trigger calls preventDefault as soon as it opens).
@@ -197,7 +197,7 @@ describe('MediaGrid', () => {
       expect(w.emitted('toggle')?.[0]).toEqual(['f1'])
     })
 
-    // Fix for review finding 2: reka's ContextMenuTrigger also opens on a still touch/pen press,
+    // reka's ContextMenuTrigger also opens on a still touch/pen press,
     // armed by its OWN @pointerdown listener (reka-ui/src/ContextMenu/ContextMenuTrigger.vue:70-79,
     // bound at line 115) -- not a `contextmenu` event, so `@contextmenu.stop` alone never sees
     // that path. Without an equivalent `.stop` on pointerdown, a long press on a tile would arm
@@ -222,7 +222,7 @@ describe('MediaGrid', () => {
     })
   })
 
-  // Task 9: batch selection. Ctrl/Cmd/Shift-click toggle selection instead of opening; a plain
+  // Batch selection. Ctrl/Cmd/Shift-click toggle selection instead of opening; a plain
   // click keeps opening as before. Checkboxes only appear once the shared selection is non-empty.
   describe('batch selection', () => {
     const empty: MovePayload = { files: [], folders: [] }

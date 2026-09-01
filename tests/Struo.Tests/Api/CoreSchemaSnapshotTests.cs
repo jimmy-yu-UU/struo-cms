@@ -110,7 +110,7 @@ public sealed class CoreSchemaSnapshotTests
             .ToArray());
 
     /// <summary>
-    /// Core = the FrameworkEntityTypes that actually carry [CmsCollection] (7 of the 10). Derived by
+    /// Core = the FrameworkEntityTypes that actually carry [CmsCollection] (7 of the 11). Derived by
     /// running the real scanner over that list instead of hard-coding names, so a future core
     /// collection cannot be silently left out of this gate. Filtering is required because the test
     /// host has the Blog sample wired in process-wide (Support/ContentAssemblyEnvBootstrap.cs), so

@@ -104,7 +104,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         snapshot.GetProperty("status").GetString().Should().Be("draft"); // non-hidden fields untouched
     }
 
-    /// <summary>Task 3: the revert-target revision number must round-trip through both the REST
+    /// <summary>The revert-target revision number must round-trip through both the REST
     /// list (free, since it serialises <c>RevisionInfo</c> records directly) and the REST detail
     /// endpoint (an explicit anonymous object that needs the field added by hand).</summary>
     [Fact]

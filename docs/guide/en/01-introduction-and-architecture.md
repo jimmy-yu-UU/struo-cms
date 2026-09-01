@@ -29,7 +29,7 @@ default and is meant to be deleted once you have used it to learn the patterns (
 opt-in and the deletion checklist).
 
 Concretely, verified on this checkout: a default install has **zero content collections**. The
-database contains only the ten framework tables (see below); the admin SPA's sidebar has no "Content"
+database contains only the eleven framework tables (see below); the admin SPA's sidebar has no "Content"
 navigation group at all, because there is nothing to show. That is the correct, intended shape of a
 fresh template checkout — not a bug and not an incomplete install.
 
@@ -43,7 +43,7 @@ PostgreSQL/SQLite behavior specifically.
 
 **Core** is everything under `src/Struo.*` (the four backend projects below) plus the framework's own
 persisted entity types, gathered in one list — `FrameworkEntityTypes.All`. That list currently has
-10 entries, each backing one database table:
+11 entries, each backing one database table:
 
 | Entity type | Table |
 |---|---|
@@ -57,11 +57,12 @@ persisted entity types, gathered in one list — `FrameworkEntityTypes.All`. Tha
 | `UserRole` | `user_roles` |
 | `Revision` | `revisions` |
 | `SiteSettings` | `site_settings` |
+| `UserSession` | `user_sessions` |
 
 Two directories are core **despite living outside `src/Struo.*`**, and a fork keeps both alongside it:
 `frontend/` (the admin SPA) and `schema/` (the committed contract snapshots the schema gate checks both
 stacks against — `schema/README.md`). Apart from those two, anything outside `src/Struo.*` that is not
-one of the ten types above is not core. In
+one of the eleven types above is not core. In
 particular, `samples/Struo.Sample.Blog` is a demo, deleted on fork; `db/migrations/` ships **zero** SQL
 scripts for the core — CodeFirst creates the core's own tables in every environment, on any of the five
 supported backends, so core needs no bootstrap script of its own — and any scripts a fork adds under

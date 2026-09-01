@@ -114,7 +114,7 @@ public sealed class ShippedConfigurationBindingTests
         // plain assertion, matching the sibling idiom at
         // OptionsValidationTests.Shipped_appsettings_disables_AutoSyncSchema ("鍵被整段
         // 刪掉時 GetValue<bool> 也會回 false，光斷言 false 會假綠燈"). It does NOT, by itself, catch the
-        // section-name divergence this file's Step 3 mutation exercises (BindConfiguration bound to a
+        // divergence the section-name-divergence mutation exercises (BindConfiguration bound to a
         // hardcoded "Db" instead of DatabaseOptions.SectionName) — that mutation lives inside
         // AddStruoInfrastructure and never touches this raw configuration object, so this assertion
         // still finds "Database" present and passes even while the mutation is active. See the comment
@@ -135,7 +135,7 @@ public sealed class ShippedConfigurationBindingTests
         // documentation value and because a future change to either default would make them
         // discriminate too, not because they discriminate today.
         //
-        // In practice, for the mutation this file's Step 3 exercises (an unbound/misbound section),
+        // In practice, for the section-name-divergence mutation (an unbound/misbound section),
         // NONE of the four ever get the chance to run: DatabaseOptions.ConnectionString carries
         // [Required(AllowEmptyStrings = false)], so IOptions<DatabaseOptions>.Value throws
         // OptionsValidationException before any Should() call below executes. That exception — not

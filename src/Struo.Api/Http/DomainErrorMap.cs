@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Struo.Application.Security;
 using Struo.Domain.Query;
 
 namespace Struo.Api.Http;
@@ -33,6 +34,7 @@ public static class DomainErrorMap
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
+            SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
 
