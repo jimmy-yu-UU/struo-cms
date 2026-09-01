@@ -56,6 +56,28 @@ public class ItemServicePermissionTests : IDisposable
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
     }
 
+    // Holds read on 'article' and nothing else. A relation hop must not become a way to reach
+    // rows in a collection the caller has no read grant on: 'deep' drops the relation, a relation
+    // filter/sort path is refused outright.
+    private sealed class ReadArticleOnlyPermissions : IPermissionService
+    {
+        public bool CanRead(string collection) =>
+            string.Equals(collection, "article", StringComparison.OrdinalIgnoreCase);
+        public bool CanWrite(string collection) => true;
+        public bool CanDelete(string collection) => true;
+        public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
+    }
+
+    // Reads everything except one named collection.
+    private sealed class DenyReadOfPermissions(string denied) : IPermissionService
+    {
+        public bool CanRead(string collection) =>
+            !string.Equals(collection, denied, StringComparison.OrdinalIgnoreCase);
+        public bool CanWrite(string collection) => true;
+        public bool CanDelete(string collection) => true;
+        public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
+    }
+
     // A super-admin: passes the AdminOnly gate.
     private sealed class SuperAdminPermissions : IPermissionService
     {
@@ -79,6 +101,7 @@ public class ItemServicePermissionTests : IDisposable
         db.CodeFirst.InitTables<Tag>();
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.UserRole>();
@@ -118,7 +141,7 @@ public class ItemServicePermissionTests : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         return new ItemService(repo, provider, registry, permissions,
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder);
+            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public void Dispose() => _file.Dispose();
@@ -202,6 +225,237 @@ public class ItemServicePermissionTests : IDisposable
         using var body = System.Text.Json.JsonDocument.Parse("""{"email":"admin@example.com","isActive":true}""");
         var act = async () => await svc.CreateAsync("user", body.RootElement);
         await act.Should().NotThrowAsync<PermissionDeniedException>();
+    }
+
+    // Seeds one category and one article pointing at it, using a super-admin service. Both services
+    // built by BuildService share the same SQLite file, so a narrower caller can read the result back.
+    private async Task<string> SeedArticleWithCategoryAsync()
+    {
+        var admin = BuildService(new SuperAdminPermissions());
+        using var cat = System.Text.Json.JsonDocument.Parse("""{"name":"News"}""");
+        var catId = (await admin.CreateAsync("category", cat.RootElement))["id"]!.ToString()!;
+        using var art = System.Text.Json.JsonDocument.Parse(
+            """{"status":"draft","categoryId":"__CAT__","translations":{"en":{"title":"Hello"}}}"""
+                .Replace("__CAT__", catId));
+        return (await admin.CreateAsync("article", art.RootElement))["id"]!.ToString()!;
+    }
+
+    // Inserts a 'file' row directly: ItemService refuses generic creates on the file collection,
+    // since the upload pipeline owns StorageKey and the derived columns.
+    private Guid SeedFileRow()
+    {
+        var db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
+        var row = new Struo.Infrastructure.Files.File
+        {
+            Id = Guid.CreateVersion7(),
+            StorageKey = "2026/08/deadbeef.pdf",
+            FileName = "confidential-salaries.pdf",
+            ContentType = "application/pdf",
+            Size = 4242,
+            Status = "published",
+        };
+        db.Insertable(row).ExecuteCommand();
+        return row.Id;
+    }
+
+    private async Task<string> SeedArticleWithOgImageAsync(Guid fileId)
+    {
+        var admin = BuildService(new SuperAdminPermissions());
+        using var art = System.Text.Json.JsonDocument.Parse(
+            """{"status":"draft","translations":{"en":{"title":"Hello","seoOgImageId":"__F__"}}}"""
+                .Replace("__F__", fileId.ToString()));
+        return (await admin.CreateAsync("article", art.RootElement))["id"]!.ToString()!;
+    }
+
+    private static IReadOnlyDictionary<string, object?> EnTranslation(
+        IReadOnlyDictionary<string, object?> row) =>
+        (IReadOnlyDictionary<string, object?>)
+            ((System.Collections.IDictionary)row["translations"]!)["en"]!;
+
+    // A translatable Image field resolves into a projected 'file' row. That is a read of the file
+    // collection and needs its own grant: without it the nested object must not materialise, or a
+    // role granted only 'article' reads file names, sizes and content types it has no grant for.
+    [Fact]
+    public async Task Translatable_image_field_is_not_resolved_without_read_on_the_file_collection()
+    {
+        var fileId = SeedFileRow();
+        var id = await SeedArticleWithOgImageAsync(fileId);
+        var narrow = BuildService(new DenyReadOfPermissions("file"));
+
+        var row = await narrow.GetAsync("article", id, locale: "en");
+
+        var en = EnTranslation(row!);
+        en["seoOgImage"].Should().BeNull();
+    }
+
+    // The counterpart: with the grant the nested file row is still resolved.
+    [Fact]
+    public async Task Translatable_image_field_is_resolved_with_read_on_the_file_collection()
+    {
+        var fileId = SeedFileRow();
+        var id = await SeedArticleWithOgImageAsync(fileId);
+        var svc = BuildService(new SuperAdminPermissions());
+
+        var row = await svc.GetAsync("article", id, locale: "en");
+
+        var en = EnTranslation(row!);
+        en["seoOgImage"].Should().NotBeNull();
+        ((IReadOnlyDictionary<string, object?>)en["seoOgImage"]!)["fileName"]
+            .Should().Be("confidential-salaries.pdf");
+    }
+
+    private static DeepSpec Deep(params string[] relations) =>
+        new(relations.ToDictionary(
+            r => r, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase));
+
+    // A caller who cannot read 'category' gets the article without the expanded relation, rather
+    // than a 403 — expanding is a convenience, and failing the whole read would take the admin SPA
+    // down for any narrowly-granted role (its item form requests deep=category,tags).
+    [Fact]
+    public async Task Deep_expansion_omits_a_relation_whose_target_is_unreadable()
+    {
+        var id = await SeedArticleWithCategoryAsync();
+        var narrow = BuildService(new ReadArticleOnlyPermissions());
+
+        var row = await narrow.GetAsync("article", id, Deep("category"));
+
+        row.Should().NotBeNull();
+        row!.Should().NotContainKey("category");
+    }
+
+    // The counterpart that keeps the omission honest: with the grant, the relation is still expanded.
+    [Fact]
+    public async Task Deep_expansion_includes_a_relation_whose_target_is_readable()
+    {
+        var id = await SeedArticleWithCategoryAsync();
+        var svc = BuildService(new SuperAdminPermissions());
+
+        var row = await svc.GetAsync("article", id, Deep("category"));
+
+        row!.Should().ContainKey("category");
+    }
+
+    // A relation filter path is refused, not silently dropped: dropping it would return rows that
+    // do not match the filter the caller sent. meta.total on such a query is also a blind-extraction
+    // oracle over the unreadable collection.
+    [Fact]
+    public async Task Relation_filter_path_into_an_unreadable_collection_is_denied()
+    {
+        var narrow = BuildService(new ReadArticleOnlyPermissions());
+        var q = new QueryModel(
+            null, new ComparisonFilter("category.name", QueryOperator.Eq, "News"), [], 20, 0, null);
+
+        var act = async () => await narrow.QueryAsync("article", q);
+
+        await act.Should().ThrowAsync<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public async Task Relation_sort_path_into_an_unreadable_collection_is_denied()
+    {
+        var narrow = BuildService(new ReadArticleOnlyPermissions());
+        var q = new QueryModel(null, null, [new SortField("category.name", false)], 20, 0, null);
+
+        var act = async () => await narrow.QueryAsync("article", q);
+
+        await act.Should().ThrowAsync<PermissionDeniedException>();
+    }
+
+    // The many-to-many hop is the same rule: 'tags' targets 'tag', which this caller cannot read.
+    [Fact]
+    public async Task Deep_expansion_omits_a_many_to_many_relation_whose_target_is_unreadable()
+    {
+        var id = await SeedArticleWithCategoryAsync();
+        var narrow = BuildService(new ReadArticleOnlyPermissions());
+
+        var row = await narrow.GetAsync("article", id, Deep("tags"));
+
+        row!.Should().NotContainKey("tags");
+    }
+
+    // Pruning is recursive. Root 'category' and the first hop ('children' -> category) are both
+    // readable; the second hop ('articles' -> article) is not, and must be dropped from the nested
+    // rows rather than riding in on the readable hop above it.
+    [Fact]
+    public async Task Deep_expansion_prunes_an_unreadable_target_at_the_second_hop()
+    {
+        var admin = BuildService(new SuperAdminPermissions());
+        using var parent = System.Text.Json.JsonDocument.Parse("""{"name":"News"}""");
+        var parentId = (await admin.CreateAsync("category", parent.RootElement))["id"]!.ToString()!;
+        using var child = System.Text.Json.JsonDocument.Parse(
+            """{"name":"Sub","parentId":"__P__"}""".Replace("__P__", parentId));
+        await admin.CreateAsync("category", child.RootElement);
+
+        var svc = BuildService(new DenyReadOfPermissions("article"));
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["children"] = new DeepRelationSpec(null, null, Deep("articles")),
+        });
+
+        var row = await svc.GetAsync("category", parentId, deep);
+
+        row!.Should().ContainKey("children");
+        var children = ((System.Collections.IEnumerable)row["children"]!)
+            .Cast<IReadOnlyDictionary<string, object?>>().ToList();
+        children.Should().ContainSingle();
+        children[0].Should().NotContainKey("articles");
+    }
+
+    // Everything requested is unreadable: the read still succeeds, it just carries no expansion.
+    // Pins that the all-pruned early return is a 200, not a 400 or a 403.
+    [Fact]
+    public async Task Deep_expansion_with_every_relation_unreadable_still_returns_the_item()
+    {
+        var id = await SeedArticleWithCategoryAsync();
+        var narrow = BuildService(new ReadArticleOnlyPermissions());
+
+        var row = await narrow.GetAsync("article", id, Deep("category", "tags"));
+
+        row.Should().NotBeNull();
+        row!.Should().ContainKey("id");
+        row.Should().NotContainKey("category");
+        row.Should().NotContainKey("tags");
+    }
+
+    // Dropping an unreadable relation must not swallow the validation of the ones that remain:
+    // an unknown relation name is still rejected by name.
+    [Fact]
+    public async Task Unknown_relation_is_still_rejected_when_an_unreadable_sibling_is_pruned()
+    {
+        var id = await SeedArticleWithCategoryAsync();
+        var narrow = BuildService(new ReadArticleOnlyPermissions());
+
+        var act = async () => await narrow.GetAsync("article", id, Deep("category", "ghostRelation"));
+
+        await act.Should().ThrowAsync<QueryException>();
+    }
+
+    // Where the two halves of the design meet: the relation being expanded is readable, but its
+    // nested filter reaches on into a collection that is not. The filter half wins — a filter is
+    // refused, never silently dropped.
+    [Fact]
+    public async Task Nested_deep_filter_crossing_into_an_unreadable_collection_is_denied()
+    {
+        var admin = BuildService(new SuperAdminPermissions());
+        using var cat = System.Text.Json.JsonDocument.Parse("""{"name":"News"}""");
+        var catId = (await admin.CreateAsync("category", cat.RootElement))["id"]!.ToString()!;
+
+        // 'category' (root) and 'children' -> category are readable; the filter's own hop is not.
+        var svc = BuildService(new DenyReadOfPermissions("article"));
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["children"] = new DeepRelationSpec(null, null)
+            {
+                Filter = new ComparisonFilter("articles.status", QueryOperator.Eq, "draft"),
+            },
+        });
+
+        var act = async () => await svc.GetAsync("category", catId, deep);
+
+        await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
     // Optimistic concurrency. version starts at 0 and increments on each successful update.

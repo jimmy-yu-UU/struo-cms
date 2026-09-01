@@ -176,6 +176,12 @@ enforced:
 
 ## Reading related data with `deep`
 
+Both `deep` and the dotted filter/sort paths below need a read grant on **every** collection the
+path traverses, not just the one being queried. `deep` omits a relation you may not read; a dotted
+filter or sort path is refused outright. Chapter 8,
+[Query DSL](08-query-dsl.md#validation-whitelisting-unknown-paths-and-the-depth-cap), states the rule
+and its migration consequence for anonymous-read deployments in full.
+
 `deep` requests read-time expansion of a relation onto its parent row, batched per relation per page
 (one follow-up query per relation, not one per row — N+1-safe) by `RelationExpander`
 (`src/Struo.Infrastructure/Query/RelationExpander.cs`). The simple query-string form just names the

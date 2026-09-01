@@ -252,7 +252,7 @@ describe('ChangePasswordDialog', () => {
   // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
   // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
   // not cosmetic: without a description, assistive tech follows a dangling reference. This dialog
-  // is the one case in this batch where a description already existed (resetDescription, for the
+  // is the one case where a description already existed (resetDescription, for the
   // admin-reset path) -- it was still v-if="!isSelf", so the self path (targetUserId === the
   // signed-in user, the default case in beforeEach) rendered no description at all and warned.
   //
@@ -274,8 +274,8 @@ describe('ChangePasswordDialog', () => {
     container.remove()
   })
 
-  // The admin-reset path's own DialogDescription (resetDescription) predates this batch, but it
-  // had never been checked against reka's actual warning under an attached mount -- this closes
+  // The admin-reset path's own DialogDescription (resetDescription) had never been checked
+  // against reka's actual warning under an attached mount -- this closes
   // that gap for the other branch of the v-if/v-else pair.
   it('renders a description in admin-reset mode too, so reka does not warn about a dangling aria-describedby', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

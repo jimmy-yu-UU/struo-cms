@@ -26,7 +26,7 @@ StruoCMS 不是一個成品，且**不含任何業務內容模型**。你可能�
 專案中，用來示範*如何*用你自己的 fork 也會用到的相同基礎元件來定義集合。該範例預設不會被 API
 host 參照，其用意是讓你學會這些模式之後就把它刪掉 (第 16 章涵蓋選用啟用方式與刪除清單)。
 
-具體而言，已在此份 checkout 上驗證過:一個預設安裝**零個內容集合**。資料庫中只有十張框架資料表
+具體而言，已在此份 checkout 上驗證過:一個預設安裝**零個內容集合**。資料庫中只有十一張框架資料表
 (見下文);管理後台 SPA 的側欄完全沒有「Content」導覽群組，因為根本沒有東西可顯示。這正是一份全新樣板
 checkout 該有的正確、預期樣貌——不是 bug，也不是安裝不完整。
 
@@ -39,7 +39,7 @@ PostgreSQL/SQLite 的行為所寫的。
 ## Core 與 sample 的界線
 
 **Core (核心)** 是指 `src/Struo.*` 下的一切 (下方四個後端專案)，加上框架自身持久化的 entity 型別，
-統一收錄於單一清單——`FrameworkEntityTypes.All`。這份清單目前有 10 個項目，各自對應一張資料庫資料表:
+統一收錄於單一清單——`FrameworkEntityTypes.All`。這份清單目前有 11 個項目，各自對應一張資料庫資料表:
 
 | Entity 型別 | 資料表 |
 |---|---|
@@ -53,10 +53,11 @@ PostgreSQL/SQLite 的行為所寫的。
 | `UserRole` | `user_roles` |
 | `Revision` | `revisions` |
 | `SiteSettings` | `site_settings` |
+| `UserSession` | `user_sessions` |
 
 有兩個目錄**雖然不在 `src/Struo.*` 之下，但仍屬於 core**，fork 時要與它一併保留:`frontend/`
 (管理後台 SPA) 與 `schema/` (schema gate 用來檢驗前後端兩邊的已提交契約快照——`schema/README.md`)。
-除了這兩者之外，任何不在 `src/Struo.*` 之下、也不是以上十種型別之一的東西，就不是 core。特別是
+除了這兩者之外，任何不在 `src/Struo.*` 之下、也不是以上十一種型別之一的東西，就不是 core。特別是
 `samples/Struo.Sample.Blog` 是一個示範專案，fork 時會被刪除;`db/migrations/` 為核心出貨**零份** SQL
 腳本——CodeFirst 會在每一個環境、五種受支援後端的任何一種上建立核心自己的資料表，因此核心不需要自己的
 bootstrap 腳本——一個 fork 若在 `db/migrations/` 下新增腳本，那些腳本屬於該 fork，不屬於核心;而框架

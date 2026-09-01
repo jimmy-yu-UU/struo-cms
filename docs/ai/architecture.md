@@ -100,8 +100,9 @@ type, field→property map, id property name, lazily-built property-accessor cac
 `src/Struo.Application/Metadata/IEntityTypeCollector.cs`: `CollectForInitTables()` returns every CLR
 entity type that needs a database table — scanned collections, their translation sidecars, and M2M
 junction types — unioned and de-duplicated against `FrameworkEntityTypes.All`
-(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the ten framework entity types: Language,
-File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision, SiteSettings).
+(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the eleven framework entity types: Language,
+File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision, SiteSettings,
+UserSession).
 Implementation: `EntityTypeCollector` (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`).
 Registered as a singleton via the container:
 `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`

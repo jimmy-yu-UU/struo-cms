@@ -160,8 +160,8 @@ UI 可用)，而 `Tags` 通常不會設定，讓使用者能真正自由輸入�
 
 1. **框架自身的組件** (`Struo.Infrastructure`)——一律會被附加，所以框架自身帶有 `[CmsCollection]`
    attribute 的型別 (`Language`、`File`、`MediaFolder`、`User`、`Role`、`Permission`、
-   `UserRole`——第 1 章列出的十個框架 entity 型別中的七個;`FileTranslation`、`Revision` 與
-   `SiteSettings` 是框架資料表，但不是集合) 一律會被發現。
+   `UserRole`——第 1 章列出的十一個框架 entity 型別中的七個;`FileTranslation`、`Revision`、
+   `SiteSettings` 與 `UserSession` 是框架資料表，但不是集合) 一律會被發現。
 2. **host 組件**（承載應用程式的 `Struo.Api`）——也就是 `Struo.Api` 本身
    (`typeof(Program).Assembly`，由 `Program.cs` 明確傳入)。
 3. **`Struo:ContentAssemblies` 中列出的每一個組件**——在 `builder.Build()` 執行*之前*，就從

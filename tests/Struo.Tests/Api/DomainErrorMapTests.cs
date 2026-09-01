@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Struo.Api.Http;
+using Struo.Application.Security;
 using Struo.Domain.Query;
 using Xunit;
 
@@ -82,6 +83,23 @@ public class DomainErrorMapTests
         message.Should().Be("too big");
     }
 
+    // Distinguishable from a plain unmapped/masked failure: the password/user-delete write already
+    // succeeded, so the caller (and the SPA) need a signal that specifically means "the write went
+    // through, but some sessions might still be alive" rather than the generic masked 500.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SessionRevocationFailed_is_its_own_code_with_the_client_safe_message(bool authenticated)
+    {
+        var exception = new SessionRevocationFailedException(
+            "Password was changed, but revoking existing sessions failed.",
+            new InvalidOperationException("db unreachable"));
+        var (code, message) = DomainErrorMap.Map(exception, authenticated);
+        code.Should().Be("SESSION_REVOCATION_FAILED");
+        message.Should().Be("Password was changed, but revoking existing sessions failed.");
+        message.Should().NotContain("db unreachable");
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -103,6 +121,7 @@ public class DomainErrorMapTests
     [InlineData("VALIDATION", 400)]
     [InlineData("PAYLOAD_TOO_LARGE", 413)]
     [InlineData("INTERNAL_SERVER_ERROR", 500)]
+    [InlineData("SESSION_REVOCATION_FAILED", 500)]
     public void StatusFor_maps_each_code_to_its_http_status(string code, int expected)
         => DomainErrorMap.StatusFor(code).Should().Be(expected);
 

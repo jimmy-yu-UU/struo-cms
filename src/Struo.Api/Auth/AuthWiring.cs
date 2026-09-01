@@ -1,8 +1,12 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Struo.Api.Http;
 using Struo.Application.Abstractions;
+using Struo.Application.Security;
 
 namespace Struo.Api.Auth;
 
@@ -49,32 +53,7 @@ public static class AuthWiring
                     AuthSchemes.HasBearerHeader(context.Request)
                         ? AuthSchemes.Bearer
                         : AuthSchemes.Cookie)
-            .AddCookie(AuthSchemes.Cookie, options =>
-            {
-                options.Cookie.Name = AuthSchemes.SessionCookieName;
-                options.Cookie.HttpOnly = true;
-                options.Cookie.SecurePolicy = securePolicy;
-                options.Cookie.SameSite = SameSiteMode.Lax;
-                options.SlidingExpiration = true;
-                options.ExpireTimeSpan = TimeSpan.FromHours(8);
-                // API, not MVC views: return 401/403 with an error envelope instead of redirecting.
-                // Body added alongside the pre-existing status-code-only behavior (which is
-                // preserved verbatim) so attribute-level challenges match the in-action error shape.
-                options.Events.OnRedirectToLogin = ctx =>
-                {
-                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return ctx.Response.WriteAsJsonAsync(
-                        Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required."),
-                        EnvelopeJsonOptionsHolder.Instance);
-                };
-                options.Events.OnRedirectToAccessDenied = ctx =>
-                {
-                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return ctx.Response.WriteAsJsonAsync(
-                        Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden."),
-                        EnvelopeJsonOptionsHolder.Instance);
-                };
-            })
+            .AddCookie(AuthSchemes.Cookie, options => ConfigureCookieOptions(options, securePolicy))
             .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(
                 AuthSchemes.Bearer, _ => { });
 
@@ -99,5 +78,66 @@ public static class AuthWiring
         services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
 
         return services;
+    }
+
+    private static void ConfigureCookieOptions(CookieAuthenticationOptions options, CookieSecurePolicy securePolicy)
+    {
+        options.Cookie.Name = AuthSchemes.SessionCookieName;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = securePolicy;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = AuthSchemes.SessionLifetime;
+        // API, not MVC views: return 401/403 with an error envelope instead of redirecting.
+        // Body added alongside the pre-existing status-code-only behavior (which is
+        // preserved verbatim) so attribute-level challenges match the in-action error shape.
+        options.Events.OnRedirectToLogin = OnRedirectToLoginAsync;
+        options.Events.OnRedirectToAccessDenied = OnRedirectToAccessDeniedAsync;
+        // Per-request liveness check, mirroring what BearerTokenAuthenticationHandler already does
+        // on every bearer request: re-verifies IsActive on every cookie request too, so a
+        // deactivated account's session dies on its very next request — regardless of how
+        // IsActive got flipped (the generic item-update endpoint, a direct database write, ...).
+        // Resolved from RequestServices (this delegate runs per-request, inside the pipeline's own
+        // scope) rather than constructor-injected, so it carries none of
+        // DistributedCacheTicketStore's singleton/scoped resolution constraint (see that class's
+        // doc comment). RejectPrincipal() alone would only refuse this one request; SignOutAsync
+        // additionally calls ITicketStore.RemoveAsync, so the ticket is actually gone from the
+        // store afterward, not merely denied. Guarded by HasStarted the same way
+        // BearerTokenAuthenticationHandler.HandleChallengeAsync/HandleForbiddenAsync are: this
+        // event can in principle run after a downstream handler already began writing the
+        // response, and SignOutAsync writes a Set-Cookie header — which throws once the response
+        // has started.
+        options.Events.OnValidatePrincipal = OnValidatePrincipalAsync;
+    }
+
+    private static Task OnRedirectToLoginAsync(RedirectContext<CookieAuthenticationOptions> ctx)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return ctx.Response.WriteAsJsonAsync(
+            Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required."),
+            EnvelopeJsonOptionsHolder.Instance);
+    }
+
+    private static Task OnRedirectToAccessDeniedAsync(RedirectContext<CookieAuthenticationOptions> ctx)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return ctx.Response.WriteAsJsonAsync(
+            Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden."),
+            EnvelopeJsonOptionsHolder.Instance);
+    }
+
+    private static async Task OnValidatePrincipalAsync(CookieValidatePrincipalContext ctx)
+    {
+        var userIdClaim = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var credentials = ctx.HttpContext.RequestServices.GetRequiredService<IUserCredentialStore>();
+        var cred = Guid.TryParse(userIdClaim, out var userId)
+            ? await credentials.FindByIdAsync(userId, ctx.HttpContext.RequestAborted)
+            : null;
+        if (cred is null || !cred.IsActive)
+        {
+            ctx.RejectPrincipal();
+            if (!ctx.HttpContext.Response.HasStarted)
+                await ctx.HttpContext.SignOutAsync(AuthSchemes.Cookie);
+        }
     }
 }
