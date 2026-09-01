@@ -175,9 +175,11 @@ concerns need. `Struo.Application`: `Abstractions/`, `Configuration/`, `Files/`,
 `Query/Write/Validators/`), `Revisions/`, `Security/`, `Settings/`. `Struo.Infrastructure`:
 `DependencyInjection/`, `Files/`, `Health/`, `Identity/`, `Localization/`, `Metadata/`, `Persistence/`,
 `Query/`, `Revisions/`, `Security/`, `Settings/` — it additionally owns `Identity/` (the concrete user/
-role/permission entities and SqlSugar wiring), `DependencyInjection/` (every `AddStruoXxx` extension
-method), `Health/`, and `Persistence/` (SqlSugar client/migration plumbing), none of which
-`Struo.Application` has any need for. `Struo.Api` mirrors this: `Controllers/`, `GraphQl/`,
+role/permission entities and SqlSugar wiring), `DependencyInjection/` (the general-purpose `AddStruoXxx`
+extension methods — `AddStruoData`, `AddStruoFiles`, `AddStruoMetadata` (two overloads),
+`AddStruoInfrastructure`; the four host-specific ones — `AddStruoAuth`, `AddStruoCors`, `AddStruoOidc`,
+`AddStruoGraphQl` — live in `src/Struo.Api` instead), `Health/`, and `Persistence/` (SqlSugar
+client/migration plumbing), none of which `Struo.Application` has any need for. `Struo.Api` mirrors this: `Controllers/`, `GraphQl/`,
 `Http/`, `Auth/`. `tests/Struo.Tests` mirrors the same feature folders (`Metadata/`, `Query/`, `Api/`,
 `Files/`, `Identity/`, ...) so a change to one feature's production code has an obvious, adjacent home
 for its test. New code should follow the same pattern: add to (or create) a feature-named folder rather
@@ -214,7 +216,9 @@ generic message — the real exception is logged server-side, never leaked to th
 - **Query DSL** (filter/sort/search/fields/deep paths): validated and whitelisted by `QueryValidator`
   (`src/Struo.Application/Query/QueryValidator.cs`) against the scanned `CollectionMetadata` before any
   SQL is built — an unknown field or relation path is rejected with `QueryException` /
-  `BAD_USER_INPUT`, never passed through to the ORM. See
+  `BAD_USER_INPUT`, never passed through to the ORM. `QueryValidator` also enforces RBAC, not just
+  metadata shape: `DenyUnreadableHops` walks a dotted filter/sort path hop by hop and throws
+  `PermissionDeniedException` on the first collection the caller cannot read. See
   `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting, unknown paths, and the depth cap".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
@@ -237,8 +241,15 @@ generic message — the real exception is logged server-side, never leaked to th
 - **RBAC**: enforced inside `ItemService` (`src/Struo.Application/Query/ItemService.cs`) via
   `ICurrentPermissions.CanRead`/`CanWrite`/`CanDelete`, throwing `PermissionDeniedException` on denial
   — not by a per-controller-action attribute for generic collection CRUD. `[CmsCollection(AdminOnly =
-  true)]` collections additionally require a super-admin for any write, checked the same way. See
-  `docs/guide/en/12-auth-and-rbac.md`.
+  true)]` collections additionally require a super-admin for any write, checked the same way. Reads
+  that traverse into a related collection are checked there too, not only on the root: besides
+  `QueryValidator.DenyUnreadableHops` above, `DeepExpansionCoordinator.PruneUnreadable`
+  (`src/Struo.Application/Query/Read/DeepExpansionCoordinator.cs`) silently omits an unreadable `deep=`
+  relation instead of failing the read, and `TranslationOverlay`
+  (`src/Struo.Application/Query/Read/TranslationOverlay.cs`) gates translatable Image/File resolution
+  on `CanRead` for the file collection. An anonymous-read deployment needs a
+  `Rbac:PublicReadCollections` entry for every collection a public filter or `deep=` traverses, not
+  just the root. See `docs/guide/en/12-auth-and-rbac.md`.
 
 ## Configuration over hardcoding
 
@@ -314,8 +325,9 @@ Pinia-backed singleton that can open while another vendored overlay is already o
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
-  sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs only `dotnet build` +
-  `dotnet test` and `pnpm test` + `pnpm build`) — both need a live API and database, not just a build.
+  sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs the five standing gates
+  — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
+  `docs/` — but no E2E project) — both need a live API and database, not just a build.
 
 See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
 the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`
