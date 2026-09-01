@@ -20,9 +20,12 @@ Both suites need, at minimum:
 - A reachable database with the seeded bootstrap admin (`Auth:BootstrapAdmin:Email` /
   `Auth:BootstrapAdmin:Password`). Override the credentials the specs log in with via `E2E_EMAIL` /
   `E2E_PASSWORD` if your seeded admin differs from the shipped default.
-- **`RateLimiting__Login__Enabled=false`.** The shipped default is secure-by-default and is not changed
-  for this, but the suites log in repeatedly across their specs and the default login-rate-limit
-  policy can reject a later attempt in the same run unless the limiter is disabled for the test run.
+- No login-rate-limit override needed for a default checkout. `RateLimiting:Login` (the per-client-IP
+  limiter, which counts every attempt — success or failure — against its window) ships **disabled** by
+  default, and `RateLimiting:LoginAccount` (the per-account throttle, on by default) only counts
+  *failed* attempts, so the suites' repeated *successful* logins across specs never trip either one. A
+  fork that has turned `RateLimiting:Login:Enabled` back on for its own deployment needs
+  `RateLimiting__Login__Enabled=false` for the test run instead, for the reason above.
 - The Vite dev server — Playwright starts this for you (`playwright.config.ts`'s `webServer` block,
   `reuseExistingServer: true`), so `pnpm dev` does not need to be running separately, though it's fine
   if it already is.

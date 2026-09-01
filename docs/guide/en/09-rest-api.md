@@ -74,7 +74,7 @@ errors recognizes REST errors by the same string.
 | `BAD_USER_INPUT` | 400 | A `QueryException` — malformed query parameters, an unknown filter field, a failed application-level check (weak password, duplicate/unknown role-permission collection, malformed id, a required-field-missing write — see below), etc. |
 | `VALIDATION` | 400 | ASP.NET Core model-binding/model-state failure (a request-body property that fails `[Required]`/data-annotation validation before the action even runs) — the only code that carries `details`. |
 | `INTERNAL_SERVER_ERROR` | 500 | Any exception `DomainErrorMap` doesn't recognize. The client-facing message is always the masked generic string `"An internal error occurred."`; the real exception is logged server-side, never leaked to the response. |
-| `TOO_MANY_REQUESTS` | 429 | Either of two independent fixed-window rate limiters rejected the request: `POST /api/auth/login` (partitioned by client IP; chapter 3's `RateLimiting:Login` section) or `PUT /api/users/{id}/password` (partitioned by the authenticated caller's user id; chapter 3's `RateLimiting:Password` section). Both write this code directly from the same shared `OnRejected` callback — no exception is thrown, so `DomainErrorMap` is never consulted for this one; the callback picks its message wording ("login attempts" vs. "password change attempts") from whichever policy actually rejected. |
+| `TOO_MANY_REQUESTS` | 429 | One of three independent producers rejected the request, none of them through `DomainErrorMap` (no exception is thrown for any of them): `POST /api/auth/login`'s per-account throttle (keyed by the account in the request body; chapter 3's `RateLimiting:LoginAccount` section), `POST /api/auth/login`'s per-client-IP limiter (chapter 3's `RateLimiting:Login` section), or `PUT /api/users/{id}/password`'s limiter (partitioned by the authenticated caller's user id; chapter 3's `RateLimiting:Password` section). The two client-IP-and-user-id limiters write this code from a shared `OnRejected` callback that picks its message wording ("login attempts" vs. "password change attempts") from whichever policy rejected; the per-account throttle writes it directly from `AuthController.Login` using the identical "login attempts" wording, so the two login-endpoint producers are indistinguishable to a client. |
 | `PAYLOAD_TOO_LARGE` | 413 | A streamed upload whose actual bytes exceed `Struo:Files:MaxUploadBytes` even though the declared `Content-Length` passed the up-front check (a "lying" or chunked upload). Not exercised live in this chapter — triggering it needs an upload past the configured 25 MB default — but the mapping is real: `DomainErrorMap.StatusFor` → 413. |
 | `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password`, self-service branch: the caller supplied a missing or wrong `currentPassword`. Deliberately not `401` — the caller already holds a valid session, and the SPA's global 401 handler clears the session on every `401` it sees, so reusing `UNAUTHORIZED` here would log the caller out on a plain typo. |
 | `NO_LOCAL_PASSWORD` | 400 | Self-service password change attempted on an account provisioned entirely through external OIDC, whose stored hash is the empty string because it never had a local password. |
@@ -146,7 +146,7 @@ the masked/logged behavior are read directly from `StruoExceptionHandler`/`Domai
 | `404 Not Found` | `NOT_FOUND`. |
 | `409 Conflict` | `CONFLICT` or `VERSION_CONFLICT`. |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`. |
-| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (the login limiter or the password-change limiter — see above). |
+| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (either login-endpoint defense or the password-change limiter — see above). |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`. |
 
 ```
@@ -520,7 +520,7 @@ On this host, seven collections come back: `language`, `permission`, `role`, `us
 
 | Method & path | Auth | Rate limit | Body | Response |
 |---|---|---|---|---|
-| `POST /api/auth/login` | anonymous | 5/60s per client IP (`RateLimiting:Login`, chapter 3) | `{ email, password }` | `200`, `{ id }`, sets the session cookie; or `401` |
+| `POST /api/auth/login` | anonymous | 10 failed/900s per account (`RateLimiting:LoginAccount`, on by default) + 5/60s per client IP (`RateLimiting:Login`, off by default) — chapter 3 | `{ email, password }` | `200`, `{ id }`, sets the session cookie; or `401` |
 | `POST /api/auth/logout` | Cookie or Bearer | — | — | `204`, clears the session cookie |
 | `GET /api/auth/me` | Cookie or Bearer | — | — | `200`, `{ id, email, name, isSuperAdmin, permissions }` (`permissions` is `{}` for a super-admin — every grant is implied) |
 | `GET /api/auth/login/oidc` | anonymous | — | `?returnUrl=` | `302` challenge to the configured OIDC provider, or `404` when `Oidc:Enabled` is `false` |
