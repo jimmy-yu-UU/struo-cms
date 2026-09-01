@@ -73,8 +73,14 @@ there is no other way to answer "every live session for user X". A password chan
 that index and revokes every session it finds for the target user via `IUserSessionRevocationService`
 (`UserSessionRevocationService`, `src/Struo.Infrastructure/Identity/UserSessionRevocationService.cs`),
 right after the password write itself succeeds; a failure to revoke does not roll back the already-
-successful password change. Deactivating an account (`isActive = false`, by whatever path — the generic
-item-update endpoint or a direct database write) is covered independently, without relying on the index:
+successful password change. Deleting a `user` row uses the same index-based revocation:
+`ItemService.RevokeSessionsIfUserAsync` (`src/Struo.Application/Query/ItemService.cs`) fires on both DELETE branches
+— soft-delete and purge — right after the delete itself commits, and lives in `ItemService` rather than
+the REST controller specifically so the GraphQL `deleteUser` mutation is covered too, not only `DELETE
+/api/items/user/{id}`. Either trigger's revocation failure surfaces as its own `SESSION_REVOCATION_FAILED`
+code (chapter 9) rather than rolling back the write that already succeeded. Deactivating an account
+(`isActive = false`, by whatever path — the generic item-update endpoint or a direct database write) is
+covered independently, without relying on the index:
 the cookie scheme's `OnValidatePrincipal` event (`AuthWiring.cs`) re-checks `IsActive` via
 `IUserCredentialStore.FindByIdAsync` on every request and, on failure, both rejects the principal and
 signs the caller out — the sign-out is what makes the ticket actually disappear from the store, not just

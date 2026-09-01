@@ -31,8 +31,11 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
   `RelationshipGraph.cs`, `EntityTypeCollector.cs`, `FrameworkEntityTypes.cs`), the query
   implementations (`Query/SqlSugarItemRepository.cs`, `RelationExpander.cs`,
   `RelationFilterResolver.cs`), identity (`Identity/`), files (`Files/`), revisions (`Revisions/`),
-  settings (`Settings/`), health checks (`Health/`), and every `AddStruoXxx` DI-registration extension
-  method (`DependencyInjection/`). References `Struo.Application` and `Struo.Domain`.
+  settings (`Settings/`), health checks (`Health/`), and the general-purpose `AddStruoXxx`
+  DI-registration extension methods (`DependencyInjection/`: `AddStruoData`, `AddStruoFiles`,
+  `AddStruoMetadata` (two overloads), `AddStruoInfrastructure`) — the four host-specific ones
+  (`AddStruoAuth`, `AddStruoCors`, `AddStruoOidc`, `AddStruoGraphQl`) live in `src/Struo.Api` instead.
+  References `Struo.Application` and `Struo.Domain`.
 - **`src/Struo.Api`** — the ASP.NET Core host: controllers (`Controllers/`), the GraphQL schema
   (`GraphQl/`), the envelope/error-handling plumbing (`Http/`), authentication/CSRF/CORS wiring
   (`Auth/`), and `Program.cs`. References `Struo.Application` and `Struo.Infrastructure`.
@@ -135,7 +138,19 @@ verbatim from `ItemService`" so controllers depend on this seam rather than the 
 implementation: `ItemService` (`src/Struo.Application/Query/ItemService.cs`) — note this is one of the
 few Application-layer classes with real business logic rather than a pure contract; it enforces RBAC
 internally by calling `ICurrentPermissions.CanRead`/`CanWrite`/`CanDelete` before each operation and
-throwing `PermissionDeniedException` on denial. Registered scoped, with `IItemUseCases` resolved from
+throwing `PermissionDeniedException` on denial. Read enforcement is not confined to `ItemService`
+itself: a query that reaches into a related collection is checked hop by hop, and the failure mode
+differs by path. `QueryValidator.DenyUnreadableHops`
+(`src/Struo.Application/Query/QueryValidator.cs`) throws `PermissionDeniedException` on the first
+unreadable collection a dotted filter/sort path traverses; `DeepExpansionCoordinator.PruneUnreadable`
+(`src/Struo.Application/Query/Read/DeepExpansionCoordinator.cs`) instead silently omits an unreadable
+`deep=` relation from the response; and `TranslationOverlay`
+(`src/Struo.Application/Query/Read/TranslationOverlay.cs`) gates translatable Image/File resolution on
+`CanRead` for the file collection. Consequence for an anonymous-read deployment: every collection a
+public filter or `deep=` path traverses needs its own `Rbac:PublicReadCollections` entry, not just the
+root collection — that key is consulted only at first boot (`docs/guide/en/12-auth-and-rbac.md`
+covers the caveat and the live-database workaround). Registered scoped, with `IItemUseCases` resolved
+from
 the same `ItemService` instance in `DataServiceCollectionExtensions.AddStruoData`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`):
 ```csharp
@@ -212,8 +227,29 @@ identity god-interface, split by *consumer* rather than by table:
   never itself be gated.
 - **`IExternalUserStore`** → `SqlSugarExternalUserStore`. OIDC just-in-time provisioning by email.
 
-`tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary these exist to
-create: no file under `src/Struo.Api/Controllers/` may mention `ISqlSugarClient`. Before these seams,
+Session revocation is a separate pair of seams, registered alongside the five above in the same
+`AddStruoInfrastructure` (`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`):
+`IUserSessionStore` → `SqlSugarUserSessionStore` and `IUserSessionRevocationService` →
+`UserSessionRevocationService` (both `src/Struo.Infrastructure/Identity/`). `IUserSessionStore` backs
+onto the `user_sessions` table (`UserSession.cs`, one row per live cookie ticket, indexed by
+`UserId`) — the index the ticket cache itself has no way to scan, needed to find "every live session
+for user X". `IUserSessionRevocationService.RevokeAllForUserAsync` clears a user's cache entries and
+`user_sessions` rows together, and is invoked on two triggers: password change and
+`ItemService.RevokeSessionsIfUserAsync` on **both** DELETE branches (soft-delete and purge) of a
+`user` row — placed in `ItemService` rather than a controller so the GraphQL `deleteUser` mutation is
+covered too. Logout is a narrower, single-ticket operation: `AuthController.Logout` →
+`DistributedCacheTicketStore.RemoveAsync` removes just the signed-out cookie's cache entry and index
+row, without touching `IUserSessionRevocationService`. A revocation failure after a committed
+delete/password-change throws
+`SessionRevocationFailedException` rather than masking it as a normal success. Between triggers, a
+still-live cookie is caught reactively: `AuthWiring`'s `OnValidatePrincipal` re-checks
+`IUserCredentialStore`'s `IsActive` on every cookie request (mirroring what
+`BearerTokenAuthenticationHandler` already does for bearer requests) and signs the session out the
+moment a deactivated account's cookie is next presented.
+
+`tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary the identity
+seams above exist to create: no file under `src/Struo.Api/Controllers/` may mention `ISqlSugarClient`.
+Before these seams,
 `UsersController`/`RolesController`/`AuthController.Me` injected the SqlSugar client and wrote
 `Insertable`/`Updateable`/`Deleteable`/`Ado.BeginTranAsync` inline against `Struo.Infrastructure.Identity`
 entity types — which quietly falsified `IItemRepository`'s billing as "the seam a fork implements to

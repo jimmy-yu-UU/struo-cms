@@ -40,7 +40,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 |---|---|
 | `src/Struo.Domain` | Domain types only — no project or package references at all. |
 | `src/Struo.Application` | Application-layer abstractions, use-case contracts, options, query/security contracts. |
-| `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, most `AddStruoXxx` DI registration (the host-specific ones — auth, CORS, OIDC, GraphQL — live in `src/Struo.Api`). |
+| `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, the general-purpose `AddStruoXxx` DI registration (the host-specific ones — auth, CORS, OIDC, GraphQL — live in `src/Struo.Api`). |
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
 | `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
@@ -92,6 +92,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   itself never re-runs per request (`MetadataScanner.Scan`, called from `AddStruoMetadata`).
 - **Query DSL paths are whitelist-validated** against scanned metadata before any SQL is built
   (`QueryValidator`) — an unknown filter/sort/relation path is rejected, never passed through.
+  `QueryValidator` also enforces RBAC on every collection a relation path traverses, not just the root
+  — see `docs/ai/conventions.md`'s "Query DSL"/"RBAC" bullets.
 - **RichText is sanitized server-side** before required-field validation, via `RichTextCleaner`
   (`src/Struo.Application/Query/Write/RichTextCleaner.cs`), which wraps `IHtmlSanitizer` plus
   blank-document coercion. Non-translatable RichText fields are sanitized in `ItemDeserializer.cs`;
@@ -235,7 +237,10 @@ five standing gates, and is not run by CI.
 
 - Never hand-author a package version. Install via the package manager itself (`dotnet add package`,
   `pnpm add <pkg>`) and let it write the version; NuGet versions are centralized in
-  `Directory.Packages.props`.
+  `Directory.Packages.props`. Exception: `frontend/pnpm-workspace.yaml` and `docs/pnpm-workspace.yaml`
+  hand-write bounded transitive-dependency `overrides:` ranges for advisories a package hasn't picked up
+  yet — that is the one place versions are legitimately hand-authored; see
+  `frontend/pnpm-workspace.yaml` for why every entry there carries an upper bound.
 - Never add a business collection to `src/Struo.*` — new content belongs in a fork's own project (or,
   for learning/demo purposes only, the existing sample).
 - Never reintroduce a sample reference into `Struo.Api` (no `ProjectReference` from

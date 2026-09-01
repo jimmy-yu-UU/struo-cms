@@ -205,9 +205,13 @@ Background: `docs/guide/en/09-rest-api.md` (envelope, error codes, CSRF, status 
    carry **no** `[Authorize]` attribute at all — permission is enforced inside `ItemService` via
    `IPermissionService`/`ICurrentPermissions` regardless of authentication scheme — while its write
    actions (`Create`/`Update`/`Delete`/`Restore`/`Revert`) do carry
-   `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`. Bearer tokens do not authenticate
-   `ItemsController` reads or `/graphql` at all in this codebase; decide deliberately, per new endpoint,
-   whether it needs the same treatment or a plain `[Authorize]` (cookie scheme only).
+   `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]`. A bearer-only caller is still
+   authenticated on these `[Authorize]`-free actions and on `/graphql`: `AuthSchemes.Adaptive` is
+   registered as the DEFAULT scheme (`AuthWiring.cs`), and its `ForwardDefaultSelector` forwards to
+   `AuthSchemes.Bearer` whenever the request carries an `Authorization: Bearer …` header
+   (`AuthSchemes.HasBearerHeader`), so `ICurrentPermissions` sees the bearer identity even with no
+   `[Authorize]` attribute in play. Decide deliberately, per new endpoint, whether it needs the same
+   treatment or a plain `[Authorize]` (cookie scheme only).
 3. **CSRF**: cookie-authenticated mutations need the caller to send the `X-Struo-CSRF` header
    (presence-only check, enforced by `CsrfProtectionMiddleware`, `src/Struo.Api/Auth/
    CsrfProtectionMiddleware.cs`) — this applies automatically to any action reached over the cookie
