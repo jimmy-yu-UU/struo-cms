@@ -1,14 +1,17 @@
 using System.IO;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
+using Struo.Infrastructure.Security;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
 using Xunit;
@@ -123,6 +126,25 @@ public sealed class PostgresIntegrationTests : IDisposable
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, options);
         var filterResolver = new RelationFilterResolver(repo, graph, provider, registry, options);
         return (repo, graph, filterResolver, options);
+    }
+
+    // Wires an ItemDeserializer against the SAME repo/graph BuildRepoWithGraph() just built, so the
+    // create-binding allowlist tests below drive ItemDeserializer.Deserialize ->
+    // SqlSugarItemRepository.CreateAsync — the exact pair ItemService.CreateAsync calls in
+    // production — without pulling in the full ItemService (translations/M2M/revisions/permissions),
+    // which this suite has no other use for and which ItemServiceCreateBindingTests (SQLite) already
+    // covers at that layer. Chose a small dedicated helper over widening BuildRepoWithGraph()'s return
+    // tuple: that tuple already has four call sites above, and every one of them would have to
+    // destructure (and discard) a fifth member it doesn't need.
+    private (IItemRepository Repo, ItemDeserializer Deserializer, IMetadataProvider Provider)
+        BuildRepoWithDeserializer()
+    {
+        var (repo, graph, _, _) = BuildRepoWithGraph();
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var provider = new CachedMetadataProvider(MetadataScanner.ScanTypes(types));
+        var deserializer = new ItemDeserializer(registry, graph, new RichTextCleaner(new GanssHtmlSanitizer()));
+        return (repo, deserializer, provider);
     }
 
     // 安全守衛：這些測試會 DELETE 資料列、DROP 探針表。除非目標 DB 名稱含 "test" 一律拒跑，
@@ -335,6 +357,63 @@ public sealed class PostgresIntegrationTests : IDisposable
         comparison.Value.Should().BeAssignableTo<IReadOnlyList<object>>();
         ((IReadOnlyList<object>)comparison.Value!).Cast<Guid>()
             .Should().BeEquivalentTo([childA.Id, childB.Id]);
+    }
+
+    // The create-binding allowlist (bf04229, ItemDeserializer.Deserialize) on real Postgres. Once a
+    // client-supplied "id" is stripped from the body, the entity reaches
+    // SqlSugarItemRepository.CreateAsync with Id == Guid.Empty — exactly the condition that makes it
+    // mint a Guid.CreateVersion7() id (SqlSugarItemRepository.CreateAsync). Doing this TWICE with the SAME
+    // client-supplied id and asserting two DIFFERENT minted ids is the point: a single create can't
+    // tell "minted a fresh id" apart from "silently inserted the all-zero uuid", since either way the
+    // row's id would just come back as something other than the client's Guid.Empty-adjacent value
+    // read alone. If minting silently failed to run on Postgres, the first create would insert the
+    // literal zero uuid and the second would collide on the primary key and throw, never reaching the
+    // final assertion below.
+    [Fact]
+    public async Task Create_binding_allowlist_mints_distinct_ids_for_a_repeated_client_supplied_id_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, deserializer, provider) = BuildRepoWithDeserializer();
+        var meta = provider.GetCollection("category")!;
+        var clientId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var body = JsonDocument.Parse($$"""{"id":"{{clientId}}","name":"PgAllowlistId"}""").RootElement;
+
+        var first = (Category)await repo.CreateAsync("category", deserializer.Deserialize("category", body, meta));
+        var second = (Category)await repo.CreateAsync("category", deserializer.Deserialize("category", body, meta));
+
+        first.Id.Should().NotBe(clientId);
+        second.Id.Should().NotBe(clientId);
+        second.Id.Should().NotBe(first.Id,
+            "two mints off the same stripped Guid.Empty must be distinct; if minting silently failed, " +
+            "the all-zero uuid would insert once and the second create would throw a PK collision " +
+            "instead of reaching this assertion");
+    }
+
+    // Companion to the id-minting test above: a declared ManyToOne FK (Category.ParentId, a uuid
+    // column on Postgres) must still bind through the create allowlist and persist. Guid/uuid FK
+    // binding is this suite's own catalogued PG-specific risk class — see
+    // Uuid_id_filter_round_trips_on_postgres and
+    // Six_level_selfrelation_parent_chain_is_linear_and_correct_on_postgres above — and the same risk
+    // ItemServiceCreateBindingTests.Create_still_sets_a_declared_many_to_one_foreign_key already flags
+    // (on SQLite) as the reason that regression guard exists.
+    [Fact]
+    public async Task Create_binding_allowlist_still_persists_a_declared_manytoone_fk_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, deserializer, provider) = BuildRepoWithDeserializer();
+        var meta = provider.GetCollection("category")!;
+
+        var parentBody = JsonDocument.Parse("""{"name":"PgAllowlistFkParent"}""").RootElement;
+        var parent = (Category)await repo.CreateAsync(
+            "category", deserializer.Deserialize("category", parentBody, meta));
+
+        var childBody = JsonDocument.Parse(
+            "{\"name\":\"PgAllowlistFkChild\",\"parentId\":\"" + parent.Id + "\"}").RootElement;
+        var child = (Category)await repo.CreateAsync(
+            "category", deserializer.Deserialize("category", childBody, meta));
+
+        var reloaded = (Category)(await repo.GetByIdAsync("category", child.Id.ToString()))!;
+        reloaded.ParentId.Should().Be(parent.Id);
     }
 
     // The credential-write audit path on real Postgres. SqlSugarUserAccountStore's mutators are
