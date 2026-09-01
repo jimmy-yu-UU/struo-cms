@@ -264,9 +264,14 @@ account-enumeration oracle. Backed by `IDistributedCache` (`RateLimiting:LoginAc
 `src/Struo.Application/Configuration/LoginAccountRateLimitOptions.cs`) — the same store the
 session-ticket store uses, unlike `RateLimiting:Login` below, which is an in-memory, per-pod
 `AddRateLimiter` policy regardless of Redis. That means whether Redis is configured decides this
-throttle's own topology: configured, it enforces a true global limit per account across every replica;
-left empty, it falls back to the same in-process, per-pod cache the ticket store falls back to, and
-loses that property. `PermitLimit` (`10`) and `WindowSeconds` (`900`) are deliberately generous relative
+throttle's own topology: configured, every replica shares one counter per account instead of each pod
+keeping its own; left empty, it falls back to the same in-process, per-pod cache the ticket store falls
+back to, and loses that property. Even with Redis configured, that shared counter is not a hard cap:
+`IDistributedCache` exposes no atomic read-modify-write, so two failed attempts against the same account
+arriving concurrently can both read the same count and each write back the same incremented value,
+losing one increment — an accepted, deliberate trade-off, not a bug
+(`DistributedCacheLoginAttemptThrottle`'s class doc has the detail). `PermitLimit` (`10`) and
+`WindowSeconds` (`900`) are deliberately generous relative
 to the per-IP limiter's `5`/`60` — this layer targets slow, sustained password-spraying against one
 account rather than burst traffic, and leaves room for a real user mistyping their password a few
 times. Restart required.

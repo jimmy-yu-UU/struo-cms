@@ -240,9 +240,13 @@ client IP，且會在密碼驗證**之前**就先檢查——`AuthController.Log
 `src/Struo.Application/Configuration/LoginAccountRateLimitOptions.cs`)——與 session ticket 存放區
 共用同一個儲存體，這一點不同於下方的 `RateLimiting:Login`：無論 Redis 是否設定，那個限流器一律是
 行程內、逐 pod 的 `AddRateLimiter` 政策。也就是說，是否設定 Redis 決定了這個節流器自己的拓樸：
-設定了 `Redis:ConnectionString`，它就能在每一個 replica 之間對同一個帳號強制一個真正的全域上限;
-留空時，則會退回與 ticket 存放區相同的行程內、逐 pod 快取，並失去這個特性。`PermitLimit`(`10`)與
-`WindowSeconds`(`900`)刻意設定得比逐 IP 限流器的 `5`/`60` 寬鬆許多——這一層鎖定的是針對單一帳號的
+設定了 `Redis:ConnectionString`，每一個 replica 就會共用同一個帳號的同一份計數器，而不是各自擁有
+一份;留空時，則會退回與 ticket 存放區相同的行程內、逐 pod 快取，並失去這個特性。即使設定了 Redis，
+這份共用計數器也不是一個保證的上限:`IDistributedCache` 沒有原子性的讀取-寫回操作，因此針對同一個
+帳號同時抵達的兩次失敗嘗試，可能都讀到相同的計數值，各自寫回同一個遞增後的值，導致漏掉一次遞增
+——這是刻意接受的取捨，不是一個錯誤(細節見 `DistributedCacheLoginAttemptThrottle` 的 class doc)。
+`PermitLimit`(`10`)與 `WindowSeconds`(`900`)刻意設定得比逐 IP 限流器的 `5`/`60` 寬鬆許多——這一層
+鎖定的是針對單一帳號的
 緩慢、持續性密碼噴灑攻擊，而不是短時間的大量流量，也讓一個真實使用者打錯幾次密碼還有餘裕。需要
 重新啟動。
 

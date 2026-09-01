@@ -73,7 +73,7 @@ GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉
 | `VALIDATION` | 400 | ASP.NET Core 自身的 model-binding/model-state 驗證失敗 (一個請求本文屬性在 action 尚未執行之前，就未通過 `[Required]`/資料註記驗證)——唯一會帶有 `details` 的代碼。 |
 | `INTERNAL_SERVER_ERROR` | 500 | 任何 `DomainErrorMap` 無法辨識的例外。給客戶端看到的訊息永遠是遮蔽過的通用字串
 `"An internal error occurred."`;真正的例外會在伺服器端被記錄下來，絕不會外洩到回應中。 |
-| `TOO_MANY_REQUESTS` | 429 | 三個各自獨立的來源之一拒絕了這次請求，沒有一個經由 `DomainErrorMap`(沒有任何例外被擲出):`POST /api/auth/login` 的逐帳號節流器(以請求本文中的帳號為單位;第 3 章的 `RateLimiting:LoginAccount` 段落)、`POST /api/auth/login` 的逐 client IP 限流器(第 3 章的 `RateLimiting:Login` 段落)，或是 `PUT /api/users/{id}/password` 的限流器(以已驗證呼叫端的使用者 id 為單位;第 3 章的 `RateLimiting:Password` 段落)。逐 client IP 與逐使用者 id 這兩個限流器是直接從同一個共用的 `OnRejected` 回呼寫出的，會依實際拒絕的是哪一個政策，挑選對應的訊息文字(「login attempts」或「password change attempts」);逐帳號節流器則是直接從 `AuthController.Login` 寫出，使用完全相同的「login attempts」文字，因此這兩個作用在登入端點上的來源，在客戶端看來是無法區分的。 |
+| `TOO_MANY_REQUESTS` | 429 | 三個各自獨立的來源之一拒絕了這次請求，沒有一個經由 `DomainErrorMap`(沒有任何例外被擲出):`POST /api/auth/login` 的逐帳號節流器(以請求本文中的帳號為單位;第 3 章的 `RateLimiting:LoginAccount` 段落)、`POST /api/auth/login` 的逐 client IP 限流器(第 3 章的 `RateLimiting:Login` 段落)，或是 `PUT /api/users/{id}/password` 的限流器(以已驗證呼叫端的使用者 id 為單位;第 3 章的 `RateLimiting:Password` 段落)。逐 client IP 與逐使用者 id 這兩個限流器是直接從同一個共用的 `OnRejected` 回呼寫出的，會依實際拒絕的是哪一個政策，挑選對應的訊息文字(「login attempts」或「password change attempts」);逐帳號節流器則是直接從 `AuthController.Login` 寫出，使用完全相同的「login attempts」文字，因此這兩個作用在登入端點上的來源，共用完全相同的狀態碼、代碼與訊息。兩者之間唯一不同的是 `Retry-After`:逐 client IP 限流器的上限是 `RateLimiting:Login:WindowSeconds`(預設 `60`，而且這一層是否啟用都還兩說);逐帳號節流器的上限則是 `RateLimiting:LoginAccount:WindowSeconds`(預設 `900`),因此可能大上許多——見下方的即時範例。 |
 | `PAYLOAD_TOO_LARGE` | 413 | 一次串流上傳，即使宣告的 `Content-Length` 通過了前置檢查，實際位元組數仍超過 `Struo:Files:MaxUploadBytes` (一次「說謊」或分塊上傳)。本章並未即時演練這個項目——要觸發它需要上傳超過預設 25 MB 上限的內容——但這個對應是真實的:`DomainErrorMap.StatusFor` → 413。 |
 | `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password` 的自助式分支:呼叫端送出的 `currentPassword` 缺漏或錯誤。刻意不是 `401`——呼叫端本來就持有一個有效的 session，而 SPA 的全域 401 處理器只要看到 `401` 就會清除 session，所以沿用 `UNAUTHORIZED` 會讓呼叫端因為一個單純的打字錯誤而被登出。 |
 | `NO_LOCAL_PASSWORD` | 400 | 在一個完全透過外部 OIDC 建立的帳號上，嘗試自助式變更密碼——它儲存的雜湊值是空字串，因為它從來沒有本機密碼。 |
@@ -120,12 +120,25 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bbogus%5D
 $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"password":"whatever123"}'
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"Email","message":"The Email field is required."}]}}
 
-$ for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code} " -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"wrong"}'; done
-401 401 401 401 401 429
-$ curl -s -i -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"wrong"}'
+$ for i in 1 2 3 4 5 6 7 8 9 10 11; do curl -s -o /dev/null -w "%{http_code} " -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"nobody@example.com","password":"wrong"}'; done
+401 401 401 401 401 401 401 401 401 401 429
+$ curl -s -i -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"nobody@example.com","password":"wrong"}'
 HTTP/1.1 429 Too Many Requests
-Retry-After: 60
+Content-Type: application/json; charset=utf-8
+Retry-After: 897
+X-Content-Type-Options: nosniff
 {"success":false,"error":{"code":"TOO_MANY_REQUESTS","message":"Too many login attempts. Please try again later."}}
+```
+
+這是逐帳號節流器(`RateLimiting:LoginAccount`，預設開啟，`PermitLimit` 為 `10`——見第 3 章)產生的
+結果，不是逐 client IP 限流器:第十一次針對 `nobody@example.com` 的失敗才會觸發它，而其
+`Retry-After` 反映的是觸發那一刻，`900` 秒視窗中還剩下多少(此處是 `897`——已經過了三秒)。逐
+client IP 限流器(`RateLimiting:Login`)出貨即關閉，所以同一個 client IP 對**另一個**帳號的登入
+失敗完全不會被擋下——分區鍵是帳號，不是 IP:
+
+```
+$ for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code} " -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"someone-else@example.com","password":"wrong"}'; done
+401 401 401 401 401 401
 ```
 
 (`INTERNAL_SERVER_ERROR` 刻意沒有用刻意構造的請求來演示——要引發一個，代表要找出一個真正未被處理的
@@ -287,12 +300,17 @@ $ curl -s -X PUT http://localhost:5221/api/items/file/<id> -H "Content-Type: app
 ## `POST`/`PUT` 請求本文能設定什麼
 
 `ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) 由建立與更新
-共用，它會依允許清單來繫結請求本文，而不是繫結到整個 CLR entity 型別:清單只包含已宣告、可寫入的
-`[CmsField]`;已宣告的 `ManyToOne` 關聯外鍵 (例如 `categoryId`);`translations` 附掛承載;以及多對多
-關聯鍵 (例如 `tags`)。其餘每一個頂層鍵——包括 `id`、`version`，以及軟刪除/稽核欄位 (`deletedAt`、
-`deletedBy`、`createdAt`、`createdBy`、`updatedAt`、`updatedBy`)——都會被靜默捨棄，而不是被拒絕:寫入
-仍會成功，只是那個鍵不會生效。`POST` 與 `PUT` 共用同一份允許清單，因此建立請求無法設定客戶端指定的
-id，也無法竄改樂觀並行控制版本號，就跟更新請求做不到一樣。
+共用，它會依允許清單來繫結請求本文，而不是繫結到整個 CLR entity 型別:只有已宣告、可寫入的
+`[CmsField]`，以及已宣告的 `ManyToOne` 關聯外鍵 (例如 `categoryId`)，會被繫結到父層 entity 上。
+`translations` 附掛承載與多對多關聯鍵 (例如 `tags`) 則被排除在這次繫結之外——`ItemDeserializer` 在
+反序列化父層 entity 之前就把它們剝除——但它們依然會生效:`ItemService` 會直接從原始請求本文讀取
+這兩者，並在與父層資料列相同的交易中，透過
+`ItemWriteSideSync.SyncTranslationsAsync`/`SyncM2MAsync`
+(`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`) 個別套用它們。其餘每一個頂層鍵——包括
+`id`、`version`，以及軟刪除/稽核欄位 (`deletedAt`、`deletedBy`、`createdAt`、`createdBy`、
+`updatedAt`、`updatedBy`)——都會被靜默捨棄，而不是被拒絕:寫入仍會成功，只是那個鍵不會生效。`POST`
+與 `PUT` 共用同一份允許清單，因此建立請求無法設定客戶端指定的 id，也無法竄改樂觀並行控制版本號，
+就跟更新請求做不到一樣。
 
 ## 端點參考，依 controller 分類
 
