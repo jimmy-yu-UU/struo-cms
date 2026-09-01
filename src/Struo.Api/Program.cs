@@ -206,6 +206,27 @@ try
 
     var app = builder.Build();
 
+    // First in the pipeline, ahead of everything else, so an error response, a CORS preflight, or a
+    // bare 404 carries this header just as much as a normal 200 — none of those short-circuit through
+    // a later stage. Registered via Response.OnStarting (fires right before headers are written, the
+    // latest point at which "is it already set" can be answered) and TryAdd (only if absent), so any
+    // downstream handler that sets this header itself still wins. This is the one security response
+    // header the application sends: Struo.Api serves no HTML of its own (no wwwroot/UseStaticFiles/
+    // MapFallbackToFile — the admin SPA is deployed separately), so nosniff is defence in depth behind
+    // the file-download endpoint's Content-Disposition: attachment and the image-transform path's
+    // fixed raster content types, not a patch for an open hole. Strict-Transport-Security,
+    // X-Frame-Options/CSP frame-ancestors, and Referrer-Policy are left to the reverse proxy — see
+    // Ch. 15 of the manual ("Production checklist").
+    app.Use(async (context, next) =>
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+            return Task.CompletedTask;
+        });
+        await next();
+    });
+
     app.UseSerilogRequestLogging();
     app.UseStruoCors(app.Configuration);
     // Must sit ahead of UseAuthentication: UseExceptionHandler only catches exceptions thrown
