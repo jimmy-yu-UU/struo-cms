@@ -58,9 +58,20 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // CreateRolelessClientAsync. A production-sized PermitLimit (5/60s) would make the
                 // suite itself trip the 429 the limiter exists to produce. Kept generously high here;
                 // AuthLoginRateLimitTests exercises the real limiter behavior on its own isolated
-                // derived host via WithWebHostBuilder with a small, dedicated PermitLimit.
+                // derived host via WithWebHostBuilder with a small, dedicated PermitLimit. Enabled is
+                // pinned true here even though the shipped default is now false — this suite's own
+                // integration tests target the mechanism, not the default, and AuthLoginRateLimitTests
+                // already covers the disabled-by-default case on its own isolated host.
+                ["RateLimiting:Login:Enabled"] = "true",
                 ["RateLimiting:Login:PermitLimit"] = "100000",
-                ["RateLimiting:Login:WindowSeconds"] = "60"
+                ["RateLimiting:Login:WindowSeconds"] = "60",
+                // Same rationale as RateLimiting:Login above, for the per-account throttle: the
+                // shared admin/editor logins across this suite must never trip it. It is keyed by
+                // account (not client IP), so unlike the per-IP override this one protects the SAME
+                // seeded accounts (e.g. AdminEmail) being re-used, failed-then-retried, across many
+                // unrelated test classes within this one process-lifetime cache.
+                ["RateLimiting:LoginAccount:PermitLimit"] = "100000",
+                ["RateLimiting:LoginAccount:WindowSeconds"] = "60"
                 // RateLimiting:Password is deliberately left at its production default (5/60s) here,
                 // unlike RateLimiting:Login above: it partitions by authenticated user id, and every
                 // call site except the shared admin logs in a freshly-seeded user via

@@ -71,9 +71,15 @@ try
     builder.Services.AddStruoOidc(builder.Configuration);
     builder.Services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
         .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
-    // Config-bound tuning for the login rate limiter below (defaults: 5 attempts / 60s).
+    // Config-bound tuning for the per-client-IP login rate limiter below (defaults: disabled;
+    // 5 attempts / 60s if enabled — see LoginRateLimitOptions for why it ships off).
     builder.Services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
+    // Config-bound tuning for the per-account login throttle (AuthController.Login, via
+    // ILoginAttemptThrottle) — independent of the per-client-IP limiter above (defaults: enabled;
+    // 10 failed attempts / 900s).
+    builder.Services.AddOptions<Struo.Application.Configuration.LoginAccountRateLimitOptions>()
+        .BindConfiguration(Struo.Application.Configuration.LoginAccountRateLimitOptions.SectionName);
     // Fail fast at boot: MinLength is published to the SPA and sizes the admin password generator, so
     // a misconfigured MinLength > MaxLength would hand an administrator a "Generate strong password"
     // button that produces passwords the server always rejects, with no error until the next write.
@@ -100,6 +106,13 @@ try
     // global limiter: every anonymous login attempt burns full Argon2id CPU (timing-equalized by
     // design), making it a DoS amplifier if left unbounded, whereas the rest of the API is not.
     // Volumetric/global throttling is a web-server-edge concern, out of scope here.
+    // Ships DISABLED by default (RateLimiting:Login:Enabled = false, see LoginRateLimitOptions):
+    // partitioning by client IP collapses a whole office sharing one NAT egress IP into a single
+    // bucket, which is a self-inflicted availability problem, not a defense, for the typical
+    // admin-backend deployment this template ships for. AuthController.Login's separate
+    // ILoginAttemptThrottle (per-account, not per-IP) is the layer that ships enabled instead — it
+    // cannot see the request body at THIS layer (the rate limiter's partitioner below runs before
+    // model binding), which is exactly why it belongs in the controller rather than here.
     builder.Services.AddRateLimiter(rateLimiterOptions =>
     {
         rateLimiterOptions.OnRejected = async (context, ct) =>

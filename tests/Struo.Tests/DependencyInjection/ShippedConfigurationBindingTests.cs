@@ -281,7 +281,7 @@ public sealed class ShippedConfigurationBindingTests
     /// inline, so there is no callable seam short of booting a host, and a test that re-wrote the same
     /// <c>AddOptions/BindConfiguration</c> pair itself would only assert what the test wrote.</item>
     /// <item>every value they ship equals its C# default (<c>Name</c> "StruoCMS" / <c>LogoUrl</c> null;
-    /// <c>Enabled</c> true / <c>PermitLimit</c> 5 / <c>WindowSeconds</c> 60; <c>MinLength</c> 8 /
+    /// <c>Enabled</c> false / <c>PermitLimit</c> 5 / <c>WindowSeconds</c> 60; <c>MinLength</c> 8 /
     /// <c>MaxLength</c> 128), so even a real binder comparison would pass whether or not the section
     /// bound at all.</item>
     /// </list>

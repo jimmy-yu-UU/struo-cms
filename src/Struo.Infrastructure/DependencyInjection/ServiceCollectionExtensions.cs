@@ -34,6 +34,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Struo.Application.Security.IExternalLoginService, Struo.Application.Security.ExternalLoginService>();
         services.AddScoped<Struo.Application.Security.IUserSessionStore, Identity.SqlSugarUserSessionStore>();
         services.AddScoped<Struo.Application.Security.IUserSessionRevocationService, Identity.UserSessionRevocationService>();
+        // Stateless besides the injected IDistributedCache/IOptions (both already singleton-safe) —
+        // registered singleton like IPasswordHasher above, not per-request.
+        services.AddSingleton<Struo.Application.Security.ILoginAttemptThrottle, Identity.DistributedCacheLoginAttemptThrottle>();
 
         services.AddScoped<ISqlSugarClient>(sp =>
         {

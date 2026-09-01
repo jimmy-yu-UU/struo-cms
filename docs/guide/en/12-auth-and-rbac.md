@@ -131,26 +131,57 @@ itself (see either chapter for the full OWASP rationale and the middleware's `Re
 
 ## Login rate limiting
 
-`POST /api/auth/login` is guarded by an in-app fixed-window limiter, partitioned by client IP —
-`RateLimiting:Login` (`LoginRateLimitOptions`, `src/Struo.Application/Configuration/LoginRateLimitOptions.cs`):
-`Enabled` (default `true`), `PermitLimit` (default `5`), `WindowSeconds` (default `60`). Every anonymous
-login attempt burns full Argon2id CPU regardless of outcome, so an unbounded brute-force attempt is also
-a CPU-exhaustion DoS vector — this limiter exists specifically to bound that, applied to the login
-action alone among `AuthController`'s own endpoints (logout/me/the OIDC challenge are deliberately not
-limited). It is not, however, the only rate limiter in the app: a second, independently-configured
-limiter guards `PUT /api/users/{id}/password` instead, partitioned by the caller's own authenticated
-user id rather than client IP — see chapter 3 for its configuration and chapter 9 for the shared `429`
-response shape both limiters write. Chapter 9 also shows the live `429` this login limiter itself
-produces once its own window is exhausted (`Retry-After: 60`, error code `TOO_MANY_REQUESTS`); this
-chapter does not re-trigger it.
+`POST /api/auth/login` carries every anonymous request through a full Argon2id CPU verify regardless of
+outcome, so an unbounded brute-force attempt is also a CPU-exhaustion DoS vector. TWO independent
+defenses guard against this, and they stop different threats — neither replaces the other:
 
-**When to disable it:** set `Enabled` to `false` only in a multi-replica deployment (e.g. Kubernetes)
-where per-IP rate limiting is instead enforced at the ingress/edge/WAF layer — that layer sees the real
-client IP and sits in front of every pod, whereas this limiter's state is in-memory and per-pod and
-therefore cannot enforce a true global limit across replicas (chapter 3). Leaving it enabled behind a
-load balancer that doesn't itself rate-limit would under-count attempts per pod without actually
-protecting the deployment as a whole — the flag exists so an operator can make that trade-off
-consciously rather than the default silently doing the wrong thing in either topology.
+- **Per-account throttle** (`RateLimiting:LoginAccount`, `ILoginAttemptThrottle` /
+  `DistributedCacheLoginAttemptThrottle`,
+  `src/Struo.Infrastructure/Identity/DistributedCacheLoginAttemptThrottle.cs`) — **on by default**.
+  Counts FAILED login attempts against the account named in the request body, backed by
+  `IDistributedCache`, checked by `AuthController.Login` before `IAuthService.AuthenticateAsync` runs so
+  a throttled request spends no Argon2id CPU at all. This is the layer the per-client-IP limiter cannot
+  be: that limiter's partitioner runs before model binding, so it never sees the request body and has no
+  way to key on the account being attempted — a distributed, slow password-spray against one account
+  from many source IPs sails straight through it. The per-account throttle catches exactly that, since
+  every source IP shares the same target-account counter. Every failure counts toward the limit
+  regardless of kind (wrong password, unknown account, deactivated account) and the identical `429` is
+  returned whether or not the account exists — a successful login clears the counter, so a legitimate
+  user can never lock themselves out by logging in normally, and deliberately nothing here treats one
+  failure kind differently, which would otherwise let "this email never gets throttled" leak whether an
+  account exists.
+- **Per-client-IP limiter** (`RateLimiting:Login`, `LoginRateLimitOptions`,
+  `src/Struo.Application/Configuration/LoginRateLimitOptions.cs`) — **off by default**. Fixed-window,
+  partitioned by client IP, applied via `[EnableRateLimiting("login")]` on the login action alone among
+  `AuthController`'s endpoints (logout/me/the OIDC challenge are deliberately not limited by either
+  layer). It stops a single source IP hammering the endpoint, which the per-account throttle cannot: a
+  distributed attacker spraying many different accounts from one IP never trips the per-account
+  counters, since none of them individually reaches the per-account limit.
+
+Neither limiter is the only rate limiter in the app, either: a third, independently-configured one
+guards `PUT /api/users/{id}/password`, partitioned by the caller's own authenticated user id — see
+chapter 3 for its configuration and chapter 9 for the shared `429` response shape all three write.
+Chapter 9 also shows a live `429` from the per-account throttle; this chapter does not re-trigger it.
+
+**Why the per-client-IP limiter ships disabled.** Enabling it goes wrong in a specific way for this
+template's usual audience: admin-backend users are typically an organization's own staff, and staff
+commonly share one NAT egress IP. Partitioning by client IP collapses that entire office into a single
+shared bucket, so at the shipped `5`/`60` a handful of staff logging in around the same time trips the
+limit for everyone — the limiter becomes a self-inflicted denial of service rather than a defense, and
+this does **not** require a misconfigured reverse proxy: it happens even with `UseForwardedHeaders`
+configured correctly, purely from sharing one egress IP. (Behind a proxy that ISN'T configured with
+`UseForwardedHeaders` — which this application does not register by default — it is worse still:
+`Connection.RemoteIpAddress` is the proxy's own address, so **every** user of the deployment collapses
+into that one bucket, not just the ones sharing a NAT gateway.) On more than one replica, the limiter's
+in-memory, per-pod state adds a second failure mode on top: the effective limit becomes ≈N× the
+configured value, inconsistently, and is never a true global cap.
+
+**When enabling it is the right call.** A single-instance, directly-reachable deployment with no
+edge/WAF in front of it, whose users do not share an egress IP — a personal or single-tenant install, or
+a development host. If it is enabled behind any reverse proxy, `UseForwardedHeaders` (with an explicit
+`KnownProxies`/`KnownNetworks` allowlist) must be added first, or the limiter measures the proxy rather
+than the client. A shared-egress team that still wants this layer active should raise `PermitLimit`
+rather than rely on the shipped `5`.
 
 ## OIDC/external login
 
@@ -454,7 +485,8 @@ actual super-admin session (chapter 9).
   `Adaptive` authentication scheme resolves a bearer-only caller identically on every endpoint, reads
   included.
 - Chapter 3, [Configuration Reference](03-configuration-reference.md), for every config key named in this
-  chapter — `Auth:BootstrapAdmin`, `Rbac:PublicReadCollections`, `RateLimiting:Login`, `Redis`, `Oidc` —
+  chapter — `Auth:BootstrapAdmin`, `Rbac:PublicReadCollections`, `RateLimiting:LoginAccount`,
+  `RateLimiting:Login`, `Redis`, `Oidc` —
   in full, including their first-boot-only and restart caveats.
 - Chapter 11, [Files, Media & Image Transforms](11-files-and-media.md), for `IFileAccessPolicy` — the
   one place RBAC is enforced outside the generic `ItemService` path.

@@ -13,9 +13,11 @@ public static class ErrorCodes
     public const string BadUserInput = "BAD_USER_INPUT";
     public const string Validation = "VALIDATION";
     public const string Internal = "INTERNAL_SERVER_ERROR";
-    // The app-layer login rate limiter (Program.cs, Microsoft.AspNetCore.RateLimiting)
-    // writes this code directly from its OnRejected callback (no exception is thrown, so
-    // DomainErrorMap is never consulted for this one).
+    // Three independent producers write this code, none of them through DomainErrorMap (no
+    // exception is thrown for any of them): the per-client-IP login and change-password rate
+    // limiters (Program.cs, Microsoft.AspNetCore.RateLimiting) write it directly from their shared
+    // OnRejected callback, and AuthController.Login's per-account ILoginAttemptThrottle writes it
+    // directly when a throttled login is rejected before authentication even runs.
     public const string TooManyRequests = "TOO_MANY_REQUESTS";
     // A lying/streaming upload whose actual bytes exceed FileStorageOptions.MaxUploadBytes
     // even though the declared Content-Length passed the up-front check.

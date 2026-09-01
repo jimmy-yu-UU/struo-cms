@@ -73,7 +73,7 @@ GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉
 | `VALIDATION` | 400 | ASP.NET Core 自身的 model-binding/model-state 驗證失敗 (一個請求本文屬性在 action 尚未執行之前，就未通過 `[Required]`/資料註記驗證)——唯一會帶有 `details` 的代碼。 |
 | `INTERNAL_SERVER_ERROR` | 500 | 任何 `DomainErrorMap` 無法辨識的例外。給客戶端看到的訊息永遠是遮蔽過的通用字串
 `"An internal error occurred."`;真正的例外會在伺服器端被記錄下來，絕不會外洩到回應中。 |
-| `TOO_MANY_REQUESTS` | 429 | 兩個各自獨立的固定視窗速率限制器之一拒絕了這次請求:`POST /api/auth/login` (以客戶端 IP 為單位;第 3 章的 `RateLimiting:Login` 段落)，或是 `PUT /api/users/{id}/password` (以已驗證呼叫端的使用者 id 為單位;第 3 章的 `RateLimiting:Password` 段落)。兩者都是直接從同一個共用的 `OnRejected` 回呼寫出的——沒有任何例外被擲出，所以這個代碼從不會經由 `DomainErrorMap` 查詢;回呼會依實際拒絕的是哪一個政策，挑選對應的訊息文字 (「login attempts」或「password change attempts」)。 |
+| `TOO_MANY_REQUESTS` | 429 | 三個各自獨立的來源之一拒絕了這次請求，沒有一個經由 `DomainErrorMap`(沒有任何例外被擲出):`POST /api/auth/login` 的逐帳號節流器(以請求本文中的帳號為單位;第 3 章的 `RateLimiting:LoginAccount` 段落)、`POST /api/auth/login` 的逐 client IP 限流器(第 3 章的 `RateLimiting:Login` 段落)，或是 `PUT /api/users/{id}/password` 的限流器(以已驗證呼叫端的使用者 id 為單位;第 3 章的 `RateLimiting:Password` 段落)。逐 client IP 與逐使用者 id 這兩個限流器是直接從同一個共用的 `OnRejected` 回呼寫出的，會依實際拒絕的是哪一個政策，挑選對應的訊息文字(「login attempts」或「password change attempts」);逐帳號節流器則是直接從 `AuthController.Login` 寫出，使用完全相同的「login attempts」文字，因此這兩個作用在登入端點上的來源，在客戶端看來是無法區分的。 |
 | `PAYLOAD_TOO_LARGE` | 413 | 一次串流上傳，即使宣告的 `Content-Length` 通過了前置檢查，實際位元組數仍超過 `Struo:Files:MaxUploadBytes` (一次「說謊」或分塊上傳)。本章並未即時演練這個項目——要觸發它需要上傳超過預設 25 MB 上限的內容——但這個對應是真實的:`DomainErrorMap.StatusFor` → 413。 |
 | `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password` 的自助式分支:呼叫端送出的 `currentPassword` 缺漏或錯誤。刻意不是 `401`——呼叫端本來就持有一個有效的 session，而 SPA 的全域 401 處理器只要看到 `401` 就會清除 session，所以沿用 `UNAUTHORIZED` 會讓呼叫端因為一個單純的打字錯誤而被登出。 |
 | `NO_LOCAL_PASSWORD` | 400 | 在一個完全透過外部 OIDC 建立的帳號上，嘗試自助式變更密碼——它儲存的雜湊值是空字串，因為它從來沒有本機密碼。 |
@@ -145,7 +145,7 @@ Retry-After: 60
 | `404 Not Found` | `NOT_FOUND`。 |
 | `409 Conflict` | `CONFLICT` 或 `VERSION_CONFLICT`。 |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`。 |
-| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (登入限制器或改密碼限制器——見上文)。 |
+| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (登入端點的兩道防線之一，或改密碼限制器——見上文)。 |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`。 |
 
 ```
@@ -507,7 +507,7 @@ $ curl -s "http://localhost:5221/api/config"
 
 | 方法與路徑 | 驗證 | 速率限制 | 本文 | 回應 |
 |---|---|---|---|---|
-| `POST /api/auth/login` | 匿名 | 每個客戶端 IP 每 60 秒 5 次 (`RateLimiting:Login`，第 3 章) | `{ email, password }` | `200`，`{ id }`，設定 session cookie;或 `401` |
+| `POST /api/auth/login` | 匿名 | 每帳號每 900 秒 10 次失敗 (`RateLimiting:LoginAccount`，預設開啟) + 每客戶端 IP 每 60 秒 5 次 (`RateLimiting:Login`，預設關閉) ——見第 3 章 | `{ email, password }` | `200`，`{ id }`，設定 session cookie;或 `401` |
 | `POST /api/auth/logout` | Cookie or Bearer | — | — | `204`，清除 session cookie |
 | `GET /api/auth/me` | Cookie or Bearer | — | — | `200`，`{ id, email, name, isSuperAdmin, permissions }` (對超級管理員而言 `permissions` 是 `{}`——每一項授權都是隱含存在的) |
 | `GET /api/auth/login/oidc` | 匿名 | — | `?returnUrl=` | `302` 挑戰導向設定好的 OIDC 提供者，或在 `Oidc:Enabled` 為 `false` 時回傳 `404` |
