@@ -155,10 +155,14 @@ try
             // RateLimiting:Login:Enabled toggle (config-driven, see LoginRateLimitOptions): when
             // disabled, return a no-op limiter for this partition. The "login" policy still EXISTS
             // (so [EnableRateLimiting("login")] never throws "no policy named login"); it simply
-            // never rejects. Intended for multi-pod Kubernetes deployments where per-IP rate
-            // limiting is delegated to the ingress/edge/WAF — that layer sees the real client IP and
-            // sits in front of ALL pods, whereas this limiter's state is in-memory and per-pod, so
-            // it can never enforce a true global limit across replicas in that topology.
+            // never rejects. Disabled is the shipped default for every topology, not a multi-pod
+            // special case: the primary reason is shared NAT egress IP (see the AddRateLimiter
+            // comment above / LoginRateLimitOptions.Enabled's XML doc), which collapses an office's
+            // logins into one partition on a single instance just as much as on many pods. A second,
+            // independent reason applies specifically to multiple replicas: this limiter's state is
+            // in-memory and per-pod, so even if enabled it can never enforce a true global limit
+            // across them — that's delegated to the ingress/edge/WAF instead, which sees the real
+            // client IP and sits in front of every pod.
             if (!loginOptions.Enabled)
             {
                 return RateLimitPartition.GetNoLimiter<string>(partitionKey);

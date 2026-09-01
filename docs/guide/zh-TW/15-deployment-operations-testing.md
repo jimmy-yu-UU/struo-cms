@@ -19,8 +19,11 @@
 分區，而不是依 client IP。把它關掉，會讓一次針對單一帳號、來自多個來源 IP 的緩慢分散式密碼噴灑攻擊
 完全不受限制，因為下方的 `RateLimiting:Login` 看不到請求本文，也就沒辦法依被嘗試的帳號分區。跟這張表
 裡另外兩個速率限制器不同，這一層是逐 pod 還是全域，取決於 `Redis:ConnectionString`：有設定時，它與
-session ticket 存放區共用同一個 `IDistributedCache`，能在每一個 replica 之間對同一個帳號強制一個真正
-的全域上限；在多 replica 部署中留空時，會悄悄退回與 ticket 存放區相同的行程內、逐 pod 快取，實際生效
+session ticket 存放區共用同一個 `IDistributedCache`，讓每一個 replica 共用同一個帳號的同一份計數器，
+而不是各自擁有一份——但即使如此，這仍然只是一份共用計數器，不是一個保證的上限：`IDistributedCache`
+沒有原子性的讀取-寫回操作，針對同一個帳號同時抵達的兩次失敗嘗試可能會漏掉一次遞增(細節見
+`DistributedCacheLoginAttemptThrottle` 的 class doc)；在多 replica 部署中留空時，會悄悄退回與 ticket
+存放區相同的行程內、逐 pod 快取，實際生效
 的上限會像另外兩個限流器一樣變成大約設定值的 N 倍。 |
 | `RateLimiting:Login:Enabled` | `false` (the shipped default) unless the deployment is single-instance, directly reachable, and its users don't share an egress IP | 應用程式內建、逐 client IP 的登入限制器以 `Connection.RemoteIpAddress` 分區，其計數器存在於逐行程的記憶體中(`Program.cs`，`AddRateLimiter`/`AddPolicy("login", …)` 那個區塊)。若在一個 admin 後台部署中，員工共用同一個 NAT 對外 IP，卻把這個值改為 `true`，會把整個辦公室收斂成單一共用桶——在出貨預設的 `5`/`60` 之下，只要幾位員工在差不多時間登入，就會共同觸發限制，變成一次自我加害型的阻斷服務，而且不需要代理設定錯誤就會發生。在一個以上的 replica 上，還會額外變成大約 N 倍於設定值、且不一致的上限，永遠不是一個真正的全域上限——程式碼自己的註解就明白寫著正是為此才「委由 ingress/edge/WAF 處理」。上方的 `RateLimiting:LoginAccount` 才是出貨即開啟的那一層。 |
 | Reverse-proxy forwarded headers | The deployment must add `UseForwardedHeaders` (with `KnownProxies`/`KnownNetworks`) itself | `Program.cs`在整條管線中完全沒有呼叫過 `app.UseForwardedHeaders(...)`——登入限制器分區鍵旁邊的註解就明白寫著這件事(「這裡刻意不處理」)。在任何反向代理之後，`Connection.RemoteIpAddress` 都會是**代理伺服器自己的**位址，而不是真正客戶端的位址，因此若仍然在這種代理背後把 `RateLimiting:Login:Enabled` 打開，每一次透過該代理的登入嘗試都會被摺疊進單一個速率限制分區——代理伺服器背後的每一位使用者共用同一個每 60 秒 5 次的額度，是上一列所述共用對外 IP 收斂問題的一個更嚴重版本。 |

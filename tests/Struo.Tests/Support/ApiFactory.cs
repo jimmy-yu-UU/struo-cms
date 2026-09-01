@@ -60,8 +60,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // AuthLoginRateLimitTests exercises the real limiter behavior on its own isolated
                 // derived host via WithWebHostBuilder with a small, dedicated PermitLimit. Enabled is
                 // pinned true here even though the shipped default is now false — this suite's own
-                // integration tests target the mechanism, not the default, and AuthLoginRateLimitTests
-                // already covers the disabled-by-default case on its own isolated host.
+                // integration tests target the mechanism, not the default. AuthLoginRateLimitTests
+                // covers the explicitly-disabled case (RateLimiting:Login:Enabled = "false") on its own
+                // isolated host, not the shipped default itself — ShippedConfigurationBindingTests
+                // covers RateLimiting:Login by key shape only, so no test asserts the shipped value.
                 ["RateLimiting:Login:Enabled"] = "true",
                 ["RateLimiting:Login:PermitLimit"] = "100000",
                 ["RateLimiting:Login:WindowSeconds"] = "60",
