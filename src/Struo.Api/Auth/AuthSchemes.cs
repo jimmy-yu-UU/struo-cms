@@ -19,6 +19,20 @@ public static class AuthSchemes
     /// (AuthWiring) and the CSRF middleware (which keys its guard off this cookie's presence).</summary>
     public const string SessionCookieName = "struo.session";
 
+    /// <summary>
+    /// Single source of truth for how long a cookie session lives: both
+    /// <c>CookieAuthenticationOptions.ExpireTimeSpan</c> (<c>AuthWiring</c>, the sliding window the
+    /// cookie handler itself enforces) and <c>DistributedCacheTicketStore</c>'s own idea of a
+    /// session's lifetime (the cache entry's sliding expiration, and what it stamps into a
+    /// <c>UserSession</c> row's <c>ExpiresAt</c>) MUST agree. The login-time index sweep
+    /// (<c>DistributedCacheTicketStore.IndexNewSessionAsync</c>) deletes a user's own index rows past
+    /// their <c>ExpiresAt</c> — that is only safe when this value really is how long the cookie stays
+    /// alive; if the two ever diverged (e.g. a fork raising one but not the other), a still-live
+    /// cookie's index row could be swept out from under it, making that session permanently
+    /// un-revocable (no row left to find it by) while the cookie itself keeps working.
+    /// </summary>
+    public static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(8);
+
     /// <summary>Does this request carry an <c>Authorization: Bearer …</c> header? The single
     /// definition of "this is a bearer request" shared by the <see cref="Adaptive"/> forwarding
     /// selector (<c>AuthWiring</c>), <c>BearerTokenAuthenticationHandler</c>, and

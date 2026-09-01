@@ -1,6 +1,7 @@
 // src/Struo.Application/Query/QueryValidator.cs
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
@@ -11,7 +12,7 @@ public static class QueryValidator
 {
     public static QueryModel Validate(
         QueryModel q, CollectionMetadata meta, StruoQueryOptions opts,
-        IRelationshipGraph graph, IMetadataProvider metadata)
+        IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions)
     {
         // Allowlist: a collection's own fields, plus its declared many-to-one relation
         // foreign keys (e.g. "categoryId" on article) so callers (incl. the frontend
@@ -34,6 +35,20 @@ public static class QueryValidator
             {
                 if (!allowRelation)
                     throw new QueryException($"Relation paths are not supported in field selection: '{path}'.");
+                // The caller's read grant on the root collection does not extend across a relation
+                // hop: every collection the path traverses needs its own. Without this, a caller
+                // granted only 'article' could read 'user' rows through article.author, and
+                // meta.total on filter[author.email][_starts_with] would enumerate them one
+                // character at a time.
+                //
+                // This runs BEFORE RelationPath.Parse, not after, and resolves hops itself to do
+                // so. Parse validates the leaf against the terminal collection's metadata and names
+                // the collection and field in its QueryException, which DomainErrorMap returns
+                // verbatim; letting it run first would let an anonymous caller with one public-read
+                // collection enumerate the field names of every collection reachable from it. An
+                // unresolvable hop breaks out rather than throwing, so Parse still owns that
+                // message — the collection it names is one the caller has already been cleared for.
+                DenyUnreadableHops(meta.Name, path, graph, permissions);
                 var rp = RelationPath.Parse(meta.Name, path, graph, metadata, opts.MaxRelationDepth);
                 if (forSort && !rp.IsSortable)
                     throw new QueryException($"Sort across to-many relations is not supported: '{path}'.");
@@ -76,6 +91,26 @@ public static class QueryValidator
         var offset = Math.Max(0, q.Offset);
 
         return q with { Limit = limit, Offset = offset };
+    }
+
+    /// <summary>
+    /// Walks a dotted path hop by hop, refusing the first whose target collection the caller cannot
+    /// read. Stops at an unresolvable hop so <see cref="RelationPath.Parse"/> keeps ownership of that
+    /// error — every collection reached before it is one the caller is cleared to know about.
+    /// </summary>
+    private static void DenyUnreadableHops(
+        string rootCollection, string path, IRelationshipGraph graph, IPermissionService permissions)
+    {
+        var parts = path.Split('.');
+        var current = rootCollection;
+        for (var i = 0; i < parts.Length - 1; i++)
+        {
+            var rel = graph.Resolve(current, parts[i]);
+            if (rel is null) return;
+            if (!permissions.CanRead(rel.TargetCollection))
+                throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
+            current = rel.TargetCollection;
+        }
     }
 
     public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>

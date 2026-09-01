@@ -71,7 +71,7 @@ public sealed class SnapshotBuilderHarness : IDisposable
         Builder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, Builder);
+            revisionUser, revisionStore, Builder, new NoopUserSessionRevocationService());
     }
 
     public static SnapshotBuilderHarness Create() => new();

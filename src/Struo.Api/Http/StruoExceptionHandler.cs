@@ -6,8 +6,7 @@ namespace Struo.Api.Http;
 
 /// <summary>
 /// Maps StruoCMS domain exceptions to the unified error envelope (mirrors the GraphQL
-/// <c>StruoErrorFilter</c> code mapping). Replaces the inline try/catch middleware previously in
-/// Program.cs. Unmapped exceptions are masked (no internal detail leaked) and logged server-side.
+/// <c>StruoErrorFilter</c> code mapping). Unmapped exceptions are masked (no internal detail leaked) and logged server-side.
 /// </summary>
 public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger) : IExceptionHandler
 {

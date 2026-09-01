@@ -601,7 +601,7 @@ describe('CollectionListView', () => {
   })
 
   // The columns/isSelectField helpers are still live
-  // (they drive the Badge branch) even though linkField/row-link coverage was removed.
+  // (they drive the Badge branch).
   it('orders the default display field first and detects select-type columns', async () => {
     seedSchema(); seedLanguage() // seedSchema's article has defaultDisplayField: 'status' (interface: select)
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }

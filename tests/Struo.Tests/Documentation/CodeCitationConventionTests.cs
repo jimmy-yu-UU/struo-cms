@@ -11,8 +11,8 @@ namespace Struo.Tests.Documentation;
 /// docs and comments"): a citation into this repository's own code must name a construct, not a line
 /// range, because line ranges rot silently the first time someone inserts above them. Tasks 3-7 of the
 /// 2026-08-04 batch removed ~100 such citations; without this guard the next insertion quietly brings
-/// them back, which is exactly what happened both in the batch this test belongs to (a doc-comment
-/// insertion broke two chapter-12 line citations) and in the batch before it.
+/// them back, which has happened twice in this repository (in one instance a doc-comment
+/// insertion broke two chapter-12 line citations).
 /// </summary>
 /// <remarks>
 /// <para>

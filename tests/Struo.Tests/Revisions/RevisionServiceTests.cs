@@ -88,7 +88,7 @@ public sealed class RevisionServiceHarness : IDisposable
         Store = realStore;
         Service = new ItemService(repo, provider, registry, perms,
             graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, serviceStore, snapshotBuilder);
+            revisionUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
     public static RevisionServiceHarness Create(bool failCapture = false, bool canRead = true) =>

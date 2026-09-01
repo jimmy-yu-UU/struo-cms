@@ -37,6 +37,12 @@ public static class ErrorCodes
     // open the enumeration surface the timing equalizer exists to close.
     public const string AccountInactive = "ACCOUNT_INACTIVE";
 
+    // A password change or user delete already succeeded and committed — this is NOT "your request
+    // failed", it means the follow-up session revocation failed, so some of that user's existing
+    // sessions may still be live. Distinct from the generic masked Internal code so the caller (and
+    // the SPA) can tell "nothing happened" apart from "it happened, but isn't fully cleaned up".
+    public const string SessionRevocationFailed = "SESSION_REVOCATION_FAILED";
+
     public static string ForStatus(int status) => status switch
     {
         400 => BadUserInput,

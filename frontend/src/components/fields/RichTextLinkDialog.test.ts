@@ -141,7 +141,7 @@ describe('RichTextLinkDialog', () => {
     await w.get('[data-cmd="linkRemove"]').trigger('click')
     expect(w.emitted('remove')).toEqual([[]])
     expect(w.emitted('update:open')).toEqual([[false]])
-    // Removing must not also fabricate a submit -- Task 3's command dispatches on which of the
+    // Removing must not also fabricate a submit -- the command dispatches on which of the
     // two resolves, and a stray submit would apply a link the caller asked to remove.
     expect(w.emitted('submit')).toBeUndefined()
   })
