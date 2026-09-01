@@ -199,7 +199,7 @@ Every REST response — success or error — is wrapped in one of two shapes by 
 construct these shapes; a controller action that needs a bare error response uses
 `ApiResults.Fail(status, code, message)` (`src/Struo.Api/Http/ApiResults.cs`) rather than hand-building
 an `ObjectResult`, so `EnvelopeResultFilter`'s idempotency check (already-an-envelope → left untouched)
-keeps working. Domain exceptions are mapped to the ten stable `ErrorCodes`
+keeps working. Domain exceptions are mapped to the stable `ErrorCodes` set
 (`src/Struo.Api/Http/ErrorCodes.cs`) by `DomainErrorMap`
 (`src/Struo.Api/Http/DomainErrorMap.cs`) — the single source of the exception→code mapping, shared
 verbatim by REST's `StruoExceptionHandler` and GraphQL's `StruoErrorFilter` so the two protocols cannot

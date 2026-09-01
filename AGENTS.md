@@ -40,7 +40,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 |---|---|
 | `src/Struo.Domain` | Domain types only — no project or package references at all. |
 | `src/Struo.Application` | Application-layer abstractions, use-case contracts, options, query/security contracts. |
-| `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, all `AddStruoXxx` DI registration. |
+| `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, most `AddStruoXxx` DI registration (the host-specific ones — auth, CORS, OIDC, GraphQL — live in `src/Struo.Api`). |
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
 | `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
@@ -74,18 +74,22 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar; zero vendor SQL.** Migration scripts under
-  `db/migrations/` are the one place raw SQL is written deliberately — and the template ships **none**:
-  it holds only its `README.md`, and any script there belongs to the fork that put it there. Replaceability is
-  a choice made once, at fork time, not a property every deployment must preserve forever: the core
-  contains no vendor SQL; a fork writing PostgreSQL-specific ALTERs for the database it actually runs
-  is not a violation.
+- **All database access is through SqlSugar, with two deliberate exceptions for raw SQL.** Migration
+  scripts under `db/migrations/` are one — the template ships **none**: it holds only its `README.md`,
+  and any script there belongs to the fork that put it there. Replaceability is a choice made once, at
+  fork time, not a property every deployment must preserve forever: the core ships no vendor-SQL
+  migrations; a fork writing PostgreSQL-specific ALTERs for the database it actually runs is not a
+  violation. The other is `SchemaGuard`'s read-only PostgreSQL/SQLite catalog queries
+  (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) — needed because SqlSugar's ORM surface cannot
+  answer "is there a UNIQUE index covering these columns"; it returns early for MySQL/SqlServer/Oracle
+  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so the shipped
+  production path stays vendor-SQL-free.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
   `EnvelopeResultFilter.cs`).
-- **Metadata is scanned once at startup and cached** in a singleton `IMetadataProvider` — never
-  per-request reflection (`MetadataScanner.Scan`, called from `AddStruoMetadata`).
+- **Metadata is scanned once at startup and cached** in a singleton `IMetadataProvider` — the scan
+  itself never re-runs per request (`MetadataScanner.Scan`, called from `AddStruoMetadata`).
 - **Query DSL paths are whitelist-validated** against scanned metadata before any SQL is built
   (`QueryValidator`) — an unknown filter/sort/relation path is rejected, never passed through.
 - **RichText is sanitized server-side** before required-field validation, via `RichTextCleaner`
