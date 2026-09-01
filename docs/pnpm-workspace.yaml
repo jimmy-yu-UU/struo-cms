@@ -3,3 +3,21 @@
 # carries an upper bound — the same rule applies here.
 overrides:
   nanoid@<3.3.18: '>=3.3.18 <4'
+
+# ACCEPTED RISK (approved 2026-09-01). GHSA-fx2h-pf6j-xcff (High), GHSA-v6wh-96g9-6wx3
+# (Moderate), GHSA-4w7w-66w2-5vf9 (Moderate), GHSA-67mh-4wv8-2f99 (Moderate): four dev-server
+# vulnerabilities in vite/esbuild, pulled in transitively as vitepress@1.6.4 > vite@5.4.21 >
+# esbuild@0.21.5. No patched release exists on this chain: vitepress's latest stable is 1.6.4
+# (npm dist-tags show only latest 1.6.4 and next 2.0.0-alpha.19), and there is no stable
+# vitepress that moves off vite 5. Overriding vite to 6.x here would drag vitepress 1.x across
+# a major it was not built against — see frontend/pnpm-workspace.yaml for why that upper-bound
+# rule holds. All four are dev-server-only: reachable only while `pnpm dev` runs inside docs/;
+# the static site produced by `pnpm build` is unaffected. Suppression (auditConfig.ignoreGhsas
+# below) is scoped to exactly these four advisory ids.
+# REMOVE THIS once vitepress ships a stable 2.x, or 1.x widens its vite range — re-evaluate then.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fx2h-pf6j-xcff
+    - GHSA-v6wh-96g9-6wx3
+    - GHSA-4w7w-66w2-5vf9
+    - GHSA-67mh-4wv8-2f99
