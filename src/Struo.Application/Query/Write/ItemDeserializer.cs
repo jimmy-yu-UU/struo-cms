@@ -55,9 +55,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (body.ValueKind == JsonValueKind.Object)
         {
-            foreach (var prop in body.EnumerateObject())
-                if (!allowedKeys.Contains(prop.Name))
-                    stripNames.Add(prop.Name);
+            foreach (var name in body.EnumerateObject().Select(p => p.Name).Where(n => !allowedKeys.Contains(n)))
+                stripNames.Add(name);
         }
 
         object entity;
