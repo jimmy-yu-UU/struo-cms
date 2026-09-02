@@ -56,6 +56,26 @@ what makes `samples/Struo.Sample.Blog` truly optional and deletable.
 
 See `docs/guide/en/01-introduction-and-architecture.md` for the conceptual introduction to this layering.
 
+### ORM coupling
+
+"Database-replaceable" in this template means the SqlSugar *provider*, not the ORM. `Database:DbType`
+maps 1:1 onto `SqlSugar.DbType` in `DbTypeMapper.Map`
+(`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`): PostgreSQL is the verified target, SQLite
+backs the test suite, MySQL/SqlServer/Oracle are mapped but unverified. The ORM itself is not swappable
+at the content-project level — every content entity (`using SqlSugar;`, e.g.
+`samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
+`[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's
+`[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson`+`text`,
+`[ColumnShape]` — see `docs/guide/en/04-defining-a-collection.md`, `05-field-types.md`,
+`13-revisions-and-soft-delete.md`) are SqlSugar semantics, not a StruoCMS abstraction over them.
+`IItemRepository` (`src/Struo.Application/Query/IItemRepository.cs`, sole implementation
+`SqlSugarItemRepository`) is an internal seam inside core, not an ORM-abstraction layer forks are meant
+to reimplement to swap ORMs — an entity's SqlSugar attributes stay bound to SqlSugar regardless of what
+implements that interface. Consequence: a SqlSugar major-version upgrade, or a semantic change to an
+attribute like `IsJson`/`[SugarIndex]`, lands directly on every fork's entity classes; core does not
+absorb it. When bumping core, diff `Directory.Packages.props`'s `SqlSugarCore` version line against the
+fork's previous checkout and read that release's changelog before merging.
+
 ## Metadata: the single source every other layer derives from
 
 A **collection** is a plain C# class carrying `[CmsCollection]` (`src/Struo.Domain/Metadata/Attributes/
