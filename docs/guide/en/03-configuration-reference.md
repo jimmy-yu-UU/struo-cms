@@ -244,20 +244,72 @@ import, Apollo Sandbox — which should point at a Development or staging instan
 is gated separately and stays Development-only regardless of this setting. Chapter 10 has the measured
 per-environment behavior.
 
+## `RateLimiting:LoginAccount`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `RateLimiting:LoginAccount:Enabled` | bool | `true` | Turns the per-account login throttle on or off. |
+| `RateLimiting:LoginAccount:PermitLimit` | int | `10` | Failed attempts allowed against one account within the window before it is throttled. |
+| `RateLimiting:LoginAccount:WindowSeconds` | int | `900` | Fixed-window length, in seconds. |
+
+This throttle applies only to `POST /api/auth/login`, keyed by the **account being attempted** (the
+email in the request body) rather than by client IP, and is checked ahead of password verification —
+`AuthController.Login` calls it before `IAuthService.AuthenticateAsync`, so a throttled request spends
+no Argon2id CPU at all. Only FAILED attempts count; a successful login clears the account's counter, so
+a legitimate user can never lock themselves out by logging in normally. Every failure counts toward the
+limit regardless of failure kind (wrong password, unknown account, deactivated account) — the same 429
+response is returned whether or not the account exists, which is what keeps this layer from becoming an
+account-enumeration oracle. Backed by `IDistributedCache` (`RateLimiting:LoginAccount`,
+`LoginAccountRateLimitOptions`,
+`src/Struo.Application/Configuration/LoginAccountRateLimitOptions.cs`) — the same store the
+session-ticket store uses, unlike `RateLimiting:Login` below, which is an in-memory, per-pod
+`AddRateLimiter` policy regardless of Redis. That means whether Redis is configured decides this
+throttle's own topology: configured, every replica shares one counter per account instead of each pod
+keeping its own; left empty, it falls back to the same in-process, per-pod cache the ticket store falls
+back to, and loses that property. Even with Redis configured, that shared counter is not a hard cap:
+`IDistributedCache` exposes no atomic read-modify-write, so two failed attempts against the same account
+arriving concurrently can both read the same count and each write back the same incremented value,
+losing one increment — an accepted, deliberate trade-off, not a bug
+(`DistributedCacheLoginAttemptThrottle`'s class doc has the detail). `PermitLimit` (`10`) and
+`WindowSeconds` (`900`) are deliberately generous relative
+to the per-IP limiter's `5`/`60` — this layer targets slow, sustained password-spraying against one
+account rather than burst traffic, and leaves room for a real user mistyping their password a few
+times. Restart required.
+
+This is one of TWO independent login defenses `POST /api/auth/login` carries — see the next section for
+the other. Chapter 12 covers which threat each one actually addresses.
+
 ## `RateLimiting:Login`
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `RateLimiting:Login:Enabled` | bool | `true` | Turns the in-app login rate limiter on or off. |
+| `RateLimiting:Login:Enabled` | bool | `false` | Turns the per-client-IP login rate limiter on or off. |
 | `RateLimiting:Login:PermitLimit` | int | `5` | Attempts allowed per client IP within the window. |
 | `RateLimiting:Login:WindowSeconds` | int | `60` | Fixed-window length, in seconds. |
 
 This limiter applies only to `POST /api/auth/login` (fixed-window, partitioned by client IP); it is not
-a general API rate limiter. `Enabled = true` is secure-by-default for a direct or single-instance
-deployment. Set it to `false` only in multi-pod deployments (e.g. Kubernetes) where per-IP rate
-limiting is instead enforced at the ingress/edge/WAF — that layer sees the real client IP and sits in
-front of every pod, whereas this limiter's state is in-memory and per-pod, so it cannot enforce a true
-global limit across replicas in that topology. Restart required.
+a general API rate limiter. `Enabled = false` is the shipped default, for a reason specific to this
+deployment's usual audience rather than to rate limiters in general: admin-backend users are typically
+an organization's own staff, and staff commonly share one NAT egress IP. Partitioning by client IP then
+collapses that entire office into a single shared bucket, so at the shipped `5`/`60` a handful of staff
+logging in around the same time can trip the limit for everyone — turning the limiter into a
+self-inflicted denial of service rather than a defense, and it does **not** take a misconfigured reverse
+proxy to cause this; it happens even with `UseForwardedHeaders` configured correctly, purely from
+sharing one egress IP. `RateLimiting:LoginAccount` above is the layer that ships enabled instead,
+because a per-account counter cannot suffer this collapse: every account gets its own bucket regardless
+of which IP is attempting it.
+
+Enabling this limiter is the right call for a single-instance, directly-reachable deployment with no
+edge/WAF in front of it, whose users do not share an egress IP — a personal or single-tenant install, or
+a development host. If it is enabled behind any reverse proxy, `UseForwardedHeaders` (with an explicit
+`KnownProxies`/`KnownNetworks` allowlist) must be added first — this application does not register it by
+default — or the limiter measures the proxy's address, not the client's, and every user behind that
+proxy collapses into one bucket regardless of NAT. Raising `PermitLimit` is the mitigation for a
+shared-egress team that still wants this layer active. Multi-pod deployments have a second reason to
+leave it off even where the shared-egress problem doesn't apply: this limiter's state is in-memory and
+per-pod, so it cannot enforce a true global limit across replicas — per-IP rate limiting for that
+topology belongs at the ingress/edge/WAF instead, which sees the real client IP and sits in front of
+every pod. Restart required.
 
 ## `RateLimiting:Password`
 

@@ -179,9 +179,10 @@ run with:
 pnpm e2e:sample
 ```
 
-This needs everything `pnpm e2e` (chapter 15) needs — a running API, a reachable database, the seeded
-bootstrap admin, and the login rate limiter disabled or generously sized for the suite's several logins
-— **plus** the Blog sample opted into `Struo:ContentAssemblies` as above, since every one of these specs
+This needs everything `pnpm e2e` (chapter 15) needs — a running API, a reachable database, and the
+seeded bootstrap admin, with no login-rate-limit override needed for a default checkout (the per-account
+throttle only counts failed logins, and no spec performs one) — **plus** the Blog sample opted into
+`Struo:ContentAssemblies` as above, since every one of these specs
 depends on the `article`/`category`/`tag` collections existing. `frontend/e2e/README.md` documents the
 full prerequisite list and per-spec seed-data notes; nothing here changes them.
 

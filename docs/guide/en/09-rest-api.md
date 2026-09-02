@@ -74,7 +74,7 @@ errors recognizes REST errors by the same string.
 | `BAD_USER_INPUT` | 400 | A `QueryException` — malformed query parameters, an unknown filter field, a failed application-level check (weak password, duplicate/unknown role-permission collection, malformed id, a required-field-missing write — see below), etc. |
 | `VALIDATION` | 400 | ASP.NET Core model-binding/model-state failure (a request-body property that fails `[Required]`/data-annotation validation before the action even runs) — the only code that carries `details`. |
 | `INTERNAL_SERVER_ERROR` | 500 | Any exception `DomainErrorMap` doesn't recognize. The client-facing message is always the masked generic string `"An internal error occurred."`; the real exception is logged server-side, never leaked to the response. |
-| `TOO_MANY_REQUESTS` | 429 | Either of two independent fixed-window rate limiters rejected the request: `POST /api/auth/login` (partitioned by client IP; chapter 3's `RateLimiting:Login` section) or `PUT /api/users/{id}/password` (partitioned by the authenticated caller's user id; chapter 3's `RateLimiting:Password` section). Both write this code directly from the same shared `OnRejected` callback — no exception is thrown, so `DomainErrorMap` is never consulted for this one; the callback picks its message wording ("login attempts" vs. "password change attempts") from whichever policy actually rejected. |
+| `TOO_MANY_REQUESTS` | 429 | One of three independent producers rejected the request, none of them through `DomainErrorMap` (no exception is thrown for any of them): `POST /api/auth/login`'s per-account throttle (keyed by the account in the request body; chapter 3's `RateLimiting:LoginAccount` section), `POST /api/auth/login`'s per-client-IP limiter (chapter 3's `RateLimiting:Login` section), or `PUT /api/users/{id}/password`'s limiter (partitioned by the authenticated caller's user id; chapter 3's `RateLimiting:Password` section). The two client-IP-and-user-id limiters write this code from a shared `OnRejected` callback that picks its message wording ("login attempts" vs. "password change attempts") from whichever policy rejected; the per-account throttle writes it directly from `AuthController.Login` using the identical "login attempts" wording, so the two login-endpoint producers share the same status, code, and message. `Retry-After` is the one thing that differs between them: the per-client-IP limiter's is bounded by `RateLimiting:Login:WindowSeconds` (`60` by default) when that layer is even enabled, while the per-account throttle's is bounded by `RateLimiting:LoginAccount:WindowSeconds` (`900` by default) and so can be far larger — see the live example below. |
 | `PAYLOAD_TOO_LARGE` | 413 | A streamed upload whose actual bytes exceed `Struo:Files:MaxUploadBytes` even though the declared `Content-Length` passed the up-front check (a "lying" or chunked upload). Not exercised live in this chapter — triggering it needs an upload past the configured 25 MB default — but the mapping is real: `DomainErrorMap.StatusFor` → 413. |
 | `INVALID_CURRENT_PASSWORD` | 400 | `PUT /api/users/{id}/password`, self-service branch: the caller supplied a missing or wrong `currentPassword`. Deliberately not `401` — the caller already holds a valid session, and the SPA's global 401 handler clears the session on every `401` it sees, so reusing `UNAUTHORIZED` here would log the caller out on a plain typo. |
 | `NO_LOCAL_PASSWORD` | 400 | Self-service password change attempted on an account provisioned entirely through external OIDC, whose stored hash is the empty string because it never had a local password. |
@@ -121,12 +121,26 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bbogus%5D
 $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"password":"whatever123"}'
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"Email","message":"The Email field is required."}]}}
 
-$ for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code} " -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"wrong"}'; done
-401 401 401 401 401 429
-$ curl -s -i -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@admin.com","password":"wrong"}'
+$ for i in 1 2 3 4 5 6 7 8 9 10 11; do curl -s -o /dev/null -w "%{http_code} " -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"nobody@example.com","password":"wrong"}'; done
+401 401 401 401 401 401 401 401 401 401 429
+$ curl -s -i -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"nobody@example.com","password":"wrong"}'
 HTTP/1.1 429 Too Many Requests
-Retry-After: 60
+Content-Type: application/json; charset=utf-8
+Retry-After: 897
+X-Content-Type-Options: nosniff
 {"success":false,"error":{"code":"TOO_MANY_REQUESTS","message":"Too many login attempts. Please try again later."}}
+```
+
+That is the per-account throttle (`RateLimiting:LoginAccount`, on by default, `PermitLimit` `10` —
+chapter 3), not the per-client-IP limiter: the eleventh failure against `nobody@example.com` is what
+trips it, and its `Retry-After` reflects however much of the `900`-second window remained at that
+moment (`897` here — three seconds had already elapsed). The per-client-IP limiter (`RateLimiting:Login`)
+ships disabled, so nothing stops the same client IP from failing logins against a *different* account
+with no `429` at all — buckets are keyed by account, not by IP:
+
+```
+$ for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code} " -X POST http://localhost:5221/api/auth/login -H "Content-Type: application/json" -d '{"email":"someone-else@example.com","password":"wrong"}'; done
+401 401 401 401 401 401
 ```
 
 (`INTERNAL_SERVER_ERROR` is deliberately not demonstrated with a crafted request — provoking one means
@@ -146,7 +160,7 @@ the masked/logged behavior are read directly from `StruoExceptionHandler`/`Domai
 | `404 Not Found` | `NOT_FOUND`. |
 | `409 Conflict` | `CONFLICT` or `VERSION_CONFLICT`. |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`. |
-| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (the login limiter or the password-change limiter — see above). |
+| `429 Too Many Requests` | `TOO_MANY_REQUESTS` (either login-endpoint defense or the password-change limiter — see above). |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`. |
 
 ```
@@ -292,6 +306,22 @@ $ curl -s -X PUT http://localhost:5221/api/items/file/<id> -H "Content-Type: app
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
 ```
 
+## What a `POST`/`PUT` body may set
+
+`ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`), shared by
+create and update, binds a request body against an allowlist rather than the whole CLR entity type:
+only declared, writable `[CmsField]`s and declared `ManyToOne` relation foreign keys (e.g.
+`categoryId`) bind onto the parent entity. The `translations` sidecar payload and M2M relation keys
+(e.g. `tags`) are excluded from that bind — `ItemDeserializer` strips them out before deserializing the
+parent entity — but they still take effect: `ItemService` reads them from the original request body and
+applies them separately, in the same transaction as the parent row, via
+`ItemWriteSideSync.SyncTranslationsAsync`/`SyncM2MAsync`
+(`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`). Every other top-level key — including `id`,
+`version`, and the soft-delete/audit columns (`deletedAt`, `deletedBy`, `createdAt`, `createdBy`,
+`updatedAt`, `updatedBy`) — is silently dropped, not rejected: the write still succeeds, just without
+that key taking effect. `POST` and `PUT` share this allowlist, so a create request cannot set a
+client-chosen id or seed the optimistic-concurrency version any more than an update request can.
+
 ## Endpoint reference, by controller
 
 Required permission below always means the per-collection RBAC grant checked by `ItemService`/
@@ -337,7 +367,7 @@ The generic CRUD surface over every `[CmsCollection]` — `language`, `permissio
 | `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted` | — | `200`, list + `meta` | none (`[Authorize]`-absent; `Adaptive` still authenticates a cookie or bearer credential if present — see above) | `CanRead` |
 | `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8) | `200`, list + `meta` | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`, `locale`, `deleted` | — | `200` item, or `404` | none (same caveat) | `CanRead` (`deleted=only\|with` additionally needs `CanDelete`) |
-| `POST /api/items/{collection}` | — | JSON object of writable fields | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
+| `POST /api/items/{collection}` | — | JSON object of writable fields (allowlisted — see above) | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` restored item, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
@@ -509,7 +539,7 @@ On this host, seven collections come back: `language`, `permission`, `role`, `us
 
 | Method & path | Auth | Rate limit | Body | Response |
 |---|---|---|---|---|
-| `POST /api/auth/login` | anonymous | 5/60s per client IP (`RateLimiting:Login`, chapter 3) | `{ email, password }` | `200`, `{ id }`, sets the session cookie; or `401` |
+| `POST /api/auth/login` | anonymous | 10 failed/900s per account (`RateLimiting:LoginAccount`, on by default) + 5/60s per client IP (`RateLimiting:Login`, off by default) — chapter 3 | `{ email, password }` | `200`, `{ id }`, sets the session cookie; or `401` |
 | `POST /api/auth/logout` | Cookie or Bearer | — | — | `204`, clears the session cookie |
 | `GET /api/auth/me` | Cookie or Bearer | — | — | `200`, `{ id, email, name, isSuperAdmin, permissions }` (`permissions` is `{}` for a super-admin — every grant is implied) |
 | `GET /api/auth/login/oidc` | anonymous | — | `?returnUrl=` | `302` challenge to the configured OIDC provider, or `404` when `Oidc:Enabled` is `false` |
