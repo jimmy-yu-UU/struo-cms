@@ -115,6 +115,39 @@ exercises the sample) does. This is what makes the sample truly optional and del
 samples/` still breaks a solution-level `dotnet build` (`StruoCMS.slnx` and the test project reference
 above), though — see chapter 16's removal checklist for the full, safe procedure.
 
+## What is replaceable — and what is not
+
+"Database replaceable," everywhere else in this manual, means the SqlSugar **provider** — not the ORM.
+`Database:DbType` selects among five values, mapped 1:1 onto `SqlSugar.DbType` in `DbTypeMapper.Map`
+(`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`): PostgreSQL is the verified runtime target,
+SQLite backs the test suite, and MySQL/SqlServer/Oracle are mapped in code but unverified (see
+"What it is not" above).
+
+The ORM itself is not something a fork's content project swaps out. Every content entity — see
+`samples/Struo.Sample.Blog/Article.cs` — opens with `using SqlSugar;` and carries SqlSugar's own
+attributes directly: `[SugarTable]`, `[SugarColumn]`, `[SugarIndex]`, `[Navigate]`, alongside StruoCMS's
+own `[CmsCollection]`/`[CmsField]`. The CodeFirst DDL rules chapters 4, 5 and 13 document — the `Id`
+override needing `[SugarColumn(IsPrimaryKey = true)]`, `IsJson` needing an explicit `text` column,
+revision/soft-delete columns — are SqlSugar's semantics, not a StruoCMS abstraction over them.
+`IItemRepository` (`src/Struo.Application/Query/IItemRepository.cs`) is an internal seam inside core —
+its sole implementation is `SqlSugarItemRepository` — not an ORM-abstraction layer a fork is meant to
+reimplement in order to swap ORMs; a content entity's SqlSugar attributes stay bound to SqlSugar
+regardless of what implements that interface.
+
+Practical consequence: a SqlSugar major-version upgrade, or a change in what an attribute like `IsJson`
+or `[SugarIndex]` means, lands directly on every fork's entity classes — core does not, and cannot,
+absorb that change on a fork's behalf. When you upgrade core, diff `Directory.Packages.props`'s
+`SqlSugarCore` version line against your fork's previous checkout and read that release's changelog
+before merging.
+
+For the concrete traps this coupling already produces, see chapter 4's
+[Minimal collection](04-defining-a-collection.md#minimal-collection) (the `Id` override and
+`[SugarColumn(IsPrimaryKey = true)]`), chapter 5's [Pitfalls](05-field-types.md#pitfalls) (`IsJson`
+needing an explicit `text` column, `[ColumnShape]`), and chapter 13's
+[Enabling revisions per collection](13-revisions-and-soft-delete.md#enabling-revisions-per-collection)
+and [Soft delete](13-revisions-and-soft-delete.md#soft-delete) sections — this section states the
+coupling; those chapters show its concrete shape.
+
 ## Technology stack
 
 Backend:
