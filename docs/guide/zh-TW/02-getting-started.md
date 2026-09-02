@@ -162,3 +162,5 @@ Scalar 瀏覽工具與原始 OpenAPI 文件，只有在環境不是 `Production`
 - 第 4 章 [定義一個集合](04-defining-a-collection.md)，用你的第一個真實集合讓
   Content 導覽群組出現。
 - 第 16 章 [範例走查](16-sample-walkthrough.md)，改為選用啟用 Blog 示範專案 (以及乾淨地退出它)。
+- 第 15 章 [容器映像](15-deployment-operations-testing.md#容器映像)，改以 Docker image 部署 API 與
+  管理後台 SPA，而不是用 `dotnet run`/`pnpm dev` 執行它們。

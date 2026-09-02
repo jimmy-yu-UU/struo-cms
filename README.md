@@ -28,7 +28,9 @@ deleted once you've used it to learn the patterns.
 
 ## Quick start
 
-Prerequisites: .NET SDK 10.0.x, Node.js 24.x, pnpm 10.x, Docker (with Compose).
+Prerequisites: .NET SDK 10.0.x, Node.js 24.x, pnpm 10.x, Docker (with Compose). To run the API and
+admin SPA as container images instead, see chapter 15's
+[Container images](docs/guide/en/15-deployment-operations-testing.md#container-images) section.
 
 ```bash
 # 1. Start PostgreSQL and Redis
