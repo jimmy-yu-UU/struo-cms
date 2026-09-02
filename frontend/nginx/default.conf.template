@@ -1,0 +1,91 @@
+# nginx config for the StruoCMS admin SPA, rendered by the official nginx
+# image's docker-entrypoint (20-envsubst-on-templates.sh) into
+# /etc/nginx/conf.d/default.conf at container start.
+#
+# (a) The entrypoint only envsubst's variable names that actually exist in
+#     the container's environment (it passes `envsubst "$(env | ...)"`), so
+#     nginx's own runtime variables ($host, $uri, $scheme,
+#     $proxy_add_x_forwarded_for, ...) are left alone -- they are not env
+#     vars. The one known trap: if the deployment environment happens to
+#     define an env var literally named e.g. `host` or `uri`, that name
+#     WOULD get substituted here too. Don't introduce env vars with names
+#     that collide with nginx variables used below.
+# (b) When an `add_header` value is the empty string, nginx does not send
+#     that header at all. HSTS_VALUE defaults to empty, i.e. by default this
+#     image does NOT send Strict-Transport-Security. Only set HSTS_VALUE
+#     (e.g. "max-age=31536000; includeSubDomains") when TLS is terminated
+#     here or by a fronting proxy for every request that can reach this
+#     container.
+# (c) proxy_pass is given without a URI suffix after the upstream, so the
+#     original request path is forwarded unchanged: a request to
+#     /api/foo/bar reaches the backend as /api/foo/bar. The backend's
+#     controllers are routed at `api/...`, so no rewrite is needed. The one
+#     exception is the health endpoints (see the /api/health/ location
+#     below): the backend deliberately registers those bare, at
+#     `/health/live` and `/health/ready`, outside the `api/` prefix used by
+#     every actual controller -- they're infra probes, not API surface --
+#     so that one location strips the `/api` prefix on the way through.
+# (d) proxy_pass takes $upstream (an nginx variable) rather than the
+#     envsubst'd literal directly. With a literal target nginx resolves the
+#     hostname once at config load and refuses to start at all if it isn't
+#     resolvable yet -- fatal for this image if the admin container starts
+#     before, or without, its `api` container. Routing through a variable
+#     defers DNS lookup to request time via the `resolver` directive, so
+#     nginx starts regardless and a request to /api/... 502s (not the
+#     process refusing to boot) until the upstream is reachable. 127.0.0.11
+#     is Docker's embedded DNS server, available on any user-defined bridge
+#     network; it also resolves the container's own name.
+resolver 127.0.0.11 valid=10s;
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+
+    # Backend MaxUploadBytes is 25 MiB (26214400); keep some headroom so a
+    # request that is actually too large gets the backend's JSON error
+    # envelope (413) rather than nginx's own HTML error page.
+    client_max_body_size 32m;
+
+    # Backend health checks live at /health/live and /health/ready, not
+    # under /api -- see comment (c) above. This location matches before the
+    # general /api/ one below and strips the /api prefix. It uses an
+    # explicit rewrite rather than a proxy_pass URI part: once proxy_pass's
+    # target is a variable (needed for (d) above), nginx stops doing its
+    # usual location-prefix-for-URI substitution and instead sends the
+    # rewrite target verbatim -- so the strip has to happen via `rewrite`
+    # before proxy_pass, not by appending a path to $upstream. `set` has to
+    # come before `rewrite ... break;`, not after: `break` stops the rest of
+    # ngx_http_rewrite_module's directives (including a later `set`) from
+    # running in this location, not just the rewrite chain itself.
+    location /api/health/ {
+        set $upstream ${API_UPSTREAM};
+        rewrite ^/api/health/(.*)$ /health/$1 break;
+        proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location /api/ {
+        set $upstream ${API_UPSTREAM};
+        proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
