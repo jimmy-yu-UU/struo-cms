@@ -1,5 +1,4 @@
 // src/Struo.Infrastructure/Query/RelationFilterResolver.cs
-using System.Reflection;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
@@ -149,10 +148,5 @@ public sealed class RelationFilterResolver(
     }
 
     private static IReadOnlyList<object> ReadIds(IReadOnlyList<object> rows, string property) =>
-        rows.Select(r => ReadProp(r, property)).Where(v => v is not null).Distinct().ToList()!;
-
-    private static object? ReadProp(object entity, string property) =>
-        entity.GetType().GetProperty(property,
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)?.GetValue(entity);
-
+        rows.Select(r => PropertyAccessorCache.Read(r, property)).Where(v => v is not null).Distinct().ToList()!;
 }

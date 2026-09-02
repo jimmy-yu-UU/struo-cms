@@ -18,7 +18,7 @@ namespace Struo.Application.Query;
 /// a stable spelling, so that is negligible and avoids a bespoke tuple comparer (YAGNI).
 /// </para>
 /// </summary>
-internal static class PropertyAccessorCache
+public static class PropertyAccessorCache
 {
     private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo?> Cache = new();
 
