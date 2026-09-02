@@ -1,8 +1,8 @@
 namespace Struo.Application.Security;
 
-/// <summary>Scoped holder for the current request's resolved permissions. Populated once per
-/// request by the resolution middleware; read by <see cref="RbacPermissionService"/> and by
-/// controllers that need an admin check.</summary>
+/// <summary>Scoped holder for the current request's resolved permissions. Populated through
+/// <see cref="ICurrentPermissionsWriter"/> once per request by the resolution middleware; read by
+/// <see cref="RbacPermissionService"/> and by controllers that need an admin check.</summary>
 public interface ICurrentPermissions
 {
     EffectivePermissions Current { get; }

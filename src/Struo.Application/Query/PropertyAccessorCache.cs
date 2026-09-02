@@ -17,6 +17,11 @@ namespace Struo.Application.Query;
 /// both resolve to the same accessor — never a wrong result, at worst a spare entry. Call sites pass
 /// a stable spelling, so that is negligible and avoids a bespoke tuple comparer (YAGNI).
 /// </para>
+/// <para>
+/// The cache is process-wide and unbounded: every distinct <c>(type, name)</c> key ever requested stays
+/// cached for the process's lifetime, so keys must come from metadata (entity descriptors, relation
+/// metadata), never from caller-supplied strings, which could grow the cache without bound.
+/// </para>
 /// </summary>
 public static class PropertyAccessorCache
 {
