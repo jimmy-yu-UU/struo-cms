@@ -71,7 +71,7 @@ server {
     # The SPA's JS/CSS/JSON/SVG payloads compress well; images and fonts
     # under /assets/ are already compressed formats and are left out.
     gzip on;
-    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+    gzip_types text/plain text/css text/javascript application/javascript application/json image/svg+xml;
     gzip_min_length 1024;
     gzip_vary on;
 
@@ -120,7 +120,7 @@ server {
     # immutably for a year is safe. Same add_header inheritance caveat as
     # /index.html above: the four security headers are repeated here too.
     location /assets/ {
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;

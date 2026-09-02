@@ -121,8 +121,8 @@ ORM 本身則不是 fork 的 content project 可以抽換的東西。每一個 c
 自身的 attribute:`[SugarTable]`、`[SugarColumn]`、`[SugarIndex]`、`[Navigate]`，與 StruoCMS
 自己的 `[CmsCollection]`/`[CmsField]` 並列。第 4、5 章記載的 CodeFirst DDL 規則——`Id`
 override 需要 `[SugarColumn(IsPrimaryKey = true)]`、`IsJson` 需要明確的 `text` 欄位、`[ColumnShape]`
-——都是 SqlSugar 自身的語意，並非 StruoCMS 在其上包了一層抽象;第 13 章的軟刪除底線也是同一種直接
-綁定 SqlSugar 的耦合，只是以註冊在 client 上的查詢過濾器呈現，而非 DDL attribute (詳見下方)。
+——都是 SqlSugar 自身的語意，並非 StruoCMS 在其上包了一層抽象;第 13 章的軟刪除底線是同一個直接
+依賴，只是換了形式，以註冊在 client 上的查詢過濾器呈現，而非 DDL attribute (詳見下方)。
 `IItemRepository`
 (`src/Struo.Application/Query/IItemRepository.cs`) 是 core 內部的 seam——它唯一的實作是
 `SqlSugarItemRepository`——不是為了讓 fork 換 ORM 而設計的抽象層;不論由誰實作這個介面，content

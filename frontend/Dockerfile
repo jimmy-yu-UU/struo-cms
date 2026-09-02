@@ -25,6 +25,17 @@ RUN pnpm build
 # backend. See nginx/default.conf.template for the proxy and header
 # behavior; API_UPSTREAM, HSTS_VALUE and NGINX_RESOLVER are consumed by
 # nginx's own envsubst-on-templates entrypoint at container start.
+#
+# Two deliberate asymmetries with the API image, neither a behaviour change:
+# - No USER directive: the stock nginx:alpine image's master process needs to
+#   run as root to bind the privileged port 80 (its worker processes still
+#   drop to the unprivileged `nginx` user on their own). Switching to
+#   nginxinc/nginx-unprivileged would drop that root requirement but also
+#   changes the exposed port away from 80, which this image's EXPOSE/runtime
+#   contract does not do.
+# - No HEALTHCHECK: unlike the API image, static nginx here has no downstream
+#   dependency to probe (no database, no cache) -- an orchestrator supervising
+#   this container should probe `/` directly instead.
 FROM nginx:alpine AS runtime
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
