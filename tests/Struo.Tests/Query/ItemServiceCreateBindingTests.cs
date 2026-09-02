@@ -68,7 +68,7 @@ public sealed class ItemServiceCreateBindingTests : IDisposable
     }
 
     private readonly SqliteTestDatabase _file = new();
-    private readonly IItemRepository _repo;
+    private readonly SqlSugarItemRepository _repo;
     private readonly ItemService _svc;
 
     public ItemServiceCreateBindingTests()
