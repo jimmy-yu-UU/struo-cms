@@ -9,20 +9,19 @@ export default defineConfig({
   plugins: [vue(), tailwindcss()],
   // TipTap + ProseMirror is the SPA's largest dependency and only the richText field needs it.
   // A named group separates that vendor code from RichTextField's own code, so the vendor chunk
-  // can cache across app deploys and stays under the 500 kB warning on its own.
-  // includeDependenciesRecursively is turned off because it defaults to true, and TipTap's
-  // dependency closure includes Vue itself (via @tiptap/vue-3) — left at the default, Rolldown
-  // pulls Vue into this group too, and every page (including login) ends up preloading TipTap.
+  // can cache across app deploys.
+  // Rolldown captures a group's whole dependency closure, and TipTap shares code with the app's
+  // own eager UI (Vue itself, plus whatever else TipTap's BubbleMenu happens to pull in) — so the
+  // higher-priority `vendor` group grabs every node_modules module already tagged `$initial`
+  // (statically reachable from the entry) first; whatever's left for `tiptap` to capture can only
+  // be reachable through the lazy richText path, so no eager chunk can end up depending on it.
   build: {
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
-            {
-              name: 'tiptap',
-              test: /node_modules[\\/](@tiptap|prosemirror-)/,
-              includeDependenciesRecursively: false,
-            },
+            { name: 'vendor', test: /node_modules/, tags: ['$initial'], priority: 20 },
+            { name: 'tiptap', test: /node_modules[\\/](@tiptap|prosemirror-)/, priority: 10 },
           ],
         },
       },
