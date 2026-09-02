@@ -17,14 +17,10 @@
 #     here or by a fronting proxy for every request that can reach this
 #     container.
 # (c) proxy_pass is given without a URI suffix after the upstream, so the
-#     original request path is forwarded unchanged: a request to
-#     /api/foo/bar reaches the backend as /api/foo/bar. The backend's
-#     controllers are routed at `api/...`, so no rewrite is needed. The one
-#     exception is the health endpoints (see the /api/health/ location
-#     below): the backend deliberately registers those bare, at
-#     `/health/live` and `/health/ready`, outside the `api/` prefix used by
-#     every actual controller -- they're infra probes, not API surface --
-#     so that one location strips the `/api` prefix on the way through.
+#     original request path is forwarded unchanged: a request to /api/foo/bar
+#     reaches the backend as /api/foo/bar. The backend's controllers are
+#     routed at `api/...`, so no rewrite is needed -- the proxy's contract is
+#     a plain /api/* pass-through, nothing more.
 # (d) proxy_pass takes $upstream (an nginx variable) rather than the
 #     envsubst'd literal directly. With a literal target nginx resolves the
 #     hostname once at config load and refuses to start at all if it isn't
@@ -33,9 +29,13 @@
 #     defers DNS lookup to request time via the `resolver` directive, so
 #     nginx starts regardless and a request to /api/... 502s (not the
 #     process refusing to boot) until the upstream is reachable. 127.0.0.11
-#     is Docker's embedded DNS server, available on any user-defined bridge
-#     network; it also resolves the container's own name.
-resolver 127.0.0.11 valid=10s;
+#     is Docker's embedded DNS server, the default for any Docker
+#     user-defined bridge network; it also resolves the container's own
+#     name. Non-Docker deployments (e.g. Kubernetes) don't have that
+#     resolver available, so NGINX_RESOLVER is configurable -- point it at
+#     the cluster's DNS service (e.g. Kubernetes' `kube-dns.kube-system.svc.
+#     cluster.local` or the node-local resolver address) there.
+resolver ${NGINX_RESOLVER} valid=10s;
 
 server {
     listen 80;
@@ -53,28 +53,6 @@ server {
     # envelope (413) rather than nginx's own HTML error page.
     client_max_body_size 32m;
 
-    # Backend health checks live at /health/live and /health/ready, not
-    # under /api -- see comment (c) above. This location matches before the
-    # general /api/ one below and strips the /api prefix. It uses an
-    # explicit rewrite rather than a proxy_pass URI part: once proxy_pass's
-    # target is a variable (needed for (d) above), nginx stops doing its
-    # usual location-prefix-for-URI substitution and instead sends the
-    # rewrite target verbatim -- so the strip has to happen via `rewrite`
-    # before proxy_pass, not by appending a path to $upstream. `set` has to
-    # come before `rewrite ... break;`, not after: `break` stops the rest of
-    # ngx_http_rewrite_module's directives (including a later `set`) from
-    # running in this location, not just the rewrite chain itself.
-    location /api/health/ {
-        set $upstream ${API_UPSTREAM};
-        rewrite ^/api/health/(.*)$ /health/$1 break;
-        proxy_pass $upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-
     location /api/ {
         set $upstream ${API_UPSTREAM};
         proxy_pass $upstream;
@@ -83,6 +61,11 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
+        # The API already sends its own X-Content-Type-Options: nosniff.
+        # Hide it here so the server-level add_header above is the only
+        # copy left on the response -- without this, proxied responses
+        # would carry the header twice.
+        proxy_hide_header X-Content-Type-Options;
     }
 
     location / {
