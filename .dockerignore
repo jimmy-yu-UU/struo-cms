@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+frontend/
+docs/
+.git/
+.github/
+*.log
+App_Data/
+TestResults/
+.sonarqube/
+.scannerwork/
+**/appsettings.Development.json
