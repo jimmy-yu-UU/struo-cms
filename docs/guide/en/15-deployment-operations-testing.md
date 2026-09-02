@@ -260,26 +260,28 @@ deployment.
 ASP.NET Core's DataProtection key ring — what signs and encrypts the auth cookie and antiforgery tokens
 — is written inside the container, at `/home/app/.aspnet/DataProtection-Keys`. Nothing in this image
 persists or shares that directory: it is not mounted as a volume, and the application logs a warning
-about it at startup ("No XML encryptor configured"). That log message is also a warning about the key
-ring's own format: without an encryptor configured, DataProtection stores the keys unencrypted at rest.
-A directory mounted for the key ring therefore holds plaintext key material and must be protected like
-any other secret — filesystem permissions, backup encryption, access logging — not treated as ordinary
-application state. Two consequences follow from the container not persisting it at all: replacing the container (a redeploy, a restart after an
-image update) invalidates every existing auth cookie and antiforgery token, forcing every user to log
-back in; and running more than one replica gives each one its own, unshared key ring, which breaks
-cookie validation and antiforgery for any request a load balancer routes to a different replica than
-the one that issued it. For a single instance, mount `/home/app/.aspnet/DataProtection-Keys` as a
-volume so keys survive a container replacement. For more than one replica, configure a shared
-DataProtection key store instead (a shared filesystem, Redis, or a cloud provider's key-ring service) —
-this repository does not configure one itself; treat this as an honest limitation of the image, not a
-feature.
+about it at startup ("Storing keys in a directory '/home/app/.aspnet/DataProtection-Keys' that may not
+be persisted outside of the container"). A second, separate warning covers the key ring's own storage
+format: "No XML encryptor configured. Key {…} may be persisted to storage in unencrypted form." Without
+an encryptor configured, DataProtection stores the keys unencrypted at rest, so a directory mounted for
+the key ring holds plaintext key material and must be protected like any other secret — filesystem
+permissions, backup encryption, access logging — not treated as ordinary application state. Two
+consequences follow from the container not persisting the directory at all: replacing the container (a
+redeploy, a restart after an image update) invalidates every existing auth cookie and antiforgery
+token, forcing every user to log back in; and running more than one replica gives each one its own,
+unshared key ring, which breaks cookie validation and antiforgery for any request a load balancer
+routes to a different replica than the one that issued it. For a single instance, mount
+`/home/app/.aspnet/DataProtection-Keys` as a volume so keys survive a container replacement. For more
+than one replica, configure a shared DataProtection key store instead (a shared filesystem, Redis, or a
+cloud provider's key-ring service) — this repository does not configure one itself; treat this as an
+honest limitation of the image, not a feature.
 
 ### The admin SPA image
 
 - Listens on port `80` (`EXPOSE 80`) and serves the Vite production build through nginx.
-- The image build honours a committed `frontend/.env.production` (`frontend/.env.example` advertises
-  the file): set `VITE_API_BASE_URL` there for a cross-origin deployment, or leave it unset to keep the
-  same-origin `/api` proxy this image provides.
+- The image build honours a committed `frontend/.env.production` (`frontend/.env.example`
+  advertises the `VITE_API_BASE_URL` variable): set it there for a cross-origin deployment, or leave it
+  unset to keep the same-origin `/api` proxy this image provides.
 - `API_UPSTREAM` (default `http://api:8080`) is the backend to reverse-proxy `/api/*` to. It must be
   `scheme://host:port` with **no path and no trailing slash**: `proxy_pass` is given as an nginx
   variable rather than a literal (so the container can start even before the API is resolvable), and

@@ -251,23 +251,26 @@ cookie 送回去。請在容器前面終結 TLS，或者只在本機、純 HTTP 
 ASP.NET Core 的 DataProtection 金鑰環(key ring)——負責簽署與加密驗證 cookie 與 antiforgery
 token——會被寫在容器內部的 `/home/app/.aspnet/DataProtection-Keys`。這個 image 中沒有任何東西會
 持久化或共用這個目錄：它沒有被掛載成 volume，應用程式也會在啟動時針對這件事記錄一則警告
-(「No XML encryptor configured」)。這則記錄同時也是在警告金鑰環本身的儲存格式：在沒有設定
-encryptor 的情況下，DataProtection 會以未加密的明文形式將金鑰儲存在磁碟上。因此，任何為金鑰環
-掛載的目錄裡存放的都是明文金鑰材料，必須比照其他機密來保護它——檔案系統權限、備份加密、存取
-記錄——而不是當成一般的應用程式狀態來對待。容器不持久化這個目錄，會直接帶來兩個後果：替換容器(一次重新部署、一次因映像更新而重啟)會讓每一個既有的驗證 cookie 與 antiforgery
-token 全部失效，強迫每一位使用者重新登入；而執行一個以上的 replica，會讓每個 replica 各自擁有一份
-互不相通的金鑰環，導致負載平衡器把請求路由到與核發者不同的 replica 時，cookie 驗證與 antiforgery
-雙雙失敗。若只有單一實例，請把 `/home/app/.aspnet/DataProtection-Keys` 掛載成一個 volume，讓金鑰能
-在容器被替換後存活。若有一個以上的 replica，請改為設定一個共用的 DataProtection 金鑰存放區(一個共用
-檔案系統、Redis，或雲端供應商自己的金鑰環服務)——這個儲存庫本身並未設定任何一種;請把這當成這個
-image 一個誠實的限制，而不是一項功能。
+(「Storing keys in a directory '/home/app/.aspnet/DataProtection-Keys' that may not be
+persisted outside of the container」)。另外還有第二則、獨立的警告，涵蓋的是金鑰環本身的儲存
+格式:「No XML encryptor configured. Key {…} may be persisted to storage in unencrypted
+form.」在沒有設定 encryptor 的情況下，DataProtection 會以未加密的明文形式將金鑰儲存在磁碟上，
+因此任何為金鑰環掛載的目錄裡存放的都是明文金鑰材料，必須比照其他機密來保護它——檔案系統權限、
+備份加密、存取記錄——而不是當成一般的應用程式狀態來對待。容器完全不持久化這個目錄，會直接帶來
+兩個後果：替換容器(一次重新部署、一次因映像更新而重啟)會讓每一個既有的驗證 cookie 與
+antiforgery token 全部失效，強迫每一位使用者重新登入；而執行一個以上的 replica，會讓每個
+replica 各自擁有一份互不相通的金鑰環，導致負載平衡器把請求路由到與核發者不同的 replica 時，
+cookie 驗證與 antiforgery 雙雙失敗。若只有單一實例，請把 `/home/app/.aspnet/DataProtection-Keys`
+掛載成一個 volume，讓金鑰能在容器被替換後存活。若有一個以上的 replica，請改為設定一個共用的
+DataProtection 金鑰存放區(一個共用檔案系統、Redis，或雲端供應商自己的金鑰環服務)——這個儲存庫
+本身並未設定任何一種;請把這當成這個 image 一個誠實的限制，而不是一項功能。
 
 ### 管理後台 SPA image
 
 - 監聽連接埠 `80`(`EXPOSE 80`)，透過 nginx 提供 Vite 正式環境建置的產物。
-- 這個 image 的建置會採納一份已提交的 `frontend/.env.production`(`frontend/.env.example` 有
-  廣告這個檔案)：若是跨來源(cross-origin)部署，請在裡面設定 `VITE_API_BASE_URL`；若要沿用這個
-  image 提供的同來源(same-origin)`/api` 代理，就讓它保持未設定。
+- 這個 image 的建置會採納一份已提交的 `frontend/.env.production`(`frontend/.env.example`
+  有廣告 `VITE_API_BASE_URL` 這個變數)：若是跨來源(cross-origin)部署，請在裡面設定它；若要沿用
+  這個 image 提供的同來源(same-origin)`/api` 代理，就讓它保持未設定。
 - `API_UPSTREAM`(預設 `http://api:8080`)是要把 `/api/*` 反向代理過去的後端。它必須是
   `scheme://host:port`，**沒有路徑、也沒有結尾斜線**：`proxy_pass` 使用的是一個 nginx 變數而不是
   字面值(這樣容器才能在 API 尚未可解析時也照樣啟動)，而在使用變數目標時，`API_UPSTREAM` 攜帶的任何
