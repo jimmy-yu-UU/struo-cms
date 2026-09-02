@@ -238,9 +238,10 @@ generic message — the real exception is logged server-side, never leaked to th
   generic host). `FileStorageOptionsValidator`
   (`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) is an
   example of wrapping a plain `Validate()` method into that pipeline.
-- **RBAC**: enforced inside `ItemService` (`src/Struo.Application/Query/ItemService.cs`) via
-  `ICurrentPermissions.CanRead`/`CanWrite`/`CanDelete`, throwing `PermissionDeniedException` on denial
-  — not by a per-controller-action attribute for generic collection CRUD. `[CmsCollection(AdminOnly =
+- **RBAC**: enforced inside `ItemService` (`src/Struo.Application/Query/ItemService.cs`), which calls
+  `CanRead`/`CanWrite`/`CanDelete` on the injected `IPermissionService` (`RbacPermissionService`, which
+  reads `ICurrentPermissions.Current`), throwing `PermissionDeniedException` on denial — not by a
+  per-controller-action attribute for generic collection CRUD. `[CmsCollection(AdminOnly =
   true)]` collections additionally require a super-admin for any write, checked the same way. Reads
   that traverse into a related collection are checked there too, not only on the root: besides
   `QueryValidator.DenyUnreadableHops` above, `DeepExpansionCoordinator.PruneUnreadable`

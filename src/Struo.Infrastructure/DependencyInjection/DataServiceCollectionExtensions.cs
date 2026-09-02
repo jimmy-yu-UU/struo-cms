@@ -24,7 +24,12 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
         services.AddScoped<IPermissionService, RbacPermissionService>();
-        services.AddScoped<ICurrentPermissions, CurrentPermissions>();
+        // Expose reader and writer seams for the SAME scoped CurrentPermissions instance (same
+        // request scope, same object) — if they resolved to different instances, the middleware
+        // would write into one while controllers read the other and every request would see DenyAll.
+        services.AddScoped<CurrentPermissions>();
+        services.AddScoped<ICurrentPermissions>(sp => sp.GetRequiredService<CurrentPermissions>());
+        services.AddScoped<ICurrentPermissionsWriter>(sp => sp.GetRequiredService<CurrentPermissions>());
         services.AddScoped<OrderByExpressionBuilder>();
         services.AddScoped<IItemRepository, SqlSugarItemRepository>();
         services.AddScoped<IRelationExpander, RelationExpander>();
