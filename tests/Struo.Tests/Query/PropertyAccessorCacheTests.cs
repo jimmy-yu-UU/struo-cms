@@ -1,4 +1,3 @@
-using System.Reflection;
 using AwesomeAssertions;
 using Struo.Application.Query;
 using Xunit;
@@ -44,5 +43,11 @@ public class PropertyAccessorCacheTests
     {
         var id = Guid.NewGuid();
         PropertyAccessorCache.Read(new Sample { AuthorId = id }, "authorId").Should().Be(id);
+    }
+
+    [Fact]
+    public void Read_returns_null_for_an_unset_string_property()
+    {
+        PropertyAccessorCache.Read(new Sample(), "title").Should().BeNull();
     }
 }

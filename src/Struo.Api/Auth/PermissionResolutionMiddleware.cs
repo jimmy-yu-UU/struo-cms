@@ -5,7 +5,7 @@ using Struo.Application.Security;
 namespace Struo.Api.Auth;
 
 /// <summary>Resolves the caller's effective permissions ONCE per request (after authentication)
-/// into the scoped <see cref="ICurrentPermissionsWriter"/> snapshot. One role/permission resolution per
+/// into the scoped <see cref="ICurrentPermissionsWriter"/> holder. One role/permission resolution per
 /// request — how many DB round trips that resolution costs is an implementation detail of
 /// <see cref="IRolePermissionStore"/>, not of this middleware.</summary>
 public sealed class PermissionResolutionMiddleware(RequestDelegate next)

@@ -25,6 +25,7 @@ public class CurrentPermissionsWiringTests(ApiFactory factory)
     {
         typeof(ICurrentPermissions).GetMethod("Set").Should().BeNull();
         typeof(ICurrentPermissionsWriter).GetMethod("Set").Should().NotBeNull();
+        typeof(ICurrentPermissionsWriter).IsAssignableFrom(typeof(ICurrentPermissions)).Should().BeFalse();
     }
 
     [Fact]
