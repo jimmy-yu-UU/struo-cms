@@ -39,6 +39,27 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         foreach (var jsonField in meta.Fields.Where(f => f.Interface == FieldInterface.Json))
             stripNames.Add(jsonField.Name);
 
+        // Allowlist everything else: only declared, writable [CmsField]s and declared ManyToOne
+        // foreign keys may bind directly into the CLR entity. Without this, deserializing straight
+        // into the whole entity type lets a client set anything the CLR type exposes but metadata
+        // never declared — the primary key, the optimistic-concurrency Version, the soft-delete
+        // markers, or a fork's own undeclared property — none of which carry [CmsField] and so none
+        // of which are covered by the IsSystem/ReadOnly strip loop below. This mirrors the allowlist
+        // ItemService.UpdateCoreAsync already applies on update (fields + M2O FKs actually present in
+        // the body); unknown keys are silently ignored here too, not rejected with a 400.
+        var allowedKeys = meta.Fields.Where(f => !f.IsSystem && !f.ReadOnly)
+            .Select(f => f.Name)
+            .Concat(meta.Relations
+                .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
+                .Select(r => r.ForeignKey!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (body.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in body.EnumerateObject())
+                if (!allowedKeys.Contains(prop.Name))
+                    stripNames.Add(prop.Name);
+        }
+
         object entity;
         if (stripNames.Count > 0)
         {

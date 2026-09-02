@@ -118,9 +118,11 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   on any backend; `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
-  on REST: the REST write path does not filter on `Hidden` at all (`ItemDeserializer.cs`/
-  `ItemService.UpdateCoreAsync` strip only `IsSystem`/`ReadOnly` fields) — a client that already knows a
-  hidden field's name can still set it via a normal REST create/update. GraphQL is stricter here:
+  on REST: `Hidden` plays no part in either write-path allowlist. `ItemDeserializer.cs`'s create/update
+  allowlist admits every declared field that isn't `IsSystem`/`ReadOnly`, `Hidden` or not, and
+  `ItemService.UpdateCoreAsync`'s merge-overlay applies the same `IsSystem`/`ReadOnly` check alone — so
+  a client that already knows a hidden field's name can still set it via a normal REST create/update.
+  GraphQL is stricter here:
   `CollectionSchemaBuilder` (`src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs`) excludes
   `Hidden`/`ReadOnly`/`IsSystem` fields from every create/update input type, so a hidden field never
   appears as a GraphQL mutation argument in the first place. Do not rely on `Hidden` alone as a write

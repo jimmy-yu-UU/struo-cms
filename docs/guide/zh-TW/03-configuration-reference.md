@@ -222,19 +222,63 @@
 應該指向 Development 或 staging 執行個體。Nitro 瀏覽器 IDE 由另一道閘門把關，不受這個設定影響，
 一律僅限 Development。各環境的實測行為見第 10 章。
 
+## `RateLimiting:LoginAccount`
+
+| 鍵 | 型別 | 預設值 | 作用 |
+|---|---|---|---|
+| `RateLimiting:LoginAccount:Enabled` | bool | `true` | 開啟或關閉逐帳號的登入節流器。 |
+| `RateLimiting:LoginAccount:PermitLimit` | int | `10` | 在視窗期間內，單一帳號被允許的失敗嘗試次數，超過即被節流。 |
+| `RateLimiting:LoginAccount:WindowSeconds` | int | `900` | 固定視窗的長度，單位為秒。 |
+
+此節流器只套用在 `POST /api/auth/login` 上，依**被嘗試的帳號**(請求本文中的 email)分區，而不是依
+client IP，且會在密碼驗證**之前**就先檢查——`AuthController.Login` 會在呼叫
+`IAuthService.AuthenticateAsync` 之前先呼叫它，所以一次被節流的請求完全不會耗用任何 Argon2id CPU。
+只有*失敗*的嘗試才會計數;一次成功登入會清除該帳號的計數器，所以一個正常登入的合法使用者永遠不會
+把自己鎖在外面。無論失敗的原因為何(密碼錯誤、帳號不存在、帳號已停用)，每一次失敗都會計入額度，
+而且無論帳號是否存在都會回傳相同的 `429`——這正是讓這一層不會變成帳號列舉 (enumeration) 探測器的
+原因。此節流器背後是 `IDistributedCache`(`RateLimiting:LoginAccount`，`LoginAccountRateLimitOptions`，
+`src/Struo.Application/Configuration/LoginAccountRateLimitOptions.cs`)——與 session ticket 存放區
+共用同一個儲存體，這一點不同於下方的 `RateLimiting:Login`：無論 Redis 是否設定，那個限流器一律是
+行程內、逐 pod 的 `AddRateLimiter` 政策。也就是說，是否設定 Redis 決定了這個節流器自己的拓樸：
+設定了 `Redis:ConnectionString`，每一個 replica 就會共用同一個帳號的同一份計數器，而不是各自擁有
+一份;留空時，則會退回與 ticket 存放區相同的行程內、逐 pod 快取，並失去這個特性。即使設定了 Redis，
+這份共用計數器也不是一個保證的上限:`IDistributedCache` 沒有原子性的讀取-寫回操作，因此針對同一個
+帳號同時抵達的兩次失敗嘗試，可能都讀到相同的計數值，各自寫回同一個遞增後的值，導致漏掉一次遞增
+——這是刻意接受的取捨，不是一個錯誤(細節見 `DistributedCacheLoginAttemptThrottle` 的 class doc)。
+`PermitLimit`(`10`)與 `WindowSeconds`(`900`)刻意設定得比逐 IP 限流器的 `5`/`60` 寬鬆許多——這一層
+鎖定的是針對單一帳號的
+緩慢、持續性密碼噴灑攻擊，而不是短時間的大量流量，也讓一個真實使用者打錯幾次密碼還有餘裕。需要
+重新啟動。
+
+`POST /api/auth/login` 一共有**兩道**互相獨立的登入防線——另一道見下一節。第 12 章說明各自實際
+對應到哪一種威脅。
+
 ## `RateLimiting:Login`
 
 | 鍵 | 型別 | 預設值 | 作用 |
 |---|---|---|---|
-| `RateLimiting:Login:Enabled` | bool | `true` | 開啟或關閉應用程式內的登入速率限制器。 |
+| `RateLimiting:Login:Enabled` | bool | `false` | 開啟或關閉逐 client IP 的登入速率限制器。 |
 | `RateLimiting:Login:PermitLimit` | int | `5` | 在視窗期間內，每個 client IP 允許的嘗試次數。 |
 | `RateLimiting:Login:WindowSeconds` | int | `60` | 固定視窗的長度，單位為秒。 |
 
 此限流器只套用在 `POST /api/auth/login` 上 (固定視窗，依 client IP 分區)；它不是通用的 API 速率
-限制器。對於直接部署或單一實例部署而言，`Enabled = true` 屬於安全的預設值。只有在多 pod 部署
-(例如 Kubernetes) 中，且已在 ingress/edge/WAF 那一層改用逐 IP 速率限制時，才把它設為 `false`——那
-一層能看到真實的 client IP，且位於每個 pod 之前，而這個限流器的狀態是記憶體內、逐 pod 的，因此在
-那種拓樸下無法在多個 replica 間強制一個真正的全域限制。需要重新啟動。
+限制器。`Enabled = false` 是出貨預設值，原因是這個部署形態常見使用者的特性，而不是速率限制器本身
+的通則:admin 後台的使用者通常是同一個組織自己的員工，而員工之間常常共用同一個 NAT 對外 IP。依
+client IP 分區，就會把整個辦公室收斂成單一共用桶，於是在出貨預設的 `5`/`60` 之下，只要幾位員工在
+差不多時間登入，就會共同觸發限制——讓這個限流器變成一次自我加害型的阻斷服務，而不是防禦，而且
+**不需要**反向代理設定錯誤就會發生;即使 `UseForwardedHeaders` 設定完全正確，光是共用一個對外 IP
+就會如此。上方的 `RateLimiting:LoginAccount` 才是出貨即開啟的那一層，因為逐帳號的計數器不會有這種
+收斂問題:無論是哪一個 IP 在嘗試，每個帳號都有自己獨立的額度。
+
+開啟這個限流器，只有在單一實例、可直接連線、前面沒有 edge/WAF、且使用者彼此不共用對外 IP 的部署
+中才是正確的選擇——例如個人或單租戶安裝，或是一個開發用的 host。若要在任何反向代理背後開啟它，
+必須先加上 `UseForwardedHeaders`(並明確設定 `KnownProxies`/`KnownNetworks` 白名單)——這個應用程式
+預設不會註冊它——否則這個限流器量到的會是代理伺服器的位址，而不是真正的客戶端，屆時無論是否共用
+NAT，該代理背後的每一位使用者都會收斂進同一個桶。若一個共用對外 IP 的團隊仍想啟用這一層，該做的
+是調高 `PermitLimit`。多 pod 部署還有第二個理由，即使不存在共用對外 IP 的問題也該讓它保持關閉:
+這個限流器的狀態是記憶體內、逐 pod 的，因此無法在多個 replica 間強制一個真正的全域限制——那種拓樸
+下的逐 IP 速率限制應該交給 ingress/edge/WAF，那一層看得到真實的 client IP，且位於每個 pod 之前。
+需要重新啟動。
 
 ## `RateLimiting:Password`
 

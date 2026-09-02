@@ -32,6 +32,10 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
         var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                // RateLimiting:Login now defaults to disabled (per-account throttling is the
+                // default-on layer instead — see LoginAccountThrottleTests); set it explicitly here
+                // so this test still exercises the per-client-IP mechanism itself.
+                ["RateLimiting:Login:Enabled"] = "true",
                 ["RateLimiting:Login:PermitLimit"] = "2",
                 ["RateLimiting:Login:WindowSeconds"] = "60",
             })));
@@ -63,6 +67,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
         var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["RateLimiting:Login:Enabled"] = "true",
                 ["RateLimiting:Login:PermitLimit"] = "1",
                 ["RateLimiting:Login:WindowSeconds"] = "60",
             })));
@@ -83,6 +88,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
         var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["RateLimiting:Login:Enabled"] = "true",
                 ["RateLimiting:Login:PermitLimit"] = "1",
                 ["RateLimiting:Login:WindowSeconds"] = "60",
             })));

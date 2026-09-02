@@ -118,23 +118,48 @@ cookie 的請求同樣豁免。這正是為什麼上面那個 bearer `PUT` 不�
 
 ## 登入速率限制
 
-`POST /api/auth/login` 由一個應用程式內建的固定視窗限制器守護，依用戶端 IP 分區——
-`RateLimiting:Login`(`LoginRateLimitOptions`，
-`src/Struo.Application/Configuration/LoginRateLimitOptions.cs`)：`Enabled`(預設 `true`)、
-`PermitLimit`(預設 `5`)、`WindowSeconds`(預設 `60`)。每一次匿名登入嘗試都會耗用完整的 Argon2id
-CPU 運算，無論結果為何，因此一次不受限的暴力破解嘗試同時也是一個 CPU 耗盡型的 DoS 攻擊媒介——這個限制器
-的存在正是為了界限這個風險，且只套用在 `AuthController` 自身端點之中的登入這個 action 上(登出／me／
-OIDC challenge 則刻意不受限制)。不過它並不是這個應用程式裡唯一的速率限制器：另一個獨立設定的限制器
-改守護 `PUT /api/users/{id}/password`，依呼叫端自己已驗證的使用者 id 分區，而不是依 client IP——它的
-設定見第 3 章，兩個限制器共用的 `429` 回應形狀見第 9 章。第 9 章也展示了登入限制器自身視窗耗盡後產生
-的即時 `429` 回應(`Retry-After: 60`，錯誤代碼 `TOO_MANY_REQUESTS`)；本章不會再次觸發它。
+`POST /api/auth/login` 上每一次匿名請求都會耗用一次完整的 Argon2id CPU 驗證，無論結果為何，因此一次
+不受限的暴力破解嘗試同時也是一個 CPU 耗盡型的 DoS 攻擊媒介。有**兩道**互相獨立的防線在防範這件事，
+而且它們防範的威脅並不相同——彼此不能互相取代：
 
-**何時停用它：** 只有在多複本部署(例如 Kubernetes)中，且改由 ingress/edge/WAF 這一層強制執行逐 IP
-速率限制時，才將 `Enabled` 設為 `false`——那一層看得到真正的用戶端 IP，且位於每個 pod 之前，而這個限制
-器的狀態是位於記憶體內、逐 pod 各自獨立的，因此無法在各複本之間強制一個真正的全域上限(第 3 章)。若在
-一個自身不做速率限制的負載平衡器背後，仍保留這個限制器為啟用狀態，會導致每個 pod 各自低估攻擊次數，卻
-無法真正保護整體部署——這個旗標的存在，就是為了讓維運者能夠有意識地做出這個取捨，而不是讓預設值在任一種
-拓樸下都悄悄做錯事。
+- **逐帳號節流器**(`RateLimiting:LoginAccount`，`ILoginAttemptThrottle` /
+  `DistributedCacheLoginAttemptThrottle`，
+  `src/Struo.Infrastructure/Identity/DistributedCacheLoginAttemptThrottle.cs`)——**預設開啟**。依
+  請求本文中指名的帳號，計算失敗的登入嘗試次數，背後是 `IDistributedCache`，並且在
+  `AuthController.Login` 呼叫 `IAuthService.AuthenticateAsync` **之前**就先檢查，所以一次被節流的
+  請求完全不會耗用任何 Argon2id CPU。這正是逐 client IP 限流器做不到的一層：那個限流器的分區邏輯
+  在 model binding 之前就先執行，永遠看不到請求本文，也就沒有辦法依被嘗試的帳號分區——一次從多個
+  來源 IP 對單一帳號進行的緩慢分散式密碼噴灑攻擊，會直接穿透它。逐帳號節流器正是為了攔截這種攻擊
+  而存在，因為無論攻擊來自哪一個來源 IP，都共用同一個目標帳號的計數器。無論失敗的原因為何(密碼
+  錯誤、帳號不存在、帳號已停用)，每一次失敗都會計入額度，而且無論帳號是否存在都會回傳相同的
+  `429`——一次成功登入會清除該計數器，所以一個正常登入的合法使用者永遠不會把自己鎖在外面，這裡也
+  刻意不對任何一種失敗類型做特殊處理，否則「這個 email 永遠不會被節流」就會洩漏該帳號是否存在。
+- **逐 client IP 限流器**(`RateLimiting:Login`，`LoginRateLimitOptions`，
+  `src/Struo.Application/Configuration/LoginRateLimitOptions.cs`)——**預設關閉**。固定視窗，依
+  client IP 分區，透過 `[EnableRateLimiting("login")]` 只套用在登入這一個 action 上(登出／me／
+  OIDC challenge 兩層都刻意不受限制)。它攔截的是逐帳號節流器攔不住的情形：單一來源 IP 對這個端點
+  發動猛攻;而一個從同一個 IP 對多個不同帳號分別發動的分散式攻擊，永遠不會觸發任何一個逐帳號計數器
+  (因為沒有任何一個帳號單獨達到上限)，逐 client IP 限流器則能攔下它。
+
+這兩個限流器也都不是這個應用程式裡唯一的速率限制器：還有第三個獨立設定的限制器守護
+`PUT /api/users/{id}/password`，依呼叫端自己已驗證的使用者 id 分區——它的設定見第 3 章，三者共用的
+`429` 回應形狀見第 9 章。第 9 章也展示了逐帳號節流器產生的即時 `429`；本章不會再次觸發它。
+
+**為什麼逐 client IP 限流器出貨即關閉。** 對這個範本常見的使用族群而言，開啟它會出一種特定的錯：
+admin 後台的使用者通常是同一個組織自己的員工，而員工之間常常共用同一個 NAT 對外 IP。依 client IP
+分區，就會把整個辦公室收斂成單一共用桶，於是在出貨預設的 `5`/`60` 之下，只要幾位員工在差不多時間
+登入，就會共同觸發限制——這個限流器變成一次自我加害型的阻斷服務，而不是防禦，而且**不需要**反向
+代理設定錯誤就會發生：即使 `UseForwardedHeaders` 設定完全正確，光是共用一個對外 IP 就會如此。(若
+背後的反向代理**沒有**設定 `UseForwardedHeaders`——這個應用程式預設不會註冊它——情況還會更糟：
+`Connection.RemoteIpAddress` 會是代理伺服器自己的位址，於是**每一位**使用者都會收斂進同一個桶，
+不只是共用 NAT 閘道的那些人。)在一個以上的 replica 上，這個限流器記憶體內、逐 pod 的狀態還會疊加
+第二種失效模式：實際生效的上限會不一致地變成大約設定值的 N 倍，而且永遠不是一個真正的全域上限。
+
+**何時開啟它才是正確的選擇。** 單一實例、可直接連線、前面沒有 edge/WAF、且使用者彼此不共用對外 IP
+的部署——例如個人或單租戶安裝，或是一個開發用的 host。若要在任何反向代理背後開啟它，必須先加上
+`UseForwardedHeaders`(並明確設定 `KnownProxies`/`KnownNetworks` 白名單)，否則這個限流器量到的會是
+代理伺服器的位址，而不是真正的客戶端。若一個共用對外 IP 的團隊仍想啟用這一層，該做的是調高
+`PermitLimit`，而不是沿用出貨的 `5`。
 
 ## OIDC／外部登入
 
@@ -412,7 +437,8 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/users/<editor-id>/effective-
   機制本身、完整的 cookie/bearer 端點表，以及預設的 `Adaptive` 驗證機制如何在每一個端點上——包括
   讀取——都以相同方式解析一個純 bearer 的呼叫端。
 - 第 3 章 [設定參考](03-configuration-reference.md)，涵蓋本章提及的每一個設定鍵——
-  `Auth:BootstrapAdmin`、`Rbac:PublicReadCollections`、`RateLimiting:Login`、`Redis`、`Oidc`——的
+  `Auth:BootstrapAdmin`、`Rbac:PublicReadCollections`、`RateLimiting:LoginAccount`、
+  `RateLimiting:Login`、`Redis`、`Oidc`——的
   完整內容，包括它們「只在第一次啟動時生效」的但書。
 - 第 11 章 [檔案、媒體與圖片轉換](11-files-and-media.md)，涵蓋 `IFileAccessPolicy`——RBAC 在一般
   `ItemService` 路徑之外被強制執行的唯一場合。
