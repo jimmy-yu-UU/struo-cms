@@ -117,7 +117,7 @@ above), though — see chapter 16's removal checklist for the full, safe procedu
 
 ## What is replaceable — and what is not
 
-"Database replaceable," everywhere else in this manual, means the SqlSugar **provider** — not the ORM.
+"Database replaceable," elsewhere in this manual, means the SqlSugar **provider** — not the ORM.
 `Database:DbType` selects among five values, mapped 1:1 onto `SqlSugar.DbType` in `DbTypeMapper.Map`
 (`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`): PostgreSQL is the verified runtime target,
 SQLite backs the test suite, and MySQL/SqlServer/Oracle are mapped in code but unverified (see
@@ -126,10 +126,12 @@ SQLite backs the test suite, and MySQL/SqlServer/Oracle are mapped in code but u
 The ORM itself is not something a fork's content project swaps out. Every content entity — see
 `samples/Struo.Sample.Blog/Article.cs` — opens with `using SqlSugar;` and carries SqlSugar's own
 attributes directly: `[SugarTable]`, `[SugarColumn]`, `[SugarIndex]`, `[Navigate]`, alongside StruoCMS's
-own `[CmsCollection]`/`[CmsField]`. The CodeFirst DDL rules chapters 4, 5 and 13 document — the `Id`
+own `[CmsCollection]`/`[CmsField]`. The CodeFirst DDL rules chapters 4 and 5 document — the `Id`
 override needing `[SugarColumn(IsPrimaryKey = true)]`, `IsJson` needing an explicit `text` column,
-revision/soft-delete columns — are SqlSugar's semantics, not a StruoCMS abstraction over them.
-`IItemRepository` (`src/Struo.Application/Query/IItemRepository.cs`) is an internal seam inside core —
+`[ColumnShape]` — are SqlSugar's semantics, not a StruoCMS abstraction over them; chapter 13's
+soft-delete floor is the same kind of direct SqlSugar dependency, expressed as a registered query filter
+rather than a DDL attribute (see below). `IItemRepository`
+(`src/Struo.Application/Query/IItemRepository.cs`) is an internal seam inside core —
 its sole implementation is `SqlSugarItemRepository` — not an ORM-abstraction layer a fork is meant to
 reimplement in order to swap ORMs; a content entity's SqlSugar attributes stay bound to SqlSugar
 regardless of what implements that interface.
@@ -142,10 +144,13 @@ before merging.
 
 For the concrete traps this coupling already produces, see chapter 4's
 [Minimal collection](04-defining-a-collection.md#minimal-collection) (the `Id` override and
-`[SugarColumn(IsPrimaryKey = true)]`), chapter 5's [Pitfalls](05-field-types.md#pitfalls) (`IsJson`
-needing an explicit `text` column, `[ColumnShape]`), and chapter 13's
-[Enabling revisions per collection](13-revisions-and-soft-delete.md#enabling-revisions-per-collection)
-and [Soft delete](13-revisions-and-soft-delete.md#soft-delete) sections — this section states the
+`[SugarColumn(IsPrimaryKey = true)]`) and chapter 5's [Pitfalls](05-field-types.md#pitfalls) (`IsJson`
+needing an explicit `text` column, `[ColumnShape]`) for the DDL-attribute side of this coupling.
+Chapter 13's [The global query filter](13-revisions-and-soft-delete.md#the-global-query-filter) is a
+different kind of SqlSugar coupling: revisions need no extra column on the entity, and `ISoftDeletable`
+itself is a package-free marker interface — the SqlSugar dependency for soft delete is the query filter
+`db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`, registered against the
+SqlSugar client in `SqlSugarClientFactory.Create`, not declared on the entity. This section states the
 coupling; those chapters show its concrete shape.
 
 ## Technology stack

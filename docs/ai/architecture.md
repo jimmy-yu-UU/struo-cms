@@ -66,8 +66,13 @@ at the content-project level — every content entity (`using SqlSugar;`, e.g.
 `samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
 `[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's
 `[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson`+`text`,
-`[ColumnShape]` — see `docs/guide/en/04-defining-a-collection.md`, `05-field-types.md`,
-`13-revisions-and-soft-delete.md`) are SqlSugar semantics, not a StruoCMS abstraction over them.
+`[ColumnShape]` — see `docs/guide/en/04-defining-a-collection.md`,
+`docs/guide/en/05-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them.
+`docs/guide/en/13-revisions-and-soft-delete.md` is a different kind of SqlSugar coupling, not a DDL one:
+revisions need no extra column and `ISoftDeletable` is a package-free marker interface, but the
+soft-delete floor itself is `db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`,
+registered against the SqlSugar client in `SqlSugarClientFactory.Create` (see that chapter's "The global
+query filter" section) — a SqlSugar API dependency, just not a DDL attribute one.
 `IItemRepository` (`src/Struo.Application/Query/IItemRepository.cs`, sole implementation
 `SqlSugarItemRepository`) is an internal seam inside core, not an ORM-abstraction layer forks are meant
 to reimplement to swap ORMs — an entity's SqlSugar attributes stay bound to SqlSugar regardless of what
@@ -206,8 +211,9 @@ class the defaults exist to prevent. Sole implementation: `SqlSugarItemRepositor
 (`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`). Registered scoped:
 `services.AddScoped<IItemRepository, SqlSugarItemRepository>()`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`). This is the seam
-a fork would implement to point at a different storage engine; any replacement must implement the three
-purge primitives explicitly or purge will throw for every collection.
+a fork would implement to point at a different storage engine, not a different ORM — see *ORM coupling*
+above; the content entities' SqlSugar attributes stay regardless. Any replacement must implement the
+three purge primitives explicitly or purge will throw for every collection.
 
 ### `IRelationExpander`
 
