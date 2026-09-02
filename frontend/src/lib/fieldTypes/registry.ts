@@ -1,9 +1,8 @@
-import type { Component } from 'vue'
+import { defineAsyncComponent, type Component } from 'vue'
 import type { FieldMeta, TagItem } from '../../types/schema'
 import type { FieldInterface, FieldTypeDef } from './types'
 import TextField from '../../components/fields/TextField.vue'
 import TextareaField from '../../components/fields/TextareaField.vue'
-import RichTextField from '../../components/fields/RichTextField.vue'
 import NumberField from '../../components/fields/NumberField.vue'
 import BooleanField from '../../components/fields/BooleanField.vue'
 import DateField from '../../components/fields/DateField.vue'
@@ -194,7 +193,9 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   textarea: def({ component: TextareaField, listColumn: asString }),
   markdown: def({ component: TextareaField }),
   code: def({ component: TextareaField }),
-  richText: def({ component: RichTextField }),
+  // richText is the only field whose component pulls in TipTap/ProseMirror, the
+  // largest dependency in the SPA, so it alone is loaded on demand.
+  richText: def({ component: defineAsyncComponent(() => import('../../components/fields/RichTextField.vue')) }),
   number: def({ component: NumberField, listColumn: asString }),
   slider: def({ component: NumberField, listColumn: asString }),
   rating: def({ component: NumberField, listColumn: asString }),
