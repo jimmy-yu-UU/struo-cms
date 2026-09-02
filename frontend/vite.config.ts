@@ -7,16 +7,22 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
-  // Several route/async entry points (the RichText field, its slash-menu views) each pull in
-  // TipTap + ProseMirror. Left alone, every async chunk that imports it would bundle its own
-  // copy; grouping the whole family into one named vendor chunk means the browser downloads
-  // TipTap once and every entry point that needs it shares that same chunk.
+  // TipTap + ProseMirror is the SPA's largest dependency and only the richText field needs it.
+  // A named group separates that vendor code from RichTextField's own code, so the vendor chunk
+  // can cache across app deploys and stays under the 500 kB warning on its own.
+  // includeDependenciesRecursively is turned off because it defaults to true, and TipTap's
+  // dependency closure includes Vue itself (via @tiptap/vue-3) — left at the default, Rolldown
+  // pulls Vue into this group too, and every page (including login) ends up preloading TipTap.
   build: {
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
-            { name: 'tiptap', test: /node_modules[\\/](@tiptap|prosemirror-)/ },
+            {
+              name: 'tiptap',
+              test: /node_modules[\\/](@tiptap|prosemirror-)/,
+              includeDependenciesRecursively: false,
+            },
           ],
         },
       },
