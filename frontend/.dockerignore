@@ -1,3 +1,9 @@
+# tests/ is deliberately NOT excluded: pnpm build runs `vue-tsc -b`, which
+# follows tsconfig.json's project references including tsconfig.test.json,
+# whose "include" is ["tests/**/*.ts", "src/**/*.d.ts"] -- without tests/ in
+# the build context, that reference resolves to nothing and vue-tsc fails
+# with TS18003 ("No inputs were found"). e2e/ below is safe to exclude only
+# because no tsconfig in this project references it at all.
 node_modules/
 dist/
 coverage/
