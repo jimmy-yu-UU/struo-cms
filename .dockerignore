@@ -11,3 +11,11 @@ TestResults/
 .sonarqube/
 .scannerwork/
 **/appsettings.Development.json
+.claude/
+.superpowers/
+.idea/
+.env
+dist/
+# samples/ is deliberately NOT excluded here: the ch.16 sample opt-in adds a
+# ProjectReference into samples/, so excluding it would break `docker build .`
+# for exactly the forks that opted into the sample.

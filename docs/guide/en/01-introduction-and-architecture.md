@@ -129,8 +129,8 @@ attributes directly: `[SugarTable]`, `[SugarColumn]`, `[SugarIndex]`, `[Navigate
 own `[CmsCollection]`/`[CmsField]`. The CodeFirst DDL rules chapters 4 and 5 document — the `Id`
 override needing `[SugarColumn(IsPrimaryKey = true)]`, `IsJson` needing an explicit `text` column,
 `[ColumnShape]` — are SqlSugar's semantics, not a StruoCMS abstraction over them; chapter 13's
-soft-delete floor is the same kind of direct SqlSugar dependency, expressed as a registered query filter
-rather than a DDL attribute (see below). `IItemRepository`
+soft-delete floor is the same direct dependency in a different form, expressed as a registered query
+filter rather than a DDL attribute (see below). `IItemRepository`
 (`src/Struo.Application/Query/IItemRepository.cs`) is an internal seam inside core —
 its sole implementation is `SqlSugarItemRepository` — not an ORM-abstraction layer a fork is meant to
 reimplement in order to swap ORMs; a content entity's SqlSugar attributes stay bound to SqlSugar

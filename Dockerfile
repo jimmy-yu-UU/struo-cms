@@ -5,8 +5,14 @@
 # 2. db/migrations is copied into the image so Database__MigrationsPath can point at it, but
 #    that setting is left unset here, matching the appsettings.json default of not running
 #    migrations automatically on boot.
-# 3. The runtime stage is Debian-based (aspnet:10.0), not alpine: SqlSugar/globalization need
-#    full ICU, which the alpine variant does not ship.
+# 3. The runtime stage is Debian-based (aspnet:10.0), not alpine: globalization needs full ICU,
+#    which the alpine variant does not ship.
+#
+# COPY . . before dotnet restore (rather than copying each .csproj first to prime a
+# restore-only layer) trades away NuGet layer caching -- any source edit invalidates the
+# restore step too, not just publish -- for staying generic across forks: a per-csproj
+# pre-copy would have to enumerate paths, and it cannot preserve an arbitrary fork's project
+# layout the way copying everything does.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src

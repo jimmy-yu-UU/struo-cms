@@ -86,6 +86,12 @@ jobs:
   # without one. It then polls /health/ready rather than /health/live, because
   # /health/ready additionally exercises the database and cache readiness checks
   # - /health/live would pass even if those were broken.
+  #
+  # The admin smoke test greps the served / for "assets/index-", the entry
+  # chunk Vite emits by default -- deliberately stronger than grepping for
+  # e.g. id="app", which the unbuilt source index.html also contains, so a
+  # broken build that still serves the raw template would not pass silently.
+  # If the entry chunk is ever renamed, update the grep to match.
   docker:
     runs-on: ubuntu-latest
     steps:

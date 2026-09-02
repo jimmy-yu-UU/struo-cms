@@ -247,7 +247,7 @@ ones most relevant to running the image are listed here.
 | `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` | S3-compatible storage credentials | Only consulted when `Struo__Files__Backend=s3`; all four ship as `REPLACE_ME` placeholders. |
 | `Struo__Files__S3__Region` | S3 region | Ships with a real default, `us-east-1`, not a placeholder — override it if the bucket is not there. |
 | `Auth__BootstrapAdmin__Email` / `__Password` | Overrides the seeded default admin account | Only read the **first** time the `users` table is created — see the checklist row above. |
-| `ASPNETCORE_ENVIRONMENT` | ASP.NET Core hosting environment | Defaults to `Production` in this image — the base image's own default, not something this `Dockerfile` sets — see the paragraph below on why that matters. |
+| `ASPNETCORE_ENVIRONMENT` | ASP.NET Core hosting environment | Not set anywhere in this image (`docker image inspect struo-api:ci` shows no `ASPNETCORE_ENVIRONMENT` in the env list) — it defaults to `Production` because that's ASP.NET Core's own framework default when the variable is absent, not something this `Dockerfile` sets. See the paragraph below on why that matters. |
 
 Because `ASPNETCORE_ENVIRONMENT` defaults to `Production`, `CookieSecurePolicy.Always` applies (the
 Cookie `Secure` policy row in the checklist above): a login over plain HTTP appears to succeed but the
@@ -260,7 +260,11 @@ deployment.
 ASP.NET Core's DataProtection key ring — what signs and encrypts the auth cookie and antiforgery tokens
 — is written inside the container, at `/home/app/.aspnet/DataProtection-Keys`. Nothing in this image
 persists or shares that directory: it is not mounted as a volume, and the application logs a warning
-about it at startup. Two consequences follow: replacing the container (a redeploy, a restart after an
+about it at startup ("No XML encryptor configured"). That log message is also a warning about the key
+ring's own format: without an encryptor configured, DataProtection stores the keys unencrypted at rest.
+A directory mounted for the key ring therefore holds plaintext key material and must be protected like
+any other secret — filesystem permissions, backup encryption, access logging — not treated as ordinary
+application state. Two consequences follow from the container not persisting it at all: replacing the container (a redeploy, a restart after an
 image update) invalidates every existing auth cookie and antiforgery token, forcing every user to log
 back in; and running more than one replica gives each one its own, unshared key ring, which breaks
 cookie validation and antiforgery for any request a load balancer routes to a different replica than
@@ -273,6 +277,9 @@ feature.
 ### The admin SPA image
 
 - Listens on port `80` (`EXPOSE 80`) and serves the Vite production build through nginx.
+- The image build honours a committed `frontend/.env.production` (`frontend/.env.example` advertises
+  the file): set `VITE_API_BASE_URL` there for a cross-origin deployment, or leave it unset to keep the
+  same-origin `/api` proxy this image provides.
 - `API_UPSTREAM` (default `http://api:8080`) is the backend to reverse-proxy `/api/*` to. It must be
   `scheme://host:port` with **no path and no trailing slash**: `proxy_pass` is given as an nginx
   variable rather than a literal (so the container can start even before the API is resolvable), and
@@ -403,9 +410,9 @@ a condition on top of that (see their own bullet below):
   unit/integration suite. No
   `STRUO_TEST_PG_CONNECTION` is set anywhere in the workflow, so the live-PostgreSQL suite's tests all
   take their no-op-pass path in CI; only the SQLite-backed tests actually exercise anything there.
-- **`frontend`** — `pnpm install --frozen-lockfile --ignore-scripts`, then `pnpm test`, then `pnpm build` — the frontend
-  unit suite plus a full production build (`vue-tsc -b && vite build`), which doubles as CI's only
-  enforcement of the SPA's TypeScript types.
+- **`frontend`** — `pnpm install --frozen-lockfile --ignore-scripts`, then `pnpm test`, then `pnpm build`
+  — the frontend unit suite plus a full production build (`vue-tsc -b && vite build`), which doubles as
+  CI's only enforcement of the SPA's TypeScript types.
 - **`docs`** — `pnpm install --frozen-lockfile --ignore-scripts`, then `pnpm build` from `docs/` — the
   manual's own gate: `vitepress build` resolves every cross-chapter link and fails on a dead one, then
   a `check-rendered-chapters.mjs` step asserts every chapter actually rendered non-empty content, since
