@@ -7,6 +7,21 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
+  // Several route/async entry points (the RichText field, its slash-menu views) each pull in
+  // TipTap + ProseMirror. Left alone, every async chunk that imports it would bundle its own
+  // copy; grouping the whole family into one named vendor chunk means the browser downloads
+  // TipTap once and every entry point that needs it shares that same chunk.
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'tiptap', test: /node_modules[\\/](@tiptap|prosemirror-)/ },
+          ],
+        },
+      },
+    },
+  },
   // Shared by `vite build`, `vite dev` and Vitest — Vitest reads this same config,
   // so one alias entry covers the app, the type-check and the test run.
   resolve: {
