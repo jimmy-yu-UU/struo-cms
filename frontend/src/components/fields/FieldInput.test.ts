@@ -35,14 +35,19 @@ describe('FieldInput', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-text').exists()).toBe(true)
   })
-  it('renders RichTextInput for richText', () => {
+  it('renders RichTextInput for richText', async () => {
     const w = mount(FieldInput, {
       props: { field: field({ interface: 'richText' }), modelValue: '' },
       global: { stubs: { ...stubs, RichTextInput: { template: '<div class="stub-richtext" />' } } },
     })
+    // The async loader's own `import()` resolves only after Vitest's transform pipeline has
+    // walked RichTextField -> RichTextInput -> TipTap/ProseMirror for the first time, which does
+    // real work and takes real wall-clock time -- far more than `flushPromises()` (a single
+    // microtask/immediate-timer flush) advances. Wait for the real condition instead.
+    await vi.waitFor(() => expect(w.find('.stub-richtext').exists()).toBe(true), { timeout: 4000 })
     expect(w.find('.stub-richtext').exists()).toBe(true)
     expect(w.find('.stub-textarea').exists()).toBe(false)
-  })
+  }, 15_000)
   it('renders Select for select interface', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-select').exists()).toBe(true)

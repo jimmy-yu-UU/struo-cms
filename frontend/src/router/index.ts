@@ -1,28 +1,24 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { authGuard } from './guard'
+// AppShell stays a static import: every authenticated route (everything but /login) renders
+// inside it, so it is loaded eagerly.
 import AppShell from '../layouts/AppShell.vue'
-import LoginView from '../views/LoginView.vue'
-import DashboardView from '../views/DashboardView.vue'
-import CollectionListView from '../views/CollectionListView.vue'
-import ItemFormView from '../views/ItemFormView.vue'
-import MediaLibraryView from '../views/MediaLibraryView.vue'
-import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
+    { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
     {
       path: '/',
       component: AppShell,
       children: [
-        { path: '', name: 'dashboard', component: DashboardView },
-        { path: 'media', name: 'media', component: MediaLibraryView },
-        { path: 'settings', name: 'settings', component: SettingsView },
-        { path: 'collections/:name', name: 'collection-list', component: CollectionListView },
-        { path: 'collections/:name/new', name: 'collection-create', component: ItemFormView },
-        { path: 'collections/:name/:id', name: 'collection-item', component: ItemFormView },
+        { path: '', name: 'dashboard', component: () => import('../views/DashboardView.vue') },
+        { path: 'media', name: 'media', component: () => import('../views/MediaLibraryView.vue') },
+        { path: 'settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+        { path: 'collections/:name', name: 'collection-list', component: () => import('../views/CollectionListView.vue') },
+        { path: 'collections/:name/new', name: 'collection-create', component: () => import('../views/ItemFormView.vue') },
+        { path: 'collections/:name/:id', name: 'collection-item', component: () => import('../views/ItemFormView.vue') },
       ],
     },
   ],

@@ -304,8 +304,9 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only
    from `zh-TW` degrades gracefully but a key missing from `en` does not.
 4. **A new view/component**: follow the existing `views/` pattern (one component per route, registered
-   in `frontend/src/router/index.ts`, gated by `frontend/src/router/guard.ts` if it needs
-   authentication/permission checks).
+   in `frontend/src/router/index.ts` as a `() => import()` lazy loader — routed views are code-split,
+   and `frontend/tests/codeSplitting.test.ts` enforces it — gated by `frontend/src/router/guard.ts` if
+   it needs authentication/permission checks).
 5. **Tests to add**: a `*.test.ts` next to any new `lib/` helper or non-trivial component logic
    (Vitest). If the change affects a user-facing flow end-to-end, add or update a Playwright spec under
    `frontend/e2e/` (`core` project — never `e2e/sample/**` unless the change is specific to the Blog
