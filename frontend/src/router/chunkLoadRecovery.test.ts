@@ -16,16 +16,33 @@ describe('isChunkLoadError', () => {
   })
 })
 
+// A minimal fake router: captures the beforeEach/afterEach/onError callbacks vue-router would
+// normally own, so tests can drive them directly in whatever order a real navigation would.
+function fakeRouter() {
+  const callbacks: {
+    beforeEach?: () => void
+    afterEach?: () => void
+    onError?: (err: unknown, to: { fullPath: string }) => void
+  } = {}
+  const router = {
+    beforeEach: vi.fn((cb: () => void) => { callbacks.beforeEach = cb }),
+    afterEach: vi.fn((cb: () => void) => { callbacks.afterEach = cb }),
+    onError: vi.fn((cb: (err: unknown, to: { fullPath: string }) => void) => { callbacks.onError = cb }),
+  } as unknown as Router
+  return { router, callbacks }
+}
+
 // A minimal fake host: spies for assign/reload/addEventListener, and an in-memory
 // sessionStorage backed by a Map so the reload guard can be observed without jsdom.
-function fakeHost() {
+function fakeHost(initialPath = '/', initialSearch = '') {
   const store = new Map<string, string>()
   const listeners = new Map<string, () => void>()
   const host: RecoveryHost = {
     location: {
       assign: vi.fn(),
       reload: vi.fn(),
-      href: 'http://x/',
+      pathname: initialPath,
+      search: initialSearch,
     },
     addEventListener: vi.fn((type: string, listener: () => void) => {
       listeners.set(type, listener)
@@ -44,71 +61,98 @@ function fakeHost() {
 }
 
 describe('installChunkLoadRecovery', () => {
-  it('reloads to the failing route once when router.onError sees a chunk-load error', () => {
-    const onError = vi.fn()
-    const router = { onError } as unknown as Router
-    const { host } = fakeHost()
+  it('route failure: onError owns it, assign once, reload not called', () => {
+    const { router, callbacks } = fakeRouter()
+    const { host, listeners } = fakeHost()
 
     installChunkLoadRecovery(router, host)
 
-    const handler = onError.mock.calls[0][0] as (err: unknown, to: { fullPath: string }) => void
-    handler(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
+    callbacks.beforeEach!()
+    listeners.get('vite:preloadError')!()
+    callbacks.onError!(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
 
     expect(host.location.assign).toHaveBeenCalledTimes(1)
     expect(host.location.assign).toHaveBeenCalledWith('/media')
+    expect(host.location.reload).not.toHaveBeenCalled()
   })
 
-  it('does not reload for a non-chunk error', () => {
-    const onError = vi.fn()
-    const router = { onError } as unknown as Router
-    const { host } = fakeHost()
+  it('repeating the same failing sequence with no afterEach in between: still only one assign total', () => {
+    const { router, callbacks } = fakeRouter()
+    const { host, listeners } = fakeHost()
 
     installChunkLoadRecovery(router, host)
 
-    const handler = onError.mock.calls[0][0] as (err: unknown, to: { fullPath: string }) => void
-    handler(new Error('Network Error'), { fullPath: '/media' })
+    callbacks.beforeEach!()
+    listeners.get('vite:preloadError')!()
+    callbacks.onError!(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
 
+    callbacks.beforeEach!()
+    listeners.get('vite:preloadError')!()
+    callbacks.onError!(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
+
+    expect(host.location.assign).toHaveBeenCalledTimes(1)
+    expect(host.location.reload).not.toHaveBeenCalled()
+  })
+
+  it('after a successful navigation (afterEach) clears the guard, the next failure reloads again', () => {
+    const { router, callbacks } = fakeRouter()
+    const { host, listeners } = fakeHost()
+
+    installChunkLoadRecovery(router, host)
+
+    callbacks.beforeEach!()
+    listeners.get('vite:preloadError')!()
+    callbacks.onError!(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
+
+    callbacks.afterEach!()
+
+    callbacks.beforeEach!()
+    listeners.get('vite:preloadError')!()
+    callbacks.onError!(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
+
+    expect(host.location.assign).toHaveBeenCalledTimes(2)
+  })
+
+  it('async-component failure outside navigation: preloadError reloads once', () => {
+    const { router } = fakeRouter()
+    const { host, listeners } = fakeHost('/collections/article/x', '')
+
+    installChunkLoadRecovery(router, host)
+
+    listeners.get('vite:preloadError')!()
+
+    expect(host.location.reload).toHaveBeenCalledTimes(1)
     expect(host.location.assign).not.toHaveBeenCalled()
   })
 
-  it('only reloads once for the same path (reload guard)', () => {
-    const onError = vi.fn()
-    const router = { onError } as unknown as Router
-    const { host } = fakeHost()
+  it('a second preloadError with no afterEach in between still reloads only once', () => {
+    const { router } = fakeRouter()
+    const { host, listeners } = fakeHost('/collections/article/x', '')
 
     installChunkLoadRecovery(router, host)
 
-    const handler = onError.mock.calls[0][0] as (err: unknown, to: { fullPath: string }) => void
-    handler(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
-    handler(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
+    listeners.get('vite:preloadError')!()
+    listeners.get('vite:preloadError')!()
+
+    expect(host.location.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('a non-chunk error in onError does not assign and does not touch the guard', () => {
+    const { router, callbacks } = fakeRouter()
+    const { host, listeners } = fakeHost()
+
+    installChunkLoadRecovery(router, host)
+
+    callbacks.beforeEach!()
+    callbacks.onError!(new Error('Network Error'), { fullPath: '/media' })
+    expect(host.location.assign).not.toHaveBeenCalled()
+
+    // A following chunk error still gets its one reload -- the guard was untouched.
+    callbacks.beforeEach!()
+    listeners.get('vite:preloadError')!()
+    callbacks.onError!(new Error('Failed to fetch dynamically imported module'), { fullPath: '/media' })
 
     expect(host.location.assign).toHaveBeenCalledTimes(1)
-  })
-
-  it('reloads once on a vite:preloadError event', () => {
-    const onError = vi.fn()
-    const router = { onError } as unknown as Router
-    const { host, listeners } = fakeHost()
-
-    installChunkLoadRecovery(router, host)
-
-    const preloadHandler = listeners.get('vite:preloadError')!
-    preloadHandler()
-
-    expect(host.location.reload).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not reload twice for a second preloadError event on the same href', () => {
-    const onError = vi.fn()
-    const router = { onError } as unknown as Router
-    const { host, listeners } = fakeHost()
-
-    installChunkLoadRecovery(router, host)
-
-    const preloadHandler = listeners.get('vite:preloadError')!
-    preloadHandler()
-    preloadHandler()
-
-    expect(host.location.reload).toHaveBeenCalledTimes(1)
+    expect(host.location.assign).toHaveBeenCalledWith('/media')
   })
 })
