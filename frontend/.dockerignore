@@ -12,8 +12,12 @@ playwright-report/
 blob-report/
 e2e/
 *.log
-# Only Vite's own secret-bearing local overrides are excluded here -- a
-# committed frontend/.env.production (VITE_API_BASE_URL and friends, see
-# frontend/.env.example) is meant to reach the image build.
+# Vite's local, gitignored env files are excluded here -- .env is a developer's
+# own uncommitted file (Vite still loads it in production mode, so it would
+# otherwise reach the build), and .env.local/.env.*.local are its per-mode
+# equivalents. A committed frontend/.env.production (VITE_API_BASE_URL and
+# friends, see frontend/.env.example) is NOT excluded and still reaches the
+# image build.
+.env
 .env.local
 .env.*.local
