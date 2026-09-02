@@ -193,7 +193,7 @@ Two Dockerfiles ship in this repository, each producing one independent image: t
 builds the API, `frontend/Dockerfile` builds the admin SPA. There is no production `docker compose`
 file here — see "What deployment is still on you" below.
 
-**Building** — the same two commands the CI `docker` job runs:
+**Building** — the same two commands the CI `docker` job runs, with a local tag:
 
 ```bash
 docker build --tag struo-api:local .
@@ -223,7 +223,9 @@ build/test artifacts out of that context.
   the health-probe table below for what each route actually checks.
 
 Verified live against PostgreSQL: with `Database:ConnectionString` pointed at a PostgreSQL instance
-reachable from inside the container (`host.docker.internal` when the database runs on the host) and
+reachable from inside the container (`host.docker.internal` when the database runs on the host — this
+resolves out of the box on Docker Desktop only; on Linux, add
+`--add-host=host.docker.internal:host-gateway` to the `docker run` invocation) and
 `Database:MigrationsPath=/app/db/migrations`, startup created the eleven core tables and the migration
 runner ran against that directory with zero pending scripts — `db/migrations/` ships only its
 `README.md`. `/health/ready` reported `Healthy` in roughly 2 seconds. A real upload made through the
@@ -237,12 +239,13 @@ ones most relevant to running the image are listed here.
 
 | Variable | Purpose | Notes |
 |---|---|---|
-| `Database__DbType` | Which backend to connect to | `PostgreSQL` (the shipped default), `Sqlite`, `MySql`, `SqlServer`, or `Oracle` (`DatabaseOptions.cs`); the CI smoke test uses `Sqlite`. |
-| `Database__ConnectionString` | Connection string for that backend | Ships as a `REPLACE_ME` placeholder — required for the image to start at all. |
+| `Database__DbType` | Which backend to connect to | `PostgreSQL` (the shipped default), `Sqlite`, `MySql`, `SqlServer`, or `Oracle` (`StruoDbType.cs`); the CI smoke test uses `Sqlite`. |
+| `Database__ConnectionString` | Connection string for that backend | Ships as a full PostgreSQL connection string with `REPLACE_ME` credentials (`Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME`) — required for the image to start at all. |
 | `Database__MigrationsPath` | Directory of reviewed `.sql` migration scripts applied at startup | Must be an **absolute** path (see the checklist above). Empty/unset — the default — disables the runner entirely. Inside this image, the migrations directory is `/app/db/migrations`. |
 | `Redis__ConnectionString` | Distributed cache backing the session-ticket store | Empty (the default) falls back to an in-process cache — fine for one replica, not for more than one. |
 | `Struo__Files__Backend` | `local` or `s3` | Default `local`, writing under `Struo:Files:Local:RootPath` (`App_Data/uploads`, inside the declared volume). |
-| `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` / `__Region` | S3-compatible storage credentials | Only consulted when `Struo__Files__Backend=s3`; all ship as `REPLACE_ME` placeholders. |
+| `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` | S3-compatible storage credentials | Only consulted when `Struo__Files__Backend=s3`; all four ship as `REPLACE_ME` placeholders. |
+| `Struo__Files__S3__Region` | S3 region | Ships with a real default, `us-east-1`, not a placeholder — override it if the bucket is not there. |
 | `Auth__BootstrapAdmin__Email` / `__Password` | Overrides the seeded default admin account | Only read the **first** time the `users` table is created — see the checklist row above. |
 | `ASPNETCORE_ENVIRONMENT` | ASP.NET Core hosting environment | Defaults to `Production` in this image — the base image's own default, not something this `Dockerfile` sets — see the paragraph below on why that matters. |
 
@@ -400,7 +403,7 @@ a condition on top of that (see their own bullet below):
   unit/integration suite. No
   `STRUO_TEST_PG_CONNECTION` is set anywhere in the workflow, so the live-PostgreSQL suite's tests all
   take their no-op-pass path in CI; only the SQLite-backed tests actually exercise anything there.
-- **`frontend`** — `pnpm install --frozen-lockfile`, then `pnpm test`, then `pnpm build` — the frontend
+- **`frontend`** — `pnpm install --frozen-lockfile --ignore-scripts`, then `pnpm test`, then `pnpm build` — the frontend
   unit suite plus a full production build (`vue-tsc -b && vite build`), which doubles as CI's only
   enforcement of the SPA's TypeScript types.
 - **`docs`** — `pnpm install --frozen-lockfile --ignore-scripts`, then `pnpm build` from `docs/` — the

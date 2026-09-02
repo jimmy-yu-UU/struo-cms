@@ -188,7 +188,7 @@ $ ls -la src/Struo.Api/logs
 `frontend/Dockerfile` 建置管理後台 SPA。這個儲存庫沒有正式環境用的 `docker compose` 檔——見下方
 「部署仍然是你的責任」一節。
 
-**建置**——與 CI `docker` job 執行的完全相同兩道指令：
+**建置**——與 CI `docker` job 相同的兩道指令，只是 tag 改成本機用的：
 
 ```bash
 docker build --tag struo-api:local .
@@ -215,7 +215,9 @@ API image 的建置情境(build context)是整個儲存庫，不只是 `src/Stru
   探針表。
 
 已針對 PostgreSQL 進行即時驗證：把 `Database:ConnectionString` 指向一個從容器內部可連線的 PostgreSQL
-執行個體(若資料庫執行在主機上，則是 `host.docker.internal`)，並設定
+執行個體(若資料庫執行在主機上，則是 `host.docker.internal`——這只有在 Docker Desktop 上才會開箱
+即用可解析；在 Linux 上，需要在 `docker run` 指令加上
+`--add-host=host.docker.internal:host-gateway`)，並設定
 `Database:MigrationsPath=/app/db/migrations`，啟動時建立了十一張核心資料表，migration runner 也
 針對該目錄執行，待處理腳本數為零——`db/migrations/` 只出貨了它的 `README.md`。`/health/ready` 在大約
 2 秒內回報 `Healthy`。一次透過 SPA image 完成的真實上傳，最終落在
@@ -229,12 +231,13 @@ image 最相關的幾個。
 
 | 變數 | 用途 | 備註 |
 |---|---|---|
-| `Database__DbType` | 要連線的後端 | `PostgreSQL`(出貨預設值)、`Sqlite`、`MySql`、`SqlServer`，或 `Oracle`(`DatabaseOptions.cs`);CI 的 smoke test 使用 `Sqlite`。 |
-| `Database__ConnectionString` | 對應後端的連線字串 | 出貨時是一個 `REPLACE_ME` 預留值——image 若要能啟動，這是必要設定。 |
+| `Database__DbType` | 要連線的後端 | `PostgreSQL`(出貨預設值)、`Sqlite`、`MySql`、`SqlServer`，或 `Oracle`(`StruoDbType.cs`);CI 的 smoke test 使用 `Sqlite`。 |
+| `Database__ConnectionString` | 對應後端的連線字串 | 出貨時是一整組 PostgreSQL 連線字串，其中的帳密是 `REPLACE_ME` 預留值(`Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME`)——image 若要能啟動，這是必要設定。 |
 | `Database__MigrationsPath` | 啟動時要套用的一批已審查 `.sql` migration 腳本所在目錄 | 必須是**絕對路徑**(見上方檢查清單)。留空/未設定(預設)會完全停用 runner。在這個 image 內，migrations 目錄是 `/app/db/migrations`。 |
 | `Redis__ConnectionString` | 支撐 session ticket 存放區的分散式快取 | 留空(預設)會回退到行程內快取——單一 replica 沒問題，一個以上就不行。 |
 | `Struo__Files__Backend` | `local` 或 `s3` | 預設 `local`，寫入 `Struo:Files:Local:RootPath`(`App_Data/uploads`，位於已宣告的 volume 之內)。 |
-| `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` / `__Region` | S3 相容儲存憑證 | 只有在 `Struo__Files__Backend=s3` 時才會被查閱;全部出貨為 `REPLACE_ME` 預留值。 |
+| `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` | S3 相容儲存憑證 | 只有在 `Struo__Files__Backend=s3` 時才會被查閱;這四個全部出貨為 `REPLACE_ME` 預留值。 |
+| `Struo__Files__S3__Region` | S3 區域 | 出貨時有一個真正的預設值 `us-east-1`，不是預留值——若儲存桶不在該區域，請自行覆寫。 |
 | `Auth__BootstrapAdmin__Email` / `__Password` | 覆寫種子建立的預設 admin 帳號 | 只會在 `users` 資料表**第一次**被建立時讀取——見上方檢查清單那一列。 |
 | `ASPNETCORE_ENVIRONMENT` | ASP.NET Core 的 hosting 環境 | 在這個 image 中預設為 `Production`——這是基底 image 自己的預設值，不是這份 `Dockerfile` 自己設定的——原因見下方段落。 |
 
@@ -250,7 +253,7 @@ token——會被寫在容器內部的 `/home/app/.aspnet/DataProtection-Keys`�
 持久化或共用這個目錄：它沒有被掛載成 volume，應用程式也會在啟動時針對這件事記錄一則警告。這帶來兩個
 直接後果：替換容器(一次重新部署、一次因映像更新而重啟)會讓每一個既有的驗證 cookie 與 antiforgery
 token 全部失效，強迫每一位使用者重新登入；而執行一個以上的 replica，會讓每個 replica 各自擁有一份
-互不相通的金鑰環，導致載入平衡器把請求路由到與核發者不同的 replica 時，cookie 驗證與 antiforgery
+互不相通的金鑰環，導致負載平衡器把請求路由到與核發者不同的 replica 時，cookie 驗證與 antiforgery
 雙雙失敗。若只有單一實例，請把 `/home/app/.aspnet/DataProtection-Keys` 掛載成一個 volume，讓金鑰能
 在容器被替換後存活。若有一個以上的 replica，請改為設定一個共用的 DataProtection 金鑰存放區(一個共用
 檔案系統、Redis，或雲端供應商自己的金鑰環服務)——這個儲存庫本身並未設定任何一種;請把這當成這個
@@ -379,7 +382,7 @@ liveness/readiness 探針使用：
   `dotnet test --no-build --configuration Release --verbosity normal`——完整的後端單元/整合套件。
   這個工作流程中的任何地方都沒有設定 `STRUO_TEST_PG_CONNECTION`，因此即時 PostgreSQL 套件中的測試
   在 CI 裡全部都會走無操作通過的路徑；那裡只有 SQLite 支援的測試才會真正演練任何東西。
-- **`frontend`**——`pnpm install --frozen-lockfile`，接著 `pnpm test`，然後 `pnpm build`——前端
+- **`frontend`**——`pnpm install --frozen-lockfile --ignore-scripts`，接著 `pnpm test`，然後 `pnpm build`——前端
   單元套件，加上一次完整的正式環境建置(`vue-tsc -b && vite build`)，同時也是 CI 對這個 SPA 的
   TypeScript 型別唯一的強制檢查。
 - **`docs`**——在 `docs/` 底下執行 `pnpm install --frozen-lockfile --ignore-scripts`，接著
