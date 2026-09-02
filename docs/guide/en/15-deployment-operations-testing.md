@@ -23,7 +23,7 @@ shared development database or the running development API.
 | `Redis:ConnectionString` | Set to a real Redis instance for any deployment with more than one API replica, or any deployment where sessions must survive a restart | Empty falls back to `AddDistributedMemoryCache()` (`AuthWiring.cs`) — an in-process, per-instance cache backing the cookie-authentication ticket store. A restart loses every session (forced re-login); with more than one replica behind a load balancer, each replica has its own session store, so a user's session is only valid on whichever replica issued it. |
 | Cookie `Secure` policy | The reverse proxy/load balancer must terminate HTTPS in front of a Production deployment | `AuthWiring.cs` sets `CookieSecurePolicy.Always` whenever `env.IsProduction()` (`CookieSecurePolicy.SameAsRequest` otherwise, so the dev/test HTTP host still works). Serving Production over plain HTTP means the browser never sends the auth cookie back on any subsequent request — login appears to succeed once and then silently never persists. |
 | `Oidc:RequireEmailVerified` / `AllowedTenantId` / `AllowedEmailDomains` | Pinned explicitly whenever `Oidc:Enabled=true` | `AllowedTenantId` ships as the non-matching placeholder `"REPLACE_TENANT_ID"` (`appsettings.json`), and `ExternalLoginService.ResolveOrProvisionAsync` (`src/Struo.Application/Security/ExternalLoginService.cs`) rejects any external identity whose tenant doesn't equal it (`TenantNotAllowed`) — so with the **shipped** defaults, external login fails closed for every real tenant until this is replaced with the real one. `RequireEmailVerified` (`false`) and `AllowedEmailDomains` (`[]`) do default permissive, though: once `AllowedTenantId` is set to a real, matching tenant, the only remaining checks are opt-in, and linking then proceeds by **email equality alone** — any external account whose claimed email matches an existing local user's is treated as that user, verification status notwithstanding. |
-| Security response headers | Not configurable — the application always sends `X-Content-Type-Options: nosniff`; the reverse proxy is responsible for `Strict-Transport-Security`, `X-Frame-Options`/CSP `frame-ancestors`, and `Referrer-Policy` | An inline middleware registered first in `Program.cs`'s pipeline sets `X-Content-Type-Options: nosniff` on every response — a plain 200, an error envelope, a CORS preflight, a bare 404 — unless a downstream handler has already set it. `Struo.Api` serves no HTML of its own (no `wwwroot`, `UseStaticFiles`, or `MapFallbackToFile`; the admin SPA is deployed separately), so this is defence in depth behind the file-download endpoint's `Content-Disposition: attachment` (`FilesController.Download`) and the image-transform path's fixed raster content types, not a patch for an existing hole. The application does **not** send the other usual headers itself: skipping them at the reverse proxy leaves whatever HTML surface sits behind it (e.g. the separately deployed admin SPA) without HSTS's downgrade protection, without clickjacking protection from `X-Frame-Options`/CSP `frame-ancestors`, and without a `Referrer-Policy` restricting what leaks to a link target — this API's own JSON responses carry none of that exposure to begin with. |
+| Security response headers | Not configurable — the application always sends `X-Content-Type-Options: nosniff`; the reverse proxy is responsible for `Strict-Transport-Security`, `X-Frame-Options`/CSP `frame-ancestors`, and `Referrer-Policy`; `frontend/nginx/default.conf.template` is a working reference implementation | An inline middleware registered first in `Program.cs`'s pipeline sets `X-Content-Type-Options: nosniff` on every response — a plain 200, an error envelope, a CORS preflight, a bare 404 — unless a downstream handler has already set it. `Struo.Api` serves no HTML of its own (no `wwwroot`, `UseStaticFiles`, or `MapFallbackToFile`; the admin SPA is deployed separately), so this is defence in depth behind the file-download endpoint's `Content-Disposition: attachment` (`FilesController.Download`) and the image-transform path's fixed raster content types, not a patch for an existing hole. The application does **not** send the other usual headers itself: skipping them at the reverse proxy leaves whatever HTML surface sits behind it (e.g. the separately deployed admin SPA) without HSTS's downgrade protection, without clickjacking protection from `X-Frame-Options`/CSP `frame-ancestors`, and without a `Referrer-Policy` restricting what leaks to a link target — this API's own JSON responses carry none of that exposure to begin with. |
 
 ## Schema management
 
@@ -187,6 +187,153 @@ on `appsettings.json` notwithstanding. `builder.Host.UseSerilog(...)` reads from
 and the DI container (`ReadFrom.Services`), so any enrichers registered through DI are picked up as
 well.
 
+## Container images
+
+Two Dockerfiles ship in this repository, each producing one independent image: the root `Dockerfile`
+builds the API, `frontend/Dockerfile` builds the admin SPA. There is no production `docker compose`
+file here — see "What deployment is still on you" below.
+
+**Building** — the same two commands the CI `docker` job runs:
+
+```bash
+docker build --tag struo-api:local .
+docker build --tag struo-admin:local frontend
+```
+
+The API image's build context is the whole repository, not just `src/Struo.Api/`: a fork's content
+project is referenced from `Struo.Api.csproj` as a `ProjectReference`, so the build needs every project
+that reference can point at, plus the root `Directory.Build.props`/`Directory.Packages.props`
+(`Dockerfile`'s own comment 1). The root `.dockerignore` keeps `frontend/`, `docs/`, and the usual
+build/test artifacts out of that context.
+
+### The API image
+
+- Listens on port `8080` (`EXPOSE 8080`) and runs as the non-root user `app`, not root.
+- `db/migrations` is copied into the image at `/app/db/migrations`. `Database:MigrationsPath` is left
+  unset by default, matching `appsettings.json`'s own default of not running migrations automatically
+  on boot — set it explicitly to `/app/db/migrations` to turn the runner on inside this image (it must
+  be an absolute path; see the checklist row above).
+- Two directories are writable by `app`: `/app/App_Data` (local-backend uploads and the image-transform
+  cache) and `/app/logs` (Serilog's File sink). `/app/App_Data` is additionally declared as a
+  `VOLUME`, so even a plain `docker run` with no `--mount`/`-v` gets an anonymous volume there instead
+  of writes silently landing in the container's writable layer.
+- `HEALTHCHECK` polls `http://localhost:8080/health/live` every 30 s (5 s timeout, 30 s start period, 3
+  retries) — the liveness route, not `/health/ready`. `docker ps`/`docker inspect`'s health status
+  therefore reflects only "the process is accepting requests," not database or cache reachability; see
+  the health-probe table below for what each route actually checks.
+
+Verified live against PostgreSQL: with `Database:ConnectionString` pointed at a PostgreSQL instance
+reachable from inside the container (`host.docker.internal` when the database runs on the host) and
+`Database:MigrationsPath=/app/db/migrations`, startup created the eleven core tables and the migration
+runner ran against that directory with zero pending scripts — `db/migrations/` ships only its
+`README.md`. `/health/ready` reported `Healthy` in roughly 2 seconds. A real upload made through the
+SPA image landed at `/app/App_Data/uploads/<yyyy>/<MM>/<id>.<ext>`, confirming
+`Struo:Files:Local:RootPath`'s default resolves inside the declared volume as expected.
+
+#### Environment variables
+
+Every key below exists in `src/Struo.Api/appsettings.json` (chapter 3 has the full reference); only the
+ones most relevant to running the image are listed here.
+
+| Variable | Purpose | Notes |
+|---|---|---|
+| `Database__DbType` | Which backend to connect to | `PostgreSQL` (the shipped default), `Sqlite`, `MySql`, `SqlServer`, or `Oracle` (`DatabaseOptions.cs`); the CI smoke test uses `Sqlite`. |
+| `Database__ConnectionString` | Connection string for that backend | Ships as a `REPLACE_ME` placeholder — required for the image to start at all. |
+| `Database__MigrationsPath` | Directory of reviewed `.sql` migration scripts applied at startup | Must be an **absolute** path (see the checklist above). Empty/unset — the default — disables the runner entirely. Inside this image, the migrations directory is `/app/db/migrations`. |
+| `Redis__ConnectionString` | Distributed cache backing the session-ticket store | Empty (the default) falls back to an in-process cache — fine for one replica, not for more than one. |
+| `Struo__Files__Backend` | `local` or `s3` | Default `local`, writing under `Struo:Files:Local:RootPath` (`App_Data/uploads`, inside the declared volume). |
+| `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` / `__Region` | S3-compatible storage credentials | Only consulted when `Struo__Files__Backend=s3`; all ship as `REPLACE_ME` placeholders. |
+| `Auth__BootstrapAdmin__Email` / `__Password` | Overrides the seeded default admin account | Only read the **first** time the `users` table is created — see the checklist row above. |
+| `ASPNETCORE_ENVIRONMENT` | ASP.NET Core hosting environment | Defaults to `Production` in this image — the base image's own default, not something this `Dockerfile` sets — see the paragraph below on why that matters. |
+
+Because `ASPNETCORE_ENVIRONMENT` defaults to `Production`, `CookieSecurePolicy.Always` applies (the
+Cookie `Secure` policy row in the checklist above): a login over plain HTTP appears to succeed but the
+browser never sends the cookie back on a later request. Either terminate TLS in front of the container,
+or set `ASPNETCORE_ENVIRONMENT=Development` for a local, HTTP-only smoke test only — never for a real
+deployment.
+
+#### DataProtection keys
+
+ASP.NET Core's DataProtection key ring — what signs and encrypts the auth cookie and antiforgery tokens
+— is written inside the container, at `/home/app/.aspnet/DataProtection-Keys`. Nothing in this image
+persists or shares that directory: it is not mounted as a volume, and the application logs a warning
+about it at startup. Two consequences follow: replacing the container (a redeploy, a restart after an
+image update) invalidates every existing auth cookie and antiforgery token, forcing every user to log
+back in; and running more than one replica gives each one its own, unshared key ring, which breaks
+cookie validation and antiforgery for any request a load balancer routes to a different replica than
+the one that issued it. For a single instance, mount `/home/app/.aspnet/DataProtection-Keys` as a
+volume so keys survive a container replacement. For more than one replica, configure a shared
+DataProtection key store instead (a shared filesystem, Redis, or a cloud provider's key-ring service) —
+this repository does not configure one itself; treat this as an honest limitation of the image, not a
+feature.
+
+### The admin SPA image
+
+- Listens on port `80` (`EXPOSE 80`) and serves the Vite production build through nginx.
+- `API_UPSTREAM` (default `http://api:8080`) is the backend to reverse-proxy `/api/*` to. It must be
+  `scheme://host:port` with **no path and no trailing slash**: `proxy_pass` is given as an nginx
+  variable rather than a literal (so the container can start even before the API is resolvable), and
+  with a variable target any path segment on `API_UPSTREAM` *replaces* the request URI instead of being
+  prefixed to it (`frontend/nginx/default.conf.template`, comment (d)).
+- `HSTS_VALUE` defaults to empty, which means the image does **not** send `Strict-Transport-Security`
+  at all — nginx omits an `add_header` whose value is the empty string. Set it (e.g.
+  `max-age=31536000; includeSubDomains`) only once TLS is actually terminated here or by a fronting
+  proxy for every request that can reach the container.
+- Three security headers are always sent, independent of `HSTS_VALUE`: `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin`. This is
+  what the Security response headers row in the checklist above means by "the reverse proxy is
+  responsible" — `frontend/nginx/default.conf.template` is a working reference implementation of that
+  responsibility, not a requirement to use nginx specifically. The API's own `X-Content-Type-Options:
+  nosniff` is hidden on proxied `/api/*` responses (`proxy_hide_header`), so the header appears exactly
+  once on those responses, not twice.
+- Caching: `index.html` is served `Cache-Control: no-cache` (it references the content-hashed bundle,
+  so a stale cached copy would keep pointing at files a newer deploy replaced); everything under
+  `/assets/` is served `Cache-Control: public, max-age=31536000, immutable` (Vite's filenames are
+  content-hashed, so a new build is a new URL). gzip is on for the SPA's text payloads,
+  `server_tokens off` stops nginx advertising its version, and `client_max_body_size 32m` gives some
+  headroom above the backend's `Struo:Files:MaxUploadBytes` (25 MiB / 26214400 bytes,
+  `src/Struo.Api/appsettings.json`) so a genuinely oversized upload gets the backend's own JSON error
+  envelope rather than nginx's HTML error page.
+- `NGINX_RESOLVER` (default `127.0.0.11`, Docker's embedded DNS, with a 5 s `resolver_timeout`) only
+  exists on a **user-defined** Docker network — the kind `docker compose` or `docker network create`
+  produces. On the default bridge network (a bare `docker run` with no `--network`), every `/api/*`
+  request 502s after the resolver timeout, because nothing listens at `127.0.0.11` there. Put both
+  containers on a user-defined network, or point `NGINX_RESOLVER` at a DNS server that actually is
+  reachable from wherever the image runs.
+
+### What deployment is still on you
+
+Neither image is a deployment on its own — beyond the DataProtection key ring above:
+
+- **HTTPS termination.** Neither image terminates TLS itself; both expect a reverse proxy or load
+  balancer in front of them (the Cookie `Secure` policy row in the checklist above).
+- **`UseForwardedHeaders`.** If the API sits behind any reverse proxy — including the admin SPA image's
+  own nginx — configure `UseForwardedHeaders` with an explicit `KnownProxies`/`KnownNetworks` allowlist,
+  as the checklist row above already covers.
+- **Orchestration.** Restart policies, scaling, secret injection, and health-check wiring into whatever
+  platform runs these images (Kubernetes, ECS, a plain `docker run` with `--restart`, ...) are outside
+  what either Dockerfile provides. This repository does not ship a production `docker compose` file.
+
+### Verifying the two images together
+
+The minimal way to confirm both images can actually talk to each other — a **verification recipe**, not
+a deployment topology:
+
+```bash
+docker network create struo-verify
+docker run --detach --name api --network struo-verify \
+  --env Database__DbType=Sqlite \
+  --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' \
+  struo-api:local
+docker run --detach --name admin --network struo-verify --publish 8081:80 \
+  struo-admin:local
+```
+
+The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit on
+the same user-defined network `struo-verify` and the API container is named `api` — the same reasoning
+as the `NGINX_RESOLVER` note above. Open `http://localhost:8081` and confirm the SPA loads and its
+`/api/*` calls reach the backend.
+
 ## Health probes for orchestrators
 
 Chapter 2 introduces the two health routes; here is what each one actually checks, for wiring into an
@@ -244,8 +391,9 @@ orchestrator's liveness/readiness probes:
 
 ## What CI runs — and what it deliberately does not
 
-`.github/workflows/ci.yml` defines exactly two jobs, both triggered on push to `main`, on every pull
-request, and on manual dispatch:
+`.github/workflows/ci.yml` defines six jobs. `backend`, `frontend`, `docs` and `docker` all trigger on
+push to `main`, on every pull request, and on manual dispatch; `sonar-backend` and `sonar-frontend` add
+a condition on top of that (see their own bullet below):
 
 - **`backend`** — `dotnet restore`, `dotnet build --no-restore --configuration Release`, then
   `dotnet test --no-build --configuration Release --verbosity normal` — the full backend
@@ -255,6 +403,26 @@ request, and on manual dispatch:
 - **`frontend`** — `pnpm install --frozen-lockfile`, then `pnpm test`, then `pnpm build` — the frontend
   unit suite plus a full production build (`vue-tsc -b && vite build`), which doubles as CI's only
   enforcement of the SPA's TypeScript types.
+- **`docs`** — `pnpm install --frozen-lockfile --ignore-scripts`, then `pnpm build` from `docs/` — the
+  manual's own gate: `vitepress build` resolves every cross-chapter link and fails on a dead one, then
+  a `check-rendered-chapters.mjs` step asserts every chapter actually rendered non-empty content, since
+  `vitepress build` alone exits `0` even when a page comes out empty.
+- **`docker`** — builds both container images (the root `Dockerfile` for the API, `frontend/Dockerfile`
+  for the admin SPA; the *Container images* section above has the detail) and smoke-tests each one: the
+  API image boots against SQLite (`Database__DbType=Sqlite`,
+  `Database__ConnectionString=Data Source=/tmp/struo-ci.db`) and the job polls `/health/ready` until it
+  reports healthy; the SPA image boots and the job greps the served `/` for `assets/index-`, confirming
+  the built bundle is actually reachable through nginx. It is deliberately **not** a sixth standing
+  gate — contributors do not need Docker installed locally to work on this repository — and, unlike the
+  two `sonar-*` jobs below, it needs no secret, so it runs the same way for a pull request from a fork
+  and for Dependabot as it does for a normal push.
+- **`sonar-backend`** / **`sonar-frontend`** — report to SonarQube Cloud. Neither is a standing gate,
+  and both are skipped for pull requests from forks and for Dependabot, since both need `SONAR_TOKEN`, a
+  secret those contexts cannot read — the opposite of the `docker` job above.
+
+The five standing gates remain `dotnet build`, `dotnet test`, `pnpm test` and `pnpm build` (the latter
+two from `frontend/`), plus `pnpm build` from `docs/` — `docker`, `sonar-backend` and `sonar-frontend`
+are additional jobs, not additional gates.
 
 CI deliberately runs **neither** `pnpm e2e` nor `pnpm e2e:sample`/`pnpm e2e:all`: no step in `ci.yml`
 starts a database, starts the API, or invokes `playwright test`. End-to-end coverage needs a live API

@@ -328,7 +328,9 @@ Pinia-backed singleton that can open while another vendored overlay is already o
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
   sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs the five standing gates
   — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
-  `docs/` — but no E2E project) — both need a live API and database, not just a build.
+  `docs/` — but no E2E project) — both need a live API and database, not just a build. `ci.yml` also
+  runs a `docker` job (builds and smoke-tests the two container images — chapter 15's "Container
+  images" section) and two `sonar-*` jobs; none of the three is a standing gate.
 
 See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
 the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`

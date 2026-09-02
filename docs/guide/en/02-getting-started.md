@@ -174,3 +174,5 @@ if you need them there.
   group appear with your first real collection.
 - Chapter 16, [Sample Walkthrough](16-sample-walkthrough.md), to opt the Blog demo in (and cleanly back
   out) instead.
+- Chapter 15, [Container images](15-deployment-operations-testing.md#container-images), to deploy the
+  API and admin SPA as Docker images instead of running them with `dotnet run`/`pnpm dev`.
