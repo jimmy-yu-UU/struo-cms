@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { authGuard } from './guard'
-// AppShell stays a static import: every authenticated route renders inside it,
-// so deferring it would not reduce what any real navigation has to load.
+// AppShell stays a static import: every authenticated route (everything but /login) renders
+// inside it, so deferring it would not reduce what any real navigation has to load.
 import AppShell from '../layouts/AppShell.vue'
 
 const router = createRouter({

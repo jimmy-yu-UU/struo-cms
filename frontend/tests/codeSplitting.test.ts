@@ -21,6 +21,11 @@ describe('route-level code splitting', () => {
     expect(parent).toBeDefined()
     expect(typeof parent!.components?.default).toBe('object')
   })
+
+  it('every named route is lazy', () => {
+    const eager = router.getRoutes().filter((r) => r.name && typeof r.components?.default !== 'function')
+    expect(eager.map((r) => r.name)).toEqual([])
+  })
 })
 
 // Vue's defineAsyncComponent returns a wrapper component carrying an internal __asyncLoader.
