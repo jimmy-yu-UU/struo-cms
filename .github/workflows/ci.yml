@@ -73,6 +73,47 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm build
 
+  # Builds the two container images (root Dockerfile for the API, frontend/Dockerfile
+  # for the admin SPA) and smoke-tests each one. It is deliberately not a sixth
+  # standing gate: contributors do not need Docker installed locally to work on
+  # this repo, so this job only confirms the images build and boot in CI.
+  #
+  # Unlike the sonar-* jobs below, it needs no secret, so it runs the same way
+  # for pull requests from forks and for Dependabot as it does for a normal push.
+  #
+  # The API smoke test boots the image against SQLite rather than no database at
+  # all: Program.cs creates the schema at startup, so the API cannot come up
+  # without one. It then polls /health/ready rather than /health/live, because
+  # /health/ready additionally exercises the database and cache readiness checks
+  # - /health/live would pass even if those were broken.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: docker build --tag struo-api:ci .
+      - run: docker build --tag struo-admin:ci frontend
+      - name: Smoke-test the API image against SQLite
+        run: |
+          docker run --detach --name api --publish 8080:8080 \
+            --env Database__DbType=Sqlite \
+            --env 'Database__ConnectionString=Data Source=/tmp/struo-ci.db' \
+            struo-api:ci
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error http://localhost:8080/health/ready; then exit 0; fi
+            sleep 2
+          done
+          docker logs api
+          exit 1
+      - name: Smoke-test the admin image
+        run: |
+          docker run --detach --name admin --publish 8081:80 struo-admin:ci
+          for _ in $(seq 1 15); do
+            if curl --fail --silent http://localhost:8081/ | grep --quiet 'id="app"'; then exit 0; fi
+            sleep 1
+          done
+          docker logs admin
+          exit 1
+
   # The two jobs below report to SonarQube Cloud. They are deliberately separate
   # from the five standing gates above rather than wrapping them: the gates must
   # stay green or red on their own evidence, not on whether an external service
