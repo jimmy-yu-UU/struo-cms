@@ -15,7 +15,7 @@ namespace Struo.Tests.Identity;
 // covers the same mechanism wired through AuthController/the real HTTP pipeline instead.
 public class DistributedCacheLoginAttemptThrottleTests
 {
-    private static IDistributedCache MemoryCache() =>
+    private static MemoryDistributedCache MemoryCache() =>
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     private static DistributedCacheLoginAttemptThrottle Throttle(

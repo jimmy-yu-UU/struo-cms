@@ -71,13 +71,13 @@ try
     builder.Services.AddStruoOidc(builder.Configuration);
     builder.Services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
         .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
-    // Config-bound tuning for the per-client-IP login rate limiter below (defaults: disabled;
-    // 5 attempts / 60s if enabled — see LoginRateLimitOptions for why it ships off).
+    // Config-bound tuning for the per-client-IP login rate limiter below (defaults: disabled,
+    // 5 attempts / 60s if enabled) — see LoginRateLimitOptions for why it ships off
     builder.Services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
     // Config-bound tuning for the per-account login throttle (AuthController.Login, via
-    // ILoginAttemptThrottle) — independent of the per-client-IP limiter above (defaults: enabled;
-    // 10 failed attempts / 900s).
+    // ILoginAttemptThrottle) — independent of the per-client-IP limiter above. Defaults: enabled,
+    // 10 failed attempts per 900s
     builder.Services.AddOptions<Struo.Application.Configuration.LoginAccountRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginAccountRateLimitOptions.SectionName);
     // Fail fast at boot: MinLength is published to the SPA and sizes the admin password generator, so
