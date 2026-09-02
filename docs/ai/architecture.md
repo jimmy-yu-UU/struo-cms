@@ -137,8 +137,20 @@ services.AddSingleton(graph);
 verbatim from `ItemService`" so controllers depend on this seam rather than the concrete class. Sole
 implementation: `ItemService` (`src/Struo.Application/Query/ItemService.cs`) — note this is one of the
 few Application-layer classes with real business logic rather than a pure contract; it enforces RBAC
-internally by calling `ICurrentPermissions.CanRead`/`CanWrite`/`CanDelete` before each operation and
-throwing `PermissionDeniedException` on denial. Read enforcement is not confined to `ItemService`
+internally by calling `IPermissionService.CanRead`/`CanWrite`/`CanDelete` before each operation and
+throwing `PermissionDeniedException` on denial. The sole shippable `IPermissionService` implementation,
+`RbacPermissionService`, answers those calls by reading the resolved snapshot off
+`ICurrentPermissions.Current` (`src/Struo.Application/Security/ICurrentPermissions.cs`), which only
+exposes that read-only `Current` getter; writing a new snapshot goes through the separate
+`ICurrentPermissionsWriter.Set`, and the only caller of it is `PermissionResolutionMiddleware`
+(`src/Struo.Api/Auth/PermissionResolutionMiddleware.cs`). `DataServiceCollectionExtensions.AddStruoData`
+resolves both interfaces from the same factory-forwarded scoped `CurrentPermissions` instance, the same
+pattern used for `IItemUseCases` below — otherwise the middleware's write and a controller's read would
+land on two different objects. A fork that substitutes its own permissions holder must replace all
+three registrations together (`CurrentPermissions`, `ICurrentPermissions`, `ICurrentPermissionsWriter`);
+replacing only one or two leaves `PermissionResolutionMiddleware` writing into the framework's
+`CurrentPermissions` while the fork's reader is resolved from a different instance and never sees the
+write. Read enforcement is not confined to `ItemService`
 itself: a query that reaches into a related collection is checked hop by hop, and the failure mode
 differs by path. `QueryValidator.DenyUnreadableHops`
 (`src/Struo.Application/Query/QueryValidator.cs`) throws `PermissionDeniedException` on the first
