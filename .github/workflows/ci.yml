@@ -108,7 +108,7 @@ jobs:
         run: |
           docker run --detach --name admin --publish 8081:80 struo-admin:ci
           for _ in $(seq 1 15); do
-            if curl --fail --silent http://localhost:8081/ | grep --quiet 'id="app"'; then exit 0; fi
+            if curl --fail --silent http://localhost:8081/ | grep --quiet 'assets/index-'; then exit 0; fi
             sleep 1
           done
           docker logs admin
