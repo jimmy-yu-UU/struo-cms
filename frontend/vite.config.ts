@@ -20,7 +20,7 @@ export default defineConfig({
       output: {
         codeSplitting: {
           groups: [
-            { name: 'vendor', test: /node_modules/, tags: ['$initial'], priority: 20 },
+            { name: 'vendor', test: /node_modules[\\/]/, tags: ['$initial'], priority: 20 },
             { name: 'tiptap', test: /node_modules[\\/](@tiptap|prosemirror-)/, priority: 10 },
           ],
         },

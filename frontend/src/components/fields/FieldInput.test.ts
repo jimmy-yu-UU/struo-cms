@@ -47,7 +47,7 @@ describe('FieldInput', () => {
     await vi.waitFor(() => expect(w.find('.stub-richtext').exists()).toBe(true), { timeout: 4000 })
     expect(w.find('.stub-richtext').exists()).toBe(true)
     expect(w.find('.stub-textarea').exists()).toBe(false)
-  })
+  }, 15_000)
   it('renders Select for select interface', () => {
     const w = mount(FieldInput, { props: { field: field({ interface: 'select', options: [{ value: 'a', label: 'A' }] }), modelValue: '' }, global: { stubs } })
     expect(w.find('.stub-select').exists()).toBe(true)

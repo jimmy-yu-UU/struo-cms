@@ -9,6 +9,7 @@ import './assets/theme.css'
 import 'vue-sonner/style.css'
 import App from './App.vue'
 import router from './router'
+import { installChunkLoadRecovery } from './router/chunkLoadRecovery'
 import { apiClient } from './api/apiClient'
 import { useAuthStore } from './stores/authStore'
 import { i18n } from './i18n'
@@ -38,6 +39,7 @@ Promise.allSettled([auth.fetchCurrentUser(), appConfig.load()]).finally(() => {
   // Keep the tab title in sync with the brand name reactively: it changes at runtime when a
   // super-admin edits branding (Site Settings), not only at bootstrap. `immediate` sets it now.
   watch(() => appConfig.brandName, (name) => { document.title = name }, { immediate: true })
+  installChunkLoadRecovery(router)
   app.use(router)
   app.mount('#app')
 })

@@ -75,6 +75,8 @@ async function createAndOpen(page: Page, title: string): Promise<string> {
   // Wait until init() finished loading (Title populated) so the dirty baseline is captured against
   // the fully-loaded model, not a half-initialised one.
   await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
+  // The RichText editor is an async chunk now; the test's "loaded RichText body" promise needs it mounted.
+  await expect(translatableFieldByLabel(page, 'Body').locator('.ProseMirror')).toBeVisible()
   const id = page.url().match(/\/collections\/article\/([0-9a-fA-F-]+)$/)![1]
   created = { collection: 'article', id }
   return id
