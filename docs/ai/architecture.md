@@ -215,14 +215,18 @@ a fork would implement to point at a different storage engine, not a different O
 above; the content entities' SqlSugar attributes stay regardless. Any replacement must implement the
 three purge primitives explicitly or purge will throw for every collection.
 
-`SqlSugarItemRepository` is a facade: it keeps `QueryAsync`/`RunQueryAsync`, `GetByIdAsync`,
-`CreateAsync`, `UpdateAsync`, `DeleteAsync`, and `CloneEntity` itself, and delegates every other
-`IItemRepository` member to one of seven collaborators, all in the same `Query/` folder, each `new`ed
-inside the facade's constructor from its own constructor dependencies rather than injected — only
-`OrderByExpressionBuilder` is also registered scoped in DI:
+`SqlSugarItemRepository` is a facade: it keeps the `IItemRepository` members `QueryAsync`,
+`GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
+`RunQueryAsync` and `CloneEntity` those methods use internally), and delegates every other
+`IItemRepository` member to one of seven collaborators, all in the same `Query/` folder. Each is a
+field initializer on the facade's primary constructor rather than an injected dependency — only
+`OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync` and `TranslationStore`
+each get their own `new TransactionRunner(db)` instance (a field initializer cannot reference another
+instance field), rather than sharing the facade's own `transactions` field; `TransactionRunner` holds
+no state beyond `db`, so the extra instance behaves identically to sharing one:
 
-- `OrderByExpressionBuilder` — builds `OrderBy` expressions for the query DSL; the only collaborator
-  registered as a scoped DI service.
+- `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
+  query DSL; the only collaborator registered as a scoped DI service.
 - `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
 - `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
   `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, `QueryIdsAsync`, and
@@ -235,9 +239,16 @@ inside the facade's constructor from its own constructor dependencies rather tha
 - `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
   `QueryTranslationParentIdsAsync`, `SyncTranslationsAsync`.
 
+`RepositoryHelpers` (`RepositoryHelpers.cs`) is a static helper class — `TypeNameOf`,
+`TypeNameOfProperty`, `Descriptor`, `ConvertId` — used by the facade and by `WhereInQueries`,
+`SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, and `TranslationStore`.
+
 `GenericDispatcher<TDelegate>`/`BiGenericDispatcher<TDelegate>` (`GenericDispatcher.cs`) are the single
 implementation of the "resolve a private open generic method, cache the closed open-instance delegate
-per entity type" pattern the facade and every collaborator above use for entity-type dispatch.
+per entity type" pattern the facade and the collaborators that dispatch by entity type
+(`WhereInQueries`, `SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, `TranslationStore`) use — not
+`TransactionRunner` (plain C# generics) or `OrderByExpressionBuilder` (a single reflection
+`GetProperty` lookup, no per-entity-type dispatch).
 
 ### `IRelationExpander`
 
