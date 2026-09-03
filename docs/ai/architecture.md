@@ -215,6 +215,30 @@ a fork would implement to point at a different storage engine, not a different O
 above; the content entities' SqlSugar attributes stay regardless. Any replacement must implement the
 three purge primitives explicitly or purge will throw for every collection.
 
+`SqlSugarItemRepository` is a facade: it keeps `QueryAsync`/`RunQueryAsync`, `GetByIdAsync`,
+`CreateAsync`, `UpdateAsync`, `DeleteAsync`, and `CloneEntity` itself, and delegates every other
+`IItemRepository` member to one of seven collaborators, all in the same `Query/` folder, each `new`ed
+inside the facade's constructor from its own constructor dependencies rather than injected — only
+`OrderByExpressionBuilder` is also registered scoped in DI:
+
+- `OrderByExpressionBuilder` — builds `OrderBy` expressions for the query DSL; the only collaborator
+  registered as a scoped DI service.
+- `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
+- `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
+  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, `QueryIdsAsync`, and
+  `QueryWhereInWithDeletedAsync`.
+- `SoftDeleteOps` (`SoftDeleteOps.cs`) — `SoftDeleteAsync`/`RestoreAsync`, the atomic
+  `UPDATE ... WHERE deletedat IS [NOT] NULL` with the version bump.
+- `PurgeOps` (`PurgeOps.cs`) — the purge referential-integrity primitives, `SetForeignKeyNullAsync`
+  and `DeleteByPropertyAsync`.
+- `ManyToManySync` (`ManyToManySync.cs`) — `SyncManyToManyAsync`.
+- `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
+  `QueryTranslationParentIdsAsync`, `SyncTranslationsAsync`.
+
+`GenericDispatcher<TDelegate>`/`BiGenericDispatcher<TDelegate>` (`GenericDispatcher.cs`) are the single
+implementation of the "resolve a private open generic method, cache the closed open-instance delegate
+per entity type" pattern the facade and every collaborator above use for entity-type dispatch.
+
 ### `IRelationExpander`
 
 `src/Struo.Application/Query/IRelationExpander.cs`: `ExpandAsync(...)` expands `deep` relations for a
