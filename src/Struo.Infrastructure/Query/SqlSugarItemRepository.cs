@@ -27,6 +27,7 @@ public sealed class SqlSugarItemRepository(
     // registered as a scoped DI service for future direct consumers.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
+    private readonly WhereInQueries whereIn = new(db, registry);
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
     // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
@@ -64,11 +65,6 @@ public sealed class SqlSugarItemRepository(
         typeof(SqlSugarItemRepository).GetMethod(nameof(RestoreGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(object), typeof(CancellationToken)])!;
-
-    private static readonly MethodInfo WhereInGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo WhereInFilteredGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInFilteredGenericAsync),
@@ -163,9 +159,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>> RestoreInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredInvokers = new();
@@ -658,47 +651,12 @@ public sealed class SqlSugarItemRepository(
     }
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
-        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
-    {
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        // Map camelCase field name -> CLR property name (fall back to the raw name, e.g. "id").
-        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        return QueryEntityWhereInAsync(d.EntityType, clrProperty, values, ct);
-    }
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        whereIn.QueryWhereInAsync(collection, property, values, ct);
 
-    public async Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
-        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default)
-    {
-        // Empty value set -> never emit an "IN ()"; return empty.
-        if (values.Count == 0) return [];
-
-        var column = db.EntityMaintenance.GetDbColumnName(propertyName, entityType);
-        var invoke = WhereInInvokers.GetOrAdd(entityType, static t =>
-            WhereInGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, column, values, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> WhereInGenericAsync<T>(
-        string column, IReadOnlyList<object> values, CancellationToken ct) where T : class, new()
-    {
-        // Use a ConditionalModel (ConditionalType.In) rather than the typed .In(string, ...)
-        // overload: SqlSugar's In(string, FieldType[]) is value-typed/array-bound and brittle
-        // across heterogeneous CLR id types. The comma-joined value form matches how the
-        // ConditionalModelTranslator emits IN clauses.
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = column,
-                ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
-            }
-        };
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
-        return rows.Cast<object>().ToList();
-    }
+    public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
+        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        whereIn.QueryEntityWhereInAsync(entityType, propertyName, values, ct);
 
     public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
