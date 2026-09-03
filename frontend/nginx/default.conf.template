@@ -1,0 +1,134 @@
+# nginx config for the StruoCMS admin SPA, rendered by the official nginx
+# image's docker-entrypoint (20-envsubst-on-templates.sh) into
+# /etc/nginx/conf.d/default.conf at container start.
+#
+# (a) The entrypoint only envsubst's variable names that actually exist in
+#     the container's environment (it passes `envsubst "$(env | ...)"`), so
+#     nginx's own runtime variables ($host, $uri, $scheme,
+#     $proxy_add_x_forwarded_for, ...) are left alone -- they are not env
+#     vars. The one known trap: if the deployment environment happens to
+#     define an env var literally named e.g. `host` or `uri`, that name
+#     WOULD get substituted here too. Don't introduce env vars with names
+#     that collide with nginx variables used below.
+# (b) When an `add_header` value is the empty string, nginx does not send
+#     that header at all. HSTS_VALUE defaults to empty, i.e. by default this
+#     image does NOT send Strict-Transport-Security. Only set HSTS_VALUE
+#     (e.g. "max-age=31536000; includeSubDomains") when TLS is terminated
+#     here or by a fronting proxy for every request that can reach this
+#     container.
+# (c) proxy_pass is given without a URI suffix after the upstream, so the
+#     original request path is forwarded unchanged: a request to /api/foo/bar
+#     reaches the backend as /api/foo/bar. The backend's controllers are
+#     routed at `api/...`, so no rewrite is needed -- the proxy's contract is
+#     a plain /api/* pass-through, nothing more.
+# (d) proxy_pass takes $upstream (an nginx variable) rather than the
+#     envsubst'd literal directly. With a literal target nginx resolves the
+#     hostname once at config load and refuses to start at all if it isn't
+#     resolvable yet -- fatal for this image if the admin container starts
+#     before, or without, its `api` container. Routing through a variable
+#     defers DNS lookup to request time via the `resolver` directive, so
+#     nginx starts regardless and a request to /api/... 502s (not the
+#     process refusing to boot) until the upstream is reachable.
+#
+#     API_UPSTREAM must be scheme://host:port ONLY -- no path component, not
+#     even a trailing slash. With a *variable* proxy_pass target (unlike a
+#     literal one), any URI part it carries REPLACES the request URI instead
+#     of being prefixed to it: `http://api:8080/` would turn every request
+#     -- e.g. `/api/items/posts` -- into a plain `GET /` at the backend.
+#     (This is exactly the bug that motivated deleting the /api/health/
+#     rewrite location in the previous revision of this file; the lesson is
+#     kept here instead of in a location block that no longer exists.)
+#
+#     127.0.0.11 is Docker's embedded DNS server -- but it only exists on a
+#     user-defined bridge network (the kind `docker compose` creates by
+#     default, or `docker network create`). A container started with a bare
+#     `docker run` on the default bridge network has no resolver listening
+#     there at all: without `resolver_timeout` below, an unresolvable
+#     /api/* request would then hang for nginx's default 30s resolver
+#     timeout before failing, instead of 502ing quickly. Either run this
+#     image on a user-defined network, or point NGINX_RESOLVER at a DNS
+#     server that actually is reachable from wherever it runs (e.g. a
+#     Kubernetes cluster's `kube-dns.kube-system.svc.cluster.local`, or a
+#     node-local resolver address).
+resolver ${NGINX_RESOLVER} valid=10s;
+resolver_timeout 5s;
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Don't advertise the nginx version in the Server header or on error
+    # pages.
+    server_tokens off;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+
+    # The SPA's JS/CSS/JSON/SVG payloads compress well; images and fonts
+    # under /assets/ are already compressed formats and are left out.
+    gzip on;
+    gzip_types text/plain text/css text/javascript application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+    gzip_vary on;
+
+    # Backend MaxUploadBytes is 25 MiB (26214400); keep some headroom so a
+    # request that is actually too large gets the backend's JSON error
+    # envelope (413) rather than nginx's own HTML error page.
+    client_max_body_size 32m;
+
+    location /api/ {
+        set $upstream "${API_UPSTREAM}";
+        proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        # The API already sends its own X-Content-Type-Options: nosniff.
+        # Hide it here so the server-level add_header above is the only
+        # copy left on the response -- without this, proxied responses
+        # would carry the header twice.
+        proxy_hide_header X-Content-Type-Options;
+    }
+
+    # index.html itself must never be cached long-term: it's the entry point
+    # that references the content-hashed bundle under /assets/, and a stale
+    # cached copy would keep pointing at files a newer deploy has replaced.
+    # nginx's add_header does NOT inherit into a location that declares its
+    # own add_header -- so the four security headers set at server level
+    # above are repeated here explicitly, or this location would silently
+    # drop them for every response it serves. This location is also what an
+    # SPA-fallback internal redirect from `location /` below lands on: nginx
+    # re-runs location matching on the try_files fallback URI, so a request
+    # to e.g. /collections/whatever still gets these headers, not the bare
+    # server-level ones.
+    location = /index.html {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        try_files /index.html =404;
+    }
+
+    # Vite emits content-hashed filenames under /assets/ (e.g.
+    # index-LStR-MxW.js) -- a new build is a new URL, so caching these
+    # immutably for a year is safe. Same add_header inheritance caveat as
+    # /index.html above: the four security headers are repeated here too.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
