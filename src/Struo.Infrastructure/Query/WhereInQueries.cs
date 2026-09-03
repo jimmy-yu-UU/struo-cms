@@ -1,6 +1,7 @@
 // src/Struo.Infrastructure/Query/WhereInQueries.cs
 using SqlSugar;
 using Struo.Application.Metadata;
+using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
 
@@ -8,6 +9,9 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
 {
     private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
+
+    private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredDispatcher =
+        new(typeof(WhereInQueries), nameof(WhereInFilteredGenericAsync), [typeof(List<IConditionalModel>), typeof(CancellationToken)]);
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
@@ -45,6 +49,40 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
                 CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        return rows.Cast<object>().ToList();
+    }
+
+    public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
+        string collection, string property, IReadOnlyList<object> values,
+        FilterNode? extraFilter, CancellationToken ct = default)
+    {
+        if (values.Count == 0) return [];
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
+        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.In,
+                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
+            }
+        };
+        // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
+        // IConditionalModel entries. ConditionalModelTranslator maps camelCase field paths -> columns.
+        if (extraFilter is not null)
+            conditionals.AddRange(ConditionalModelTranslator.Translate(extraFilter, null, [], d, db));
+
+        return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, ct);
+    }
+
+    private async Task<IReadOnlyList<object>> WhereInFilteredGenericAsync<T>(
+        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
+    {
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();
     }
