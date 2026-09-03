@@ -13,9 +13,9 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
             [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> ParentIdsDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> ParentIdsDispatcher =
         new(typeof(TranslationStore), nameof(QueryTranslationParentIdsGenericAsync),
-            [typeof(string), typeof(string), typeof(string), typeof(string), typeof(List<IConditionalModel>), typeof(CancellationToken)]);
+            [typeof(string), typeof(List<IConditionalModel>), typeof(CancellationToken)]);
 
     // Second-level dispatcher (T fixed by the call above, TFk resolved at runtime from the FK
     // property's actual CLR type) so the FK-only SQL projection below can be expressed as a genuinely
@@ -81,7 +81,6 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         FilterNode fieldCondition,
         CancellationToken ct = default)
     {
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
         var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
 
         // Build a fake EntityDescriptor for the translation type so ConditionalModelTranslator
@@ -103,12 +102,11 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         var conditionals = new List<IConditionalModel> { localeConditional };
         conditionals.AddRange(fieldConditionals);
 
-        return await ParentIdsDispatcher.For(translationType)(this, fkColumn, fkProperty, localeColumn, locale, conditionals, ct);
+        return await ParentIdsDispatcher.For(translationType)(this, fkProperty, conditionals, ct);
     }
 
     private async Task<IReadOnlyList<object>> QueryTranslationParentIdsGenericAsync<T>(
-        string fkColumn, string fkProperty, string localeColumn, string locale,
-        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
+        string fkProperty, List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
     {
         var fkProp = typeof(T).GetProperty(fkProperty,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);

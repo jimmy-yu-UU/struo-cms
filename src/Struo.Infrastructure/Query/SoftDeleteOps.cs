@@ -51,7 +51,7 @@ internal sealed class SoftDeleteOps(ISqlSugarClient db, IEntityRegistry registry
         // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
         // For AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
         // the trash stamp so the history timeline advances and a stale client 409s after a restore.
-        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(ISoftDeletable.DeletedAt));
         var affected = await ApplyVersionBump(db.Updateable<T>()
                 .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy }))
             .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NULL", new { __sdId = id })
@@ -109,7 +109,7 @@ internal sealed class SoftDeleteOps(ISqlSugarClient db, IEntityRegistry registry
         // ItemService, which would leave a TOCTOU window between the check and this UPDATE where two
         // concurrent restores of the same row could each re-stamp/re-version and double-record a
         // "restore" revision.
-        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(ISoftDeletable.DeletedAt));
         var affected = await ApplyVersionBump(db.Updateable<T>()
                 .SetColumns(it => new T { DeletedAt = null, DeletedBy = null }))
             .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NOT NULL", new { __sdId = id })
