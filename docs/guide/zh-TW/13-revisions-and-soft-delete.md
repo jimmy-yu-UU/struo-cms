@@ -244,11 +244,11 @@ db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
 取得單筆、深度展開、跨關聯 id 解析、M2M 存在性檢查，以及入站的 `OnDelete.Restrict` 檢查(第 7 章)都
 會靜默地預設排除一列已被移入回收桶的資料。一次真正需要已移入回收桶資料列的讀取(`?deleted=only|with`、
 還原、清除)會針對那單一次查詢明確清除這個過濾器(`.ClearFilter<ISoftDeletable>()`，
-`SqlSugarItemRepository.cs`)，而不是讓這道底線在全域層級變成可選擇退出——預設移入回收桶，是失敗時該
+`src/Struo.Infrastructure/Query/`)，而不是讓這道底線在全域層級變成可選擇退出——預設移入回收桶，是失敗時該
 偏向的安全方向。
 
 移入回收桶/還原這兩個寫入動作本身(`SoftDeleteAsync`/`RestoreAsync`，
-`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`)都以單一原子性的
+`src/Struo.Infrastructure/Query/SoftDeleteOps.cs`)都以單一原子性的
 `UPDATE ... WHERE deletedat IS [NOT] NULL` 執行，而不是先讀取再寫入——因此把一列已經在回收桶中的資料
 再次移入回收桶(或還原一列已經是現行有效的資料)，在 SQL 層級是一個無操作(影響零列資料)，而不是一場
 兩個並行呼叫端都可能各自「贏得」的競賽。對於一個 `AuditableEntity` 而言，同一個 `UPDATE` 也會推進

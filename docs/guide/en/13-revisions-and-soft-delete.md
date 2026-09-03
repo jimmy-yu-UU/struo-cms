@@ -264,11 +264,11 @@ This applies to **every** `Queryable<T>` over an `ISoftDeletable` entity with no
 required — list, get, deep-expansion, cross-relation id-resolution, M2M existence checks, and inbound
 `OnDelete.Restrict` checks (chapter 7) all silently exclude a trashed row by default. A read that
 genuinely needs trashed rows (`?deleted=only|with`, restore, purge) clears the filter explicitly for that
-one query (`.ClearFilter<ISoftDeletable>()`, `SqlSugarItemRepository.cs`) rather than the floor being
+one query (`.ClearFilter<ISoftDeletable>()`, `src/Struo.Infrastructure/Query/`) rather than the floor being
 opt-out globally — trashed-by-default is the safe direction to fail in.
 
 The trash/restore writes themselves (`SoftDeleteAsync`/`RestoreAsync`,
-`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`) run as a single atomic `UPDATE ...
+`src/Struo.Infrastructure/Query/SoftDeleteOps.cs`) run as a single atomic `UPDATE ...
 WHERE deletedat IS [NOT] NULL`, not a pre-read-then-write — so trashing an already-trashed row (or
 restoring an already-live one) is a no-op at the SQL level (zero rows affected) rather than a race two
 concurrent callers could each "win". For an `AuditableEntity`, the same `UPDATE` also bumps `Version`
