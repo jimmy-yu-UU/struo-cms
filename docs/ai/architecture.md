@@ -219,14 +219,14 @@ three purge primitives explicitly or purge will throw for every collection.
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
 `RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,
 `DeleteGenericAsync`, and `CloneEntity` those methods use internally), and delegates every other
-`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder`, the seventh, is
-used inside `QueryAsync` rather than delegated to — all in the same `Query/` folder. Each is
+`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder`, the seventh,
+is used inside `QueryAsync` rather than delegated to — all in the same `Query/` folder. Each is
 initialized in a field initializer from the facade's primary-constructor parameters rather than
 injected as its own dependency — only `OrderByExpressionBuilder` is also registered scoped in DI.
-`ManyToManySync` and `TranslationStore`
-each get their own `new TransactionRunner(db)` instance (a field initializer cannot reference another
-instance field), rather than sharing the facade's own `transactions` field; `TransactionRunner` holds
-no state beyond `db`, so the extra instance behaves identically to sharing one:
+`ManyToManySync` and `TranslationStore` each get their own `new TransactionRunner(db)` instance (a
+field initializer cannot reference another instance field), rather than sharing the facade's own
+`transactions` field; `TransactionRunner` holds no state beyond `db`, so the extra instance behaves
+identically to sharing one:
 
 - `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
   query DSL; the only collaborator registered as a scoped DI service.
