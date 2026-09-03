@@ -12,6 +12,9 @@ internal sealed class SoftDeleteOps(ISqlSugarClient db, IEntityRegistry registry
     private static readonly GenericDispatcher<Func<SoftDeleteOps, string, object, DateTime, Guid?, CancellationToken, Task<bool>>> SoftDeleteDispatcher =
         new(typeof(SoftDeleteOps), nameof(SoftDeleteGenericAsync), [typeof(string), typeof(object), typeof(DateTime), typeof(Guid?), typeof(CancellationToken)]);
 
+    private static readonly GenericDispatcher<Func<SoftDeleteOps, string, object, CancellationToken, Task<bool>>> RestoreDispatcher =
+        new(typeof(SoftDeleteOps), nameof(RestoreGenericAsync), [typeof(string), typeof(object), typeof(CancellationToken)]);
+
     public async Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default)
     {
         var d = RepositoryHelpers.Descriptor(registry, collection);
@@ -63,10 +66,7 @@ internal sealed class SoftDeleteOps(ISqlSugarClient db, IEntityRegistry registry
     // SQL fragment `version = version + 1` — no bound null parameter (no 42804 typed-null trap) and no
     // CAS (delete/restore carry no client version; the decision is increment-only). Non-AuditableEntity
     // ISoftDeletable types have no Version and are returned unchanged.
-    // Internal (not private) only until Task 4's second commit moves RestoreGenericAsync here too —
-    // that commit's cross-class caller in the facade needs it visible in the meantime; it reverts to
-    // private once RestoreGenericAsync becomes the only other caller, inside this same class.
-    internal static IUpdateable<T> ApplyVersionBump<T>(IUpdateable<T> updateable) where T : class, new()
+    private static IUpdateable<T> ApplyVersionBump<T>(IUpdateable<T> updateable) where T : class, new()
     {
         if (!typeof(AuditableEntity).IsAssignableFrom(typeof(T))) return updateable;
 
@@ -79,5 +79,41 @@ internal sealed class SoftDeleteOps(ISqlSugarClient db, IEntityRegistry registry
             Expression.MemberInit(Expression.New(typeof(T)), Expression.Bind(versionProp, incremented)),
             param);
         return updateable.SetColumns(setExpr);
+    }
+
+    public async Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default)
+    {
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
+            throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
+
+        var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
+        var typedId = RepositoryHelpers.ConvertId(id, d);
+
+        return await RestoreDispatcher.For(d.EntityType)(this, idColumn, typedId, ct);
+    }
+
+    private async Task<bool> RestoreGenericAsync<T>(string idColumn, object id, CancellationToken ct)
+        where T : class, ISoftDeletable, new()
+    {
+        // PG 42804 fix: `.SetColumns(deletedAtColumn, (object?)null)` binds a null
+        // parameter with NO CLR type, so Npgsql infers `text` and PG rejects
+        // `SET deletedat = @p(text)` against the `timestamp` column. The entity-typed object
+        // initializer below goes through SqlSugar's expression resolver instead of the raw
+        // string-fieldName overload: it recognizes DeletedAt/DeletedBy as Nullable<DateTime>/
+        // Nullable<Guid> and assigns the null parameter's DbType from the underlying type
+        // (DateTime / Guid), which PG accepts against the timestamp/uuid columns.
+        // Bump Version in the SAME UPDATE (AuditableEntity subclasses only) — see ApplyVersionBump.
+        // Guard the UPDATE itself with "deletedat IS NOT NULL" so restoring an already-live row
+        // is an atomic no-op at the SQL level (affected = 0) — not merely a pre-read check in
+        // ItemService, which would leave a TOCTOU window between the check and this UPDATE where two
+        // concurrent restores of the same row could each re-stamp/re-version and double-record a
+        // "restore" revision.
+        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
+        var affected = await ApplyVersionBump(db.Updateable<T>()
+                .SetColumns(it => new T { DeletedAt = null, DeletedBy = null }))
+            .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NOT NULL", new { __sdId = id })
+            .ExecuteCommandAsync(ct);
+        return affected > 0;
     }
 }
