@@ -108,6 +108,42 @@ entity 上，而非 domain 型別上。
 core。不過，單純執行 `rm -rf samples/` 仍會破壞 solution 層級的 `dotnet build`(`StruoCMS.slnx` 與上述
 測試專案參照)——完整、安全的移除程序請見第 16 章的移除檢查清單。
 
+## 什麼可以換、什麼不能換
+
+本手冊其他地方所說的「資料庫可替換」，指的是 SqlSugar 的 **provider**——不是指 ORM 本身。
+`Database:DbType` 可選五個值，在 `DbTypeMapper.Map`
+(`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`) 中一對一對應到 `SqlSugar.DbType`:
+PostgreSQL 是已驗證的執行期目標，SQLite 支撐測試套件，MySQL/SqlServer/Oracle 雖然在程式碼中有對應，
+但屬未驗證 (見上方「StruoCMS 不是什麼」一節)。
+
+ORM 本身則不是 fork 的 content project 可以抽換的東西。每一個 content entity——參見
+`samples/Struo.Sample.Blog/Article.cs`——都以 `using SqlSugar;` 開頭，並直接掛上 SqlSugar
+自身的 attribute:`[SugarTable]`、`[SugarColumn]`、`[SugarIndex]`、`[Navigate]`，與 StruoCMS
+自己的 `[CmsCollection]`/`[CmsField]` 並列。第 4、5 章記載的 CodeFirst DDL 規則——`Id`
+override 需要 `[SugarColumn(IsPrimaryKey = true)]`、`IsJson` 需要明確的 `text` 欄位、`[ColumnShape]`
+——都是 SqlSugar 自身的語意，並非 StruoCMS 在其上包了一層抽象;第 13 章的軟刪除底線是同一個直接
+依賴，只是換了形式，以註冊在 client 上的查詢過濾器呈現，而非 DDL attribute (詳見下方)。
+`IItemRepository`
+(`src/Struo.Application/Query/IItemRepository.cs`) 是 core 內部的 seam——它唯一的實作是
+`SqlSugarItemRepository`——不是為了讓 fork 換 ORM 而設計的抽象層;不論由誰實作這個介面，content
+entity 上的 SqlSugar attribute 都仍然綁定 SqlSugar。
+
+實際影響是:SqlSugar 的大版本升級，或是像 `IsJson`、`[SugarIndex]` 這類 attribute 語意上的變動，
+會直接衝擊每一個 fork 的 entity 類別——core 不會、也無法替 fork 吸收這類變動。升級 core 時，
+請把 `Directory.Packages.props` 中 `SqlSugarCore` 的版本列與你 fork 先前 checkout 的版本相比對，
+並在合併前讀過該版本的 changelog。
+
+這種耦合會產生的具體陷阱，已記載於既有章節，這裡不重複:第 4 章的
+[最小集合](04-defining-a-collection.md#最小集合) (`Id` override 與
+`[SugarColumn(IsPrimaryKey = true)]`) 與第 5 章的
+[常見陷阱](05-field-types.md#常見陷阱) (`IsJson` 需要明確的 `text` 欄位、`[ColumnShape]`)，是這種
+耦合在 DDL attribute 上的表現。第 13 章的
+[全域查詢過濾器](13-revisions-and-soft-delete.md#全域查詢過濾器) 則是另一種 SqlSugar
+耦合:版本紀錄不需要在 entity 上多加任何欄位，`ISoftDeletable` 本身也是一個不依賴任何套件的標記
+介面——軟刪除真正綁定 SqlSugar 的地方，是那道註冊在 `SqlSugarClientFactory.Create` 中、針對
+SqlSugar client 本身的查詢過濾器 `db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt ==
+null)`，而不是宣告在 entity 上的東西。這一節說明耦合本身，那些章節則展示它的具體樣貌。
+
 ## 技術堆疊
 
 後端:

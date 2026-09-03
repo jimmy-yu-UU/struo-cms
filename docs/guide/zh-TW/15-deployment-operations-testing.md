@@ -33,7 +33,7 @@ session ticket 存放區共用同一個 `IDistributedCache`，讓每一個 repli
 | Cookie `Secure` policy | The reverse proxy/load balancer must terminate HTTPS in front of a Production deployment | `AuthWiring.cs` 只要 `env.IsProduction()` 就會設定 `CookieSecurePolicy.Always`(否則為 `CookieSecurePolicy.SameAsRequest`，這樣開發/測試用的 HTTP host(即執行本章範例的
 `Struo.Api` 執行個體)才能繼續運作)。以純 HTTP 提供 Production 服務，代表瀏覽器永遠不會在任何後續請求中把驗證 cookie 送回去——登入看似成功一次，之後卻始終悄悄地不會被保留。 |
 | `Oidc:RequireEmailVerified` / `AllowedTenantId` / `AllowedEmailDomains` | Pinned explicitly whenever `Oidc:Enabled=true` | `AllowedTenantId` 出貨時是一個不會相符的預留值 `"REPLACE_TENANT_ID"`(`appsettings.json`)，而 `ExternalLoginService.ResolveOrProvisionAsync`(`src/Struo.Application/Security/ExternalLoginService.cs`)會拒絕任何租戶不等於它的外部身分(`TenantNotAllowed`)——因此在**出貨**預設值之下，外部登入對每一個真實租戶都會失敗封閉，直到這個值被換成真正的租戶為止。不過 `RequireEmailVerified`(`false`)與 `AllowedEmailDomains`(`[]`)確實預設寬鬆：一旦 `AllowedTenantId` 被設為一個真實、相符的租戶，剩下的檢查就都是選用的，而連結接下來就只會依**電子郵件相等性**進行——任何外部帳號，只要其宣稱的電子郵件與一個既有本機使用者相符，就會被當成該使用者處理，無論其驗證狀態為何。 |
-| Security response headers | Not configurable — the application always sends `X-Content-Type-Options: nosniff`; the reverse proxy is responsible for `Strict-Transport-Security`, `X-Frame-Options`/CSP `frame-ancestors`, and `Referrer-Policy` | `Program.cs`管線中最前面註冊了一個內建 middleware，會在每一個回應上設定 `X-Content-Type-Options: nosniff`——一個普通的 200、一個錯誤 envelope、一個 CORS preflight、一個裸的 404 皆然——除非下游的處理常式已經自行設定過它。`Struo.Api` 本身不提供任何 HTML(沒有 `wwwroot`、`UseStaticFiles`，也沒有 `MapFallbackToFile`；admin SPA 是另外部署的)，所以這是檔案下載端點 `Content-Disposition: attachment`(`FilesController.Download`)與圖片轉檔路徑固定的點陣圖 content type 之後的縱深防禦，不是在修補一個現存的漏洞。應用程式本身**不會**送出其他常見的標頭：若在反向代理那一層也略過它們，會讓其後方的任何 HTML 表面(例如另外部署的 admin SPA)完全沒有 HSTS 的降級保護、沒有 `X-Frame-Options`/CSP `frame-ancestors` 的點擊劫持防護、也沒有 `Referrer-Policy` 限制外洩到連結目的地的內容——而這個 API 本身的 JSON 回應原本就不存在這類暴露。 |
+| Security response headers | Not configurable — the application always sends `X-Content-Type-Options: nosniff`; the reverse proxy is responsible for `Strict-Transport-Security`, `X-Frame-Options`/CSP `frame-ancestors`, and `Referrer-Policy`; `frontend/nginx/default.conf.template` is a working reference implementation | `Program.cs`管線中最前面註冊了一個內建 middleware，會在每一個回應上設定 `X-Content-Type-Options: nosniff`——一個普通的 200、一個錯誤 envelope、一個 CORS preflight、一個裸的 404 皆然——除非下游的處理常式已經自行設定過它。`Struo.Api` 本身不提供任何 HTML(沒有 `wwwroot`、`UseStaticFiles`，也沒有 `MapFallbackToFile`；admin SPA 是另外部署的)，所以這是檔案下載端點 `Content-Disposition: attachment`(`FilesController.Download`)與圖片轉檔路徑固定的點陣圖 content type 之後的縱深防禦，不是在修補一個現存的漏洞。應用程式本身**不會**送出其他常見的標頭：若在反向代理那一層也略過它們，會讓其後方的任何 HTML 表面(例如另外部署的 admin SPA)完全沒有 HSTS 的降級保護、沒有 `X-Frame-Options`/CSP `frame-ancestors` 的點擊劫持防護、也沒有 `Referrer-Policy` 限制外洩到連結目的地的內容——而這個 API 本身的 JSON 回應原本就不存在這類暴露。 |
 
 ## Schema 管理
 
@@ -182,6 +182,154 @@ $ ls -la src/Struo.Api/logs
 `builder.Host.UseSerilog(...)` 會同時從 `IConfiguration` 與 DI 容器讀取(`ReadFrom.Services`)，
 因此任何透過 DI 註冊的 enricher 也都會被納入。
 
+## 容器映像
+
+這個儲存庫出貨兩份 Dockerfile，各自產生一個獨立的 image：根目錄的 `Dockerfile` 建置 API，
+`frontend/Dockerfile` 建置管理後台 SPA。這個儲存庫沒有正式環境用的 `docker compose` 檔——見下方
+「部署仍然是你的責任」一節。
+
+**建置**——與 CI `docker` job 相同的兩道指令，只是 tag 改成本機用的：
+
+```bash
+docker build --tag struo-api:local .
+docker build --tag struo-admin:local frontend
+```
+
+API image 的建置情境(build context)是整個儲存庫，不只是 `src/Struo.Api/`：一個 fork 的內容專案
+是以 `ProjectReference` 從 `Struo.Api.csproj` 參照進來的，因此建置需要那個參照能指向的每一個專案，
+加上根目錄的 `Directory.Build.props`/`Directory.Packages.props`(`Dockerfile` 自己的註解 1)。
+根目錄的 `.dockerignore` 把 `frontend/`、`docs/`，以及一般的建置/測試產物排除在這個情境之外。
+
+### API image
+
+- 監聽連接埠 `8080`(`EXPOSE 8080`)，並以非 root 使用者 `app` 執行，不是 root。
+- `db/migrations` 會被複製進 image，位於 `/app/db/migrations`。`Database:MigrationsPath` 預設留空，
+  與 `appsettings.json` 本身「不自動在啟動時執行 migration」的預設值一致——要在這個 image 內開啟
+  runner，請明確把它設為 `/app/db/migrations`(必須是絕對路徑;見上方檢查清單那一列)。
+- `app` 可寫入兩個目錄：`/app/App_Data`(local 後端上傳檔案與圖片轉檔快取)與 `/app/logs`(Serilog 的
+  File sink)。`/app/App_Data` 另外被宣告為一個 `VOLUME`，因此即使是一次沒有 `--mount`/`-v` 的單純
+  `docker run`，也會在那裡取得一個匿名 volume，而不是讓寫入悄悄落在容器的可寫層裡。
+- `HEALTHCHECK` 每 30 秒對 `http://localhost:8080/health/live` 探測一次(5 秒逾時、30 秒啟動寬限期、
+  3 次重試)——是 liveness 路由，不是 `/health/ready`。因此 `docker ps`/`docker inspect` 的健康狀態
+  只反映「行程正在接受請求」，不反映資料庫或快取的可連線性;每個路由實際檢查什麼，見下方的健康檢查
+  探針表。
+
+已針對 PostgreSQL 進行即時驗證：把 `Database:ConnectionString` 指向一個從容器內部可連線的 PostgreSQL
+執行個體(若資料庫執行在主機上，則是 `host.docker.internal`——這只有在 Docker Desktop 上才會開箱
+即用可解析；在 Linux 上，需要在 `docker run` 指令加上
+`--add-host=host.docker.internal:host-gateway`)，並設定
+`Database:MigrationsPath=/app/db/migrations`，啟動時建立了十一張核心資料表，migration runner 也
+針對該目錄執行，待處理腳本數為零——`db/migrations/` 只出貨了它的 `README.md`。`/health/ready` 在大約
+2 秒內回報 `Healthy`。一次透過 SPA image 完成的真實上傳，最終落在
+`/app/App_Data/uploads/<yyyy>/<MM>/<id>.<ext>`，確認了 `Struo:Files:Local:RootPath` 的預設值確實會
+解析到這個已宣告的 volume 之內。
+
+#### 環境變數
+
+下方每一個鍵都存在於 `src/Struo.Api/appsettings.json`(完整參考見第 3 章);這裡只列出與執行這個
+image 最相關的幾個。
+
+| 變數 | 用途 | 備註 |
+|---|---|---|
+| `Database__DbType` | 要連線的後端 | `PostgreSQL`(出貨預設值)、`Sqlite`、`MySql`、`SqlServer`，或 `Oracle`(`StruoDbType.cs`);CI 的 smoke test 使用 `Sqlite`。 |
+| `Database__ConnectionString` | 對應後端的連線字串 | 出貨時是一整組 PostgreSQL 連線字串，其中的帳密是 `REPLACE_ME` 預留值(`Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME`)——image 若要能啟動，這是必要設定。 |
+| `Database__MigrationsPath` | 啟動時要套用的一批已審查 `.sql` migration 腳本所在目錄 | 必須是**絕對路徑**(見上方檢查清單)。留空/未設定(預設)會完全停用 runner。在這個 image 內，migrations 目錄是 `/app/db/migrations`。 |
+| `Redis__ConnectionString` | 支撐 session ticket 存放區的分散式快取 | 留空(預設)會回退到行程內快取——單一 replica 沒問題，一個以上就不行。 |
+| `Struo__Files__Backend` | `local` 或 `s3` | 預設 `local`，寫入 `Struo:Files:Local:RootPath`(`App_Data/uploads`，位於已宣告的 volume 之內)。 |
+| `Struo__Files__S3__Endpoint` / `__Bucket` / `__AccessKey` / `__SecretKey` | S3 相容儲存憑證 | 只有在 `Struo__Files__Backend=s3` 時才會被查閱;這四個全部出貨為 `REPLACE_ME` 預留值。 |
+| `Struo__Files__S3__Region` | S3 區域 | 出貨時有一個真正的預設值 `us-east-1`，不是預留值——若儲存桶不在該區域，請自行覆寫。 |
+| `Auth__BootstrapAdmin__Email` / `__Password` | 覆寫種子建立的預設 admin 帳號 | 只會在 `users` 資料表**第一次**被建立時讀取——見上方檢查清單那一列。 |
+| `ASPNETCORE_ENVIRONMENT` | ASP.NET Core 的 hosting 環境 | 這個 image 中完全沒有設定它(`docker image inspect struo-api:ci` 顯示 env 清單裡沒有 `ASPNETCORE_ENVIRONMENT`)——它之所以預設為 `Production`，是因為這個變數不存在時，那就是 ASP.NET Core 框架自身的預設值，不是這份 `Dockerfile` 自己設定的。原因見下方段落。 |
+
+因為 `ASPNETCORE_ENVIRONMENT` 預設為 `Production`，`CookieSecurePolicy.Always` 就會生效(上方檢查
+清單中的 Cookie `Secure` policy 那一列)：以純 HTTP 登入看似成功，但瀏覽器在之後的請求中永遠不會把
+cookie 送回去。請在容器前面終結 TLS，或者只在本機、純 HTTP 的 smoke test 中設定
+`ASPNETCORE_ENVIRONMENT=Development`——絕不可用於真正的部署。
+
+#### DataProtection 金鑰
+
+ASP.NET Core 的 DataProtection 金鑰環(key ring)——負責簽署與加密驗證 cookie 與 antiforgery
+token——會被寫在容器內部的 `/home/app/.aspnet/DataProtection-Keys`。這個 image 中沒有任何東西會
+持久化或共用這個目錄：它沒有被掛載成 volume，應用程式也會在啟動時針對這件事記錄一則警告
+(「Storing keys in a directory '/home/app/.aspnet/DataProtection-Keys' that may not be
+persisted outside of the container」)。另外還有第二則、獨立的警告，涵蓋的是金鑰環本身的儲存
+格式:「No XML encryptor configured. Key {…} may be persisted to storage in unencrypted
+form.」在沒有設定 encryptor 的情況下，DataProtection 會以未加密的明文形式將金鑰儲存在磁碟上，
+因此任何為金鑰環掛載的目錄裡存放的都是明文金鑰材料，必須比照其他機密來保護它——檔案系統權限、
+備份加密、存取記錄——而不是當成一般的應用程式狀態來對待。容器完全不持久化這個目錄，會直接帶來
+兩個後果：替換容器(一次重新部署、一次因映像更新而重啟)會讓每一個既有的驗證 cookie 與
+antiforgery token 全部失效，強迫每一位使用者重新登入；而執行一個以上的 replica，會讓每個
+replica 各自擁有一份互不相通的金鑰環，導致負載平衡器把請求路由到與核發者不同的 replica 時，
+cookie 驗證與 antiforgery 雙雙失敗。若只有單一實例，請把 `/home/app/.aspnet/DataProtection-Keys`
+掛載成一個 volume，讓金鑰能在容器被替換後存活。若有一個以上的 replica，請改為設定一個共用的
+DataProtection 金鑰存放區(一個共用檔案系統、Redis，或雲端供應商自己的金鑰環服務)——這個儲存庫
+本身並未設定任何一種;請把這當成這個 image 一個誠實的限制，而不是一項功能。
+
+### 管理後台 SPA image
+
+- 監聽連接埠 `80`(`EXPOSE 80`)，透過 nginx 提供 Vite 正式環境建置的產物。
+- 這個 image 的建置會採納一份已提交的 `frontend/.env.production`(`frontend/.env.example`
+  有廣告 `VITE_API_BASE_URL` 這個變數)：若是跨來源(cross-origin)部署，請在裡面設定它；若要沿用
+  這個 image 提供的同來源(same-origin)`/api` 代理，就讓它保持未設定。
+- `API_UPSTREAM`(預設 `http://api:8080`)是要把 `/api/*` 反向代理過去的後端。它必須是
+  `scheme://host:port`，**沒有路徑、也沒有結尾斜線**：`proxy_pass` 使用的是一個 nginx 變數而不是
+  字面值(這樣容器才能在 API 尚未可解析時也照樣啟動)，而在使用變數目標時，`API_UPSTREAM` 攜帶的任何
+  路徑片段都會*取代*請求的 URI，而不是被加在前面(`frontend/nginx/default.conf.template`，
+  註解 (d))。
+- `HSTS_VALUE` 預設留空，代表這個 image 完全**不會**送出 `Strict-Transport-Security`——因為
+  nginx 對於值為空字串的 `add_header` 會直接不送出。只有在這裡、或某個前置代理，已經針對每一個能
+  抵達這個容器的請求終結了 TLS 之後，才設定它(例如 `max-age=31536000; includeSubDomains`)。
+- 不論 `HSTS_VALUE` 為何，都一律會送出三個安全標頭：`X-Content-Type-Options: nosniff`、
+  `X-Frame-Options: DENY`，以及 `Referrer-Policy: strict-origin-when-cross-origin`。這正是上方檢查
+  清單中 Security response headers 那一列所說的「reverse proxy 負責」的意思——
+  `frontend/nginx/default.conf.template` 是這個責任的一個可執行的參考實作，不是規定一定要用
+  nginx。API 自己送出的 `X-Content-Type-Options: nosniff` 在代理過的 `/api/*` 回應上會被隱藏
+  (`proxy_hide_header`)，讓這個標頭在那些回應上恰好只出現一次，而不是兩次。
+- 快取：`index.html` 以 `Cache-Control: no-cache` 提供(它參照的是內容雜湊過的 bundle，一份過期的
+  快取副本會一直指向新版部署已經替換掉的檔案)；`/assets/` 底下的一切則以
+  `Cache-Control: public, max-age=31536000, immutable` 提供(Vite 的檔名帶有內容雜湊，因此每次新
+  建置都是新的 URL)。SPA 的文字型回應開啟了 gzip，`server_tokens off` 讓 nginx 不再對外揭露自己的
+  版本號，而 `client_max_body_size 32m` 在後端的 `Struo:Files:MaxUploadBytes`(25 MiB /
+  26214400 bytes，`src/Struo.Api/appsettings.json`)之上留了一些餘裕，讓一個真正過大的上傳能拿到
+  後端自己的 JSON 錯誤 envelope，而不是 nginx 的 HTML 錯誤頁。
+- `NGINX_RESOLVER`(預設 `127.0.0.11`，Docker 內建的 DNS，`resolver_timeout` 為 5 秒)只存在於
+  **user-defined** 的 Docker network 上——也就是 `docker compose` 或 `docker network create` 產生
+  的那種。在預設的 bridge network 上(一次沒有 `--network` 的單純 `docker run`)，每一個 `/api/*`
+  請求都會在解析逾時後以 502 失敗，因為那裡根本沒有東西在監聽 `127.0.0.11`。請把兩個容器放在同一個
+  user-defined network 上，或把 `NGINX_RESOLVER` 指向一個從 image 執行環境真正可連線的 DNS
+  伺服器。
+
+### 部署仍然是你的責任
+
+單靠這兩個 image 本身並不構成一次部署——除了上方的 DataProtection 金鑰環之外：
+
+- **HTTPS 終結。** 兩個 image 都不會自行終結 TLS；兩者都預期前面有一個反向代理或負載平衡器
+  (上方檢查清單中的 Cookie `Secure` policy 那一列)。
+- **`UseForwardedHeaders`。** 若 API 位於任何反向代理之後——包括管理後台 SPA image 自己的
+  nginx——請設定 `UseForwardedHeaders`，並附上明確的 `KnownProxies`/`KnownNetworks` 允許清單，如上方
+  檢查清單那一列已涵蓋的。
+- **編排(Orchestration)。** 重啟原則、擴縮、密鑰注入，以及把健康檢查接進實際執行這些 image 的
+  平台(Kubernetes、ECS、一個帶 `--restart` 的單純 `docker run`……)，都在兩份 Dockerfile 提供的範圍
+  之外。這個儲存庫不出貨正式環境用的 `docker compose` 檔。
+
+### 一起驗證這兩個 image
+
+確認兩個 image 真的能互相溝通的最小方式——這是一份**驗證用的操作步驟**，不是一個部署拓樸：
+
+```bash
+docker network create struo-verify
+docker run --detach --name api --network struo-verify \
+  --env Database__DbType=Sqlite \
+  --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' \
+  struo-api:local
+docker run --detach --name admin --network struo-verify --publish 8081:80 \
+  struo-admin:local
+```
+
+admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以能解析成功，是因為兩個容器都位於同一個
+user-defined network `struo-verify` 上，而且 API 容器命名為 `api`——與上方 `NGINX_RESOLVER` 那段
+說明相同的道理。打開 `http://localhost:8081`，確認 SPA 能載入，且它的 `/api/*` 呼叫能抵達後端。
+
 ## 給協調器用的健康檢查探針
 
 第 2 章介紹了這兩個健康檢查路由；這裡要說明的是每一個實際檢查了什麼，供接入協調器的
@@ -235,16 +383,36 @@ liveness/readiness 探針使用：
 
 ## CI 會執行什麼——以及它刻意不執行什麼
 
-`.github/workflows/ci.yml` 恰好定義了兩個 job，兩者都會在推送到 `main`、每一次 pull request，以及
-手動觸發時被觸發：
+`.github/workflows/ci.yml` 定義了六個 job。`backend`、`frontend`、`docs` 與 `docker` 都會在推送到
+`main`、每一次 pull request，以及手動觸發時被觸發；`sonar-backend` 與 `sonar-frontend` 則額外加了
+一個條件(見它們各自下方的說明)：
 
 - **`backend`**——`dotnet restore`、`dotnet build --no-restore --configuration Release`，接著
   `dotnet test --no-build --configuration Release --verbosity normal`——完整的後端單元/整合套件。
   這個工作流程中的任何地方都沒有設定 `STRUO_TEST_PG_CONNECTION`，因此即時 PostgreSQL 套件中的測試
   在 CI 裡全部都會走無操作通過的路徑；那裡只有 SQLite 支援的測試才會真正演練任何東西。
-- **`frontend`**——`pnpm install --frozen-lockfile`，接著 `pnpm test`，然後 `pnpm build`——前端
+- **`frontend`**——`pnpm install --frozen-lockfile --ignore-scripts`，接著 `pnpm test`，然後 `pnpm build`——前端
   單元套件，加上一次完整的正式環境建置(`vue-tsc -b && vite build`)，同時也是 CI 對這個 SPA 的
   TypeScript 型別唯一的強制檢查。
+- **`docs`**——在 `docs/` 底下執行 `pnpm install --frozen-lockfile --ignore-scripts`，接著
+  `pnpm build`——這是手冊自己的關卡：`vitepress build` 會解析每一個跨章節連結，遇到失效連結就失敗；
+  接著一個 `check-rendered-chapters.mjs` 步驟會斷言每一章確實渲染出非空內容，因為單靠
+  `vitepress build` 即使某一頁渲染成空白，結束代碼仍然是 `0`。
+- **`docker`**——建置兩個容器 image(根目錄的 `Dockerfile` 對應 API，`frontend/Dockerfile` 對應
+  管理後台 SPA;細節見上方「容器映像」一節)，並對每一個都做 smoke test：API image 以 SQLite 啟動
+  (`Database__DbType=Sqlite`、`Database__ConnectionString=Data Source=/tmp/struo-ci.db`)，job 反覆
+  探測 `/health/ready` 直到回報健康;SPA image 啟動後，job 對回應的 `/` 內容做 grep，確認其中含有
+  `assets/index-`，證明建置出來的 bundle 確實能透過 nginx 存取。這個 job 刻意**不是**第六個 standing
+  gate——貢獻者不需要在本機安裝 Docker 也能開發這個儲存庫——而且和下方的兩個 `sonar-*` job 不同，它
+  不需要任何 secret，因此無論是來自 fork 的 pull request、Dependabot，或一次普通的 push，執行方式
+  都完全相同。
+- **`sonar-backend`** / **`sonar-frontend`**——回報給 SonarQube Cloud。兩者都不是 standing
+  gate，而且都會在來自 fork 的 pull request 與 Dependabot 時被跳過，因為兩者都需要 `SONAR_TOKEN`
+  這個那些情境讀不到的 secret——恰好與上方的 `docker` job 相反。
+
+五個 standing gate 仍然是 `dotnet build`、`dotnet test`、`pnpm test` 與 `pnpm build`(後兩者來自
+`frontend/`)，加上來自 `docs/` 的 `pnpm build`——`docker`、`sonar-backend` 與 `sonar-frontend` 是
+額外的 job，不是額外的 gate。
 
 CI 刻意**兩者皆不執行**——既不執行 `pnpm e2e`，也不執行 `pnpm e2e:sample`/`pnpm e2e:all`：
 `ci.yml` 中沒有任何一個步驟會啟動資料庫、啟動 API，或呼叫 `playwright test`。端到端涵蓋率需要一個

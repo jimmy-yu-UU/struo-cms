@@ -172,5 +172,7 @@ if you need them there.
   above (and every one that was not).
 - Chapter 4, [Defining a Collection](04-defining-a-collection.md), to make the Content navigation
   group appear with your first real collection.
+- Chapter 15, [Container images](15-deployment-operations-testing.md#container-images), to deploy the
+  API and admin SPA as Docker images instead of running them with `dotnet run`/`pnpm dev`.
 - Chapter 16, [Sample Walkthrough](16-sample-walkthrough.md), to opt the Blog demo in (and cleanly back
   out) instead.

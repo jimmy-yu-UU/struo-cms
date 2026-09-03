@@ -26,7 +26,9 @@
 
 ## 快速入門
 
-先決條件：.NET SDK 10.0.x、Node.js 24.x、pnpm 10.x、Docker (含 Compose)。
+先決條件：.NET SDK 10.0.x、Node.js 24.x、pnpm 10.x、Docker (含 Compose)。若要改以容器 image 執行
+API 與管理後台 SPA，見第 15 章的
+[容器映像](docs/guide/zh-TW/15-deployment-operations-testing.md#容器映像) 一節。
 
 ```bash
 # 1. Start PostgreSQL and Redis
