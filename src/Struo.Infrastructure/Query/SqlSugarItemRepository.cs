@@ -26,6 +26,7 @@ public sealed class SqlSugarItemRepository(
     // and the pure-refactor acceptance gate forbids changing any test line. The builder is also
     // registered as a scoped DI service for future direct consumers.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
+    private readonly TransactionRunner transactions = new(db);
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
     // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
@@ -193,7 +194,7 @@ public sealed class SqlSugarItemRepository(
         IReadOnlyList<string> searchableFields, string? queryLocale = null,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var collMeta = metadata.GetCollection(collection);
         var translatableFields = collMeta?.Translation?.Fields ?? [];
 
@@ -241,7 +242,7 @@ public sealed class SqlSugarItemRepository(
                         FieldName = idColumn,
                         ConditionalType = SqlSugar.ConditionalType.In,
                         FieldValue = string.Join(",", allParentIds),
-                        CSharpTypeName = TypeNameOfProperty(d.EntityType, d.IdProperty)  // PK is Guid -> uuid on PG
+                        CSharpTypeName = RepositoryHelpers.TypeNameOfProperty(d.EntityType, d.IdProperty)  // PK is Guid -> uuid on PG
                     };
 
                     if (nonTranslatableSearchable.Count > 0)
@@ -328,11 +329,11 @@ public sealed class SqlSugarItemRepository(
     public async Task<object?> GetByIdAsync(string collection, string id,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var invoke = GetByIdInvokers.GetOrAdd(d.EntityType, static t =>
             GetByIdGenericAsyncDef.MakeGenericMethod(t)
                 .CreateDelegate<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>>());
-        return await invoke(this, ConvertId(id, d), deleted, ct);
+        return await invoke(this, RepositoryHelpers.ConvertId(id, d), deleted, ct);
     }
 
     private async Task<object?> GetByIdGenericAsync<T>(object id, DeletedFilter deleted, CancellationToken ct) where T : class, new()
@@ -344,54 +345,15 @@ public sealed class SqlSugarItemRepository(
         return await q.In(id).FirstAsync(ct);
     }
 
-    public async Task InTransactionAsync(Func<Task> body, CancellationToken ct = default) =>
-        await InTransactionAsync(async () =>
-        {
-            await body();
-            return true;
-        }, ct);
+    public Task InTransactionAsync(Func<Task> body, CancellationToken ct = default) =>
+        transactions.InTransactionAsync(body, ct);
 
-    public async Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct = default)
-    {
-        // Nesting-safe: if the scoped connection already has an open transaction (an outer
-        // InTransactionAsync), join it rather than opening — and committing — a second one, which
-        // would end the outer transaction early.
-        if (db.Ado.Transaction is not null)
-            return await body();
-
-        try
-        {
-            // BeginTranAsync/CommitTranAsync/RollbackTranAsync have no CancellationToken overloads
-            // (SqlSugar 5.1.4.216); the token is honored by the awaited ORM calls inside body().
-            await db.Ado.BeginTranAsync();
-            var result = await body();
-            await db.Ado.CommitTranAsync();
-            return result;
-        }
-        catch
-        {
-            await db.Ado.RollbackTranAsync();
-            throw;
-        }
-    }
-
-    // Resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
-    // their real CLR type (Guid -> uuid, long -> bigint) on Postgres instead of as text (42883 on PG).
-    // Mirrors what ConditionalModelTranslator already does for the parsed query DSL; returns null for
-    // string/unknown so those keep untyped behavior.
-    private static string? TypeNameOf(object? sample) =>
-        sample is null ? null : ConditionalModelTranslator.SqlSugarTypeName(sample.GetType());
-
-    private static string? TypeNameOfProperty(Type entityType, string clrPropertyName)
-    {
-        var pt = entityType.GetProperty(clrPropertyName,
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)?.PropertyType;
-        return pt is null ? null : ConditionalModelTranslator.SqlSugarTypeName(Nullable.GetUnderlyingType(pt) ?? pt);
-    }
+    public Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct = default) =>
+        transactions.InTransactionAsync(body, ct);
 
     public async Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var pk = d.EntityType.GetProperty(d.IdProperty)!;
         if (pk.PropertyType == typeof(Guid) && pk.GetValue(entity) is Guid cur && cur == Guid.Empty)
             pk.SetValue(entity, Guid.CreateVersion7());
@@ -424,13 +386,13 @@ public sealed class SqlSugarItemRepository(
     public async Task<object?> UpdateAsync(string collection, string id, object entity,
         CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var existing = await GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
 
         // Clone so the caller's object is never mutated.
         var clone = CloneEntity(entity, d.EntityType);
-        d.EntityType.GetProperty(d.IdProperty)!.SetValue(clone, ConvertId(id, d));
+        d.EntityType.GetProperty(d.IdProperty)!.SetValue(clone, RepositoryHelpers.ConvertId(id, d));
 
         var invoke = UpdateInvokers.GetOrAdd(d.EntityType, static t =>
             UpdateGenericAsyncDef.MakeGenericMethod(t)
@@ -466,7 +428,7 @@ public sealed class SqlSugarItemRepository(
 
     public async Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         // Look up regardless of the soft-delete filter: a hard delete (purge) must be able to
         // remove a row that is already trashed (DeletedAt set), not just a live one.
         var existing = await GetByIdAsync(collection, id, DeletedFilter.With, ct);
@@ -475,7 +437,7 @@ public sealed class SqlSugarItemRepository(
         var invoke = DeleteInvokers.GetOrAdd(d.EntityType, static t =>
             DeleteGenericAsyncDef.MakeGenericMethod(t)
                 .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task>>());
-        await invoke(this, ConvertId(id, d), ct);
+        await invoke(this, RepositoryHelpers.ConvertId(id, d), ct);
         return true;
     }
 
@@ -487,7 +449,7 @@ public sealed class SqlSugarItemRepository(
     public async Task SetForeignKeyNullAsync(
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default)
     {
-        var d = Descriptor(sourceCollection);
+        var d = RepositoryHelpers.Descriptor(registry, sourceCollection);
         var clrProperty = d.FieldToProperty.TryGetValue(foreignKeyProperty, out var p) ? p : foreignKeyProperty;
         var fkColumn = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
         var invoke = SetForeignKeyNullInvokers.GetOrAdd(d.EntityType, static t =>
@@ -548,7 +510,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.Equal,
                 FieldValue = value.ToString(),
-                CSharpTypeName = TypeNameOf(value)
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(value)
             }
         };
         await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
@@ -558,7 +520,7 @@ public sealed class SqlSugarItemRepository(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
         var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
         var invoke = WhereInWithDeletedInvokers.GetOrAdd(d.EntityType, static t =>
@@ -577,7 +539,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         var q = db.Queryable<T>();
@@ -589,12 +551,12 @@ public sealed class SqlSugarItemRepository(
 
     public async Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
             throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
 
         var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-        var typedId = ConvertId(id, d);
+        var typedId = RepositoryHelpers.ConvertId(id, d);
 
         var invoke = SoftDeleteInvokers.GetOrAdd(d.EntityType, static t =>
             SoftDeleteGenericAsyncDef.MakeGenericMethod(t)
@@ -658,12 +620,12 @@ public sealed class SqlSugarItemRepository(
 
     public async Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
             throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
 
         var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-        var typedId = ConvertId(id, d);
+        var typedId = RepositoryHelpers.ConvertId(id, d);
 
         var invoke = RestoreInvokers.GetOrAdd(d.EntityType, static t =>
             RestoreGenericAsyncDef.MakeGenericMethod(t)
@@ -698,7 +660,7 @@ public sealed class SqlSugarItemRepository(
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         // Map camelCase field name -> CLR property name (fall back to the raw name, e.g. "id").
         var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
         return QueryEntityWhereInAsync(d.EntityType, clrProperty, values, ct);
@@ -731,7 +693,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
@@ -743,7 +705,7 @@ public sealed class SqlSugarItemRepository(
         FilterNode? extraFilter, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
         var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
 
@@ -754,7 +716,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = column,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(values.FirstOrDefault(v => v is not null))
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
         // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
@@ -778,7 +740,7 @@ public sealed class SqlSugarItemRepository(
     public async Task<IReadOnlyList<object>> QueryIdsAsync(
         string collection, FilterNode leafCondition, CancellationToken ct = default)
     {
-        var d = Descriptor(collection);
+        var d = RepositoryHelpers.Descriptor(registry, collection);
         var conditionals = ConditionalModelTranslator.Translate(leafCondition, null, [], d, db);
         var invoke = QueryIdsInvokers.GetOrAdd(d.EntityType, static t =>
             QueryIdsGenericAsyncDef.MakeGenericMethod(t)
@@ -827,7 +789,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = parentColumn,
                 ConditionalType = ConditionalType.In,
                 FieldValue = parentId.ToString(),
-                CSharpTypeName = TypeNameOf(parentId)
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)
             }
         };
 
@@ -890,7 +852,7 @@ public sealed class SqlSugarItemRepository(
                 FieldName = fkColumn,
                 ConditionalType = ConditionalType.In,
                 FieldValue = string.Join(",", parentIds.Select(v => v?.ToString())),
-                CSharpTypeName = TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // parent FK is Guid
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // parent FK is Guid
             }
         };
         if (locale is not null)
@@ -1063,7 +1025,7 @@ public sealed class SqlSugarItemRepository(
                     FieldName = fkColumn,
                     ConditionalType = ConditionalType.In,
                     FieldValue = parentId.ToString(),
-                    CSharpTypeName = TypeNameOf(parentId)  // parent FK is Guid
+                    CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
                 },
                 new ConditionalModel
                 {
@@ -1095,21 +1057,6 @@ public sealed class SqlSugarItemRepository(
     }
 
     private static object? CoerceValue(object? raw, Type targetType) => IdCoercion.Coerce(raw, targetType);
-
-    private EntityDescriptor Descriptor(string collection) =>
-        registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
-
-    /// <summary>
-    /// Converts a string ID to the PK property type. Handles Guid and all IConvertible types.
-    /// Delegates entirely to the Application-layer twin so any unparseable id surfaces as a
-    /// mappable <see cref="QueryException"/> (-&gt; HTTP 400) instead of a raw FormatException/
-    /// ArgumentException that <c>StruoExceptionHandler.Map</c> cannot map and masks as a 500.
-    /// </summary>
-    private static object ConvertId(string id, EntityDescriptor d)
-    {
-        var idType = d.EntityType.GetProperty(d.IdProperty)!.PropertyType;
-        return Struo.Application.Query.IdParsing.ParseTo(id, idType);
-    }
 
     /// <summary>
     /// Shallow-clones an entity by copying each public read/write property by value.
