@@ -31,6 +31,7 @@ public sealed class SqlSugarItemRepository(
     private readonly SoftDeleteOps softDelete = new(db, registry);
     private readonly PurgeOps purge = new(db, registry);
     private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db));
+    private readonly TranslationStore translations = new(db, new TransactionRunner(db));
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
     // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
@@ -58,11 +59,6 @@ public sealed class SqlSugarItemRepository(
         typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
-
-    private static readonly MethodInfo LoadTranslationsGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(LoadTranslationsGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo QueryTranslationParentIdsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(QueryTranslationParentIdsGenericAsync),
@@ -107,9 +103,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadTranslationsInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationParentIdsInvokers = new();
@@ -421,51 +414,14 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default) =>
         manyToMany.SyncManyToManyAsync(junctionType, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct);
 
-    public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
+    public Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType,
         string fkProperty,
         string localeProperty,
         IReadOnlyList<object> parentIds,
         string? locale,
-        CancellationToken ct = default)
-    {
-        if (parentIds.Count == 0) return [];
-
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-        var invoke = LoadTranslationsInvokers.GetOrAdd(translationType, static t =>
-            LoadTranslationsGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, fkColumn, parentIds, localeColumn, locale, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> LoadTranslationsGenericAsync<T>(
-        string fkColumn, IReadOnlyList<object> parentIds, string localeColumn, string? locale,
-        CancellationToken ct) where T : class, new()
-    {
-        // ConditionalType.In on the FK keeps "bigint IN (...)" Postgres-safe (no text coercion).
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = fkColumn,
-                ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", parentIds.Select(v => v?.ToString())),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // parent FK is Guid
-            }
-        };
-        if (locale is not null)
-        {
-            conditionals.Add(new ConditionalModel
-            {
-                FieldName = localeColumn,
-                ConditionalType = ConditionalType.Equal,
-                FieldValue = locale
-            });
-        }
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
-        return rows.Cast<object>().ToList();
-    }
+        CancellationToken ct = default) =>
+        translations.LoadTranslationsAsync(translationType, fkProperty, localeProperty, parentIds, locale, ct);
 
     public async Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
         Type translationType,
