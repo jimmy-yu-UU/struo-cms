@@ -30,6 +30,7 @@ public sealed class SqlSugarItemRepository(
     private readonly WhereInQueries whereIn = new(db, registry);
     private readonly SoftDeleteOps softDelete = new(db, registry);
     private readonly PurgeOps purge = new(db, registry);
+    private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db));
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
     // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
@@ -57,11 +58,6 @@ public sealed class SqlSugarItemRepository(
         typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
-
-    private static readonly MethodInfo SyncM2MGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(SyncM2MGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(string), typeof(string), typeof(string), typeof(object), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo LoadTranslationsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(LoadTranslationsGenericAsync),
@@ -111,9 +107,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>> SyncM2MInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadTranslationsInvokers = new();
@@ -418,71 +411,15 @@ public sealed class SqlSugarItemRepository(
         string collection, FilterNode leafCondition, CancellationToken ct = default) =>
         whereIn.QueryIdsAsync(collection, leafCondition, ct);
 
-    public async Task SyncManyToManyAsync(
+    public Task SyncManyToManyAsync(
         Type junctionType,
         string parentFkProperty,
         string targetFkProperty,
         string? sortProperty,
         object parentId,
         IReadOnlyList<object> targetIds,
-        CancellationToken ct = default)
-    {
-        var parentColumn = db.EntityMaintenance.GetDbColumnName(parentFkProperty, junctionType);
-        var invoke = SyncM2MInvokers.GetOrAdd(junctionType, static t =>
-            SyncM2MGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>>());
-        await invoke(this, parentColumn, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct);
-    }
-
-    private async Task SyncM2MGenericAsync<T>(
-        string parentColumn,
-        string parentFkProperty,
-        string targetFkProperty,
-        string? sortProperty,
-        object parentId,
-        IReadOnlyList<object> targetIds,
-        CancellationToken ct) where T : class, new()
-    {
-        // ConditionalType.In (not Equal): Equal binds FieldValue as text -> "bigint = text" 42883 on PostgreSQL. In is the Postgres-safe primitive used elsewhere in this class.
-        var deleteConditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = parentColumn,
-                ConditionalType = ConditionalType.In,
-                FieldValue = parentId.ToString(),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)
-            }
-        };
-
-        // Build new rows before opening the transaction so reflection work stays outside the tx.
-        var type = typeof(T);
-        var parentProp = type.GetProperty(parentFkProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var targetProp = type.GetProperty(targetFkProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var sortProp   = sortProperty is null ? null
-            : type.GetProperty(sortProperty, BindingFlags.Public | BindingFlags.Instance)!;
-
-        var rows = new List<T>(targetIds.Count);
-        for (var i = 0; i < targetIds.Count; i++)
-        {
-            var row = new T();
-            parentProp.SetValue(row, IdCoercion.Coerce(parentId,    parentProp.PropertyType));
-            targetProp.SetValue(row, IdCoercion.Coerce(targetIds[i], targetProp.PropertyType));
-            // Use Convert.ChangeType so the sort index (int) is coerced to whatever numeric
-            // type the sort column declares (e.g. int, long, short).
-            sortProp?.SetValue(row, Convert.ChangeType(i, sortProp.PropertyType));
-            rows.Add(row);
-        }
-
-        // Delete + insert in a single transaction so a failed insert never leaves the parent
-        // with zero junction rows. Joins the caller's aggregate transaction when one is open.
-        await InTransactionAsync(async () =>
-        {
-            await db.Deleteable<T>().Where(deleteConditionals).ExecuteCommandAsync(ct);
-            if (rows.Count > 0)
-                await db.Insertable(rows).ExecuteCommandAsync(ct);
-        }, ct);
-    }
+        CancellationToken ct = default) =>
+        manyToMany.SyncManyToManyAsync(junctionType, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct);
 
     public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType,
