@@ -59,12 +59,6 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo SyncTranslationsGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(SyncTranslationsGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
-             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)])!;
-
     // Per-dispatcher open-instance delegate caches, keyed by closed entity type.
     // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
     // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
@@ -88,9 +82,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncTranslationsInvokers = new();
 
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, string? queryLocale = null,
@@ -409,99 +400,15 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default) =>
         translations.QueryTranslationParentIdsAsync(translationType, fkProperty, localeProperty, locale, fieldCondition, ct);
 
-    public async Task SyncTranslationsAsync(
+    public Task SyncTranslationsAsync(
         Type translationType,
         string fkProperty,
         string localeProperty,
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct = default)
-    {
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-        var invoke = SyncTranslationsInvokers.GetOrAdd(translationType, static t =>
-            SyncTranslationsGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>>());
-        await invoke(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
-    }
-
-    private async Task SyncTranslationsGenericAsync<T>(
-        string fkColumn,
-        string fkProperty,
-        string localeProperty,
-        IReadOnlyList<string> fieldProperties,
-        object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct) where T : class, new()
-    {
-        if (perLocale.Count == 0) return;
-
-        var type = typeof(T);
-        var fkProp = type.GetProperty(fkProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var fieldProps = fieldProperties.ToDictionary(
-            f => f,
-            f => type.GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                 ?? throw new InvalidOperationException(
-                     $"Translation entity '{type.Name}' has no field property '{f}'."),
-            StringComparer.OrdinalIgnoreCase);
-
-        // Build the rows + per-locale delete models outside the transaction (reflection only).
-        var inserts = new List<T>(perLocale.Count);
-        var deletes = new List<List<IConditionalModel>>(perLocale.Count);
-        foreach (var (locale, values) in perLocale)
-        {
-            var row = new T();
-            fkProp.SetValue(row, IdCoercion.Coerce(parentId, fkProp.PropertyType));
-            localeProp.SetValue(row, locale);
-            foreach (var (fieldName, prop) in fieldProps)
-            {
-                if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
-                    prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
-            }
-            inserts.Add(row);
-
-            // ConditionalType.In on the FK (Postgres-safe), Equal on the string locale.
-            deletes.Add(
-            [
-                new ConditionalModel
-                {
-                    FieldName = fkColumn,
-                    ConditionalType = ConditionalType.In,
-                    FieldValue = parentId.ToString(),
-                    CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
-                },
-                new ConditionalModel
-                {
-                    FieldName = db.EntityMaintenance.GetDbColumnName(localeProperty, type),
-                    ConditionalType = ConditionalType.Equal,
-                    FieldValue = locale
-                }
-            ]);
-        }
-
-        await InTransactionAsync(async () =>
-        {
-            foreach (var del in deletes)
-                await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
-            await db.Insertable(inserts).ExecuteCommandAsync(ct);
-        }, ct);
-    }
-
-    private static bool TryGetValueCaseInsensitive(
-        IReadOnlyDictionary<string, object?> dict, string key, out object? value)
-    {
-        if (dict.TryGetValue(key, out value)) return true;
-        foreach (var (k, v) in dict)
-        {
-            if (string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) { value = v; return true; }
-        }
-        value = null;
-        return false;
-    }
-
-    private static object? CoerceValue(object? raw, Type targetType) => IdCoercion.Coerce(raw, targetType);
+        CancellationToken ct = default) =>
+        translations.SyncTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
 
     /// <summary>
     /// Shallow-clones an entity by copying each public read/write property by value.
