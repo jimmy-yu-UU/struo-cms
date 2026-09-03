@@ -28,6 +28,7 @@ public sealed class SqlSugarItemRepository(
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly WhereInQueries whereIn = new(db, registry);
+    private readonly SoftDeleteOps softDelete = new(db, registry);
     // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
     // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
@@ -55,11 +56,6 @@ public sealed class SqlSugarItemRepository(
         typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
-
-    private static readonly MethodInfo SoftDeleteGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(SoftDeleteGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(object), typeof(DateTime), typeof(Guid?), typeof(CancellationToken)])!;
 
     private static readonly MethodInfo RestoreGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(RestoreGenericAsync),
@@ -135,9 +131,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task>> DeleteByPropertyInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, object, DateTime, Guid?, CancellationToken, Task<bool>>> SoftDeleteInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>> RestoreInvokers = new();
@@ -489,74 +482,8 @@ public sealed class SqlSugarItemRepository(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
         whereIn.QueryWhereInWithDeletedAsync(collection, property, values, ct);
 
-    public async Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default)
-    {
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
-            throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
-
-        var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-        var typedId = RepositoryHelpers.ConvertId(id, d);
-
-        var invoke = SoftDeleteInvokers.GetOrAdd(d.EntityType, static t =>
-            SoftDeleteGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, object, DateTime, Guid?, CancellationToken, Task<bool>>>());
-        return await invoke(this, idColumn, typedId, deletedAt, deletedBy, ct);
-    }
-
-    private async Task<bool> SoftDeleteGenericAsync<T>(
-        string idColumn, object id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct)
-        where T : class, ISoftDeletable, new()
-    {
-        // Updateable<T> is not subject to the ISoftDeletable query filter, so without an explicit
-        // guard the row would be located by id alone regardless of its current DeletedAt. The
-        // WHERE below adds "deletedat IS NULL" so trashing an already-trashed row is an atomic no-op
-        // AT THE SQL LEVEL (affected = 0) — not merely a pre-read check in ItemService, which would
-        // leave a TOCTOU window where two concurrent DELETEs of the same live row could each pass the
-        // check and both re-stamp/re-version and double-record a "delete" revision. Mirrors
-        // RestoreGenericAsync's identical "deletedat IS NOT NULL" guard on the opposite side.
-        // Parameter named "__sdId" (not "@id"): SqlSugar auto-binds an internal "@id" placeholder of
-        // its own on Updateable<T>() for an entity whose PK property is named "Id" — colliding with a
-        // plain "@id" here silently rebinds to that internal (unset/default) parameter instead of ours.
-        // UpdateGenericAsync's "@__ocId" dodges the same collision.
-        //
-        // SetColumns(it => new T{...}) — not the string-fieldName overload — because when deletedBy is
-        // null, SqlSugar's expression resolver (MemberInitExpressionResolve.Update) sees the target
-        // property is Nullable<T> and types the resulting SQL parameter's DbType from the underlying
-        // CLR type (Guid), instead of boxing a bare `(object?)null` with no type info at all. An
-        // untyped null parameter is sent to Npgsql as `text`, which PG rejects (42804) against a
-        // `uuid`/`timestamp` column — see RestoreGenericAsync below for the confirmed live-gate case.
-        // For AuditableEntity subclasses, bump the optimistic-lock Version in the SAME UPDATE as
-        // the trash stamp so the history timeline advances and a stale client 409s after a restore.
-        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
-        var affected = await ApplyVersionBump(db.Updateable<T>()
-                .SetColumns(it => new T { DeletedAt = deletedAt, DeletedBy = deletedBy }))
-            .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NULL", new { __sdId = id })
-            .ExecuteCommandAsync(ct);
-        return affected > 0;
-    }
-
-    // Chains a `Version = Version + 1` set onto the trash/restore UPDATE when T is an
-    // AuditableEntity subclass. Built as a dynamic member-init expression
-    // `it => new T { Version = it.Version + 1 }` (T is statically only ISoftDeletable, so Version can
-    // only be reached via reflection); SqlSugar's expression resolver turns `it.Version + 1` into the
-    // SQL fragment `version = version + 1` — no bound null parameter (no 42804 typed-null trap) and no
-    // CAS (delete/restore carry no client version; the decision is increment-only). Non-AuditableEntity
-    // ISoftDeletable types have no Version and are returned unchanged.
-    private static IUpdateable<T> ApplyVersionBump<T>(IUpdateable<T> updateable) where T : class, new()
-    {
-        if (!typeof(AuditableEntity).IsAssignableFrom(typeof(T))) return updateable;
-
-        var versionProp = typeof(T).GetProperty(
-            nameof(AuditableEntity.Version), BindingFlags.Public | BindingFlags.Instance)!;
-        var param = Expression.Parameter(typeof(T), "it");
-        var incremented = Expression.Add(
-            Expression.Property(param, versionProp), Expression.Constant(1L));
-        var setExpr = Expression.Lambda<Func<T, T>>(
-            Expression.MemberInit(Expression.New(typeof(T)), Expression.Bind(versionProp, incremented)),
-            param);
-        return updateable.SetColumns(setExpr);
-    }
+    public Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default) =>
+        softDelete.SoftDeleteAsync(collection, id, deletedAt, deletedBy, ct);
 
     public async Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default)
     {
@@ -590,7 +517,7 @@ public sealed class SqlSugarItemRepository(
         // concurrent restores of the same row could each re-stamp/re-version and double-record a
         // "restore" revision.
         var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
-        var affected = await ApplyVersionBump(db.Updateable<T>()
+        var affected = await SoftDeleteOps.ApplyVersionBump(db.Updateable<T>()
                 .SetColumns(it => new T { DeletedAt = null, DeletedBy = null }))
             .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NOT NULL", new { __sdId = id })
             .ExecuteCommandAsync(ct);
