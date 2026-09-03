@@ -57,11 +57,6 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo RestoreGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(RestoreGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(object), typeof(CancellationToken)])!;
-
     private static readonly MethodInfo SyncM2MGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SyncM2MGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -131,9 +126,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task>> DeleteByPropertyInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>> RestoreInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>> SyncM2MInvokers = new();
@@ -485,44 +477,8 @@ public sealed class SqlSugarItemRepository(
     public Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default) =>
         softDelete.SoftDeleteAsync(collection, id, deletedAt, deletedBy, ct);
 
-    public async Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default)
-    {
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType))
-            throw new InvalidOperationException($"Collection '{collection}' does not implement ISoftDeletable.");
-
-        var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-        var typedId = RepositoryHelpers.ConvertId(id, d);
-
-        var invoke = RestoreInvokers.GetOrAdd(d.EntityType, static t =>
-            RestoreGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>>());
-        return await invoke(this, idColumn, typedId, ct);
-    }
-
-    private async Task<bool> RestoreGenericAsync<T>(string idColumn, object id, CancellationToken ct)
-        where T : class, ISoftDeletable, new()
-    {
-        // PG 42804 fix: `.SetColumns(deletedAtColumn, (object?)null)` binds a null
-        // parameter with NO CLR type, so Npgsql infers `text` and PG rejects
-        // `SET deletedat = @p(text)` against the `timestamp` column. The entity-typed object
-        // initializer below goes through SqlSugar's expression resolver instead of the raw
-        // string-fieldName overload: it recognizes DeletedAt/DeletedBy as Nullable<DateTime>/
-        // Nullable<Guid> and assigns the null parameter's DbType from the underlying type
-        // (DateTime / Guid), which PG accepts against the timestamp/uuid columns.
-        // Bump Version in the SAME UPDATE (AuditableEntity subclasses only) — see ApplyVersionBump.
-        // Guard the UPDATE itself with "deletedat IS NOT NULL" so restoring an already-live row
-        // is an atomic no-op at the SQL level (affected = 0) — not merely a pre-read check in
-        // ItemService, which would leave a TOCTOU window between the check and this UPDATE where two
-        // concurrent restores of the same row could each re-stamp/re-version and double-record a
-        // "restore" revision.
-        var deletedAtColumn = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T));
-        var affected = await SoftDeleteOps.ApplyVersionBump(db.Updateable<T>()
-                .SetColumns(it => new T { DeletedAt = null, DeletedBy = null }))
-            .Where($"{idColumn} = @__sdId AND {deletedAtColumn} IS NOT NULL", new { __sdId = id })
-            .ExecuteCommandAsync(ct);
-        return affected > 0;
-    }
+    public Task<bool> RestoreAsync(string collection, string id, CancellationToken ct = default) =>
+        softDelete.RestoreAsync(collection, id, ct);
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
