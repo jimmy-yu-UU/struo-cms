@@ -66,11 +66,6 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(object), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo QueryIdsGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(QueryIdsGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(List<IConditionalModel>), typeof(string), typeof(CancellationToken)])!;
-
     private static readonly MethodInfo SyncM2MGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SyncM2MGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -154,9 +149,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>> RestoreInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>> QueryIdsInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>> SyncM2MInvokers = new();
@@ -655,24 +647,9 @@ public sealed class SqlSugarItemRepository(
         FilterNode? extraFilter, CancellationToken ct = default) =>
         whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, ct);
 
-    public async Task<IReadOnlyList<object>> QueryIdsAsync(
-        string collection, FilterNode leafCondition, CancellationToken ct = default)
-    {
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var conditionals = ConditionalModelTranslator.Translate(leafCondition, null, [], d, db);
-        var invoke = QueryIdsInvokers.GetOrAdd(d.EntityType, static t =>
-            QueryIdsGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, conditionals, d.IdProperty, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> QueryIdsGenericAsync<T>(
-        List<IConditionalModel> conditionals, string idProperty, CancellationToken ct) where T : class, new()
-    {
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
-        var pi = typeof(T).GetProperty(idProperty)!;
-        return rows.Select(r => pi.GetValue(r)!).ToList();
-    }
+    public Task<IReadOnlyList<object>> QueryIdsAsync(
+        string collection, FilterNode leafCondition, CancellationToken ct = default) =>
+        whereIn.QueryIdsAsync(collection, leafCondition, ct);
 
     public async Task SyncManyToManyAsync(
         Type junctionType,

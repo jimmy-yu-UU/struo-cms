@@ -13,6 +13,9 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
     private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInFilteredGenericAsync), [typeof(List<IConditionalModel>), typeof(CancellationToken)]);
 
+    private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>> QueryIdsDispatcher =
+        new(typeof(WhereInQueries), nameof(QueryIdsGenericAsync), [typeof(List<IConditionalModel>), typeof(string), typeof(CancellationToken)]);
+
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
     {
@@ -85,5 +88,21 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
     {
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();
+    }
+
+    public async Task<IReadOnlyList<object>> QueryIdsAsync(
+        string collection, FilterNode leafCondition, CancellationToken ct = default)
+    {
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        var conditionals = ConditionalModelTranslator.Translate(leafCondition, null, [], d, db);
+        return await QueryIdsDispatcher.For(d.EntityType)(this, conditionals, d.IdProperty, ct);
+    }
+
+    private async Task<IReadOnlyList<object>> QueryIdsGenericAsync<T>(
+        List<IConditionalModel> conditionals, string idProperty, CancellationToken ct) where T : class, new()
+    {
+        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        var pi = typeof(T).GetProperty(idProperty)!;
+        return rows.Select(r => pi.GetValue(r)!).ToList();
     }
 }
