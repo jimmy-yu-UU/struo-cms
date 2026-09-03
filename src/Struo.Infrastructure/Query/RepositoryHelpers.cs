@@ -1,5 +1,4 @@
 // src/Struo.Infrastructure/Query/RepositoryHelpers.cs
-using System.Reflection;
 using Struo.Application.Metadata;
 
 namespace Struo.Infrastructure.Query;
@@ -26,7 +25,7 @@ internal static class RepositoryHelpers
     /// <summary>
     /// Converts a string ID to the PK property type. Handles Guid and all IConvertible types.
     /// Delegates entirely to the Application-layer twin so any unparseable id surfaces as a
-    /// mappable <see cref="QueryException"/> (-&gt; HTTP 400) instead of a raw FormatException/
+    /// mappable <see cref="Struo.Domain.Query.QueryException"/> (-&gt; HTTP 400) instead of a raw FormatException/
     /// ArgumentException that <c>StruoExceptionHandler.Map</c> cannot map and masks as a 500.
     /// </summary>
     public static object ConvertId(string id, EntityDescriptor d)

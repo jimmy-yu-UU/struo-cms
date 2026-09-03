@@ -31,8 +31,8 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
     {
         // SqlSugar's IUpdateable<T> has no raw-SQL-fragment SetColumns(string) overload — only
         // SetColumns(string field, object value) (which would bind an UNTYPED null parameter, the PG
-        // 42804 trap) and the expression form SetColumns(it => new T {...}) used elsewhere in this
-        // class (SoftDeleteGenericAsync/RestoreGenericAsync). Since the FK property name is only known
+        // 42804 trap) and the expression form SetColumns(it => new T {...}) used in SoftDeleteOps
+        // (SoftDeleteGenericAsync/RestoreGenericAsync). Since the FK property name is only known
         // at runtime here (unlike those two compile-time call sites), build the equivalent
         // `it => new T { <Fk> = (FkType?)null }` member-init expression dynamically: the null constant
         // is typed to the FK property's own CLR type, so SqlSugar/Npgsql bind it correctly instead of
@@ -48,7 +48,7 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
 
         // WHERE side stays parameterized; "@__fk" (not "@id"/"@fk") avoids colliding with any
         // auto-bound internal parameter SqlSugar generates for Updateable<T>() (see
-        // SoftDeleteGenericAsync's identical note on "@__sdId"). Updateable<T> is NOT subject to the
+        // SoftDeleteOps.SoftDeleteGenericAsync's identical note on "@__sdId"). Updateable<T> is NOT subject to the
         // ISoftDeletable query filter, so an already-trashed source row referencing the purge target
         // is still found and nulled.
         await db.Updateable<T>()

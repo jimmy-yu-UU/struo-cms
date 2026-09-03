@@ -32,7 +32,7 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
         IReadOnlyList<object> targetIds,
         CancellationToken ct) where T : class, new()
     {
-        // ConditionalType.In (not Equal): Equal binds FieldValue as text -> "bigint = text" 42883 on PostgreSQL. In is the Postgres-safe primitive used elsewhere in this class.
+        // ConditionalType.In (not Equal): Equal binds FieldValue as text -> "bigint = text" 42883 on PostgreSQL. In is the Postgres-safe primitive the other collaborators use (WhereInQueries, TranslationStore).
         var deleteConditionals = new List<IConditionalModel>
         {
             new ConditionalModel

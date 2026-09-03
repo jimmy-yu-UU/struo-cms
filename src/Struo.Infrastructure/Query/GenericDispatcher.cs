@@ -24,7 +24,9 @@ internal sealed class GenericDispatcher<TDelegate> where TDelegate : Delegate
     }
 
     public TDelegate For(Type entityType) =>
-        cache.GetOrAdd(entityType, t => definition.MakeGenericMethod(t).CreateDelegate<TDelegate>());
+        cache.GetOrAdd(entityType,
+            static (t, def) => def.MakeGenericMethod(t).CreateDelegate<TDelegate>(),
+            definition);
 }
 
 // Same caching scheme as GenericDispatcher, but for a method with two independent type parameters
@@ -41,7 +43,8 @@ internal sealed class BiGenericDispatcher<TDelegate> where TDelegate : Delegate
 
     public TDelegate For(Type first, Type second) =>
         cache.GetOrAdd((first, second),
-            key => definition.MakeGenericMethod(key.First, key.Second).CreateDelegate<TDelegate>());
+            static (key, def) => def.MakeGenericMethod(key.First, key.Second).CreateDelegate<TDelegate>(),
+            definition);
 }
 
 internal static class GenericDispatcherSupport

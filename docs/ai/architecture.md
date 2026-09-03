@@ -217,10 +217,13 @@ three purge primitives explicitly or purge will throw for every collection.
 
 `SqlSugarItemRepository` is a facade: it keeps the `IItemRepository` members `QueryAsync`,
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
-`RunQueryAsync` and `CloneEntity` those methods use internally), and delegates every other
-`IItemRepository` member to one of seven collaborators, all in the same `Query/` folder. Each is a
-field initializer on the facade's primary constructor rather than an injected dependency — only
-`OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync` and `TranslationStore`
+`RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,
+`DeleteGenericAsync`, and `CloneEntity` those methods use internally), and delegates every other
+`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder`, the seventh, is
+used inside `QueryAsync` rather than delegated to — all in the same `Query/` folder. Each is
+initialized in a field initializer from the facade's primary-constructor parameters rather than
+injected as its own dependency — only `OrderByExpressionBuilder` is also registered scoped in DI.
+`ManyToManySync` and `TranslationStore`
 each get their own `new TransactionRunner(db)` instance (a field initializer cannot reference another
 instance field), rather than sharing the facade's own `transactions` field; `TransactionRunner` holds
 no state beyond `db`, so the extra instance behaves identically to sharing one:

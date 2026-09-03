@@ -173,7 +173,6 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         CancellationToken ct = default)
     {
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
         await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
     }
 
