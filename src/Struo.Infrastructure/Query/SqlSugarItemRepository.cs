@@ -17,19 +17,21 @@ public sealed class SqlSugarItemRepository(
     IMetadataProvider metadata,
     StruoQueryOptions options) : IItemRepository
 {
-    // This class is a facade over IItemRepository backed by seven collaborators in this folder:
-    // GenericDispatcher (the generic-dispatch primitive used below), RepositoryHelpers (static
-    // helpers), and five instances — TransactionRunner, WhereInQueries, SoftDeleteOps, PurgeOps,
-    // ManyToManySync, TranslationStore, OrderByExpressionBuilder — that do the actual work; this
-    // class only routes calls to them. OrderByExpressionBuilder is the only one of the seven
-    // registered as a scoped DI service, because it alone has consumers outside this class; the
-    // rest are built here, from the same five constructor dependencies, because nothing else needs
-    // them — and because the test suite constructs SqlSugarItemRepository directly with this exact
-    // 5-arg constructor (many test files do), so adding constructor parameters for them is not an
-    // option. manyToMany and translations take `new TransactionRunner(db)` rather than the
-    // `transactions` field below because a field initializer cannot reference another instance
-    // field (CS0236); TransactionRunner holds no state beyond `db`, so the second instance behaves
-    // identically to sharing the first.
+    // This class is a facade over IItemRepository. Two static helpers support it — GenericDispatcher
+    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the seven instance
+    // fields declared next: TransactionRunner, WhereInQueries, SoftDeleteOps, PurgeOps,
+    // ManyToManySync, TranslationStore, and OrderByExpressionBuilder. The facade itself still
+    // implements Query/GetById/Create/Update/Delete (the optimistic-concurrency check, the
+    // identity-PK read-back and the offset/limit paging all live in this file); every other
+    // IItemRepository member just delegates to one of the seven fields. Among those seven,
+    // OrderByExpressionBuilder is the only one registered as a scoped DI service — kept registered
+    // for a future direct consumer, though none exists today. The other six are not registered:
+    // nothing outside this class needs them, and the test suite constructs SqlSugarItemRepository
+    // directly with this exact 5-arg constructor (26 test files do), so adding constructor
+    // parameters for them is not an option. manyToMany and translations take
+    // `new TransactionRunner(db)` rather than the `transactions` field below because a field
+    // initializer cannot reference another instance field (CS0236); TransactionRunner holds no
+    // state beyond `db`, so the second instance behaves identically to sharing the first.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly WhereInQueries whereIn = new(db, registry);
