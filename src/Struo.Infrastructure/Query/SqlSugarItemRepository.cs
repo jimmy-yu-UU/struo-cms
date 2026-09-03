@@ -66,11 +66,6 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(object), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo WhereInFilteredGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInFilteredGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(List<IConditionalModel>), typeof(CancellationToken)])!;
-
     private static readonly MethodInfo QueryIdsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(QueryIdsGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -159,9 +154,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task<bool>>> RestoreInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>> QueryIdsInvokers = new();
@@ -658,42 +650,10 @@ public sealed class SqlSugarItemRepository(
         Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default) =>
         whereIn.QueryEntityWhereInAsync(entityType, propertyName, values, ct);
 
-    public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
+    public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, CancellationToken ct = default)
-    {
-        if (values.Count == 0) return [];
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
-
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = column,
-                ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
-            }
-        };
-        // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
-        // IConditionalModel entries. ConditionalModelTranslator maps camelCase field paths -> columns.
-        if (extraFilter is not null)
-            conditionals.AddRange(ConditionalModelTranslator.Translate(extraFilter, null, [], d, db));
-
-        var invoke = WhereInFilteredInvokers.GetOrAdd(d.EntityType, static t =>
-            WhereInFilteredGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, conditionals, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> WhereInFilteredGenericAsync<T>(
-        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
-    {
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
-        return rows.Cast<object>().ToList();
-    }
+        FilterNode? extraFilter, CancellationToken ct = default) =>
+        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, ct);
 
     public async Task<IReadOnlyList<object>> QueryIdsAsync(
         string collection, FilterNode leafCondition, CancellationToken ct = default)
