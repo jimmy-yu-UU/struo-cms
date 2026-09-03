@@ -11,6 +11,9 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
     private static readonly GenericDispatcher<Func<PurgeOps, string, string, object, CancellationToken, Task>> SetForeignKeyNullDispatcher =
         new(typeof(PurgeOps), nameof(SetForeignKeyNullGenericAsync), [typeof(string), typeof(string), typeof(object), typeof(CancellationToken)]);
 
+    private static readonly GenericDispatcher<Func<PurgeOps, string, object, CancellationToken, Task>> DeleteByPropertyDispatcher =
+        new(typeof(PurgeOps), nameof(DeleteByPropertyGenericAsync), [typeof(string), typeof(object), typeof(CancellationToken)]);
+
     // ── Purge referential-integrity primitives ─────────────
 
     public async Task SetForeignKeyNullAsync(
@@ -52,5 +55,28 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
             .SetColumns(setExpr)
             .Where($"{fkColumn} = @__fk", new { __fk = typedId })
             .ExecuteCommandAsync(ct);
+    }
+
+    public async Task DeleteByPropertyAsync(
+        Type entityType, string property, object value, CancellationToken ct = default)
+    {
+        var column = db.EntityMaintenance.GetDbColumnName(property, entityType);
+        await DeleteByPropertyDispatcher.For(entityType)(this, column, value, ct);
+    }
+
+    private async Task DeleteByPropertyGenericAsync<T>(string column, object value, CancellationToken ct)
+        where T : class, new()
+    {
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.Equal,
+                FieldValue = value.ToString(),
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(value)
+            }
+        };
+        await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
     }
 }

@@ -88,11 +88,6 @@ public sealed class SqlSugarItemRepository(
             [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
              typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo DeleteByPropertyGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteByPropertyGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(object), typeof(CancellationToken)])!;
-
     // Per-dispatcher open-instance delegate caches, keyed by closed entity type.
     // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
     // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
@@ -116,9 +111,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, object, CancellationToken, Task>> DeleteByPropertyInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, string?, object, IReadOnlyList<object>, CancellationToken, Task>> SyncM2MInvokers = new();
@@ -395,31 +387,9 @@ public sealed class SqlSugarItemRepository(
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
         purge.SetForeignKeyNullAsync(sourceCollection, foreignKeyProperty, typedId, ct);
 
-    public async Task DeleteByPropertyAsync(
-        Type entityType, string property, object value, CancellationToken ct = default)
-    {
-        var column = db.EntityMaintenance.GetDbColumnName(property, entityType);
-        var invoke = DeleteByPropertyInvokers.GetOrAdd(entityType, static t =>
-            DeleteByPropertyGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, object, CancellationToken, Task>>());
-        await invoke(this, column, value, ct);
-    }
-
-    private async Task DeleteByPropertyGenericAsync<T>(string column, object value, CancellationToken ct)
-        where T : class, new()
-    {
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = column,
-                ConditionalType = ConditionalType.Equal,
-                FieldValue = value.ToString(),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(value)
-            }
-        };
-        await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
-    }
+    public Task DeleteByPropertyAsync(
+        Type entityType, string property, object value, CancellationToken ct = default) =>
+        purge.DeleteByPropertyAsync(entityType, property, value, ct);
 
     public Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
