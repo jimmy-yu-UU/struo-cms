@@ -1,7 +1,5 @@
 // src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs
-using System.Collections.Concurrent;
 using System.Reflection;
-using System.Text;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
@@ -19,11 +17,19 @@ public sealed class SqlSugarItemRepository(
     IMetadataProvider metadata,
     StruoQueryOptions options) : IItemRepository
 {
-    // ORDER BY SQL construction (plain / translatable / relation-path) is extracted verbatim
-    // into OrderByExpressionBuilder. Built from this repository's own deps rather than injected: the
-    // existing test suite constructs SqlSugarItemRepository directly with this exact 5-arg signature,
-    // and the pure-refactor acceptance gate forbids changing any test line. The builder is also
-    // registered as a scoped DI service for future direct consumers.
+    // This class is a facade over IItemRepository backed by seven collaborators in this folder:
+    // GenericDispatcher (the generic-dispatch primitive used below), RepositoryHelpers (static
+    // helpers), and five instances — TransactionRunner, WhereInQueries, SoftDeleteOps, PurgeOps,
+    // ManyToManySync, TranslationStore, OrderByExpressionBuilder — that do the actual work; this
+    // class only routes calls to them. OrderByExpressionBuilder is the only one of the seven
+    // registered as a scoped DI service, because it alone has consumers outside this class; the
+    // rest are built here, from the same five constructor dependencies, because nothing else needs
+    // them — and because the test suite constructs SqlSugarItemRepository directly with this exact
+    // 5-arg constructor (many test files do), so adding constructor parameters for them is not an
+    // option. manyToMany and translations take `new TransactionRunner(db)` rather than the
+    // `transactions` field below because a field initializer cannot reference another instance
+    // field (CS0236); TransactionRunner holds no state beyond `db`, so the second instance behaves
+    // identically to sharing the first.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly WhereInQueries whereIn = new(db, registry);
@@ -31,57 +37,22 @@ public sealed class SqlSugarItemRepository(
     private readonly PurgeOps purge = new(db, registry);
     private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db));
     private readonly TranslationStore translations = new(db, new TransactionRunner(db));
-    // Cached generic method definitions — resolved once at class load, pinned by parameter-type signature.
-    // Each private helper is async and returns a KNOWN Task<T> so the dispatcher can cast before awaiting.
 
-    private static readonly MethodInfo RunQueryAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(RunQueryAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int), typeof(DeletedFilter), typeof(CancellationToken)])!;
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryDispatcher =
+        new(typeof(SqlSugarItemRepository), nameof(RunQueryAsync),
+            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int), typeof(DeletedFilter), typeof(CancellationToken)]);
 
-    private static readonly MethodInfo GetByIdGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(GetByIdGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object), typeof(DeletedFilter), typeof(CancellationToken)])!;
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>> GetByIdDispatcher =
+        new(typeof(SqlSugarItemRepository), nameof(GetByIdGenericAsync), [typeof(object), typeof(DeletedFilter), typeof(CancellationToken)]);
 
-    private static readonly MethodInfo CreateGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(CreateGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object), typeof(CancellationToken)])!;
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, CancellationToken, Task<object>>> CreateDispatcher =
+        new(typeof(SqlSugarItemRepository), nameof(CreateGenericAsync), [typeof(object), typeof(CancellationToken)]);
 
-    private static readonly MethodInfo UpdateGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(UpdateGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object), typeof(CancellationToken)])!;
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, CancellationToken, Task>> UpdateDispatcher =
+        new(typeof(SqlSugarItemRepository), nameof(UpdateGenericAsync), [typeof(object), typeof(CancellationToken)]);
 
-    private static readonly MethodInfo DeleteGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(DeleteGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(object), typeof(CancellationToken)])!;
-
-    // Per-dispatcher open-instance delegate caches, keyed by closed entity type.
-    // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
-    // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
-    // replaced by a direct delegate call. The *Def MethodInfo fields above seed CreateDelegate; each
-    // delegate's FIRST parameter is the receiver (open-instance form), and the remaining parameters +
-    // return type match the corresponding private generic helper's EXACT closed signature. All helpers
-    // are async (or return the Task directly), so exceptions surface on the awaited Task identically to
-    // the old Invoke form (no TargetInvocationException wrapping to preserve).
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>> GetByIdInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, object, CancellationToken, Task<object>>> CreateInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, object, CancellationToken, Task>> UpdateInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteDispatcher =
+        new(typeof(SqlSugarItemRepository), nameof(DeleteGenericAsync), [typeof(object), typeof(CancellationToken)]);
 
     public async Task<QueryResult> QueryAsync(string collection, QueryModel query,
         IReadOnlyList<string> searchableFields, string? queryLocale = null,
@@ -173,10 +144,7 @@ public sealed class SqlSugarItemRepository(
         }
 
         var orderBy = orderByBuilder.BuildOrderBy(query.Sort, d, collection, queryLocale);
-        var invoke = RunQueryInvokers.GetOrAdd(d.EntityType, static t =>
-            RunQueryAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>>());
-        return await invoke(this, conditionals, orderBy, query.Limit, query.Offset, deleted, ct);
+        return await RunQueryDispatcher.For(d.EntityType)(this, conditionals, orderBy, query.Limit, query.Offset, deleted, ct);
     }
 
     private async Task<QueryResult> RunQueryAsync<T>(
@@ -223,10 +191,7 @@ public sealed class SqlSugarItemRepository(
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var d = RepositoryHelpers.Descriptor(registry, collection);
-        var invoke = GetByIdInvokers.GetOrAdd(d.EntityType, static t =>
-            GetByIdGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>>());
-        return await invoke(this, RepositoryHelpers.ConvertId(id, d), deleted, ct);
+        return await GetByIdDispatcher.For(d.EntityType)(this, RepositoryHelpers.ConvertId(id, d), deleted, ct);
     }
 
     private async Task<object?> GetByIdGenericAsync<T>(object id, DeletedFilter deleted, CancellationToken ct) where T : class, new()
@@ -250,10 +215,7 @@ public sealed class SqlSugarItemRepository(
         var pk = d.EntityType.GetProperty(d.IdProperty)!;
         if (pk.PropertyType == typeof(Guid) && pk.GetValue(entity) is Guid cur && cur == Guid.Empty)
             pk.SetValue(entity, Guid.CreateVersion7());
-        var invoke = CreateInvokers.GetOrAdd(d.EntityType, static t =>
-            CreateGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task<object>>>());
-        return await invoke(this, entity, ct);
+        return await CreateDispatcher.For(d.EntityType)(this, entity, ct);
     }
 
     // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.216); its only effect beyond
@@ -287,10 +249,7 @@ public sealed class SqlSugarItemRepository(
         var clone = CloneEntity(entity, d.EntityType);
         d.EntityType.GetProperty(d.IdProperty)!.SetValue(clone, RepositoryHelpers.ConvertId(id, d));
 
-        var invoke = UpdateInvokers.GetOrAdd(d.EntityType, static t =>
-            UpdateGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task>>());
-        await invoke(this, clone, ct);
+        await UpdateDispatcher.For(d.EntityType)(this, clone, ct);
         return await GetByIdAsync(collection, id, ct: ct);
     }
 
@@ -327,10 +286,7 @@ public sealed class SqlSugarItemRepository(
         var existing = await GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (existing is null) return false;
 
-        var invoke = DeleteInvokers.GetOrAdd(d.EntityType, static t =>
-            DeleteGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, object, CancellationToken, Task>>());
-        await invoke(this, RepositoryHelpers.ConvertId(id, d), ct);
+        await DeleteDispatcher.For(d.EntityType)(this, RepositoryHelpers.ConvertId(id, d), ct);
         return true;
     }
 
