@@ -1,6 +1,5 @@
 // src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs
 using System.Collections.Concurrent;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using SqlSugar;
@@ -60,20 +59,6 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(object), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo QueryTranslationParentIdsGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(QueryTranslationParentIdsGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(string), typeof(string), typeof(string), typeof(List<IConditionalModel>), typeof(CancellationToken)])!;
-
-    // Second-level dispatcher (T fixed by the call above, TFk resolved at runtime from the FK
-    // property's actual CLR type) so the FK-only SQL projection below can be expressed as a genuinely
-    // typed `Expression<Func<T, TFk>>` — SqlSugar's Select() does not translate a boxed
-    // `Convert(member, object)` lambda into a single-column projection.
-    private static readonly MethodInfo QueryTranslationFkSelectGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(QueryTranslationFkSelectGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(List<IConditionalModel>), typeof(LambdaExpression), typeof(CancellationToken)])!;
-
     private static readonly MethodInfo SyncTranslationsGenericAsyncDef =
         typeof(SqlSugarItemRepository).GetMethod(nameof(SyncTranslationsGenericAsync),
             BindingFlags.NonPublic | BindingFlags.Instance,
@@ -103,14 +88,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, object, CancellationToken, Task>> DeleteInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationParentIdsInvokers = new();
-
-    // Keyed by (translation entity type, FK CLR type) — two independent type parameters, so a
-    // single-Type ConcurrentDictionary (the pattern every other Invokers cache above uses) doesn't fit.
-    private static readonly ConcurrentDictionary<(Type EntityType, Type FkType),
-        Func<SqlSugarItemRepository, List<IConditionalModel>, LambdaExpression, CancellationToken, Task<IReadOnlyList<object>>>> QueryTranslationFkSelectInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncTranslationsInvokers = new();
@@ -145,7 +122,7 @@ public sealed class SqlSugarItemRepository(
                 foreach (var field in translatableSearchable)
                 {
                     var fieldCondition = new ComparisonFilter(field, QueryOperator.Contains, query.Search);
-                    var parentIds = await QueryTranslationParentIdsAsync(
+                    var parentIds = await translations.QueryTranslationParentIdsAsync(
                         tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty,
                         queryLocale, fieldCondition, ct);
                     foreach (var pid in parentIds)
@@ -423,101 +400,14 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default) =>
         translations.LoadTranslationsAsync(translationType, fkProperty, localeProperty, parentIds, locale, ct);
 
-    public async Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
+    public Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
         Type translationType,
         string fkProperty,
         string localeProperty,
         string locale,
         FilterNode fieldCondition,
-        CancellationToken ct = default)
-    {
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-
-        // Build a fake EntityDescriptor for the translation type so ConditionalModelTranslator
-        // can map camelCase field names to DB columns.
-        var translationDescriptor = BuildTranslationDescriptor(translationType);
-
-        // Locale equality filter (AND'd with the field condition below).
-        var localeConditional = new ConditionalModel
-        {
-            FieldName = localeColumn,
-            ConditionalType = ConditionalType.Equal,
-            FieldValue = locale
-        };
-
-        // Field condition translated via the translation entity's column map.
-        var fieldConditionals = ConditionalModelTranslator.Translate(fieldCondition, null, [], translationDescriptor, db);
-
-        // Combine: locale AND field.  SqlSugar AND's consecutive IConditionalModel items.
-        var conditionals = new List<IConditionalModel> { localeConditional };
-        conditionals.AddRange(fieldConditionals);
-
-        var invoke = QueryTranslationParentIdsInvokers.GetOrAdd(translationType, static t =>
-            QueryTranslationParentIdsGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, string, string, string, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, fkColumn, fkProperty, localeColumn, locale, conditionals, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> QueryTranslationParentIdsGenericAsync<T>(
-        string fkColumn, string fkProperty, string localeColumn, string locale,
-        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
-    {
-        var fkProp = typeof(T).GetProperty(fkProperty,
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        if (fkProp is null) return [];
-
-        // Project ONLY the FK column at the SQL level instead of materializing whole
-        // translation rows (which carry potentially-large body/text columns) just to read one value
-        // out of each. The lambda's return type must be the FK's REAL CLR type (Guid/string/...) —
-        // SqlSugar's Select() does not turn a boxed `Convert(member, object)` body into a one-column
-        // projection, it silently produces an empty/garbage result — so TFk is resolved and dispatched
-        // via a second generic layer below rather than boxed here.
-        var param = Expression.Parameter(typeof(T), "x");
-        var selectBody = Expression.Property(param, fkProp);
-        var selector = Expression.Lambda(selectBody, param);
-
-        var invoke = QueryTranslationFkSelectInvokers.GetOrAdd((typeof(T), fkProp.PropertyType), static key =>
-            QueryTranslationFkSelectGenericAsyncDef.MakeGenericMethod(key.EntityType, key.FkType)
-                .CreateDelegate<Func<SqlSugarItemRepository, List<IConditionalModel>, LambdaExpression, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, conditionals, selector, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> QueryTranslationFkSelectGenericAsync<T, TFk>(
-        List<IConditionalModel> conditionals, LambdaExpression selector, CancellationToken ct) where T : class, new()
-    {
-        var typedSelector = (Expression<Func<T, TFk>>)selector;
-        var values = await db.Queryable<T>().Where(conditionals).Select(typedSelector).ToListAsync(ct);
-        return values
-            .Cast<object>()
-            .Where(v => v is not null)
-            .Distinct()
-            .ToList();
-    }
-
-    /// <summary>
-    /// Builds a minimal <see cref="EntityDescriptor"/> for a translation entity type so that
-    /// <see cref="ConditionalModelTranslator"/> can resolve camelCase field names to DB columns.
-    /// Only the <c>FieldToProperty</c> map and <c>IdProperty</c> are needed.
-    /// </summary>
-    private static EntityDescriptor BuildTranslationDescriptor(Type translationType)
-    {
-        // Build a camelCase -> CLR property name map for all public instance properties.
-        var map = translationType
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .ToDictionary(
-                p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..],
-                p => p.Name,
-                StringComparer.OrdinalIgnoreCase);
-
-        // Id property: first property decorated with IsPrimaryKey, fall back to "Id".
-        var idProp = translationType
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
-            ?.Name ?? "Id";
-
-        return new EntityDescriptor(translationType, map, idProp);
-    }
+        CancellationToken ct = default) =>
+        translations.QueryTranslationParentIdsAsync(translationType, fkProperty, localeProperty, locale, fieldCondition, ct);
 
     public async Task SyncTranslationsAsync(
         Type translationType,
