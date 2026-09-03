@@ -106,11 +106,6 @@ public sealed class SqlSugarItemRepository(
             BindingFlags.NonPublic | BindingFlags.Instance,
             [typeof(string), typeof(object), typeof(CancellationToken)])!;
 
-    private static readonly MethodInfo WhereInWithDeletedGenericAsyncDef =
-        typeof(SqlSugarItemRepository).GetMethod(nameof(WhereInWithDeletedGenericAsync),
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)])!;
-
     // Per-dispatcher open-instance delegate caches, keyed by closed entity type.
     // Replaces per-call MakeGenericMethod().Invoke(this, [...]) — the MethodInfo.MakeGenericMethod cost
     // is paid once per (dispatcher, type) and the reflection *invoke* on every subsequent request is
@@ -140,9 +135,6 @@ public sealed class SqlSugarItemRepository(
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, CancellationToken, Task>> DeleteByPropertyInvokers = new();
-
-    private static readonly ConcurrentDictionary<Type,
-        Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInWithDeletedInvokers = new();
 
     private static readonly ConcurrentDictionary<Type,
         Func<SqlSugarItemRepository, string, object, DateTime, Guid?, CancellationToken, Task<bool>>> SoftDeleteInvokers = new();
@@ -493,38 +485,9 @@ public sealed class SqlSugarItemRepository(
         await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
     }
 
-    public async Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
-        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
-    {
-        if (values.Count == 0) return [];
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
-        var invoke = WhereInWithDeletedInvokers.GetOrAdd(d.EntityType, static t =>
-            WhereInWithDeletedGenericAsyncDef.MakeGenericMethod(t)
-                .CreateDelegate<Func<SqlSugarItemRepository, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>>());
-        return await invoke(this, column, values, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> WhereInWithDeletedGenericAsync<T>(
-        string column, IReadOnlyList<object> values, CancellationToken ct) where T : class, new()
-    {
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = column,
-                ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
-            }
-        };
-        var q = db.Queryable<T>();
-        if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
-            q = q.ClearFilter<ISoftDeletable>();  // include trashed rows — Cascade must still find/recurse into them
-        var rows = await q.Where(conditionals).ToListAsync(ct);
-        return rows.Cast<object>().ToList();
-    }
+    public Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        whereIn.QueryWhereInWithDeletedAsync(collection, property, values, ct);
 
     public async Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default)
     {

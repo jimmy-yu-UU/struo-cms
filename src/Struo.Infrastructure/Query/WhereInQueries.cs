@@ -1,6 +1,7 @@
 // src/Struo.Infrastructure/Query/WhereInQueries.cs
 using SqlSugar;
 using Struo.Application.Metadata;
+using Struo.Domain.Auditing;
 using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
@@ -15,6 +16,9 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
 
     private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>> QueryIdsDispatcher =
         new(typeof(WhereInQueries), nameof(QueryIdsGenericAsync), [typeof(List<IConditionalModel>), typeof(string), typeof(CancellationToken)]);
+
+    private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInWithDeletedDispatcher =
+        new(typeof(WhereInQueries), nameof(WhereInWithDeletedGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
@@ -104,5 +108,35 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         var pi = typeof(T).GetProperty(idProperty)!;
         return rows.Select(r => pi.GetValue(r)!).ToList();
+    }
+
+    public async Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
+    {
+        if (values.Count == 0) return [];
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
+        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+        return await WhereInWithDeletedDispatcher.For(d.EntityType)(this, column, values, ct);
+    }
+
+    private async Task<IReadOnlyList<object>> WhereInWithDeletedGenericAsync<T>(
+        string column, IReadOnlyList<object> values, CancellationToken ct) where T : class, new()
+    {
+        var conditionals = new List<IConditionalModel>
+        {
+            new ConditionalModel
+            {
+                FieldName = column,
+                ConditionalType = ConditionalType.In,
+                FieldValue = string.Join(",", values.Select(v => v?.ToString())),
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
+            }
+        };
+        var q = db.Queryable<T>();
+        if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+            q = q.ClearFilter<ISoftDeletable>();  // include trashed rows — Cascade must still find/recurse into them
+        var rows = await q.Where(conditionals).ToListAsync(ct);
+        return rows.Cast<object>().ToList();
     }
 }
