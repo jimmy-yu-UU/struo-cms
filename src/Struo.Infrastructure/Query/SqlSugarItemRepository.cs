@@ -22,9 +22,12 @@ public sealed class SqlSugarItemRepository(
     // ManyToManySync, TranslationStore, and OrderByExpressionBuilder. The facade itself still
     // implements Query/GetById/Create/Update/Delete (the optimistic-concurrency check, the
     // identity-PK read-back and the offset/limit paging all live in this file); every other
-    // IItemRepository member just delegates to one of the seven fields. Among those seven,
-    // OrderByExpressionBuilder is the only one registered as a scoped DI service — kept registered
-    // for a future direct consumer, though none exists today. The other six are not registered:
+    // IItemRepository member just delegates to one of six fields — transactions, whereIn,
+    // softDelete, purge, manyToMany, and translations; orderByBuilder is not a delegation
+    // target, it is used inside QueryAsync (orderByBuilder.BuildOrderBy(...)). Among the
+    // seven fields, OrderByExpressionBuilder is the only one registered as a scoped DI
+    // service — kept registered for a future direct consumer, though none exists today. The
+    // other six are not registered:
     // nothing outside this class needs them, and the test suite constructs SqlSugarItemRepository
     // directly with this exact 5-arg constructor (26 test files do), so adding constructor
     // parameters for them is not an option. manyToMany and translations take
