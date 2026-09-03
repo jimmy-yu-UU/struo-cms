@@ -5,7 +5,6 @@ using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Auditing;
-using Struo.Domain.Localization;
 using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
@@ -17,7 +16,7 @@ public sealed class SqlSugarItemRepository(
     IMetadataProvider metadata,
     StruoQueryOptions options) : IItemRepository
 {
-    // This class is a facade over IItemRepository. Two static helpers support it — GenericDispatcher
+    // This class is a facade over IItemRepository. Two supporting types back it — GenericDispatcher
     // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the seven instance
     // fields declared next: TransactionRunner, WhereInQueries, SoftDeleteOps, PurgeOps,
     // ManyToManySync, TranslationStore, and OrderByExpressionBuilder. The facade itself still
