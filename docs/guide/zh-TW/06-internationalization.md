@@ -77,9 +77,11 @@ public List<FileTranslation> Translations { get; set; } = [];
 public sealed class FileTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
+    // FileId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
+    // this table's [CmsTranslations] metadata through TranslationSidecarIndexPolicy and adds the
+    // composite unique (fileid, locale) to the generated column model at CodeFirst time.
+    // SchemaGuard.AssertCriticalConstraintsAsync re-checks the resulting index in Development.
     public Guid FileId { get; set; }
-    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
     public string Locale { get; set; } = "";
 
     [SugarColumn(IsNullable = true)]
@@ -94,9 +96,17 @@ public sealed class FileTranslation
 `MetadataScanner` 會從這一對類別衍生出 `TranslationMetadata`
 (`src/Struo.Domain/Metadata/Models/TranslationMetadata.cs`):`ForeignKeyProperty` (掃描器的慣例是
 `{ParentTypeName}Id`，所以 `File` 對應到 `FileId`)、`LocaleProperty` (`Locale`)，以及 `Fields`
-(該附屬資料表自身 `[CmsField]` 的 camelCase 名稱——此處為 `title` 與 `alt`)。`FileId`+`Locale` 上的
-複合 `UniqueGroupNameList`，正是用來保證每個父資料列、每個語言，最多只有一筆翻譯資料列——`Revision`
-(`src/Struo.Infrastructure/Revisions/Revision.cs`) 也是用同一種機制來實作它自己的複合唯一鍵。
+(該附屬資料表自身 `[CmsField]` 的 camelCase 名稱——此處為 `title` 與 `alt`)。用來保證每個父資料列、
+每個語言最多只有一筆翻譯資料列的 `FileId`+`Locale` 複合唯一鍵，並不是宣告在 entity 上的:它是由
+`SqlSugarClientFactory` 的 `EntityService` hook，透過 `TranslationSidecarIndexPolicy`
+(`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`) 從同一份
+`[CmsTranslations]` metadata 衍生而來，在 `InitTables` 讀取這兩個關鍵欄位之前，先把解析出來的群組
+名稱蓋上去。fork 自己的附屬資料表也會以同樣的方式免費取得這個索引，只要在新的 CodeFirst 資料表上
+掛上 `[CmsTranslations(typeof(...))]` 即可——不需要在附屬資料表 entity 本身寫任何東西。一個*既有*
+的、早於這個機制就存在的附屬資料表，並不會回溯取得這個索引;那需要在 `db/migrations/` 底下寫一份
+經過審查的 migration，就跟為既有資料表新增任何其他限制式一樣。`SchemaGuard`
+(`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) 會在 Development 啟動時，針對目前設定所擁有
+的每一個附屬資料表，驗證該索引確實存在。
 
 翻譯附屬資料表上欄位的 `MaxLength` 行為，完全依循第 5 章的規則，由
 `FieldValueRules.CheckMaxLengthTranslation` 逐語言套用;與父資料列欄位唯一的差異，是錯誤訊息會指名

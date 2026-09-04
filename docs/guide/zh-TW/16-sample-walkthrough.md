@@ -103,7 +103,6 @@ schema、GraphQL 與項目投影之外的 `Hidden` 文字欄位。它還宣告�
 
 ```csharp
 [SugarTable("article_translations")]
-[SugarIndex("ix_article_translations_fk_locale", nameof(ArticleId), OrderByType.Asc, nameof(Locale), OrderByType.Asc)]
 public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 ```
 
