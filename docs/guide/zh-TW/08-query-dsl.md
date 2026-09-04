@@ -240,6 +240,8 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bbogus%5D
 片段、終端集合上一個無法解析的葉欄位，以及一個超過 6 跳深度上限的路徑，三者各自會以自己精確的
 訊息被拒絕——這三種情況都已在第 7 章即時驗證過。`fields=` 額外完全不允許關聯路徑
 (`allowRelation: false`)——投影一律只會選取集合自身的純量欄位，絕不會選取一個巢狀關聯的欄位。
+在同一個 to-many 關聯路徑上組合多個條件是 each-exists 而非同一列——參見
+[第 7 章](07-relations.md#跨帶點號路徑的關聯篩選)。
 
 讀取授權不會跨越關聯跳躍。一個帶點號的路徑所經過的每一個集合，都需要它自己的讀取權限，因此一個
 只被授予 `article`、未被授予 `user` 的角色，無法透過 `author.email` 觸及 user 的資料列:該請求會被
