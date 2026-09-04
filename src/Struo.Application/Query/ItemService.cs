@@ -36,7 +36,10 @@ public sealed class ItemService(
     IUserSessionRevocationService sessionRevocation) : IItemUseCases
 {
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
-    private readonly ItemWriteSideSync writeSync = new(repository, m2mSource, languages, new(sanitizer));
+    // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
+    // the sibling `deserializer` field above (CS0236).
+    private readonly ItemWriteSideSync writeSync =
+        new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);

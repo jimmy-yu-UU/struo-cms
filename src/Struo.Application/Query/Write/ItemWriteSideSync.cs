@@ -3,6 +3,7 @@ using System.Text.Json;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query.Write;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -18,7 +19,10 @@ public sealed class ItemWriteSideSync(
     IItemRepository repository,
     IM2MDescriptorSource m2mSource,
     ILanguageProvider languages,
-    RichTextCleaner richText)
+    RichTextCleaner richText,
+    ItemDeserializer deserializer,
+    IMetadataProvider metadata,
+    IPermissionService permissions)
 {
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
@@ -140,32 +144,66 @@ public sealed class ItemWriteSideSync(
             if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
             if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
 
-            // De-duplicate the incoming ids up front — `tags:[t1,t1]` is semantically `tags:[t1]`
-            // (a junction is a set). Distinct() returns a NEW list (no in-place mutation) and the typed
-            // boxed values (long / string) compare correctly under the default equality comparer. Without
-            // this, a repeated id inflated targetIds.Count so the count-based existence check below
-            // spuriously failed ("do not exist"), and the junction sync would attempt duplicate rows.
+            var junctionMeta = desc.JunctionCollection is null ? null : metadata.GetCollection(desc.JunctionCollection);
+            var payloadNames = desc.HasPayload
+                ? desc.JunctionPayload!.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : null;
+
+            // Ordered, id-keyed merge of the array elements. `tags:[t1,t1]` is semantically `tags:[t1]`
+            // (a junction is a set) — de-duplicating up front also matters for the count-based existence
+            // check below and for the repository, which throws on a duplicate TargetId. An element may be
+            // a bare id (membership only) or, on a relation that declares payload, an object carrying an
+            // `id` plus payload fields; when the same id appears more than once, an object always
+            // outranks a bare id (whichever came first or last), and between two objects the later one
+            // wins. Order of first appearance is the sort order.
             //
-            // Each element must be coerced safely. `e.GetInt64()` throws FormatException on a
-            // non-integer number (e.g. 1.5). A JSON `null` element was already handled pre-fix —
-            // `e.GetString()` returns null (not a throw) for Null, which coerced to "" and was rejected
-            // by the "do not exist" existence check below (already a 400); only bool/object/array
-            // elements previously fell into the "else" branch and threw InvalidOperationException from
-            // `e.GetString()`. That IOE and the FormatException above were both unhandled (-> 500);
-            // this switch newly rejects them as a QueryException (-> 400) client error instead, matching
-            // every other malformed-input rejection on this path.
-            var targetIds = idsElem.EnumerateArray()
-                .Select(e => e.ValueKind switch
+            // Each id must be coerced safely. `e.GetInt64()` throws FormatException on a non-integer
+            // number (e.g. 1.5). A JSON `null` element was already handled pre-fix — `e.GetString()`
+            // returns null (not a throw) for Null, which coerced to "" and was rejected by the "do not
+            // exist" existence check below (already a 400); only bool/array elements (and, on a relation
+            // without payload, object elements) previously fell into the "else" branch and threw
+            // InvalidOperationException from `e.GetString()`. That IOE and the FormatException above were
+            // both unhandled (-> 500); this switch newly rejects them as a QueryException (-> 400) client
+            // error instead, matching every other malformed-input rejection on this path.
+            var order = new List<object>();
+            var merged = new Dictionary<object, JunctionLink>();
+            var anyPayload = false;
+            foreach (var e in idsElem.EnumerateArray())
+            {
+                JunctionLink link;
+                switch (e.ValueKind)
                 {
-                    JsonValueKind.Number when e.TryGetInt64(out var n) => (object)n,
-                    JsonValueKind.Number => throw new QueryException(
-                        $"One or more ids in '{desc.RelationName}' are not valid."),
-                    JsonValueKind.String => (object)(e.GetString() ?? string.Empty),
-                    _ => throw new QueryException(
-                        $"One or more ids in '{desc.RelationName}' are not valid."),
-                })
-                .Distinct()
-                .ToList();
+                    case JsonValueKind.Number when e.TryGetInt64(out var n): link = JunctionLink.Bare(n); break;
+                    case JsonValueKind.String: link = JunctionLink.Bare(e.GetString() ?? string.Empty); break;
+                    case JsonValueKind.Object when desc.HasPayload:
+                    {
+                        if (!e.TryGetProperty("id", out var idEl))
+                            throw new QueryException($"Each object in '{desc.RelationName}' must carry an 'id'.");
+                        object id = idEl.ValueKind switch
+                        {
+                            JsonValueKind.Number when idEl.TryGetInt64(out var n) => n,
+                            JsonValueKind.String => idEl.GetString() ?? string.Empty,
+                            _ => throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid."),
+                        };
+                        var bound = deserializer.DeserializePartial(desc.JunctionCollection!, e, junctionMeta!, payloadNames!);
+                        link = new JunctionLink(id, bound);
+                        anyPayload = true;
+                        break;
+                    }
+                    default:
+                        throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
+                }
+                if (!merged.ContainsKey(link.TargetId)) order.Add(link.TargetId);
+                if (merged.TryGetValue(link.TargetId, out var prev) && link.Payload is null && prev.Payload is not null)
+                    continue; // an object already recorded outranks a later bare id
+                merged[link.TargetId] = link;
+            }
+
+            if (anyPayload && !permissions.CanWrite(desc.JunctionCollection!))
+                throw new PermissionDeniedException($"Write to '{desc.JunctionCollection}' not permitted.");
+
+            var links = order.Select(id => merged[id]).ToList();
+            var targetIds = links.Select(l => l.TargetId).ToList();
 
             // Validate all target ids exist. A REVERT (includeDeleted) may legitimately reference a
             // target that has since been trashed — the snapshot was captured while it was still live — so
@@ -181,14 +219,13 @@ public sealed class ItemWriteSideSync(
                         $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
             }
 
-            // Interim: bare links only, no payload — Task 3 replaces this with parsed junction payloads.
             await repository.SyncManyToManyAsync(
                 desc.JunctionType,
                 desc.ParentFkProperty,
                 desc.TargetFkProperty,
                 desc.SortProperty,
                 parentId,
-                targetIds.Select(JunctionLink.Bare).ToList(),
+                links,
                 ct);
         }
     }
