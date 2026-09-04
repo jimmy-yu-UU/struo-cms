@@ -15,4 +15,8 @@ public sealed record RelationMetadata
     public OnDelete OnDelete { get; init; }
     public bool Editable { get; init; }
     public bool SelfReferencing { get; init; }
+
+    /// <summary>camelCase name of the junction collection when the M2M junction type is itself a
+    /// [CmsCollection]; null for plain junction entities and for non-M2M relations.</summary>
+    public string? JunctionCollection { get; init; }
 }
