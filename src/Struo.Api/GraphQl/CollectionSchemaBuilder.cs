@@ -256,12 +256,13 @@ internal sealed class CollectionSchemaBuilder(
     private static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
         payloadRelations.FirstOrDefault(d => string.Equals(d.RelationName, relationName, StringComparison.OrdinalIgnoreCase));
 
-    // Builds the "<Parent><Rel>Link" wrapper type for M2M relations that carry junction payload,
-    // exposing a "node" field (the target row) and a "junction" field (the junction payload) for
-    // one entry per element of the underlying "<rel>" list. `node` is the element dict itself
-    // (already a full target row, exactly what the bare `<rel>` field's own sub-resolvers read via
-    // ParentDict); `junction` reads the "_junction" key the deep expansion attaches, or null when
-    // the caller lacks the junction read grant — hence the nullable (non-required) return type.
+    // Builds the per-parent-relation wrapper type used when an M2M relation carries junction
+    // payload. It exposes a node field holding the target row and a junction field holding the
+    // junction payload, one entry per element of the underlying relation list. The node field
+    // reads the same element dict that the bare relation field's own sub-resolvers already read
+    // through ParentDict, since it is already a full target row. The junction field reads the
+    // internal junction key that deep expansion attaches, returning null when the caller lacks the
+    // junction read grant, which is why that field's GraphQL type omits the required marker.
     private static ObjectType BuildLinkType(CollectionMetadata meta, string targetTypeName, M2MDescriptor descriptor)
     {
         var config = new ObjectTypeConfiguration(
