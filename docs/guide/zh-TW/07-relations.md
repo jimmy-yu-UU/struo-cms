@@ -136,6 +136,10 @@ public List<Role> Roles { get; set; } = [];
 `[Navigate(typeof(JunctionType), parentFkName, targetFkName)]`——junction 型別本身不帶任何
 `[CmsRelation]`。
 
+每一種 junction 型別——不論帶不帶 payload——都必須宣告恰好一個 `[SugarColumn(IsPrimaryKey =
+true)]` 屬性:many-to-many 同步機制會依這個主鍵去更新既有的 junction 資料列，所以複合主鍵或完全
+沒有主鍵的 junction 會在啟動階段就以 `MetadataException` 快速失敗，而不是等到第一次寫入才出錯。
+
 ### Junction payload
 
 當一個 junction 型別*同時*也帶有 `[CmsCollection]` 時，它就成了本手冊稱之為 **junction

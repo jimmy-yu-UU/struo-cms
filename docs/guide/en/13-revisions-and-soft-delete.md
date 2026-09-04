@@ -237,6 +237,11 @@ directly from reusing the normal update path:
 - A revert **is** a normal write for every other purpose: it goes through the same `CanWrite` (+
   super-admin-if-`AdminOnly`) check, the same optimistic-concurrency machinery, and produces the same
   `200`-with-updated-item response shape as any other update.
+- Reverting a revision whose snapshot carries many-to-many junction payload (chapter 7) re-applies its
+  `[{id, ...payload}]` elements exactly like a direct payload write, and so requires the junction
+  collection's own write grant (plus super-admin if the junction is `AdminOnly`) — see chapter 9. A
+  role that may write the parent collection but not the junction gets `403` on that revert; grant the
+  junction collection to any role that needs to be able to revert a parent carrying junction payload.
 - Many-to-many sync during a revert **tolerates** a target row that was trashed since the snapshot was
   captured (`includeDeleted: operation == "revert"` in `UpdateCoreAsync`,
   `src/Struo.Application/Query/ItemService.cs`) — every other write path stays strict about this. A

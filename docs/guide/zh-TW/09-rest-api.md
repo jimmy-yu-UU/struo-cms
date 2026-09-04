@@ -335,7 +335,10 @@ payload 物件裡不認得的鍵一律被忽略，若呼叫端在 payload 部分
 該 junction 是 `AdminOnly`，還要求超級管理員身分)——這項檢查會在解析任何 payload 之前先執行，
 所以缺乏該授權的呼叫端得到的是 `403 FORBIDDEN` (`"Write to '{junction}' not permitted."`，或
 `"Writes to '{junction}' require a super-admin."`)，而不是關於 payload 自身欄位的驗證錯誤。
-純 id 則只需要父集合原本的寫入授權，跟這個功能出現之前一樣。針對範例 `article`
+純 id 則只需要父集合原本的寫入授權，跟這個功能出現之前一樣。這個授權關卡對
+`.../revisions/{n}/revert` (第 13 章) 同樣適用:只要被還原的那筆快照帶有 junction payload，
+revert 就會像一般寫入一樣重新套用 `[{id, ...payload}]` 元素，因此除了父集合之外，也需要該
+junction collection 本身的寫入授權。針對範例 `article`
 (`Article.Tags`，第 16 章——`Note` 是 `ArticleTag` 的 payload 欄位) 的示意混合陣列請求本文:
 
 ```json

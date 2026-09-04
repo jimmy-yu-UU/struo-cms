@@ -183,6 +183,12 @@ Development 環境下的 `Database:AutoSyncSchema=true`(第 15 章)，要嘛自�
 因為 `db/migrations` 是 core 專屬的，從不出貨範例集合的 schema(本章自己的「完全移除範例」
 檢查清單，見下文，對範例的資料表也點出了同樣的界線)。
 
+由於 `ArticleTag` 本身就是一個 `[CmsCollection]`，它也完全可以透過通用 CRUD/GraphQL 介面直接
+對這張 junction 資料表本身操作(即 `articleTag`，不只是透過 `Article.Tags`)——而它並未在
+`(ArticleId, TagId)` 上宣告唯一索引，所以透過這條路徑直接寫入有可能建立出重複的一對；下一次
+儲存所屬的 article 時就會修復它(保留主鍵最小的那一列，其餘刪除，並記錄一筆警告——見第 7 章
+`ManyToManySync`)。
+
 ### `Category.cs`——帶有自我參照樹狀結構的多對一關聯
 
 ```csharp
