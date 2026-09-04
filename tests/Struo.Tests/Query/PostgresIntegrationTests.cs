@@ -519,7 +519,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         {
             if (db.DbMaintenance.IsAnyTable("ddl_closeout_isjson_probe", false))
                 db.DbMaintenance.DropTable("ddl_closeout_isjson_probe");
-            db.CodeFirst.InitTables(typeof(DdlCloseoutIsJsonProbe));
+            db.CodeFirst.InitTables<DdlCloseoutIsJsonProbe>();
 
             var dataType = db.Ado.GetString(
                 "SELECT data_type FROM information_schema.columns WHERE table_name = 'ddl_closeout_isjson_probe' AND column_name = 'tags'");
@@ -551,7 +551,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         {
             if (db.DbMaintenance.IsAnyTable("file_translations", false))
                 db.DbMaintenance.DropTable("file_translations");
-            db.CodeFirst.InitTables(typeof(Struo.Infrastructure.Files.FileTranslation));
+            db.CodeFirst.InitTables<Struo.Infrastructure.Files.FileTranslation>();
 
             var indexDefs = db.Ado.SqlQuery<string>("SELECT indexdef FROM pg_indexes WHERE tablename = 'file_translations'");
             indexDefs.Should().Contain(d =>

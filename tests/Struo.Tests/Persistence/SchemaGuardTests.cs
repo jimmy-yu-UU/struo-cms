@@ -141,7 +141,7 @@ public sealed class SchemaGuardTests
         using (db)
         {
             client.CodeFirst.InitTables(typeof(Revision));
-            client.CodeFirst.InitTables(typeof(FileTranslation)); // policy -> composite unique
+            client.CodeFirst.InitTables<FileTranslation>(); // policy -> composite unique
 
             // Same resolution Program.cs performs at the call site: CLR type/property names ->
             // physical table/column names via EntityMaintenance, never a hardcoded literal.

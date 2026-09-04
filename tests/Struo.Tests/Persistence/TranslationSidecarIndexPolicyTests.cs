@@ -89,9 +89,9 @@ public sealed class TranslationSidecarIndexPolicyTests
                 new TestCurrentUserAccessor(Guid.Empty), policy);
 
     private static TranslationSidecarDescriptor ProbeDescriptor(ISqlSugarClient client) => new(
-        client.EntityMaintenance.GetTableName(typeof(PolicyProbeTranslation)),
-        client.EntityMaintenance.GetDbColumnName(nameof(PolicyProbeTranslation.PolicyProbeId), typeof(PolicyProbeTranslation)),
-        client.EntityMaintenance.GetDbColumnName(nameof(PolicyProbeTranslation.Locale), typeof(PolicyProbeTranslation)));
+        client.EntityMaintenance.GetTableName<PolicyProbeTranslation>(),
+        client.EntityMaintenance.GetDbColumnName<PolicyProbeTranslation>(nameof(PolicyProbeTranslation.PolicyProbeId)),
+        client.EntityMaintenance.GetDbColumnName<PolicyProbeTranslation>(nameof(PolicyProbeTranslation.Locale)));
 
     [Fact]
     public async Task With_policy_InitTables_emits_the_composite_unique_that_SchemaGuard_demands()
@@ -141,7 +141,7 @@ public sealed class TranslationSidecarIndexPolicyTests
                 typeof(LegacyAttributedTranslation), nameof(LegacyAttributedTranslation.LegacyProbeId), nameof(LegacyAttributedTranslation.Locale)),
         });
         var client = NewSqliteClient(db, policy);
-        client.CodeFirst.InitTables(typeof(LegacyAttributedTranslation));
+        client.CodeFirst.InitTables<LegacyAttributedTranslation>();
 
         var uniqueIndexCount = client.Ado.GetInt(
             "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name='policy_probe_legacy_translations' AND sql LIKE 'CREATE UNIQUE INDEX%'");
@@ -181,10 +181,10 @@ public sealed class TranslationSidecarIndexPolicyTests
                 typeof(ForkOwnedAttributedTranslation), nameof(ForkOwnedAttributedTranslation.ForkProbeId), nameof(ForkOwnedAttributedTranslation.Locale)),
         });
         var client = NewSqliteClient(db, policy);
-        client.CodeFirst.InitTables(typeof(ForkOwnedAttributedTranslation));
+        client.CodeFirst.InitTables<ForkOwnedAttributedTranslation>();
 
-        var fkColumn = client.EntityMaintenance.GetDbColumnName(nameof(ForkOwnedAttributedTranslation.ForkProbeId), typeof(ForkOwnedAttributedTranslation));
-        var localeColumn = client.EntityMaintenance.GetDbColumnName(nameof(ForkOwnedAttributedTranslation.Locale), typeof(ForkOwnedAttributedTranslation));
+        var fkColumn = client.EntityMaintenance.GetDbColumnName<ForkOwnedAttributedTranslation>(nameof(ForkOwnedAttributedTranslation.ForkProbeId));
+        var localeColumn = client.EntityMaintenance.GetDbColumnName<ForkOwnedAttributedTranslation>(nameof(ForkOwnedAttributedTranslation.Locale));
 
         var indexSqlStatements = client.Ado.SqlQuery<string>(
             "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='policy_probe_foreign_translations' AND sql LIKE 'CREATE UNIQUE INDEX%'");
@@ -212,9 +212,9 @@ public sealed class TranslationSidecarIndexPolicyTests
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(ArticleTranslation));
 
         var descriptor = new TranslationSidecarDescriptor(
-            client.EntityMaintenance.GetTableName(typeof(ArticleTranslation)),
-            client.EntityMaintenance.GetDbColumnName(nameof(ArticleTranslation.ArticleId), typeof(ArticleTranslation)),
-            client.EntityMaintenance.GetDbColumnName(nameof(ArticleTranslation.Locale), typeof(ArticleTranslation)));
+            client.EntityMaintenance.GetTableName<ArticleTranslation>(),
+            client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.ArticleId)),
+            client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.Locale)));
         var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [descriptor], default);
         await act.Should().NotThrowAsync();
     }
