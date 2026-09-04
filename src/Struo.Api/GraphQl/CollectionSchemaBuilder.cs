@@ -37,7 +37,6 @@ internal sealed class CollectionSchemaBuilder(
     internal IEnumerable<ITypeSystemMember> Build(CollectionMetadata meta)
     {
         var types = new List<ITypeSystemMember>();
-        var relationNames = meta.Relations.Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // M2M relations that carry junction payload — drives the additive <rel>Links/<Rel>Link/
         // <Rel>Junction/<Rel>LinkInput types below. Empty for every payload-free relation, so
         // nothing extra is generated for them (existing SDL stays byte-identical). Gated on
@@ -52,7 +51,7 @@ internal sealed class CollectionSchemaBuilder(
             .Where(d => HasExposablePayload(d, metadataProvider))
             .ToList();
 
-        types.Add(BuildObjectType(meta, relationNames, types, payloadRelations)); // Article + nested repeater item types + <Rel>Link/<Rel>Junction types (added to `types`)
+        types.Add(BuildObjectType(meta, types, payloadRelations)); // Article + nested repeater item types + <Rel>Link/<Rel>Junction types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
         types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
 
@@ -81,8 +80,7 @@ internal sealed class CollectionSchemaBuilder(
     }
 
     private ObjectType BuildObjectType(
-        CollectionMetadata meta, HashSet<string> relationNames, List<ITypeSystemMember> sink,
-        IReadOnlyList<M2MDescriptor> payloadRelations)
+        CollectionMetadata meta, List<ITypeSystemMember> sink, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var typeName = SchemaTypeMapper.TypeName(meta.Name);
         var desc = registry.Get(meta.Name);
@@ -127,45 +125,52 @@ internal sealed class CollectionSchemaBuilder(
         // relations (single-level value pre-nested by ItemService deep expansion).
         // To-many (O2M/M2M) list fields gain nested-list args; M2O stays a bare object field.
         foreach (var rel in meta.Relations)
-        {
-            var target = SchemaTypeMapper.TypeName(rel.TargetCollection);
-            if (rel.Kind == RelationKind.ManyToOne)
-            {
-                config.Fields.Add(Field(rel.Name, target, ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
-            }
-            else
-            {
-                var field = Field(rel.Name, $"[{target}!]", ctx => ParentDict(ctx).GetValueOrDefault(rel.Name));
-                field.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse($"{target}FilterInput")));
-                field.Arguments.Add(new ArgumentConfiguration("sort", null, TypeReference.Parse("[String!]")));
-                field.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
-                field.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
-                config.Fields.Add(field);
-
-                // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>Link!]`
-                // field reading the SAME underlying list as `<rel>` above (untouched); each element
-                // is exposed as { node, junction } instead of the bare target.
-                if (rel.Kind == RelationKind.ManyToMany)
-                {
-                    var descriptor = DescriptorFor(payloadRelations, rel.Name);
-                    if (descriptor is not null)
-                    {
-                        sink.Add(BuildJunctionType(meta, descriptor));
-                        sink.Add(BuildLinkType(meta, target, descriptor));
-                        config.Fields.Add(Field(
-                            SchemaTypeMapper.LinksFieldName(rel.Name),
-                            $"[{SchemaTypeMapper.LinkTypeName(meta.Name, rel.Name)}!]",
-                            ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
-                    }
-                }
-            }
-        }
+            AddRelationField(config, sink, meta, rel, payloadRelations);
 
         // translations map (always present in projection when the collection has a sidecar).
         if (meta.Translation is not null)
             config.Fields.Add(Field("translations", "[Translation!]", ctx => TranslationList(ParentDict(ctx))));
 
         return ObjectType.CreateUnsafe(config);
+    }
+
+    // Adds a single relation's read-side field(s) to the collection's object type: a bare object
+    // field for ManyToOne, or a filterable/sortable list field for OneToMany/ManyToMany — plus,
+    // for a ManyToMany relation whose junction carries an exposable payload, the additive
+    // `<rel>Links: [<Rel>Link!]` field (see BuildObjectType's caller comment for why this is
+    // additive rather than a replacement of the bare `<rel>` field).
+    private void AddRelationField(
+        ObjectTypeConfiguration config, List<ITypeSystemMember> sink, CollectionMetadata meta,
+        RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations)
+    {
+        var target = SchemaTypeMapper.TypeName(rel.TargetCollection);
+        if (rel.Kind == RelationKind.ManyToOne)
+        {
+            config.Fields.Add(Field(rel.Name, target, ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
+            return;
+        }
+
+        var field = Field(rel.Name, $"[{target}!]", ctx => ParentDict(ctx).GetValueOrDefault(rel.Name));
+        field.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse($"{target}FilterInput")));
+        field.Arguments.Add(new ArgumentConfiguration("sort", null, TypeReference.Parse("[String!]")));
+        field.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
+        field.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
+        config.Fields.Add(field);
+
+        // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>Link!]`
+        // field reading the SAME underlying list as `<rel>` above (untouched); each element
+        // is exposed as { node, junction } instead of the bare target.
+        if (rel.Kind != RelationKind.ManyToMany) return;
+
+        var descriptor = DescriptorFor(payloadRelations, rel.Name);
+        if (descriptor is null) return;
+
+        sink.Add(BuildJunctionType(meta, descriptor));
+        sink.Add(BuildLinkType(meta, target, descriptor));
+        config.Fields.Add(Field(
+            SchemaTypeMapper.LinksFieldName(rel.Name),
+            $"[{SchemaTypeMapper.LinkTypeName(meta.Name, rel.Name)}!]",
+            ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
     }
 
     private static ObjectType BuildRepeaterItemType(string collection, FieldMetadata repeater)

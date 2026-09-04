@@ -135,36 +135,8 @@ internal static class CollectionResolvers
         var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
         foreach (var sel in childSelections)
         {
-            RelationMetadata rel;
-            DeepSpec? nested;
-
-            if (relByName.TryGetValue(sel.Field.Name, out var directRel))
-            {
-                rel = directRel;
-                var targetType = (ObjectType)sel.Field.Type.NamedType();
-                nested = BuildDeep(ctx, rel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
-            }
-            else if (relByLinksName.TryGetValue(sel.Field.Name, out var linksRel))
-            {
-                // `<rel>Links`' own selection set is `{ node junction }`, not the target
-                // collection's fields — recurse into `node`'s own sub-selection instead, so a
-                // nested relation under `childrenLinks { node { tags { ... } } }` still expands.
-                // A selection with no `node` sub-selection at all (e.g.
-                // `childrenLinks { junction { note } }`) must still expand the relation itself —
-                // it just has nothing to recurse into, so `nested` stays null rather than
-                // dropping the relation from the DeepSpec entirely.
-                rel = linksRel;
-                var linkType = (ObjectType)sel.Field.Type.NamedType();
-                var nodeSel = ctx.GetSelections(linkType, sel).FirstOrDefault(s => s.Field.Name == "node");
-                nested = nodeSel is null
-                    ? null
-                    : BuildDeep(ctx, rel.TargetCollection,
-                        ctx.GetSelections((ObjectType)nodeSel.Field.Type.NamedType(), nodeSel), metadata);
-            }
-            else
-            {
-                continue;
-            }
+            var resolved = ResolveRelationSelection(ctx, sel, relByName, relByLinksName, metadata);
+            if (resolved is not var (rel, nested)) continue;
 
             // `<rel>` and `<rel>Links` selected at the SAME level (or an aliased duplicate of
             // either) must MERGE their nested Deep trees rather than first-wins — otherwise
@@ -179,34 +151,76 @@ internal static class CollectionResolvers
                 continue;
             }
 
-            // To-many list fields may carry filter/sort/limit/offset arguments. M2O has no
-            // args declared on its field (CollectionSchemaBuilder), so this only ever fires for
-            // OneToMany/ManyToMany relations. `<rel>Links` itself declares no such arguments, so
-            // this is always empty when `sel` is a `<rel>Links` selection.
-            FilterNode? filter = null;
-            IReadOnlyList<SortField>? sort = null;
-            int? limit = null, offset = null;
-            if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
-            {
-                var args = ReadSelectionArgs(ctx, sel);
-                if (args.TryGetValue("filter", out var fv) && fv is IReadOnlyDictionary<string, object?> fd)
-                    filter = FilterInputTranslator.Translate(fd, rel.TargetCollection, RelationTargets(metadata));
-                if (args.TryGetValue("sort", out var sv) && sv is IEnumerable<object?> st)
-                    sort = GraphQlQueryBuilder.ParseSort(st.Select(x => x?.ToString() ?? "").ToList());
-                if (args.TryGetValue("limit", out var lv) && lv is not null)
-                    limit = Convert.ToInt32(lv);
-                if (args.TryGetValue("offset", out var ov) && ov is not null)
-                    offset = Convert.ToInt32(ov);
-            }
-
-            map[rel.Name] = new DeepRelationSpec(null, limit, nested)
-            {
-                Filter = filter,
-                Sort = sort,
-                Offset = offset
-            };
+            map[rel.Name] = ReadListArgs(ctx, sel, rel, metadata, nested);
         }
         return map.Count == 0 ? null : new DeepSpec(map);
+    }
+
+    // Resolves a single child selection to the relation it targets — either the relation's own
+    // field name, or (for a ManyToMany relation with an exposable junction payload) its additive
+    // `<rel>Links` name — and recurses into that relation's own nested Deep tree. Returns null when
+    // the selection is neither (a field unrelated to any relation, e.g. a plain scalar).
+    private static (RelationMetadata Rel, DeepSpec? Nested)? ResolveRelationSelection(
+        IResolverContext ctx, Selection sel, Dictionary<string, RelationMetadata> relByName,
+        Dictionary<string, RelationMetadata> relByLinksName, IMetadataProvider metadata)
+    {
+        if (relByName.TryGetValue(sel.Field.Name, out var directRel))
+        {
+            var targetType = (ObjectType)sel.Field.Type.NamedType();
+            var nested = BuildDeep(ctx, directRel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
+            return (directRel, nested);
+        }
+
+        if (relByLinksName.TryGetValue(sel.Field.Name, out var linksRel))
+        {
+            // `<rel>Links`' own selection set is `{ node junction }`, not the target
+            // collection's fields — recurse into `node`'s own sub-selection instead, so a
+            // nested relation under `childrenLinks { node { tags { ... } } }` still expands.
+            // A selection with no `node` sub-selection at all (e.g.
+            // `childrenLinks { junction { note } }`) must still expand the relation itself —
+            // it just has nothing to recurse into, so `nested` stays null rather than
+            // dropping the relation from the DeepSpec entirely.
+            var linkType = (ObjectType)sel.Field.Type.NamedType();
+            var nodeSel = ctx.GetSelections(linkType, sel).FirstOrDefault(s => s.Field.Name == "node");
+            var nested = nodeSel is null
+                ? null
+                : BuildDeep(ctx, linksRel.TargetCollection,
+                    ctx.GetSelections((ObjectType)nodeSel.Field.Type.NamedType(), nodeSel), metadata);
+            return (linksRel, nested);
+        }
+
+        return null;
+    }
+
+    // To-many list fields may carry filter/sort/limit/offset arguments. M2O has no args declared
+    // on its field (CollectionSchemaBuilder), so this only ever fires for OneToMany/ManyToMany
+    // relations. `<rel>Links` itself declares no such arguments, so this is always empty when
+    // `sel` is a `<rel>Links` selection.
+    private static DeepRelationSpec ReadListArgs(
+        IResolverContext ctx, Selection sel, RelationMetadata rel, IMetadataProvider metadata, DeepSpec? nested)
+    {
+        FilterNode? filter = null;
+        IReadOnlyList<SortField>? sort = null;
+        int? limit = null, offset = null;
+        if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
+        {
+            var args = ReadSelectionArgs(ctx, sel);
+            if (args.TryGetValue("filter", out var fv) && fv is IReadOnlyDictionary<string, object?> fd)
+                filter = FilterInputTranslator.Translate(fd, rel.TargetCollection, RelationTargets(metadata));
+            if (args.TryGetValue("sort", out var sv) && sv is IEnumerable<object?> st)
+                sort = GraphQlQueryBuilder.ParseSort(st.Select(x => x?.ToString() ?? "").ToList());
+            if (args.TryGetValue("limit", out var lv) && lv is not null)
+                limit = Convert.ToInt32(lv);
+            if (args.TryGetValue("offset", out var ov) && ov is not null)
+                offset = Convert.ToInt32(ov);
+        }
+
+        return new DeepRelationSpec(null, limit, nested)
+        {
+            Filter = filter,
+            Sort = sort,
+            Offset = offset
+        };
     }
 
     // Merges two DeepSpecs' relation maps: the union of keys, recursively merging the nested Deep
