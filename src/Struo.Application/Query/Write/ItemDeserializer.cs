@@ -19,7 +19,39 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     private readonly FieldValidatorRegistry validatorRegistry = new();
 
-    public object Deserialize(string collection, JsonElement body, CollectionMetadata meta)
+    public object Deserialize(string collection, JsonElement body, CollectionMetadata meta) =>
+        DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null);
+
+    /// <summary>
+    /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
+    /// RichText, MaxLength and per-interface validation as <see cref="Deserialize"/>, but only for the
+    /// camelCase fields in <paramref name="onlyFields"/> that are present in <paramref name="body"/>, and
+    /// without Required checks (absent payload fields keep their stored value). Returns CLR property name → value.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?> DeserializePartial(
+        string collection, JsonElement body, CollectionMetadata meta, IReadOnlySet<string> onlyFields)
+    {
+        var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
+        var entity = DeserializeCore(collection, body, meta, enforceRequired: false, onlyFields);
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (body.ValueKind != JsonValueKind.Object) return result;
+
+        // JsonElement.TryGetProperty is case-sensitive; onlyFields (and allowedKeys below) compare
+        // OrdinalIgnoreCase, so match "is this field present in body" the same way.
+        var presentNames = body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in onlyFields)
+        {
+            if (!presentNames.Contains(name)) continue;
+            if (!d.FieldToProperty.TryGetValue(name, out var prop)) continue;
+            var pi = d.Properties.GetValueOrDefault(prop);
+            if (pi is not { CanWrite: true }) continue;
+            result[prop] = pi.GetValue(entity);
+        }
+        return result;
+    }
+
+    private object DeserializeCore(
+        string collection, JsonElement body, CollectionMetadata meta, bool enforceRequired, IReadOnlySet<string>? onlyFields)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
 
@@ -53,6 +85,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
                 .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
                 .Select(r => r.ForeignKey!))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (onlyFields is not null) allowedKeys.IntersectWith(onlyFields);
         if (body.ValueKind == JsonValueKind.Object)
         {
             foreach (var name in body.EnumerateObject().Select(p => p.Name).Where(n => !allowedKeys.Contains(n)))
@@ -126,12 +159,18 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         }
 
         // required validation — skip translatable fields (they live on the sidecar entity and
-        // are validated per-locale in SyncTranslationsAsync, not on the parent).
-        foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
+        // are validated per-locale in SyncTranslationsAsync, not on the parent). Skipped entirely for a
+        // partial bind (enforceRequired: false) — a junction payload object only sets the fields it
+        // names, so a required payload field absent from this particular element is not an error;
+        // absent payload fields keep their stored value.
+        if (enforceRequired)
         {
-            var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.Properties.GetValueOrDefault(prop) : null;
-            var value = pi?.GetValue(entity);
-            FieldValueRules.RequireParent(field.Name, value);
+            foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
+            {
+                var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.Properties.GetValueOrDefault(prop) : null;
+                var value = pi?.GetValue(entity);
+                FieldValueRules.RequireParent(field.Name, value);
+            }
         }
 
         // Max length — a CMS-layer limit; the DB column width is SqlSugar's separate concern.
