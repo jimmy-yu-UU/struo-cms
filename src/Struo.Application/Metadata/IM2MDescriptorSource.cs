@@ -1,5 +1,9 @@
 namespace Struo.Application.Metadata;
 
+/// <summary>One payload column of a junction collection: the camelCase field name the API exposes and
+/// the CLR property it binds to. FK and sort columns are never payload.</summary>
+public sealed record JunctionPayloadField(string Name, string Property, bool Hidden);
+
 /// <summary>
 /// Carries the junction-table information needed by <see cref="Struo.Application.Query.ItemService"/>
 /// to sync M2M assignments after a create or update. Infrastructure populates this via
@@ -11,7 +15,14 @@ public sealed record M2MDescriptor(
     Type   JunctionType,
     string ParentFkProperty,
     string TargetFkProperty,
-    string? SortProperty);
+    string? SortProperty,
+    string? JunctionCollection = null,
+    IReadOnlyList<JunctionPayloadField>? JunctionPayload = null)
+{
+    /// <summary>True when <see cref="JunctionCollection"/> carries payload fields beyond its FKs and
+    /// sort column — i.e. the junction is itself a [CmsCollection] with extra data on it.</summary>
+    public bool HasPayload => JunctionPayload is { Count: > 0 };
+}
 
 /// <summary>
 /// An M2M descriptor viewed from the TARGET side: <paramref name="SourceCollection"/> is the

@@ -19,7 +19,9 @@ public sealed record RelationDescriptor(
     string? JunctionParentFk,
     string? JunctionTargetFk,
     string? JunctionSort,
-    string? ReverseForeignKeyProperty);
+    string? ReverseForeignKeyProperty,
+    string? JunctionCollection = null,
+    IReadOnlyList<JunctionPayloadField>? JunctionPayload = null);
 
 /// <summary>
 /// Singleton graph of all collection relations, built once at startup.
@@ -28,6 +30,7 @@ public sealed record RelationDescriptor(
 /// </summary>
 public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 {
+    private readonly IReadOnlyList<CollectionMetadata> _collections;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<RelationDescriptor>> _byCollection;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundRestrict;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundSetNull;
@@ -37,6 +40,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         IReadOnlyList<CollectionMetadata> collections,
         IReadOnlyDictionary<string, Type> collectionTypes)
     {
+        _collections = collections;
         var known = collections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var map = new Dictionary<string, IReadOnlyList<RelationDescriptor>>(StringComparer.OrdinalIgnoreCase);
         var inboundRestrict = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
@@ -136,7 +140,9 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                 d.JunctionType!,
                 d.JunctionParentFk!,
                 d.JunctionTargetFk!,
-                d.JunctionSort))
+                d.JunctionSort,
+                d.JunctionCollection,
+                d.JunctionPayload))
             .ToList();
 
     /// <summary>
@@ -159,12 +165,14 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                     d.JunctionType!,
                     d.JunctionParentFk!,
                     d.JunctionTargetFk!,
-                    d.JunctionSort))))
+                    d.JunctionSort,
+                    d.JunctionCollection,
+                    d.JunctionPayload))))
             .ToList();
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private static RelationDescriptor BuildDescriptor(Type entityType, RelationMetadata r)
+    private RelationDescriptor BuildDescriptor(Type entityType, RelationMetadata r)
     {
         // Find the nav property by matching camelCase name
         var prop = entityType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -178,13 +186,12 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 
         if (r.Kind == RelationKind.ManyToMany)
         {
-            return new RelationDescriptor(
-                r,
-                JunctionType: MetadataScanner.NavigateMappingType(navData),
-                JunctionParentFk: MetadataScanner.NavigateMappingA(navData),
-                JunctionTargetFk: MetadataScanner.NavigateMappingB(navData),
-                JunctionSort: prop.GetCustomAttribute<Struo.Domain.Metadata.Attributes.CmsRelationAttribute>()?.SortField,
-                ReverseForeignKeyProperty: null);
+            var junctionType = MetadataScanner.NavigateMappingType(navData)!;
+            var parentFk = MetadataScanner.NavigateMappingA(navData)!;
+            var targetFk = MetadataScanner.NavigateMappingB(navData)!;
+            var sort = prop.GetCustomAttribute<Struo.Domain.Metadata.Attributes.CmsRelationAttribute>()?.SortField;
+            var (junctionCollection, payload) = JunctionPayloadOf(junctionType, parentFk, targetFk, sort);
+            return new RelationDescriptor(r, junctionType, parentFk, targetFk, sort, null, junctionCollection, payload);
         }
 
         if (r.Kind == RelationKind.OneToMany)
@@ -201,5 +208,29 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 
         // ManyToOne — FK is already captured in Meta.ForeignKey
         return new RelationDescriptor(r, null, null, null, null, null);
+    }
+
+    // Single source of the junction payload field list: everything downstream that needs to know which
+    // extra columns a M2M junction collection carries (beyond its two FKs and its sort column) reads
+    // M2MDescriptor.JunctionPayload rather than re-deriving this itself.
+    private (string? Collection, IReadOnlyList<JunctionPayloadField>? Payload) JunctionPayloadOf(
+        Type junctionType, string parentFk, string targetFk, string? sortProperty)
+    {
+        var name = System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(junctionType.Name);
+        var meta = _collections.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (meta is null) return (null, null);
+
+        var excluded = new HashSet<string>(StringComparer.Ordinal) { parentFk, targetFk };
+        if (sortProperty is not null) excluded.Add(sortProperty);
+
+        var props = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var payload = meta.Fields
+            .Where(f => !f.IsSystem && !f.ReadOnly)
+            .Select(f => (Field: f, Prop: props.FirstOrDefault(p =>
+                string.Equals(System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name), f.Name, StringComparison.OrdinalIgnoreCase))))
+            .Where(x => x.Prop is not null && !excluded.Contains(x.Prop!.Name))
+            .Select(x => new JunctionPayloadField(x.Field.Name, x.Prop!.Name, x.Field.Hidden))
+            .ToList();
+        return (meta.Name, payload);
     }
 }
