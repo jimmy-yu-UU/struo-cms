@@ -58,9 +58,9 @@ public class InfrastructureRegistrationTests
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(FileTranslation));
 
         var descriptor = new TranslationSidecarDescriptor(
-            client.EntityMaintenance.GetTableName(typeof(FileTranslation)),
-            client.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation)),
-            client.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.Locale), typeof(FileTranslation)));
+            client.EntityMaintenance.GetTableName<FileTranslation>(),
+            client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId)),
+            client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.Locale)));
         var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [descriptor], default);
         await act.Should().NotThrowAsync();
     }
