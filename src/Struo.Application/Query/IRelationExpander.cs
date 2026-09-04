@@ -18,6 +18,12 @@ public interface IRelationExpander
     /// <param name="projectTarget"><c>(targetCollection, targetEntity, fields?) -&gt; camelCase dict</c>.</param>
     /// <param name="parentId">Reads the primary-key value off a parent entity.</param>
     /// <param name="readProp">Reads a property value off an entity by CLR/camel name.</param>
+    /// <param name="canReadJunction">
+    /// <c>junctionCollection -&gt; bool</c>, consulted before a payload-bearing M2M relation's
+    /// <c>_junction</c> sub-object is attached, at every nesting level (this same delegate is
+    /// threaded through the recursive call for a relation's own nested <c>deep</c>). <c>null</c>
+    /// means "no restriction" — every payload-bearing M2M relation gets its <c>_junction</c>.
+    /// </param>
     Task<Dictionary<object, Dictionary<string, object?>>> ExpandAsync(
         string collection,
         IReadOnlyList<object> parents,
@@ -26,5 +32,6 @@ public interface IRelationExpander
         Func<object, object> parentId,
         Func<object, string, object?> readProp,
         string? locale = null,
+        Func<string, bool>? canReadJunction = null,
         CancellationToken ct = default);
 }
