@@ -70,6 +70,11 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
         {
             // Ordered by ascending PK so that when a target has more than one row (legacy duplicate),
             // "keep the first" deterministically means "keep the lowest PK" on every backend.
+            // NOTE: this read goes through db.Queryable<T>(), which is subject to the global
+            // soft-delete query filter. A junction type that implements ISoftDeletable would have its
+            // trashed rows silently excluded from this diff (and so never deleted/updated/reconciled
+            // here) — an unusual shape, not supported by design; junctions are membership/payload rows,
+            // not independently soft-deletable entities. No behaviour change.
             var existing = await db.Queryable<T>().Where(parentConditional).OrderBy($"{pkColumn} ASC").ToListAsync(ct);
 
             var byTarget = await ResolveExistingByTargetAsync(existing, targetProp, pkProp, tableName, parentId, ct);

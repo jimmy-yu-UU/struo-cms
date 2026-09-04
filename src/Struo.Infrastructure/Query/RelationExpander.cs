@@ -176,7 +176,8 @@ public sealed class RelationExpander(
     }
 
     // Projects a junction row's non-hidden payload fields into the "_junction" dict attached to a
-    // ManyToMany target row (see the ExpandAsync M2M case above), keyed by CLR property name.
+    // ManyToMany target row (see the ExpandAsync M2M case above), keyed by f.Name (the camelCase API
+    // field name), not the junction's CLR property name.
     private static Dictionary<string, object?> BuildJunctionPayload(
         RelationDescriptor desc, Func<object, string, object?> readProp, object junction)
     {

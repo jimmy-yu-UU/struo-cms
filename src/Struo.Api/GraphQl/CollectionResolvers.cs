@@ -136,7 +136,8 @@ internal static class CollectionResolvers
         foreach (var sel in childSelections)
         {
             var resolved = ResolveRelationSelection(ctx, sel, relByName, relByLinksName, metadata);
-            if (resolved is not var (rel, nested)) continue;
+            if (resolved is null) continue;
+            var (rel, nested) = resolved.Value;
 
             // `<rel>` and `<rel>Links` selected at the SAME level (or an aliased duplicate of
             // either) must MERGE their nested Deep trees rather than first-wins — otherwise

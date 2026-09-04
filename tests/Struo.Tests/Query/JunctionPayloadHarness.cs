@@ -76,6 +76,16 @@ public sealed class JpLink
     [SugarColumn(IsNullable = true)] [CmsField(Label = "Weight", Interface = FieldInterface.Number)] public int? Weight { get; set; }
     [SugarColumn(IsNullable = true)] [CmsField(Label = "Secret", Interface = FieldInterface.Text, Hidden = true)] public string? Secret { get; set; }
     [CmsField(Label = "Sort", Interface = FieldInterface.Number)] public int Sort { get; set; }
+    // T5: a Guid-typed payload field, to prove a non-string payload scalar round-trips through
+    // create -> update -> revert (snapshot -> ApplyPayload/CoerceScalar -> DB) intact. An enum-typed
+    // payload field was considered too (kind: "B") but dropped: ItemDeserializer.DeserializePartial
+    // binds the junction payload element via plain System.Text.Json (JsonSerializerDefaults.Web,
+    // no JsonStringEnumConverter), which cannot deserialize a JSON *string* into an enum property —
+    // it throws JsonException ("could not be converted"), surfaced as a 400 QueryException. No
+    // existing entity in this codebase declares an enum-typed [CmsField] to establish a binding
+    // convention, so adding one here would invent a new, untested convention rather than exercise
+    // an existing one.
+    [SugarColumn(IsNullable = true)] [CmsField(Label = "Ref", Interface = FieldInterface.Uuid)] public Guid? Ref { get; set; }
 }
 
 [SugarTable("jp_plain_links")]

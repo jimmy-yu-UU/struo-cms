@@ -84,6 +84,49 @@ public sealed class JunctionPayloadMetadataTests
         public List<JpmChild> Children { get; set; } = [];
     }
 
+    // A junction with a COMPOSITE primary key (both FKs marked IsPrimaryKey, no single Id) —
+    // ManyToManySync.SyncM2MGenericAsync resolves the junction's PK via
+    // `Columns.Single(c => c.IsPrimarykey)`, which throws InvalidOperationException on the first M2M
+    // write for a junction like this; the scan-time fail-fast must catch it instead. Deliberately NOT
+    // itself a [CmsCollection] — the single-PK requirement applies to every M2M junction, payload or
+    // plain, collection or bare POCO.
+    [SugarTable("jpm_composite_pk_links")]
+    public sealed class JpmCompositePkLink
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid JpmCompositePkParentId { get; set; }
+        [SugarColumn(IsPrimaryKey = true)] public Guid JpmChildId { get; set; }
+    }
+
+    [SugarTable("jpm_composite_pk_parents")]
+    [CmsCollection("Jpm composite pk parent")]
+    public sealed class JpmCompositePkParent
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [Navigate(typeof(JpmCompositePkLink), nameof(JpmCompositePkLink.JpmCompositePkParentId), nameof(JpmCompositePkLink.JpmChildId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)]
+        public List<JpmChild> Children { get; set; } = [];
+    }
+
+    // A junction with NO primary key at all.
+    [SugarTable("jpm_no_pk_links")]
+    public sealed class JpmNoPkLink
+    {
+        public Guid JpmNoPkParentId { get; set; }
+        public Guid JpmChildId { get; set; }
+    }
+
+    [SugarTable("jpm_no_pk_parents")]
+    [CmsCollection("Jpm no pk parent")]
+    public sealed class JpmNoPkParent
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [Navigate(typeof(JpmNoPkLink), nameof(JpmNoPkLink.JpmNoPkParentId), nameof(JpmNoPkLink.JpmChildId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)]
+        public List<JpmChild> Children { get; set; } = [];
+    }
+
     private static (RelationshipGraph Graph, IReadOnlyList<Struo.Domain.Metadata.Models.CollectionMetadata> Collections) Build(params Type[] types)
     {
         var collections = MetadataScanner.ScanTypes(types);
@@ -145,5 +188,33 @@ public sealed class JunctionPayloadMetadataTests
         var act = () => MetadataScanner.ScanTypes([typeof(JpmBadParent), typeof(JpmChild), typeof(JpmBadLink)]);
         act.Should().Throw<MetadataException>()
             .WithMessage("*jpmBadLink*").And.Message.Should().ContainAll("jpmBadParent", "children", "JpmBadParentId", "JpmChildId", "FieldInterface.Uuid");
+    }
+
+    [Fact]
+    public void Junction_with_a_composite_primary_key_fails_fast_at_scan()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(JpmCompositePkParent), typeof(JpmChild), typeof(JpmCompositePkLink)]);
+        act.Should().Throw<MetadataException>().Which.Message.Should().ContainAll(
+            "JpmCompositePkLink", "IsPrimaryKey", "jpmCompositePkParent", "children");
+    }
+
+    [Fact]
+    public void Junction_with_no_primary_key_fails_fast_at_scan()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(JpmNoPkParent), typeof(JpmChild), typeof(JpmNoPkLink)]);
+        act.Should().Throw<MetadataException>().Which.Message.Should().ContainAll(
+            "JpmNoPkLink", "IsPrimaryKey", "jpmNoPkParent", "children");
+    }
+
+    [Fact]
+    public void Preexisting_single_primary_key_junction_fixtures_still_scan()
+    {
+        // Sanity companion to the two fail-fast tests above: every junction fixture already declared
+        // in this file carries exactly one [SugarColumn(IsPrimaryKey = true)] property, so scanning
+        // them must not throw for the new PK check (already exercised implicitly by the earlier tests
+        // in this file — asserted explicitly here so a future fixture edit that breaks this is caught
+        // by name).
+        Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
+        Build(typeof(JpmPlainParent), typeof(JpmChild), typeof(JpmPlainLink));
     }
 }
