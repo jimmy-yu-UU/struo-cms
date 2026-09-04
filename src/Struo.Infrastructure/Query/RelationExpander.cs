@@ -28,6 +28,16 @@ public sealed class RelationExpander(
     IRelationFilterResolver filterResolver, StruoQueryOptions options)
     : IRelationExpander
 {
+    // The per-call context ExpandAsync threads through its relation expansion, bundled so
+    // ExpandManyToManyAsync (and any future per-relation helper) takes one value instead of five
+    // separate parameters. Built once per ExpandAsync call.
+    private readonly record struct ExpandContext(
+        Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> ProjectTarget,
+        Func<object, object> ParentId,
+        Func<object, string, object?> ReadProp,
+        string? Locale,
+        Func<string, bool>? CanReadJunction);
+
     /// <summary>
     /// Builds, per parent id, a map of <c>relationName -&gt; (object?|list)</c> of projected
     /// target rows for every relation named in <paramref name="deep"/>.
@@ -50,6 +60,7 @@ public sealed class RelationExpander(
         ArgumentNullException.ThrowIfNull(filterResolver);
         ArgumentNullException.ThrowIfNull(options);
 
+        var ctx = new ExpandContext(projectTarget, parentId, readProp, locale, canReadJunction);
         var result = new Dictionary<object, Dictionary<string, object?>>();
         foreach (var p in parents) result[parentId(p)] = new Dictionary<string, object?>();
 
@@ -114,9 +125,7 @@ public sealed class RelationExpander(
                     break;
                 }
                 case RelationKind.ManyToMany:
-                    expanded = await ExpandManyToManyAsync(
-                        desc, relName, spec, parents, projectTarget, parentId, readProp, locale,
-                        canReadJunction, result, ct);
+                    expanded = await ExpandManyToManyAsync(desc, relName, spec, parents, ctx, result, ct);
                     break;
                 default:
                     throw new QueryException($"Unsupported relation kind '{rel.Kind}' for '{relName}'.");
@@ -149,44 +158,41 @@ public sealed class RelationExpander(
     // projected dict) pairs for the caller's recursion step.
     private async Task<List<(object Entity, Dictionary<string, object?> Dict)>> ExpandManyToManyAsync(
         RelationDescriptor desc, string relName, DeepRelationSpec spec, IReadOnlyList<object> parents,
-        Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
-        Func<object, object> parentId, Func<object, string, object?> readProp, string? locale,
-        Func<string, bool>? canReadJunction, Dictionary<object, Dictionary<string, object?>> result,
-        CancellationToken ct)
+        ExpandContext ctx, Dictionary<object, Dictionary<string, object?>> result, CancellationToken ct)
     {
         var rel = desc.Meta;
         var expanded = new List<(object Entity, Dictionary<string, object?> Dict)>();
-        var ids = parents.Select(parentId).ToList();
+        var ids = parents.Select(ctx.ParentId).ToList();
         var junctions = await repository.QueryEntityWhereInAsync(
             desc.JunctionType!, desc.JunctionParentFk!, ids, ct);
         var targetIds = junctions
-            .Select(j => readProp(j, desc.JunctionTargetFk!)!)
+            .Select(j => ctx.ReadProp(j, desc.JunctionTargetFk!)!)
             .Distinct()
             .ToList();
         var m2mFilter = spec.Filter is null ? null
-            : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, locale, ct);
+            : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, ctx.Locale, ct);
         var targets = (await repository.QueryWhereInFilteredAsync(
                 rel.TargetCollection, "id", targetIds, m2mFilter, ct))
-            .ToDictionary(t => readProp(t, "id")!, t => t);
+            .ToDictionary(t => ctx.ReadProp(t, "id")!, t => t);
         var includeJunction = desc.JunctionPayload is { Count: > 0 }
             && desc.JunctionCollection is not null
-            && (canReadJunction is null || canReadJunction(desc.JunctionCollection));
+            && (ctx.CanReadJunction is null || ctx.CanReadJunction(desc.JunctionCollection));
         foreach (var p in parents)
         {
-            var pid = parentId(p);
+            var pid = ctx.ParentId(p);
             var rows = new List<IReadOnlyDictionary<string, object?>>();
             var linkedPairs = junctions
-                .Where(j => Equals(readProp(j, desc.JunctionParentFk!), pid))
-                .OrderBy(j => JunctionSortKey(desc.JunctionSort, readProp, j))
-                .Select(j => (Junction: j, TargetId: readProp(j, desc.JunctionTargetFk!)!))
+                .Where(j => Equals(ctx.ReadProp(j, desc.JunctionParentFk!), pid))
+                .OrderBy(j => JunctionSortKey(desc.JunctionSort, ctx.ReadProp, j))
+                .Select(j => (Junction: j, TargetId: ctx.ReadProp(j, desc.JunctionTargetFk!)!))
                 .Where(jt => targets.ContainsKey(jt.TargetId))
                 .Select(jt => (jt.Junction, Target: targets[jt.TargetId]))
                 .ToList();
-            foreach (var pair in ApplyListArgs(linkedPairs, spec, (jt, field) => readProp(jt.Target, field)))
+            foreach (var pair in ApplyListArgs(linkedPairs, spec, (jt, field) => ctx.ReadProp(jt.Target, field)))
             {
-                var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, pair.Target, spec.Fields);
+                var d = (Dictionary<string, object?>)ctx.ProjectTarget(rel.TargetCollection, pair.Target, spec.Fields);
                 if (includeJunction)
-                    d["_junction"] = BuildJunctionPayload(desc, readProp, pair.Junction);
+                    d["_junction"] = BuildJunctionPayload(desc, ctx.ReadProp, pair.Junction);
                 rows.Add(d);
                 expanded.Add((pair.Target, d));
             }
@@ -224,17 +230,7 @@ public sealed class RelationExpander(
         {
             IOrderedEnumerable<T>? ordered = null;
             foreach (var s in sorts)
-            {
-                var field = s.Field;
-                Func<T, object?> key = e => readField(e, field);
-                ordered = ordered is null
-                    ? (s.Descending
-                        ? seq.OrderByDescending(key, RelationSortComparer.Instance)
-                        : seq.OrderBy(key, RelationSortComparer.Instance))
-                    : (s.Descending
-                        ? ordered.ThenByDescending(key, RelationSortComparer.Instance)
-                        : ordered.ThenBy(key, RelationSortComparer.Instance));
-            }
+                ordered = ApplySortKey(seq, ordered, s, e => readField(e, s.Field));
             seq = ordered!;
         }
 
@@ -243,6 +239,20 @@ public sealed class RelationExpander(
         if (spec.Limit is > 0) seq = seq.Take(Math.Min(spec.Limit.Value, options.MaxLimit));
         return seq;
     }
+
+    // One step of ApplyListArgs multi-key sort ladder, extracted verbatim (same comparer, same
+    // null handling, same stable-sort semantics) to keep ApplyListArgs cognitive complexity in
+    // check. The first key starts the ordering via OrderBy/OrderByDescending; every subsequent
+    // key refines it via ThenBy/ThenByDescending without disturbing the earlier keys ordering.
+    private static IOrderedEnumerable<T> ApplySortKey<T>(
+        IEnumerable<T> seq, IOrderedEnumerable<T>? ordered, SortField s, Func<T, object?> key) =>
+        ordered is null
+            ? (s.Descending
+                ? seq.OrderByDescending(key, RelationSortComparer.Instance)
+                : seq.OrderBy(key, RelationSortComparer.Instance))
+            : (s.Descending
+                ? ordered.ThenByDescending(key, RelationSortComparer.Instance)
+                : ordered.ThenBy(key, RelationSortComparer.Instance));
 
     /// <summary>
     /// Null-safe comparer for boxed own-field values (nulls sort first). Values on the same field
