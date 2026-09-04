@@ -42,7 +42,7 @@ public sealed class RelationExpander(
         string collection, IReadOnlyList<object> parents, DeepSpec deep,
         Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
         Func<object, object> parentId, Func<object, string, object?> readProp,
-        string? locale = null, CancellationToken ct = default)
+        string? locale = null, Func<string, bool>? canReadJunction = null, CancellationToken ct = default)
     {
         // filterResolver is consumed for nested-filter push-down (O2M/M2M target-side rewrite)
         // and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
@@ -127,22 +127,32 @@ public sealed class RelationExpander(
                     var targets = (await repository.QueryWhereInFilteredAsync(
                             rel.TargetCollection, "id", targetIds, m2mFilter, ct))
                         .ToDictionary(t => readProp(t, "id")!, t => t);
+                    var includeJunction = desc.JunctionPayload is { Count: > 0 }
+                        && desc.JunctionCollection is not null
+                        && (canReadJunction is null || canReadJunction(desc.JunctionCollection));
                     foreach (var p in parents)
                     {
                         var pid = parentId(p);
                         var rows = new List<IReadOnlyDictionary<string, object?>>();
-                        var linkedTargets = junctions
+                        var linkedPairs = junctions
                             .Where(j => Equals(readProp(j, desc.JunctionParentFk!), pid))
                             .OrderBy(j => JunctionSortKey(desc.JunctionSort, readProp, j))
-                            .Select(j => readProp(j, desc.JunctionTargetFk!)!)
-                            .Where(tid => targets.ContainsKey(tid))
-                            .Select(tid => targets[tid])
+                            .Select(j => (Junction: j, TargetId: readProp(j, desc.JunctionTargetFk!)!))
+                            .Where(jt => targets.ContainsKey(jt.TargetId))
+                            .Select(jt => (jt.Junction, Target: targets[jt.TargetId]))
                             .ToList();
-                        foreach (var t in ApplyListArgs(linkedTargets, spec, readProp))
+                        foreach (var pair in ApplyListArgs(linkedPairs, spec, (jt, field) => readProp(jt.Target, field)))
                         {
-                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, t, spec.Fields);
+                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, pair.Target, spec.Fields);
+                            if (includeJunction)
+                            {
+                                var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
+                                foreach (var f in desc.JunctionPayload!)
+                                    if (!f.Hidden) payload[f.Name] = readProp(pair.Junction, f.Property);
+                                d["_junction"] = payload;
+                            }
                             rows.Add(d);
-                            expanded.Add((t, d));
+                            expanded.Add((pair.Target, d));
                         }
                         result[pid][relName] = rows;
                     }
@@ -159,7 +169,8 @@ public sealed class RelationExpander(
             {
                 var distinct = expanded.Select(e => e.Entity).Distinct().ToList();
                 var sub = await ExpandAsync(
-                    rel.TargetCollection, distinct, spec.Deep, projectTarget, parentId, readProp, locale, ct);
+                    rel.TargetCollection, distinct, spec.Deep, projectTarget, parentId, readProp,
+                    locale, canReadJunction, ct);
                 foreach (var (entity, dict) in expanded)
                     if (sub.TryGetValue(parentId(entity), out var subMap))
                         foreach (var (k, v) in subMap) dict[k] = v;
@@ -177,18 +188,18 @@ public sealed class RelationExpander(
     /// <c>options.MaxLimit</c>. This is the per-parent windowing that keeps the batched fetch N+1-safe.
     /// Instance method: reads <c>options.MaxLimit</c> off the injected <see cref="StruoQueryOptions"/>.
     /// </summary>
-    private IEnumerable<object> ApplyListArgs(
-        List<object> entities, DeepRelationSpec spec, Func<object, string, object?> readProp)
+    private IEnumerable<T> ApplyListArgs<T>(
+        List<T> entities, DeepRelationSpec spec, Func<T, string, object?> readField)
     {
-        IEnumerable<object> seq = entities;
+        IEnumerable<T> seq = entities;
 
         if (spec.Sort is { Count: > 0 } sorts)
         {
-            IOrderedEnumerable<object>? ordered = null;
+            IOrderedEnumerable<T>? ordered = null;
             foreach (var s in sorts)
             {
                 var field = s.Field;
-                Func<object, object?> key = e => readProp(e, field);
+                Func<T, object?> key = e => readField(e, field);
                 ordered = ordered is null
                     ? (s.Descending
                         ? seq.OrderByDescending(key, RelationSortComparer.Instance)
