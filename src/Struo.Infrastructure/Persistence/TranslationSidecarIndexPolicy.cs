@@ -17,7 +17,10 @@ public sealed class TranslationSidecarIndexPolicy
     public static TranslationSidecarIndexPolicy None { get; } =
         new(new Dictionary<Type, TranslationSidecarKey>());
 
-    private readonly IReadOnlyDictionary<Type, TranslationSidecarKey> _sidecars;
+    // Declared as the concrete Dictionary (not IReadOnlyDictionary) so the compiler can devirtualize
+    // TryGetValue - this is already a defensive copy of the ctor argument, and the class never
+    // mutates it after construction, so immutability is preserved regardless of the declared type.
+    private readonly Dictionary<Type, TranslationSidecarKey> _sidecars;
 
     public TranslationSidecarIndexPolicy(IReadOnlyDictionary<Type, TranslationSidecarKey> sidecars)
     {
