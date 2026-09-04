@@ -5,6 +5,7 @@ using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Application.Query.Write;
 using Struo.Application.Revisions;
 using Struo.Application.Security;
 using Struo.Domain.Localization;
@@ -78,7 +79,7 @@ public class DeleteRestrictWithGuidPkTests
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task<IReadOnlyList<object>> QueryIdsAsync(string c, FilterNode f, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
-        public Task SyncManyToManyAsync(Type jt, string pfk, string tfk, string? sort, object pid, IReadOnlyList<object> tids, CancellationToken ct) =>
+        public Task SyncManyToManyAsync(Type jt, string pfk, string tfk, string? sort, object pid, IReadOnlyList<JunctionLink> links, CancellationToken ct) =>
             Task.CompletedTask;
         public Task<IReadOnlyList<object>> LoadTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<object> pids, string? locale, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);

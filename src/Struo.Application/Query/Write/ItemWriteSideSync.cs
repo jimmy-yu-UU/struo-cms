@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
+using Struo.Application.Query.Write;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -179,13 +180,14 @@ public sealed class ItemWriteSideSync(
                         $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
             }
 
+            // Interim: bare links only, no payload — Task 3 replaces this with parsed junction payloads.
             await repository.SyncManyToManyAsync(
                 desc.JunctionType,
                 desc.ParentFkProperty,
                 desc.TargetFkProperty,
                 desc.SortProperty,
                 parentId,
-                targetIds,
+                targetIds.Select(JunctionLink.Bare).ToList(),
                 ct);
         }
     }

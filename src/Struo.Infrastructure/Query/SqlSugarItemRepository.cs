@@ -1,9 +1,11 @@
 // src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Application.Query.Write;
 using Struo.Domain.Auditing;
 using Struo.Domain.Query;
 
@@ -14,7 +16,8 @@ public sealed class SqlSugarItemRepository(
     IEntityRegistry registry,
     IRelationshipGraph graph,
     IMetadataProvider metadata,
-    StruoQueryOptions options) : IItemRepository
+    StruoQueryOptions options,
+    ILogger<SqlSugarItemRepository>? logger = null) : IItemRepository
 {
     // This class is a facade over IItemRepository. Two supporting types back it — GenericDispatcher
     // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the seven instance
@@ -29,17 +32,18 @@ public sealed class SqlSugarItemRepository(
     // service — kept registered for a future direct consumer, though none exists today. The
     // other six are not registered:
     // nothing outside this class needs them, and the test suite constructs SqlSugarItemRepository
-    // directly with this exact 5-arg constructor (26 test files do), so adding constructor
-    // parameters for them is not an option. manyToMany and translations take
-    // `new TransactionRunner(db)` rather than the `transactions` field below because a field
-    // initializer cannot reference another instance field (CS0236); TransactionRunner holds no
-    // state beyond `db`, so the second instance behaves identically to sharing the first.
+    // directly with this exact 5-arg constructor (26 test files do), so any new required
+    // constructor parameter is not an option — `logger` above is optional (defaults to null) for
+    // exactly that reason. manyToMany and translations take `new TransactionRunner(db)` rather
+    // than the `transactions` field below because a field initializer cannot reference another
+    // instance field (CS0236); TransactionRunner holds no state beyond `db`, so the second
+    // instance behaves identically to sharing the first.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly WhereInQueries whereIn = new(db, registry);
     private readonly SoftDeleteOps softDelete = new(db, registry);
     private readonly PurgeOps purge = new(db, registry);
-    private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db));
+    private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db), logger);
     private readonly TranslationStore translations = new(db, new TransactionRunner(db));
 
     private static readonly GenericDispatcher<Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryDispatcher =
@@ -338,9 +342,9 @@ public sealed class SqlSugarItemRepository(
         string targetFkProperty,
         string? sortProperty,
         object parentId,
-        IReadOnlyList<object> targetIds,
+        IReadOnlyList<JunctionLink> links,
         CancellationToken ct = default) =>
-        manyToMany.SyncManyToManyAsync(junctionType, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct);
+        manyToMany.SyncManyToManyAsync(junctionType, parentFkProperty, targetFkProperty, sortProperty, parentId, links, ct);
 
     public Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType,
