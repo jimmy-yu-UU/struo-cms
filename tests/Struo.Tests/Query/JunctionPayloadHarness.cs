@@ -37,6 +37,10 @@ public sealed class JpParent : AuditableEntity
     [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
     [SugarColumn(IsIgnore = true)]
     public List<JpChild> PlainChildren { get; set; } = [];
+    [Navigate(typeof(JpAdminLink), nameof(JpAdminLink.JpParentId), nameof(JpAdminLink.JpChildId))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
+    [SugarColumn(IsIgnore = true)]
+    public List<JpChild> AdminChildren { get; set; } = [];
 }
 
 [SugarTable("jp_children")]
@@ -68,6 +72,18 @@ public sealed class JpPlainLink
     public Guid JpChildId { get; set; }
 }
 
+/// <summary>A payload junction whose collection is <c>AdminOnly</c> — proves that an object element on
+/// such a relation is gated by super-admin, not just the ordinary per-collection write grant.</summary>
+[SugarTable("jp_admin_links")]
+[CmsCollection("Jp admin link", Hidden = true, AdminOnly = true)]
+public sealed class JpAdminLink
+{
+    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    [CmsField(Label = "Parent", Interface = FieldInterface.Uuid)] public Guid JpParentId { get; set; }
+    [CmsField(Label = "Child", Interface = FieldInterface.Uuid)] public Guid JpChildId { get; set; }
+    [SugarColumn(IsNullable = true)] [CmsField(Label = "Note", Interface = FieldInterface.Text)] public string? Note { get; set; }
+}
+
 // ── harness ───────────────────────────────────────────────────────────────────
 
 /// <summary>Real ItemService over SQLite with a payload junction (JpLink) and a plain one (JpPlainLink),
@@ -95,15 +111,17 @@ public sealed class JunctionPayloadHarness : IDisposable
         Db.CodeFirst.InitTables<JpChild>();
         Db.CodeFirst.InitTables<JpLink>();
         Db.CodeFirst.InitTables<JpPlainLink>();
+        Db.CodeFirst.InitTables<JpAdminLink>();
         LanguageSeeder.SeedAsync(Db).GetAwaiter().GetResult();
 
-        var types = new[] { typeof(JpParent), typeof(JpChild), typeof(JpLink), typeof(JpPlainLink) };
+        var types = new[] { typeof(JpParent), typeof(JpChild), typeof(JpLink), typeof(JpPlainLink), typeof(JpAdminLink) };
         var collections = MetadataScanner.ScanTypes(types);
         Metadata = new CachedMetadataProvider(collections);
         Registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["jpParent"] = typeof(JpParent), ["jpChild"] = typeof(JpChild), ["jpLink"] = typeof(JpLink),
+            ["jpAdminLink"] = typeof(JpAdminLink),
         };
         Graph = new RelationshipGraph(collections, collectionTypes);
         var options = new StruoQueryOptions();
@@ -134,6 +152,9 @@ public sealed class JunctionPayloadHarness : IDisposable
 
     public List<JpLink> Links(Guid parentId) =>
         Db.Queryable<JpLink>().Where(l => l.JpParentId == parentId).OrderBy(l => l.Sort).ToList();
+
+    public List<JpAdminLink> AdminLinks(Guid parentId) =>
+        Db.Queryable<JpAdminLink>().Where(l => l.JpParentId == parentId).ToList();
 
     public void Dispose() => _file.Dispose();
 }

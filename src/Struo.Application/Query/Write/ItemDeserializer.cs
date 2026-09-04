@@ -36,8 +36,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (body.ValueKind != JsonValueKind.Object) return result;
 
-        // JsonElement.TryGetProperty is case-sensitive; onlyFields (and allowedKeys below) compare
-        // OrdinalIgnoreCase, so match "is this field present in body" the same way.
+        // JsonElement.TryGetProperty is case-sensitive; onlyFields (and DeserializeCore's allowedKeys)
+        // compare OrdinalIgnoreCase, so match "is this field present in body" the same way.
         var presentNames = body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var name in onlyFields)
         {

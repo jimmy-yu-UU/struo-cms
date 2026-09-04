@@ -144,10 +144,29 @@ public sealed class ItemWriteSideSync(
             if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
             if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
 
-            var junctionMeta = desc.JunctionCollection is null ? null : metadata.GetCollection(desc.JunctionCollection);
-            var payloadNames = desc.HasPayload
-                ? desc.JunctionPayload!.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
-                : null;
+            // An object element carries junction payload — gate it BEFORE any parsing/binding runs, so a
+            // caller who lacks the grant gets a 403, not a 400 from probing the payload's own field
+            // rules (e.g. a MaxLength violation). Resolved lazily: only when the array actually contains
+            // an object element, and only for a relation whose junction declares payload at all (a
+            // relation without payload rejects any object element as an invalid id regardless of grant —
+            // unchanged, existing behaviour).
+            CollectionMetadata? junctionMeta = null;
+            HashSet<string>? payloadNames = null;
+            var hasObjectElement = idsElem.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object);
+            if (hasObjectElement && desc.HasPayload)
+            {
+                junctionMeta = metadata.GetCollection(desc.JunctionCollection!)
+                    ?? throw new CollectionNotFoundException(desc.JunctionCollection!);
+                // AdminOnly junctions require a super-admin regardless of any per-collection write grant
+                // — the same escalation guard ItemService.RequireSuperAdminForAdminOnly applies to every
+                // other write path (a fork hanging an AdminOnly junction off a non-AdminOnly parent must
+                // not gain a second, weaker write surface into it).
+                if (junctionMeta.AdminOnly && !permissions.IsSuperAdmin)
+                    throw new PermissionDeniedException($"Writes to '{junctionMeta.Name}' require a super-admin.");
+                if (!permissions.CanWrite(desc.JunctionCollection!))
+                    throw new PermissionDeniedException($"Write to '{desc.JunctionCollection}' not permitted.");
+                payloadNames = desc.JunctionPayload!.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
 
             // Ordered, id-keyed merge of the array elements. `tags:[t1,t1]` is semantically `tags:[t1]`
             // (a junction is a set) — de-duplicating up front also matters for the count-based existence
@@ -167,7 +186,6 @@ public sealed class ItemWriteSideSync(
             // error instead, matching every other malformed-input rejection on this path.
             var order = new List<object>();
             var merged = new Dictionary<object, JunctionLink>();
-            var anyPayload = false;
             foreach (var e in idsElem.EnumerateArray())
             {
                 JunctionLink link;
@@ -187,7 +205,6 @@ public sealed class ItemWriteSideSync(
                         };
                         var bound = deserializer.DeserializePartial(desc.JunctionCollection!, e, junctionMeta!, payloadNames!);
                         link = new JunctionLink(id, bound);
-                        anyPayload = true;
                         break;
                     }
                     default:
@@ -198,9 +215,6 @@ public sealed class ItemWriteSideSync(
                     continue; // an object already recorded outranks a later bare id
                 merged[link.TargetId] = link;
             }
-
-            if (anyPayload && !permissions.CanWrite(desc.JunctionCollection!))
-                throw new PermissionDeniedException($"Write to '{desc.JunctionCollection}' not permitted.");
 
             var links = order.Select(id => merged[id]).ToList();
             var targetIds = links.Select(l => l.TargetId).ToList();
