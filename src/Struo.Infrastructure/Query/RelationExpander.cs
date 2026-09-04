@@ -145,12 +145,7 @@ public sealed class RelationExpander(
                         {
                             var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, pair.Target, spec.Fields);
                             if (includeJunction)
-                            {
-                                var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
-                                foreach (var f in desc.JunctionPayload!)
-                                    if (!f.Hidden) payload[f.Name] = readProp(pair.Junction, f.Property);
-                                d["_junction"] = payload;
-                            }
+                                d["_junction"] = BuildJunctionPayload(desc, readProp, pair.Junction);
                             rows.Add(d);
                             expanded.Add((pair.Target, d));
                         }
@@ -178,6 +173,17 @@ public sealed class RelationExpander(
         }
 
         return result;
+    }
+
+    // Projects a junction row's non-hidden payload fields into the "_junction" dict attached to a
+    // ManyToMany target row (see the ExpandAsync M2M case above), keyed by CLR property name.
+    private static Dictionary<string, object?> BuildJunctionPayload(
+        RelationDescriptor desc, Func<object, string, object?> readProp, object junction)
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var f in desc.JunctionPayload!)
+            if (!f.Hidden) payload[f.Name] = readProp(junction, f.Property);
+        return payload;
     }
 
     /// <summary>

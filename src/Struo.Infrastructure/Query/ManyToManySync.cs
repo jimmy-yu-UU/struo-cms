@@ -50,18 +50,7 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
         var reservedNames = new HashSet<string>(StringComparer.Ordinal) { pkProp.Name, parentFkProperty, targetFkProperty };
         if (sortProperty is not null) reservedNames.Add(sortProperty);
 
-        // Application (Task 3) is expected to de-duplicate targets before calling in; a duplicate
-        // target id here is a caller bug, not data to silently repair by last-wins — fail loud so
-        // it is caught in development instead of quietly reordering/dropping a link.
-        var incoming = new Dictionary<object, (JunctionLink Link, int Index)>();
-        for (var i = 0; i < links.Count; i++)
-        {
-            var key = IdCoercion.Coerce(links[i].TargetId, targetProp.PropertyType)!;
-            if (!incoming.TryAdd(key, (links[i], i)))
-                throw new ArgumentException(
-                    $"Duplicate target id '{links[i].TargetId}' for junction table '{tableName}' — each target may appear at most once in links.",
-                    nameof(links));
-        }
+        var incoming = BuildIncomingLinks(links, targetProp, tableName);
 
         // ConditionalType.In (not Equal): Equal binds FieldValue as text -> "bigint = text" 42883 on PostgreSQL. In is the Postgres-safe primitive the other collaborators use (WhereInQueries, TranslationStore).
         var parentConditional = new List<IConditionalModel>
@@ -83,55 +72,14 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
             // "keep the first" deterministically means "keep the lowest PK" on every backend.
             var existing = await db.Queryable<T>().Where(parentConditional).OrderBy($"{pkColumn} ASC").ToListAsync(ct);
 
-            // Index existing rows by target id. This side's keys are already typed as
-            // targetProp.PropertyType (read straight off the entity); `incoming`'s keys are coerced
-            // to that same CLR type via IdCoercion above — that shared type is why the two
-            // dictionaries' lookups agree.
-            var byTarget = new Dictionary<object, T>();
-            var duplicates = new List<object>();
-            foreach (var row in existing)
-            {
-                var key = targetProp.GetValue(row)!;
-                if (!byTarget.TryAdd(key, row)) duplicates.Add(pkProp.GetValue(row)!);
-            }
-            if (duplicates.Count > 0)
-            {
-                logger?.LogWarning(
-                    "Junction table {Table} had {Count} duplicate row(s) for parent {ParentId}; keeping the lowest-PK row per target and deleting the rest.",
-                    tableName, duplicates.Count, parentId);
-                await db.Deleteable<T>().In(duplicates.ToArray()).ExecuteCommandAsync(ct);
-            }
+            var byTarget = await ResolveExistingByTargetAsync(existing, targetProp, pkProp, tableName, parentId, ct);
 
             var toDelete = byTarget.Where(kv => !incoming.ContainsKey(kv.Key)).Select(kv => pkProp.GetValue(kv.Value)!).ToArray();
             if (toDelete.Length > 0)
                 await db.Deleteable<T>().In(toDelete).ExecuteCommandAsync(ct);
 
-            var toInsert = new List<T>();
-            var toUpdate = new List<T>();
-            foreach (var (targetId, (link, index)) in incoming)
-            {
-                var sortValue = sortProp is null ? null : ConvertSortValue(index, sortProp.PropertyType);
-
-                if (byTarget.TryGetValue(targetId, out var row))
-                {
-                    var changed = new List<string>();
-                    if (sortProp is not null && !Equals(sortProp.GetValue(row), sortValue))
-                    {
-                        sortProp.SetValue(row, sortValue);
-                        changed.Add(sortProp.Name);
-                    }
-                    changed.AddRange(ApplyPayload(type, row, link.Payload, reservedNames));
-                    if (changed.Count > 0) toUpdate.Add(row);
-                    continue;
-                }
-
-                var fresh = new T();
-                parentProp.SetValue(fresh, IdCoercion.Coerce(parentId, parentProp.PropertyType));
-                targetProp.SetValue(fresh, targetId);
-                sortProp?.SetValue(fresh, sortValue);
-                ApplyPayload(type, fresh, link.Payload, reservedNames);
-                toInsert.Add(fresh);
-            }
+            var (toInsert, toUpdate) = PartitionChanges(
+                incoming, byTarget, type, parentId, parentProp, targetProp, sortProp, reservedNames);
             if (toInsert.Count > 0)
                 await db.Insertable(toInsert).ExecuteCommandAsync(ct);
 
@@ -147,6 +95,87 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
             if (toUpdate.Count > 0)
                 await db.Updateable(toUpdate).ExecuteCommandAsync(ct);
         }, ct);
+    }
+
+    // Application (Task 3) is expected to de-duplicate targets before calling in; a duplicate
+    // target id here is a caller bug, not data to silently repair by last-wins — fail loud so
+    // it is caught in development instead of quietly reordering/dropping a link.
+    private static Dictionary<object, (JunctionLink Link, int Index)> BuildIncomingLinks(
+        IReadOnlyList<JunctionLink> links, PropertyInfo targetProp, string tableName)
+    {
+        var incoming = new Dictionary<object, (JunctionLink Link, int Index)>();
+        for (var i = 0; i < links.Count; i++)
+        {
+            var key = IdCoercion.Coerce(links[i].TargetId, targetProp.PropertyType)!;
+            if (!incoming.TryAdd(key, (links[i], i)))
+                throw new ArgumentException(
+                    $"Duplicate target id '{links[i].TargetId}' for junction table '{tableName}' — each target may appear at most once in links.",
+                    nameof(links));
+        }
+        return incoming;
+    }
+
+    // Index existing rows by target id, then delete any legacy duplicate rows for the same target
+    // (keeping the lowest-PK row, per the caller's ascending-PK ordering). This side's keys are
+    // already typed as targetProp.PropertyType (read straight off the entity); the caller's
+    // `incoming` keys are coerced to that same CLR type via IdCoercion — that shared type is why
+    // the two dictionaries' lookups agree.
+    private async Task<Dictionary<object, T>> ResolveExistingByTargetAsync<T>(
+        List<T> existing, PropertyInfo targetProp, PropertyInfo pkProp, string tableName, object parentId,
+        CancellationToken ct) where T : class, new()
+    {
+        var byTarget = new Dictionary<object, T>();
+        var duplicates = new List<object>();
+        foreach (var row in existing)
+        {
+            var key = targetProp.GetValue(row)!;
+            if (!byTarget.TryAdd(key, row)) duplicates.Add(pkProp.GetValue(row)!);
+        }
+        if (duplicates.Count > 0)
+        {
+            logger?.LogWarning(
+                "Junction table {Table} had {Count} duplicate row(s) for parent {ParentId}; keeping the lowest-PK row per target and deleting the rest.",
+                tableName, duplicates.Count, parentId);
+            await db.Deleteable<T>().In(duplicates.ToArray()).ExecuteCommandAsync(ct);
+        }
+        return byTarget;
+    }
+
+    // Splits the incoming target set against the existing rows: a target already present becomes an
+    // update only when its sort value or payload actually changed; a target with no existing row
+    // becomes a fresh insert.
+    private static (List<T> ToInsert, List<T> ToUpdate) PartitionChanges<T>(
+        Dictionary<object, (JunctionLink Link, int Index)> incoming, Dictionary<object, T> byTarget, Type type,
+        object parentId, PropertyInfo parentProp, PropertyInfo targetProp, PropertyInfo? sortProp,
+        HashSet<string> reservedNames) where T : class, new()
+    {
+        var toInsert = new List<T>();
+        var toUpdate = new List<T>();
+        foreach (var (targetId, (link, index)) in incoming)
+        {
+            var sortValue = sortProp is null ? null : ConvertSortValue(index, sortProp.PropertyType);
+
+            if (byTarget.TryGetValue(targetId, out var row))
+            {
+                var changed = new List<string>();
+                if (sortProp is not null && !Equals(sortProp.GetValue(row), sortValue))
+                {
+                    sortProp.SetValue(row, sortValue);
+                    changed.Add(sortProp.Name);
+                }
+                changed.AddRange(ApplyPayload(type, row, link.Payload, reservedNames));
+                if (changed.Count > 0) toUpdate.Add(row);
+                continue;
+            }
+
+            var fresh = new T();
+            parentProp.SetValue(fresh, IdCoercion.Coerce(parentId, parentProp.PropertyType));
+            targetProp.SetValue(fresh, targetId);
+            sortProp?.SetValue(fresh, sortValue);
+            ApplyPayload(type, fresh, link.Payload, reservedNames);
+            toInsert.Add(fresh);
+        }
+        return (toInsert, toUpdate);
     }
 
     private static object ConvertSortValue(int index, Type sortPropType)
