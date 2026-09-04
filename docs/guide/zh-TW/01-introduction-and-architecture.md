@@ -134,7 +134,7 @@ entity 上的 SqlSugar attribute 都仍然綁定 SqlSugar。
 
 實際影響是:SqlSugar 的大版本升級，或是像 `[SugarIndex]` 這類 attribute 語意上的變動，會直接
 衝擊每一個 fork 的 entity 類別——core 不會、也無法替 fork 吸收這類變動。有兩個過去屬於這種情況的
-DDL 決策現在不再是了:單純的 `[SugarColumn(IsJson = true)]` 欄位寬度、以及翻譯 sidecar 的
+DDL 決策現在不再是了:單純的 `[SugarColumn(IsJson = true)]` 欄位寬度、以及翻譯附屬資料表的
 `(fk, locale)` 複合唯一鍵，兩者都改由 core 的 `SqlSugarClientFactory` 內部計算，而非宣告在
 entity 上，所以這兩項變動都由 core 替你吸收。升級 core 時，請把 `Directory.Packages.props` 中
 `SqlSugarCore` 的版本列與你 fork 先前 checkout 的版本相比對，並在合併前讀過該版本的 changelog。

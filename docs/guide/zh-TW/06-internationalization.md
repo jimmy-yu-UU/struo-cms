@@ -104,7 +104,11 @@ public sealed class FileTranslation
 名稱蓋上去。fork 自己的附屬資料表也會以同樣的方式免費取得這個索引，只要在新的 CodeFirst 資料表上
 掛上 `[CmsTranslations(typeof(...))]` 即可——不需要在附屬資料表 entity 本身寫任何東西。一個*既有*
 的、早於這個機制就存在的附屬資料表，並不會回溯取得這個索引;那需要在 `db/migrations/` 底下寫一份
-經過審查的 migration，就跟為既有資料表新增任何其他限制式一樣。`SchemaGuard`
+經過審查的 migration，就跟為既有資料表新增任何其他限制式一樣。唯一的例外是一台以
+`Database:AutoSyncSchema=true` 執行的 Development host:它完整的 CodeFirst 同步會自行嘗試把這個
+衍生出來的唯一索引加到既有資料表上，如果該資料表已經存在重複的 `(fk, locale)` 資料列，啟動就會直接
+失敗——這會讓壞資料浮現出來而不是隱藏它，但在 Development 之外，仍然不能取代一份經過審查的
+migration。`SchemaGuard`
 (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) 會在 Development 啟動時，針對目前設定所擁有
 的每一個附屬資料表，驗證該索引確實存在。
 
