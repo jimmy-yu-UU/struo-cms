@@ -460,7 +460,7 @@ public sealed class ItemService(
         if (!meta.Revisions) return null;
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
-        return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta) };
+        return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, m2mSource.M2MDescriptors(collection)) };
     }
 
     private CollectionMetadata Meta(string collection) =>
