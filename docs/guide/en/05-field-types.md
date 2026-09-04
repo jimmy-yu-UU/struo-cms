@@ -174,9 +174,10 @@ surfaced against a real Postgres instance. What happens today: `SqlSugarClientFa
 `EntityService` hook (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) widens a bare
 `IsJson` column to the same `text`-shaped type on its own, so `[SugarColumn(IsJson = true)]` alone no
 longer truncates on any backend. The one case you still hand-write: give the property an explicit
-`ColumnDataType` — `[SugarColumn(IsJson = true, ColumnDataType = "jsonb")]` for a fork that wants
-Postgres's native JSON type, say — and it wins; the hook only widens when the attribute's own
-`ColumnDataType` is unset.
+`ColumnDataType` — `[SugarColumn(IsJson = true, ColumnDataType = "text")]` to pin the exact type
+yourself instead of letting the hook widen it, say — and it wins; the hook only widens when the
+attribute's own `ColumnDataType` is unset. A Postgres-native type such as `jsonb` is not something this
+template tests; do not assume one round-trips through the same code paths as the `text`-shaped default.
 
 **`[ColumnShape]` on a JSON-column field is refused.** Cause: the CodeFirst hook resolves an explicit
 `[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) and returns before its
@@ -205,13 +206,14 @@ read. Fix: use `JsonSerializer.Deserialize<JsonElement>(raw)` instead — no `us
 self-contained `JsonElement` safe to hold — exactly what `ItemProjector.Project` does when re-hydrating a
 `Json` field for the API response.
 
-**Multi-value selects need `IsJson` *and* a `text` column — one alone isn't enough.** Cause:
+**Multi-value selects need `IsJson` — the `text` column is closed by the same hook.** Cause:
 `MultiSelect`/`CheckboxGroup` (`List<string>`) rely on both settings together: `IsJson` tells SqlSugar to
-(de)serialize the list at all, and a widened `text`-shaped `DataType` gives it room — either one alone
-reproduces the corresponding failure above. The framework's `[CmsField]`-aware CodeFirst hook applies
-both automatically for every `JsonColumnInterfaces` member (`MultiSelect`/`CheckboxGroup`/`Tags`/
-`KeyValue`/`Files`/`Repeater`), so there is nothing to hand-write for these interfaces. If your own
-property falls outside that set — a hand-declared `List<>` the hook doesn't route through
+(de)serialize the list at all, and a widened `text`-shaped `DataType` gives it room — a `text` type
+declared without `IsJson` still reproduces the corresponding failure above, `IsJson` alone does not
+(the same hook widens it). The framework's `[CmsField]`-aware CodeFirst hook applies both automatically
+for every `JsonColumnInterfaces` member (`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/
+`Repeater`), so there is nothing to hand-write for these interfaces beyond the interface choice itself.
+If your own property falls outside that set — a hand-declared `List<>` the hook doesn't route through
 `JsonColumnInterfaces` — you still write `[SugarColumn(IsJson = true)]` yourself, but once you do, the
 bare-`IsJson` widening from the previous pitfall picks up the `DataType` automatically; an explicit
 `ColumnDataType` on that property is respected instead, same as there.

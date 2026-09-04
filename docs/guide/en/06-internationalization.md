@@ -109,7 +109,11 @@ which stamps the resolved group name onto the two key columns before `InitTables
 own sidecar gets the index for free the same way, purely by carrying `[CmsTranslations(typeof(...))]`
 on a new CodeFirst table — nothing to write on the sidecar entity itself. An *existing* sidecar table
 that predates this mechanism does not gain the index retroactively; that needs a reviewed migration
-under `db/migrations/`, the same as any other constraint added to a live table. `SchemaGuard`
+under `db/migrations/`, the same as any other constraint added to a live table. The one exception is a
+Development host running with `Database:AutoSyncSchema=true`: its full CodeFirst sync will try to add
+the derived unique index to that existing table on its own, and startup fails outright if the table
+already holds duplicate `(fk, locale)` rows — surfacing the bad data rather than hiding it, but still no
+substitute for a reviewed migration outside Development. `SchemaGuard`
 (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) verifies the index is actually present at
 Development startup, for every sidecar the running configuration has.
 
