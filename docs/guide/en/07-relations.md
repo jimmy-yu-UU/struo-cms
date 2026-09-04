@@ -240,6 +240,27 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bbogus
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown relation 'bogus' on 'article' in path 'bogus.name'."}}
 ```
 
+**Combining conditions** on the same to-many relation path is *each-exists*, not same-row, because
+`RewriteAsync` resolves every `ComparisonFilter` on a relation path independently: each one walks
+leaf-to-root via `ResolveRootIdsAsync` and is rewritten into its own `id _in [...]` (or `id _null`);
+a `LogicalFilter` only recurses into its children and re-wraps the results, so nothing correlates
+which related row satisfied which condition. Take a `product` collection with a one-to-many
+`properties` relation to rows shaped `(code, valueNum)`:
+`filter[_and][0][properties.code][_eq]=vds-v` combined with
+`filter[_and][1][properties.valueNum][_gte]=60` also matches a product whose `properties` are
+`{code: "vds-v", valueNum: 20}` and `{code: "ptot-w", valueNum: 100}` — the first row alone
+satisfies the `code` condition, the second row alone satisfies the `valueNum` condition, and
+each-exists is satisfied even though no single row satisfies both. No error is raised; the query
+simply returns products the caller did not intend, which is easy to miss coming from Directus or
+Prisma, where nested relation conditions bind to one related row. `MaxResolvedFilterIds` (chapter 8)
+still bounds each condition's leaf-to-root walk independently. The workaround for same-row semantics
+today is two requests: filter the child collection directly on its own fields, projecting the
+parent foreign key —
+`/api/items/property?filter[_and][0][code][_eq]=vds-v&filter[_and][1][valueNum][_gte]=60&fields=id,productId`
+— then filter `product` by `id _in` the returned `productId` values. A `_some` relation predicate
+that binds a to-many path's inner conditions to a single related row is on the roadmap; until it
+ships, the each-exists rule above is the only semantics dotted paths have.
+
 **Sorting** across a relation path is narrower than filtering: only an all-many-to-one path is
 sortable (`RelationPath.IsSortable`), since a to-many hop has no single well-defined order to sort a
 parent row by:
