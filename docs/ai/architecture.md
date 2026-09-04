@@ -83,10 +83,13 @@ Two decisions that used to fall in that category are the exception: bare-`IsJson
 the translation sidecar's `(fk, locale)` unique are both derived inside `SqlSugarClientFactory`'s
 `EntityService` hook rather than declared per entity, so core absorbs a change to either one on a
 fork's behalf. That absorption leans on SqlSugar-internal surface — the hook sets
-`SugarColumn.UIndexGroupNameList`, not a documented public API — so a SqlSugar upgrade that renames or
-reshapes it would silently stop deriving the unique; `TranslationSidecarIndexPolicyTests`
-(`tests/Struo.Tests/Persistence/`) pins that dependency so such a change fails the test suite instead
-of failing silently. When bumping core, diff `Directory.Packages.props`'s `SqlSugarCore` version line
+`SugarColumn.UIndexGroupNameList`, not a documented public API. A SqlSugar upgrade that renames the
+property is a compile error, caught immediately; the risk is a *reshape* that leaves the property
+itself in place but changes what CodeFirst does with it, which would silently stop deriving the unique
+with no build-time signal. `TranslationSidecarIndexPolicyTests` (`tests/Struo.Tests/Persistence/`)
+exercises the hook end-to-end against a real `InitTables` run and asserts the resulting index, so that
+kind of reshape fails the test suite instead of failing silently. When bumping core, diff
+`Directory.Packages.props`'s `SqlSugarCore` version line
 against the fork's previous checkout and read that release's changelog before merging.
 
 ## Metadata: the single source every other layer derives from

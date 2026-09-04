@@ -183,7 +183,9 @@ Postgres's native JSON type, say — and it wins; the hook only widens when the 
 JSON-column branch runs, so a property carrying both would keep the shape's column type and lose
 `IsJson` — and with the shape declared `LongText` (the only sensible choice here) both branches resolve
 a JSON-column interface to the same `text`, so losing `IsJson` was the combination's *only* effect,
-reproducing the truncation pitfall above. Symptom: an `InvalidOperationException` naming the property
+reproducing the truncation pitfall above — the `[ColumnShape]` branch returns before the bare-`IsJson`
+widening ever runs, so that widening never gets a chance to save a property carrying both. Symptom: an
+`InvalidOperationException` naming the property
 and the offending interface, thrown at **startup** for anything in the `InitTables` set — every
 framework entity plus every `[CmsCollection]` type — whether or not its table already exists, because
 `DatabaseInitializer.CreateMissingTables` asks `EntityMaintenance` for each type's table name to compute
@@ -210,8 +212,9 @@ reproduces the corresponding failure above. The framework's `[CmsField]`-aware C
 both automatically for every `JsonColumnInterfaces` member (`MultiSelect`/`CheckboxGroup`/`Tags`/
 `KeyValue`/`Files`/`Repeater`), so there is nothing to hand-write for these interfaces. If your own
 property falls outside that set — a hand-declared `List<>` the hook doesn't route through
-`JsonColumnInterfaces` — the bare-`IsJson` widening from the previous pitfall still applies
-automatically; an explicit `ColumnDataType` on that property is respected instead, same as there.
+`JsonColumnInterfaces` — you still write `[SugarColumn(IsJson = true)]` yourself, but once you do, the
+bare-`IsJson` widening from the previous pitfall picks up the `DataType` automatically; an explicit
+`ColumnDataType` on that property is respected instead, same as there.
 
 ## Read-only, hidden and system fields
 
