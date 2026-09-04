@@ -257,15 +257,24 @@ internal static class FakeMetadataFixtures
                 Required = true, Sort = 1,
             },
         ],
-        // A payload-free M2M relation so `childrenLinks { node { tags { name } } }` has a real
-        // relation to nest into — proves BuildDeep recurses INTO node's own sub-selection (not
-        // just matching the top-level `childrenLinks` field itself).
+        // Two payload-free M2M relations so nested-relation tests have real, DISJOINT relations to
+        // select: `childrenLinks { node { tags { name } } }` proves BuildDeep recurses INTO node's
+        // own sub-selection; selecting `children { categories { ... } }` AND
+        // `childrenLinks { node { tags { ... } } }` together at the same level proves the two
+        // selections' nested Deep trees MERGE (categories + tags) rather than one clobbering the
+        // other.
         Relations =
         [
             new RelationMetadata
             {
                 Name = "tags", Label = "Tags", Kind = RelationKind.ManyToMany,
                 TargetCollection = "tag", Interface = RelationInterface.TagSelect,
+                DisplayTemplate = "{Name}",
+            },
+            new RelationMetadata
+            {
+                Name = "categories", Label = "Categories", Kind = RelationKind.ManyToMany,
+                TargetCollection = "category", Interface = RelationInterface.TagSelect,
                 DisplayTemplate = "{Name}",
             },
         ],

@@ -127,11 +127,18 @@ internal static class MutationResolvers
         return PruneObject(coerced, literal) as IReadOnlyDictionary<string, object?> ?? coerced;
     }
 
-    // M2M relations for `collection` that carry junction payload — drives FoldLinks below. Same
-    // source (IM2MDescriptorSource) and HasPayload filter CollectionSchemaBuilder used to decide
-    // which relations got a `<rel>Links` input field in the first place.
-    private static IReadOnlyList<M2MDescriptor> PayloadRelations(IResolverContext ctx, string collection) =>
-        ctx.Service<IM2MDescriptorSource>().M2MDescriptors(collection).Where(d => d.HasPayload).ToList();
+    // M2M relations for `collection` that carry junction payload — drives FoldLinks below. Reuses
+    // CollectionSchemaBuilder.HasExposablePayload, the EXACT predicate that decided which
+    // relations got a `<rel>Links` input field in the first place (not the raw HasPayload flag —
+    // a relation whose only payload field is hidden/unmappable never got a `<rel>Links` field at
+    // all, so it must never be treated as one here either).
+    private static IReadOnlyList<M2MDescriptor> PayloadRelations(IResolverContext ctx, string collection)
+    {
+        var metadataProvider = ctx.Service<IMetadataProvider>();
+        return ctx.Service<IM2MDescriptorSource>().M2MDescriptors(collection)
+            .Where(d => CollectionSchemaBuilder.HasExposablePayload(d, metadataProvider))
+            .ToList();
+    }
 
     // GraphQL sends `<rel>Links` as a list of { id, ...payload } entries — already the exact REST
     // mixed-array shape ItemService/SyncM2MAsync accepts. Fold it into `<rel>` (inserting or

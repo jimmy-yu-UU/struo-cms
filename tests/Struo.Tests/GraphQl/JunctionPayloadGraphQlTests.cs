@@ -271,6 +271,65 @@ public class JunctionPayloadGraphQlTests
         childrenDeep!.Relations.Should().ContainKey("tags");
     }
 
+    // Fix-round-2 regression: a `<rel>Links` selection with NO `node` sub-selection at all (only
+    // `junction`) must still produce a DeepSpec entry for the relation — otherwise the relation is
+    // never expanded and `childrenLinks` resolves to null, same failure class as the original
+    // finding this fixed.
+    [Fact]
+    public async Task ChildrenLinks_without_node_still_produces_a_children_DeepSpec_entry()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?> { ["id"] = "1" };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await QueryExecutorAsync(ds)).ExecuteAsync(
+            "{ parents { items { id childrenLinks { junction { note } } } } }");
+        ParseData(result);
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("children");
+    }
+
+    // Fix-round-2 regression: `<rel>` and `<rel>Links` selected TOGETHER at the same level must
+    // MERGE their nested Deep trees, not first-wins — `children { categories { ... } }` and
+    // `childrenLinks { node { tags { ... } } }` nest into DISJOINT relations (categories vs tags),
+    // and both must survive into the single `children` DeepSpec entry.
+    [Fact]
+    public async Task Children_and_childrenLinks_together_merge_disjoint_nested_relations()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?> { ["id"] = "1" };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await QueryExecutorAsync(ds)).ExecuteAsync(
+            "{ parents { items { id " +
+            "children { categories { name } } " +
+            "childrenLinks { node { tags { name } } } " +
+            "} } }");
+        ParseData(result);
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("children");
+        var childrenDeep = deepSeen.Relations["children"].Deep;
+        childrenDeep.Should().NotBeNull();
+        childrenDeep!.Relations.Should().ContainKey("categories", "the plain `children` selection's nested relation must survive the merge");
+        childrenDeep.Relations.Should().ContainKey("tags", "the `childrenLinks` selection's nested relation must survive the merge");
+    }
+
     // M1: an EXPLICIT `childrenLinks: null` still overwrites/discards a simultaneously-sent
     // `children` array — FoldLinks keys off ContainsKey, which is true for a present-but-null value.
     [Fact]
