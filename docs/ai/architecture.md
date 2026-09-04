@@ -65,9 +65,12 @@ backs the test suite, MySQL/SqlServer/Oracle are mapped but unverified. The ORM 
 at the content-project level — every content entity (`using SqlSugar;`, e.g.
 `samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
 `[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's
-`[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson`+`text`,
-`[ColumnShape]` — see `docs/guide/en/04-defining-a-collection.md`,
-`docs/guide/en/05-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them.
+`[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson` (hook-widened),
+`[ColumnShape]` — see
+`docs/guide/en/04-defining-a-collection.md`,
+`docs/guide/en/05-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them. The
+sidecar `(fk, locale)` unique is the exception, not SqlSugar semantics but a StruoCMS abstraction
+derived from `[CmsTranslations]` metadata — see the next paragraph.
 `docs/guide/en/13-revisions-and-soft-delete.md` is a different kind of SqlSugar coupling, not a DDL one:
 revisions need no extra column and `ISoftDeletable` is a package-free marker interface, but the
 soft-delete floor itself is `db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`,
@@ -77,9 +80,19 @@ query filter" section) — a SqlSugar API dependency, just not a DDL attribute o
 `SqlSugarItemRepository`) is an internal seam inside core, not an ORM-abstraction layer forks are meant
 to reimplement to swap ORMs — an entity's SqlSugar attributes stay bound to SqlSugar regardless of what
 implements that interface. Consequence: a SqlSugar major-version upgrade, or a semantic change to an
-attribute like `IsJson`/`[SugarIndex]`, lands directly on every fork's entity classes; core does not
-absorb it. When bumping core, diff `Directory.Packages.props`'s `SqlSugarCore` version line against the
-fork's previous checkout and read that release's changelog before merging.
+attribute like `[SugarIndex]`, lands directly on every fork's entity classes; core does not absorb it.
+Two decisions that used to fall in that category are the exception: bare-`IsJson` column widening and
+the translation sidecar's `(fk, locale)` unique are both derived inside `SqlSugarClientFactory`'s
+`EntityService` hook rather than declared per entity, so core absorbs a change to either one on a
+fork's behalf. That absorption leans on SqlSugar-internal surface — the hook sets
+`EntityColumnInfo.UIndexGroupNameList`, not a documented public API. A SqlSugar upgrade that renames the
+property is a compile error, caught immediately; the risk is a *reshape* that leaves the property
+itself in place but changes what CodeFirst does with it, which would silently stop deriving the unique
+with no build-time signal. `TranslationSidecarIndexPolicyTests` (`tests/Struo.Tests/Persistence/`)
+exercises the hook end-to-end against a real `InitTables` run and asserts the resulting index, so that
+kind of reshape fails the test suite instead of failing silently. When bumping core, diff
+`Directory.Packages.props`'s `SqlSugarCore` version line
+against the fork's previous checkout and read that release's changelog before merging.
 
 ## Metadata: the single source every other layer derives from
 

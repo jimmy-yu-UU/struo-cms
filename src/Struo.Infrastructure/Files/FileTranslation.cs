@@ -12,14 +12,11 @@ namespace Struo.Infrastructure.Files;
 public sealed class FileTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-    // Composite UNIQUE (fileid, locale) — one translation row per parent per locale (deterministic
-    // overlay read). Same mechanism as Revision.cs. This unique index also serves the (fileid, locale)
-    // lookup, so the previously-declared redundant plain btree ([SugarIndex] ix_file_translations_fk_locale)
-    // was dropped — it was pure write amplification. CodeFirst creates this index under the same name
-    // wherever this table does not already exist, in every environment and on every backend.
-    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
+    // FileId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
+    // this table's [CmsTranslations] metadata through TranslationSidecarIndexPolicy and adds the
+    // composite unique (fileid, locale) to the generated column model at CodeFirst time.
+    // SchemaGuard.AssertCriticalConstraintsAsync re-checks the resulting index in Development.
     public Guid FileId { get; set; }
-    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
     public string Locale { get; set; } = "";
 
     [SugarColumn(IsNullable = true)]

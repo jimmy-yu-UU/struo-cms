@@ -21,9 +21,12 @@ form — set `Testing:PostgresConnection` to a disposable database whose name co
 `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`;
 either route works. Or run the application against a real PostgreSQL instance directly. SQLite passing
 is not evidence of PostgreSQL
-correctness: this codebase has a documented, specific SQLite/PostgreSQL divergence — `IsJson` without
-an explicit `text` column type truncates on PostgreSQL at `varchar(1)`, but "works" on SQLite because
-SQLite ignores declared column length. **E2E** (`pnpm e2e` for the `core` Playwright project,
+correctness: this codebase has documented, specific SQLite/PostgreSQL divergences — a `DateTime`
+property without `[ColumnShape(TimestampWithTimeZone)]` becomes `timestamp without time zone` on
+PostgreSQL (the reason `UserSession`'s timestamps carry that shape) while SQLite has no real column
+types to expose the gap, and a `ConditionalType.Equal` filter binding a text value against a
+`uuid`/`bigint` column throws `42883` on PostgreSQL but "works" on SQLite, whose loose typing accepts
+the comparison without complaint. **E2E** (`pnpm e2e` for the `core` Playwright project,
 `pnpm e2e:sample` for the sample) is a further, separate check for changes that touch user-facing flows
 end-to-end; it needs a live API and database reachable at the dev proxy target and is not part of the
 standing gates or of CI.
@@ -140,9 +143,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
 4. If the value's CLR-side value is a structured aggregate (a `List<>`/`Dictionary<>`) that needs a
    JSON column, add it to `SqlSugarClientFactory`'s `JsonColumnInterfaces` set
    (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) so SqlSugar (de)serializes it and
-   the column gets `IsJson = true` + `text` together (either one alone is a documented pitfall —
-   `IsJson` without an explicit `text` type defaults to `varchar(1)` and truncates on PostgreSQL, a
-   failure that does not reproduce on SQLite). If instead it's a plain long string that needs widening,
+   the column gets `IsJson = true` + a widened `text`-shaped type together. The `EntityService` hook
+   also widens a *bare* `[SugarColumn(IsJson = true)]` outside this set on its own, so you no longer
+   need to hand-add a `ColumnDataType` for that case; an explicit `ColumnDataType` on the property still
+   wins over the hook's default. If instead it's a plain long string that needs widening,
    add it to `ContentBearingInterfaces` in the same file.
 5. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
    `KeyValue`/`Files`/`Repeater` already have), add an `IFieldValidator` implementation under
@@ -174,7 +178,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
    `docs/guide/en/05-field-types.md`'s `FieldInterface` reference, in which case add `pnpm build` from
    `docs/` too. **Verify against the backend you are configured for** if you touched
    `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends diverge, and
-   the `IsJson`/`text` truncation failure mode above does not reproduce on SQLite at all. On
+   a divergence like the `timestamp without time zone` shape a missing `[ColumnShape]` produces on
+   PostgreSQL does not reproduce on SQLite at all. On
    PostgreSQL that means the live-PG check (strongly recommended here); on another backend, its own
    equivalent.
 

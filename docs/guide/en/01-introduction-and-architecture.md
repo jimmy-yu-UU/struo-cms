@@ -127,8 +127,11 @@ The ORM itself is not something a fork's content project swaps out. Every conten
 `samples/Struo.Sample.Blog/Article.cs` — opens with `using SqlSugar;` and carries SqlSugar's own
 attributes directly: `[SugarTable]`, `[SugarColumn]`, `[SugarIndex]`, `[Navigate]`, alongside StruoCMS's
 own `[CmsCollection]`/`[CmsField]`. The CodeFirst DDL rules chapters 4 and 5 document — the `Id`
-override needing `[SugarColumn(IsPrimaryKey = true)]`, `IsJson` needing an explicit `text` column,
-`[ColumnShape]` — are SqlSugar's semantics, not a StruoCMS abstraction over them; chapter 13's
+override needing `[SugarColumn(IsPrimaryKey = true)]`, `[ColumnShape]` in general — are SqlSugar's
+semantics, not a StruoCMS abstraction over them. One example this manual doesn't spell out elsewhere: a
+`DateTime` property needs `[ColumnShape(TimestampWithTimeZone)]` to get a zone-aware column on
+PostgreSQL instead of a bare `timestamp`, which is why `UserSession.CreatedAt`/`ExpiresAt`
+(`src/Struo.Infrastructure/Identity/UserSession.cs`) carry that shape explicitly. Chapter 13's
 soft-delete floor is the same direct dependency in a different form, expressed as a registered query
 filter rather than a DDL attribute (see below). `IItemRepository`
 (`src/Struo.Application/Query/IItemRepository.cs`) is an internal seam inside core —
@@ -136,16 +139,20 @@ its sole implementation is `SqlSugarItemRepository` — not an ORM-abstraction l
 reimplement in order to swap ORMs; a content entity's SqlSugar attributes stay bound to SqlSugar
 regardless of what implements that interface.
 
-Practical consequence: a SqlSugar major-version upgrade, or a change in what an attribute like `IsJson`
-or `[SugarIndex]` means, lands directly on every fork's entity classes — core does not, and cannot,
-absorb that change on a fork's behalf. When you upgrade core, diff `Directory.Packages.props`'s
+Practical consequence: a SqlSugar major-version upgrade, or a change in what an attribute like
+`[SugarIndex]` means, lands directly on every fork's entity classes — core does not, and cannot, absorb
+that change on a fork's behalf. Two DDL decisions that used to work this way no longer do: a bare
+`[SugarColumn(IsJson = true)]`'s column width and a translation sidecar's `(fk, locale)` unique index
+are both computed inside core's `SqlSugarClientFactory` rather than declared per entity, so core absorbs
+a change to either one for you. When you upgrade core, diff `Directory.Packages.props`'s
 `SqlSugarCore` version line against your fork's previous checkout and read that release's changelog
 before merging.
 
 For the concrete traps this coupling already produces, see chapter 4's
 [Minimal collection](04-defining-a-collection.md#minimal-collection) (the `Id` override and
-`[SugarColumn(IsPrimaryKey = true)]`) and chapter 5's [Pitfalls](05-field-types.md#pitfalls) (`IsJson`
-needing an explicit `text` column, `[ColumnShape]`) for the DDL-attribute side of this coupling.
+`[SugarColumn(IsPrimaryKey = true)]`) and chapter 5's [Pitfalls](05-field-types.md#pitfalls)
+(`[ColumnShape]`, including where combining it with a JSON-column field is refused outright) for the
+DDL-attribute side of this coupling.
 Chapter 13's [The global query filter](13-revisions-and-soft-delete.md#the-global-query-filter) is a
 different kind of SqlSugar coupling: revisions need no extra column on the entity, and `ISoftDeletable`
 itself is a package-free marker interface — the SqlSugar dependency for soft delete is the query filter

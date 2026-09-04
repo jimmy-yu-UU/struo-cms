@@ -38,11 +38,23 @@ public static class ServiceCollectionExtensions
         // registered singleton like IPasswordHasher above, not per-request.
         services.AddSingleton<Struo.Application.Security.ILoginAttemptThrottle, Identity.DistributedCacheLoginAttemptThrottle>();
 
+        services.AddSingleton(sp =>
+        {
+            // GetService, not GetRequiredService: a host that never calls AddStruoMetadata has no
+            // IMetadataProvider, therefore no collections and no translation sidecars to derive an
+            // index from — None is the correct answer for that host, not a startup failure.
+            var metadata = sp.GetService<Struo.Application.Metadata.IMetadataProvider>();
+            return metadata is null
+                ? TranslationSidecarIndexPolicy.None
+                : TranslationSidecarIndexPolicy.FromMetadata(metadata.GetCollections());
+        });
+
         services.AddScoped<ISqlSugarClient>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<DatabaseOptions>>().Value;
             var currentUser = sp.GetRequiredService<ICurrentUserAccessor>();
-            return SqlSugarClientFactory.Create(options, currentUser);
+            var sidecarPolicy = sp.GetRequiredService<TranslationSidecarIndexPolicy>();
+            return SqlSugarClientFactory.Create(options, currentUser, sidecarPolicy);
         });
 
         return services;

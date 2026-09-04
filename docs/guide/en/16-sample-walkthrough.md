@@ -110,7 +110,6 @@ they live on the translation sidecar, next.
 
 ```csharp
 [SugarTable("article_translations")]
-[SugarIndex("ix_article_translations_fk_locale", nameof(ArticleId), OrderByType.Asc, nameof(Locale), OrderByType.Asc)]
 public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 ```
 
