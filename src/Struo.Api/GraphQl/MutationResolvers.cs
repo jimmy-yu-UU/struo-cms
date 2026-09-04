@@ -152,7 +152,7 @@ internal static class MutationResolvers
     // immutability) — a no-op (same reference back) when no `<rel>Links` key is present for any
     // payload relation.
     private static IReadOnlyDictionary<string, object?>? FoldLinks(
-        IReadOnlyDictionary<string, object?>? input, IReadOnlyList<M2MDescriptor> payloadRelations)
+        IReadOnlyDictionary<string, object?>? input, List<M2MDescriptor> payloadRelations)
     {
         if (input is null || payloadRelations.Count == 0) return input;
 
