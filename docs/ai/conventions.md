@@ -173,7 +173,7 @@ row per parent per locale — is **derived, not declared**. Nothing on `FileTran
 `Struo.Sample.Blog.ArticleTranslation` names the pair; the same `EntityService` hook that widens `IsJson`
 columns reads each sidecar's `[CmsTranslations(typeof(T))]` metadata via `TranslationSidecarIndexPolicy`
 (`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`) and stamps the resolved group
-name onto the foreign-key and locale columns' `SugarColumn.UIndexGroupNameList` before `InitTables` reads
+name onto the foreign-key and locale columns' `EntityColumnInfo.UIndexGroupNameList` before `InitTables` reads
 it, so CodeFirst emits the composite `UNIQUE` on table creation with no attribute on the entity at all.
 
 `SqlSugarClientFactory.Create` takes the policy as an optional third parameter defaulting to

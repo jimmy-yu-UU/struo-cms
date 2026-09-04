@@ -22,7 +22,7 @@ public sealed class TranslationSidecarIndexPolicy
     public TranslationSidecarIndexPolicy(IReadOnlyDictionary<Type, TranslationSidecarKey> sidecars)
     {
         ArgumentNullException.ThrowIfNull(sidecars);
-        _sidecars = sidecars;
+        _sidecars = new Dictionary<Type, TranslationSidecarKey>(sidecars);
     }
 
     public static TranslationSidecarIndexPolicy FromMetadata(IEnumerable<CollectionMetadata> collections)

@@ -66,9 +66,11 @@ at the content-project level — every content entity (`using SqlSugar;`, e.g.
 `samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
 `[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's
 `[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson` (hook-widened),
-`[ColumnShape]`, the sidecar `(fk, locale)` unique (hook-derived from `[CmsTranslations]`) — see
+`[ColumnShape]` — see
 `docs/guide/en/04-defining-a-collection.md`,
-`docs/guide/en/05-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them.
+`docs/guide/en/05-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them. The
+sidecar `(fk, locale)` unique is the exception, not SqlSugar semantics but a StruoCMS abstraction
+derived from `[CmsTranslations]` metadata — see the next paragraph.
 `docs/guide/en/13-revisions-and-soft-delete.md` is a different kind of SqlSugar coupling, not a DDL one:
 revisions need no extra column and `ISoftDeletable` is a package-free marker interface, but the
 soft-delete floor itself is `db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`,
@@ -83,7 +85,7 @@ Two decisions that used to fall in that category are the exception: bare-`IsJson
 the translation sidecar's `(fk, locale)` unique are both derived inside `SqlSugarClientFactory`'s
 `EntityService` hook rather than declared per entity, so core absorbs a change to either one on a
 fork's behalf. That absorption leans on SqlSugar-internal surface — the hook sets
-`SugarColumn.UIndexGroupNameList`, not a documented public API. A SqlSugar upgrade that renames the
+`EntityColumnInfo.UIndexGroupNameList`, not a documented public API. A SqlSugar upgrade that renames the
 property is a compile error, caught immediately; the risk is a *reshape* that leaves the property
 itself in place but changes what CodeFirst does with it, which would silently stop deriving the unique
 with no build-time signal. `TranslationSidecarIndexPolicyTests` (`tests/Struo.Tests/Persistence/`)
