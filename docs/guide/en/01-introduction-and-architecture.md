@@ -127,10 +127,11 @@ The ORM itself is not something a fork's content project swaps out. Every conten
 `samples/Struo.Sample.Blog/Article.cs` — opens with `using SqlSugar;` and carries SqlSugar's own
 attributes directly: `[SugarTable]`, `[SugarColumn]`, `[SugarIndex]`, `[Navigate]`, alongside StruoCMS's
 own `[CmsCollection]`/`[CmsField]`. The CodeFirst DDL rules chapters 4 and 5 document — the `Id`
-override needing `[SugarColumn(IsPrimaryKey = true)]`, a `DateTime` property needing
-`[ColumnShape(TimestampWithTimeZone)]` to get a zone-aware column on PostgreSQL instead of a bare
-`timestamp`, `[ColumnShape]` in general — are SqlSugar's semantics, not a StruoCMS abstraction over
-them; chapter 13's
+override needing `[SugarColumn(IsPrimaryKey = true)]`, `[ColumnShape]` in general — are SqlSugar's
+semantics, not a StruoCMS abstraction over them. One example this manual doesn't spell out elsewhere: a
+`DateTime` property needs `[ColumnShape(TimestampWithTimeZone)]` to get a zone-aware column on
+PostgreSQL instead of a bare `timestamp`, which is why `UserSession.CreatedAt`/`ExpiresAt`
+(`src/Struo.Infrastructure/Identity/UserSession.cs`) carry that shape explicitly. Chapter 13's
 soft-delete floor is the same direct dependency in a different form, expressed as a registered query
 filter rather than a DDL attribute (see below). `IItemRepository`
 (`src/Struo.Application/Query/IItemRepository.cs`) is an internal seam inside core —
@@ -150,8 +151,8 @@ before merging.
 For the concrete traps this coupling already produces, see chapter 4's
 [Minimal collection](04-defining-a-collection.md#minimal-collection) (the `Id` override and
 `[SugarColumn(IsPrimaryKey = true)]`) and chapter 5's [Pitfalls](05-field-types.md#pitfalls)
-(`[ColumnShape]`, without which a `DateTime` property such as `UserSession.CreatedAt` would lose its
-time zone on PostgreSQL) for the DDL-attribute side of this coupling.
+(`[ColumnShape]`, including where combining it with a JSON-column field is refused outright) for the
+DDL-attribute side of this coupling.
 Chapter 13's [The global query filter](13-revisions-and-soft-delete.md#the-global-query-filter) is a
 different kind of SqlSugar coupling: revisions need no extra column on the entity, and `ISoftDeletable`
 itself is a package-free marker interface — the SqlSugar dependency for soft delete is the query filter
