@@ -226,6 +226,24 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bbogus
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown relation 'bogus' on 'article' in path 'bogus.name'."}}
 ```
 
+**多個條件的組合**在同一個 to-many 關聯路徑上是 each-exists(各自存在)，而非同一列:`RewriteAsync`
+會獨立解析關聯路徑上的每一個 `ComparisonFilter`——各自透過 `ResolveRootIdsAsync` 從葉節點走到根
+節點，並改寫成各自的 `id _in [...]`(或一個恆為假的 `id _null`);`LogicalFilter` 只會遞迴處理其子
+節點並重新包裝結果，因此沒有任何機制會記錄「哪一列滿足了哪一個條件」。以一個帶有 one-to-many
+`properties` 關聯(目標列形狀為 `(code, valueNum)`)的 `product` 集合為例:
+`filter[properties.code][_eq]=vds-v` 搭配組合(同一請求上的兩個 filter 鍵會以 AND 組合;JSON
+envelope 的 `_and` 行為相同) `filter[properties.valueNum][_gte]=60`，也會比對到一個 `properties`
+為 `{code: "vds-v", valueNum: 20}` 與 `{code: "ptot-w", valueNum: 100}` 的 product——第一列單獨滿
+足了 `code` 條件，第二列單獨滿足了 `valueNum` 條件，即使沒有任何單一列同時滿足兩者，each-exists
+依然成立。不會有任何錯誤發生——查詢只會回傳呼叫者原本並不打算取得的 product，如果你是從 Prisma
+轉來的(它的巢狀關聯條件會綁定在同一個相關列上)，很容易忽略這一點(Directus 預設的 o2m 篩選也有
+同樣的 each-exists 模糊性，這正是它提供 `_some` 運算子的原因)。`MaxResolvedFilterIds`(第 8 章)
+仍然會各自限制每一個條件自己的葉節點到根節點走訪。想在今天取得真正的同一列語意，目前的變通做法
+是發出兩個請求:先直接對子集合本身的欄位做篩選，並投影出父項外鍵——
+`/api/items/property?filter[code][_eq]=vds-v&filter[valueNum][_gte]=60&fields=id,productId`——再用
+回傳的 `productId` 值，以 `id _in` 篩選 `product`。一個能把 to-many 路徑內層條件綁定到同一個相關
+列的 `_some` 關聯述詞已在規劃中;在它出貨之前，上述的 each-exists 規則就是帶點號路徑僅有的語意。
+
 **跨關聯路徑的排序**，範圍比篩選更窄:只有全程都是 many-to-one 的路徑才可排序
 (`RelationPath.IsSortable`)，因為一個 to-many 跳點，並沒有單一、明確定義的順序可以拿來排序父
 資料列:
