@@ -136,33 +136,48 @@ internal static class CollectionResolvers
         foreach (var sel in childSelections)
         {
             RelationMetadata rel;
-            SelectionEnumerator targetSelections;
+            DeepSpec? nested;
 
             if (relByName.TryGetValue(sel.Field.Name, out var directRel))
             {
                 rel = directRel;
                 var targetType = (ObjectType)sel.Field.Type.NamedType();
-                targetSelections = ctx.GetSelections(targetType, sel);
+                nested = BuildDeep(ctx, rel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
             }
             else if (relByLinksName.TryGetValue(sel.Field.Name, out var linksRel))
             {
                 // `<rel>Links`' own selection set is `{ node junction }`, not the target
                 // collection's fields — recurse into `node`'s own sub-selection instead, so a
                 // nested relation under `childrenLinks { node { tags { ... } } }` still expands.
+                // A selection with no `node` sub-selection at all (e.g.
+                // `childrenLinks { junction { note } }`) must still expand the relation itself —
+                // it just has nothing to recurse into, so `nested` stays null rather than
+                // dropping the relation from the DeepSpec entirely.
+                rel = linksRel;
                 var linkType = (ObjectType)sel.Field.Type.NamedType();
                 var nodeSel = ctx.GetSelections(linkType, sel).FirstOrDefault(s => s.Field.Name == "node");
-                if (nodeSel is null) continue; // no `node` selected -> nothing to expand
-                rel = linksRel;
-                var targetType = (ObjectType)nodeSel.Field.Type.NamedType();
-                targetSelections = ctx.GetSelections(targetType, nodeSel);
+                nested = nodeSel is null
+                    ? null
+                    : BuildDeep(ctx, rel.TargetCollection,
+                        ctx.GetSelections((ObjectType)nodeSel.Field.Type.NamedType(), nodeSel), metadata);
             }
             else
             {
                 continue;
             }
 
-            if (map.ContainsKey(rel.Name)) continue; // aliased-duplicate selections (incl. `<rel>` + `<rel>Links` both selected): first wins per level
-            var nested = BuildDeep(ctx, rel.TargetCollection, targetSelections, metadata);
+            // `<rel>` and `<rel>Links` selected at the SAME level (or an aliased duplicate of
+            // either) must MERGE their nested Deep trees rather than first-wins — otherwise
+            // `children { tags { ... } } childrenLinks { node { otherRel { ... } } }` would
+            // silently drop whichever side's nested relations lost the race. Filter/Sort/
+            // Limit/Offset are NOT merged (only `<rel>` can ever carry them — `<rel>Links`
+            // declares no arguments): the FIRST occurrence's own args win, same as the
+            // pre-existing pure-aliased-duplicate behaviour.
+            if (map.TryGetValue(rel.Name, out var existing))
+            {
+                map[rel.Name] = existing with { Deep = MergeDeep(existing.Deep, nested) };
+                continue;
+            }
 
             // To-many list fields may carry filter/sort/limit/offset arguments. M2O has no
             // args declared on its field (CollectionSchemaBuilder), so this only ever fires for
@@ -192,6 +207,24 @@ internal static class CollectionResolvers
             };
         }
         return map.Count == 0 ? null : new DeepSpec(map);
+    }
+
+    // Merges two DeepSpecs' relation maps: the union of keys, recursively merging the nested Deep
+    // tree for any key present in both (rather than either side silently discarding the other's
+    // nested selections). Either side may be null (no relations selected there).
+    private static DeepSpec? MergeDeep(DeepSpec? a, DeepSpec? b)
+    {
+        if (a is null) return b;
+        if (b is null) return a;
+
+        var merged = new Dictionary<string, DeepRelationSpec>(a.Relations, StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, bSpec) in b.Relations)
+        {
+            merged[key] = merged.TryGetValue(key, out var aSpec)
+                ? aSpec with { Deep = MergeDeep(aSpec.Deep, bSpec.Deep) }
+                : bSpec;
+        }
+        return new DeepSpec(merged);
     }
 
     // HotChocolate's InputParser is stateless/reusable (mirrors how the runtime itself owns one
