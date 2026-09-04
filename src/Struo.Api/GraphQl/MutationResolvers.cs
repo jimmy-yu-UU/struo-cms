@@ -32,7 +32,9 @@ internal static class MutationResolvers
     {
         var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var body = MutationInputMapper.ToJsonElement(FoldTranslations(SentFieldsOnly(ctx, "input", input)));
+        var payloadRelations = PayloadRelations(ctx, collection);
+        var body = MutationInputMapper.ToJsonElement(
+            FoldLinks(FoldTranslations(SentFieldsOnly(ctx, "input", input)), payloadRelations));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var created = await source.CreateAsync(collection, body, ctx.RequestAborted);
@@ -74,7 +76,9 @@ internal static class MutationResolvers
         var id = ctx.ArgumentValue<string>("id");
         var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
         var locale = ctx.ArgumentValue<string?>("locale");
-        var body = MutationInputMapper.ToJsonElement(FoldTranslations(SentFieldsOnly(ctx, "input", input)));
+        var payloadRelations = PayloadRelations(ctx, collection);
+        var body = MutationInputMapper.ToJsonElement(
+            FoldLinks(FoldTranslations(SentFieldsOnly(ctx, "input", input)), payloadRelations));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var updated = await source.UpdateAsync(collection, id, body, ctx.RequestAborted);
@@ -121,6 +125,38 @@ internal static class MutationResolvers
         if (coerced is null) return null;
         var literal = ctx.ArgumentLiteral<IValueNode>(argumentName);
         return PruneObject(coerced, literal) as IReadOnlyDictionary<string, object?> ?? coerced;
+    }
+
+    // M2M relations for `collection` that carry junction payload — drives FoldLinks below. Same
+    // source (IM2MDescriptorSource) and HasPayload filter CollectionSchemaBuilder used to decide
+    // which relations got a `<rel>Links` input field in the first place.
+    private static IReadOnlyList<M2MDescriptor> PayloadRelations(IResolverContext ctx, string collection) =>
+        ctx.Service<IM2MDescriptorSource>().M2MDescriptors(collection).Where(d => d.HasPayload).ToList();
+
+    // GraphQL sends `<rel>Links` as a list of { id, ...payload } entries — already the exact REST
+    // mixed-array shape ItemService/SyncM2MAsync accepts. Fold it into `<rel>` (inserting or
+    // replacing) and drop the `<rel>Links` key, so the REST body carries the junction payload
+    // through the existing M2M sync path. When both `<rel>` and `<rel>Links` are sent, `<rel>Links`
+    // wins (its value is written into `<rel>` after the plain array is copied over). Runs on the
+    // already-pruned dict (after SentFieldsOnly/FoldTranslations), returning a NEW dict so the
+    // input is never mutated (CLAUDE immutability) — a no-op (same reference back) when no
+    // `<rel>Links` key is present for any payload relation.
+    private static IReadOnlyDictionary<string, object?>? FoldLinks(
+        IReadOnlyDictionary<string, object?>? input, IReadOnlyList<M2MDescriptor> payloadRelations)
+    {
+        if (input is null || payloadRelations.Count == 0) return input;
+
+        Dictionary<string, object?>? result = null;
+        foreach (var rel in payloadRelations)
+        {
+            var linksKey = SchemaTypeMapper.LinksFieldName(rel.RelationName);
+            if (!input.ContainsKey(linksKey)) continue;
+
+            result ??= new Dictionary<string, object?>(input);
+            result[rel.RelationName] = result[linksKey];
+            result.Remove(linksKey);
+        }
+        return result ?? input;
     }
 
     // GraphQL sends `translations` as a list of { locale, fields } entries (mirroring the read side's

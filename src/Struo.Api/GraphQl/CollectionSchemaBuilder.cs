@@ -11,7 +11,8 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Api.GraphQl;
 
 /// <summary>Builds all GraphQL types + root query fields for a single collection.</summary>
-internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
+internal sealed class CollectionSchemaBuilder(
+    IEntityRegistry registry, IMetadataProvider metadataProvider, IM2MDescriptorSource m2mSource)
 {
     private static IReadOnlyDictionary<string, object?> ParentDict(IResolverContext ctx)
         => ctx.Parent<IReadOnlyDictionary<string, object?>>();
@@ -37,8 +38,12 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
     {
         var types = new List<ITypeSystemMember>();
         var relationNames = meta.Relations.Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // M2M relations that carry junction payload — drives the additive <rel>Links/<Rel>Link/
+        // <Rel>Junction/<Rel>LinkInput types below. Empty for every payload-free relation, so
+        // nothing extra is generated for them (existing SDL stays byte-identical).
+        var payloadRelations = m2mSource.M2MDescriptors(meta.Name).Where(d => d.HasPayload).ToList();
 
-        types.Add(BuildObjectType(meta, relationNames, types));   // Article + nested repeater item types (added to `types`)
+        types.Add(BuildObjectType(meta, relationNames, types, payloadRelations)); // Article + nested repeater item types + <Rel>Link/<Rel>Junction types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
         types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
 
@@ -56,12 +61,19 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             types.Add(BuildTranslationInputType(meta));        // XTranslationInput { locale, fields }
         }
 
-        types.Add(BuildCreateInput(meta));                         // ArticleCreateInput
-        types.Add(BuildUpdateInput(meta));                         // ArticleUpdateInput
+        // <Rel>LinkInput types — built ONCE per M2M relation with payload, referenced by name from
+        // both create/update inputs (same "build once" rule as the Repeater/Translation inputs above).
+        foreach (var rel in payloadRelations)
+            types.Add(BuildLinkInputType(meta, rel));
+
+        types.Add(BuildCreateInput(meta, payloadRelations));       // ArticleCreateInput
+        types.Add(BuildUpdateInput(meta, payloadRelations));       // ArticleUpdateInput
         return types;
     }
 
-    private ObjectType BuildObjectType(CollectionMetadata meta, HashSet<string> relationNames, List<ITypeSystemMember> sink)
+    private ObjectType BuildObjectType(
+        CollectionMetadata meta, HashSet<string> relationNames, List<ITypeSystemMember> sink,
+        IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var typeName = SchemaTypeMapper.TypeName(meta.Name);
         var desc = registry.Get(meta.Name);
@@ -120,6 +132,24 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
                 field.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
                 field.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
                 config.Fields.Add(field);
+
+                // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>Link!]`
+                // field reading the SAME underlying list as `<rel>` above (untouched); each element
+                // is exposed as { node, junction } instead of the bare target.
+                if (rel.Kind == RelationKind.ManyToMany)
+                {
+                    var descriptor = payloadRelations.FirstOrDefault(d =>
+                        string.Equals(d.RelationName, rel.Name, StringComparison.OrdinalIgnoreCase));
+                    if (descriptor is not null)
+                    {
+                        sink.Add(BuildJunctionType(meta, descriptor));
+                        sink.Add(BuildLinkType(meta, target, descriptor));
+                        config.Fields.Add(Field(
+                            SchemaTypeMapper.LinksFieldName(rel.Name),
+                            $"[{SchemaTypeMapper.LinkTypeName(meta.Name, rel.Name)}!]",
+                            ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
+                    }
+                }
             }
         }
 
@@ -160,6 +190,75 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
         }
         return InputObjectType.CreateUnsafe(config);
+    }
+
+    // <Parent><Rel>Junction: one field per non-hidden payload field of a payload-carrying M2M
+    // relation. RuntimeType = dict — matches the "_junction" projection ItemService's deep
+    // expansion attaches to each target element when the relation carries payload.
+    private ObjectType BuildJunctionType(CollectionMetadata meta, M2MDescriptor descriptor)
+    {
+        var config = new ObjectTypeConfiguration(
+            SchemaTypeMapper.JunctionTypeName(meta.Name, descriptor.RelationName), null,
+            typeof(IReadOnlyDictionary<string, object?>));
+        foreach (var pf in descriptor.JunctionPayload!)
+        {
+            if (pf.Hidden) continue;
+            var iface = JunctionFieldInterface(descriptor, pf.Name);
+            if (iface is null || SchemaTypeMapper.IsExcluded(iface.Value)) continue;
+            var clr = descriptor.JunctionType.GetProperty(pf.Property)?.PropertyType;
+            var sdl = SchemaTypeMapper.ScalarSdl(iface.Value, clr);
+            if (sdl is null) continue;
+            config.Fields.Add(Field(pf.Name, sdl, ctx => ParentDict(ctx).GetValueOrDefault(pf.Name)));
+        }
+        return ObjectType.CreateUnsafe(config);
+    }
+
+    // <Parent><Rel>Link: { node: <Target>!, junction: <Parent><Rel>Junction } — one entry per
+    // element of the underlying `<rel>` list. `node` is the element dict itself (already a full
+    // target row, exactly what the bare `<rel>` field's own sub-resolvers read via ParentDict);
+    // `junction` reads the "_junction" key the deep expansion attaches, or null when the caller
+    // lacks the junction read grant — hence the nullable (non-"!") return type.
+    private static ObjectType BuildLinkType(CollectionMetadata meta, string targetTypeName, M2MDescriptor descriptor)
+    {
+        var config = new ObjectTypeConfiguration(
+            SchemaTypeMapper.LinkTypeName(meta.Name, descriptor.RelationName), null,
+            typeof(IReadOnlyDictionary<string, object?>));
+        config.Fields.Add(Field("node", $"{targetTypeName}!", ctx => ParentDict(ctx)));
+        config.Fields.Add(Field("junction", SchemaTypeMapper.JunctionTypeName(meta.Name, descriptor.RelationName),
+            ctx => ParentDict(ctx).GetValueOrDefault("_junction")));
+        return ObjectType.CreateUnsafe(config);
+    }
+
+    // <Parent><Rel>LinkInput: { id: ID!, <writable payload fields> }. JunctionPayload already
+    // excludes ReadOnly/IsSystem columns (see RelationshipGraph.JunctionPayloadOf) — only Hidden
+    // remains to filter here, mirroring AddWritableFields' writability rule.
+    private InputObjectType BuildLinkInputType(CollectionMetadata meta, M2MDescriptor descriptor)
+    {
+        var config = new InputObjectTypeConfiguration(
+            SchemaTypeMapper.LinkInputName(meta.Name, descriptor.RelationName), null,
+            typeof(IReadOnlyDictionary<string, object?>));
+        config.Fields.Add(new InputFieldConfiguration("id", null, TypeReference.Parse("ID!")));
+        foreach (var pf in descriptor.JunctionPayload!)
+        {
+            if (pf.Hidden) continue;
+            var iface = JunctionFieldInterface(descriptor, pf.Name);
+            if (iface is null) continue;
+            var clr = descriptor.JunctionType.GetProperty(pf.Property)?.PropertyType;
+            var sdl = SchemaTypeMapper.WritableInputSdl(iface.Value, clr);
+            if (sdl is null) continue;
+            config.Fields.Add(new InputFieldConfiguration(pf.Name, null, TypeReference.Parse(sdl)));
+        }
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    // Resolves a junction payload field's FieldInterface from the junction collection's own
+    // [CmsCollection] metadata — JunctionPayloadField itself carries only Name/Property/Hidden.
+    private FieldInterface? JunctionFieldInterface(M2MDescriptor descriptor, string payloadFieldName)
+    {
+        if (descriptor.JunctionCollection is not { } junctionCollection) return null;
+        var junctionMeta = metadataProvider.GetCollection(junctionCollection);
+        return junctionMeta?.Fields.FirstOrDefault(f =>
+            string.Equals(f.Name, payloadFieldName, StringComparison.OrdinalIgnoreCase))?.Interface;
     }
 
     // XTranslationFieldsInput: one input field per translatable own-field, all nullable, SDL via the
@@ -244,28 +343,29 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
         return InputObjectType.CreateUnsafe(config);
     }
 
-    private InputObjectType BuildCreateInput(CollectionMetadata meta)
+    private InputObjectType BuildCreateInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.CreateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
-        AddWritableFields(config, meta);
+        AddWritableFields(config, meta, payloadRelations);
         return InputObjectType.CreateUnsafe(config);
     }
 
-    private InputObjectType BuildUpdateInput(CollectionMetadata meta)
+    private InputObjectType BuildUpdateInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.UpdateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
         // Optimistic-concurrency token (update-only). Absent -> no protection (backward compatible).
         config.Fields.Add(new InputFieldConfiguration("version", null, TypeReference.Parse("Long")));
-        AddWritableFields(config, meta);
+        AddWritableFields(config, meta, payloadRelations);
         return InputObjectType.CreateUnsafe(config);
     }
 
     // Shared by create/update inputs: writable own-fields (scalars, File/Image, Files, multi-value,
     // Json/KeyValue), Tags, Repeater, and M2M foreign-key arrays — all nullable. Translatable own-fields
     // are excluded — translations use the dedicated typed translations input instead.
-    private void AddWritableFields(InputObjectTypeConfiguration config, CollectionMetadata meta)
+    private void AddWritableFields(
+        InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var desc = registry.Get(meta.Name);
         foreach (var f in meta.Fields)
@@ -290,7 +390,18 @@ internal sealed class CollectionSchemaBuilder(IEntityRegistry registry)
             if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("ID")));
             else if (rel.Kind == RelationKind.ManyToMany)
+            {
                 config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse("[ID!]")));
+
+                // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>LinkInput!]`
+                // alongside the plain `[ID!]` field above (untouched).
+                var descriptor = payloadRelations.FirstOrDefault(d =>
+                    string.Equals(d.RelationName, rel.Name, StringComparison.OrdinalIgnoreCase));
+                if (descriptor is not null)
+                    config.Fields.Add(new InputFieldConfiguration(
+                        SchemaTypeMapper.LinksFieldName(rel.Name), null,
+                        TypeReference.Parse($"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]")));
+            }
         }
 
         // Typed translations input — only when the collection has a translation sidecar.
