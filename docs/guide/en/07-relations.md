@@ -112,9 +112,12 @@ public List<Role> Roles { get; set; } = [];
 the scanner this is `ManyToMany` rather than `OneToMany`, even though both are declared on a `List<T>`
 property. The write side accepts a plain array of target ids under the relation's own camelCase name
 — `"roles": ["<role-id>", ...]` — and `ItemWriteSideSync.SyncM2MAsync` validates every id exists in
-the target collection before replacing the junction rows for that parent (a full replace, not a
-diff/patch): an unknown id is rejected as `"One or more ids in '{relation}' do not exist in
-'{target}'."`, and a repeated id is silently de-duplicated (a junction is a set).
+the target collection before handing the array to `ManyToManySync`, which diffs it against the junction
+rows already on file for that parent: rows for targets no longer present are deleted, rows for newly
+added targets are inserted, and rows for targets that remain keep their primary key rather than being
+dropped and recreated. An unknown id is rejected as `"One or more ids in '{relation}' do not exist in
+'{target}'."`, and a repeated id is silently de-duplicated (a junction is a set). The next section covers
+the richer write shape available when the junction itself carries payload beyond the two foreign keys.
 
 ## `[CmsRelation]` properties
 
@@ -133,16 +136,51 @@ diff/patch): an unknown id is rejected as `"One or more ids in '{relation}' do n
 
 ## Junction entities for many-to-many
 
-A junction is a plain SqlSugar entity — not necessarily a `[CmsCollection]` at all. The framework's
-`UserRole` (`src/Struo.Infrastructure/Identity/UserRole.cs`) happens to *also* be its own
-`[CmsCollection]` (`Hidden = true`, so it never shows in the sidebar; `AdminOnly = true`, so generic
-writes to it need a super-admin regardless of any per-collection grant); its own doc comment states
-only that it "model[s] the user↔role many-to-many," with no further stated rationale for also being
-a collection. A junction entity does not need to be a collection at all: the sample's `ArticleTag`
-(`samples/Struo.Sample.Blog/ArticleTag.cs`) is a bare junction with no `[CmsCollection]` attribute.
-Either way, `[Navigate(typeof(JunctionType), parentFkName, targetFkName)]` on the *owning*
-collection's list property is what the scanner needs to resolve the junction's shape — the junction
-type itself carries no `[CmsRelation]`.
+A junction is a plain SqlSugar entity — not necessarily a `[CmsCollection]` at all. A bare junction
+with no `[CmsCollection]` attribute at all works exactly as it always has: nothing in this section
+applies to it. `[Navigate(typeof(JunctionType), parentFkName, targetFkName)]` on the *owning*
+collection's list property is what the scanner needs to resolve a junction's shape either way — the
+junction type itself carries no `[CmsRelation]`.
+
+### Junction payload
+
+When a junction type *also* carries `[CmsCollection]` it becomes what this manual calls a **junction
+collection**, and its `[CmsField]`s — other than the two foreign keys and the relation's `SortField`
+(above) — become the relation's **payload**: data that belongs to the link itself rather than to
+either endpoint (a note on why two rows are linked, a display weight distinct from ordering, an
+approval timestamp). `RelationshipGraph.JunctionPayloadOf`
+(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) is the single place that computes a
+relation's payload field list; the write-side mixed-array binder (chapter 9), the `_junction` read
+projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there rather than
+re-deriving it themselves.
+
+Both of a junction collection's foreign keys **must** be declared as writable `[CmsField]`s (e.g.
+`Interface = FieldInterface.Uuid`) — the framework's own `UserRole`
+(`src/Struo.Infrastructure/Identity/UserRole.cs`) does this too, though it declares no field beyond its
+two FKs, so it carries no payload. `MetadataScanner.ValidateJunctionCollections`
+(`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) fails startup with a `MetadataException` if
+either FK isn't writable, because the generic CRUD API would otherwise be able to create junction rows
+with empty keys; the message's first clause is `"Junction collection '{junction}' (used by
+'{owner}.{relation}') must declare its foreign keys '{fkA}' and '{fkB}' as writable [CmsField]s (e.g.
+Interface = FieldInterface.Uuid)"`.
+
+`Hidden = true` on a junction collection (`UserRole`, and the sample's `ArticleTag` below) only keeps
+it out of the admin sidebar — it stays a fully addressable collection everywhere else: `GET
+/api/schema`, the RBAC permission matrix, and the generated GraphQL schema all include it exactly like
+a non-hidden collection. `RelationMetadata.JunctionCollection` (`junctionCollection` in `/api/schema`'s
+relation entry) names it, which is how a client discovers which collection needs its own write grant
+before it can send junction payload (chapter 9).
+
+**Caveat for forks**: if you add your own `[Navigate]`/`[CmsRelation]` picker relation directly on a
+junction entity (a many-to-one from the junction to some third collection — "linked by user", say),
+that relation registers in the inbound-restrict index exactly like any other many-to-one, since
+`OnDelete` defaults to `Restrict`: deleting that third collection's row while a junction row still
+references it is blocked unless you declare `OnDelete = OnDelete.Cascade` on the picker relation.
+
+The sample's `ArticleTag` (`samples/Struo.Sample.Blog/ArticleTag.cs`, chapter 16) is the shipped
+example of a junction collection: `[CmsCollection("Article tag", Hidden = true)]`, both foreign keys
+declared as writable `Uuid` fields, a `Note` text field as its payload, and a `Sort` number field wired
+to `Article.Tags`' `[CmsRelation(SortField = nameof(ArticleTag.Sort))]`.
 
 ## `OnDelete` semantics per value
 
@@ -199,6 +237,27 @@ own-field `sort`, and `limit`/`offset` — applied in-memory to that relation's 
 per parent — plus a nested `deep` for multi-level expansion. A many-to-one relation ignores
 filter/sort/limit/offset (there is at most one target row); they apply only to one-to-many and
 many-to-many.
+
+### `_junction` on a payload-bearing many-to-many
+
+When `deep` expands a many-to-many relation whose junction carries payload (above), `RelationExpander`
+attaches a `_junction` object to each expanded target row, holding that row's non-`Hidden` payload
+field values — a `Hidden` payload field is left out of `_junction` the same way a `Hidden` own field is
+left out of the target row itself. A relation whose junction carries no payload gets no `_junction`
+key at all, and `_junction` is omitted entirely (not sent as `null`) when the caller does not hold a
+read grant on the junction collection — the same "omit, don't fail" stance `deep` already takes for a
+relation the caller cannot read. Deep-expanding the sample's `Article.Tags` (chapter 16), the shape is
+(illustrative — `sort` itself is excluded from `_junction` because it is the relation's `SortField`,
+already reflected in array order, not payload):
+
+```json
+{
+  "id": "<article-id>",
+  "tags": [
+    { "id": "<tag-id>", "name": "Guide", "_junction": { "note": "editor pick" } }
+  ]
+}
+```
 
 ## The depth cap of 6
 

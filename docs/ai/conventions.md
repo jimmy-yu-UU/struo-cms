@@ -120,6 +120,13 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   (`ItemsEndpointTests.cs`, `MetadataScannerTests.cs`, `TemplateInvariantsTests.cs`) or
   `<subject>.test.ts` for frontend unit tests, co-located next to the source file it covers
   (`frontend/src/lib/buildItemPayload.ts` / `buildItemPayload.test.ts`).
+- **M2M junction payload on read**: a fixed, reserved key, `_junction`, attached by `RelationExpander`
+  to each `deep`-expanded target row of a many-to-many relation whose junction carries payload (below)
+  — not derived from the junction collection's own name, and not present at all on a payload-free
+  relation. GraphQL's generated type/field names around the same feature (`<Parent><Rel>Link`,
+  `<Parent><Rel>Junction`, `<Parent><Rel>LinkInput`, `<rel>Links`) are the ordinary
+  `Pascal`/`Camel` mechanical naming above, applied to the relation's owning collection and relation
+  name (`SchemaTypeMapper.LinkTypeName`/`JunctionTypeName`/`LinkInputName`/`LinksFieldName`).
 
 ## Column type mapping
 
@@ -188,6 +195,29 @@ index at all, not an error at that point. `SchemaGuard.AssertCriticalConstraints
 (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`), run at Development startup, is what actually
 catches the gap: it re-checks each sidecar table for a UNIQUE index covering its `(fk, locale)` columns
 by uniqueness and column coverage, not by name, and throws with an actionable message if one is missing.
+
+## Many-to-many junction payload
+
+A relation's payload field list — which of a junction collection's `[CmsField]`s (beyond its two
+foreign keys and the relation's `SortField`) are exposed as the link's own data — is computed in
+exactly one place: `RelationshipGraph.JunctionPayloadOf`
+(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`). Every downstream consumer — the REST
+mixed-array write binder (`ItemWriteSideSync.SyncM2MAsync`), the diff-and-patch sync
+(`ManyToManySync`), the `_junction` read projection (`RelationExpander`), revision snapshots
+(`RevisionSnapshotBuilder`/`RevisionSnapshotRedactor`), and the GraphQL `<rel>Links` surface
+(`CollectionSchemaBuilder`) — reads `M2MDescriptor.JunctionPayload` rather than re-deriving which
+fields count as payload; a field only reaches any of those surfaces if `JunctionPayloadOf` already
+excluded it from "structural" (the two FKs, and the sort column when the relation declares one) and it
+survives the `!IsSystem && !ReadOnly` filter applied there.
+
+A many-to-many relation's write-side array element (REST body key, or GraphQL `<rel>Links` entry after
+`MutationResolvers.FoldLinks` folds it into the REST shape) is one of two forms: a **bare id** (link
+this target, leave its junction row's payload untouched) or an **object** `{ id, ...payload }` (link
+this target and merge the named payload fields into its junction row). `docs/guide/en/09-rest-api.md`,
+"Many-to-many write shape", states the full precedence rule for when the same id appears more than
+once in one array (an object always outranks a bare id; between two objects the later one wins; order
+of first appearance is the sort order) and is the canonical source for that rule — this section only
+names where the code that enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
 
 ## File organization
 

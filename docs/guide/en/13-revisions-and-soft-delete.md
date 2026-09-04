@@ -41,8 +41,15 @@ viewing a revision later. It assembles a single JSON object containing:
   structured `JsonElement` so it serializes as JSON, not a quoted string.
 - Every many-to-one relation's foreign-key id, under its camelCase name (e.g. `folderId`) — these are
   declared via `[CmsRelation]`, not `[CmsField]`, so the own-field pass above doesn't already cover them.
-- Every many-to-many relation as an **ordered id array** under the relation name (sorted by the
-  relation's declared sort property when one exists).
+- Every many-to-many relation under the relation name, ordered by the relation's declared sort property
+  when one exists. A relation whose junction carries no payload (chapter 7) snapshots as a plain
+  **ordered id array**, unchanged from before; a relation whose junction *does* carry payload snapshots
+  instead as an ordered array of `{ "id": <targetId>, "<payloadField>": <value>, ... }` objects — one
+  per linked target, including any `Hidden` payload field's value (a snapshot is always full-fidelity;
+  see Redaction below for how a `Hidden` value stays hidden from anyone reading the snapshot back). A
+  bare-id snapshot captured before this feature existed still reverts cleanly: reverting from a bare-id
+  array is exactly the write-side "bare id" rule (chapter 9) — membership only, any payload already on
+  the junction row is left untouched.
 - `translations`: `{ locale: { camelField: value } }` for every locale the item has a translation row
   for — the full sidecar state, not just the query-effective locale.
 
@@ -103,11 +110,13 @@ are inserted, never updated), and carries no `ISoftDeletable`/audit shape of its
 Because a snapshot captures the **entire** item including any field flagged `Hidden` (chapter 5), a
 snapshot handed to an external caller must never leak one. `RevisionSnapshotRedactor.RedactHidden`
 (`src/Struo.Application/Query/RevisionSnapshotRedactor.cs`) produces a redacted **copy** — omitting any
-top-level key whose field metadata is `Hidden`, and, inside `translations.{locale}`, any key belonging to
-a field that is both `Hidden` and `Translatable` — leaving every other value (nested objects, arrays,
-numbers, booleans, nulls) copied through unchanged. This redaction is applied **only** on the external
-single-revision read path (`ItemService.GetRevisionAsync`, REST's `GET
-.../revisions/{n}` and GraphQL's `{collection}Revision`) — `RevertAsync` deliberately reads the **raw,
+top-level key whose field metadata is `Hidden`; inside `translations.{locale}`, any key belonging to
+a field that is both `Hidden` and `Translatable`; and, inside a payload-bearing many-to-many relation's
+array, any payload key belonging to a `Hidden` payload field from each `{ id, ...payload }` element (a
+bare-id array element has no payload to redact, so it is left untouched either way) — leaving every
+other value (nested objects, arrays, numbers, booleans, nulls) copied through unchanged. This redaction
+is applied **only** on the external single-revision read path (`ItemService.GetRevisionAsync`, REST's
+`GET .../revisions/{n}` and GraphQL's `{collection}Revision`) — `RevertAsync` deliberately reads the **raw,
 unredacted** snapshot straight from the store, because a revert has to be able to restore a `Hidden`
 field's value too (e.g. a revisioned collection with a hidden credential-shaped field must have that
 credential actually restored by a revert, not nulled out). A hidden value therefore only ever leaves the
