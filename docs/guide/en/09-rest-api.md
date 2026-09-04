@@ -322,6 +322,57 @@ applies them separately, in the same transaction as the parent row, via
 that key taking effect. `POST` and `PUT` share this allowlist, so a create request cannot set a
 client-chosen id or seed the optimistic-concurrency version any more than an update request can.
 
+### Many-to-many write shape: bare ids and junction payload
+
+A many-to-many relation's array (`"tags": [...]`) accepts a **mixed list**: each element is either a
+bare id or, for a relation whose junction declares payload (chapter 7), an object carrying `id` plus
+payload field values. `ItemWriteSideSync.SyncM2MAsync`
+(`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`) merges the array into an ordered, id-keyed
+list of links before syncing, following three rules:
+
+- A **bare id** means membership only — the target is linked (or stays linked), and any existing
+  payload on its junction row is left untouched.
+- An **object** (`{ "id": ..., "<payloadField>": ... }`) means membership *and* a merge of the payload
+  fields it names into the junction row — fields the object doesn't mention keep their current value.
+  When the same id appears more than once in the array, an object always outranks a bare id (whichever
+  came first or last), and between two objects the later one wins — it **replaces**, not merges with,
+  the earlier object's payload.
+- The **order of first appearance** in the array is the sort order (when the relation declares a
+  `SortField`), regardless of which later duplicate of that id ends up winning.
+
+Unknown keys inside a payload object are ignored, and so are the junction's own foreign-key, sort, and
+`id`-adjacent structural keys if a caller includes them in the payload portion — only the relation's
+declared payload fields (chapter 7) are ever merged in. An element carrying a payload additionally
+requires the caller to hold the **write** grant on the junction collection itself (and, if the junction
+is `AdminOnly`, to be a super-admin) — checked before any payload is parsed, so a caller lacking that
+grant gets `403 FORBIDDEN` (`"Write to '{junction}' not permitted."`, or `"Writes to '{junction}'
+require a super-admin."`) rather than a validation error about the payload's own fields. A bare id
+needs only the parent collection's ordinary write grant, exactly as before this feature. Illustrative
+mixed-array body against the sample's `article` (`Article.Tags`, chapter 16 — `Note` is `ArticleTag`'s
+payload field):
+
+```json
+{
+  "tags": [
+    "<tag-id-1>",
+    { "id": "<tag-id-2>", "note": "editor pick" }
+  ]
+}
+```
+
+`<tag-id-1>` is linked with its existing payload untouched (or defaulted, if newly linked); `<tag-id-2>`
+is linked and its junction row's `note` column is set to `"editor pick"`.
+
+The junction rows themselves now survive a re-sync: `ManyToManySync`
+(`src/Struo.Infrastructure/Query/ManyToManySync.cs`) diffs the incoming link list against what is
+already stored for the parent — deleting rows for targets no longer present, inserting rows for newly
+added targets, and updating rows for targets that remain in place — rather than the "delete everything,
+reinsert everything" approach an earlier version of this sync used; a junction row's own primary key is
+therefore stable across a write that keeps its target linked, which matters for anything that
+references a junction row by id (a duplicate `(parent, target)` pair left over from data written before
+this behavior existed is reduced to its lowest-primary-key row the next time that parent is synced,
+with one warning logged).
+
 ## Endpoint reference, by controller
 
 Required permission below always means the per-collection RBAC grant checked by `ItemService`/

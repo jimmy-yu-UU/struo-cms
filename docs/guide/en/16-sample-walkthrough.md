@@ -15,10 +15,11 @@ this chapter.
 one of the two variants chapter 4's checklist allows for a content project's SqlSugar dependency. The
 sample's `.csproj` actually carries **both** variants at once: that transitive path through
 `Struo.Infrastructure`, plus its own direct `SqlSugarCore` `PackageReference` — the second variant the
-checklist allows. It declares three real
-collections — `Article`, `Tag`, `Category` — plus `ArticleTranslation` (`Article`'s translation sidecar,
-not a collection of its own), a pure `ArticleTag` many-to-many junction (not `[CmsCollection]`-attributed
-either), and `FaqItem`, a plain POCO used as a Repeater sub-field type.
+checklist allows. It declares three collections with their own admin sidebar entry —
+`Article`, `Tag`, `Category` — plus `ArticleTranslation` (`Article`'s translation sidecar, not a
+collection of its own), the `Article`↔`Tag` many-to-many junction `ArticleTag` (itself a
+`[CmsCollection]`, `Hidden = true` so it carries no sidebar entry of its own — see below), and
+`FaqItem`, a plain POCO used as a Repeater sub-field type.
 
 Nothing under `src/Struo.*` references it. The shipped `src/Struo.Api/Struo.Api.csproj` has no
 `ProjectReference` to it, and the shipped `Struo:ContentAssemblies` is `[]` — confirmed in chapter 2's
@@ -103,8 +104,9 @@ falls back to the raw value), `Audiences` (`CheckboxGroup`), `Keywords` (`Tags`,
 `Files` field), `Faqs` (`Repeater`, of `FaqItem` — see below), and `InternalNote`, a `Hidden` text field
 excluded from schema, GraphQL and item projections. It also declares two relations: `Category` (a
 many-to-one `Dropdown`, `OnDelete = SetNull`) and `Tags` (a many-to-many `TagSelect` through the
-`ArticleTag` junction, via `[Navigate(typeof(ArticleTag), ...)]`). Title and body are **not** here —
-they live on the translation sidecar, next.
+`ArticleTag` junction, via `[Navigate(typeof(ArticleTag), ...)]`, ordered by
+`[CmsRelation(SortField = nameof(ArticleTag.Sort))]`). Title and body are **not** here — they live on
+the translation sidecar, next.
 
 ### `ArticleTranslation.cs` — the translation sidecar
 
@@ -120,13 +122,74 @@ second `Hidden` field, `InternalSlug`, mirroring `Article.InternalNote`. By inhe
 it also picks up `SeoTitle`/`SeoMetaDescription`/`SeoOgImageId` for free, filed under the `SEO` group
 declared on `Article` — this is exactly the mechanism chapter 4's field-groups section points to.
 
-### `Tag.cs` + `ArticleTag.cs` — many-to-many through a junction
+### `Tag.cs` + `ArticleTag.cs` — many-to-many through a junction, with payload
 
 `Tag` (`[SugarTable("tags")]`) is the simplest real collection in the sample: just a required,
-searchable `Name`. `ArticleTag` (`[SugarTable("article_tags")]`) is **not** a collection at all — no
-`[CmsCollection]`, just `Id`/`ArticleId`/`TagId` plus a secondary index on each FK column. It exists
-solely as the join table `Article.Tags`'s `[Navigate(typeof(ArticleTag), ...)]` relation walks through,
-giving `Article` a many-to-many `TagSelect` field with no junction-table UI of its own (chapter 7).
+searchable `Name`. `ArticleTag` (`[SugarTable("article_tags")]`) is the join table `Article.Tags`'s
+`[Navigate(typeof(ArticleTag), ...)]` relation walks through — but unlike a bare junction, it **is**
+itself a `[CmsCollection]` (`Hidden = true`, so it never appears in the admin sidebar) with payload
+beyond its two foreign keys: a `Note` text field, and a `Sort` number field that doubles as
+`Article.Tags`' `SortField`. It exists to demonstrate the junction-payload feature (chapter 7) end to
+end against a real, running collection — `Note` is data that belongs to the article↔tag *link* itself
+(why this tag is attached to this article), not to either endpoint:
+
+```csharp
+// samples/Struo.Sample.Blog/ArticleTag.cs
+using SqlSugar;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
+
+namespace Struo.Sample.Blog;
+
+// The article<->tag M2M junction, promoted to a [CmsCollection] so the shipped sample demonstrates
+// the junction-payload feature end to end: Note is extra data carried BY the link itself (not by
+// either endpoint), and Sort lets an admin order an article's tags (wired via
+// Article.Tags' [CmsRelation(SortField = nameof(Sort))]). Hidden = true keeps it out of the admin
+// sidebar — it is still reachable through /api/schema, the RBAC matrix and GraphQL, same as any
+// other collection; only the sidebar treats it specially. Both foreign keys must stay declared as
+// writable [CmsField]s (Interface = FieldInterface.Uuid): MetadataScanner.ValidateJunctionCollections
+// fails fast at startup on any junction collection whose FKs aren't writable, because the generic
+// CRUD API would otherwise create rows with empty keys. A fork that deletes this sample (per
+// AGENTS.md's core/sample boundary) loses nothing else — no core code references this type. An
+// existing dev database picks up the two new columns (note, sort) only through Development's
+// AutoSyncSchema or a fork-authored migration; this table is not part of db/migrations.
+[SugarTable("article_tags")]
+// CodeFirst-declared secondary indexes on both M2M junction FKs, both directions (RelationExpander
+// expansion + sync-on-write), created by InitTables in dev; a downstream fork that keeps this
+// entity should add the equivalent indexes to its own migrations.
+[SugarIndex("ix_article_tags_articleid", nameof(ArticleId), OrderByType.Asc)]
+[SugarIndex("ix_article_tags_tagid", nameof(TagId), OrderByType.Asc)]
+[CmsCollection("Article tag", Icon = "link", Group = "Content", Hidden = true)]
+public sealed class ArticleTag
+{
+    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+    [CmsField(Label = "Article", Interface = FieldInterface.Uuid, Required = true, Sort = 1)]
+    public Guid ArticleId { get; set; }
+
+    [CmsField(Label = "Tag", Interface = FieldInterface.Uuid, Required = true, Sort = 2)]
+    public Guid TagId { get; set; }
+
+    [SugarColumn(IsNullable = true)]
+    [CmsField(Label = "Note", Interface = FieldInterface.Text, MaxLength = 200, Sort = 3)]
+    public string? Note { get; set; }
+
+    [CmsField(Label = "Sort", Interface = FieldInterface.Number, Sort = 4)]
+    public int Sort { get; set; }
+}
+```
+
+`Required = true` on `ArticleId`/`TagId` here is decorative, not the mechanism that actually guards
+against an empty junction key — chapter 7's fail-fast validation (declaring both FKs as writable
+`[CmsField]`s) is what does that; `FieldValueRules.IsMissing`
+(`src/Struo.Application/Query/Write/FieldValueRules.cs`), the check `Required` runs against, only
+rejects a `null` value or a blank *string*, and a `Guid` FK deserializes to a real `Guid` value, never a
+string, so `Required` never actually catches an omitted or empty one here. If you run this sample
+against a database created before this feature existed, the two new columns (`note`,
+`sort`) need to actually reach the table before `article_tags` rows can carry them — either
+`Database:AutoSyncSchema=true` in Development (chapter 15) or a migration you author yourself, since
+`db/migrations` is core-only and never ships sample-collection schema (this chapter's own
+sample-removal checklist, below, notes the same boundary for the sample's tables generally).
 
 ### `Category.cs` — many-to-one with a self-referencing tree
 

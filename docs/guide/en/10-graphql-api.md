@@ -277,13 +277,54 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 ```
 
 A many-to-many relation is written as a plain `[ID!]` array of target ids on the create/update input
-(`roles` on `UserCreateInput`/`UserUpdateInput`) — a full replace of the junction rows, same as REST's
-M2M sync:
+(`roles` on `UserCreateInput`/`UserUpdateInput`), sharing REST's underlying M2M sync end to end
+(chapter 9): the array is diffed against what's already linked rather than deleted and reinserted
+wholesale, so a junction row for a target that stays linked keeps its own primary key:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
     -d '{"query":"mutation { updateUser(id: \"<id>\", input: { email: \"editor@example.com\", name: \"Editor Person\", roles: [\"<role-id>\"] }) { id email name isActive roles { id name } } }"}'
 {"data":{"updateUser":{"id":"...","email":"editor@example.com","name":"Editor Person","isActive":true,"roles":[{"id":"...","name":"Editor"}]}}}
+```
+
+### `<rel>Links`: reading and writing junction payload
+
+For a many-to-many relation whose junction declares at least one exposable payload field (non-`Hidden`,
+scalar-mappable — chapter 7), `CollectionSchemaBuilder` additively generates a parallel, richer surface
+alongside the plain `<rel>`/`[ID!]` one above; a relation whose junction has no exposable payload (like
+`User.Roles`) gets none of this — only the plain surface. On the read side, `<rel>Links:
+[<Parent><Rel>Link!]` sits next to `<rel>: [<Target>!]`, where `<Parent><Rel>Link = { node: <Target>!,
+junction: <Parent><Rel>Junction }` — `node` is the same target row `<rel>` would return, and `junction`
+is an object of the relation's non-`Hidden` payload fields, or `null` when the caller cannot read the
+junction collection. On the write side, the create/update input gains `<rel>Links:
+[<Parent><Rel>LinkInput!]` next to the existing `<rel>: [ID!]`, where `<Parent><Rel>LinkInput = { id:
+ID!, <writable payload fields...> }`. Selecting `<rel>Links` in a query drives the same deep expansion
+`<rel>` does; sending `<rel>Links` in a mutation folds straight into REST's mixed-array write shape
+(chapter 9) under the hood — `MutationResolvers.FoldLinks` rewrites it into the `<rel>` key before the
+request reaches `ItemService`. If a mutation sends **both** `<rel>` and `<rel>Links` for the same
+relation, `<rel>Links` wins outright, including an explicit `<rel>Links: null`, which discards a
+simultaneously-sent `<rel>` array rather than leaving it alone.
+
+The sample's `Article.Tags` (chapter 16) is the shipped example — its junction, `ArticleTag`, exposes
+`note` as payload, so the generated schema additionally carries, on `Article`, `tagsLinks:
+[ArticleTagsLink!]` where `ArticleTagsLink { node: Tag!, junction: ArticleTagsJunction }` and
+`ArticleTagsJunction { note: String }`, and, on `ArticleCreateInput`/`ArticleUpdateInput`, `tagsLinks:
+[ArticleTagsLinkInput!]` where `ArticleTagsLinkInput = { id: ID!, note: String }`. Shape (illustrative —
+schema type/field names, matching `SchemaTypeMapper`'s
+`<Parent><Rel>Link`/`<Parent><Rel>Junction`/`<Parent><Rel>LinkInput` type naming and `<rel>Links` field
+naming):
+
+```graphql
+type ArticleTagsJunction { note: String }
+type ArticleTagsLink { node: Tag!, junction: ArticleTagsJunction }
+input ArticleTagsLinkInput { id: ID!, note: String }
+
+# on Article: tags: [Tag!]  (unchanged)  +  tagsLinks: [ArticleTagsLink!]
+# on ArticleUpdateInput: tags: [ID!]  (unchanged)  +  tagsLinks: [ArticleTagsLinkInput!]
+```
+
+```json
+{ "tagsLinks": [{ "id": "<tag-id>", "note": "editor pick" }] }
 ```
 
 `AdminOnly`-collection writes (`permission`/`role`/`user`/`userRole`) require super-admin here exactly
