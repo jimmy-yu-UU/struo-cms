@@ -10,6 +10,7 @@ using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
+using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
@@ -122,17 +123,51 @@ internal static class CollectionResolvers
             .ToDictionary(r => r.Name, r => r, StringComparer.OrdinalIgnoreCase);
         if (relByName is null || relByName.Count == 0) return null;
 
+        // `<rel>Links` (M2M relations exposing junction payload — CollectionSchemaBuilder) is a
+        // second selectable name for the SAME relation: it must drive the SAME DeepSpec entry as
+        // `<rel>` itself, or the server never asks ItemService to expand the relation at all and
+        // `childrenLinks` resolves to null whenever the client didn't ALSO select `children`. Only
+        // ManyToMany relations can ever have such a field.
+        var relByLinksName = relByName.Values
+            .Where(r => r.Kind == RelationKind.ManyToMany)
+            .ToDictionary(r => SchemaTypeMapper.LinksFieldName(r.Name), r => r, StringComparer.OrdinalIgnoreCase);
+
         var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
         foreach (var sel in childSelections)
         {
-            if (!relByName.TryGetValue(sel.Field.Name, out var rel)) continue;
-            if (map.ContainsKey(rel.Name)) continue; // aliased-duplicate selections: first wins per level
-            var targetType = (ObjectType)sel.Field.Type.NamedType();
-            var nested = BuildDeep(ctx, rel.TargetCollection, ctx.GetSelections(targetType, sel), metadata);
+            RelationMetadata rel;
+            SelectionEnumerator targetSelections;
+
+            if (relByName.TryGetValue(sel.Field.Name, out var directRel))
+            {
+                rel = directRel;
+                var targetType = (ObjectType)sel.Field.Type.NamedType();
+                targetSelections = ctx.GetSelections(targetType, sel);
+            }
+            else if (relByLinksName.TryGetValue(sel.Field.Name, out var linksRel))
+            {
+                // `<rel>Links`' own selection set is `{ node junction }`, not the target
+                // collection's fields — recurse into `node`'s own sub-selection instead, so a
+                // nested relation under `childrenLinks { node { tags { ... } } }` still expands.
+                var linkType = (ObjectType)sel.Field.Type.NamedType();
+                var nodeSel = ctx.GetSelections(linkType, sel).FirstOrDefault(s => s.Field.Name == "node");
+                if (nodeSel is null) continue; // no `node` selected -> nothing to expand
+                rel = linksRel;
+                var targetType = (ObjectType)nodeSel.Field.Type.NamedType();
+                targetSelections = ctx.GetSelections(targetType, nodeSel);
+            }
+            else
+            {
+                continue;
+            }
+
+            if (map.ContainsKey(rel.Name)) continue; // aliased-duplicate selections (incl. `<rel>` + `<rel>Links` both selected): first wins per level
+            var nested = BuildDeep(ctx, rel.TargetCollection, targetSelections, metadata);
 
             // To-many list fields may carry filter/sort/limit/offset arguments. M2O has no
             // args declared on its field (CollectionSchemaBuilder), so this only ever fires for
-            // OneToMany/ManyToMany relations.
+            // OneToMany/ManyToMany relations. `<rel>Links` itself declares no such arguments, so
+            // this is always empty when `sel` is a `<rel>Links` selection.
             FilterNode? filter = null;
             IReadOnlyList<SortField>? sort = null;
             int? limit = null, offset = null;

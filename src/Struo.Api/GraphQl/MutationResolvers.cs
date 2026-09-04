@@ -137,10 +137,13 @@ internal static class MutationResolvers
     // mixed-array shape ItemService/SyncM2MAsync accepts. Fold it into `<rel>` (inserting or
     // replacing) and drop the `<rel>Links` key, so the REST body carries the junction payload
     // through the existing M2M sync path. When both `<rel>` and `<rel>Links` are sent, `<rel>Links`
-    // wins (its value is written into `<rel>` after the plain array is copied over). Runs on the
-    // already-pruned dict (after SentFieldsOnly/FoldTranslations), returning a NEW dict so the
-    // input is never mutated (CLAUDE immutability) — a no-op (same reference back) when no
-    // `<rel>Links` key is present for any payload relation.
+    // wins (its value is written into `<rel>` after the plain array is copied over). This applies
+    // even to an EXPLICIT `<rel>Links: null` — the key is still present (ContainsKey is true
+    // regardless of the value), so it still overwrites/discards a simultaneously-sent `<rel>`
+    // array rather than leaving it alone. Runs on the already-pruned dict (after
+    // SentFieldsOnly/FoldTranslations), returning a NEW dict so the input is never mutated (CLAUDE
+    // immutability) — a no-op (same reference back) when no `<rel>Links` key is present for any
+    // payload relation.
     private static IReadOnlyDictionary<string, object?>? FoldLinks(
         IReadOnlyDictionary<string, object?>? input, IReadOnlyList<M2MDescriptor> payloadRelations)
     {

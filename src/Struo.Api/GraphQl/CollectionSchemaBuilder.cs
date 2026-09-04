@@ -40,8 +40,17 @@ internal sealed class CollectionSchemaBuilder(
         var relationNames = meta.Relations.Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // M2M relations that carry junction payload — drives the additive <rel>Links/<Rel>Link/
         // <Rel>Junction/<Rel>LinkInput types below. Empty for every payload-free relation, so
-        // nothing extra is generated for them (existing SDL stays byte-identical).
-        var payloadRelations = m2mSource.M2MDescriptors(meta.Name).Where(d => d.HasPayload).ToList();
+        // nothing extra is generated for them (existing SDL stays byte-identical). Gated on
+        // ExposableJunctionFields(d).Any() too: HasPayload alone counts hidden/unmappable fields
+        // (or a JunctionPayload whose junction collection metadata is missing entirely), which
+        // would otherwise emit a zero-field <Rel>Junction — HotChocolate rejects an object type
+        // with no fields at schema-build time ("has to at least define one field"), taking the
+        // whole GraphQL endpoint down. A LinkInput alone would stay valid (it always has `id: ID!`),
+        // but a Links input without a Links output is a half-feature, so the entire additive set
+        // (read AND write) is skipped together for such a relation.
+        var payloadRelations = m2mSource.M2MDescriptors(meta.Name)
+            .Where(d => d.HasPayload && ExposableJunctionFields(d).Any())
+            .ToList();
 
         types.Add(BuildObjectType(meta, relationNames, types, payloadRelations)); // Article + nested repeater item types + <Rel>Link/<Rel>Junction types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
@@ -138,8 +147,7 @@ internal sealed class CollectionSchemaBuilder(
                 // is exposed as { node, junction } instead of the bare target.
                 if (rel.Kind == RelationKind.ManyToMany)
                 {
-                    var descriptor = payloadRelations.FirstOrDefault(d =>
-                        string.Equals(d.RelationName, rel.Name, StringComparison.OrdinalIgnoreCase));
+                    var descriptor = DescriptorFor(payloadRelations, rel.Name);
                     if (descriptor is not null)
                     {
                         sink.Add(BuildJunctionType(meta, descriptor));
@@ -200,6 +208,22 @@ internal sealed class CollectionSchemaBuilder(
         var config = new ObjectTypeConfiguration(
             SchemaTypeMapper.JunctionTypeName(meta.Name, descriptor.RelationName), null,
             typeof(IReadOnlyDictionary<string, object?>));
+        foreach (var (pf, _, sdl) in ExposableJunctionFields(descriptor))
+            config.Fields.Add(Field(pf.Name, sdl, ctx => ParentDict(ctx).GetValueOrDefault(pf.Name)));
+        return ObjectType.CreateUnsafe(config);
+    }
+
+    // Enumerates the payload fields BuildJunctionType actually declares: non-hidden, resolvable
+    // against the junction collection's own metadata (a non-null, non-excluded FieldInterface —
+    // null when JunctionCollection is unset or metadataProvider.GetCollection(...) can't find it),
+    // and mappable via ScalarSdl. Computed once and reused both to gate whether the whole
+    // <Rel>Link/<Rel>Junction/<rel>Links/<Rel>LinkInput set is generated for a relation at all
+    // (see Build's payloadRelations filter — HotChocolate rejects a zero-field object type at
+    // schema-build time) and to build <Rel>Junction's actual field list, so the two can never
+    // disagree.
+    private IEnumerable<(JunctionPayloadField Field, FieldInterface Interface, string Sdl)> ExposableJunctionFields(
+        M2MDescriptor descriptor)
+    {
         foreach (var pf in descriptor.JunctionPayload!)
         {
             if (pf.Hidden) continue;
@@ -208,10 +232,15 @@ internal sealed class CollectionSchemaBuilder(
             var clr = descriptor.JunctionType.GetProperty(pf.Property)?.PropertyType;
             var sdl = SchemaTypeMapper.ScalarSdl(iface.Value, clr);
             if (sdl is null) continue;
-            config.Fields.Add(Field(pf.Name, sdl, ctx => ParentDict(ctx).GetValueOrDefault(pf.Name)));
+            yield return (pf, iface.Value, sdl);
         }
-        return ObjectType.CreateUnsafe(config);
     }
+
+    // Shared lookup used by both the read (BuildObjectType) and write (AddWritableFields) relation
+    // loops to find a relation's payload descriptor, if any, among the collection's already-filtered
+    // payloadRelations (see Build).
+    private static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
+        payloadRelations.FirstOrDefault(d => string.Equals(d.RelationName, relationName, StringComparison.OrdinalIgnoreCase));
 
     // <Parent><Rel>Link: { node: <Target>!, junction: <Parent><Rel>Junction } — one entry per
     // element of the underlying `<rel>` list. `node` is the element dict itself (already a full
@@ -395,8 +424,7 @@ internal sealed class CollectionSchemaBuilder(
 
                 // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>LinkInput!]`
                 // alongside the plain `[ID!]` field above (untouched).
-                var descriptor = payloadRelations.FirstOrDefault(d =>
-                    string.Equals(d.RelationName, rel.Name, StringComparison.OrdinalIgnoreCase));
+                var descriptor = DescriptorFor(payloadRelations, rel.Name);
                 if (descriptor is not null)
                     config.Fields.Add(new InputFieldConfiguration(
                         SchemaTypeMapper.LinksFieldName(rel.Name), null,

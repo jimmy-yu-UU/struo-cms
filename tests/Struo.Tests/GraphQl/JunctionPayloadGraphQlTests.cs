@@ -9,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.GraphQl;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
+using Struo.Application.Query;
+using Struo.Domain.Query;
 using Xunit;
 
 namespace Struo.Tests.GraphQl;
@@ -72,6 +74,25 @@ public class JunctionPayloadGraphQlTests
             .AddTypeModule<StruoTypeModule>()
             .BuildRequestExecutorAsync();
     }
+
+    // Query-side executor (list/single fields only — no Mutation-specific wiring), mirroring
+    // GraphQlExecutionTests.ExecutorAsync verbatim. Used by the DeepSpec-capture tests below, which
+    // need OnQuery's QueryModel.Deep, not a mutation's captured body.
+    private static async Task<IRequestExecutor> QueryExecutorAsync(FakeGraphQlDataSource ds)
+        => await new ServiceCollection()
+            .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
+            .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
+            .AddScoped<IGraphQlDataSource>(_ => ds)
+            .AddSingleton(new StruoQueryOptions())
+            .AddSingleton<StruoTypeModule>()
+            .AddGraphQLServer()
+            .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
+            .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
+            .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
+            .AddTypeModule<StruoTypeModule>()
+            .BuildRequestExecutorAsync();
 
     private static JsonElement ParseData(IExecutionResult result)
     {
@@ -168,6 +189,129 @@ public class JunctionPayloadGraphQlTests
         var create = InputBlock(sdl, "ParentCreateInput");
         create.Should().Contain("plainChildren: [ID!]"); // the ordinary M2M id-array field stays
         create.Should().NotContain("plainChildrenLinks");
+    }
+
+    // CRITICAL regression: "secretChildren" HasPayload=true (its JunctionPayload has one entry),
+    // but that entry is Hidden — so ExposableJunctionFields(descriptor) is empty for it. Before the
+    // fix, CollectionSchemaBuilder generated a zero-field ParentSecretChildrenJunction anyway, which
+    // HotChocolate rejects at schema-build time ("has to at least define one field"), taking the
+    // WHOLE schema build down — BuildSdlAsync() throwing at all (not any specific assertion below)
+    // is what the original bug looked like. Getting an SDL string back at all is therefore already
+    // most of the proof; the assertions pin the rest of the required behaviour (no half-generated
+    // artefacts, and the ordinary bare relation + [ID!] input untouched).
+    [Fact]
+    public async Task Relation_with_only_hidden_payload_field_builds_schema_with_no_Links_artefacts()
+    {
+        var sdl = await BuildSdlAsync(); // must not throw SchemaException
+
+        sdl.Should().NotContain("secretChildrenLinks");
+        sdl.Should().NotContain("ParentSecretChildrenLink");
+        sdl.Should().NotContain("ParentSecretChildrenJunction");
+        sdl.Should().NotContain("ParentSecretChildrenLinkInput");
+
+        // The bare relation field and its input still exist, exactly like a payload-free relation.
+        // SchemaFormatter wraps a field's argument list onto its own lines once the field name is
+        // long enough (as "secretChildren" is) — so the separators between args are whitespace
+        // only, not necessarily a comma; `,?\s*` tolerates either layout.
+        sdl.Should().MatchRegex(
+            @"secretChildren\(\s*filter:\s*ChildFilterInput,?\s*sort:\s*\[String!\],?\s*limit:\s*Int,?\s*offset:\s*Int,?\s*\):\s*\[Child!\]");
+        InputBlock(sdl, "ParentCreateInput").Should().Contain("secretChildren: [ID!]");
+    }
+
+    // IMPORTANT regression: `<rel>Links` must drive the SAME DeepSpec entry as `<rel>` itself, or
+    // ItemService/DeepExpansionCoordinator never expands the relation and the field resolves to
+    // null in production for a client that selects only `childrenLinks` (not also `children`).
+    [Fact]
+    public async Task ChildrenLinks_selection_alone_produces_a_children_DeepSpec_entry()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?> { ["id"] = "1" };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await QueryExecutorAsync(ds)).ExecuteAsync(
+            "{ parents { items { id childrenLinks { node { id } junction { note } } } } }");
+        ParseData(result);
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("children");
+    }
+
+    // A nested relation under `node` (not under the top-level `childrenLinks` field itself) must
+    // still produce a nested DeepSpec — proving BuildDeep recurses into node's own sub-selection,
+    // not the Link type's `{ node junction }` shape.
+    [Fact]
+    public async Task Nested_relation_under_node_produces_a_nested_DeepSpec_entry()
+    {
+        DeepSpec? deepSeen = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnQuery = (_, q, _, _) =>
+            {
+                deepSeen = q.Deep;
+                var row = new Dictionary<string, object?> { ["id"] = "1" };
+                return new PagedResult(new IReadOnlyDictionary<string, object?>[] { row }, 1, q.Limit, q.Offset);
+            }
+        };
+
+        var result = await (await QueryExecutorAsync(ds)).ExecuteAsync(
+            "{ parents { items { id childrenLinks { node { id tags { name } } } } } }");
+        ParseData(result);
+
+        deepSeen.Should().NotBeNull();
+        deepSeen!.Relations.Should().ContainKey("children");
+        var childrenDeep = deepSeen.Relations["children"].Deep;
+        childrenDeep.Should().NotBeNull("a relation nested under `node` must still produce a nested Deep tree");
+        childrenDeep!.Relations.Should().ContainKey("tags");
+    }
+
+    // M1: an EXPLICIT `childrenLinks: null` still overwrites/discards a simultaneously-sent
+    // `children` array — FoldLinks keys off ContainsKey, which is true for a present-but-null value.
+    [Fact]
+    public async Task Explicit_null_childrenLinks_discards_a_simultaneous_children_array()
+    {
+        JsonElement? capturedBody = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { createParent(input: { name: \"p\", children: [\"c1\"], childrenLinks: null }) { id } }");
+        ParseData(result);
+
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo(["name", "children"]);
+        capturedBody.Value.GetProperty("children").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    // M2: the UPDATE mutation path folds childrenLinks the same way create does.
+    [Fact]
+    public async Task Update_with_childrenLinks_folds_into_children()
+    {
+        JsonElement? capturedBody = null;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnUpdate = (_, id, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
+            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+        };
+
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "mutation { updateParent(id: \"5\", input: { childrenLinks: [{ id: \"c1\", note: \"y\" }] }) { id } }");
+        ParseData(result);
+
+        capturedBody!.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["children"]);
+        var sent = capturedBody.Value.GetProperty("children");
+        sent.GetArrayLength().Should().Be(1);
+        sent[0].GetProperty("id").GetString().Should().Be("c1");
+        sent[0].GetProperty("note").GetString().Should().Be("y");
     }
 
     [Fact]
