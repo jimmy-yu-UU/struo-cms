@@ -2,10 +2,12 @@ using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Files;
+using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Revisions;
 using Struo.Tests.Support;
 using Xunit;
+using File = Struo.Infrastructure.Files.File;
 
 namespace Struo.Tests.Persistence;
 
@@ -28,6 +30,20 @@ public sealed class SchemaGuardTests
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
             new TestCurrentUserAccessor(Guid.Empty));
+        return (db, client);
+    }
+
+    // Only the file_translations test below needs the sidecar's composite unique derived, so it
+    // alone builds its client with the metadata-backed policy Program.cs would pass through DI;
+    // every other fact here creates tables by hand or only exercises the revisions backstop.
+    private static (SqliteTestDatabase, ISqlSugarClient) NewClientWithPolicy()
+    {
+        var db = new SqliteTestDatabase();
+        var policy = TranslationSidecarIndexPolicy.FromMetadata(
+            MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]));
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty), policy);
         return (db, client);
     }
 
@@ -121,11 +137,11 @@ public sealed class SchemaGuardTests
     [Fact]
     public async Task Passes_for_file_translations_descriptor_resolved_the_way_Program_cs_resolves_it()
     {
-        var (db, client) = NewClient();
+        var (db, client) = NewClientWithPolicy();
         using (db)
         {
             client.CodeFirst.InitTables(typeof(Revision));
-            client.CodeFirst.InitTables(typeof(FileTranslation)); // UniqueGroupNameList -> composite unique
+            client.CodeFirst.InitTables(typeof(FileTranslation)); // policy -> composite unique
 
             // Same resolution Program.cs performs at the call site: CLR type/property names ->
             // physical table/column names via EntityMaintenance, never a hardcoded literal.

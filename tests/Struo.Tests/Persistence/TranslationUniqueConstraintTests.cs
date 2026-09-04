@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Files;
+using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -11,20 +12,26 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// A translation sidecar must not hold two rows for the same (foreign key, locale) — that would
-/// make overlay reads non-deterministic. The entities declare a composite UNIQUE via
-/// <c>[SugarColumn(UniqueGroupNameList = [...])]</c> on the FK + Locale columns, which CodeFirst
-/// <c>InitTables</c> materialises as a unique index (the same mechanism the revisions backstop uses).
-/// CodeFirst creates the matching physical index on any backend where these tables do not already
-/// exist.
+/// make overlay reads non-deterministic. SqlSugarClientFactory's EntityService hook derives the
+/// composite UNIQUE on the FK + Locale columns from a <see cref="TranslationSidecarIndexPolicy"/>
+/// built from the sample's <c>[CmsTranslations]</c> metadata, which CodeFirst <c>InitTables</c>
+/// materialises as a unique index (the same mechanism the revisions backstop uses). CodeFirst
+/// creates the matching physical index on any backend where these tables do not already exist.
 /// </summary>
 public sealed class TranslationUniqueConstraintTests
 {
+    private static readonly TranslationSidecarIndexPolicy Policy = TranslationSidecarIndexPolicy.FromMetadata(
+        MetadataScanner.ScanTypes([
+            typeof(Article), typeof(Category), typeof(Tag),
+            typeof(Struo.Infrastructure.Files.File), typeof(MediaFolder),
+        ]));
+
     private static (SqliteTestDatabase, ISqlSugarClient) NewClient()
     {
         var db = new SqliteTestDatabase();
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor(Guid.Empty));
+            new TestCurrentUserAccessor(Guid.Empty), Policy);
         return (db, client);
     }
 
