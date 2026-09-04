@@ -122,7 +122,7 @@ second `Hidden` field, `InternalSlug`, mirroring `Article.InternalNote`. By inhe
 it also picks up `SeoTitle`/`SeoMetaDescription`/`SeoOgImageId` for free, filed under the `SEO` group
 declared on `Article` — this is exactly the mechanism chapter 4's field-groups section points to.
 
-### `Tag.cs` + `ArticleTag.cs` — many-to-many through a junction, with payload
+### `Tag.cs` + `ArticleTag.cs` — many-to-many through a junction
 
 `Tag` (`[SugarTable("tags")]`) is the simplest real collection in the sample: just a required,
 searchable `Name`. `ArticleTag` (`[SugarTable("article_tags")]`) is the join table `Article.Tags`'s

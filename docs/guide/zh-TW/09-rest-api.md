@@ -314,7 +314,7 @@ $ curl -s -X PUT http://localhost:5221/api/items/file/<id> -H "Content-Type: app
 
 ### Many-to-many 寫入形狀:純 id 與 junction payload
 
-一個 many-to-many 關聯的陣列 (`"tags": [...]`) 接受**混合清單**：陣列中每個元素，可以是一個純
+一個 many-to-many 關聯的陣列 (`"tags": [...]`) 接受**混合清單**:陣列中每個元素，可以是一個純
 id，也可以是 (對於 junction 帶有 payload 的關聯，第 7 章) 一個帶著 `id` 加上 payload 欄位值的
 物件。`ItemWriteSideSync.SyncM2MAsync`
 (`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`) 在同步之前，會把陣列合併成一份依 id
