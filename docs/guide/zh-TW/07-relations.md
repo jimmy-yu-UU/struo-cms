@@ -139,8 +139,9 @@ public List<Role> Roles { get; set; } = [];
 ### Junction payload
 
 當一個 junction 型別*同時*也帶有 `[CmsCollection]` 時，它就成了本手冊稱之為 **junction
-collection** 的東西，而它除了兩個外鍵與該關聯的 `SortField` (見上文) 之外的所有 `[CmsField]`，就
-是這個關聯的 **payload**：屬於這條連結本身、而不屬於任何一端的資料 (例如為什麼要連結這兩列的
+collection** 的東西，而它除了兩個外鍵、該關聯的 `SortField` (見上文)，以及任何 `IsSystem`/
+`ReadOnly` 欄位之外的所有 `[CmsField]`，就是這個關聯的 **payload**:屬於這條連結本身、而不屬於
+任何一端的資料 (例如為什麼要連結這兩列的
 備註、有別於排序的顯示權重、核准時間戳)。`RelationshipGraph.JunctionPayloadOf`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) 是唯一計算一個關聯 payload 欄位清單
 的地方;寫入端的混合陣列繫結器 (第 9 章)、`_junction` 讀取投影 (見下文)、修訂版本 (第 13 章)，
@@ -157,19 +158,19 @@ declare its foreign keys '{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Inter
 FieldInterface.Uuid)"`。
 
 `Hidden = true` 用在 junction collection 上 (`UserRole`，以及範例的 `ArticleTag`，見下文) 只會
-讓它不出現在管理後台側欄中——在其他所有地方，它仍是一個完全可定址的集合：`GET /api/schema`、RBAC
+讓它不出現在管理後台側欄中——在其他所有地方，它仍是一個完全可定址的集合:`GET /api/schema`、RBAC
 權限矩陣，以及產生出來的 GraphQL schema，都會像對待任何非隱藏集合一樣把它包含進去。
 `RelationMetadata.JunctionCollection` (`/api/schema` 關聯項目中的 `junctionCollection`) 會指名
 它，讓客戶端知道要對哪個集合另外申請寫入授權，才能寫入 junction payload (第 9 章)。
 
-**給 fork 的但書**：如果你在一個 junction entity 上直接加上自己的
+**給 fork 的但書**:如果你在一個 junction entity 上直接加上自己的
 `[Navigate]`/`[CmsRelation]` picker 關聯 (例如從該 junction 到某個第三方集合的 many-to-one，
 比方說「由誰新增」)，這個關聯會像任何其他 many-to-one 一樣，登記進 inbound-restrict 索引，因為
-`OnDelete` 預設就是 `Restrict`：只要還有 junction 資料列參照著第三方集合的那一列，刪除它就會被
+`OnDelete` 預設就是 `Restrict`:只要還有 junction 資料列參照著第三方集合的那一列，刪除它就會被
 擋下，除非你在這個 picker 關聯上宣告 `OnDelete = OnDelete.Cascade`。
 
 範例的 `ArticleTag` (`samples/Struo.Sample.Blog/ArticleTag.cs`，第 16 章) 就是隨附出貨的
-junction collection 範例：`[CmsCollection("Article tag", Hidden = true)]`，兩個外鍵都宣告成
+junction collection 範例:`[CmsCollection("Article tag", Hidden = true)]`，兩個外鍵都宣告成
 可寫入的 `Uuid` 欄位，一個 `Note` 文字欄位作為它的 payload，以及一個 `Sort` 數字欄位，接到
 `Article.Tags` 的 `[CmsRelation(SortField = nameof(ArticleTag.Sort))]`。
 

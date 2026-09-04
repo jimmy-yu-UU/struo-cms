@@ -115,7 +115,7 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 `SeoTitle`/`SeoMetaDescription`/`SeoOgImageId`，歸檔在 `Article` 上宣告的 `SEO` 群組之下——這正是
 第 4 章欄位群組一節所指向的機制。
 
-### `Tag.cs` + `ArticleTag.cs`——透過 junction 建立、帶 payload 的多對多關聯
+### `Tag.cs` + `ArticleTag.cs`——透過 junction 建立的多對多關聯
 
 `Tag`(`[SugarTable("tags")]`)是這個範例中最單純的一個真正集合：只有一個必填、可搜尋的 `Name`。
 `ArticleTag`(`[SugarTable("article_tags")]`)就是 `Article.Tags` 的

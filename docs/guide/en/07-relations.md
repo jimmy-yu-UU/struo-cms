@@ -145,10 +145,10 @@ junction type itself carries no `[CmsRelation]`.
 ### Junction payload
 
 When a junction type *also* carries `[CmsCollection]` it becomes what this manual calls a **junction
-collection**, and its `[CmsField]`s — other than the two foreign keys and the relation's `SortField`
-(above) — become the relation's **payload**: data that belongs to the link itself rather than to
-either endpoint (a note on why two rows are linked, a display weight distinct from ordering, an
-approval timestamp). `RelationshipGraph.JunctionPayloadOf`
+collection**, and its `[CmsField]`s — other than the two foreign keys, the relation's `SortField`
+(above), and any `IsSystem`/`ReadOnly` field — become the relation's **payload**: data that belongs to
+the link itself rather than to either endpoint (a note on why two rows are linked, a display weight
+distinct from ordering, an approval timestamp). `RelationshipGraph.JunctionPayloadOf`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) is the single place that computes a
 relation's payload field list; the write-side mixed-array binder (chapter 9), the `_junction` read
 projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there rather than

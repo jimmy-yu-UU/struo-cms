@@ -240,8 +240,8 @@ one existing row targets the same id (a duplicate left over from data written be
 strategy existed), the lowest-primary-key row is kept and the rest are deleted, with one warning logged
 naming the table and the count removed.
 
-**Breaking change for a fork implementing `IItemRepository` itself**: `SyncManyToManyAsync`'s last
-positional parameter changed from a plain target-id list to `IReadOnlyList<JunctionLink>` — a fork with
+**Breaking change for a fork implementing `IItemRepository` itself**: `SyncManyToManyAsync`'s `links`
+parameter changed from a plain target-id list to `IReadOnlyList<JunctionLink>` — a fork with
 its own `IItemRepository` implementation (not `SqlSugarItemRepository`) must update that method's
 signature and, if it wants junction-payload writes to actually take effect, apply each link's `Payload`
 dictionary itself; a fork that only calls through the framework's `SqlSugarItemRepository` is
