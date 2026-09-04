@@ -114,45 +114,10 @@ public sealed class RelationExpander(
                     break;
                 }
                 case RelationKind.ManyToMany:
-                {
-                    var ids = parents.Select(parentId).ToList();
-                    var junctions = await repository.QueryEntityWhereInAsync(
-                        desc.JunctionType!, desc.JunctionParentFk!, ids, ct);
-                    var targetIds = junctions
-                        .Select(j => readProp(j, desc.JunctionTargetFk!)!)
-                        .Distinct()
-                        .ToList();
-                    var m2mFilter = spec.Filter is null ? null
-                        : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, locale, ct);
-                    var targets = (await repository.QueryWhereInFilteredAsync(
-                            rel.TargetCollection, "id", targetIds, m2mFilter, ct))
-                        .ToDictionary(t => readProp(t, "id")!, t => t);
-                    var includeJunction = desc.JunctionPayload is { Count: > 0 }
-                        && desc.JunctionCollection is not null
-                        && (canReadJunction is null || canReadJunction(desc.JunctionCollection));
-                    foreach (var p in parents)
-                    {
-                        var pid = parentId(p);
-                        var rows = new List<IReadOnlyDictionary<string, object?>>();
-                        var linkedPairs = junctions
-                            .Where(j => Equals(readProp(j, desc.JunctionParentFk!), pid))
-                            .OrderBy(j => JunctionSortKey(desc.JunctionSort, readProp, j))
-                            .Select(j => (Junction: j, TargetId: readProp(j, desc.JunctionTargetFk!)!))
-                            .Where(jt => targets.ContainsKey(jt.TargetId))
-                            .Select(jt => (jt.Junction, Target: targets[jt.TargetId]))
-                            .ToList();
-                        foreach (var pair in ApplyListArgs(linkedPairs, spec, (jt, field) => readProp(jt.Target, field)))
-                        {
-                            var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, pair.Target, spec.Fields);
-                            if (includeJunction)
-                                d["_junction"] = BuildJunctionPayload(desc, readProp, pair.Junction);
-                            rows.Add(d);
-                            expanded.Add((pair.Target, d));
-                        }
-                        result[pid][relName] = rows;
-                    }
+                    expanded = await ExpandManyToManyAsync(
+                        desc, relName, spec, parents, projectTarget, parentId, readProp, locale,
+                        canReadJunction, result, ct);
                     break;
-                }
                 default:
                     throw new QueryException($"Unsupported relation kind '{rel.Kind}' for '{relName}'.");
             }
@@ -173,6 +138,61 @@ public sealed class RelationExpander(
         }
 
         return result;
+    }
+
+    // ManyToMany case of ExpandAsync's per-relation switch, extracted verbatim (same conditions,
+    // order, and semantics) to keep ExpandAsync's cognitive complexity in check. Queries the
+    // junction rows for this page's parents, resolves + filters the target rows, then for each
+    // parent pairs its junction rows with their resolved targets (ordered by the junction sort
+    // column, windowed by ApplyListArgs), attaching the junction payload dict when the caller may
+    // read it. Populates <paramref name="result"/> in place and returns the (target entity,
+    // projected dict) pairs for the caller's recursion step.
+    private async Task<List<(object Entity, Dictionary<string, object?> Dict)>> ExpandManyToManyAsync(
+        RelationDescriptor desc, string relName, DeepRelationSpec spec, IReadOnlyList<object> parents,
+        Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
+        Func<object, object> parentId, Func<object, string, object?> readProp, string? locale,
+        Func<string, bool>? canReadJunction, Dictionary<object, Dictionary<string, object?>> result,
+        CancellationToken ct)
+    {
+        var rel = desc.Meta;
+        var expanded = new List<(object Entity, Dictionary<string, object?> Dict)>();
+        var ids = parents.Select(parentId).ToList();
+        var junctions = await repository.QueryEntityWhereInAsync(
+            desc.JunctionType!, desc.JunctionParentFk!, ids, ct);
+        var targetIds = junctions
+            .Select(j => readProp(j, desc.JunctionTargetFk!)!)
+            .Distinct()
+            .ToList();
+        var m2mFilter = spec.Filter is null ? null
+            : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, locale, ct);
+        var targets = (await repository.QueryWhereInFilteredAsync(
+                rel.TargetCollection, "id", targetIds, m2mFilter, ct))
+            .ToDictionary(t => readProp(t, "id")!, t => t);
+        var includeJunction = desc.JunctionPayload is { Count: > 0 }
+            && desc.JunctionCollection is not null
+            && (canReadJunction is null || canReadJunction(desc.JunctionCollection));
+        foreach (var p in parents)
+        {
+            var pid = parentId(p);
+            var rows = new List<IReadOnlyDictionary<string, object?>>();
+            var linkedPairs = junctions
+                .Where(j => Equals(readProp(j, desc.JunctionParentFk!), pid))
+                .OrderBy(j => JunctionSortKey(desc.JunctionSort, readProp, j))
+                .Select(j => (Junction: j, TargetId: readProp(j, desc.JunctionTargetFk!)!))
+                .Where(jt => targets.ContainsKey(jt.TargetId))
+                .Select(jt => (jt.Junction, Target: targets[jt.TargetId]))
+                .ToList();
+            foreach (var pair in ApplyListArgs(linkedPairs, spec, (jt, field) => readProp(jt.Target, field)))
+            {
+                var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, pair.Target, spec.Fields);
+                if (includeJunction)
+                    d["_junction"] = BuildJunctionPayload(desc, readProp, pair.Junction);
+                rows.Add(d);
+                expanded.Add((pair.Target, d));
+            }
+            result[pid][relName] = rows;
+        }
+        return expanded;
     }
 
     // Projects a junction row's non-hidden payload fields into the "_junction" dict attached to a

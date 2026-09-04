@@ -35,7 +35,7 @@ public sealed class JunctionPayloadRevisionTests
         await h.Service.UpdateAsync("jpParent", p.ToString(),
             JunctionPayloadHarness.Body(new { name = "p", children = new object[] { new { id = c1, note = "v2" } } }));
         h.Links(p).Single().Note.Should().Be("v2");
-        var first = (await h.Service.ListRevisionsAsync("jpParent", p.ToString())).Last().RevisionNumber;
+        var first = (await h.Service.ListRevisionsAsync("jpParent", p.ToString()))[^1].RevisionNumber;
 
         // I1: write on the parent ("jpParent") is granted throughout; only the junction's own write
         // grant is withdrawn. Revert must still be refused — a role that may write the parent but not
@@ -64,7 +64,7 @@ public sealed class JunctionPayloadRevisionTests
             JunctionPayloadHarness.Body(new { name = "p", children = new object[] { new { id = c1, @ref = refV2 } } }));
         h.Links(p).Single().Ref.Should().Be(refV2);
 
-        var first = (await h.Service.ListRevisionsAsync("jpParent", p.ToString())).Last().RevisionNumber;
+        var first = (await h.Service.ListRevisionsAsync("jpParent", p.ToString()))[^1].RevisionNumber;
         await h.Service.RevertAsync("jpParent", p.ToString(), first);
 
         h.Links(p).Single().Ref.Should().Be(refV1, "the Guid payload field must round-trip through snapshot -> revert -> DB");
@@ -79,7 +79,7 @@ public sealed class JunctionPayloadRevisionTests
         await h.Service.UpdateAsync("jpParent", p.ToString(), JunctionPayloadHarness.Body(new { name = "p", plainChildren = new[] { c1 } }));
 
         var revisions = await h.Service.ListRevisionsAsync("jpParent", p.ToString());
-        var rec = await h.RevisionStore.GetAsync("jpParent", p.ToString(), revisions.First().RevisionNumber);
+        var rec = await h.RevisionStore.GetAsync("jpParent", p.ToString(), revisions[0].RevisionNumber);
         using var doc = JsonDocument.Parse(rec!.Snapshot);
         var children = doc.RootElement.GetProperty("children");
         children[0].GetProperty("id").GetString().Should().Be(c1.ToString());
@@ -96,7 +96,7 @@ public sealed class JunctionPayloadRevisionTests
         var p = await h.CreateParentAsync(new object[] { new { id = c1, note = "x", secret = "s" } });
 
         var revisions = await h.Service.ListRevisionsAsync("jpParent", p.ToString());
-        var rec = await h.Service.GetRevisionAsync("jpParent", p.ToString(), revisions.First().RevisionNumber);
+        var rec = await h.Service.GetRevisionAsync("jpParent", p.ToString(), revisions[0].RevisionNumber);
         using var doc = JsonDocument.Parse(rec!.Snapshot);
         var el = doc.RootElement.GetProperty("children")[0];
         el.TryGetProperty("secret", out _).Should().BeFalse();
@@ -112,7 +112,7 @@ public sealed class JunctionPayloadRevisionTests
         await h.Service.UpdateAsync("jpParent", p.ToString(), JunctionPayloadHarness.Body(new { name = "p", children = new object[] { new { id = c1, note = "v2" } } }));
         h.Links(p).Single().Note.Should().Be("v2");
 
-        var first = (await h.Service.ListRevisionsAsync("jpParent", p.ToString())).Last().RevisionNumber;
+        var first = (await h.Service.ListRevisionsAsync("jpParent", p.ToString()))[^1].RevisionNumber;
         await h.Service.RevertAsync("jpParent", p.ToString(), first);
 
         h.Links(p).Single().Note.Should().Be("v1");
@@ -128,7 +128,7 @@ public sealed class JunctionPayloadRevisionTests
         await h.RevisionStore.CaptureAsync("jpParent", p.ToString(), "update",
             JsonSerializer.Serialize(new { id = p, name = "p", children = new[] { c1, c2 } }));
 
-        var legacy = (await h.Service.ListRevisionsAsync("jpParent", p.ToString())).First().RevisionNumber;
+        var legacy = (await h.Service.ListRevisionsAsync("jpParent", p.ToString()))[0].RevisionNumber;
         await h.Service.RevertAsync("jpParent", p.ToString(), legacy);
 
         var links = h.Links(p);

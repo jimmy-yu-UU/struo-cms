@@ -14,6 +14,9 @@ namespace Struo.Tests.Query;
 /// </summary>
 public sealed class ItemDeserializerPartialTests
 {
+    private static readonly string[] NoteAndWeightKeys = ["Note", "Weight"];
+    private static readonly string[] WeightKeyOnly = ["Weight"];
+
     private static ItemDeserializer NewDeserializer(JunctionPayloadHarness h) =>
         new(h.Registry, h.Graph, new RichTextCleaner(new GanssHtmlSanitizer()));
 
@@ -32,7 +35,7 @@ public sealed class ItemDeserializerPartialTests
 
         var result = deserializer.DeserializePartial("jpLink", body, meta, onlyFields);
 
-        result.Keys.Should().BeEquivalentTo(new[] { "Note", "Weight" });
+        result.Keys.Should().BeEquivalentTo(NoteAndWeightKeys);
     }
 
     [Fact]
@@ -46,7 +49,7 @@ public sealed class ItemDeserializerPartialTests
 
         var result = deserializer.DeserializePartial("jpLink", body, meta, onlyFields);
 
-        result.Keys.Should().BeEquivalentTo(new[] { "Weight" });
+        result.Keys.Should().BeEquivalentTo(WeightKeyOnly);
     }
 
     [Fact]

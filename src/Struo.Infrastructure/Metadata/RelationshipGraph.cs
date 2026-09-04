@@ -228,7 +228,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
             .Where(f => !f.IsSystem && !f.ReadOnly)
             .Select(f => (Field: f, Prop: props.FirstOrDefault(p =>
                 string.Equals(System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name), f.Name, StringComparison.OrdinalIgnoreCase))))
-            .Where(x => x.Prop is not null && !excluded.Contains(x.Prop!.Name))
+            .Where(x => x.Prop is not null && !excluded.Contains(x.Prop.Name))
             .Select(x => new JunctionPayloadField(x.Field.Name, x.Prop!.Name, x.Field.Hidden))
             .ToList();
         return (meta.Name, payload);

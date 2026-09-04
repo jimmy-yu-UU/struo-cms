@@ -116,23 +116,32 @@ public static class MetadataScanner
             {
                 var navData = prop.CustomAttributes.FirstOrDefault(a => a.AttributeType == typeof(Navigate));
                 if (navData is null || !NavigateHasMappingType(navData)) continue;
-                var junctionType = NavigateMappingType(navData)!;
-                var junction = byName.GetValueOrDefault(Camel(junctionType.Name));
-                if (junction is null) continue; // plain junction: nothing to validate
-
-                var writable = junction.Fields.Where(f => !f.IsSystem && !f.ReadOnly).Select(f => f.Name)
-                    .Concat(junction.Relations.Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null).Select(r => r.ForeignKey!))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var fkA = NavigateMappingA(navData)!;
-                var fkB = NavigateMappingB(navData)!;
-                if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB))) continue;
-
-                throw new MetadataException(
-                    $"Junction collection '{junction.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare its foreign keys " +
-                    $"'{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created " +
-                    "through the API store empty keys.");
+                ValidateOneJunctionCollection(owner, prop, navData, byName);
             }
         }
+    }
+
+    // Per-relation body of ValidateJunctionCollections, extracted verbatim (same conditions, order,
+    // and exception message) to keep the caller's cognitive complexity in check.
+    private static void ValidateOneJunctionCollection(
+        CollectionMetadata owner, PropertyInfo prop, CustomAttributeData navData,
+        IReadOnlyDictionary<string, CollectionMetadata> byName)
+    {
+        var junctionType = NavigateMappingType(navData)!;
+        var junction = byName.GetValueOrDefault(Camel(junctionType.Name));
+        if (junction is null) return; // plain junction: nothing to validate
+
+        var writable = junction.Fields.Where(f => !f.IsSystem && !f.ReadOnly).Select(f => f.Name)
+            .Concat(junction.Relations.Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null).Select(r => r.ForeignKey!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fkA = NavigateMappingA(navData)!;
+        var fkB = NavigateMappingB(navData)!;
+        if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB))) return;
+
+        throw new MetadataException(
+            $"Junction collection '{junction.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare its foreign keys " +
+            $"'{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created " +
+            "through the API store empty keys.");
     }
 
     /// <summary>
@@ -157,18 +166,26 @@ public static class MetadataScanner
             {
                 var navData = prop.CustomAttributes.FirstOrDefault(a => a.AttributeType == typeof(Navigate));
                 if (navData is null || !NavigateHasMappingType(navData)) continue;
-                var junctionType = NavigateMappingType(navData)!;
-                if (!checkedJunctions.Add(junctionType)) continue; // already validated via another owner/relation
-
-                var pkCount = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Count(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true });
-                if (pkCount == 1) continue;
-
-                throw new MetadataException(
-                    $"Junction type '{junctionType.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare exactly one " +
-                    "[SugarColumn(IsPrimaryKey = true)] property; the M2M sync updates junction rows by primary key.");
+                ValidateOneJunctionPrimaryKey(owner, prop, navData, checkedJunctions);
             }
         }
+    }
+
+    // Per-relation body of ValidateJunctionPrimaryKeys, extracted verbatim (same conditions, order,
+    // and exception message) to keep the caller's cognitive complexity in check.
+    private static void ValidateOneJunctionPrimaryKey(
+        CollectionMetadata owner, PropertyInfo prop, CustomAttributeData navData, HashSet<Type> checkedJunctions)
+    {
+        var junctionType = NavigateMappingType(navData)!;
+        if (!checkedJunctions.Add(junctionType)) return; // already validated via another owner/relation
+
+        var pkCount = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Count(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true });
+        if (pkCount == 1) return;
+
+        throw new MetadataException(
+            $"Junction type '{junctionType.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare exactly one " +
+            "[SugarColumn(IsPrimaryKey = true)] property; the M2M sync updates junction rows by primary key.");
     }
 
     public static IReadOnlyDictionary<string, EntityDescriptor> ScanDescriptors(IEnumerable<Type> types)

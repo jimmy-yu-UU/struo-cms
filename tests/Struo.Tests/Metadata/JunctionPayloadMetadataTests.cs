@@ -214,7 +214,10 @@ public sealed class JunctionPayloadMetadataTests
         // them must not throw for the new PK check (already exercised implicitly by the earlier tests
         // in this file — asserted explicitly here so a future fixture edit that breaks this is caught
         // by name).
-        Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
-        Build(typeof(JpmPlainParent), typeof(JpmChild), typeof(JpmPlainLink));
+        var (_, junctionCollections) = Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
+        junctionCollections.Select(c => c.Name).Should().BeEquivalentTo("jpmParent", "jpmChild", "jpmLink");
+
+        var (_, plainJunctionCollections) = Build(typeof(JpmPlainParent), typeof(JpmChild), typeof(JpmPlainLink));
+        plainJunctionCollections.Select(c => c.Name).Should().BeEquivalentTo("jpmPlainParent", "jpmChild");
     }
 }
