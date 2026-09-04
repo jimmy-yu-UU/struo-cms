@@ -146,4 +146,51 @@ public sealed class TranslationSidecarIndexPolicyTests
             "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name='policy_probe_legacy_translations' AND sql LIKE 'CREATE UNIQUE INDEX%'");
         uniqueIndexCount.Should().Be(1);
     }
+
+    [SugarTable("policy_probe_foreign_translations")]
+    private sealed class ForkOwnedAttributedTranslation
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+        [SugarColumn(UniqueGroupNameList = ["uq_fork_owned_key"])]
+        public Guid ForkProbeId { get; set; }
+        [SugarColumn(UniqueGroupNameList = ["uq_fork_owned_key"])]
+        public string Locale { get; set; } = "";
+        // A third member of the fork's own group, deliberately NOT covered by the policy. If the hook
+        // unions, ForkProbeId/Locale end up in BOTH groups (2-column derived group + 3-column
+        // fork-owned group) -> 2 distinct composite indexes, both spanning ForkProbeId+Locale. If the
+        // hook overwrote instead, ForkProbeId/Locale would be stripped out of "uq_fork_owned_key",
+        // leaving it with only Variant (a single-column group that can never cover the two key columns)
+        // -> the assertion below fails either on count or on column coverage.
+        [SugarColumn(UniqueGroupNameList = ["uq_fork_owned_key"])]
+        public string Variant { get; set; } = "";
+    }
+
+    // Discriminates the union guard from mere name-matching: the attribute's group name
+    // ("uq_fork_owned_key") deliberately differs from what TranslationSidecarIndexPolicy.KeyFor
+    // derives for this table ("ux_policy_probe_foreign_translations_fk_locale"), so a hook that
+    // OVERWRITES column.UIndexGroupNameList instead of unioning into it would silently drop the
+    // fork-owned group, leaving only 1 unique index instead of 2.
+    [Fact]
+    public void Hand_written_group_with_a_different_name_is_kept_alongside_the_derived_one()
+    {
+        using var db = new SqliteTestDatabase();
+        var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
+        {
+            [typeof(ForkOwnedAttributedTranslation)] = TranslationSidecarIndexPolicy.KeyFor(
+                typeof(ForkOwnedAttributedTranslation), nameof(ForkOwnedAttributedTranslation.ForkProbeId), nameof(ForkOwnedAttributedTranslation.Locale)),
+        });
+        var client = NewSqliteClient(db, policy);
+        client.CodeFirst.InitTables(typeof(ForkOwnedAttributedTranslation));
+
+        var fkColumn = client.EntityMaintenance.GetDbColumnName(nameof(ForkOwnedAttributedTranslation.ForkProbeId), typeof(ForkOwnedAttributedTranslation));
+        var localeColumn = client.EntityMaintenance.GetDbColumnName(nameof(ForkOwnedAttributedTranslation.Locale), typeof(ForkOwnedAttributedTranslation));
+
+        var indexSqlStatements = client.Ado.SqlQuery<string>(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='policy_probe_foreign_translations' AND sql LIKE 'CREATE UNIQUE INDEX%'");
+
+        indexSqlStatements.Should().HaveCount(2);
+        indexSqlStatements.Should().OnlyContain(sql =>
+            sql.Contains(fkColumn, StringComparison.OrdinalIgnoreCase) &&
+            sql.Contains(localeColumn, StringComparison.OrdinalIgnoreCase));
+    }
 }
