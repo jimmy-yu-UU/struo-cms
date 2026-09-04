@@ -112,4 +112,77 @@ public sealed class JunctionPayloadWriteTests
         var act = () => h.Service.CreateAsync("jpParent", JunctionPayloadHarness.Body(new { name = "p", plainChildren = new object[] { new { id = c1, note = "x" } } }));
         (await act.Should().ThrowAsync<QueryException>()).WithMessage("*'plainChildren'*not valid*");
     }
+
+    [Fact]
+    public async Task Grant_check_runs_before_payload_field_validation()
+    {
+        // The junction write grant is denied AND the payload would separately fail MaxLength — the
+        // caller must see the 403, not a 400 that would leak that the field rule was even evaluated.
+        using var h = new JunctionPayloadHarness(new NoJunctionWrite());
+        var c1 = await h.CreateChildAsync("a");
+
+        var act = () => h.CreateParentAsync(new object[] { new { id = c1, note = new string('x', 21) } });
+        (await act.Should().ThrowAsync<PermissionDeniedException>()).WithMessage("*jpLink*");
+    }
+
+    [Fact]
+    public async Task Object_outranks_a_bare_id_appearing_before_or_after_it_in_the_same_request()
+    {
+        using var h = new JunctionPayloadHarness();
+        var c1 = await h.CreateChildAsync("a");
+        var p = await h.CreateParentAsync(new object[] { c1, new { id = c1, note = "x" }, c1 });
+
+        var link = h.Links(p).Should().ContainSingle().Subject;
+        link.Note.Should().Be("x");
+    }
+
+    [Fact]
+    public async Task Two_objects_for_the_same_id_do_not_merge_payload_across_each_other()
+    {
+        using var h = new JunctionPayloadHarness();
+        var c1 = await h.CreateChildAsync("a");
+        var p = await h.CreateParentAsync(new object[] { new { id = c1, note = "n" } });
+
+        // The later object (weight only) replaces the earlier one entirely — it does not inherit "note"
+        // from the earlier object in this same request, and the stored note is untouched from before.
+        await h.Service.UpdateAsync("jpParent", p.ToString(), JunctionPayloadHarness.Body(new
+        {
+            name = "p",
+            children = new object[] { new { id = c1, note = "x" }, new { id = c1, weight = 9 } }
+        }));
+
+        var link = h.Links(p).Should().ContainSingle().Subject;
+        link.Note.Should().Be("n");
+        link.Weight.Should().Be(9);
+    }
+
+    private sealed class WriteEverywhereNotSuperAdmin : IPermissionService
+    {
+        public bool CanRead(string c) => true;
+        public bool CanWrite(string c) => true;
+        public bool CanDelete(string c) => true;
+        public bool IsSuperAdmin => false;
+        public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
+    }
+
+    [Fact]
+    public async Task AdminOnly_junction_payload_requires_super_admin_but_bare_ids_do_not()
+    {
+        using var h = new JunctionPayloadHarness(new WriteEverywhereNotSuperAdmin());
+        var c1 = await h.CreateChildAsync("a");
+
+        // Bare id: membership-only — no payload write, so the ordinary per-collection grant suffices
+        // even though the caller is not super-admin.
+        var created = await h.Service.CreateAsync("jpParent",
+            JunctionPayloadHarness.Body(new { name = "p", adminChildren = new object[] { c1 } }));
+        var p = Guid.Parse(created["id"]!.ToString()!);
+        h.AdminLinks(p).Should().ContainSingle();
+
+        var act = () => h.Service.UpdateAsync("jpParent", p.ToString(), JunctionPayloadHarness.Body(new
+        {
+            name = "p",
+            adminChildren = new object[] { new { id = c1, note = "x" } }
+        }));
+        (await act.Should().ThrowAsync<PermissionDeniedException>()).WithMessage("*super-admin*");
+    }
 }
