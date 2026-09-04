@@ -204,10 +204,14 @@ backend, and the SQLite suite is a development convenience, not the portability 
 The portability rule that governs application code is "all DB access through SqlSugar, zero vendor
 SQL" (see Invariants). That rule keeps *query and command* code portable. It does not make
 *type mapping, column semantics, or DDL* portable, and this codebase has concrete counterexamples —
-which is why the verification above is per-backend rather than per-codebase. This codebase has a
-documented, specific divergence: `IsJson` without an
-explicit `text` column type truncates at `varchar(1)` on PostgreSQL but appears to work on SQLite,
-which ignores declared column length. Configure `Testing:PostgresConnection` to a disposable database
+which is why the verification above is per-backend rather than per-codebase. This codebase has
+documented, specific divergences: a `DateTime` property with no `[ColumnShape(TimestampWithTimeZone)]`
+maps to `timestamp without time zone` on PostgreSQL — the reason `UserSession.CreatedAt`/`ExpiresAt`
+carry that shape explicitly — while SQLite has no real column types to show the difference; and a
+SqlSugar `ConditionalType.Equal` filter that binds a text value against a `uuid`/`bigint` column throws
+`42883` on PostgreSQL ("operator does not exist") but passes silently on SQLite, whose loose typing
+accepts the comparison without complaint. Configure
+`Testing:PostgresConnection` to a disposable database
 whose name contains `test` — the test resolves it from the `STRUO_TEST_PG_CONNECTION` environment
 variable first, falling back to the `Testing:PostgresConnection` key in
 `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify

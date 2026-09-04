@@ -156,20 +156,25 @@ value too long for type character varying(255)`。修法:使用五個承載內�
 `Revision.Snapshot` 那樣做 (`src/Struo.Infrastructure/Settings/SiteSettings.cs`、
 `src/Struo.Infrastructure/Revisions/Revision.cs`)。
 
-**`IsJson` 若沒有搭配 `text` 欄位會被截斷。** 原因:單獨使用 `[SugarColumn(IsJson = true)]` 會讓
-CodeFirst 的欄位長度保持未設定，而 Postgres 對此的預設值是 `varchar(1)`。徵狀:序列化任何長度超過
-一個字元的 JSON 值都會插入失敗 (`22001`)，即使這個欄位在測試中對 SQLite「看起來能動」也一樣
-(SQLite 會忽略已宣告的長度;這個錯誤只會在對 Postgres 執行時才浮現)。修法:一律讓 `IsJson = true`
-搭配明確的 `text` `DataType`——這正是框架自身的 `JsonColumnInterfaces` hook 對
-`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater` 欄位自動做的事;如果你曾經在這個
-慣例之外的屬性上自行設定 `[SugarColumn(IsJson = true)]`，就必須同時設定
-`ColumnDataType = "text"`。
+**`IsJson` 若沒有搭配 `text` 欄位會被截斷——現在已由 hook 解決。** 原因:這曾經是一個真實的陷阱:
+單獨使用 `[SugarColumn(IsJson = true)]`，在下方 `JsonColumnInterfaces` 慣例觸及不到的屬性上，會讓
+CodeFirst 的欄位長度保持未設定，而 Postgres 對此的預設值是 `varchar(1)`;序列化任何長度超過一個
+字元的 JSON 值都會插入失敗 (`22001`)，而同一個欄位在測試中對 SQLite「看起來能動」，因為 SQLite 會
+忽略已宣告的欄位長度——這個落差只會在對真正的 Postgres 執行個體時才浮現。現在的情況是:
+`SqlSugarClientFactory` 的 `EntityService` hook
+(`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) 會自行把單獨的 `IsJson` 欄位加寬
+為同樣的 `text` 型別欄位，所以單獨的 `[SugarColumn(IsJson = true)]` 在任何後端上都不再會截斷。你
+仍然需要自己手動處理的唯一情況是:為屬性明確指定 `ColumnDataType`——例如
+`[SugarColumn(IsJson = true, ColumnDataType = "text")]`，自己直接釘死型別而不讓 hook 加寬——此時
+它會優先生效;hook 只在該 attribute 自身的 `ColumnDataType` 未設定時才會加寬。像 `jsonb` 這種
+Postgres 原生型別本模板並未測試;不要假設它能透過與 `text` 預設值相同的路徑正確往返讀寫。
 
 **JSON 欄位上加 `[ColumnShape]` 會被拒絕。** 原因:CodeFirst hook 解析明寫的 `[ColumnShape]`
 (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) 之後就會早退，不會走到它的 JSON 欄位分支;
 因此一個同時帶著兩者的屬性原本會保留 shape 的欄位型別、並丟掉 `IsJson`——而在 shape 宣告為
 `LongText` (此處唯一合理的選擇) 時，兩條路對 JSON 欄位介面會解析出同一個 `text`，所以丟掉
-`IsJson` 曾是這個組合*唯一*的效果，正好重現上面那個截斷陷阱。徵狀:擲出
+`IsJson` 曾是這個組合*唯一*的效果，正好重現上面那個截斷陷阱——`[ColumnShape]` 分支會在單獨
+`IsJson` 的加寬邏輯執行之前就提前返回，所以那個加寬邏輯永遠沒有機會拯救同時帶有兩者的屬性。徵狀:擲出
 `InvalidOperationException`，訊息會指名該屬性與違規的介面;凡是落在 `InitTables` 集合裡的型別——
 每一個框架 entity 加上每一個 `[CmsCollection]` 型別——都會在**啟動時**擲出，該資料表是否已存在
 無關緊要:`DatabaseInitializer.CreateMissingTables` 會為每個型別向 `EntityMaintenance` 詢問表名以
@@ -189,12 +194,16 @@ JsonDocument.Parse(raw)` 解析 `Json` 欄位的原始儲存文字，然後在�
 的獨立 `JsonElement`——這正是 `ItemProjector.Project` 在為 API 回應重新還原一個 `Json` 欄位時所做
 的事。
 
-**多值選擇欄位需要 `IsJson` *且*搭配 `text` 欄位——單獨一項並不夠。** 原因:`MultiSelect`/
-`CheckboxGroup` (`List<string>`) 同時依賴這兩項設定:`IsJson = true` 讓 SqlSugar 願意 (反) 序列化
-這個清單，而 `ColumnDataType = "text"` 則給它足夠的空間 (見前兩個陷阱——單獨設定其中一項，就會重現
-對應的失敗)。框架自身能感知 `[CmsField]` 的 CodeFirst hook，會為這些介面自動套用這兩項設定;如果你
-曾經自己手動宣告 SqlSugar attribute，而不是依賴這個慣例 (例如在該 hook 觸及不到的屬性上)，就必須把
-兩項都設定好。
+**多值選擇欄位需要 `IsJson`——`text` 欄位由同一個 hook 解決。** 原因:`MultiSelect`/
+`CheckboxGroup` (`List<string>`) 同時依賴這兩項設定:`IsJson` 讓 SqlSugar 願意 (反) 序列化這個
+清單，而加寬為 `text` 型別的 `DataType` 則給它足夠的空間——單獨宣告 `text` 型別而不搭配 `IsJson`，
+仍然會重現上面對應的失敗，但單獨的 `IsJson` 不會 (同一個 hook 會把它加寬)。框架自身能感知
+`[CmsField]` 的 CodeFirst hook，會為每一個 `JsonColumnInterfaces` 成員
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) 自動套用這兩項設定，所以除了
+選擇介面本身之外，這些介面完全不需要手動宣告。如果你自己的屬性落在這個集合之外——例如一個 hook 不會
+透過 `JsonColumnInterfaces` 路由到的手動宣告 `List<>`——你仍然需要自己寫上
+`[SugarColumn(IsJson = true)]`，但一旦這麼做，上一個陷阱提到的單獨 `IsJson` 加寬邏輯就會自動接手
+補上 `DataType`;如果該屬性明確指定了 `ColumnDataType`，則會如同上一個陷阱一樣優先採用該值。
 
 ## 唯讀、隱藏與系統欄位
 
