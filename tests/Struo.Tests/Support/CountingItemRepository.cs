@@ -1,4 +1,5 @@
 using Struo.Application.Query;
+using Struo.Application.Query.Write;
 using Struo.Domain.Query;
 
 namespace Struo.Tests.Support;
@@ -73,8 +74,8 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
 
     public Task SyncManyToManyAsync(
         Type junctionType, string parentFkProperty, string targetFkProperty, string? sortProperty,
-        object parentId, IReadOnlyList<object> targetIds, CancellationToken ct = default) =>
-        inner.SyncManyToManyAsync(junctionType, parentFkProperty, targetFkProperty, sortProperty, parentId, targetIds, ct);
+        object parentId, IReadOnlyList<JunctionLink> links, CancellationToken ct = default) =>
+        inner.SyncManyToManyAsync(junctionType, parentFkProperty, targetFkProperty, sortProperty, parentId, links, ct);
 
     public Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType, string fkProperty, string localeProperty,

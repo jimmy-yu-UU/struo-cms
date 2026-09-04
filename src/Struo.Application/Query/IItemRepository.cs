@@ -1,3 +1,4 @@
+using Struo.Application.Query.Write;
 using Struo.Domain.Query;
 
 namespace Struo.Application.Query;
@@ -73,11 +74,17 @@ public interface IItemRepository
     Task<IReadOnlyList<object>> QueryIdsAsync(string collection, FilterNode leafCondition, CancellationToken ct = default);
 
     /// <summary>
-    /// Replaces all junction rows for <paramref name="parentId"/> on the given
-    /// <paramref name="junctionType"/> so that exactly <paramref name="targetIds"/> are linked.
-    /// Deletes all existing rows whose parent FK matches <paramref name="parentId"/>, then inserts
-    /// one new row per target id in order. If <paramref name="sortProperty"/> is non-null it is set
-    /// to the list index (0-based) on each inserted row.
+    /// Diffs and patches the junction rows for <paramref name="parentId"/> on the given
+    /// <paramref name="junctionType"/> so that exactly the targets named in <paramref name="links"/>
+    /// remain linked, in that order. Rows for targets absent from <paramref name="links"/> are
+    /// deleted; rows for targets newly present are inserted; rows for targets already present keep
+    /// their primary key — they are never deleted and reinserted. If <paramref name="sortProperty"/>
+    /// is non-null it is set to each link's list index (0-based). A <see cref="JunctionLink.Payload"/>
+    /// dictionary merges only the given keys (CLR property names) into the row; a null payload
+    /// (<see cref="JunctionLink.Bare"/>) leaves an existing row's payload untouched and leaves a new
+    /// row's payload columns at their default. If the existing data holds more than one row for the
+    /// same target (legacy duplicate), the first is kept and the rest are deleted, with one warning
+    /// logged naming the table and the count removed.
     /// </summary>
     Task SyncManyToManyAsync(
         Type junctionType,
@@ -85,7 +92,7 @@ public interface IItemRepository
         string targetFkProperty,
         string? sortProperty,
         object parentId,
-        IReadOnlyList<object> targetIds,
+        IReadOnlyList<JunctionLink> links,
         CancellationToken ct = default);
 
     /// <summary>
