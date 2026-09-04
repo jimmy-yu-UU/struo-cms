@@ -28,6 +28,7 @@ public class GraphQlExecutionTests
         => await new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource>(_ => ds)
             // FileByIdDataLoader's ctor takes StruoQueryOptions (it chunks the
             // batch fetch to MaxLimit-sized slices) — HotChocolate's ctx.DataLoader<T>() resolves
@@ -521,6 +522,7 @@ public class GraphQlExecutionTests
         var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()
