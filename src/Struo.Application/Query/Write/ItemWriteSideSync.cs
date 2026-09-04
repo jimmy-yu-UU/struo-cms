@@ -125,8 +125,9 @@ public sealed class ItemWriteSideSync(
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
     /// from <paramref name="body"/> under the relation's camelCase name (e.g. <c>"tags"</c>).
     /// If the key is present, validates every id exists in the target collection, then delegates
-    /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to replace the junction rows.
-    /// Absent keys are silently skipped (partial updates are supported).
+    /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to diff-and-patch the junction rows
+    /// (existing rows for targets that remain keep their primary key; only the added/removed set
+    /// actually changes). Absent keys are silently skipped (partial updates are supported).
     /// </summary>
     public async Task SyncM2MAsync(string collection, JsonElement body, object parentId, bool includeDeleted, CancellationToken ct)
     {
