@@ -165,14 +165,18 @@ interfaces (auto-widened to `text`), or add an explicit `[SugarColumn(ColumnData
 `SiteSettings.BrandName` and `Revision.Snapshot` do (`src/Struo.Infrastructure/Settings/SiteSettings.cs`,
 `src/Struo.Infrastructure/Revisions/Revision.cs`).
 
-**`IsJson` without a `text` column truncates.** Cause: `[SugarColumn(IsJson = true)]` alone leaves the
-CodeFirst column length unset, which Postgres defaults to `varchar(1)`. Symptom: serializing any JSON
-value longer than one character fails to insert (`22001`), even though the field "worked" against
-SQLite in tests (SQLite ignores declared length; the bug only surfaces against Postgres). Fix: always
-pair `IsJson = true` with an explicit `text` `DataType` — exactly what the framework's own
-`JsonColumnInterfaces` hook does automatically for `MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/
-`Files`/`Repeater` fields; if you ever set `[SugarColumn(IsJson = true)]` yourself on a property outside
-that convention, set `ColumnDataType = "text"` alongside it.
+**`IsJson` without a `text` column truncates — closed by the hook.** This used to be a real trap: a
+bare `[SugarColumn(IsJson = true)]`, on a property the `JsonColumnInterfaces` convention below never
+reaches, left CodeFirst's column length unset, which Postgres defaulted to `varchar(1)`; serializing
+any JSON value longer than one character failed to insert (`22001`), while the same field "worked"
+against SQLite in tests, because SQLite ignores declared column length — the divergence only ever
+surfaced against a real Postgres instance. What happens today: `SqlSugarClientFactory`'s
+`EntityService` hook (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) widens a bare
+`IsJson` column to the same `text`-shaped type on its own, so `[SugarColumn(IsJson = true)]` alone no
+longer truncates on any backend. The one case you still hand-write: give the property an explicit
+`ColumnDataType` — `[SugarColumn(IsJson = true, ColumnDataType = "jsonb")]` for a fork that wants
+Postgres's native JSON type, say — and it wins; the hook only widens when the attribute's own
+`ColumnDataType` is unset.
 
 **`[ColumnShape]` on a JSON-column field is refused.** Cause: the CodeFirst hook resolves an explicit
 `[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) and returns before its
@@ -200,12 +204,14 @@ self-contained `JsonElement` safe to hold — exactly what `ItemProjector.Projec
 `Json` field for the API response.
 
 **Multi-value selects need `IsJson` *and* a `text` column — one alone isn't enough.** Cause:
-`MultiSelect`/`CheckboxGroup` (`List<string>`) rely on both settings together: `IsJson = true` tells
-SqlSugar to (de)serialize the list at all, and `ColumnDataType = "text"` gives it room (see the previous
-two pitfalls — either one alone reproduces the corresponding failure). The framework's `[CmsField]`-aware
-CodeFirst hook applies both automatically for these interfaces; if you ever hand-declare the SqlSugar
-attributes yourself instead of relying on that convention (for example, on a property the hook doesn't
-reach), you must set both.
+`MultiSelect`/`CheckboxGroup` (`List<string>`) rely on both settings together: `IsJson` tells SqlSugar to
+(de)serialize the list at all, and a widened `text`-shaped `DataType` gives it room — either one alone
+reproduces the corresponding failure above. The framework's `[CmsField]`-aware CodeFirst hook applies
+both automatically for every `JsonColumnInterfaces` member (`MultiSelect`/`CheckboxGroup`/`Tags`/
+`KeyValue`/`Files`/`Repeater`), so there is nothing to hand-write for these interfaces. If your own
+property falls outside that set — a hand-declared `List<>` the hook doesn't route through
+`JsonColumnInterfaces` — the bare-`IsJson` widening from the previous pitfall still applies
+automatically; an explicit `ColumnDataType` on that property is respected instead, same as there.
 
 ## Read-only, hidden and system fields
 
