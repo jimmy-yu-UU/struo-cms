@@ -38,7 +38,13 @@
   它會序列化成 JSON，而不是一個帶引號的字串。
 - 每一個多對一關聯的外鍵 id，以其 camelCase 名稱表示(例如 `folderId`)——這些是透過 `[CmsRelation]`
   宣告的，而不是 `[CmsField]`，因此上面那個自身欄位的處理並不會涵蓋它們。
-- 每一個多對多關聯，以該關聯名稱下的一個**排序過的 id 陣列**表示(若該關聯宣告了排序屬性，則依此排序)。
+- 每一個多對多關聯，以該關聯名稱表示，若該關聯宣告了排序屬性，則依此排序。junction 不帶
+  payload 的關聯(第 7 章)，快照仍是一個純**排序過的 id 陣列**，與之前一樣；junction 確實帶
+  payload 的關聯，快照則改為一個 `{ "id": <targetId>, "<payloadField>": <value>, ... }` 物件的
+  排序陣列——每個已連結的目標各一筆，包括任何 `Hidden` payload 欄位的值(快照永遠是完整保真的；
+  見下方「遮蔽」一節，說明一個 `Hidden` 值如何在讀回快照時仍然保持隱藏)。一份在此功能出現之前
+  就已擷取的純 id 快照，依然能乾淨地還原：從一個純 id 陣列還原，正是寫入端「純 id」規則(第 9
+  章)的體現——只代表成員關係，junction 資料列上既有的 payload 不受影響。
 - `translations`：`{ locale: { camelField: value } }`，涵蓋該項目擁有翻譯資料列的每一個語言——是完整
   的附屬資料表狀態，而不只是查詢當下生效的那個語言。
 
@@ -96,9 +102,11 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article/01a00d89-50c0-
 因為一份快照會擷取一個項目的**全部**內容，包括任何標示 `Hidden` 的欄位(第 5 章)，一份交給外部呼叫端
 的快照絕不能洩漏其中任何一個。`RevisionSnapshotRedactor.RedactHidden`
 (`src/Struo.Application/Query/RevisionSnapshotRedactor.cs`)會產生一份經過遮蔽的**副本**——省略任何
-其欄位中介資料為 `Hidden` 的頂層鍵，並且在 `translations.{locale}` 之內，省略任何同時屬於 `Hidden` 與
-`Translatable` 的欄位鍵——其他每一個值(巢狀物件、陣列、數字、布林值、null)則原封不動地複製過去。這種
-遮蔽**只**套用在外部的單筆版本紀錄讀取路徑上(`ItemService.GetRevisionAsync`，REST 的
+其欄位中介資料為 `Hidden` 的頂層鍵；在 `translations.{locale}` 之內，省略任何同時屬於 `Hidden` 與
+`Translatable` 的欄位鍵；以及在一個帶 payload 的 many-to-many 關聯陣列之內，從每一筆
+`{ id, ...payload }` 元素中，省略屬於 `Hidden` payload 欄位的 payload 鍵(一筆純 id 的陣列元素
+沒有 payload 可遮蔽，所以原封不動)——其他每一個值(巢狀物件、陣列、數字、布林值、null)則原封
+不動地複製過去。這種遮蔽**只**套用在外部的單筆版本紀錄讀取路徑上(`ItemService.GetRevisionAsync`，REST 的
 `GET .../revisions/{n}` 與 GraphQL 的 `{collection}Revision`)——`RevertAsync` 則刻意直接從存放區讀取
 **原始、未遮蔽**的快照，因為一次還原必須能夠恢復一個 `Hidden` 欄位的值(例如一個有版本紀錄的集合，若有
 一個外形像憑證的隱藏欄位，一次還原必須真正恢復該憑證，而不是把它清空)。因此一個隱藏值只會透過還原路徑
