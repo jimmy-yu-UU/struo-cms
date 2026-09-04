@@ -8,6 +8,11 @@ namespace Struo.Infrastructure.Query;
 
 internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner transactions, ILogger? logger)
 {
+    // The junction type's reflected shape, resolved once per SyncM2MGenericAsync call and passed
+    // through to PartitionChanges as one value instead of four separate parameters.
+    private readonly record struct JunctionShape(
+        PropertyInfo ParentFk, PropertyInfo TargetFk, PropertyInfo? Sort, HashSet<string> ReservedNames);
+
     private static readonly GenericDispatcher<Func<ManyToManySync, string, string, string, string?, object, IReadOnlyList<JunctionLink>, CancellationToken, Task>> SyncDispatcher =
         new(typeof(ManyToManySync), nameof(SyncM2MGenericAsync),
             [typeof(string), typeof(string), typeof(string), typeof(string), typeof(object), typeof(IReadOnlyList<JunctionLink>), typeof(CancellationToken)]);
@@ -49,6 +54,7 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
         // caller that bypasses that layer.
         var reservedNames = new HashSet<string>(StringComparer.Ordinal) { pkProp.Name, parentFkProperty, targetFkProperty };
         if (sortProperty is not null) reservedNames.Add(sortProperty);
+        var shape = new JunctionShape(parentProp, targetProp, sortProp, reservedNames);
 
         var incoming = BuildIncomingLinks(links, targetProp, tableName);
 
@@ -83,8 +89,7 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
             if (toDelete.Length > 0)
                 await db.Deleteable<T>().In(toDelete).ExecuteCommandAsync(ct);
 
-            var (toInsert, toUpdate) = PartitionChanges(
-                incoming, byTarget, type, parentId, parentProp, targetProp, sortProp, reservedNames);
+            var (toInsert, toUpdate) = PartitionChanges(incoming, byTarget, type, parentId, shape);
             if (toInsert.Count > 0)
                 await db.Insertable(toInsert).ExecuteCommandAsync(ct);
 
@@ -151,9 +156,9 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
     // becomes a fresh insert.
     private static (List<T> ToInsert, List<T> ToUpdate) PartitionChanges<T>(
         Dictionary<object, (JunctionLink Link, int Index)> incoming, Dictionary<object, T> byTarget, Type type,
-        object parentId, PropertyInfo parentProp, PropertyInfo targetProp, PropertyInfo? sortProp,
-        HashSet<string> reservedNames) where T : class, new()
+        object parentId, JunctionShape shape) where T : class, new()
     {
+        var (parentProp, targetProp, sortProp, reservedNames) = (shape.ParentFk, shape.TargetFk, shape.Sort, shape.ReservedNames);
         var toInsert = new List<T>();
         var toUpdate = new List<T>();
         foreach (var (targetId, (link, index)) in incoming)
@@ -195,7 +200,7 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
     // `reservedNames` (PK, both FKs, sort) are structural columns the payload must never touch even
     // if a caller's dictionary happens to name one.
     private static List<string> ApplyPayload(
-        Type type, object row, IReadOnlyDictionary<string, object?>? payload, IReadOnlySet<string> reservedNames)
+        Type type, object row, IReadOnlyDictionary<string, object?>? payload, HashSet<string> reservedNames)
     {
         var changed = new List<string>();
         if (payload is null) return changed;

@@ -256,11 +256,12 @@ internal sealed class CollectionSchemaBuilder(
     private static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
         payloadRelations.FirstOrDefault(d => string.Equals(d.RelationName, relationName, StringComparison.OrdinalIgnoreCase));
 
-    // <Parent><Rel>Link: { node: <Target>!, junction: <Parent><Rel>Junction } — one entry per
-    // element of the underlying `<rel>` list. `node` is the element dict itself (already a full
-    // target row, exactly what the bare `<rel>` field's own sub-resolvers read via ParentDict);
-    // `junction` reads the "_junction" key the deep expansion attaches, or null when the caller
-    // lacks the junction read grant — hence the nullable (non-"!") return type.
+    // Builds the "<Parent><Rel>Link" wrapper type for M2M relations that carry junction payload,
+    // exposing a "node" field (the target row) and a "junction" field (the junction payload) for
+    // one entry per element of the underlying "<rel>" list. `node` is the element dict itself
+    // (already a full target row, exactly what the bare `<rel>` field's own sub-resolvers read via
+    // ParentDict); `junction` reads the "_junction" key the deep expansion attaches, or null when
+    // the caller lacks the junction read grant — hence the nullable (non-required) return type.
     private static ObjectType BuildLinkType(CollectionMetadata meta, string targetTypeName, M2MDescriptor descriptor)
     {
         var config = new ObjectTypeConfiguration(
@@ -412,6 +413,20 @@ internal sealed class CollectionSchemaBuilder(
         InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var desc = registry.Get(meta.Name);
+        AddWritableOwnFields(config, meta, desc);
+        AddWritableRelationFields(config, meta, payloadRelations);
+
+        // Typed translations input — only when the collection has a translation sidecar.
+        // Translatable own-fields stay excluded above (`if (f.Translatable) continue;`); they are
+        // carried here instead.
+        if (meta.Translation is not null)
+            config.Fields.Add(new InputFieldConfiguration(
+                "translations", null,
+                TypeReference.Parse($"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]")));
+    }
+
+    private static void AddWritableOwnFields(InputObjectTypeConfiguration config, CollectionMetadata meta, EntityDescriptor? desc)
+    {
         foreach (var f in meta.Fields)
         {
             if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
@@ -427,8 +442,12 @@ internal sealed class CollectionSchemaBuilder(
             if (sdl is null) continue;
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
         }
+    }
 
-        // M2O foreign keys (as ID) + M2M relations (as [ID!] target-id arrays).
+    // M2O foreign keys (as ID) + M2M relations (as [ID!] target-id arrays).
+    private static void AddWritableRelationFields(
+        InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
+    {
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
@@ -446,14 +465,6 @@ internal sealed class CollectionSchemaBuilder(
                         TypeReference.Parse($"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]")));
             }
         }
-
-        // Typed translations input — only when the collection has a translation sidecar.
-        // Translatable own-fields stay excluded above (`if (f.Translatable) continue;`); they are
-        // carried here instead.
-        if (meta.Translation is not null)
-            config.Fields.Add(new InputFieldConfiguration(
-                "translations", null,
-                TypeReference.Parse($"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]")));
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).

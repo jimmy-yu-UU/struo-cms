@@ -132,7 +132,7 @@ internal static class MutationResolvers
     // relations got a `<rel>Links` input field in the first place (not the raw HasPayload flag —
     // a relation whose only payload field is hidden/unmappable never got a `<rel>Links` field at
     // all, so it must never be treated as one here either).
-    private static IReadOnlyList<M2MDescriptor> PayloadRelations(IResolverContext ctx, string collection)
+    private static List<M2MDescriptor> PayloadRelations(IResolverContext ctx, string collection)
     {
         var metadataProvider = ctx.Service<IMetadataProvider>();
         return ctx.Service<IM2MDescriptorSource>().M2MDescriptors(collection)
@@ -157,13 +157,13 @@ internal static class MutationResolvers
         if (input is null || payloadRelations.Count == 0) return input;
 
         Dictionary<string, object?>? result = null;
-        foreach (var rel in payloadRelations)
+        foreach (var relationName in payloadRelations.Select(rel => rel.RelationName))
         {
-            var linksKey = SchemaTypeMapper.LinksFieldName(rel.RelationName);
+            var linksKey = SchemaTypeMapper.LinksFieldName(relationName);
             if (!input.ContainsKey(linksKey)) continue;
 
             result ??= new Dictionary<string, object?>(input);
-            result[rel.RelationName] = result[linksKey];
+            result[relationName] = result[linksKey];
             result.Remove(linksKey);
         }
         return result ?? input;
