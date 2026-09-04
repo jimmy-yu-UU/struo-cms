@@ -23,9 +23,13 @@ public sealed class JunctionPayloadReadTests
         var child = ((IReadOnlyList<object?>)item!["children"]!).Cast<IReadOnlyDictionary<string, object?>>().Single();
         child["name"].Should().Be("a");
         var junction = (IReadOnlyDictionary<string, object?>)child["_junction"]!;
-        junction.Keys.Should().BeEquivalentTo(["note", "weight"]);
+        // "ref" is a declared non-hidden payload field on JpLink (added for the Guid round-trip
+        // coverage in JunctionPayloadRevisionTests) that this create body never sets, so it always
+        // projects into `_junction` as null alongside note/weight.
+        junction.Keys.Should().BeEquivalentTo(["note", "weight", "ref"]);
         junction["note"].Should().Be("x");
         junction["weight"].Should().Be(2);
+        junction["ref"].Should().BeNull();
     }
 
     [Fact]

@@ -411,6 +411,17 @@ public sealed class ItemService(
     /// Reverts an item to a past revision by re-applying that revision's snapshot as a normal update
     /// (append-only: a new "revert" revision is recorded; forward history is never deleted). Returns the
     /// re-read item, or null for an unknown collection-revision/item (→ 404). Requires write permission.
+    /// <para>
+    /// PINNED BEHAVIOUR: because a payload M2M relation's snapshot is captured as
+    /// <c>[{id, ...payload}]</c> object elements (not bare ids), reverting such a relation goes through
+    /// the same <c>ItemWriteSideSync.EnsureJunctionPayloadGrant</c> gate as any other payload write — the
+    /// caller must additionally hold the junction collection's write grant (and super-admin when the
+    /// junction is <c>AdminOnly</c>), or this throws <see cref="PermissionDeniedException"/>, even though
+    /// the caller already holds write on the parent collection. This is intentional and fails closed: a
+    /// role that may write the parent but not the junction must not be able to smuggle a junction-payload
+    /// change through revert. Grant the junction collection to any role that must be able to revert a
+    /// parent carrying junction payload.
+    /// </para>
     /// </summary>
     public async Task<IReadOnlyDictionary<string, object?>?> RevertAsync(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
