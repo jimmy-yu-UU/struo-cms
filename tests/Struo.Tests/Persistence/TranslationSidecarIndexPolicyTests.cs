@@ -4,6 +4,7 @@ using Struo.Application.Configuration;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
+using Struo.Sample.Blog;
 using Struo.Tests.Support;
 using Xunit;
 using File = Struo.Infrastructure.Files.File;
@@ -192,5 +193,29 @@ public sealed class TranslationSidecarIndexPolicyTests
         indexSqlStatements.Should().OnlyContain(sql =>
             sql.Contains(fkColumn, StringComparison.OrdinalIgnoreCase) &&
             sql.Contains(localeColumn, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Sample_ArticleTranslation_gets_its_unique_from_metadata_not_from_attributes()
+    {
+        typeof(ArticleTranslation).GetProperty(nameof(ArticleTranslation.ArticleId))!
+            .GetCustomAttributes(typeof(SugarColumn), inherit: false)
+            .Cast<SugarColumn>().Select(a => a.UniqueGroupNameList)
+            .Should().AllSatisfy(g => g.Should().BeNullOrEmpty(), "the sample must not hand-write what core derives");
+        typeof(ArticleTranslation).GetCustomAttributes(typeof(SugarIndexAttribute), inherit: false)
+            .Should().BeEmpty("the (fk, locale) unique index already serves the lookup; the plain btree was redundant");
+
+        using var db = new SqliteTestDatabase();
+        var policy = TranslationSidecarIndexPolicy.FromMetadata(
+            MetadataScanner.ScanTypes([typeof(Article), typeof(Category), typeof(Tag)]));
+        var client = NewSqliteClient(db, policy);
+        client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(ArticleTranslation));
+
+        var descriptor = new TranslationSidecarDescriptor(
+            client.EntityMaintenance.GetTableName(typeof(ArticleTranslation)),
+            client.EntityMaintenance.GetDbColumnName(nameof(ArticleTranslation.ArticleId), typeof(ArticleTranslation)),
+            client.EntityMaintenance.GetDbColumnName(nameof(ArticleTranslation.Locale), typeof(ArticleTranslation)));
+        var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [descriptor], default);
+        await act.Should().NotThrowAsync();
     }
 }
