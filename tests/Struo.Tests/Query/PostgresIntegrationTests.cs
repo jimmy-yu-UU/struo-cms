@@ -508,4 +508,66 @@ public sealed class PostgresIntegrationTests : IDisposable
             catch { /* best-effort cleanup; don't mask the real failure */ }
         }
     }
+
+    // A5: 只標 IsJson、無 [CmsField]/[ColumnShape]/ColumnDataType 的欄位，在真 PG 上必須是 text 而非 varchar(1)。
+    [Fact]
+    public void Bare_IsJson_column_is_text_on_postgres_and_round_trips()
+    {
+        if (!PgConfigured) return;
+        var db = BuildRawClient();
+        try
+        {
+            if (db.DbMaintenance.IsAnyTable("ddl_closeout_isjson_probe", false))
+                db.DbMaintenance.DropTable("ddl_closeout_isjson_probe");
+            db.CodeFirst.InitTables(typeof(DdlCloseoutIsJsonProbe));
+
+            var dataType = db.Ado.GetString(
+                "SELECT data_type FROM information_schema.columns WHERE table_name = 'ddl_closeout_isjson_probe' AND column_name = 'tags'");
+            dataType.Should().Be("text");
+
+            db.Insertable(new DdlCloseoutIsJsonProbe { Tags = ["alpha", "beta", "gamma"] }).ExecuteCommand();
+            db.Queryable<DdlCloseoutIsJsonProbe>().First()!.Tags.Should().Equal("alpha", "beta", "gamma");
+        }
+        finally
+        {
+            try { if (db.DbMaintenance.IsAnyTable("ddl_closeout_isjson_probe", false)) db.DbMaintenance.DropTable("ddl_closeout_isjson_probe"); }
+            catch { /* best-effort cleanup */ }
+        }
+    }
+
+    // A6: FileTranslation 不再手寫 UniqueGroupNameList；帶 policy 的 client 建表後，PG 必須有覆蓋 (fileid, locale) 的 UNIQUE。
+    [Fact]
+    public void Sidecar_unique_index_is_derived_on_postgres_without_hand_written_attributes()
+    {
+        if (!PgConfigured) return;
+        GuardDisposableDatabase();
+        var policy = TranslationSidecarIndexPolicy.FromMetadata(
+            MetadataScanner.ScanTypes([typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder)]));
+        _db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
+            new TestCurrentUserAccessor(Guid.Empty), policy);
+        var db = _db;
+        try
+        {
+            if (db.DbMaintenance.IsAnyTable("file_translations", false))
+                db.DbMaintenance.DropTable("file_translations");
+            db.CodeFirst.InitTables(typeof(Struo.Infrastructure.Files.FileTranslation));
+
+            var indexDefs = db.Ado.SqlQuery<string>("SELECT indexdef FROM pg_indexes WHERE tablename = 'file_translations'");
+            indexDefs.Should().Contain(d =>
+                d.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                && d.Contains("fileid", StringComparison.OrdinalIgnoreCase)
+                && d.Contains("locale", StringComparison.OrdinalIgnoreCase));
+
+            var fileId = Guid.NewGuid();
+            db.Insertable(new Struo.Infrastructure.Files.FileTranslation { FileId = fileId, Locale = "en", Title = "a" }).ExecuteCommand();
+            var dup = () => db.Insertable(new Struo.Infrastructure.Files.FileTranslation { FileId = fileId, Locale = "en", Title = "b" }).ExecuteCommand();
+            dup.Should().Throw<Exception>().Which.Message.Should().Contain("23505");
+        }
+        finally
+        {
+            try { db.Deleteable<Struo.Infrastructure.Files.FileTranslation>().Where(x => true).ExecuteCommand(); }
+            catch { /* best-effort cleanup */ }
+        }
+    }
 }
