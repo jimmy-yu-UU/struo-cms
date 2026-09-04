@@ -319,4 +319,43 @@ public class ColumnTypeMapTests
             body.DataType.Should().ContainEquivalentOf("text");
         }
     }
+
+    [SugarTable("bare_isjson_probe")]
+    private sealed class BareIsJsonProbe
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+        [SugarColumn(IsJson = true)] public List<string> Tags { get; set; } = [];
+        [SugarColumn(IsJson = true, ColumnDataType = "clob")] public List<string> Pinned { get; set; } = [];
+    }
+
+    [Fact]
+    public void Bare_IsJson_without_CmsField_or_shape_is_widened_to_LongText_on_Sqlite()
+    {
+        using var db = new SqliteTestDatabase();
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<BareIsJsonProbe>();
+
+        var columns = client.DbMaintenance.GetColumnInfosByTableName("bare_isjson_probe", false);
+        columns.Single(c => c.DbColumnName.Equals("Tags", StringComparison.OrdinalIgnoreCase))
+            .DataType.Should().ContainEquivalentOf(ColumnTypeMap.For(ColumnShape.LongText, DbType.Sqlite));
+
+        client.Insertable(new BareIsJsonProbe { Tags = ["alpha", "beta"] }).ExecuteCommand();
+        client.Queryable<BareIsJsonProbe>().First()!.Tags.Should().Equal("alpha", "beta");
+    }
+
+    [Fact]
+    public void Explicit_ColumnDataType_on_an_IsJson_property_is_respected()
+    {
+        using var db = new SqliteTestDatabase();
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<BareIsJsonProbe>();
+
+        var columns = client.DbMaintenance.GetColumnInfosByTableName("bare_isjson_probe", false);
+        columns.Single(c => c.DbColumnName.Equals("Pinned", StringComparison.OrdinalIgnoreCase))
+            .DataType.Should().ContainEquivalentOf("clob", "a fork's own literal must win over the convention");
+    }
 }
