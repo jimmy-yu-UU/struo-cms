@@ -63,6 +63,55 @@ public sealed class JunctionPayloadReadTests
         child.Should().NotContainKey("_junction");
     }
 
+    private sealed class NoChildLinkRead : IPermissionService
+    {
+        public bool CanRead(string c) => c != "jpChildLink";
+        public bool CanWrite(string c) => true;
+        public bool CanDelete(string c) => true;
+        public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
+    }
+
+    [Fact]
+    public async Task Nested_junction_payload_is_projected_at_depth_two()
+    {
+        using var h = new JunctionPayloadHarness();
+        var tag = await h.CreateTagAsync("t");
+        var child = await h.CreateChildAsync("a", new object[] { new { id = tag, label = "L" } });
+        var p = await h.CreateParentAsync(new object[] { new { id = child, note = "x" } });
+
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["children"] = new DeepRelationSpec(null, null, Deep("tags"))
+        });
+
+        var item = await h.Service.GetAsync("jpParent", p.ToString(), deep);
+        var childRow = ((IReadOnlyList<object?>)item!["children"]!).Cast<IReadOnlyDictionary<string, object?>>().Single();
+        ((IReadOnlyDictionary<string, object?>)childRow["_junction"]!)["note"].Should().Be("x");
+        var tagRow = ((IReadOnlyList<object?>)childRow["tags"]!).Cast<IReadOnlyDictionary<string, object?>>().Single();
+        ((IReadOnlyDictionary<string, object?>)tagRow["_junction"]!)["label"].Should().Be("L");
+    }
+
+    [Fact]
+    public async Task Nested_junction_is_omitted_when_only_the_nested_junction_is_unreadable()
+    {
+        using var h = new JunctionPayloadHarness(new NoChildLinkRead());
+        var tag = await h.CreateTagAsync("t");
+        var child = await h.CreateChildAsync("a", new object[] { new { id = tag, label = "L" } });
+        var p = await h.CreateParentAsync(new object[] { new { id = child, note = "x" } });
+
+        var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["children"] = new DeepRelationSpec(null, null, Deep("tags"))
+        });
+
+        var item = await h.Service.GetAsync("jpParent", p.ToString(), deep);
+        var childRow = ((IReadOnlyList<object?>)item!["children"]!).Cast<IReadOnlyDictionary<string, object?>>().Single();
+        ((IReadOnlyDictionary<string, object?>)childRow["_junction"]!)["note"].Should().Be("x", "the parent-level junction (jpLink) is still readable");
+        var tagRow = ((IReadOnlyList<object?>)childRow["tags"]!).Cast<IReadOnlyDictionary<string, object?>>().Single();
+        tagRow["name"].Should().Be("t", "the target itself is still readable");
+        tagRow.Should().NotContainKey("_junction");
+    }
+
     [Fact]
     public async Task List_query_with_deep_carries_junction_per_parent()
     {

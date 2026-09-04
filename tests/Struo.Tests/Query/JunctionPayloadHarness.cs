@@ -49,6 +49,20 @@ public sealed class JpChild : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)] public string Name { get; set; } = "";
+    /// <summary>A second, deeper payload junction (child -&gt; tag) so a nested `deep` under `children`
+    /// exercises `_junction` projection/omission at depth 2, not just the top level.</summary>
+    [Navigate(typeof(JpChildLink), nameof(JpChildLink.JpChildId), nameof(JpChildLink.JpTagId))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
+    [SugarColumn(IsIgnore = true)]
+    public List<JpTag> Tags { get; set; } = [];
+}
+
+[SugarTable("jp_tags")]
+[CmsCollection("Jp tag")]
+public sealed class JpTag : AuditableEntity
+{
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+    [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)] public string Name { get; set; } = "";
 }
 
 [SugarTable("jp_links")]
@@ -70,6 +84,17 @@ public sealed class JpPlainLink
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
     public Guid JpParentId { get; set; }
     public Guid JpChildId { get; set; }
+}
+
+/// <summary>Nested-under-child payload junction (see <see cref="JpChild.Tags"/>).</summary>
+[SugarTable("jp_child_links")]
+[CmsCollection("Jp child link", Hidden = true)]
+public sealed class JpChildLink
+{
+    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    [CmsField(Label = "Child", Interface = FieldInterface.Uuid)] public Guid JpChildId { get; set; }
+    [CmsField(Label = "Tag", Interface = FieldInterface.Uuid)] public Guid JpTagId { get; set; }
+    [SugarColumn(IsNullable = true)] [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string? Label { get; set; }
 }
 
 /// <summary>A payload junction whose collection is <c>AdminOnly</c> — proves that an object element on
@@ -112,16 +137,22 @@ public sealed class JunctionPayloadHarness : IDisposable
         Db.CodeFirst.InitTables<JpLink>();
         Db.CodeFirst.InitTables<JpPlainLink>();
         Db.CodeFirst.InitTables<JpAdminLink>();
+        Db.CodeFirst.InitTables<JpTag>();
+        Db.CodeFirst.InitTables<JpChildLink>();
         LanguageSeeder.SeedAsync(Db).GetAwaiter().GetResult();
 
-        var types = new[] { typeof(JpParent), typeof(JpChild), typeof(JpLink), typeof(JpPlainLink), typeof(JpAdminLink) };
+        var types = new[]
+        {
+            typeof(JpParent), typeof(JpChild), typeof(JpLink), typeof(JpPlainLink), typeof(JpAdminLink),
+            typeof(JpTag), typeof(JpChildLink),
+        };
         var collections = MetadataScanner.ScanTypes(types);
         Metadata = new CachedMetadataProvider(collections);
         Registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["jpParent"] = typeof(JpParent), ["jpChild"] = typeof(JpChild), ["jpLink"] = typeof(JpLink),
-            ["jpAdminLink"] = typeof(JpAdminLink),
+            ["jpAdminLink"] = typeof(JpAdminLink), ["jpTag"] = typeof(JpTag), ["jpChildLink"] = typeof(JpChildLink),
         };
         Graph = new RelationshipGraph(collections, collectionTypes);
         var options = new StruoQueryOptions();
@@ -144,11 +175,15 @@ public sealed class JunctionPayloadHarness : IDisposable
         return doc.RootElement.Clone();
     }
 
-    public async Task<Guid> CreateChildAsync(string name) =>
-        Guid.Parse((await Service.CreateAsync("jpChild", Body(new { name })))["id"]!.ToString()!);
+    public async Task<Guid> CreateChildAsync(string name, object? tags = null) =>
+        Guid.Parse((await Service.CreateAsync(
+            "jpChild", Body(tags is null ? new { name } : new { name, tags })))["id"]!.ToString()!);
 
     public async Task<Guid> CreateParentAsync(object children) =>
         Guid.Parse((await Service.CreateAsync("jpParent", Body(new { name = "p", children })))["id"]!.ToString()!);
+
+    public async Task<Guid> CreateTagAsync(string name) =>
+        Guid.Parse((await Service.CreateAsync("jpTag", Body(new { name })))["id"]!.ToString()!);
 
     public List<JpLink> Links(Guid parentId) =>
         Db.Queryable<JpLink>().Where(l => l.JpParentId == parentId).OrderBy(l => l.Sort).ToList();
