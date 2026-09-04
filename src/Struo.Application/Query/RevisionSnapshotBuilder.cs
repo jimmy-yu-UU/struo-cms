@@ -11,7 +11,8 @@ namespace Struo.Application.Query;
 /// Assembles a canonical, revert-capable JSON snapshot of an item's post-write state. Unlike
 /// the read projection (<c>ItemService.Project</c>), it (a) applies NO RBAC field filtering — a snapshot
 /// must capture the whole item regardless of the writer's field grants — and (b) includes M2O foreign-key
-/// ids and M2M relation id arrays, so the result is exactly the shape <c>ItemService.UpdateAsync</c>
+/// ids and M2M relations (bare-id arrays, or objects carrying junction payload), so the result is
+/// exactly the shape <c>ItemService.UpdateAsync</c>
 /// consumes and revert round-trips through the normal write path.
 /// <para>
 /// The omission of RBAC/hidden-field filtering here is deliberate: a revert must be able to restore
@@ -67,7 +68,11 @@ public sealed class RevisionSnapshotBuilder(
             snap[rel.ForeignKey] = d.Properties.GetValueOrDefault(rel.ForeignKey)?.GetValue(entity);
         }
 
-        // (3) M2M relations as ordered id arrays under the relation name (e.g. "tags": ["<id>", ...]).
+        // (3) M2M relations under the relation name (e.g. "tags"). A plain relation snapshots as an
+        //     ordered bare-id array (["<id>", ...]); a payload-bearing relation snapshots as ordered
+        //     objects ({ "id": <targetId>, ...payload }), including Hidden payload fields — the stored
+        //     snapshot must be full-fidelity so RevertAsync can restore them; redaction happens only on
+        //     the external read path (see RevisionSnapshotRedactor).
         foreach (var desc in m2mSource.M2MDescriptors(collection))
         {
             var junctions = await repository.QueryEntityWhereInAsync(
@@ -75,9 +80,14 @@ public sealed class RevisionSnapshotBuilder(
             var ordered = desc.SortProperty is null
                 ? junctions
                 : junctions.OrderBy(j => ReadProp(j, desc.SortProperty)).ToList();
-            snap[desc.RelationName] = ordered
-                .Select(j => ReadProp(j, desc.TargetFkProperty))
-                .ToList();
+            snap[desc.RelationName] = desc.HasPayload
+                ? ordered.Select(j =>
+                  {
+                      var o = new Dictionary<string, object?>(StringComparer.Ordinal) { ["id"] = ReadProp(j, desc.TargetFkProperty) };
+                      foreach (var f in desc.JunctionPayload!) o[f.Name] = ReadProp(j, f.Property);
+                      return (object?)o;
+                  }).ToList()
+                : ordered.Select(j => ReadProp(j, desc.TargetFkProperty)).ToList();
         }
 
         // (4) All-locale translations: { locale: { camelField: rawValue } }. Image/file fields stay
