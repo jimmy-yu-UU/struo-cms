@@ -230,6 +230,17 @@ internal static class FakeMetadataFixtures
                 TargetCollection = "child", Interface = RelationInterface.TagSelect,
                 DisplayTemplate = "{Name}",
             },
+            // HasPayload=true (JunctionPayload has one entry) but that entry is Hidden — the
+            // CRITICAL regression fixture: a zero-EXPOSABLE-field junction must not emit a
+            // zero-field <Rel>Junction (HotChocolate rejects that at schema-build time), so this
+            // relation must get NONE of the additive Link/Junction/Links/LinkInput artefacts,
+            // exactly like a payload-free relation.
+            new RelationMetadata
+            {
+                Name = "secretChildren", Label = "Secret Children", Kind = RelationKind.ManyToMany,
+                TargetCollection = "child", Interface = RelationInterface.TagSelect,
+                DisplayTemplate = "{Name}",
+            },
         ],
     };
 
@@ -244,6 +255,18 @@ internal static class FakeMetadataFixtures
             {
                 Name = "name", Label = "Name", Interface = FieldInterface.Text,
                 Required = true, Sort = 1,
+            },
+        ],
+        // A payload-free M2M relation so `childrenLinks { node { tags { name } } }` has a real
+        // relation to nest into — proves BuildDeep recurses INTO node's own sub-selection (not
+        // just matching the top-level `childrenLinks` field itself).
+        Relations =
+        [
+            new RelationMetadata
+            {
+                Name = "tags", Label = "Tags", Kind = RelationKind.ManyToMany,
+                TargetCollection = "tag", Interface = RelationInterface.TagSelect,
+                DisplayTemplate = "{Name}",
             },
         ],
     };
@@ -268,6 +291,15 @@ internal static class FakeMetadataFixtures
             },
         ],
     };
+
+    // NOTE: deliberately NO CollectionMetadata for "parentSecretChild" is registered here (see
+    // FakeM2MDescriptorSource below) — it only needs to exist as a name on the M2MDescriptor for
+    // the CRITICAL regression fixture ("secretChildren", whose only JunctionPayloadField is
+    // Hidden). Registering it as a real collection whose only field is Hidden would itself produce
+    // a DIFFERENT zero-field object (a zero-writable-field ParentSecretChildCreateInput) — an
+    // unrelated crash this fixture must not also trigger. JunctionPayloadField.Hidden already short-
+    // circuits CollectionSchemaBuilder.ExposableJunctionFields before it would ever look the
+    // junction collection's metadata up, so no registration is needed for the scenario under test.
 
     // --- test POCOs: give FakeRegistry a real EntityType + FieldToProperty + IdProperty, and give
     // Number fields (width/height) a real CLR type (int) for SchemaTypeMapper/FilterInputTranslator
@@ -343,6 +375,17 @@ internal static class FakeMetadataFixtures
         public Guid ChildId { get; set; }
         public string? Note { get; set; }
         public string? Secret { get; set; }
+    }
+
+    // Exists purely to give M2MDescriptor.JunctionType (the "secretChildren" CRITICAL-fix
+    // fixture, below) a real CLR type — unreflected in practice, since its only payload field is
+    // Hidden and ExposableJunctionFields short-circuits before ever reaching JunctionType.GetProperty.
+    private sealed class ParentSecretChildPoco
+    {
+        public Guid Id { get; set; }
+        public Guid ParentId { get; set; }
+        public Guid ChildId { get; set; }
+        public string? OnlyHidden { get; set; }
     }
 
     private sealed class FakeProvider(IReadOnlyList<CollectionMetadata> all) : IMetadataProvider
@@ -429,16 +472,23 @@ internal static class FakeMetadataFixtures
                         ["secret"] = "Secret",
                     },
                     "Id"),
+                // No "parentSecretChild" entry: that collection is deliberately not registered
+                // with FakeProvider either (see the NOTE above Parent()'s M2M relations) — the
+                // registry lookup path is exercised by "parentChild" above.
             };
 
         public EntityDescriptor? Get(string collection) =>
             ByCollection.TryGetValue(collection, out var d) ? d : null;
     }
 
-    // IM2MDescriptorSource fake: only "parent" carries an M2M descriptor, and only for "children"
-    // (the payload relation) — "plainChildren" deliberately has none, so
-    // CollectionSchemaBuilder's `payloadRelations.FirstOrDefault(...)` lookup misses for it and no
+    // IM2MDescriptorSource fake: only "parent" carries M2M descriptors, and only "children" and
+    // "secretChildren" have one (HasPayload=true) — "plainChildren" deliberately has none, so
+    // CollectionSchemaBuilder's `DescriptorFor(...)` lookup misses for it and no
     // Link/Junction/LinkInput types are generated (the payload-free-relation pin).
+    // "secretChildren"'s HasPayload=true but its only JunctionPayload entry is Hidden — the
+    // CRITICAL regression fixture: ExposableJunctionFields(descriptor) must be empty for it too,
+    // so it must ALSO get none of the additive artefacts (a zero-field <Rel>Junction would
+    // otherwise abort the whole schema build).
     private sealed class FakeM2MDescriptorSource : IM2MDescriptorSource
     {
         private static readonly IReadOnlyList<M2MDescriptor> ParentDescriptors =
@@ -455,6 +505,18 @@ internal static class FakeMetadataFixtures
                 [
                     new JunctionPayloadField("note", "Note", Hidden: false),
                     new JunctionPayloadField("secret", "Secret", Hidden: true),
+                ]),
+            new M2MDescriptor(
+                RelationName: "secretChildren",
+                TargetCollection: "child",
+                JunctionType: typeof(ParentSecretChildPoco),
+                ParentFkProperty: "ParentId",
+                TargetFkProperty: "ChildId",
+                SortProperty: null,
+                JunctionCollection: "parentSecretChild",
+                JunctionPayload:
+                [
+                    new JunctionPayloadField("onlyHidden", "OnlyHidden", Hidden: true),
                 ]),
         ];
 
