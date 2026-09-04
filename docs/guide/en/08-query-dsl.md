@@ -248,7 +248,8 @@ graph (chapter 7): an unresolvable relation segment, an unresolvable leaf field 
 collection, and a path exceeding the 6-hop depth cap are each rejected with their own precise
 message — all three live-verified in chapter 7. `fields=` additionally disallows relation paths
 entirely (`allowRelation: false`) — projection only ever selects a collection's own scalar fields,
-never a nested relation's.
+never a nested relation's. Combining several conditions on the same to-many relation path is
+each-exists, not same-row — see [chapter 7](07-relations.md#relation-filtering-across-dotted-paths).
 
 A read grant does not travel across a relation hop. Every collection a dotted path traverses needs
 its own read permission, so a role granted `article` but not `user` cannot reach user rows through
