@@ -142,6 +142,11 @@ applies to it. `[Navigate(typeof(JunctionType), parentFkName, targetFkName)]` on
 collection's list property is what the scanner needs to resolve a junction's shape either way — the
 junction type itself carries no `[CmsRelation]`.
 
+Every junction type — payload-bearing or bare — must declare exactly one `[SugarColumn(IsPrimaryKey =
+true)]` property: the many-to-many sync updates existing junction rows by that primary key, so a
+junction with a composite key or no key at all fails fast at startup with a `MetadataException` rather
+than throwing on the first write.
+
 ### Junction payload
 
 When a junction type *also* carries `[CmsCollection]` it becomes what this manual calls a **junction

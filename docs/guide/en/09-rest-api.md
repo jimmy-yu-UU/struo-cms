@@ -347,7 +347,10 @@ requires the caller to hold the **write** grant on the junction collection itsel
 is `AdminOnly`, to be a super-admin) — checked before any payload is parsed, so a caller lacking that
 grant gets `403 FORBIDDEN` (`"Write to '{junction}' not permitted."`, or `"Writes to '{junction}'
 require a super-admin."`) rather than a validation error about the payload's own fields. A bare id
-needs only the parent collection's ordinary write grant, exactly as before this feature. Illustrative
+needs only the parent collection's ordinary write grant, exactly as before this feature. This same
+gate applies to `.../revisions/{n}/revert` (chapter 13) whenever the reverted-to snapshot carries
+junction payload — a revert re-applies `[{id, ...payload}]` elements exactly like a direct write, so it
+also requires the junction collection's write grant, not just the parent's. Illustrative
 mixed-array body against the sample's `article` (`Article.Tags`, chapter 16 — `Note` is `ArticleTag`'s
 payload field):
 

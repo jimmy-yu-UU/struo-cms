@@ -191,6 +191,12 @@ against a database created before this feature existed, the two new columns (`no
 `db/migrations` is core-only and never ships sample-collection schema (this chapter's own
 sample-removal checklist, below, notes the same boundary for the sample's tables generally).
 
+Because `ArticleTag` is a `[CmsCollection]` in its own right, it is also fully reachable through the
+generic CRUD/GraphQL surface on the junction table itself (`articleTag`, not just through
+`Article.Tags`) — and it declares no unique index on `(ArticleId, TagId)`, so a direct write through
+that surface can create a duplicate pair; the next save of the owning article repairs it (the
+lowest-PK row is kept, the rest deleted, and a warning is logged — `ManyToManySync`, chapter 7).
+
 ### `Category.cs` — many-to-one with a self-referencing tree
 
 ```csharp

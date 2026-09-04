@@ -219,6 +219,11 @@ $ docker exec struo-postgres psql -U struo -d struo -c \
 - 一次還原就其他任何目的而言，**就是**一次普通的寫入：它會經過相同的 `CanWrite`(若為 `AdminOnly` 則
   另需超級管理員)檢查、相同的樂觀並行控制機制，並產生與任何其他更新相同的 `200`(附帶更新後項目)回應
   形狀。
+- 若被還原的快照帶有多對多 junction payload(第 7 章)，還原會像一般 payload 寫入一樣重新套用
+  `[{id, ...payload}]` 元素，因此也需要該 junction collection 自己的寫入授權(若該 junction 是
+  `AdminOnly`，還需要超級管理員身分)——詳見第 9 章。一個只擁有父集合寫入授權、但沒有 junction
+  寫入授權的角色，對這樣的還原會得到 `403`；要讓某個角色能還原帶有 junction payload 的父項，
+  就必須額外把該 junction collection 也授權給它。
 - 在一次還原期間的多對多同步，**能夠容忍**一列自快照擷取以來已被移入回收桶的目標資料列
   (`includeDeleted: operation == "revert"`，位於 `UpdateCoreAsync`，
   `src/Struo.Application/Query/ItemService.cs`)——其他每一條寫入路徑對此都維持嚴格。因此一次還原到
