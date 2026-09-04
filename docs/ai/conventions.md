@@ -166,6 +166,29 @@ Oracle database fails `InitTables` outright on a type name that only exists on P
 `[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go through `[ColumnShape]`
 instead.
 
+## Translation sidecar unique index
+
+A translation sidecar's `(fk, locale)` UNIQUE index — the constraint that keeps at most one translation
+row per parent per locale — is **derived, not declared**. Nothing on `FileTranslation` or
+`Struo.Sample.Blog.ArticleTranslation` names the pair; the same `EntityService` hook that widens `IsJson`
+columns reads each sidecar's `[CmsTranslations(typeof(T))]` metadata via `TranslationSidecarIndexPolicy`
+(`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`) and stamps the resolved group
+name onto the foreign-key and locale columns' `SugarColumn.UIndexGroupNameList` before `InitTables` reads
+it, so CodeFirst emits the composite `UNIQUE` on table creation with no attribute on the entity at all.
+
+`SqlSugarClientFactory.Create` takes the policy as an optional third parameter defaulting to
+`TranslationSidecarIndexPolicy.None` (no sidecars, no uniques). `AddStruoInfrastructure`
+(`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`) registers the real policy
+as a singleton built from `IMetadataProvider.GetCollections()` and resolves it into the `ISqlSugarClient`
+factory registration, so any host going through DI gets the derivation for free. A fork that constructs
+`SqlSugarClientFactory.Create` itself — bypassing `AddStruoInfrastructure`'s registration, or calling it
+outside DI entirely — must pass `TranslationSidecarIndexPolicy.FromMetadata(metadata.GetCollections())`
+explicitly; omitting it silently falls back to `None` and every sidecar table comes up with no unique
+index at all, not an error at that point. `SchemaGuard.AssertCriticalConstraintsAsync`
+(`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`), run at Development startup, is what actually
+catches the gap: it re-checks each sidecar table for a UNIQUE index covering its `(fk, locale)` columns
+by uniqueness and column coverage, not by name, and throws with an actionable message if one is missing.
+
 ## File organization
 
 Both `Struo.Application` and `Struo.Infrastructure` are organized **by feature area**, not by technical

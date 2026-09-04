@@ -82,9 +82,11 @@ public List<FileTranslation> Translations { get; set; } = [];
 public sealed class FileTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
+    // FileId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
+    // this table's [CmsTranslations] metadata through TranslationSidecarIndexPolicy and adds the
+    // composite unique (fileid, locale) to the generated column model at CodeFirst time.
+    // SchemaGuard.AssertCriticalConstraintsAsync re-checks the resulting index in Development.
     public Guid FileId { get; set; }
-    [SugarColumn(UniqueGroupNameList = ["ux_file_translations_fk_locale"])]
     public string Locale { get; set; } = "";
 
     [SugarColumn(IsNullable = true)]
@@ -99,9 +101,17 @@ public sealed class FileTranslation
 `MetadataScanner` derives `TranslationMetadata` (`src/Struo.Domain/Metadata/Models/TranslationMetadata.cs`)
 from this pair: `ForeignKeyProperty` (the scanner's convention is `{ParentTypeName}Id`, so `FileId`
 for `File`), `LocaleProperty` (`Locale`), and `Fields` (the camelCase names of the sidecar's own
-`[CmsField]`s — here, `title` and `alt`). The composite `UniqueGroupNameList` on `FileId`+`Locale`
-is what guarantees at most one translation row per parent per locale — the same mechanism
-`Revision` (`src/Struo.Infrastructure/Revisions/Revision.cs`) uses for its own composite unique key.
+`[CmsField]`s — here, `title` and `alt`). The composite unique on `FileId`+`Locale` that guarantees at
+most one translation row per parent per locale is not declared on the entity at all: it is derived by
+`SqlSugarClientFactory`'s `EntityService` hook from this same `[CmsTranslations]` metadata, via
+`TranslationSidecarIndexPolicy` (`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`),
+which stamps the resolved group name onto the two key columns before `InitTables` reads them. A fork's
+own sidecar gets the index for free the same way, purely by carrying `[CmsTranslations(typeof(...))]`
+on a new CodeFirst table — nothing to write on the sidecar entity itself. An *existing* sidecar table
+that predates this mechanism does not gain the index retroactively; that needs a reviewed migration
+under `db/migrations/`, the same as any other constraint added to a live table. `SchemaGuard`
+(`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) verifies the index is actually present at
+Development startup, for every sidecar the running configuration has.
 
 A field's `MaxLength` behavior on a translation sidecar follows chapter 5's rules exactly, applied
 per-locale by `FieldValueRules.CheckMaxLengthTranslation`; the only difference from a parent-row
