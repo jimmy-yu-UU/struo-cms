@@ -312,6 +312,52 @@ $ curl -s -X PUT http://localhost:5221/api/items/file/<id> -H "Content-Type: app
 與 `PUT` 共用同一份允許清單，因此建立請求無法設定客戶端指定的 id，也無法竄改樂觀並行控制版本號，
 就跟更新請求做不到一樣。
 
+### Many-to-many 寫入形狀:純 id 與 junction payload
+
+一個 many-to-many 關聯的陣列 (`"tags": [...]`) 接受**混合清單**：陣列中每個元素，可以是一個純
+id，也可以是 (對於 junction 帶有 payload 的關聯，第 7 章) 一個帶著 `id` 加上 payload 欄位值的
+物件。`ItemWriteSideSync.SyncM2MAsync`
+(`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`) 在同步之前，會把陣列合併成一份依 id
+索引、有順序的連結清單，遵循以下三條規則:
+
+- **純 id** 只代表成員關係——目標會被連結 (或維持連結)，其 junction 資料列上任何既有的
+  payload 都不受影響。
+- **物件** (`{ "id": ..., "<payloadField>": ... }`) 代表成員關係，*加上*把它點名的 payload
+  欄位合併進 junction 資料列——物件沒提到的欄位維持原值。當同一個 id 在陣列中出現超過一次時，
+  物件永遠勝過純 id (不論物件出現在前或在後)，而在兩個物件之間，後出現的那個勝出——它是
+  **取代**而非合併前一個物件的 payload。
+- **陣列中第一次出現的順序**就是排序順序 (若該關聯宣告了 `SortField`)，無論最終是哪個重複的
+  id 勝出。
+
+payload 物件裡不認得的鍵一律被忽略，若呼叫端在 payload 部分放進 junction 自己的外鍵、排序或
+`id` 相關的結構性鍵，同樣會被忽略——只有該關聯宣告過的 payload 欄位 (第 7 章) 才會被真正合併
+進去。帶 payload 的元素，還額外要求呼叫端持有該 junction collection 本身的**寫入**授權 (若
+該 junction 是 `AdminOnly`，還要求超級管理員身分)——這項檢查會在解析任何 payload 之前先執行，
+所以缺乏該授權的呼叫端得到的是 `403 FORBIDDEN` (`"Write to '{junction}' not permitted."`，或
+`"Writes to '{junction}' require a super-admin."`)，而不是關於 payload 自身欄位的驗證錯誤。
+純 id 則只需要父集合原本的寫入授權，跟這個功能出現之前一樣。針對範例 `article`
+(`Article.Tags`，第 16 章——`Note` 是 `ArticleTag` 的 payload 欄位) 的示意混合陣列請求本文:
+
+```json
+{
+  "tags": [
+    "<tag-id-1>",
+    { "id": "<tag-id-2>", "note": "editor pick" }
+  ]
+}
+```
+
+`<tag-id-1>` 會被連結，其既有 payload 不受影響 (若是新連結，則維持預設值);`<tag-id-2>` 會被
+連結，且其 junction 資料列的 `note` 欄位會被設為 `"editor pick"`。
+
+junction 資料列本身，現在能撐過一次重新同步:`ManyToManySync`
+(`src/Struo.Infrastructure/Query/ManyToManySync.cs`) 會把傳入的連結清單，與該父項目前已儲存的
+資料做差異比對——刪除不再存在的目標的資料列、插入新增目標的資料列、就地更新維持不變的目標的
+資料列——而不是這個同步機制較早版本那種「全部刪除、全部重新插入」的做法;維持連結狀態的目標，
+其 junction 資料列自身的主鍵因此保持穩定，這對任何以 id 參照 junction 資料列的東西都很重要
+(若既有資料留下同一組 `(parent, target)` 的重複資料列——來自這個行為存在之前寫入的資料——下次
+該父項同步時，會被收斂成主鍵最小的那一列，並記一筆警告)。
+
 ## 端點參考，依 controller 分類
 
 下方的「必要權限」永遠是指 `ItemService`/`FileAccessPolicy` 所檢查的逐集合 RBAC 授權
