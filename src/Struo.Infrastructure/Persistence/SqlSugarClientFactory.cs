@@ -135,6 +135,27 @@ public static class SqlSugarClientFactory
                         return;
                     }
 
+                    // A property that carries only a bare [SugarColumn(IsJson = true)] — no
+                    // [CmsField] interface in JsonColumnInterfaces above, no [ColumnShape] — still
+                    // needs widening, but column.DataType cannot be the test for "nothing has
+                    // claimed this column yet": SqlSugar's own attribute processing already stamps
+                    // an IsJson column with its own default length (observed varchar(4000) here on
+                    // SQLite, varchar(1) on PostgreSQL) before this hook ever runs, so DataType is
+                    // never actually empty at this point. Reading the property's own [SugarColumn]
+                    // ColumnDataType instead — the same pattern the content-bearing branch below
+                    // uses — tells the two cases apart: an unset attribute means SqlSugar's
+                    // untouched default and gets widened to LongText (otherwise PostgreSQL keeps a
+                    // short varchar and every real write fails with 22001); a fork's own explicit
+                    // ColumnDataType is left exactly as SqlSugar already applied it.
+                    if (column.IsJson)
+                    {
+                        var explicitJsonDataType = property.GetCustomAttribute<SugarColumn>()?.ColumnDataType;
+                        if (string.IsNullOrEmpty(explicitJsonDataType))
+                        {
+                            column.DataType = ColumnTypeMap.For(ColumnShape.LongText, dbType);
+                        }
+                    }
+
                     // Multi-value fields (List<string> / List<TagItem>) always map to a JSON column —
                     // it's the only valid mapping for a List<> property. An explicit
                     // [SugarColumn(IsJson = true)] on the same property is redundant but compatible.
