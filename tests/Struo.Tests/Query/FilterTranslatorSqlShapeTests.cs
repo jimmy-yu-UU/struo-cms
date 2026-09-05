@@ -287,4 +287,27 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         sql.Should().MatchRegex(@"IN \(SELECT [\s\S]*sq_product_labels[\s\S]* IN \(SELECT [\s\S]*sq_labels");
         sql.Should().NotContain("SqlSugar.");
     }
+
+    // Two subquery-wrapped OR children (an M2O dotted path and an M2M dotted path — different compare
+    // columns) must merge into ONE OrOfSubqueriesConditional entry, not two adjacent custom entries in
+    // the same ConditionalCollections (the SqlSugar defect FilterTranslator.OrGroup exists to dodge).
+    [Fact]
+    public void Or_of_two_subqueries_merges_into_one_conditional_with_distinct_parameters()
+    {
+        using var h = new SubqueryPushdownHarness();
+        var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
+        var filter = new LogicalFilter(LogicalOperator.Or,
+        [
+            new ComparisonFilter("category.name", QueryOperator.Eq, "Tech"),
+            new ComparisonFilter("labels.name", QueryOperator.Eq, "Misc"),
+        ]);
+        var conds = t.Translate("sqProduct", filter, null, [], null);
+        var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql();
+
+        // Exactly one OR between two "IN (SELECT" fragments, inside one pair of parentheses.
+        sql.Key.Should().MatchRegex(@"\(\s*\S+\s+IN\s+\(SELECT[\s\S]*?\)\s+OR\s+\S+\s+IN\s+\(SELECT[\s\S]*?\)\s*\)");
+        // None of the doubled-keyword signatures the underlying SqlSugar defect produces.
+        sql.Key.Should().NotContain("AND  AND").And.NotContain("OR  OR").And.NotContain("OR  AND").And.NotContain("AND  OR");
+        sql.Value.Select(p => p.ParameterName).Should().OnlyHaveUniqueItems();
+    }
 }

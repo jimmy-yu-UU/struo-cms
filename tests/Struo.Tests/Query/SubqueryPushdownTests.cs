@@ -104,6 +104,33 @@ public class SubqueryPushdownTests : IDisposable
     }
 
     [Fact]
+    public async Task Or_over_two_relation_conditions_composes()
+    {
+        var (cross, same, noProps, noCat) = _h.SeedEav();
+        var some = await _h.QueryIdsAsync(Or(Some("labels", Eq("name", "Guide")), Eq("category.name", "Archive")));
+        some.Should().BeEquivalentTo([cross, same]);
+        var none = await _h.QueryIdsAsync(Or(None("labels", Eq("name", "Guide")), Eq("category.name", "Archive")));
+        none.Should().BeEquivalentTo([same, noProps, noCat]);
+    }
+
+    [Fact]
+    public async Task Or_over_three_children_mixing_scalar_and_two_subqueries()
+    {
+        var (cross, same, _, noCat) = _h.SeedEav();
+        var ids = await _h.QueryIdsAsync(Or(
+            Eq("name", "nocat"), Some("properties", Gte("valueNum", 100)), Eq("labels._junction.note", "plain")));
+        ids.Should().BeEquivalentTo([noCat, cross, same]);
+    }
+
+    [Fact]
+    public async Task Or_whose_children_are_all_subqueries()
+    {
+        var (cross, same, noProps, _) = _h.SeedEav();
+        var ids = await _h.QueryIdsAsync(Or(Eq("category.name", "Tech"), Eq("labels.name", "Misc")));
+        ids.Should().BeEquivalentTo([cross, noProps, same]);
+    }
+
+    [Fact]
     public async Task Dotted_path_inside_a_predicate_inner()
     {
         var (_, same, _, _) = _h.SeedEav();
