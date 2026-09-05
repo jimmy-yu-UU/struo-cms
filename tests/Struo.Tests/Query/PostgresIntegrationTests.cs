@@ -322,13 +322,50 @@ public sealed class PostgresIntegrationTests : IDisposable
 
         var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
         var sub = _db.Queryable<Category>()
-            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.In, FieldValue = "PgProbe O'Brien" } })
+            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgProbe O'Brien" } })
             .Select(sel).ToSql();
         var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
         var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { SubQueryConditional.Wrap(SubQueryKind.In, col, sub) });
 
         q.ToSql().Key.Should().NotContain("N'");
         (await q.ToListAsync()).Should().ContainSingle().Which.CategoryId.Should().Be(cat.Id);
+    }
+
+    // U3 primitive probe: reproduces the exact collision the fix targets, on real Postgres. An outer
+    // ConditionalModel and an inner (wrapped) subquery both filter Category.Name at conditional-list
+    // index 0, so SqlSugar independently assigns the SAME generated parameter name to both before
+    // SubQueryConditional renames the inner one. Categories only — no Article needed for this case.
+    [Fact]
+    public async Task Subquery_conditional_parameters_do_not_collide_on_postgres()
+    {
+        if (!PgConfigured) return;
+        BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
+
+        var tech = new Category { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
+        var news = new Category { Id = Guid.NewGuid(), Name = "PgCollide News" };
+        var other = new Category { Id = Guid.NewGuid(), Name = "PgCollide Other" };
+        _db!.Insertable(new[] { tech, news, other }).ExecuteCommand();
+
+        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+        var innerSub = _db.Queryable<Category>()
+            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgCollide News" } })
+            .Select(sel).ToSql();
+        var innerWrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSub);
+
+        var group = new ConditionalCollections
+        {
+            ConditionalList =
+            [
+                new(WhereType.Or, new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgCollide Tech" }),
+                new(WhereType.Or, innerWrapped),
+            ]
+        };
+        var q = _db.Queryable<Category>().Where(new List<IConditionalModel> { group });
+
+        q.ToSql().Key.Should().NotContain("N'");
+        var rows = await q.ToListAsync();
+        rows.Select(c => c.Name).Should().BeEquivalentTo(["PgCollide Tech", "PgCollide News"]);
     }
 
     // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
