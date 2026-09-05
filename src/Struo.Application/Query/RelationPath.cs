@@ -71,7 +71,7 @@ public sealed class RelationPath
 
         var junctionIdx = Array.IndexOf(parts, FilterReservedTokens.Junction);
         if (junctionIdx >= 0)
-            return ParseJunctionLeaf(rootCollection, path, parts, junctionIdx, graph, metadata, maxDepth, reportedMaxDepth);
+            return ParseJunctionLeaf(new ParseContext(rootCollection, path, parts, graph, metadata), junctionIdx, maxDepth, reportedMaxDepth);
 
         var relCount = parts.Length - 1;          // last part is the leaf field
         if (relCount > maxDepth)
@@ -116,33 +116,38 @@ public sealed class RelationPath
         return new RelationPath(segments, string.Empty, current, isJunctionLeaf: false, junctionCollection: null);
     }
 
-    private static RelationPath ParseJunctionLeaf(
-        string rootCollection, string path, string[] parts, int junctionIdx,
-        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth, int configuredMaxDepth)
+    // Bundles the inputs shared by every path-parsing helper below (root collection, raw path, its
+    // dotted parts, and the graph/metadata to resolve segments and leaves against) into one value, so
+    // that helpers needing several of them plus their own numeric parameters stay within the
+    // parameter-count limit without changing behaviour.
+    private readonly record struct ParseContext(
+        string RootCollection, string Path, string[] Parts, IRelationshipGraph Graph, IMetadataProvider Metadata);
+
+    private static RelationPath ParseJunctionLeaf(ParseContext ctx, int junctionIdx, int maxDepth, int configuredMaxDepth)
     {
-        if (junctionIdx != parts.Length - 2)
-            throw new QueryException($"'{path}': '_junction' must be followed by exactly one junction field.");
+        if (junctionIdx != ctx.Parts.Length - 2)
+            throw new QueryException($"'{ctx.Path}': '_junction' must be followed by exactly one junction field.");
 
         var relCount = junctionIdx;               // hops before "_junction"; the leaf does not count
         if (relCount > maxDepth)
             throw new QueryException(
-                $"Relation path '{path}' exceeds the maximum depth of {configuredMaxDepth}.");
+                $"Relation path '{ctx.Path}' exceeds the maximum depth of {configuredMaxDepth}.");
 
-        var (segments, _) = WalkSegments(rootCollection, parts, relCount, graph, path);
+        var (segments, _) = WalkSegments(ctx.RootCollection, ctx.Parts, relCount, ctx.Graph, ctx.Path);
         var lastRelation = relCount > 0 ? segments[^1].Relation : null;
         if (lastRelation is null || lastRelation.Kind != RelationKind.ManyToMany || lastRelation.JunctionCollection is null)
             throw new QueryException(
-                $"'{path}': '_junction' is only valid after a many-to-many relation with a junction collection.");
+                $"'{ctx.Path}': '_junction' is only valid after a many-to-many relation with a junction collection.");
 
         var junctionCollection = lastRelation.JunctionCollection;
-        var junctionMeta = metadata.GetCollection(junctionCollection)
-            ?? throw new QueryException($"Unknown collection '{junctionCollection}' in path '{path}'.");
+        var junctionMeta = ctx.Metadata.GetCollection(junctionCollection)
+            ?? throw new QueryException($"Unknown collection '{junctionCollection}' in path '{ctx.Path}'.");
 
-        var leaf = parts[^1];
+        var leaf = ctx.Parts[^1];
         var leafKnown = junctionMeta.Fields.Any(f => !f.Hidden && string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
         if (!leafKnown)
             throw new QueryException(
-                $"Unknown field '{leaf}' on collection '{junctionCollection}' in path '{path}'.");
+                $"Unknown field '{leaf}' on collection '{junctionCollection}' in path '{ctx.Path}'.");
 
         return new RelationPath(segments, leaf, junctionCollection, isJunctionLeaf: true, junctionCollection: junctionCollection);
     }

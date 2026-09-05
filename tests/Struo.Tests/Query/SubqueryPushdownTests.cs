@@ -8,7 +8,12 @@ namespace Struo.Tests.Query;
 public class SubqueryPushdownTests : IDisposable
 {
     private readonly SubqueryPushdownHarness _h = new();
-    public void Dispose() => _h.Dispose();
+
+    public void Dispose()
+    {
+        _h.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private static ComparisonFilter Eq(string p, object v) => new(p, QueryOperator.Eq, v);
     private static ComparisonFilter Gte(string p, object v) => new(p, QueryOperator.Gte, v);

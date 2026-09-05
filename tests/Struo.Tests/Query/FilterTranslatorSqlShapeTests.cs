@@ -15,8 +15,13 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class FilterTranslatorSqlShapeTests : IDisposable
+public partial class FilterTranslatorSqlShapeTests : IDisposable
 {
+    // Source-generated regex (SYSLIB1045): matches the "sqN_" nesting-prefix SubQueryConditional
+    // allocates per Wrap() call (see Two_nesting_levels_compose_through_Wrap below).
+    [GeneratedRegex(@"sq(\d+)_")]
+    private static partial Regex SqPrefixRegex();
+
     private readonly SqliteTestDatabase _file = new();
     private readonly ISqlSugarClient _db;
 
@@ -30,7 +35,11 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         _db.CodeFirst.InitTables<ArticleTranslation>();
     }
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose()
+    {
+        _file.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     // A FilterTranslator wired over the sample Article/Category graph (Article.title lives on its
     // ArticleTranslation sidecar and is translatable; Article.status is a plain own field) — same
@@ -68,7 +77,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         var originalNames = sub.Value.Select(p => p.ParameterName).ToList();
         originalNames.Should().NotBeEmpty("Equal parameterizes its FieldValue, unlike In's literal inlining");
 
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, sub);
         var wrapped = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToSql();
 
@@ -95,7 +104,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
             new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
         }).ExecuteCommand();
 
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, CategoryIdsNamed("Tech"));
         var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond });
 
@@ -106,7 +115,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void Wrapped_subquery_inside_an_or_group_keeps_its_parentheses()
     {
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var group = new ConditionalCollections
         {
             ConditionalList =
@@ -122,7 +131,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void NullOrNotIn_renders_the_null_guard()
     {
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.NullOrNotIn, col, CategoryIdsNamed("Tech"));
         var sql = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToSql().Key;
         sql.Should().Contain($"({col} IS NULL OR {col} NOT IN (SELECT");
@@ -135,7 +144,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         _db.Insertable(cat).ExecuteCommand();
         _db.Insertable(new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = cat.Id }).ExecuteCommand();
 
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, CategoryIdsNamed("O'Brien"));
         var rows = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToList();
         rows.Should().ContainSingle();
@@ -155,7 +164,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         var news = new Category { Id = Guid.NewGuid(), Name = "News" };
         _db.Insertable(new[] { tech, news }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
 
         ConditionalModel OuterNameLeaf(string name) => new() { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name };
 
@@ -196,7 +205,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
             new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = tech.Id },
         }).ExecuteCommand();
 
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var sub = CategoryIdsNamed("Tech");
         var originalNames = sub.Value.Select(p => p.ParameterName).ToList();
 
@@ -245,8 +254,8 @@ public class FilterTranslatorSqlShapeTests : IDisposable
             new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
         }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
-        var categoryIdCol = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
+        var categoryIdCol = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
 
         // Level 2 (innermost): SELECT Id FROM categories WHERE Name = 'Tech'
         var level2Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("Tech"));
@@ -272,7 +281,7 @@ public class FilterTranslatorSqlShapeTests : IDisposable
 
         // Nested renaming keeps the inner prefix as a body substring (only the outermost "sqN_" keeps
         // its leading "@" — e.g. "@sq2_sq1_ConditName0"), so match "sqN_" without requiring "@" before it.
-        var prefixes = Regex.Matches(final.Key, @"sq(\d+)_").Select(m => m.Groups[1].Value).Distinct().ToList();
+        var prefixes = SqPrefixRegex().Matches(final.Key).Select(m => m.Groups[1].Value).Distinct().ToList();
         prefixes.Should().HaveCount(2, "two independent Wrap() calls (level2->level1, level1->outer) each allocate their own prefix");
 
         q.ToList().Should().ContainSingle().Which.CategoryId.Should().Be(tech.Id);

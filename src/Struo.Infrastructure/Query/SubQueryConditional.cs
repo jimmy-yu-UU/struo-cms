@@ -69,7 +69,8 @@ internal sealed class SubQueryConditional : ICustomConditionalFunc
             var source = sub.Value[i];
             var oldName = source.ParameterName; // e.g. "@ConditName0"
             var newName = $"@{prefix}{oldName.TrimStart('@')}"; // e.g. "@sq7_ConditName0"
-            sql = Regex.Replace(sql, Regex.Escape(oldName) + "(?![A-Za-z0-9_])", newName);
+            sql = Regex.Replace(sql, Regex.Escape(oldName) + "(?![A-Za-z0-9_])", newName,
+                RegexOptions.None, TimeSpan.FromSeconds(1));
             parameters[i] = Copy(source, newName);
         }
         return (sql, parameters);
