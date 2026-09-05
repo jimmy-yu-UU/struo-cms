@@ -68,15 +68,14 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
-        var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
-        var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
+        var expander = new RelationExpander(repo, graph, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         var revisionStore = new SqlSugarRevisionStore(db, currentUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
 
         _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
+            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
             currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 

@@ -167,15 +167,14 @@ public sealed class JunctionPayloadHarness : IDisposable
         Graph = new RelationshipGraph(collections, collectionTypes);
         var options = new StruoQueryOptions();
         var repo = new SqlSugarItemRepository(Db, Registry, Graph, Metadata, options, NullLogger<SqlSugarItemRepository>.Instance);
-        var resolver = new RelationFilterResolver(repo, Graph, Metadata, Registry, options);
-        var expander = new RelationExpander(repo, Graph, resolver, options);
+        var expander = new RelationExpander(repo, Graph, options);
         var languages = new LanguageProvider(Db);
         var revisionStore = new SqlSugarRevisionStore(Db, currentUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, Metadata, Registry, Graph);
         Repository = repo;
         RevisionStore = revisionStore;
         Service = new ItemService(repo, Metadata, Registry, permissions ?? new AllowAllPermissionService(),
-            Graph, expander, Graph, resolver, languages, options, new GanssHtmlSanitizer(),
+            Graph, expander, Graph, languages, options, new GanssHtmlSanitizer(),
             currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 

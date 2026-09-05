@@ -68,13 +68,6 @@ public interface IItemRepository
     Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default);
 
     /// <summary>
-    /// Returns the primary-key values of all rows of <paramref name="collection"/> matching a
-    /// single own-collection (non-dotted) <paramref name="leafCondition"/>. Used by the
-    /// cross-relation filter resolver as the leaf step of two-phase id-resolution.
-    /// </summary>
-    Task<IReadOnlyList<object>> QueryIdsAsync(string collection, FilterNode leafCondition, CancellationToken ct = default);
-
-    /// <summary>
     /// Diffs and patches the junction rows for <paramref name="parentId"/> on the given
     /// <paramref name="junctionType"/> so that exactly the targets named in <paramref name="links"/>
     /// remain linked, in that order. Rows for targets absent from <paramref name="links"/> are
@@ -109,20 +102,6 @@ public interface IItemRepository
         string localeProperty,
         IReadOnlyList<object> parentIds,
         string? locale,
-        CancellationToken ct = default);
-
-    /// <summary>
-    /// Queries the translation sidecar table for rows matching <c>Locale == locale</c> AND the given
-    /// <paramref name="fieldCondition"/> (which references a CLR property name on the translation
-    /// entity), then returns the distinct FK (parent id) values from those rows.
-    /// Used by the translatable filter resolver to produce parent-id sets at a given locale.
-    /// </summary>
-    Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
-        Type translationType,
-        string fkProperty,
-        string localeProperty,
-        string locale,
-        FilterNode fieldCondition,
         CancellationToken ct = default);
 
     /// <summary>

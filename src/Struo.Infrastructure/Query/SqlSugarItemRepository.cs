@@ -254,10 +254,6 @@ public sealed class SqlSugarItemRepository(
         FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default) =>
         whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, ct);
 
-    public Task<IReadOnlyList<object>> QueryIdsAsync(
-        string collection, FilterNode leafCondition, CancellationToken ct = default) =>
-        whereIn.QueryIdsAsync(collection, leafCondition, ct);
-
     public Task SyncManyToManyAsync(
         Type junctionType,
         string parentFkProperty,
@@ -276,15 +272,6 @@ public sealed class SqlSugarItemRepository(
         string? locale,
         CancellationToken ct = default) =>
         translations.LoadTranslationsAsync(translationType, fkProperty, localeProperty, parentIds, locale, ct);
-
-    public Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
-        Type translationType,
-        string fkProperty,
-        string localeProperty,
-        string locale,
-        FilterNode fieldCondition,
-        CancellationToken ct = default) =>
-        translations.QueryTranslationParentIdsAsync(translationType, fkProperty, localeProperty, locale, fieldCondition, ct);
 
     public Task SyncTranslationsAsync(
         Type translationType,

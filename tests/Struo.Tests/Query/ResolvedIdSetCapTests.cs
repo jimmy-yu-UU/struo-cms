@@ -60,21 +60,19 @@ public class ResolvedIdSetCapTests(ApiFactory factory)
     private static async Task<HttpResponseMessage> QueryArticlesAsync(HttpClient c, object envelope) =>
         await c.PostAsJsonAsync("/api/items/article/query", JsonSerializer.SerializeToElement(envelope));
 
-    private static async Task AssertCapRejectionAsync(HttpResponseMessage response)
-    {
-        var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
-        var error = Root(body).GetProperty("error");
-        error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
-        error.GetProperty("message").GetString().Should().Contain("too many");
-    }
-
     [Fact]
-    public async Task Cross_relation_filter_resolving_past_the_cap_is_rejected()
+    public async Task Cross_relation_filter_resolving_past_the_cap_is_not_refused()
     {
+        // Task 5 removed ItemService's redundant materialize-then-rewrite step (relation paths were
+        // already pushed down as SQL subqueries by FilterTranslator inside the repository; the
+        // ItemService-level rewrite ran first and was the only thing left enforcing this cap for a
+        // cross-relation filter). No id set is materialized here anymore, so a wide related set — more
+        // than Cap categories matching the stamp — must no longer be refused, mirroring
+        // SubqueryPushdownTests.Wide_related_set_beyond_the_old_cap_is_not_refused and this file's own
+        // Translatable_search_beyond_the_old_cap_is_not_refused for the same drop of the old cap.
         var stamp = "CapLeaf" + Guid.NewGuid().ToString("N")[..8];
         var admin = await _factory.CreateAuthenticatedClientAsync();
-        // Cap + 1 categories matching the stamp -> the leaf id set alone exceeds the cap.
+        // Cap + 1 categories matching the stamp -> the related set alone would have exceeded the old cap.
         for (var i = 0; i <= Cap; i++)
             await PostAsync(admin, "category", new { name = $"{stamp}-{i}" });
 
@@ -84,7 +82,10 @@ public class ResolvedIdSetCapTests(ApiFactory factory)
             filter = new Dictionary<string, object> { ["category.name"] = Contains(stamp) },
         });
 
-        await AssertCapRejectionAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        // No article references any of these categories, so the pushed-down query legitimately
+        // returns zero rows — the point is the 200, not the row count.
+        Root(await response.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
     }
 
     [Fact]
@@ -114,10 +115,12 @@ public class ResolvedIdSetCapTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Cross_relation_filter_whose_intermediate_hop_exceeds_the_cap_is_rejected()
+    public async Task Cross_relation_filter_whose_intermediate_hop_exceeds_the_cap_is_not_refused()
     {
-        // Distinct code path from the leaf guard: here the LEAF (one parent category) is well within
-        // the cap and it is the walk-back hop (its children) that blows past it.
+        // Distinct code path from the leaf case above: here the LEAF (one parent category) is well
+        // within the cap and it is the walk-back hop (its children) that would have blown past it
+        // under the old materialize-then-rewrite path. Nested as a subquery instead (see Task 5's
+        // ItemService change above), it is no longer refused either.
         var stamp = "CapHop" + Guid.NewGuid().ToString("N")[..8];
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var parent = await PostAsync(admin, "category", new { name = stamp });
@@ -130,7 +133,8 @@ public class ResolvedIdSetCapTests(ApiFactory factory)
             filter = new Dictionary<string, object> { ["category.parent.name"] = Eq(stamp) },
         });
 
-        await AssertCapRejectionAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        Root(await response.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
     }
 
     [Fact]
