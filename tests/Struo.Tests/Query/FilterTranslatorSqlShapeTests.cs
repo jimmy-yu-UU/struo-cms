@@ -1,5 +1,6 @@
 // tests/Struo.Tests/Query/FilterTranslatorSqlShapeTests.cs
 using System.Linq.Expressions;
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
@@ -27,25 +28,38 @@ public class FilterTranslatorSqlShapeTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    // ConditionalType.In (not Equal) is deliberate: SqlSugar parameterizes Equal's FieldValue
-    // (a real @ConditName0 binding), but inlines In's FieldValue as an escaped SQL literal with an
-    // empty parameter list — the same convention WhereInQueries.cs already relies on for IN clauses.
-    // A single name is a degenerate one-element IN list, semantically equivalent to Equal here.
+    // ConditionalType.Equal, deliberately: this is the shape ConditionalModelTranslator actually
+    // produces for the leaf conditionals relation-filter pushdown will nest (Eq/GreaterThan/Like/...
+    // are all parameterized), so the subquery this builds carries a real SqlSugar-assigned parameter
+    // name (e.g. "@ConditName0") — the exact case SubQueryConditional's renaming exists to handle.
     private KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name)
     {
         var sel = (Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
         return _db.Queryable<Category>()
-            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.In, FieldValue = name } })
+            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
             .Select(sel).ToSql();
     }
 
     [Fact]
-    public void Typed_selector_projects_a_single_column_with_no_parameters()
+    public void Wrapped_subquery_parameters_are_renamed_with_a_unique_prefix()
     {
         var sub = CategoryIdsNamed("Tech");
-        sub.Key.Should().Contain("SELECT").And.Contain("FROM");
-        sub.Key.Should().NotContain("SqlSugar.");
-        sub.Value.Should().BeEmpty("S1: values are inlined as literals; a non-empty list would need parameter renaming");
+        var originalNames = sub.Value.Select(p => p.ParameterName).ToList();
+        originalNames.Should().NotBeEmpty("Equal parameterizes its FieldValue, unlike In's literal inlining");
+
+        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, sub);
+        var wrapped = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToSql();
+
+        wrapped.Key.Should().NotContain("SqlSugar.");
+        wrapped.Value.Should().NotBeEmpty();
+        foreach (var parameter in wrapped.Value)
+        {
+            parameter.ParameterName.Should().MatchRegex(@"^@sq\d+_");
+            wrapped.Key.Should().Contain(parameter.ParameterName);
+        }
+        foreach (var original in originalNames)
+            wrapped.Key.Should().NotContain(original);
     }
 
     [Fact]
@@ -111,5 +125,84 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, CategoryIdsNamed("O'Brien"));
         var rows = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToList();
         rows.Should().ContainSingle();
+    }
+
+    // Reproduces the exact collision the fix targets: an outer ConditionalModel and an inner
+    // (wrapped) subquery both filter Category.Name at conditional-list index 0, so SqlSugar
+    // independently assigns BOTH the same generated name ("@ConditName0") before renaming. Without
+    // SubQueryConditional renaming the inner subquery's parameter, the outer query's ADO parameter
+    // collection would carry two entries named "@ConditName0" with different values, and whichever
+    // one wins determines silently-wrong results.
+    [Fact]
+    public void Outer_and_inner_parameters_with_the_same_generated_name_do_not_collide()
+    {
+        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
+        var news = new Category { Id = Guid.NewGuid(), Name = "News" };
+        var other = new Category { Id = Guid.NewGuid(), Name = "Other" };
+        _db.Insertable(new[] { tech, news, other }).ExecuteCommand();
+
+        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var innerWrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("News"));
+
+        var group = new ConditionalCollections
+        {
+            ConditionalList =
+            [
+                new(WhereType.Or, new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "Tech" }),
+                new(WhereType.Or, innerWrapped),
+            ]
+        };
+        var rows = _db.Queryable<Category>().Where(new List<IConditionalModel> { group }).ToList();
+        rows.Select(c => c.Name).Should().BeEquivalentTo(["Tech", "News"]);
+    }
+
+    // Two independent Wrap() calls, each nesting the previous level's ToSql() output: level 2 (a
+    // plain Category-by-Name filter) is wrapped into level 1's own Where list (also filtering
+    // Category.Name — same field/index as level 2's internal filter), and level 1's ToSql() is then
+    // wrapped again for the Article-level outer query. Proves composition through Wrap works at
+    // arbitrary nesting depth, and that each level gets its own unique parameter prefix.
+    [Fact]
+    public void Two_nesting_levels_compose_through_Wrap()
+    {
+        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
+        var news = new Category { Id = Guid.NewGuid(), Name = "News" };
+        _db.Insertable(new[] { tech, news }).ExecuteCommand();
+        _db.Insertable(new[]
+        {
+            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
+            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
+        }).ExecuteCommand();
+
+        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var categoryIdCol = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+
+        // Level 2 (innermost): SELECT Id FROM categories WHERE Name = 'Tech'
+        var level2Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("Tech"));
+
+        // Level 1 (middle): SELECT Id FROM categories WHERE Name = 'Tech' AND Id IN (level 2)
+        var sel = (Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+        var level1 = _db.Queryable<Category>()
+            .Where(new List<IConditionalModel>
+            {
+                new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "Tech" },
+                level2Wrapped,
+            })
+            .Select(sel).ToSql();
+        var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, categoryIdCol, level1);
+
+        // Outer: Article.Status = 'draft' AND Article.CategoryId IN (level 1)
+        var q = _db.Queryable<Article>().Where(new List<IConditionalModel>
+        {
+            new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "draft" },
+            level1Wrapped,
+        });
+        var final = q.ToSql();
+
+        // Nested renaming keeps the inner prefix as a body substring (only the outermost "sqN_" keeps
+        // its leading "@" — e.g. "@sq2_sq1_ConditName0"), so match "sqN_" without requiring "@" before it.
+        var prefixes = Regex.Matches(final.Key, @"sq(\d+)_").Select(m => m.Groups[1].Value).Distinct().ToList();
+        prefixes.Should().HaveCount(2, "two independent Wrap() calls (level2->level1, level1->outer) each allocate their own prefix");
+
+        q.ToList().Should().ContainSingle().Which.CategoryId.Should().Be(tech.Id);
     }
 }
