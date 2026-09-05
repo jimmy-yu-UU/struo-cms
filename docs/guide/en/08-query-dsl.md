@@ -40,7 +40,7 @@ $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: a
 | Pagination | `limit=`, `offset=` | `"limit"`, `"offset"` | No `page` parameter exists — pagination is purely offset-based (see below). |
 | Fields | `fields=a,b,c` | `"fields": ["a","b","c"]` | Restricts which *own* fields are projected (relations and `translations` are unaffected — see below). |
 | Deep | `deep=rel1,rel2` | `"deep": { "rel1": {...} }` | Relation expansion; chapter 7 covers this in full. |
-| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4). |
+| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4); combines with `filter` on the same request as AND — a row must satisfy the filter *and* match the search term, not either one. |
 | Soft-delete | `deleted=exclude\|only\|with` | *(query-string only — `GET`/`POST query` both read it from the URL)* | See below. |
 | Locale | `locale=code` | *(query-string only, same as above)* | Effective query locale for translatable-field filter/sort/read (chapter 6). |
 
@@ -124,29 +124,73 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bsize%5D%
 
 There is also a hard cap on total filter conditions per query — `StruoQueryOptions.MaxFilterConditions`,
 default **50** — counted across every leaf `ComparisonFilter` the walk visits, regardless of how
-they're nested under `_and`/`_or`; exceeding it throws `"Too many filter conditions (max 50)."` before
-any query runs.
+they're nested under `_and`/`_or`, and including every leaf inside a `_some`/`_none` predicate's own
+inner filter (below) — a quantifier's inner filter does not get its own separate budget; exceeding it
+throws `"Too many filter conditions (max 50)."` before any query runs.
 
-A second cap bounds something different: not the shape of the query, but how much intermediate work
-answering it may take. A dotted (cross-relation) filter and a search over a translatable field are both
-answered by resolving the condition to a set of root ids and rewriting it into an own-collection
-`id IN (...)` — see chapter 7 for the walk. `StruoQueryOptions.MaxResolvedFilterIds` (default **5000**)
-bounds every step of that resolution: the leaf lookup, each walk-back hop, and the translatable-search
-union. It exists because the caps above bound the *result page*, not this intermediate set — without it a
-deliberately wide condition (`?filter[category.name][_contains]=a`, `?search=a`) costs O(table) memory
-plus one enormous SQL statement, and it is reachable by any caller holding a read grant, including an
-anonymous one wherever `public` grants read.
+A dotted (cross-relation) filter and a search over a translatable field are both answered by pushing
+the condition down into a nested SQL subquery — see chapter 7 for the exact shapes — rather than by
+resolving an intermediate id set in memory first. Because of that, there is no cap here analogous to
+`MaxFilterConditions` above: a cross-relation condition costs one subquery regardless of how many
+rows it could match, not memory proportional to the size of some intermediate set — there is no
+longer an intermediate set at all for a cap to bound.
 
-Exceeding it is a client error, not a truncation:
+## Relation quantifiers: `_some`/`_none`
+
+Chapter 7 covers the semantics (each-exists vs. same-row, `_junction`, the many-to-one case, the
+NULL-safety and soft-delete rules) in full; this section is the grammar reference for both request
+shapes plus the reserved-token and error catalog.
+
+**Reserved tokens.** `_some`, `_none`, `_junction` (query-string/JSON-envelope spelling) and `some`,
+`none`, `junction` (GraphQL spelling) are reserved exactly like `_and`/`_or` — no field or relation
+may be named any of these (`FilterReservedTokens.All`,
+`src/Struo.Application/Query/FilterReservedTokens.cs`); a collection that violates this fails fast at
+startup, before any request is served.
+
+**JSON envelope (the complete form).** A field object's key is `_some` or `_none`, and its value is a
+complete `filter` object rooted at the relation's target collection — recursively the same grammar as
+any top-level `filter`, so it may itself contain dotted paths, nested `_some`/`_none`, `_junction`,
+and a single level of `_and`/`_or`:
+
+```json
+{"filter":{"tags":{"_some":{"name":{"_eq":"Guide"},"_junction.note":{"_contains":"hero"}}}}}
+{"filter":{"tags":{"_none":{"name":{"_eq":"internal"}}}}}
+```
+
+A field object may carry both `_some` and `_none` as two independent predicates (AND-ed), but may
+not mix either with a plain scalar operator (`_eq`, `_contains`, …) in the same field object — a
+relation path has no scalar operators of its own:
 
 ```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory.name%5D%5B_contains%5D=a"
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Resolving 'category.name' matched too many rows (7412, limit 5000). Narrow the filter or search term, or raise Query:MaxResolvedFilterIds."}}
+$ curl -s -X POST http://localhost:5221/api/items/article/query -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"filter":{"tags":{"_some":{"name":{"_eq":"Guide-u3doc0905"}},"_eq":"someval"}}}'
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"'tags' mixes a relation quantifier with scalar operators; a relation path has no scalar operators."}}
 ```
 
-Truncating instead would silently drop matching rows and return quietly wrong results, so the query is
-refused. Raise `Query:MaxResolvedFilterIds` if a fork's legitimate filters resolve to larger sets — the
-cost is memory plus SQL statement size, roughly 40 bytes of statement text per uuid.
+**Query string (the folding shorthand).** `filter[<prefix>._some.<inner path>][<op>]=<value>` (or
+`_none`) is folded, after ordinary query-string parsing, into the same `_some`/`_none` tree
+(`RelationQuantifierFolder.Fold`, `src/Struo.Application/Query/RelationQuantifierFolder.cs`): every
+condition whose path contains a `_some`/`_none` segment is grouped by (the path prefix *before* that
+segment, the quantifier), and every condition sharing one such group becomes one predicate, AND-ed
+together — a nested quantifier (`a._some.b._none.c`) folds again, recursively, on the inner group.
+**One request can express only a single group per (prefix, quantifier) pair on the query string** —
+two conditions with the same prefix and quantifier always land in the same group, however many
+`filter[...]` keys they're spread across; there is no query-string way to express two *independent*
+same-row predicates against the same relation (e.g. "some tag named `a`, or a *different* tag that is
+red, under an `_or`") — that needs the JSON envelope instead, whose `_some` value is a single filter
+object you construct explicitly.
+
+A quantifier segment must be followed by at least one more path segment (the condition it quantifies)
+— it cannot be the path's last segment:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags._some%5D%5B_eq%5D=x"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"'tags._some': '_some' must be followed by a condition on the related collection."}}
+```
+
+Nor can two quantifier segments follow each other directly (`a._some._none.b`) — express that as a
+nested `_some`/`_none` inside the envelope form's inner filter instead.
 
 ## Sorting
 
@@ -248,8 +292,11 @@ graph (chapter 7): an unresolvable relation segment, an unresolvable leaf field 
 collection, and a path exceeding the 6-hop depth cap are each rejected with their own precise
 message — all three live-verified in chapter 7. `fields=` additionally disallows relation paths
 entirely (`allowRelation: false`) — projection only ever selects a collection's own scalar fields,
-never a nested relation's. Combining several conditions on the same to-many relation path is
-each-exists, not same-row — see [chapter 7](07-relations.md#relation-filtering-across-dotted-paths).
+never a nested relation's. Combining several plain (non-quantified) conditions on the same to-many
+relation path is each-exists, not same-row — `_some`/`_none` above are the quantifiers that bind a
+relation path's conditions to one related row instead — see
+[chapter 7](07-relations.md#each-exists-vs-same-row-dotted-paths-vs-some-none) for the full semantics
+table and live-verified transcripts.
 
 A read grant does not travel across a relation hop. Every collection a dotted path traverses needs
 its own read permission, so a role granted `article` but not `user` cannot reach user rows through

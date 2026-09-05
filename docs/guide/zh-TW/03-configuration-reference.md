@@ -137,8 +137,9 @@
 
 ## `Query`
 
-查詢 DSL (第 8 章) 的各項上限，由 `QueryValidator` 以及關聯/可翻譯欄位的解析器執行。這一節**不在**
-出貨的 `appsettings.json` 裡——下方每一個預設值都來自 `StruoQueryOptions`
+查詢 DSL (第 8 章) 的各項上限，由 `QueryValidator`，以及它所驗證的關聯子查詢下推機制
+`FilterTranslator` (第 7 章) 共同執行。這一節**不在**出貨的 `appsettings.json` 裡——下方每一個
+預設值都來自 `StruoQueryOptions`
 (`src/Struo.Application/Configuration/StruoQueryOptions.cs`) 的 C# 屬性初始化式;只有在你要覆寫某一項
 時才需要新增 `"Query"` 區塊。
 
@@ -146,16 +147,15 @@
 |---|---|---|---|
 | `Query:MaxLimit` | int | `100` | 單頁 `limit` 的上限。超過的請求會被向下夾制到這個值，而不是被拒絕。 |
 | `Query:DefaultLimit` | int | `25` | 當請求省略 `limit` 或送出非正值時所套用的 `limit`。 |
-| `Query:MaxFilterConditions` | int | `50` | 每次查詢的葉節點條件總數上限，跨每一個 `_and`/`_or` 分支一併計算。超過會在任何查詢執行之前擲出 `"Too many filter conditions (max 50)."`。 |
-| `Query:MaxRelationDepth` | int | `6` | 點狀路徑中關聯**跳數 (hop)** 的上限——filter、sort 鍵或巢狀 `deep` 皆適用。最後的葉欄位不計入，所以 `folder.name` 是 1 跳 (第 7 章)。 |
-| `Query:MaxResolvedFilterIds` | int | `5000` | 單一次 filter 解析步驟最多可以具現化多少個 id 的上限——即跨關聯 (點狀) filter，或可翻譯欄位的搜尋。上方其他上限約束的是*結果頁*;這一個約束的是那個中間集合。 |
+| `Query:MaxFilterConditions` | int | `50` | 每次查詢的葉節點條件總數上限，跨每一個 `_and`/`_or` 分支一併計算，也包含 `_some`/`_none` 量詞自身內層 filter 裡的每一個葉節點。超過會在任何查詢執行之前擲出 `"Too many filter conditions (max 50)."`。 |
+| `Query:MaxRelationDepth` | int | `6` | 點狀路徑中關聯**跳數 (hop)** 的上限——filter、sort 鍵或巢狀 `deep` 皆適用。最後的葉欄位不計入，所以 `folder.name` 是 1 跳 (第 7 章)。`_junction` 這個偽片段不計入此上限。 |
 
-`MaxResolvedFilterIds` 的作法是拒絕而非截斷:超過時回 `400 BAD_USER_INPUT`，訊息會指出路徑與兩個
-數字，因為無聲縮短的 id 集合會回傳靜默錯誤的資料列。若某個 fork 的正當 filter 就是會解析出更大的集合，
-把它調高即可——代價是記憶體加上 SQL 敘述長度，每個 uuid 大約 40 位元組的敘述文字。
-
-這五項都帶 `[Range(1, int.MaxValue)]` 驗證並以 `ValidateOnStart` 綁定，所以填 0 或負值的覆寫會讓啟動
+這四項都帶 `[Range(1, int.MaxValue)]` 驗證並以 `ValidateOnStart` 綁定，所以填 0 或負值的覆寫會讓啟動
 失敗，而不是產生一個沒有意義的上限。第 8 章說明每個上限在實際情境中約束的是什麼。需要重新啟動。
+
+一個 fork 的 `appsettings.*.json` 裡若殘留這項設定被移除之前留下的 `Query:MaxResolvedFilterIds` 鍵，
+並不會讓啟動失敗:選項繫結器只會填入 `StruoQueryOptions` 上實際存在的屬性，所以 `Query` 底下一個
+無法識別的鍵只會被靜默忽略，而不是被拒絕。
 
 ## `Auth:BootstrapAdmin`
 

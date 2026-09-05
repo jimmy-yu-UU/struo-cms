@@ -6,16 +6,13 @@ using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
 
-internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registry)
+internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registry, FilterTranslator filters)
 {
     private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInFilteredGenericAsync), [typeof(List<IConditionalModel>), typeof(CancellationToken)]);
-
-    private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, string, CancellationToken, Task<IReadOnlyList<object>>>> QueryIdsDispatcher =
-        new(typeof(WhereInQueries), nameof(QueryIdsGenericAsync), [typeof(List<IConditionalModel>), typeof(string), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInWithDeletedDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInWithDeletedGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
@@ -62,7 +59,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
 
     public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, CancellationToken ct = default)
+        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
         var d = RepositoryHelpers.Descriptor(registry, collection);
@@ -79,10 +76,10 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
                 CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
-        // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
-        // IConditionalModel entries. ConditionalModelTranslator maps camelCase field paths -> columns.
+        // AND the extra filter — relation paths/predicates and translatable leaves are pushed down as
+        // subqueries by FilterTranslator. SqlSugar ANDs consecutive IConditionalModel entries.
         if (extraFilter is not null)
-            conditionals.AddRange(ConditionalModelTranslator.Translate(extraFilter, null, [], d, db));
+            conditionals.AddRange(filters.Translate(collection, extraFilter, null, [], queryLocale));
 
         return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, ct);
     }
@@ -92,22 +89,6 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
     {
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();
-    }
-
-    public async Task<IReadOnlyList<object>> QueryIdsAsync(
-        string collection, FilterNode leafCondition, CancellationToken ct = default)
-    {
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var conditionals = ConditionalModelTranslator.Translate(leafCondition, null, [], d, db);
-        return await QueryIdsDispatcher.For(d.EntityType)(this, conditionals, d.IdProperty, ct);
-    }
-
-    private async Task<IReadOnlyList<object>> QueryIdsGenericAsync<T>(
-        List<IConditionalModel> conditionals, string idProperty, CancellationToken ct) where T : class, new()
-    {
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
-        var pi = typeof(T).GetProperty(idProperty)!;
-        return rows.Select(r => pi.GetValue(r)!).ToList();
     }
 
     public async Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(

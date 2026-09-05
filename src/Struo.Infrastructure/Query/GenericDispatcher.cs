@@ -1,18 +1,22 @@
 // src/Struo.Infrastructure/Query/GenericDispatcher.cs
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Struo.Infrastructure.Query;
 
-// Caches a per-closed-type open-instance delegate over a private generic instance method, so a
+// Caches a per-closed-type delegate over a private generic method (instance or static), so a
 // repeated call for the same closed type pays MethodInfo.MakeGenericMethod + CreateDelegate once
-// instead of on every request. The dispatched method must be found via NonPublic | Instance
-// binding and must be an open generic method definition; the resulting delegate's FIRST parameter
-// is the receiver (the "open-instance" delegate form), and the remaining parameters plus the
-// return type must match the closed method's exact signature. Every dispatched method is expected
-// to be async (or to return a Task directly), so any exception it throws surfaces on the awaited
-// Task exactly as it would from a direct call — there is no TargetInvocationException wrapping to
-// preserve, because no MethodInfo.Invoke is ever used to call the closed method.
+// instead of on every request. The dispatched method must be found via NonPublic | Instance |
+// Static binding and must be an open generic method definition. `MethodInfo.CreateDelegate(Type)`
+// (no target) adapts to whichever kind is resolved: for an instance method the resulting delegate
+// is the "open-instance" form — its FIRST parameter is the receiver, remaining parameters plus the
+// return type matching the closed method's exact signature; for a static method (one that needs no
+// receiver, e.g. it touches no instance state) the delegate matches the closed method's signature
+// with no extra leading parameter. Every dispatched method is expected to be async (or to return a
+// Task directly), so any exception it throws surfaces on the awaited Task exactly as it would from
+// a direct call — there is no TargetInvocationException wrapping to preserve, because no
+// MethodInfo.Invoke is ever used to call the closed method.
 internal sealed class GenericDispatcher<TDelegate> where TDelegate : Delegate
 {
     private readonly MethodInfo definition;
@@ -49,11 +53,13 @@ internal sealed class BiGenericDispatcher<TDelegate> where TDelegate : Delegate
 
 internal static class GenericDispatcherSupport
 {
+    [SuppressMessage("Major Code Smell", "S3011:Reflection should not be used to increase accessibility of classes, methods, or fields",
+        Justification = "Binds the host's own private generic workers by nameof; not reachable from external input.")]
     public static MethodInfo ResolveDefinition(Type host, string methodName, Type[] parameterTypes)
     {
-        var method = host.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance, parameterTypes)
+        var method = host.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, parameterTypes)
             ?? throw new InvalidOperationException(
-                $"'{host.Name}' has no private instance method '{methodName}' with the given parameter types.");
+                $"'{host.Name}' has no private instance or static method '{methodName}' with the given parameter types.");
         if (!method.IsGenericMethodDefinition)
             throw new InvalidOperationException(
                 $"'{host.Name}.{methodName}' is not a generic method definition.");

@@ -117,6 +117,25 @@ public class ConditionalModelTranslatorTests
     }
 
     [Fact]
+    public void Search_group_connects_to_a_preceding_filter_with_and_not_or()
+    {
+        // Mirrors FilterTranslatorSqlShapeTests.Search_group_connects_to_a_preceding_filter_with_and_not_or:
+        // the multi-arg Translate overload builds its own search-group ConditionalCollections and must
+        // not repeat the connector defect fix round 3 removed from FilterTranslator (every entry, including
+        // the first, wrongly assigned WhereType.Or — rendering "<filter> OR (search…)").
+        var (db, d, file) = Setup();
+        using (file)
+        {
+            var list = ConditionalModelTranslator.Translate(
+                new ComparisonFilter("status", QueryOperator.Eq, "published"), "hello", ["status"], d, db);
+            var sql = db.Queryable<Article>().Where(list).ToSql().Key;
+
+            sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(\s*[\s\S]*?LIKE");
+            sql.Should().NotMatchRegex(@"=\s*@\w+\s+OR\s*\(\s*[\s\S]*?LIKE");
+        }
+    }
+
+    [Fact]
     public void Nested_logical_filter_throws()
     {
         // QueryValidator rejects nested groups before they reach the translator; this

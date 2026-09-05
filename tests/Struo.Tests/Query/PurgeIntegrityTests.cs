@@ -149,8 +149,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
-        var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
-        var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
+        var expander = new RelationExpander(repo, graph, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         var realStore = new SqlSugarRevisionStore(db, currentUser);
@@ -160,7 +159,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         Repository = repo;
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
+            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
             currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 

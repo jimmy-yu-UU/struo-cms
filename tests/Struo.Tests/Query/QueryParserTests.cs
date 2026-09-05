@@ -153,4 +153,58 @@ public class QueryParserTests
         category.Fields.Should().ContainSingle().Which.Should().Be("name");
         category.Deep.Should().BeNull();
     }
+
+    [Fact]
+    public void Envelope_parses_some_predicate()
+    {
+        var json = JsonDocument.Parse("""
+        { "filter": { "properties": { "_some": { "code": { "_eq": "vds-v" }, "valueNum": { "_gte": 60 } } } } }
+        """).RootElement;
+        var p = QueryParser.ParseEnvelope(json).Filter.Should().BeOfType<RelationPredicateFilter>().Subject;
+        p.RelationPath.Should().Be("properties");
+        p.Quantifier.Should().Be(RelationQuantifier.Some);
+        p.Inner.Should().BeOfType<LogicalFilter>().Which.Children.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Envelope_some_and_none_on_one_key_become_two_predicates()
+    {
+        var json = JsonDocument.Parse("""
+        { "filter": { "tags": { "_some": { "name": { "_eq": "a" } }, "_none": { "name": { "_eq": "b" } } } } }
+        """).RootElement;
+        var l = QueryParser.ParseEnvelope(json).Filter.Should().BeOfType<LogicalFilter>().Subject;
+        l.Children.Should().AllBeOfType<RelationPredicateFilter>().And.HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData("""{ "filter": { "tags": { "_some": "x" } } }""")]
+    [InlineData("""{ "filter": { "tags": { "_some": {} } } }""")]
+    [InlineData("""{ "filter": { "tags": { "_some": { "name": { "_eq": "a" } }, "_eq": "b" } } }""")]
+    public void Envelope_malformed_quantifiers_throw(string body)
+    {
+        var json = JsonDocument.Parse(body).RootElement;
+        var act = () => QueryParser.ParseEnvelope(json);
+        act.Should().Throw<QueryException>();
+    }
+
+    [Fact]
+    public void QueryString_folds_same_prefix_some_conditions()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?>
+        {
+            ["filter[properties._some.code][_eq]"] = "vds-v",
+            ["filter[properties._some.valueNum][_gte]"] = "60",
+        });
+        var p = q.Filter.Should().BeOfType<RelationPredicateFilter>().Subject;
+        p.RelationPath.Should().Be("properties");
+        p.Inner.Should().BeOfType<LogicalFilter>().Which.Children.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void QueryString_and_envelope_produce_equal_trees()
+    {
+        var qs = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["filter[tags._none.name][_eq]"] = "internal" }).Filter;
+        var env = QueryParser.ParseEnvelope(JsonDocument.Parse("""{ "filter": { "tags": { "_none": { "name": { "_eq": "internal" } } } } }""").RootElement).Filter;
+        qs.Should().BeEquivalentTo(env, o => o.PreferringRuntimeMemberTypes());
+    }
 }

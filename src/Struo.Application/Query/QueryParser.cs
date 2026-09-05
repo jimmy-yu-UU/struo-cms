@@ -113,16 +113,7 @@ public static class QueryParser
             if (prop.Value.ValueKind != JsonValueKind.Object)
                 throw new QueryException($"Filter for field '{field}' must be an object of operators.");
 
-            var hasOperator = false;
-            foreach (var inner in prop.Value.EnumerateObject())
-            {
-                if (!Operators.TryGetValue(inner.Name, out var qop))
-                    throw new QueryException($"Unknown operator '{inner.Name}'.");
-                nodes.Add(new ComparisonFilter(field, qop, ReadValue(inner.Value)));
-                hasOperator = true;
-            }
-            if (!hasOperator)
-                throw new QueryException($"Filter for field '{field}' has no operator.");
+            ParseFieldObject(field, prop.Value, nodes);
         }
 
         return nodes.Count switch
@@ -131,6 +122,31 @@ public static class QueryParser
             1 => nodes[0],
             _ => new LogicalFilter(LogicalOperator.And, nodes)
         };
+    }
+
+    private static void ParseFieldObject(string field, JsonElement obj, List<FilterNode> nodes)
+    {
+        var hasOperator = false;
+        var hasQuantifier = false;
+        foreach (var inner in obj.EnumerateObject())
+        {
+            if (FilterReservedTokens.TryQuantifier(inner.Name, out var quantifier))
+            {
+                if (inner.Value.ValueKind != JsonValueKind.Object || !inner.Value.EnumerateObject().Any())
+                    throw new QueryException($"'{field}.{inner.Name}' must be a non-empty filter object.");
+                nodes.Add(new RelationPredicateFilter(field, quantifier, ParseFilter(inner.Value)));
+                hasQuantifier = true;
+                continue;
+            }
+            if (!Operators.TryGetValue(inner.Name, out var qop))
+                throw new QueryException($"Unknown operator '{inner.Name}'.");
+            nodes.Add(new ComparisonFilter(field, qop, ReadValue(inner.Value)));
+            hasOperator = true;
+        }
+        if (hasQuantifier && hasOperator)
+            throw new QueryException($"'{field}' mixes a relation quantifier with scalar operators; a relation path has no scalar operators.");
+        if (!hasOperator && !hasQuantifier)
+            throw new QueryException($"Filter for field '{field}' has no operator.");
     }
 
     private static object? ReadValue(JsonElement v) => v.ValueKind switch
@@ -163,7 +179,7 @@ public static class QueryParser
             foreach (var t in sv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 sort.Add(ParseSortToken(t));
 
-        var conditions = new List<FilterNode>();
+        var conditions = new List<ComparisonFilter>();
         foreach (var (key, val) in query)
         {
             if (!key.StartsWith("filter[", StringComparison.Ordinal)) continue;
@@ -177,11 +193,12 @@ public static class QueryParser
             conditions.Add(new ComparisonFilter(field, qop, val));
         }
 
-        FilterNode? filter = conditions.Count switch
+        var folded = RelationQuantifierFolder.Fold(conditions);
+        FilterNode? filter = folded.Count switch
         {
             0 => null,
-            1 => conditions[0],
-            _ => new LogicalFilter(LogicalOperator.And, conditions)
+            1 => folded[0],
+            _ => new LogicalFilter(LogicalOperator.And, folded)
         };
 
         var limit = query.TryGetValue("limit", out var lv) && int.TryParse(lv, out var li) ? li : 0;

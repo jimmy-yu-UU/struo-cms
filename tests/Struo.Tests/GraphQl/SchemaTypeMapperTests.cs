@@ -66,4 +66,18 @@ public class SchemaTypeMapperTests
     [InlineData(FieldInterface.Repeater)]
     public void Named_type_interfaces_return_null_scalar(FieldInterface iface)
         => SchemaTypeMapper.ScalarSdl(iface, typeof(object)).Should().BeNull();
+
+    // StruoTypeModule builds a "<T>FilterInput" for EVERY [CmsCollection], junction collections
+    // included. A relation "article.tags" naming its filter input "ArticleTagsFilterInput" would
+    // therefore collide with a real junction collection literally named "articleTags" (whose own
+    // FilterInput is also "ArticleTagsFilterInput"), producing a duplicate GraphQL type name and
+    // taking the whole schema build down. RelationFilterInputName must never end in the bare
+    // "FilterInput" suffix for exactly this reason.
+    [Fact]
+    public void RelationFilterInputName_cannot_collide_with_a_junction_collections_own_FilterInput()
+    {
+        var name = SchemaTypeMapper.RelationFilterInputName("article", "tags");
+        name.Should().Be("ArticleTagsRelationFilterInput");
+        name.Should().NotBe(SchemaTypeMapper.TypeName("articleTags") + "FilterInput");
+    }
 }

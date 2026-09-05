@@ -466,4 +466,31 @@ public class JunctionPayloadGraphQlTests
         sent.GetArrayLength().Should().Be(1);
         sent[0].GetProperty("id").GetString().Should().Be("c1");
     }
+
+    [Fact]
+    public async Task Payload_relation_filter_field_uses_a_relation_specific_input_with_junction()
+    {
+        var sdl = await BuildSdlAsync();   // reuse this file's SDL helper
+        sdl.Should().Contain("children: ParentChildrenRelationFilterInput");
+        sdl.Should().Contain("plainChildren: ChildFilterInput");
+        sdl.Should().Contain("input ParentChildrenRelationFilterInput");
+        sdl.Should().Contain("junction: ParentChildrenJunctionFilterInput");
+        sdl.Should().Contain("input ParentChildrenJunctionFilterInput");
+        sdl.Should().Contain("note: StringFilter");
+        sdl.Should().NotContain("secret: StringFilter");
+        sdl.Should().Contain("some: ParentChildrenRelationFilterInput");
+    }
+
+    [Fact]
+    public async Task Junction_filter_inside_some_reaches_the_query_model()
+    {
+        QueryModel? captured = null;
+        var executor = await ExecutorAsync(new FakeGraphQlDataSource { OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); } });
+        var result = await executor.ExecuteAsync(
+            "{ parents(filter: { children: { some: { name: { eq: \"a\" }, junction: { note: { contains: \"hero\" } } } } }) { total } }");
+        result.ToJson().Should().NotContain("errors");
+        var p = captured!.Filter.Should().BeOfType<RelationPredicateFilter>().Subject;
+        p.Inner.Should().BeOfType<LogicalFilter>().Which.Children.OfType<ComparisonFilter>()
+            .Select(c => c.FieldPath).Should().BeEquivalentTo(["name", "_junction.note"]);
+    }
 }

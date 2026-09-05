@@ -26,7 +26,6 @@ public sealed class ItemService(
     IRelationshipGraph graph,
     IRelationExpander expander,
     IM2MDescriptorSource m2mSource,
-    IRelationFilterResolver relationFilter,
     ILanguageProvider languages,
     StruoQueryOptions options,
     IHtmlSanitizer sanitizer,
@@ -56,17 +55,12 @@ public sealed class ItemService(
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
         ValidateLocale(locale);
 
-        // Compute the effective query locale: explicit locale ?? collection default ?? global default.
-        // Only meaningful when the collection has a translation sidecar.
-        var queryLocale = meta.Translation is not null
-            ? (locale ?? languages.DefaultCode())
-            : null;
+        // Effective query locale: explicit locale ?? global default. Computed unconditionally —
+        // the subquery translator needs it even for a root collection without its own translation
+        // sidecar (e.g. a relation path reaching into a translated related collection).
+        var queryLocale = locale ?? languages.DefaultCode();
 
         var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions);
-        validated = validated with
-        {
-            Filter = await relationFilter.RewriteAsync(collection, validated.Filter, queryLocale, ct)
-        };
         var searchable = QueryValidator.SearchableFields(meta);
         var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, deleted, ct);
 
@@ -88,7 +82,7 @@ public sealed class ItemService(
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)projector.Project(entity, meta, null);
-        var queryLocale = meta.Translation is not null ? (locale ?? languages.DefaultCode()) : null;
+        var queryLocale = locale ?? languages.DefaultCode();
         await deepExpansion.ExpandAsync(collection, deep, [entity], [projected], queryLocale, ct);
         await overlay.ApplyAsync(meta, [entity], [projected], locale, ct);
         return projected;

@@ -133,14 +133,13 @@ public class ItemServicePermissionTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
-        var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
-        var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
+        var expander = new RelationExpander(repo, graph, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         var revisionUser = new TestCurrentUserAccessor(Guid.Empty);
         var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         return new ItemService(repo, provider, registry, permissions,
-            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
+            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
             revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 
