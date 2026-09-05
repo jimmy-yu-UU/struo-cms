@@ -51,13 +51,14 @@ public interface IItemRepository
     Task<IReadOnlyList<object>> QueryWhereInAsync(string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default);
 
     /// <summary>
-    /// Like <see cref="QueryWhereInAsync"/> but ANDs an additional own-collection filter
-    /// (already relation-rewritten to own columns) into the batched WHERE. Used by nested-list
-    /// expansion to push a to-many list's filter into the single batched fetch.
+    /// Like <see cref="QueryWhereInAsync"/> but ANDs an additional filter into the batched WHERE —
+    /// own-collection leaves, relation paths/predicates and translatable leaves (at <paramref name="queryLocale"/>)
+    /// are all pushed down as SQL subqueries. Used by nested-list expansion to push a to-many list's
+    /// filter into the single batched fetch.
     /// </summary>
     Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, CancellationToken ct = default);
+        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default);
 
     /// <summary>
     /// Returns all rows of the given CLR <paramref name="entityType"/> (e.g. a junction type)
