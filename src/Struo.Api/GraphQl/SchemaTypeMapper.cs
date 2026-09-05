@@ -36,6 +36,14 @@ public static class SchemaTypeMapper
     public static string TranslationInputName(string collection) => Pascal(collection) + "TranslationInput";
     public static string TranslationFieldsInputName(string collection) => Pascal(collection) + "TranslationFieldsInput";
 
+    // M2M junction-payload naming — additive to a relation's existing bare `<rel>`/`[ID!]` shape.
+    // Read side: <Parent><Rel>Link { node, junction: <Parent><Rel>Junction }. Write side:
+    // <Parent><Rel>LinkInput { id, <payload> }, exposed on the parent object as `<rel>Links`.
+    public static string LinkTypeName(string collection, string relation) => Pascal(collection) + Pascal(relation) + "Link";
+    public static string JunctionTypeName(string collection, string relation) => Pascal(collection) + Pascal(relation) + "Junction";
+    public static string LinkInputName(string collection, string relation) => Pascal(collection) + Pascal(relation) + "LinkInput";
+    public static string LinksFieldName(string relation) => Camel(relation) + "Links";
+
     /// <summary>
     /// Returns the nullable SDL type string for a scalar/list field, or <c>null</c> when the
     /// interface is excluded (Hidden/Divider/Password) or is a named-type interface

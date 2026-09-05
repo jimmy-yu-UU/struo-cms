@@ -7,6 +7,7 @@ using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Application.Query.Write;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
@@ -568,6 +569,131 @@ public sealed class PostgresIntegrationTests : IDisposable
         {
             try { db.Deleteable<Struo.Infrastructure.Files.FileTranslation>().Where(x => true).ExecuteCommand(); }
             catch { /* best-effort cleanup */ }
+        }
+    }
+
+    // Task 2's diff-and-patch M2M sync (SyncManyToManyAsync / ManyToManySync) on real Postgres.
+    // SQLite (ManyToManySyncTests) never distinguishes a typed NULL from an untyped one, and never
+    // exercises a real uuid PK/FK column — both are PG-specific risks this asserts against rows READ
+    // BACK from the database at every step: PK constancy across a payload write and a reorder,
+    // Alias round-tripping through its renamed column, a typed NULL succeeding (the 42804 trap this
+    // whole suite exists to catch), and the duplicate-row repair keeping the lowest PK without
+    // throwing.
+    [Fact]
+    public async Task Junction_payload_sync_preserves_keys_and_patches_columns_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var db = BuildRawClient();
+        try
+        {
+            if (db.DbMaintenance.IsAnyTable("junction_sync_probe", false))
+                db.DbMaintenance.DropTable("junction_sync_probe");
+            db.CodeFirst.InitTables<JunctionSyncProbe>();
+
+            var collections = MetadataScanner.ScanTypes([]);
+            var repo = new SqlSugarItemRepository(
+                db,
+                new EntityRegistry(MetadataScanner.ScanDescriptors([])),
+                new RelationshipGraph(collections, new Dictionary<string, Type>()),
+                new CachedMetadataProvider(collections),
+                new StruoQueryOptions());
+
+            var parentId = Guid.NewGuid();
+            var c1 = Guid.NewGuid();
+            var c2 = Guid.NewGuid();
+            var c3 = Guid.NewGuid();
+
+            Task Sync(params JunctionLink[] links) => repo.SyncManyToManyAsync(
+                typeof(JunctionSyncProbe), nameof(JunctionSyncProbe.ParentId), nameof(JunctionSyncProbe.ChildId),
+                nameof(JunctionSyncProbe.Sort), parentId, links);
+
+            List<JunctionSyncProbe> Rows() => db.Queryable<JunctionSyncProbe>()
+                .Where(l => l.ParentId == parentId).OrderBy(l => l.Sort).ToList();
+
+            // Step 1: bare ids -> 2 rows, sorts 0,1; record the minted PKs.
+            await Sync(JunctionLink.Bare(c1), JunctionLink.Bare(c2));
+            var s1 = Rows();
+            s1.Select(r => r.ChildId).Should().Equal(c1, c2);
+            s1.Select(r => r.Sort).Should().Equal(0, 1);
+            var c1Pk = s1.Single(r => r.ChildId == c1).Id;
+            var c2Pk = s1.Single(r => r.ChildId == c2).Id;
+
+            // Step 2: payload on c1 (Note + the renamed Alias column) -> PKs unchanged.
+            await Sync(
+                new JunctionLink(c1, new Dictionary<string, object?> { ["Note"] = "n", ["Alias"] = "a" }),
+                JunctionLink.Bare(c2));
+            var s2 = Rows();
+            s2.Single(r => r.ChildId == c1).Id.Should().Be(c1Pk, "a payload write must not recreate the row");
+            s2.Single(r => r.ChildId == c2).Id.Should().Be(c2Pk);
+            var c1Row2 = s2.Single(r => r.ChildId == c1);
+            c1Row2.Note.Should().Be("n");
+            c1Row2.Alias.Should().Be("a", "the payload key is the CLR name Alias but must reach the note_text column on Postgres");
+
+            // Step 3: reorder (c2, c1) -> PKs unchanged; sorts swap; c1's payload survives untouched.
+            await Sync(JunctionLink.Bare(c2), JunctionLink.Bare(c1));
+            var s3 = Rows();
+            s3.Select(r => r.ChildId).Should().Equal(c2, c1);
+            s3.Select(r => r.Sort).Should().Equal(0, 1);
+            s3.Single(r => r.ChildId == c1).Id.Should().Be(c1Pk, "a reorder must not recreate the row");
+            s3.Single(r => r.ChildId == c2).Id.Should().Be(c2Pk);
+            var c1Row3 = s3.Single(r => r.ChildId == c1);
+            c1Row3.Note.Should().Be("n");
+            c1Row3.Alias.Should().Be("a");
+
+            // Step 4: c1 gets Weight only (Note untouched, merge semantics); c3 is inserted at sort 2.
+            await Sync(
+                new JunctionLink(c1, new Dictionary<string, object?> { ["Weight"] = 5 }),
+                JunctionLink.Bare(c2),
+                JunctionLink.Bare(c3));
+            var s4 = Rows();
+            s4.Select(r => r.ChildId).Should().Equal(c1, c2, c3);
+            s4.Select(r => r.Sort).Should().Equal(0, 1, 2);
+            var c1Row4 = s4.Single(r => r.ChildId == c1);
+            c1Row4.Id.Should().Be(c1Pk);
+            c1Row4.Weight.Should().Be(5);
+            c1Row4.Note.Should().Be("n", "a Weight-only payload must merge, not overwrite Note");
+            var c3Row4 = s4.Single(r => r.ChildId == c3);
+            c3Row4.Sort.Should().Be(2);
+
+            // Step 5: c1's Note explicitly set to null (typed-NULL 42804 trap); Weight kept; c3 removed.
+            await Sync(
+                new JunctionLink(c1, new Dictionary<string, object?> { ["Note"] = null }),
+                JunctionLink.Bare(c2));
+            var s5 = Rows();
+            s5.Select(r => r.ChildId).Should().Equal(c1, c2);
+            var c1Row5 = s5.Single(r => r.ChildId == c1);
+            c1Row5.Id.Should().Be(c1Pk);
+            c1Row5.Note.Should().BeNull("an explicit null payload value must reach Postgres as a typed NULL, not text 'null' (42804)");
+            c1Row5.Weight.Should().Be(5, "Note=null must not disturb the previously-set Weight");
+
+            // Step 6: a hand-inserted duplicate (parent, c2) row is repaired down to one, keeping
+            // whichever PK Postgres itself orders lowest — matching ManyToManySync's own
+            // `ORDER BY {pkColumn} ASC` — without throwing.
+            var beforeDup = Rows().Single(r => r.ChildId == c2);
+            var duplicateId = Guid.NewGuid();
+            db.Insertable(new JunctionSyncProbe { Id = duplicateId, ParentId = parentId, ChildId = c2, Sort = 99 })
+                .ExecuteCommand();
+            var expectedSurvivorId = db.Queryable<JunctionSyncProbe>()
+                .Where(r => r.Id == beforeDup.Id || r.Id == duplicateId)
+                .OrderBy(r => r.Id)
+                .Select(r => r.Id)
+                .First();
+
+            await Sync(JunctionLink.Bare(c1), JunctionLink.Bare(c2));
+
+            var s6 = Rows();
+            s6.Select(r => r.ChildId).Should().Equal(c1, c2);
+            s6.Where(r => r.ChildId == c2).Should().ContainSingle(
+                "the duplicate must be repaired down to exactly one row").Which.Id.Should().Be(expectedSurvivorId);
+        }
+        finally
+        {
+            try
+            {
+                if (db.DbMaintenance.IsAnyTable("junction_sync_probe", false))
+                    db.DbMaintenance.DropTable("junction_sync_probe");
+            }
+            catch { /* best-effort cleanup; don't mask the real failure */ }
         }
     }
 }

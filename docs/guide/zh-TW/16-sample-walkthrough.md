@@ -13,9 +13,10 @@
 內容專案的 SqlSugar 相依性所允許的兩種變體之一。這個範例的 `.csproj` 實際上同時帶有**兩種**變體：
 除了透過 `Struo.Infrastructure` 的間接路徑之外，它自己還有一個直接的 `SqlSugarCore`
 `PackageReference`——也就是檢查清單允許的第二種變體。它宣告
-了三個真正的集合——`Article`、`Tag`、`Category`——外加 `ArticleTranslation`(`Article` 的翻譯附屬
-資料表，本身並非一個集合)、一個純粹的 `ArticleTag` 多對多 junction(同樣沒有標示
-`[CmsCollection]`)，以及 `FaqItem`，一個被用作 Repeater 子欄位型別的單純 POCO。
+了三個擁有自己側欄項目的集合——`Article`、`Tag`、`Category`——外加 `ArticleTranslation`
+(`Article` 的翻譯附屬資料表，本身並非一個集合)、`Article`↔`Tag` 之間的多對多 junction
+`ArticleTag`(它自己也是一個 `[CmsCollection]`，`Hidden = true` 讓它沒有自己的側欄項目——見
+下文)，以及 `FaqItem`，一個被用作 Repeater 子欄位型別的單純 POCO。
 
 `src/Struo.*` 底下沒有任何東西參照它。出貨的 `src/Struo.Api/Struo.Api.csproj` 沒有任何
 `ProjectReference` 指向它，出貨的 `Struo:ContentAssemblies` 也是 `[]`——這在第 2 章「尚無集合時」的
@@ -96,8 +97,9 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 欄位)、`Faqs`(`Repeater`，型別為 `FaqItem`——見下方)，以及 `InternalNote`，一個被排除在
 schema、GraphQL 與項目投影之外的 `Hidden` 文字欄位。它還宣告了兩個關聯：`Category`(一個多對一的
 `Dropdown`，`OnDelete = SetNull`)與 `Tags`(一個透過 `ArticleTag` junction 建立的多對多
-`TagSelect`，藉由 `[Navigate(typeof(ArticleTag), ...)]`)。標題與內文**不在**這裡——它們位於翻譯
-附屬資料表上，接下來就會談到。
+`TagSelect`，藉由 `[Navigate(typeof(ArticleTag), ...)]`，並由
+`[CmsRelation(SortField = nameof(ArticleTag.Sort))]` 排序)。標題與內文**不在**這裡——它們位於
+翻譯附屬資料表上，接下來就會談到。
 
 ### `ArticleTranslation.cs`——翻譯附屬資料表
 
@@ -116,10 +118,76 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 ### `Tag.cs` + `ArticleTag.cs`——透過 junction 建立的多對多關聯
 
 `Tag`(`[SugarTable("tags")]`)是這個範例中最單純的一個真正集合：只有一個必填、可搜尋的 `Name`。
-`ArticleTag`(`[SugarTable("article_tags")]`)則完全**不是**一個集合——沒有 `[CmsCollection]`，
-只有 `Id`/`ArticleId`/`TagId`，外加各自 FK 欄位上的一個次要索引。它存在純粹是作為 `Article.Tags`
-的 `[Navigate(typeof(ArticleTag), ...)]` 關聯所走過的那張連接表，讓 `Article` 擁有一個多對多的
-`TagSelect` 欄位，而不需要自己專屬的 junction-table UI(第 7 章)。
+`ArticleTag`(`[SugarTable("article_tags")]`)就是 `Article.Tags` 的
+`[Navigate(typeof(ArticleTag), ...)]` 關聯所走過的那張連接表——但它跟一個純粹的 junction 不同，
+它**本身就是**一個 `[CmsCollection]`(`Hidden = true`，所以從不出現在管理後台側欄中)，除了兩個
+外鍵之外還帶有 payload：一個 `Note` 文字欄位，以及一個同時身兼 `Article.Tags` 的 `SortField` 的
+`Sort` 數字欄位。它的存在，就是為了針對一個真正、實際運作中的集合，端到端示範 junction-payload
+這個功能(第 7 章)——`Note` 是屬於文章↔標籤這條**連結**本身的資料(這個標籤為什麼被貼到這篇文章
+上)，而不屬於任何一端：
+
+```csharp
+// samples/Struo.Sample.Blog/ArticleTag.cs
+using SqlSugar;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
+
+namespace Struo.Sample.Blog;
+
+// The article<->tag M2M junction, promoted to a [CmsCollection] so the shipped sample demonstrates
+// the junction-payload feature end to end: Note is extra data carried BY the link itself (not by
+// either endpoint), and Sort lets an admin order an article's tags (wired via
+// Article.Tags' [CmsRelation(SortField = nameof(Sort))]). Hidden = true keeps it out of the admin
+// sidebar — it is still reachable through /api/schema, the RBAC matrix and GraphQL, same as any
+// other collection; only the sidebar treats it specially. Both foreign keys must stay declared as
+// writable [CmsField]s (Interface = FieldInterface.Uuid): MetadataScanner.ValidateJunctionCollections
+// fails fast at startup on any junction collection whose FKs aren't writable, because the generic
+// CRUD API would otherwise create rows with empty keys. A fork that deletes this sample (per
+// AGENTS.md's core/sample boundary) loses nothing else — no core code references this type. An
+// existing dev database picks up the two new columns (note, sort) only through Development's
+// AutoSyncSchema or a fork-authored migration; this table is not part of db/migrations.
+[SugarTable("article_tags")]
+// CodeFirst-declared secondary indexes on both M2M junction FKs, both directions (RelationExpander
+// expansion + sync-on-write), created by InitTables in dev; a downstream fork that keeps this
+// entity should add the equivalent indexes to its own migrations.
+[SugarIndex("ix_article_tags_articleid", nameof(ArticleId), OrderByType.Asc)]
+[SugarIndex("ix_article_tags_tagid", nameof(TagId), OrderByType.Asc)]
+[CmsCollection("Article tag", Icon = "link", Group = "Content", Hidden = true)]
+public sealed class ArticleTag
+{
+    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+    [CmsField(Label = "Article", Interface = FieldInterface.Uuid, Required = true, Sort = 1)]
+    public Guid ArticleId { get; set; }
+
+    [CmsField(Label = "Tag", Interface = FieldInterface.Uuid, Required = true, Sort = 2)]
+    public Guid TagId { get; set; }
+
+    [SugarColumn(IsNullable = true)]
+    [CmsField(Label = "Note", Interface = FieldInterface.Text, MaxLength = 200, Sort = 3)]
+    public string? Note { get; set; }
+
+    [CmsField(Label = "Sort", Interface = FieldInterface.Number, Sort = 4)]
+    public int Sort { get; set; }
+}
+```
+
+這裡 `ArticleId`/`TagId` 上的 `Required = true` 只是裝飾用，並非真正防止 junction 外鍵留空的
+機制——真正做到這件事的，是第 7 章那個 fail-fast 驗證(把兩個外鍵都宣告成可寫入的
+`[CmsField]`)；`Required` 實際呼叫的檢查是 `FieldValueRules.IsMissing`
+(`src/Struo.Application/Query/Write/FieldValueRules.cs`)，它只會拒絕 `null` 值或空白**字串**，
+而一個 `Guid` 外鍵反序列化出來的是真正的 `Guid` 值，從來不是字串，所以 `Required` 在這裡根本不會
+真正攔到一個被省略或留空的值。如果你把這個範例跑在一個此功能出現之前就建立好的資料庫上，這兩個
+新欄位(`note`、`sort`)得先真正抵達資料表，`article_tags` 的資料列才能攜帶它們——要嘛靠
+Development 環境下的 `Database:AutoSyncSchema=true`(第 15 章)，要嘛自己撰寫一份 migration，
+因為 `db/migrations` 是 core 專屬的，從不出貨範例集合的 schema(本章自己的「完全移除範例」
+檢查清單，見下文，對範例的資料表也點出了同樣的界線)。
+
+由於 `ArticleTag` 本身就是一個 `[CmsCollection]`，它也完全可以透過通用 CRUD/GraphQL 介面直接
+對這張 junction 資料表本身操作(即 `articleTag`，不只是透過 `Article.Tags`)——而它並未在
+`(ArticleId, TagId)` 上宣告唯一索引，所以透過這條路徑直接寫入有可能建立出重複的一對；下一次
+儲存所屬的 article 時就會修復它(保留主鍵最小的那一列，其餘刪除，並記錄一筆警告——見第 7 章
+`ManyToManySync`)。
 
 ### `Category.cs`——帶有自我參照樹狀結構的多對一關聯
 

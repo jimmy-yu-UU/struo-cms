@@ -228,6 +228,25 @@ a fork would implement to point at a different storage engine, not a different O
 above; the content entities' SqlSugar attributes stay regardless. Any replacement must implement the
 three purge primitives explicitly or purge will throw for every collection.
 
+**M2M sync strategy — diff-and-patch, not delete-and-recreate.** `SyncManyToManyAsync` (implemented by
+`ManyToManySync`, below) diffs the incoming `IReadOnlyList<JunctionLink>` against the junction rows
+already on file for `parentId`: rows for targets no longer present are deleted, rows for newly present
+targets are inserted, and rows for targets that remain keep their own primary key and are updated
+in-place rather than dropped and reinserted — a junction row's id is therefore stable across a write
+that keeps its target linked. A `JunctionLink` (`src/Struo.Application/Query/Write/JunctionLink.cs`)
+pairs a target id with an optional payload dictionary (CLR property names → values); a `null` payload
+(`JunctionLink.Bare`) is membership-only and leaves an existing row's payload untouched. If more than
+one existing row targets the same id (a duplicate left over from data written before this diff-and-patch
+strategy existed), the lowest-primary-key row is kept and the rest are deleted, with one warning logged
+naming the table and the count removed.
+
+**Breaking change for a fork implementing `IItemRepository` itself**: `SyncManyToManyAsync`'s `links`
+parameter changed from a plain target-id list to `IReadOnlyList<JunctionLink>` — a fork with
+its own `IItemRepository` implementation (not `SqlSugarItemRepository`) must update that method's
+signature and, if it wants junction-payload writes to actually take effect, apply each link's `Payload`
+dictionary itself; a fork that only calls through the framework's `SqlSugarItemRepository` is
+unaffected.
+
 `SqlSugarItemRepository` is a facade: it keeps the `IItemRepository` members `QueryAsync`,
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
 `RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,

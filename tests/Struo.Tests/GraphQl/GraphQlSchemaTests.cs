@@ -23,6 +23,7 @@ public class GraphQlSchemaTests
         var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource, FakeGraphQlDataSource>()
             // AddTypeModule<T>() resolves T via GetRequiredService<T>() against application
             // services (not schema-scoped activation) — must be registered explicitly.
@@ -50,6 +51,7 @@ public class GraphQlSchemaTests
         var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource, FakeGraphQlDataSource>()
             .AddSingleton<StruoTypeModule>();
 

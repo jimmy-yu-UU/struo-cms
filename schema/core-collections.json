@@ -249,7 +249,8 @@
         "pickerQuery": null,
         "onDelete": "restrict",
         "editable": true,
-        "selfReferencing": false
+        "selfReferencing": false,
+        "junctionCollection": null
       }
     ],
     "translation": {
@@ -554,7 +555,8 @@
         "pickerQuery": null,
         "onDelete": "restrict",
         "editable": true,
-        "selfReferencing": true
+        "selfReferencing": true,
+        "junctionCollection": null
       }
     ],
     "translation": null
@@ -1030,7 +1032,8 @@
         "pickerQuery": null,
         "onDelete": "restrict",
         "editable": true,
-        "selfReferencing": false
+        "selfReferencing": false,
+        "junctionCollection": "userRole"
       }
     ],
     "translation": null

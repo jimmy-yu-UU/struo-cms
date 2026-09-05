@@ -13,7 +13,8 @@ namespace Struo.Api.GraphQl;
 /// one object type + list wrapper + filter input + two root query fields per collection, plus the
 /// shared TagItem/Translation value types and the reusable scalar filter inputs.
 /// </summary>
-public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry registry) : ITypeModule
+public sealed class StruoTypeModule(
+    IMetadataProvider metadata, IEntityRegistry registry, IM2MDescriptorSource m2mSource) : ITypeModule
 {
 #pragma warning disable CS0067 // collections are fixed at boot; never fires
     public event EventHandler<EventArgs>? TypesChanged;
@@ -22,7 +23,7 @@ public sealed class StruoTypeModule(IMetadataProvider metadata, IEntityRegistry 
     public ValueTask<IReadOnlyCollection<ITypeSystemMember>> CreateTypesAsync(
         IDescriptorContext context, CancellationToken cancellationToken)
     {
-        var builder = new CollectionSchemaBuilder(registry);
+        var builder = new CollectionSchemaBuilder(registry, metadata, m2mSource);
         var types = new List<ITypeSystemMember>();
 
         // Shared value types.
