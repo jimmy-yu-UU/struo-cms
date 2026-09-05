@@ -94,9 +94,30 @@ public static class MetadataScanner
             collections.Add(meta);
         }
 
+        ValidateReservedNames(collections);
         ValidateJunctionCollections(collections, typeList);
         ValidateJunctionPrimaryKeys(collections, typeList);
         return collections;
+    }
+
+    /// <summary>
+    /// Fail-fast: a field or relation named like a reserved filter token (<c>_and</c>/<c>_or</c>/
+    /// <c>_some</c>/<c>_none</c>/<c>_junction</c>, in either spelling) would be unreachable through the
+    /// query-string filter grammar — the parser folds it as the token, not as a field name — and would
+    /// silently shadow the real query semantics for any predicate mentioning it. Caught at scan time
+    /// instead of surfacing as a confusing "unknown field" or mis-parsed query at request time.
+    /// </summary>
+    private static void ValidateReservedNames(IReadOnlyList<CollectionMetadata> collections)
+    {
+        foreach (var c in collections)
+        {
+            var names = c.Fields.Select(f => f.Name).Concat(c.Relations.Select(r => r.Name));
+            var clash = names.FirstOrDefault(n => Struo.Application.Query.FilterReservedTokens.All.Contains(n));
+            if (clash is not null)
+                throw new MetadataException(
+                    $"Collection '{c.Name}' declares a field or relation named '{clash}', which is a reserved filter token " +
+                    $"({string.Join(", ", Struo.Application.Query.FilterReservedTokens.All)}).");
+        }
     }
 
     /// <summary>
