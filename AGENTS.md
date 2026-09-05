@@ -74,7 +74,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with two deliberate exceptions for raw SQL.** Migration
+- **All database access is through SqlSugar, with three deliberate exceptions for raw SQL.** Migration
   scripts under `db/migrations/` are one — the template ships **none**: it holds only its `README.md`,
   and any script there belongs to the fork that put it there. Replaceability is a choice made once, at
   fork time, not a property every deployment must preserve forever: the core ships no vendor-SQL
@@ -84,6 +84,15 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   answer "is there a UNIQUE index covering these columns"; it returns early for MySQL/SqlServer/Oracle
   and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so the shipped
   production path stays vendor-SQL-free.
+  The third is the relation-filter pushdown's subquery wrapper
+  (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
+  `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
+  assembled around SqlSugar-generated SQL — `<col> IN (<sql>)`, `<col> NOT IN (<sql>)`,
+  `(<col> IS NULL OR <col> NOT IN (<sql>))` and `(<sql1> OR <sql2> …)` — where `<col>` always comes from
+  `GetDbColumnName` and `<sql>` from `ToSql()`. Nothing else may assemble SQL text, and SqlSugar's own
+  string overloads (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`)
+  count as hand-written SQL: use the typed lambda overloads, and when the typed surface cannot express
+  something, stop and get the maintainer's explicit approval instead of falling back to a string.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
