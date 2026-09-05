@@ -41,7 +41,15 @@ public static class QueryValidator
         private int conditionCount;
         private readonly Dictionary<string, HashSet<string>> knownCache = new(StringComparer.OrdinalIgnoreCase);
 
-        public void ValidateFilter(FilterNode? node, CollectionMetadata meta, int hopsUsed, int logicalDepth)
+        // predicateRelation: the enclosing RelationPredicateFilter's OWN last hop relation, threaded
+        // through so a "_junction.<field>" leaf reached DIRECTLY in that predicate's inner (see
+        // ValidateJunctionLeaf) can be validated against it — a predicate's inner has already consumed
+        // every relation hop leading to `meta`, so "_junction" there can never be resolved by walking
+        // hops from `meta` the way an ordinary dotted field path (e.g. "labels._junction.note") is.
+        // Null outside any predicate's inner (the top-level call, and every non-predicate recursion).
+        public void ValidateFilter(
+            FilterNode? node, CollectionMetadata meta, int hopsUsed, int logicalDepth,
+            RelationMetadata? predicateRelation = null)
         {
             switch (node)
             {
@@ -49,14 +57,16 @@ public static class QueryValidator
                     return;
                 case ComparisonFilter c:
                     CountCondition();
-                    CheckField(c.FieldPath, meta, hopsUsed: hopsUsed);
+                    if (IsJunctionLeaf(c.FieldPath)) ValidateJunctionLeaf(c.FieldPath, predicateRelation);
+                    else CheckField(c.FieldPath, meta, hopsUsed: hopsUsed);
                     return;
                 case LogicalFilter l:
                     if (logicalDepth >= 2)
                         throw new QueryException(
                             "Nested logical groups are not supported; " +
                             "use a single level of _and/_or over field conditions.");
-                    foreach (var child in l.Children) ValidateFilter(child, meta, hopsUsed, logicalDepth + 1);
+                    foreach (var child in l.Children)
+                        ValidateFilter(child, meta, hopsUsed, logicalDepth + 1, predicateRelation);
                     return;
                 case RelationPredicateFilter p:
                     ValidatePredicate(p, meta, hopsUsed);
@@ -65,6 +75,9 @@ public static class QueryValidator
                     throw new QueryException($"Unsupported filter node '{node.GetType().Name}'.");
             }
         }
+
+        private static bool IsJunctionLeaf(string fieldPath) =>
+            fieldPath.StartsWith(FilterReservedTokens.Junction + ".", StringComparison.Ordinal);
 
         private void ValidatePredicate(RelationPredicateFilter p, CollectionMetadata meta, int hopsUsed)
         {
@@ -77,7 +90,35 @@ public static class QueryValidator
             var rp = RelationPath.ParseRelationOnly(meta.Name, p.RelationPath, graph, metadata, opts.MaxRelationDepth - hopsUsed);
             var target = metadata.GetCollection(rp.TerminalCollection)
                 ?? throw new QueryException($"Unknown collection '{rp.TerminalCollection}'.");
-            ValidateFilter(p.Inner, target, hopsUsed + rp.Segments.Count, logicalDepth: 1);
+            ValidateFilter(p.Inner, target, hopsUsed + rp.Segments.Count, logicalDepth: 1, rp.Segments[^1].Relation);
+        }
+
+        // Validates a "_junction.<field>" leaf reached directly in a predicate's inner filter (see the
+        // ValidateFilter/ValidatePredicate doc comments). Read-grant on the junction collection is
+        // checked BEFORE the field name is looked up — resolving an unknown field first would let a
+        // caller without read on the junction collection distinguish a real payload field from an
+        // invented one by response code (400 vs 403), the same oracle DenyUnreadableHops exists to
+        // prevent for ordinary hops.
+        private void ValidateJunctionLeaf(string fieldPath, RelationMetadata? predicateRelation)
+        {
+            if (predicateRelation is null)
+                throw new QueryException($"'_junction' is only valid inside a relation predicate's inner filter: '{fieldPath}'.");
+            if (predicateRelation.Kind != RelationKind.ManyToMany || predicateRelation.JunctionCollection is null)
+                throw new QueryException($"'{fieldPath}': '_junction' is only valid after a many-to-many relation with a junction collection.");
+
+            var junctionCollection = predicateRelation.JunctionCollection;
+            if (!permissions.CanRead(junctionCollection))
+                throw new PermissionDeniedException($"Read not permitted on '{junctionCollection}'.");
+
+            var remainder = fieldPath[(FilterReservedTokens.Junction.Length + 1)..];
+            if (remainder.Length == 0 || remainder.Contains('.'))
+                throw new QueryException($"'{fieldPath}': '_junction' must be followed by exactly one junction field.");
+
+            var junctionMeta = metadata.GetCollection(junctionCollection)
+                ?? throw new QueryException($"Unknown collection '{junctionCollection}' in path '{fieldPath}'.");
+            var known = junctionMeta.Fields.Any(f => !f.Hidden && string.Equals(f.Name, remainder, StringComparison.OrdinalIgnoreCase));
+            if (!known)
+                throw new QueryException($"Unknown field '{remainder}' on collection '{junctionCollection}' in path '{fieldPath}'.");
         }
 
         public void CheckField(

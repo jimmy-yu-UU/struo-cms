@@ -470,4 +470,49 @@ public class QueryValidatorTests
         var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("articleTag"));
         act.Should().Throw<PermissionDeniedException>();
     }
+
+    // Fix round 2: "_junction.<field>" reached directly inside a `_some`/`_none` predicate's inner
+    // filter (not as an ordinary dotted field path — see QueryValidator.ValidateJunctionLeaf). The
+    // predicate's own last relation segment (article.tags, an M2M with JunctionCollection "articleTag")
+    // is what "_junction" resolves against here, since the inner has already consumed that hop.
+
+    private static LogicalFilter And(params FilterNode[] children) => new(LogicalOperator.And, children);
+
+    [Fact]
+    public void Some_inner_junction_field_is_accepted()
+    {
+        var q = Q(Some("tags", And(new ComparisonFilter("name", QueryOperator.Eq, "a"), new ComparisonFilter("_junction.note", QueryOperator.Eq, "hero"))));
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Some_inner_junction_field_requires_read_on_the_junction_collection()
+    {
+        var q = Q(Some("tags", And(new ComparisonFilter("name", QueryOperator.Eq, "a"), new ComparisonFilter("_junction.note", QueryOperator.Eq, "hero"))));
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("articleTag"));
+        act.Should().Throw<PermissionDeniedException>();
+
+        // The grant is checked before the field name — an invented junction field must fail the same
+        // way (PermissionDenied, not Unknown field) when the caller cannot read the junction collection.
+        var invented = Q(Some("tags", new ComparisonFilter("_junction.nope", QueryOperator.Eq, "x")));
+        var actInvented = () => QueryValidator.Validate(invented, Meta(), Opts, Graph, Md, new DenyReadOf("articleTag"));
+        actInvented.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Some_inner_hidden_junction_field_is_unknown()
+    {
+        var act = () => QueryValidator.Validate(
+            Q(Some("tags", new ComparisonFilter("_junction.secret", QueryOperator.Eq, "x"))), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*Unknown field*");
+    }
+
+    [Fact]
+    public void Some_inner_junction_on_m2o_relation_throws()
+    {
+        var act = () => QueryValidator.Validate(
+            Q(Some("category", new ComparisonFilter("_junction.x", QueryOperator.Eq, "y"))), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>();
+    }
 }
