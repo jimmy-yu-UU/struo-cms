@@ -471,14 +471,14 @@ public class JunctionPayloadGraphQlTests
     public async Task Payload_relation_filter_field_uses_a_relation_specific_input_with_junction()
     {
         var sdl = await BuildSdlAsync();   // reuse this file's SDL helper
-        sdl.Should().Contain("children: ParentChildrenFilterInput");
+        sdl.Should().Contain("children: ParentChildrenRelationFilterInput");
         sdl.Should().Contain("plainChildren: ChildFilterInput");
-        sdl.Should().Contain("input ParentChildrenFilterInput");
+        sdl.Should().Contain("input ParentChildrenRelationFilterInput");
         sdl.Should().Contain("junction: ParentChildrenJunctionFilterInput");
         sdl.Should().Contain("input ParentChildrenJunctionFilterInput");
         sdl.Should().Contain("note: StringFilter");
         sdl.Should().NotContain("secret: StringFilter");
-        sdl.Should().Contain("some: ParentChildrenFilterInput");
+        sdl.Should().Contain("some: ParentChildrenRelationFilterInput");
     }
 
     [Fact]

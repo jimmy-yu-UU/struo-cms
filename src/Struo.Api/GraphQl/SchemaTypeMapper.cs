@@ -47,7 +47,13 @@ public static class SchemaTypeMapper
     // Filter-side counterparts: a payload-carrying M2M relation's field on the parent's
     // FilterInput uses a relation-specific input (carrying the target's own filterable fields plus
     // and/or/some/none of itself and a `junction` field) instead of the plain `<Target>FilterInput`.
-    public static string RelationFilterInputName(string collection, string relation) => Pascal(collection) + Pascal(relation) + "FilterInput";
+    // Neither name may end in the bare "FilterInput" suffix: StruoTypeModule builds a
+    // "<T>FilterInput" for EVERY [CmsCollection] (junction collections included), so a
+    // relation-derived "<Parent><Rel>FilterInput" can collide with a real junction collection
+    // literally named "<parent><Relation>" (e.g. relation "article.tags" vs. a junction collection
+    // "articleTags" would both emit "ArticleTagsFilterInput") and take the whole schema build down
+    // with a duplicate-type error — hence "RelationFilterInput", not "FilterInput", below.
+    public static string RelationFilterInputName(string collection, string relation) => Pascal(collection) + Pascal(relation) + "RelationFilterInput";
     public static string JunctionFilterInputName(string collection, string relation) => Pascal(collection) + Pascal(relation) + "JunctionFilterInput";
 
     /// <summary>
