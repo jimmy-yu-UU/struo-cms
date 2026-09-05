@@ -201,14 +201,15 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 ## Filters, including cross-relation dotted paths
 
 `FileFilterInput` carries `and`/`or` (each `[FileFilterInput!]`, exactly one level — same restriction as
-REST's JSON-envelope `_and`/`_or`, chapter 8), `id: IdFilter`, one operator-input field per filterable
-own field (`StringFilter`/`IntFilter`/`FloatFilter`/`DateTimeFilter`/`BooleanFilter`/`IdFilter` — built
+REST's JSON-envelope `_and`/`_or`, chapter 8), `some`/`none` (each a bare `FileFilterInput` — the
+relation quantifiers, covered below; meaningless at this root level and rejected if used here), `id:
+IdFilter`, one operator-input field per filterable own field (`StringFilter`/`IntFilter`/`FloatFilter`/`DateTimeFilter`/`BooleanFilter`/`IdFilter` — built
 once in `SharedFilterTypes.cs` and reused across every collection), and — the cross-relation part — a
 relation's own foreign-key column as an `IdFilter` (parity with REST's FK-filtering allowlist, chapter
 8) **plus** a nested filter input on the relation's target type. `FilterInputTranslator`
 (`src/Struo.Api/GraphQl/FilterInputTranslator.cs`) flattens a nested relation filter into the same
-dotted `FieldPath` (`"folder.name"`) chapter 8's `RelationFilterResolver` already rewrites to `id IN
-(…)` — the GraphQL and REST cross-relation paths converge on identical `FilterNode` trees before either
+dotted `FieldPath` (`"folder.name"`) chapter 8's `FilterTranslator` pushes down into a subquery —
+the GraphQL and REST cross-relation paths converge on identical `FilterNode` trees before either
 one reaches the query validator:
 
 ```
@@ -219,6 +220,48 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 
 `isNull: Boolean` on every operator input renders the same pure `IS [NOT] NULL` chapter 8 documents for
 `_null`/`_nnull` — no comparison value reaches the database for it.
+
+### Relation quantifiers: `some`/`none`, and `_junction` via `<Parent><Rel>RelationFilterInput`
+
+Every `<T>FilterInput` additionally carries `some: <T>FilterInput` and `none: <T>FilterInput` — the
+same relation quantifiers chapter 7/8 cover for REST, reserved the same way `and`/`or` are. They are
+only meaningful **nested inside a relation's own filter dict**; used at the root of any `filter`
+argument (own-field or a nested-list's own `filter` arg) they are rejected:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { article(id: \"<id>\") { id tags(filter: { some: { name: { eq: \"Guide\" } } }) { id } } }"}'
+{"errors":[{"message":"'some' is only valid inside a relation filter.","path":["article"],"extensions":{"code":"BAD_USER_INPUT"}}],"data":{"article":null}}
+```
+
+(That last query's `tags(filter: ...)` is a to-many *nested-list* argument, resolved by the same
+`deep`-expansion machinery below — its own `filter` argument's type is the plain, unchanged
+`TagFilterInput`, not the relation-specific input described next; `some`/`none` there are evaluated
+at that argument's own root, which is exactly the "root, no relation context" case the error above
+names.)
+
+For a many-to-many relation whose junction carries an exposable payload (chapter 7's junction
+payload and `_junction` read projection), the parent type's filter field for that relation is **not** the
+plain `<Target>FilterInput` — it is a relation-specific `<Parent><Rel>RelationFilterInput`, which adds
+a `junction: <Parent><Rel>JunctionFilterInput` field (one operator-input field per exposable payload
+field) alongside the target's own filterable fields and `and`/`or`/`some`/`none` of itself. The
+sample's `Article.tags` (payload: `note`) is the shipped example — introspection confirms the type
+names (`ArticleTagsRelationFilterInput`/`ArticleTagsJunctionFilterInput`, following
+`SchemaTypeMapper.RelationFilterInputName`/`JunctionFilterInputName`), and `some` + `junction` compose
+in one query exactly like REST's `_some`/`_junction`:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { articles(filter: { tags: { some: { name: { eq: \"Guide-u3doc0905\" }, junction: { note: { eq: \"hero\" } } } } }) { items { id } total } }"}'
+{"data":{"articles":{"items":[{"id":"<a-id>"}],"total":1}}}
+```
+
+A relation whose junction carries no exposable payload keeps the plain, shared `<Target>FilterInput`
+— this relation-specific renaming is the one GraphQL type name that changes under this feature: a
+payload-bearing relation's filter field used to carry the plain, shared `<Target>FilterInput` type
+(`TagFilterInput` for `Article.tags`) and now carries the relation-specific
+`ArticleTagsRelationFilterInput` instead — a client that declares that field's type explicitly as a
+GraphQL variable (rather than letting the query embed it inline) must update it.
 
 ## Nested to-many lists and their arguments
 

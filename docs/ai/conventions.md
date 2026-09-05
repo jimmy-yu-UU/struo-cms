@@ -271,8 +271,23 @@ generic message — the real exception is logged server-side, never leaked to th
   SQL is built — an unknown field or relation path is rejected with `QueryException` /
   `BAD_USER_INPUT`, never passed through to the ORM. `QueryValidator` also enforces RBAC, not just
   metadata shape: `DenyUnreadableHops` walks a dotted filter/sort path hop by hop and throws
-  `PermissionDeniedException` on the first collection the caller cannot read. See
-  `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting, unknown paths, and the depth cap".
+  `PermissionDeniedException` on the first collection the caller cannot read (a `_junction` segment's
+  read grant is checked against the junction collection at the same point). The relation-quantifier
+  tokens `_some`/`_none`/`_junction` (`some`/`none`/`junction` in GraphQL) are reserved exactly like
+  `_and`/`_or` — `FilterReservedTokens.All`
+  (`src/Struo.Application/Query/FilterReservedTokens.cs`) is the single source of that set, and a
+  field or relation named one of them fails fast at startup. Every relation filter — a dotted path, a
+  `_some`/`_none` quantifier, or a translatable-field condition reached at any hop — is pushed down
+  into a nested SQL subquery by `FilterTranslator`
+  (`src/Struo.Infrastructure/Query/FilterTranslator.cs`, `FilterTranslator.Subquery.cs`) rather than
+  resolved to an in-memory id set first; that subquery never clears the target collection's
+  soft-delete filter, regardless of the outer request's own `?deleted=`. This translator hand-assembles
+  exactly four SQL string forms and nothing else — `<col> IN (<sql>)`, `<col> NOT IN (<sql>)`,
+  `(<col> IS NULL OR <col> NOT IN (<sql>))` (`SubQueryConditional.cs`), and the OR-merge of two or more
+  of those, `(<sql1> OR <sql2> OR …)` (`OrOfSubqueriesConditional.cs`) — every other fragment of SQL
+  text comes from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string. See
+  `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting,
+  unknown paths, and the depth cap".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
   not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a

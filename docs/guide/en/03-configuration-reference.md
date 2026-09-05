@@ -149,8 +149,9 @@ Unlike most of this chapter, this key is read straight from `IConfiguration` rat
 
 ## `Query`
 
-Bounds on the query DSL (chapter 8), enforced by `QueryValidator` and the relation/translatable-field
-resolvers. This section is **not** in the shipped `appsettings.json` — every default below comes from a
+Bounds on the query DSL (chapter 8), enforced by `QueryValidator` and, for the relation-subquery
+pushdown it validates, `FilterTranslator` (chapter 7). This section is **not** in the shipped
+`appsettings.json` — every default below comes from a
 C# property initializer on `StruoQueryOptions`
 (`src/Struo.Application/Configuration/StruoQueryOptions.cs`); add a `"Query"` block only to override one.
 
@@ -159,15 +160,9 @@ C# property initializer on `StruoQueryOptions`
 | `Query:MaxLimit` | int | `100` | Upper bound on a page's `limit`. A larger request is clamped down to this value, not rejected. |
 | `Query:DefaultLimit` | int | `25` | The `limit` applied when a request omits it or sends a non-positive value. |
 | `Query:MaxFilterConditions` | int | `50` | Cap on total leaf conditions per query, counted across every `_and`/`_or` branch. Exceeding it throws `"Too many filter conditions (max 50)."` before any query runs. |
-| `Query:MaxRelationDepth` | int | `6` | Cap on relation **hops** in a dotted path — in a filter, a sort key, or a nested `deep`. The final leaf field is not counted, so `folder.name` is 1 hop (chapter 7). |
-| `Query:MaxResolvedFilterIds` | int | `5000` | Cap on how many ids a single filter-resolution step may materialize — a cross-relation (dotted) filter or a translatable-field search. The other caps above bound the *result page*; this one bounds that intermediate set. |
+| `Query:MaxRelationDepth` | int | `6` | Cap on relation **hops** in a dotted path — in a filter, a sort key, or a nested `deep`. The final leaf field is not counted, so `folder.name` is 1 hop (chapter 7). `_junction` pseudo-segments do not count toward this cap. |
 
-`MaxResolvedFilterIds` refuses rather than truncates: exceeding it is a `400 BAD_USER_INPUT` naming the
-path and both numbers, because a silently shortened id set would return quietly wrong rows. Raise it if
-a fork's legitimate filters resolve to larger sets — the cost is memory plus SQL statement size, roughly
-40 bytes of statement text per uuid.
-
-All five are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
+All four are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
 negative override fails startup rather than producing a nonsensical bound. Chapter 8 covers what each
 cap bounds in context. Restart required.
 
