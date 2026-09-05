@@ -590,6 +590,40 @@ public sealed class PostgresIntegrationTests : IDisposable
         }
     }
 
+    // Task 8, live PG: a two-hop self-relation dotted filter (category.parent.name) with a
+    // deliberately wide sibling set at the walk-back hop — the scenario the retired resolved-id-set
+    // cap used to bound as a materialized, cardinality-checked id set — is answered as a correlated
+    // SQL subquery (IN (SELECT …)) on real Postgres, and querying with those conditionals returns
+    // exactly the matching children.
+    [Fact]
+    public async Task Wide_dotted_filter_is_answered_in_sql_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, graph, options) = BuildRepoWithGraph();
+
+        var stamp = "PgCapWide" + Guid.NewGuid().ToString("N")[..8];
+        var parent = (Category)await repo.CreateAsync("category", new Category { Name = $"PgCapWideParent-{stamp}" });
+        var children = new List<Category>();
+        for (var i = 0; i < 4; i++)
+            children.Add((Category)await repo.CreateAsync(
+                "category", new Category { Name = $"PgCapWide-p{i}-{stamp}", ParentId = parent.Id }));
+
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var collections = MetadataScanner.ScanTypes(types);
+        var metadata = new CachedMetadataProvider(collections);
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var translator = new FilterTranslator(_db!, graph, metadata, registry, options);
+
+        var conds = translator.Translate(
+            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp), null, [], null);
+        var sql = _db!.Queryable<Category>().Where(conds).ToSql();
+        sql.Key.Should().Contain("IN (SELECT");
+        sql.Key.Should().NotContain("N'");
+
+        var rows = await _db.Queryable<Category>().Where(conds).ToListAsync();
+        rows.Select(c => c.Id).Should().BeEquivalentTo(children.Select(c => c.Id));
+    }
+
     // Task 6, live PG: the translation-sidecar subquery's own shape — article_translations has a
     // `long` identity PK (Id) and projects a `uuid` FK (ArticleId) that the outer article query
     // compares its own uuid `id` column against. This is the SQLite-green/Postgres-risky combination

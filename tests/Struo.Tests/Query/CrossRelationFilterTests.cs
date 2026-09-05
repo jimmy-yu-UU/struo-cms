@@ -72,6 +72,31 @@ public class CrossRelationFilterTests(ApiFactory factory)
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit);
     }
 
+    // Distinct code path from the two tests above: here the LEAF (one parent category) is narrow and
+    // it is the walk-back hop (its children) that is wide. Moved from the retired resolved-id-set-cap
+    // test suite — the two-hop dotted path is answered as a correlated SQL subquery rather than a
+    // materialized, cardinality-bounded id set, so a parent with many children must not be refused.
+    [Fact]
+    public async Task Filter_multi_level_category_parent_name_with_a_wide_sibling_set_is_not_refused()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var stamp = "WideHop" + Guid.NewGuid().ToString("N")[..8];
+        var parent = await Post(c, "category", new { name = stamp });
+        const int childCount = 3;
+        for (var i = 0; i < childCount; i++)
+            await Post(c, "category", new { name = $"{stamp}-child-{i}", parentId = parent });
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object> { ["category.parent.name"] = Eq(stamp) }
+        });
+        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        // No article references any of these categories, so the pushed-down query legitimately
+        // returns zero rows — the point is the 200, not the row count.
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
+    }
+
     [Fact]
     public async Task Filter_relation_path_or_scalar_composes()
     {
