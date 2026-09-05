@@ -38,8 +38,16 @@ namespace Struo.Tests.Query;
 public sealed class PostgresCollectionDefinition { }
 
 [Collection("Postgres")]
-public sealed class PostgresIntegrationTests : IDisposable
+public sealed partial class PostgresIntegrationTests : IDisposable
 {
+    // Source-generated regexes (SYSLIB1045): the "sqN_" nesting-prefix SubQueryConditional
+    // allocates per Wrap() call (see Two_nesting_levels_compose_through_Wrap_on_postgres below).
+    [GeneratedRegex(@"sq(\d+)_")]
+    private static partial Regex SqPrefixWithGroupRegex();
+
+    [GeneratedRegex(@"sq\d+_")]
+    private static partial Regex SqPrefixRegex();
+
     private const string ConnEnv = "STRUO_TEST_PG_CONNECTION";
     private static readonly string? Conn = ResolveConnection();
     private ISqlSugarClient? _db;
@@ -323,7 +331,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         var sub = _db.Queryable<Category>()
             .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgProbe O'Brien" } })
             .Select(sel).ToSql();
-        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
         var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { SubQueryConditional.Wrap(SubQueryKind.In, col, sub) });
 
         q.ToSql().Key.Should().NotContain("N'");
@@ -347,7 +355,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         var news = new Category { Id = Guid.NewGuid(), Name = "PgCollide News" };
         _db!.Insertable(new[] { tech, news }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
         var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
 
         KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
@@ -392,7 +400,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         var other = new Category { Id = Guid.NewGuid(), Name = "PgNest Other" };
         _db!.Insertable(new[] { x, other }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
         var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
 
         KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
@@ -422,9 +430,9 @@ public sealed class PostgresIntegrationTests : IDisposable
         var final = q.ToSql();
 
         final.Key.Should().NotContain("N'");
-        var prefixes = System.Text.RegularExpressions.Regex.Matches(final.Key, @"sq(\d+)_").Select(m => m.Groups[1].Value).Distinct().ToList();
+        var prefixes = SqPrefixWithGroupRegex().Matches(final.Key).Select(m => m.Groups[1].Value).Distinct().ToList();
         prefixes.Should().HaveCount(2, "two independent Wrap() calls (level2->level1, level1->outer) each allocate their own prefix");
-        var doublyPrefixedName = final.Value.Select(p => p.ParameterName).Single(n => System.Text.RegularExpressions.Regex.Matches(n, "sq\\d+_").Count == 2);
+        var doublyPrefixedName = final.Value.Select(p => p.ParameterName).Single(n => SqPrefixRegex().Count(n) == 2);
         final.Key.Should().Contain(doublyPrefixedName);
 
         (await q.ToListAsync()).Should().ContainSingle().Which.Id.Should().Be(x.Id);

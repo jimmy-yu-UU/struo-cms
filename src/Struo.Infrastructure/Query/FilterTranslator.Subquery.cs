@@ -21,19 +21,24 @@ internal sealed partial class FilterTranslator
 
     private static readonly GenericDispatcher<Func<FilterTranslator, List<IConditionalModel>, object>> NewQueryableDispatcher =
         new(typeof(FilterTranslator), nameof(NewQueryable), [typeof(List<IConditionalModel>)]);
-    private static readonly BiGenericDispatcher<Func<FilterTranslator, object, LambdaExpression, object>> ProjectDispatcher =
+    // Project/Guard/ToSql are dispatched WITHOUT a receiver (static generic methods): unlike
+    // NewQueryable above (which reads the instance field `db`), these three only ever operate on the
+    // `object`-boxed queryable passed in, so they carry no instance state to dispatch through — a
+    // static generic method definition, resolved and cached exactly like an instance one (see
+    // GenericDispatcher's doc comment), just without the leading receiver parameter.
+    private static readonly BiGenericDispatcher<Func<object, LambdaExpression, object>> ProjectDispatcher =
         new(typeof(FilterTranslator), nameof(Project), [typeof(object), typeof(LambdaExpression)]);
-    private static readonly GenericDispatcher<Func<FilterTranslator, object, string, object>> GuardDispatcher =
+    private static readonly GenericDispatcher<Func<object, string, object>> GuardDispatcher =
         new(typeof(FilterTranslator), nameof(Guard), [typeof(object), typeof(string)]);
-    private static readonly GenericDispatcher<Func<FilterTranslator, object, KeyValuePair<string, List<SugarParameter>>>> ToSqlDispatcher =
+    private static readonly GenericDispatcher<Func<object, KeyValuePair<string, List<SugarParameter>>>> ToSqlDispatcher =
         new(typeof(FilterTranslator), nameof(ToSql), [typeof(object)]);
 
     private object NewQueryable<T>(List<IConditionalModel> conds) where T : class, new() => db.Queryable<T>().Where(conds);
-    private object Project<T, TField>(object q, LambdaExpression projection) where T : class, new() =>
+    private static object Project<T, TField>(object q, LambdaExpression projection) where T : class, new() =>
         ((ISugarQueryable<T>)q).Select((Expression<Func<T, TField>>)projection);
-    private object Guard<T>(object q, string column) where T : class, new() =>
+    private static object Guard<T>(object q, string column) where T : class, new() =>
         ((ISugarQueryable<T>)q).Where(new List<IConditionalModel> { new ConditionalModel { FieldName = column, ConditionalType = ConditionalType.IsNot, FieldValue = null } });
-    private KeyValuePair<string, List<SugarParameter>> ToSql<TField>(object q) => ((ISugarQueryable<TField>)q).ToSql();
+    private static KeyValuePair<string, List<SugarParameter>> ToSql<TField>(object q) => ((ISugarQueryable<TField>)q).ToSql();
 
     private RelationshipGraph Graph => graph as RelationshipGraph
         ?? throw new InvalidOperationException("Relation filters need the concrete RelationshipGraph (junction/reverse-FK descriptors).");
@@ -91,15 +96,22 @@ internal sealed partial class FilterTranslator
             RelationKind.OneToMany => Projected(
                 Over(target.EntityType, targetConds, next), target.EntityType, desc.ReverseForeignKeyProperty!,
                 declaring.EntityType, declaring.IdProperty, guard: true),          // reverse FK is nullable: always guard
-            RelationKind.ManyToMany => ManyToManyHop(seg, desc, declaring, target, targetConds, next, isLast ? junctionLeaf : null, queryLocale, forNone),
+            RelationKind.ManyToMany => ManyToManyHop(new HopDescriptors(seg, desc, declaring, target), targetConds, next, isLast ? junctionLeaf : null, queryLocale, forNone),
             _ => throw new QueryException($"Unsupported relation kind '{seg.Relation.Kind}'."),
         };
     }
 
+    // The relation/descriptor quartet a many-to-many hop resolves once in Chain and then only reads
+    // from — bundled so ManyToManyHop's own per-call inputs (conds/next/junction leaf/locale/forNone)
+    // stay within the parameter-count limit without changing behaviour.
+    private readonly record struct HopDescriptors(
+        RelationSegment Seg, RelationDescriptor Desc, EntityDescriptor Declaring, EntityDescriptor Target);
+
     // declaring.id IN (SELECT parentFk FROM junction WHERE [junction conds] [AND targetFk IN (SELECT id FROM target WHERE …)])
-    private SubqueryRef ManyToManyHop(RelationSegment seg, RelationDescriptor desc, EntityDescriptor declaring, EntityDescriptor target,
+    private SubqueryRef ManyToManyHop(HopDescriptors hop,
         List<IConditionalModel> targetConds, SubqueryRef? next, FilterNode? junctionLeaf, string? queryLocale, bool forNone)
     {
+        var (seg, desc, declaring, target) = hop;
         var junctionConds = new List<IConditionalModel>();
         if (junctionLeaf is not null)
         {
@@ -122,7 +134,7 @@ internal sealed partial class FilterTranslator
     {
         if (next is not { } n) return NewQueryableDispatcher.For(entityType)(this, conds);
         var column = db.EntityMaintenance.GetDbColumnName(n.CompareProperty, entityType);
-        var sql = ToSqlDispatcher.For(n.FieldType)(this, n.Queryable);
+        var sql = ToSqlDispatcher.For(n.FieldType)(n.Queryable);
         var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, column, sql);
         return NewQueryableDispatcher.For(entityType)(this, [.. conds, wrapped]);
     }
@@ -131,16 +143,16 @@ internal sealed partial class FilterTranslator
     // against <compareProperty> on <compareOn>.
     private SubqueryRef Projected(object q, Type entityType, string projectProperty, Type compareOn, string compareProperty, bool guard)
     {
-        if (guard) q = GuardDispatcher.For(entityType)(this, q, db.EntityMaintenance.GetDbColumnName(projectProperty, entityType));
+        if (guard) q = GuardDispatcher.For(entityType)(q, db.EntityMaintenance.GetDbColumnName(projectProperty, entityType));
         var fieldType = ColumnSelectorFactory.PropertyType(entityType, projectProperty);
-        var projected = ProjectDispatcher.For(entityType, fieldType)(this, q, ColumnSelectorFactory.TypedSelector(entityType, projectProperty));
+        var projected = ProjectDispatcher.For(entityType, fieldType)(q, ColumnSelectorFactory.TypedSelector(entityType, projectProperty));
         return new SubqueryRef(projected, fieldType, compareOn, compareProperty);
     }
 
     private ConditionalModel Wrap(SubQueryKind kind, SubqueryRef sub)
     {
         var column = db.EntityMaintenance.GetDbColumnName(sub.CompareProperty, sub.CompareOn);
-        var sql = ToSqlDispatcher.For(sub.FieldType)(this, sub.Queryable);
+        var sql = ToSqlDispatcher.For(sub.FieldType)(sub.Queryable);
         return SubQueryConditional.Wrap(kind, column, sql);
     }
 

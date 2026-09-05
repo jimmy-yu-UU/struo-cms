@@ -176,7 +176,7 @@ public static class FilterInputTranslator
         return children;
     }
 
-    private static FilterNode TranslateRelationPredicate(
+    private static RelationPredicateFilter TranslateRelationPredicate(
         string relation, string key, object? value, string target,
         Func<string, string, string?>? relationTarget)
     {
