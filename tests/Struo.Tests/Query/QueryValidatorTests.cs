@@ -457,4 +457,17 @@ public class QueryValidatorTests
         var act = () => QueryValidator.Validate(Q(new ComparisonFilter("tags._junction.secret", QueryOperator.Eq, "x")), Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*Unknown field*");
     }
+
+    // The junction collection's read grant must be checked before RelationPath.Parse resolves the
+    // leaf field. Without this, a caller who can read the M2M target but not the junction collection
+    // could distinguish a real payload field from an invented one by response code (400 vs 403) —
+    // an oracle enumerating the junction collection's field names, mirroring
+    // Unreadable_hop_is_refused_before_the_leaf_field_is_resolved above.
+    [Fact]
+    public void Unreadable_junction_is_refused_before_the_junction_field_is_resolved()
+    {
+        var q = Q(new ComparisonFilter("tags._junction.nope", QueryOperator.Eq, "x"));
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("articleTag"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
 }

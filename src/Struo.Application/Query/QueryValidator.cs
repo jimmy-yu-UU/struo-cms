@@ -100,13 +100,13 @@ public static class QueryValidator
                 // collection enumerate the field names of every collection reachable from it. An
                 // unresolvable hop breaks out rather than throwing, so Parse still owns that
                 // message — the collection it names is one the caller has already been cleared for.
-                // A trailing "_junction.<field>" resolves to no relation in this loop (it breaks out
-                // early), so the junction collection's own read grant is checked separately below,
-                // once Parse has told us which junction collection the leaf actually belongs to.
+                // A "_junction.<field>" segment is handled inside the same walk (see
+                // DenyUnreadableHops): checking the junction collection's read grant only after Parse
+                // returns would let a caller without read on the junction collection distinguish a
+                // real payload field from an invented one by response code (400 vs 403) — the same
+                // oracle this walk exists to prevent for ordinary hops.
                 DenyUnreadableHops(meta.Name, path);
                 var rp = RelationPath.Parse(meta.Name, path, graph, metadata, opts.MaxRelationDepth - hopsUsed);
-                if (rp.IsJunctionLeaf && !permissions.CanRead(rp.JunctionCollection!))
-                    throw new PermissionDeniedException($"Read not permitted on '{rp.JunctionCollection}'.");
                 if (forSort && !rp.IsSortable)
                     throw new QueryException($"Sort across to-many relations is not supported: '{path}'.");
                 return;
@@ -153,18 +153,35 @@ public static class QueryValidator
         /// cannot read. Stops at an unresolvable hop so <see cref="RelationPath.Parse"/> or
         /// <see cref="RelationPath.ParseRelationOnly"/> keeps ownership of that error — every
         /// collection reached before it is one the caller is cleared to know about.
+        /// <para>
+        /// A <c>_junction</c> segment is not itself a relation hop — it names the M2M relation
+        /// resolved one segment earlier's junction collection. Its read grant is checked here, against
+        /// that relation's <c>JunctionCollection</c>, before the walk returns; checking it only after
+        /// <see cref="RelationPath.Parse"/> resolves the leaf would let an unreadable-junction caller
+        /// distinguish a real payload field from an invented one by response code.
+        /// </para>
         /// </summary>
         private void DenyUnreadableHops(string rootCollection, string path)
         {
             var parts = path.Split('.');
             var current = rootCollection;
+            RelationMetadata? previousRel = null;
             for (var i = 0; i < parts.Length - 1; i++)
             {
+                if (parts[i] == FilterReservedTokens.Junction)
+                {
+                    if (previousRel?.JunctionCollection is null) return; // misuse: Parse owns the error
+                    if (!permissions.CanRead(previousRel.JunctionCollection))
+                        throw new PermissionDeniedException($"Read not permitted on '{previousRel.JunctionCollection}'.");
+                    return; // the one field after "_junction" is the leaf; no further hop to check
+                }
+
                 var rel = graph.Resolve(current, parts[i]);
                 if (rel is null) return;
                 if (!permissions.CanRead(rel.TargetCollection))
                     throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
                 current = rel.TargetCollection;
+                previousRel = rel;
             }
         }
     }
