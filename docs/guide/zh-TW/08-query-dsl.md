@@ -38,7 +38,7 @@ $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: a
 | 分頁 (Pagination) | `limit=`、`offset=` | `"limit"`、`"offset"` | 不存在任何 `page` 參數——分頁純粹以 offset 為基礎 (見下文)。 |
 | 欄位投影 (Fields) | `fields=a,b,c` | `"fields": ["a","b","c"]` | 限制投影出哪些*自有*欄位 (關聯與 `translations` 不受影響——見下文)。 |
 | 關聯展開 (Deep) | `deep=rel1,rel2` | `"deep": { "rel1": {...} }` | 關聯展開;第 7 章完整涵蓋。 |
-| 搜尋 (Search) | `search=text` | `"search": "text"` | 自由文字 `LIKE`，以 OR 連接跨越每一個 `Searchable` 欄位 (第 4 章)。 |
+| 搜尋 (Search) | `search=text` | `"search": "text"` | 自由文字 `LIKE`，以 OR 連接跨越每一個 `Searchable` 欄位 (第 4 章);在同一個請求上與 `filter` 以 AND 組合——一列必須同時滿足 filter*且*符合搜尋詞，而非兩者擇一。 |
 | 軟刪除 (Soft-delete) | `deleted=exclude\|only\|with` | *(僅限查詢字串——`GET`/`POST query` 都是從 URL 讀取它)* | 見下文。 |
 | 語言 (Locale) | `locale=code` | *(僅限查詢字串，同上)* | 可翻譯欄位篩選/排序/讀取時使用的有效查詢語言 (第 6 章)。 |
 
@@ -121,28 +121,64 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bsize%5D%
 
 每一次查詢的篩選條件總數也有一個硬性上限——`StruoQueryOptions.MaxFilterConditions`，預設為
 **50**——計算的是走訪過程中拜訪到的每一個葉節點 `ComparisonFilter`，不論它們巢狀在
-`_and`/`_or` 底下多少層;超過這個上限，會在任何查詢執行之前擲出 `"Too many filter conditions
-(max 50)."`。
+`_and`/`_or` 底下多少層，也包含 `_some`/`_none` 量詞自身內層 filter 裡的每一個葉節點 (下文)
+——一個量詞的內層 filter 不會有自己獨立的額度;超過這個上限，會在任何查詢執行之前擲出
+`"Too many filter conditions (max 50)."`。
 
-還有第二個上限，它限制的是不同的東西:不是查詢的形狀，而是回答這個查詢**中間**可以花多少工。
-帶點號的 (跨關聯) 篩選，以及對可翻譯欄位的搜尋，兩者的實作方式都是先把條件解析成一組根 id，
-再改寫成本集合自身的 `id IN (...)`——這趟走訪見第 7 章。`StruoQueryOptions.MaxResolvedFilterIds`
-(預設 **5000**) 為那趟解析的每一步設下上限:葉節點查詢、每一次回走的跳躍，以及可翻譯搜尋的
-聯集。它之所以存在，是因為上面那些上限限制的是**結果頁**，而不是這個中間集合——少了它，一個
-刻意放寬的條件 (`?filter[category.name][_contains]=a`、`?search=a`) 就要付出 O(表大小) 的記憶體
-外加一句巨大的 SQL，而且任何持有讀取授權的呼叫者都能觸發，包括在 `public` 授予讀取之處的匿名
-呼叫者。
+帶點號的 (跨關聯) 篩選，以及對可翻譯欄位的搜尋，兩者都是把條件下推成一個巢狀 SQL 子查詢來回答
+的——確切形狀見第 7 章——而不是先在記憶體中解析出一組中間 id 集合。正因如此，這裡沒有一個類似
+上方 `MaxFilterConditions` 的上限:一個跨關聯條件的代價恰好是一道子查詢，不論它可能比對到多少
+資料列，而不是與某個中間集合大小成正比的記憶體——已經沒有中間集合這種東西可供上限約束了。
 
-超過上限屬於用戶端錯誤，而不是截斷:
+## 關聯量詞:`_some`/`_none`
+
+第 7 章完整涵蓋語意 (各自存在 vs. 同一列、`_junction`、many-to-one 的情況、NULL 安全與軟刪除
+規則);這一節是兩種請求形式的文法參考，外加保留字詞與錯誤目錄。
+
+**保留字詞。** `_some`、`_none`、`_junction` (查詢字串／JSON envelope 拼法) 與 `some`、`none`、
+`junction` (GraphQL 拼法)，都跟 `_and`/`_or` 一樣被保留——不可以用這些名稱替任何欄位或關聯命名
+(`FilterReservedTokens.All`，`src/Struo.Application/Query/FilterReservedTokens.cs`);一個違反此
+規則的集合，會在啟動時就快速失敗，早於任何請求被服務之前。
+
+**JSON envelope (完整形式)。** 一個欄位物件的鍵是 `_some` 或 `_none`，其值是一個以關聯目標
+集合為根的完整 `filter` 物件——遞迴地與任何頂層 `filter` 同一套文法，所以它本身可以再包含
+帶點號路徑、巢狀的 `_some`/`_none`、`_junction`，以及一層 `_and`/`_or`:
+
+```json
+{"filter":{"tags":{"_some":{"name":{"_eq":"Guide"},"_junction.note":{"_contains":"hero"}}}}}
+{"filter":{"tags":{"_none":{"name":{"_eq":"internal"}}}}}
+```
+
+一個欄位物件可以同時帶有 `_some` 與 `_none`，作為兩個獨立述詞 (AND 連接)，但不能在同一個欄位
+物件中，把任一個跟一個單純的純量運算子 (`_eq`、`_contains`、……) 混用——一個關聯路徑本身沒有
+任何純量運算子:
 
 ```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory.name%5D%5B_contains%5D=a"
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Resolving 'category.name' matched too many rows (7412, limit 5000). Narrow the filter or search term, or raise Query:MaxResolvedFilterIds."}}
+$ curl -s -X POST http://localhost:5221/api/items/article/query -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"filter":{"tags":{"_some":{"name":{"_eq":"Guide-u3doc0905"}},"_eq":"someval"}}}'
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"'tags' mixes a relation quantifier with scalar operators; a relation path has no scalar operators."}}
 ```
 
-改成截斷的話，會默默丟掉符合條件的資料列並回傳靜靜出錯的結果，所以這個查詢是被拒絕的。如果
-某個 fork 的正當篩選會解析出更大的集合，就把 `Query:MaxResolvedFilterIds` 調高——代價是記憶體
-加上 SQL 語句大小，每個 uuid 大約 40 個位元組的語句文字。
+**查詢字串 (折疊的簡寫形式)。** `filter[<prefix>._some.<inner path>][<op>]=<value>` (或
+`_none`) 在一般查詢字串剖析之後，會被折疊 (`RelationQuantifierFolder.Fold`，
+`src/Struo.Application/Query/RelationQuantifierFolder.cs`) 進同一棵 `_some`/`_none` 樹:每一個
+路徑中含有 `_some`/`_none` 片段的條件，都依 (該片段*之前*的路徑前綴、該量詞) 分組，同一組裡的
+每一個條件都會合併成一個述詞，以 AND 連接——一個巢狀量詞 (`a._some.b._none.c`) 會在內層那一組
+上再次遞迴折疊。**在查詢字串上，一次請求對每一組 (前綴、量詞) 只能表達一組**——兩個前綴與量詞
+相同的條件，不論分散在多少個 `filter[...]` 鍵值裡，永遠會落進同一組;查詢字串沒有辦法表達針對
+同一個關聯的兩個*獨立*同一列述詞 (例如「某個 tag 名為 `a`，或者一個*不同的* tag 是紅色」，放在
+`_or` 之下)——那需要改用 JSON envelope，它的 `_some` 值是你明確自行建構的一個單一 filter 物件。
+
+一個量詞片段之後必須至少再接一個路徑片段 (它所量化的條件)——它不能是路徑的最後一個片段:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags._some%5D%5B_eq%5D=x"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"'tags._some': '_some' must be followed by a condition on the related collection."}}
+```
+
+兩個量詞片段也不能緊接在一起 (`a._some._none.b`)——請改用 envelope 形式的內層 filter 表達一個
+巢狀的 `_some`/`_none`。
 
 ## 排序
 
@@ -240,8 +276,10 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bbogus%5D
 片段、終端集合上一個無法解析的葉欄位，以及一個超過 6 跳深度上限的路徑，三者各自會以自己精確的
 訊息被拒絕——這三種情況都已在第 7 章即時驗證過。`fields=` 額外完全不允許關聯路徑
 (`allowRelation: false`)——投影一律只會選取集合自身的純量欄位，絕不會選取一個巢狀關聯的欄位。
-在同一個 to-many 關聯路徑上組合多個條件是 each-exists 而非同一列——參見
-[第 7 章](07-relations.md#跨帶點號路徑的關聯篩選)。
+在同一個 to-many 關聯路徑上組合多個單純 (未加量詞) 的條件，是各自存在（each-exists），而非
+同一列——上文的 `_some`/`_none` 才是把一個關聯路徑的條件綁定到同一列相關資料列的量詞——完整的
+語意對照表與即時驗證實錄，見
+[第 7 章](07-relations.md#各自存在-each-exists-vs-同一列-帶點號路徑-vs-some-none)。
 
 讀取授權不會跨越關聯跳躍。一個帶點號的路徑所經過的每一個集合，都需要它自己的讀取權限，因此一個
 只被授予 `article`、未被授予 `user` 的角色，無法透過 `author.email` 觸及 user 的資料列:該請求會被

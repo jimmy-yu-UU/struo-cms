@@ -148,7 +148,7 @@ collection** 的東西，而它除了兩個外鍵、該關聯的 `SortField` (�
 任何一端的資料 (例如為什麼要連結這兩列的
 備註、有別於排序的顯示權重、核准時間戳)。`RelationshipGraph.JunctionPayloadOf`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) 是唯一計算一個關聯 payload 欄位清單
-的地方;寫入端的混合陣列繫結器 (第 9 章)、`_junction` 讀取投影 (見下文)、修訂版本 (第 13 章)，
+的地方;寫入端的混合陣列繫結器 (REST，第 9 章)、`_junction` 讀取投影 (見下文)、修訂版本 (第 13 章)，
 以及 GraphQL (第 10 章) 全都從那裡讀取，而不是各自重新推導。
 
 一個 junction collection 的兩個外鍵**必須**宣告成可寫入的 `[CmsField]` (例如
@@ -165,7 +165,7 @@ FieldInterface.Uuid)"`。
 讓它不出現在管理後台側欄中——在其他所有地方，它仍是一個完全可定址的集合:`GET /api/schema`、RBAC
 權限矩陣，以及產生出來的 GraphQL schema，都會像對待任何非隱藏集合一樣把它包含進去。
 `RelationMetadata.JunctionCollection` (`/api/schema` 關聯項目中的 `junctionCollection`) 會指名
-它，讓客戶端知道要對哪個集合另外申請寫入授權，才能寫入 junction payload (第 9 章)。
+它，讓客戶端知道要對哪個集合另外申請寫入授權，才能寫入 junction payload (REST，第 9 章)。
 
 **給 fork 的但書**:如果你在一個 junction entity 上直接加上自己的
 `[Navigate]`/`[CmsRelation]` picker 關聯 (例如從該 junction 到某個第三方集合的 many-to-one，
@@ -264,17 +264,33 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bfolder.p
 
 ## 跨帶點號路徑的關聯篩選
 
-一個包含 `.` 的篩選欄位路徑，會被當作一個關聯路徑，並由 `RelationFilterResolver`
-(`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`) 解析:它會從葉節點走到根節點，
-逐跳收集目標 id，並把原始條件改寫成一個對*根*集合的單純 `id _in [...]` (若沒有任何東西相符，
-則改寫成一個恆為假的 `id _null`)——這樣一來，查詢管線的其餘部分就完全不需要為關聯路徑做任何
-特殊處理。三種關聯種類全都支援作為跳點，已用範例的 `article`/`category` 即時驗證過 (如上，
-暫時選用啟用):
+一個包含 `.` 的篩選欄位路徑，會被當作一個關聯路徑。`FilterTranslator`
+(`src/Struo.Infrastructure/Query/FilterTranslator.cs`、`FilterTranslator.Subquery.cs`) 不會分兩步
+解析它——先取得相符的關聯 id，再把條件改寫成 `id IN (<字面 id>)`——而是把整個條件下推成**一個
+巢狀 SQL 子查詢**，依關聯種類而形狀不同，但一律以同樣三種形式收尾 (`<col> IN (<sql>)` /
+`<col> NOT IN (<sql>)` / `(<col> IS NULL OR <col> NOT IN (<sql>))`)，包裝成單一
+`ConditionalModel`。一次清單查詢永遠恰好是兩道 SQL 敘述——一道 `COUNT`、一道 `SELECT`——不論它帶了
+多少個關聯條件，也永遠不會有任何東西被具現化成一個記憶體內的 id 集合:
+
+- **many-to-one**:`<declaring>.<fk> IN (SELECT id FROM <target> WHERE …)`
+- **one-to-many**:`<declaring>.id IN (SELECT <reverseFk> FROM <target> WHERE … AND <reverseFk> IS
+  NOT NULL)`
+- **many-to-many**:`<declaring>.id IN (SELECT <parentFk> FROM <junction> WHERE […] AND <targetFk>
+  IN (SELECT id FROM <target> WHERE …))`
+
+每一跳都把下一跳巢狀包在自己裡面，所以一條多跳路徑 (`category.parent.name`) 是一條子查詢鏈，
+而不是每一跳各發一次查詢。三種關聯種類全都支援，已用範例的 `article`/`category`/`tag` 即時驗證過
+(如上，暫時選用啟用——`Engineering-u3doc0905` 是一個 category，`Guide-u3doc0905` 是一個 tag):
 
 ```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory.name%5D%5B_eq%5D=Engineering"    # many-to-one
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags.name%5D%5B_eq%5D=Guide"              # many-to-many
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Barticles.status%5D%5B_eq%5D=published"   # one-to-many
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Bcategory.name%5D%5B_eq%5D=Engineering-u3doc0905"    # many-to-one
+{"success":true,"data":[{"id":"...","translations":{"en":{"title":"Article B u3doc0905", ...}}}, {"id":"...","translations":{"en":{"title":"Article A u3doc0905", ...}}}],"meta":{"total":2,"limit":25,"offset":0}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags.name%5D%5B_eq%5D=Guide-u3doc0905"              # many-to-many
+{"success":true,"data":[{"id":"...","translations":{"en":{"title":"Article B u3doc0905", ...}}}, {"id":"...","translations":{"en":{"title":"Article A u3doc0905", ...}}}],"meta":{"total":2,"limit":25,"offset":0}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Bname%5D%5B_contains%5D=u3doc0905&filter%5Barticles.status%5D%5B_eq%5D=published"   # one-to-many
+{"success":true,"data":[{"id":"...","name":"Engineering-u3doc0905", ...}],"meta":{"total":1,"limit":25,"offset":0}}
 ```
 
 每一個都恰好回傳了預期的資料列。路徑中一個未知的關聯名稱，會以與一個未知葉欄位相同的方式被拒絕
@@ -285,23 +301,116 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bbogus
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown relation 'bogus' on 'article' in path 'bogus.name'."}}
 ```
 
-**多個條件的組合**在同一個 to-many 關聯路徑上是 each-exists(各自存在)，而非同一列:`RewriteAsync`
-會獨立解析關聯路徑上的每一個 `ComparisonFilter`——各自透過 `ResolveRootIdsAsync` 從葉節點走到根
-節點，並改寫成各自的 `id _in [...]`(或一個恆為假的 `id _null`);`LogicalFilter` 只會遞迴處理其子
-節點並重新包裝結果，因此沒有任何機制會記錄「哪一列滿足了哪一個條件」。以一個帶有 one-to-many
-`properties` 關聯(目標列形狀為 `(code, valueNum)`)的 `product` 集合為例:
-`filter[properties.code][_eq]=vds-v` 搭配組合(同一請求上的兩個 filter 鍵會以 AND 組合;JSON
-envelope 的 `_and` 行為相同) `filter[properties.valueNum][_gte]=60`，也會比對到一個 `properties`
-為 `{code: "vds-v", valueNum: 20}` 與 `{code: "ptot-w", valueNum: 100}` 的 product——第一列單獨滿
-足了 `code` 條件，第二列單獨滿足了 `valueNum` 條件，即使沒有任何單一列同時滿足兩者，each-exists
-依然成立。不會有任何錯誤發生——查詢只會回傳呼叫者原本並不打算取得的 product，如果你是從 Prisma
-轉來的(它的巢狀關聯條件會綁定在同一個相關列上)，很容易忽略這一點(Directus 預設的 o2m 篩選也有
-同樣的 each-exists 模糊性，這正是它提供 `_some` 運算子的原因)。`MaxResolvedFilterIds`(第 8 章)
-仍然會各自限制每一個條件自己的葉節點到根節點走訪。想在今天取得真正的同一列語意，目前的變通做法
-是發出兩個請求:先直接對子集合本身的欄位做篩選，並投影出父項外鍵——
-`/api/items/property?filter[code][_eq]=vds-v&filter[valueNum][_gte]=60&fields=id,productId`——再用
-回傳的 `productId` 值，以 `id _in` 篩選 `product`。一個能把 to-many 路徑內層條件綁定到同一個相關
-列的 `_some` 關聯述詞已在規劃中;在它出貨之前，上述的 each-exists 規則就是帶點號路徑僅有的語意。
+### 各自存在（each-exists）vs. 同一列:帶點號路徑 vs. `_some`/`_none`
+
+**一條單純的帶點號路徑是「各自存在（each-exists）」，而非同一列。** 關聯路徑上的每一個
+`ComparisonFilter` 都會被翻譯成自己獨立的子查詢;`LogicalFilter` 只會遞迴處理其子節點，因此沒有
+任何機制會記錄「哪一列滿足了哪一個條件」。同一個 to-many 關聯路徑上的兩個條件，可以分別由*不同*
+的關聯資料列滿足，而父資料列依然算相符。`_some` 與 `_none` 是修正這一點的兩個關聯**量詞
+(quantifier)**:`_some` 的內層 filter 會被翻譯成對目標集合的**單一**子查詢，所以內層的每一個
+條件都必須由*同一列*關聯資料列滿足;`_none` 是同一個子查詢，只是取反 (`NOT IN`，many-to-one 則是
+`IS NULL OR NOT IN`)。
+
+| 寫法 | 語意 |
+|---|---|
+| `filter[tags.name][_eq]=a&filter[tags.color][_eq]=red` | 各自存在:某個 tag 名為 `a`，**且**某個 tag 是紅色——可能是兩個不同的 tag。 |
+| `filter[tags._some.name][_eq]=a&filter[tags._some.color][_eq]=red` | 同一列:**同一個** tag 既名為 `a` 又是紅色。 |
+| `filter[tags._none.name][_eq]=a` | 沒有任何 tag 名為 `a`——包括完全沒有 tag 的文章。 |
+| `filter[category._none.name][_eq]=x` | category 不叫 `x`，或者根本沒有 category。 |
+| `filter[tags._some._junction.note][_contains]=hero` | 某個 article↔tag 連結自己的 `note` 包含 "hero"。 |
+
+已針對一份帶有兩篇已標籤文章的 fixture 即時驗證——`A` 有一個 tag (`Guide-u3doc0905`，junction
+`note: "hero"`)，`B` 有兩個 tag (`Guide-u3doc0905` 的 `note: "plain"`，以及 `Misc-u3doc0905` 的
+`note: "hero"`)，`C` 完全沒有 tag。帶點號 (各自存在) 的寫法同時比對到 `A` 與 `B`——`B` 的 `Guide`
+tag 單獨滿足了 name 條件，它*不同的* `Misc` tag 單獨滿足了 junction-note 條件:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags.name%5D%5B_eq%5D=Guide-u3doc0905&filter%5Btags._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":2,"limit":25,"offset":0}}
+```
+
+在 `_some` 之下，完全相同的兩個條件只比對到 `A`，因為它單一的 tag 資料列同時滿足了兩者:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags._some.name%5D%5B_eq%5D=Guide-u3doc0905&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<a-id>", ...}],"meta":{"total":1,"limit":25,"offset":0}}
+```
+
+`_none` 比對到那篇沒有 tag 的文章 (關聯量詞用在 many-to-one 上同樣合法——見下文——而 `_none` 用在
+一個空的 to-many 關聯上為真，不是錯誤):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags._none.name%5D%5B_eq%5D=Guide-u3doc0905"
+{"success":true,"data":[{"id":"<c-id>","translations":{"en":{"title":"Article C u3doc0905", ...}}}],"meta":{"total":1,"limit":25,"offset":0}}
+```
+
+**`_some`/`_none` 用在 many-to-one 關聯上同樣合法，不只限於 to-many。** 用在 to-one 上時，
+`_some` 等同於對相同內層 filter 的一條帶點號路徑;`_none` 則代表「沒有相符的目標，或外鍵為
+null」——這確實有用 (「沒有 category，或者不叫 Archive」)，已針對 `C` (完全沒有 category) 連同
+`A`/`B` (有 category，但不叫 `Archive-u3doc0905`) 驗證過:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Bcategory._none.name%5D%5B_eq%5D=Archive-u3doc0905"
+{"success":true,"data":[{"id":"<c-id>", ...},{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":3,"limit":25,"offset":0}}
+```
+
+最後這個結果依賴一條 NULL 安全規則:一句單純的 SQL `<fk> NOT IN (SELECT …)`，只要它的子查詢
+曾經回傳過一個 NULL，結果就會整個變空，而*外層*資料列上一個可為 null 的外鍵——`C` 的
+`categoryId`——用普通的 `NOT IN` 也有相同的失效模式。因此 many-to-one 上的 `_none` 會產生
+`(<fk> IS NULL OR <fk> NOT IN (<sql>))`，而*內層*的 `IS NOT NULL` 防護只會套用在真的可能是
+NULL 的欄位上，並非一律套用:one-to-many 這一跳的 `<reverseFk>` 投影 (上面那條要點) 永遠會加上
+這道防護，不論是不是量詞，因為不論翻譯的是哪一種述詞，該欄位本身就是可為 null 的。many-to-one 這
+一跳自己的 `target.id` 投影，只有在翻譯 `_none` 述詞時才會以同樣的方式加上防護——一條單純的帶點號
+路徑或用在 many-to-one 上的 `_some`，都會略過這道防護，因為主鍵永遠不會是 NULL，也就沒有這道
+防護需要保護的對象。many-to-many 這一跳自己內層的 `target.id` 投影 (餵給它 junction 子查詢
+`<targetFk> IN (…)` 那一半)，永遠不會加上防護，`_none` 也一樣，理由相同;只有它*外層*的
+`junction.<parentFk>` 投影，才會像 many-to-one 這一跳的 `target.id` 投影一樣，得到那道只在
+`_none` 時才有的防護。
+
+**子查詢內的軟刪除，永遠不會隨 `?deleted=` 放寬。** 一個關聯子查詢的 `Where(...)`，不論*外層*
+請求自己的 `?deleted=only|with` 為何，建構方式都一樣——目標集合上的軟刪除過濾器，永遠不會為它
+清除。一列已進回收桶的關聯資料列，永遠無法滿足一個帶點號路徑或量詞條件，即使呼叫端當下正在檢視
+父項的回收桶也一樣。
+
+### `_junction`:篩選 junction 自身的 payload
+
+對一個 junction 帶有 payload 的 many-to-many 關聯而言 (上文)，`_junction.<field>` 是一個偽片段，
+篩選的是*連結本身*的欄位，而非任一端——帶點號時 (各自獨立看待每一個 article↔tag 連結)，或是在
+`_some`/`_none` 之內 (該述詞其餘部分所比對到的同一個連結):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":2,"limit":25,"offset":0}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags._some.name%5D%5B_eq%5D=Misc-u3doc0905&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<b-id>", ...}],"meta":{"total":1,"limit":25,"offset":0}}
+```
+
+`_junction` 必須緊接在一個帶有[可揭露 payload](07-relations.md#junction-payload) 的 many-to-many
+關聯之後，而且後面必須恰好接一個非 `Hidden` 的 payload 欄位名稱，不能再有更多跳點;它不計入上方
+提到的深度上限 6。它還需要在 *junction* 集合上取得自己的讀取授權——這是與關聯目標集合上讀取授權
+分開的另一項檢查。用在 many-to-one 上時，因為根本沒有 junction 集合，會被拒絕為
+`'_junction' is only valid after a many-to-many relation with a junction collection.`:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory._junction.note%5D%5B_eq%5D=x"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"'category._junction.note': '_junction' is only valid after a many-to-many relation with a junction collection."}}
+```
+
+**把 `_some`/`_none` 與其他普通條件組合，跟任何其他 filter 完全一樣**——包括在 `_or` 之內混用一個
+純量條件與一個關聯述詞，或是把一個關聯量詞跟一個可翻譯自有欄位葉節點 (`title`) 組合——後者本身
+也是透過完全相同的機制下推的:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/article/query -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"filter":{"_or":[{"categoryId":{"_eq":"<engineering-category-id>"}},{"tags":{"_some":{"name":{"_eq":"Misc-u3doc0905"}}}}]}}'
+{"success":true,"data":[{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":2,"limit":25,"offset":0}}
+```
+
+`_some`/`_none` 可以任意遞迴:內層 filter 是一個完整的、以目標集合為根的 `filter` 物件，本身可以
+再包含帶點號路徑、更進一步的 `_some`/`_none` (巢狀量詞)，以及一層 `_and`/`_or`——完整文法、
+JSON envelope 寫法，以及查詢字串折疊規則，見第 8 章。
 
 **跨關聯路徑的排序**，範圍比篩選更窄:只有全程都是 many-to-one 的路徑才可排序
 (`RelationPath.IsSortable`)，因為一個 to-many 跳點，並沒有單一、明確定義的順序可以拿來排序父
