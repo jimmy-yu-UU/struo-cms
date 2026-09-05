@@ -4,7 +4,9 @@ using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Application.Metadata;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Sample.Blog;
@@ -25,9 +27,27 @@ public class FilterTranslatorSqlShapeTests : IDisposable
             new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Category>();
         _db.CodeFirst.InitTables<Article>();
+        _db.CodeFirst.InitTables<ArticleTranslation>();
     }
 
     public void Dispose() => _file.Dispose();
+
+    // A FilterTranslator wired over the sample Article/Category graph (Article.title lives on its
+    // ArticleTranslation sidecar and is translatable; Article.status is a plain own field) — same
+    // wiring shape as SubqueryPushdownHarness/TranslatableSearchHarness, but over the real sample
+    // fixture so the assertions below can check for the actual "article_translations" table name.
+    private FilterTranslator BuildSampleTranslator()
+    {
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var collections = MetadataScanner.ScanTypes(types);
+        IMetadataProvider metadata = new CachedMetadataProvider(collections);
+        IEntityRegistry registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+        });
+        return new FilterTranslator(_db, graph, metadata, registry, new StruoQueryOptions());
+    }
 
     // ConditionalType.Equal, deliberately: this is the shape ConditionalModelTranslator actually
     // produces for the leaf conditionals relation-filter pushdown will nest (Eq/GreaterThan/Like/...
@@ -333,5 +353,26 @@ public class FilterTranslatorSqlShapeTests : IDisposable
 
         // Executes without throwing — proves the merged SQL is syntactically valid, not just shaped right.
         h.Db.Queryable<TsItem>().Where(conds).ToList().Should().BeEmpty();
+    }
+
+    // Task 6 (search union over one translatable + one plain searchable field): SearchGroup builds ONE
+    // OR group carrying a plain LIKE (status) alongside a translation-sidecar subquery (title, via
+    // ArticleTranslation) — over the REAL sample Article/ArticleTranslation fixture, so this also pins
+    // down the actual "article_translations" table name appearing in the generated SQL. The
+    // two-translatable-field OR-merge shape itself (SqlSugar's adjacency defect) is already covered by
+    // Search_across_two_translatable_fields_merges_into_one_conditional above (TsItem, which has two
+    // translatable searchable fields; the sample Article/ArticleTranslation fixture has only one).
+    [Fact]
+    public void Search_over_translatable_and_plain_fields_is_one_or_group_with_a_sidecar_subquery()
+    {
+        var translator = BuildSampleTranslator();
+        var conds = translator.Translate("article", null, "x", ["title", "status"], "en");
+
+        var group = conds.Should().ContainSingle().Which.Should().BeOfType<ConditionalCollections>().Subject;
+        group.ConditionalList.Should().HaveCount(2, "one plain LIKE (status) plus one translation-sidecar subquery (title)");
+        group.ConditionalList.Should().Contain(kv => kv.Value.CustomConditionalFunc != null);
+
+        var sql = _db.Queryable<Article>().Where(conds).ToSql().Key;
+        sql.Should().Contain("article_translations").And.Contain("OR");
     }
 }
