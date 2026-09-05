@@ -2,6 +2,8 @@
 using System.Text.Json;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
+using Struo.Application.Query.Write;
+using Struo.Application.Security;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -17,7 +19,10 @@ public sealed class ItemWriteSideSync(
     IItemRepository repository,
     IM2MDescriptorSource m2mSource,
     ILanguageProvider languages,
-    RichTextCleaner richText)
+    RichTextCleaner richText,
+    ItemDeserializer deserializer,
+    IMetadataProvider metadata,
+    IPermissionService permissions)
 {
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
@@ -124,8 +129,9 @@ public sealed class ItemWriteSideSync(
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
     /// from <paramref name="body"/> under the relation's camelCase name (e.g. <c>"tags"</c>).
     /// If the key is present, validates every id exists in the target collection, then delegates
-    /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to replace the junction rows.
-    /// Absent keys are silently skipped (partial updates are supported).
+    /// to <see cref="IItemRepository.SyncManyToManyAsync"/> to diff-and-patch the junction rows
+    /// (existing rows for targets that remain keep their primary key; only the added/removed set
+    /// actually changes). Absent keys are silently skipped (partial updates are supported).
     /// </summary>
     public async Task SyncM2MAsync(string collection, JsonElement body, object parentId, bool includeDeleted, CancellationToken ct)
     {
@@ -136,48 +142,15 @@ public sealed class ItemWriteSideSync(
         {
             // Only sync when the relation key is present in the request body.
             if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
-            if (idsElem.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+            if (idsElem.ValueKind != JsonValueKind.Array) continue;
 
-            // De-duplicate the incoming ids up front — `tags:[t1,t1]` is semantically `tags:[t1]`
-            // (a junction is a set). Distinct() returns a NEW list (no in-place mutation) and the typed
-            // boxed values (long / string) compare correctly under the default equality comparer. Without
-            // this, a repeated id inflated targetIds.Count so the count-based existence check below
-            // spuriously failed ("do not exist"), and the junction sync would attempt duplicate rows.
-            //
-            // Each element must be coerced safely. `e.GetInt64()` throws FormatException on a
-            // non-integer number (e.g. 1.5). A JSON `null` element was already handled pre-fix —
-            // `e.GetString()` returns null (not a throw) for Null, which coerced to "" and was rejected
-            // by the "do not exist" existence check below (already a 400); only bool/object/array
-            // elements previously fell into the "else" branch and threw InvalidOperationException from
-            // `e.GetString()`. That IOE and the FormatException above were both unhandled (-> 500);
-            // this switch newly rejects them as a QueryException (-> 400) client error instead, matching
-            // every other malformed-input rejection on this path.
-            var targetIds = idsElem.EnumerateArray()
-                .Select(e => e.ValueKind switch
-                {
-                    JsonValueKind.Number when e.TryGetInt64(out var n) => (object)n,
-                    JsonValueKind.Number => throw new QueryException(
-                        $"One or more ids in '{desc.RelationName}' are not valid."),
-                    JsonValueKind.String => (object)(e.GetString() ?? string.Empty),
-                    _ => throw new QueryException(
-                        $"One or more ids in '{desc.RelationName}' are not valid."),
-                })
-                .Distinct()
-                .ToList();
+            var hasObjectElement = idsElem.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object);
+            var (junctionMeta, payloadNames) = EnsureJunctionPayloadGrant(desc, hasObjectElement);
 
-            // Validate all target ids exist. A REVERT (includeDeleted) may legitimately reference a
-            // target that has since been trashed — the snapshot was captured while it was still live — so
-            // it validates against the soft-delete-bypassing query; a normal write keeps the strict
-            // filtered check (a trashed target is not a valid new assignment).
-            if (targetIds.Count > 0)
-            {
-                var found = includeDeleted
-                    ? await repository.QueryWhereInWithDeletedAsync(desc.TargetCollection, "id", targetIds, ct)
-                    : await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
-                if (found.Count != targetIds.Count)
-                    throw new QueryException(
-                        $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
-            }
+            var links = ParseLinks(idsElem, desc, junctionMeta, payloadNames);
+            var targetIds = links.Select(l => l.TargetId).ToList();
+
+            await ValidateTargetsExistAsync(desc, targetIds, includeDeleted, ct);
 
             await repository.SyncManyToManyAsync(
                 desc.JunctionType,
@@ -185,8 +158,107 @@ public sealed class ItemWriteSideSync(
                 desc.TargetFkProperty,
                 desc.SortProperty,
                 parentId,
-                targetIds,
+                links,
                 ct);
         }
+    }
+
+    // An object element carries junction payload — gate it BEFORE any parsing/binding runs, so a
+    // caller who lacks the grant gets a 403, not a 400 from probing the payload's own field
+    // rules (e.g. a MaxLength violation). Resolved lazily: only when the array actually contains
+    // an object element, and only for a relation whose junction declares payload at all (a
+    // relation without payload rejects any object element as an invalid id regardless of grant —
+    // unchanged, existing behaviour).
+    private (CollectionMetadata? JunctionMeta, HashSet<string>? PayloadNames) EnsureJunctionPayloadGrant(
+        M2MDescriptor desc, bool hasObjectElement)
+    {
+        if (!hasObjectElement || !desc.HasPayload) return (null, null);
+
+        var junctionMeta = metadata.GetCollection(desc.JunctionCollection!)
+            ?? throw new CollectionNotFoundException(desc.JunctionCollection!);
+        // AdminOnly junctions require a super-admin regardless of any per-collection write grant
+        // — the same escalation guard ItemService.RequireSuperAdminForAdminOnly applies to every
+        // other write path (a fork hanging an AdminOnly junction off a non-AdminOnly parent must
+        // not gain a second, weaker write surface into it).
+        if (junctionMeta.AdminOnly && !permissions.IsSuperAdmin)
+            throw new PermissionDeniedException($"Writes to '{junctionMeta.Name}' require a super-admin.");
+        if (!permissions.CanWrite(desc.JunctionCollection!))
+            throw new PermissionDeniedException($"Write to '{desc.JunctionCollection}' not permitted.");
+        var payloadNames = desc.JunctionPayload!.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return (junctionMeta, payloadNames);
+    }
+
+    // Ordered, id-keyed merge of the array elements. `tags:[t1,t1]` is semantically `tags:[t1]`
+    // (a junction is a set) — de-duplicating up front also matters for the count-based existence
+    // check below and for the repository, which throws on a duplicate TargetId. An element may be
+    // a bare id (membership only) or, on a relation that declares payload, an object carrying an
+    // `id` plus payload fields; when the same id appears more than once, an object always
+    // outranks a bare id (whichever came first or last), and between two objects the later one
+    // wins. Order of first appearance is the sort order.
+    //
+    // Each id must be coerced safely. `e.GetInt64()` throws FormatException on a non-integer
+    // number (e.g. 1.5). A JSON `null` element was already handled pre-fix — `e.GetString()`
+    // returns null (not a throw) for Null, which coerced to "" and was rejected by the "do not
+    // exist" existence check below (already a 400); only bool/array elements (and, on a relation
+    // without payload, object elements) previously fell into the "else" branch and threw
+    // InvalidOperationException from `e.GetString()`. That IOE and the FormatException above were
+    // both unhandled (-> 500); this switch newly rejects them as a QueryException (-> 400) client
+    // error instead, matching every other malformed-input rejection on this path.
+    private List<JunctionLink> ParseLinks(
+        JsonElement idsElem, M2MDescriptor desc, CollectionMetadata? junctionMeta, HashSet<string>? payloadNames)
+    {
+        var order = new List<object>();
+        var merged = new Dictionary<object, JunctionLink>();
+        foreach (var e in idsElem.EnumerateArray())
+        {
+            var link = ParseLinkElement(e, desc, junctionMeta, payloadNames);
+            if (!merged.ContainsKey(link.TargetId)) order.Add(link.TargetId);
+            if (merged.TryGetValue(link.TargetId, out var prev) && link.Payload is null && prev.Payload is not null)
+                continue; // an object already recorded outranks a later bare id
+            merged[link.TargetId] = link;
+        }
+        return order.Select(id => merged[id]).ToList();
+    }
+
+    private JunctionLink ParseLinkElement(
+        JsonElement e, M2MDescriptor desc, CollectionMetadata? junctionMeta, HashSet<string>? payloadNames)
+    {
+        switch (e.ValueKind)
+        {
+            case JsonValueKind.Number when e.TryGetInt64(out var n): return JunctionLink.Bare(n);
+            case JsonValueKind.String: return JunctionLink.Bare(e.GetString() ?? string.Empty);
+            case JsonValueKind.Object when desc.HasPayload:
+            {
+                if (!e.TryGetProperty("id", out var idEl))
+                    throw new QueryException($"Each object in '{desc.RelationName}' must carry an 'id'.");
+                object id = idEl.ValueKind switch
+                {
+                    JsonValueKind.Number when idEl.TryGetInt64(out var n) => n,
+                    JsonValueKind.String => idEl.GetString() ?? string.Empty,
+                    _ => throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid."),
+                };
+                var bound = deserializer.DeserializePartial(desc.JunctionCollection!, e, junctionMeta!, payloadNames!);
+                return new JunctionLink(id, bound);
+            }
+            default:
+                throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
+        }
+    }
+
+    // Validate all target ids exist. A REVERT (includeDeleted) may legitimately reference a
+    // target that has since been trashed — the snapshot was captured while it was still live — so
+    // it validates against the soft-delete-bypassing query; a normal write keeps the strict
+    // filtered check (a trashed target is not a valid new assignment).
+    private async Task ValidateTargetsExistAsync(
+        M2MDescriptor desc, List<object> targetIds, bool includeDeleted, CancellationToken ct)
+    {
+        if (targetIds.Count == 0) return;
+
+        var found = includeDeleted
+            ? await repository.QueryWhereInWithDeletedAsync(desc.TargetCollection, "id", targetIds, ct)
+            : await repository.QueryWhereInAsync(desc.TargetCollection, "id", targetIds, ct);
+        if (found.Count != targetIds.Count)
+            throw new QueryException(
+                $"One or more ids in '{desc.RelationName}' do not exist in '{desc.TargetCollection}'.");
     }
 }

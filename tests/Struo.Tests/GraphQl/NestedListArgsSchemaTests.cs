@@ -25,6 +25,7 @@ public class NestedListArgsSchemaTests
         var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource, FakeGraphQlDataSource>()
             .AddSingleton<StruoTypeModule>();
 

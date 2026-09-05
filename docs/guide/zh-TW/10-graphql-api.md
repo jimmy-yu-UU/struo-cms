@@ -271,13 +271,53 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 ```
 
 一個 many-to-many 關聯，會在建立/更新輸入上，以一個單純的目標 id 陣列 `[ID!]` 的形式寫入
-(`UserCreateInput`/`UserUpdateInput` 上的 `roles`)——這是對 junction 資料列的完整替換，與 REST
-的 M2M 同步方式相同:
+(`UserCreateInput`/`UserUpdateInput` 上的 `roles`)，從頭到尾共用 REST 底層的 M2M 同步機制
+(第 9 章):這個陣列會與目前已連結的資料做差異比對，而不是整批刪除再重新插入，因此一個維持連結
+狀態的目標，其 junction 資料列會保留自己的主鍵:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
     -d '{"query":"mutation { updateUser(id: \"<id>\", input: { email: \"editor@example.com\", name: \"Editor Person\", roles: [\"<role-id>\"] }) { id email name isActive roles { id name } } }"}'
 {"data":{"updateUser":{"id":"...","email":"editor@example.com","name":"Editor Person","isActive":true,"roles":[{"id":"...","name":"Editor"}]}}}
+```
+
+### `<rel>Links`:讀寫 junction payload
+
+對於 junction 至少宣告了一個可曝光 payload 欄位 (非 `Hidden`、可對應到純量——第 7 章) 的
+many-to-many 關聯，`CollectionSchemaBuilder` 會額外產生一套與上方純陣列 `<rel>`/`[ID!]` 並行、
+更豐富的介面;junction 沒有可曝光 payload 的關聯 (例如 `User.Roles`) 完全不會有這一套東西——
+只有純陣列介面。讀取端，`<rel>Links: [<Parent><Rel>Link!]` 會與 `<rel>: [<Target>!]` 並列，其中
+`<Parent><Rel>Link = { node: <Target>!, junction: <Parent><Rel>Junction }`——`node` 就是
+`<rel>` 會回傳的同一筆目標資料列，`junction` 則是該關聯非 `Hidden` payload 欄位組成的物件，若
+呼叫端無法讀取該 junction collection 則為 `null`。寫入端，建立/更新輸入會在既有的
+`<rel>: [ID!]` 之外，額外多出 `<rel>Links: [<Parent><Rel>LinkInput!]`，其中
+`<Parent><Rel>LinkInput = { id: ID!, <可寫入的 payload 欄位...> }`。在查詢中選取 `<rel>Links`
+會像 `<rel>` 一樣驅動同一套深度展開;在 mutation 中送出 `<rel>Links`，底層會直接折疊進 REST 的
+混合陣列寫入形狀 (第 9 章)——`MutationResolvers.FoldLinks` 會把它改寫進 `<rel>` 這個鍵，之後
+才送到 `ItemService`。若一次 mutation 同時送出 `<rel>` 與 `<rel>Links`，`<rel>Links` 會直接
+勝出，包括明確送出 `<rel>Links: null` 的情況——它會捨棄同時送出的 `<rel>` 陣列，而不是放著
+不管。
+
+範例的 `Article.Tags` (第 16 章) 就是隨附出貨的範例——它的 junction `ArticleTag` 曝光了
+`note` 作為 payload，因此產生出來的 schema，會在 `Article` 上額外多出 `tagsLinks:
+[ArticleTagsLink!]`，其中 `ArticleTagsLink { node: Tag!, junction: ArticleTagsJunction }` 而
+`ArticleTagsJunction { note: String }`;而在 `ArticleCreateInput`/`ArticleUpdateInput` 上，則
+多出 `tagsLinks: [ArticleTagsLinkInput!]`，其中
+`ArticleTagsLinkInput = { id: ID!, note: String }`。形狀如下 (示意用——schema 型別/欄位命名
+方式，對應 `SchemaTypeMapper` 的 `<Parent><Rel>Link`/`<Parent><Rel>Junction`/
+`<Parent><Rel>LinkInput` 型別命名，以及 `<rel>Links` 欄位命名):
+
+```graphql
+type ArticleTagsJunction { note: String }
+type ArticleTagsLink { node: Tag!, junction: ArticleTagsJunction }
+input ArticleTagsLinkInput { id: ID!, note: String }
+
+# 在 Article 上: tags: [Tag!]  (不變)  +  tagsLinks: [ArticleTagsLink!]
+# 在 ArticleUpdateInput 上: tags: [ID!]  (不變)  +  tagsLinks: [ArticleTagsLinkInput!]
+```
+
+```json
+{ "tagsLinks": [{ "id": "<tag-id>", "note": "editor pick" }] }
 ```
 
 `AdminOnly` 集合的寫入 (`permission`/`role`/`user`/`userRole`)，在這裡與在 REST 中一樣，都需要

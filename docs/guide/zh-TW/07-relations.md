@@ -106,10 +106,12 @@ public List<Role> Roles { get; set; } = [];
 `[Navigate]` 的第一個引數是一個 `Type` (而不是 `NavigateType`)，正是這一點告訴掃描器這是
 `ManyToMany` 而不是 `OneToMany`，即使兩者都宣告在一個 `List<T>` 屬性上。寫入端接受一個以關聯
 自身 camelCase 名稱為鍵值的純目標 id 陣列——`"roles": ["<role-id>", ...]`——而
-`ItemWriteSideSync.SyncM2MAsync` 會先驗證每一個 id 都存在於目標集合中，才替換該父項的
-junction 資料列 (是完整替換，不是差異式的 patch):一個未知的 id 會被拒絕為 `"One or more ids
-in '{relation}' do not exist in '{target}'."`，而一個重複的 id 會被靜默去重 (junction 本身是
-一個 set)。
+`ItemWriteSideSync.SyncM2MAsync` 會先驗證每一個 id 都存在於目標集合中，才把陣列交給
+`ManyToManySync`，由它把陣列與該父項現有的 junction 資料列做差異比對:不再存在的目標，其資料列
+會被刪除;新增的目標，其資料列會被插入;維持不變的目標，其資料列則保留自己的主鍵，不會被砍掉
+重建。一個未知的 id 會被拒絕為 `"One or more ids in '{relation}' do not exist in '{target}'."`，
+而一個重複的 id 會被靜默去重 (junction 本身是一個 set)。當 junction 本身也帶有 payload 時，
+寫入端有更豐富的寫入形狀，見下一節。
 
 ## `[CmsRelation]` 屬性
 
@@ -128,16 +130,53 @@ in '{relation}' do not exist in '{target}'."`，而一個重複的 id 會被靜�
 
 ## Many-to-many 的 junction entity
 
-一個 junction 就是一個一般的 SqlSugar entity——不見得非得是 `[CmsCollection]` 不可。框架自身的
-`UserRole` (`src/Struo.Infrastructure/Identity/UserRole.cs`) 剛好*同時*也是它自己的
-`[CmsCollection]` (`Hidden = true`，所以它從來不會顯示在側欄中;`AdminOnly = true`，所以對它的
-一般寫入，無論有沒有任何逐集合授權，都需要超級管理員身分);它自己的文件註解只說明它「塑模了
-使用者↔角色這個 many-to-many」，並未進一步說明為什麼它同時也要是一個集合。一個 junction entity
-完全不需要同時是一個集合:範例的 `ArticleTag` (`samples/Struo.Sample.Blog/ArticleTag.cs`) 就是
-一個沒有 `[CmsCollection]` attribute 的純粹 junction。不論哪一種做法，掃描器解析 junction 形狀
-時，需要的是*擁有方*集合清單屬性上的
+一個 junction 就是一個一般的 SqlSugar entity——不見得非得是 `[CmsCollection]` 不可。一個完全沒有
+`[CmsCollection]` attribute 的純粹 junction，運作方式一如既往，本節所述完全不適用於它。不論哪一種
+做法，掃描器解析 junction 形狀時，需要的都是*擁有方*集合清單屬性上的
 `[Navigate(typeof(JunctionType), parentFkName, targetFkName)]`——junction 型別本身不帶任何
 `[CmsRelation]`。
+
+每一種 junction 型別——不論帶不帶 payload——都必須宣告恰好一個 `[SugarColumn(IsPrimaryKey =
+true)]` 屬性:many-to-many 同步機制會依這個主鍵去更新既有的 junction 資料列，所以複合主鍵或完全
+沒有主鍵的 junction 會在啟動階段就以 `MetadataException` 快速失敗，而不是等到第一次寫入才出錯。
+
+### Junction payload
+
+當一個 junction 型別*同時*也帶有 `[CmsCollection]` 時，它就成了本手冊稱之為 **junction
+collection** 的東西，而它除了兩個外鍵、該關聯的 `SortField` (見上文)，以及任何 `IsSystem`/
+`ReadOnly` 欄位之外的所有 `[CmsField]`，就是這個關聯的 **payload**:屬於這條連結本身、而不屬於
+任何一端的資料 (例如為什麼要連結這兩列的
+備註、有別於排序的顯示權重、核准時間戳)。`RelationshipGraph.JunctionPayloadOf`
+(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) 是唯一計算一個關聯 payload 欄位清單
+的地方;寫入端的混合陣列繫結器 (第 9 章)、`_junction` 讀取投影 (見下文)、修訂版本 (第 13 章)，
+以及 GraphQL (第 10 章) 全都從那裡讀取，而不是各自重新推導。
+
+一個 junction collection 的兩個外鍵**必須**宣告成可寫入的 `[CmsField]` (例如
+`Interface = FieldInterface.Uuid`)——框架自身的 `UserRole`
+(`src/Struo.Infrastructure/Identity/UserRole.cs`) 也是這麼做的，只是它除了兩個外鍵之外沒有宣告
+任何欄位，所以它不帶 payload。`MetadataScanner.ValidateJunctionCollections`
+(`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) 會在任一外鍵不可寫入時，以
+`MetadataException` 讓啟動失敗，因為否則通用 CRUD API 就有辦法建立出外鍵為空的 junction 資料
+列;訊息的第一段子句是 `"Junction collection '{junction}' (used by '{owner}.{relation}') must
+declare its foreign keys '{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface =
+FieldInterface.Uuid)"`。
+
+`Hidden = true` 用在 junction collection 上 (`UserRole`，以及範例的 `ArticleTag`，見下文) 只會
+讓它不出現在管理後台側欄中——在其他所有地方，它仍是一個完全可定址的集合:`GET /api/schema`、RBAC
+權限矩陣，以及產生出來的 GraphQL schema，都會像對待任何非隱藏集合一樣把它包含進去。
+`RelationMetadata.JunctionCollection` (`/api/schema` 關聯項目中的 `junctionCollection`) 會指名
+它，讓客戶端知道要對哪個集合另外申請寫入授權，才能寫入 junction payload (第 9 章)。
+
+**給 fork 的但書**:如果你在一個 junction entity 上直接加上自己的
+`[Navigate]`/`[CmsRelation]` picker 關聯 (例如從該 junction 到某個第三方集合的 many-to-one，
+比方說「由誰新增」)，這個關聯會像任何其他 many-to-one 一樣，登記進 inbound-restrict 索引，因為
+`OnDelete` 預設就是 `Restrict`:只要還有 junction 資料列參照著第三方集合的那一列，刪除它就會被
+擋下，除非你在這個 picker 關聯上宣告 `OnDelete = OnDelete.Cascade`。
+
+範例的 `ArticleTag` (`samples/Struo.Sample.Blog/ArticleTag.cs`，第 16 章) 就是隨附出貨的
+junction collection 範例:`[CmsCollection("Article tag", Hidden = true)]`，兩個外鍵都宣告成
+可寫入的 `Uuid` 欄位，一個 `Note` 文字欄位作為它的 payload，以及一個 `Sort` 數字欄位，接到
+`Article.Tags` 的 `[CmsRelation(SortField = nameof(ArticleTag.Sort))]`。
 
 ## 逐個值的 `OnDelete` 語意
 
@@ -187,6 +226,26 @@ JSON 信封形式 (`POST /api/items/{collection}/query`，第 8 章) 則額外�
 ——這些都是在記憶體中，逐父項套用到該關聯已經取回的資料列上——再加上一個巢狀的 `deep` 以做多層
 展開。一個 many-to-one 關聯會忽略 filter/sort/limit/offset (最多只有一筆目標資料列);它們只
 適用於 one-to-many 與 many-to-many。
+
+### 帶 payload 的 many-to-many 上的 `_junction`
+
+當 `deep` 展開一個 junction 帶有 payload 的 many-to-many 關聯時 (見上文)，`RelationExpander`
+會在每一筆展開出來的目標資料列上附加一個 `_junction` 物件，裡面是該資料列非 `Hidden` 的 payload
+欄位值——一個 `Hidden` payload 欄位，會像一個 `Hidden` 自有欄位不會出現在目標資料列本身一樣，
+被排除在 `_junction` 之外。一個 junction 不帶 payload 的關聯完全不會有 `_junction` 這個鍵;而當
+呼叫端不具備對該 junction collection 的讀取授權時，`_junction` 會被整個省略 (而不是回傳
+`null`)——這與 `deep` 對呼叫端無權讀取的關聯一貫採取的「省略、不失敗」立場一致。以 deep 展開
+範例的 `Article.Tags` (第 16 章)，其形狀為 (示意用——`sort` 本身被排除在 `_junction` 之外，因為
+它是該關聯的 `SortField`，已經反映在陣列順序中，不算 payload):
+
+```json
+{
+  "id": "<article-id>",
+  "tags": [
+    { "id": "<tag-id>", "name": "Guide", "_junction": { "note": "editor pick" } }
+  ]
+}
+```
 
 ## 深度上限 6
 

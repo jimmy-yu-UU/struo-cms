@@ -50,8 +50,14 @@ public sealed class DeepExpansionCoordinator(
             PropertyAccessorCache.Read(entity, parentDesc.IdProperty)
             ?? throw new QueryException($"Cannot expand relations: a '{collection}' row has no id.");
 
+        // canReadJunction: gates the `_junction` payload sub-object per relation (omitted, never
+        // refused, mirroring PruneUnreadable's stance on target-collection reads above) — passed
+        // through so the expander's own internal recursion for nested `deep` re-applies it at
+        // every level, since a nested M2M relation is expanded inside RelationExpander itself and
+        // never comes back through this coordinator.
         var nested = await expander.ExpandAsync(
-            collection, entities, visible, projector.ProjectFor, ParentId, PropertyAccessorCache.Read, locale, ct);
+            collection, entities, visible, projector.ProjectFor, ParentId, PropertyAccessorCache.Read,
+            locale, permissions.CanRead, ct);
 
         for (var i = 0; i < entities.Count; i++)
         {

@@ -78,10 +78,11 @@ public static class MetadataScanner
 
     public static IReadOnlyList<CollectionMetadata> ScanTypes(IEnumerable<Type> types)
     {
+        var typeList = types as IReadOnlyList<Type> ?? types.ToList();
         var collections = new List<CollectionMetadata>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var type in types)
+        foreach (var type in typeList)
         {
             var collectionAttr = type.GetCustomAttribute<CmsCollectionAttribute>();
             if (collectionAttr is null) continue;
@@ -93,7 +94,98 @@ public static class MetadataScanner
             collections.Add(meta);
         }
 
+        ValidateJunctionCollections(collections, typeList);
+        ValidateJunctionPrimaryKeys(collections, typeList);
         return collections;
+    }
+
+    /// <summary>
+    /// Fail-fast: a M2M junction that is itself a [CmsCollection] must expose both of its foreign keys
+    /// as writable [CmsField]s (or as the FK of a many-to-one relation), or items created through the
+    /// generic-CRUD API would store empty junction keys. Runs for both <see cref="ScanTypes"/> and the
+    /// assembly-based <see cref="Scan"/> (which delegates to it).
+    /// </summary>
+    private static void ValidateJunctionCollections(IReadOnlyList<CollectionMetadata> collections, IEnumerable<Type> types)
+    {
+        var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var type in types)
+        {
+            var owner = byName.GetValueOrDefault(Camel(type.Name));
+            if (owner is null) continue;
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var navData = prop.CustomAttributes.FirstOrDefault(a => a.AttributeType == typeof(Navigate));
+                if (navData is null || !NavigateHasMappingType(navData)) continue;
+                ValidateOneJunctionCollection(owner, prop, navData, byName);
+            }
+        }
+    }
+
+    // Per-relation body of ValidateJunctionCollections, extracted verbatim (same conditions, order,
+    // and exception message) to keep the caller's cognitive complexity in check.
+    private static void ValidateOneJunctionCollection(
+        CollectionMetadata owner, PropertyInfo prop, CustomAttributeData navData,
+        IReadOnlyDictionary<string, CollectionMetadata> byName)
+    {
+        var junctionType = NavigateMappingType(navData)!;
+        var junction = byName.GetValueOrDefault(Camel(junctionType.Name));
+        if (junction is null) return; // plain junction: nothing to validate
+
+        var writable = junction.Fields.Where(f => !f.IsSystem && !f.ReadOnly).Select(f => f.Name)
+            .Concat(junction.Relations.Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null).Select(r => r.ForeignKey!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fkA = NavigateMappingA(navData)!;
+        var fkB = NavigateMappingB(navData)!;
+        if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB))) return;
+
+        throw new MetadataException(
+            $"Junction collection '{junction.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare its foreign keys " +
+            $"'{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created " +
+            "through the API store empty keys.");
+    }
+
+    /// <summary>
+    /// Fail-fast: every M2M junction type — whether it is itself a <c>[CmsCollection]</c> (an exposed
+    /// payload junction) or a plain POCO (membership-only) — must declare exactly one
+    /// <c>[SugarColumn(IsPrimaryKey = true)]</c> property. <c>ManyToManySync.SyncM2MGenericAsync</c>
+    /// resolves the junction's primary key via <c>Columns.Single(c => c.IsPrimarykey)</c> and updates
+    /// existing junction rows by that key; a junction with no primary key or a composite one otherwise
+    /// throws <see cref="InvalidOperationException"/> at the first M2M write instead of at scan time,
+    /// with no startup diagnostic. Runs for both <see cref="ScanTypes"/> and the assembly-based
+    /// <see cref="Scan"/> (which delegates to it).
+    /// </summary>
+    private static void ValidateJunctionPrimaryKeys(IReadOnlyList<CollectionMetadata> collections, IEnumerable<Type> types)
+    {
+        var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+        var checkedJunctions = new HashSet<Type>();
+        foreach (var type in types)
+        {
+            var owner = byName.GetValueOrDefault(Camel(type.Name));
+            if (owner is null) continue;
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var navData = prop.CustomAttributes.FirstOrDefault(a => a.AttributeType == typeof(Navigate));
+                if (navData is null || !NavigateHasMappingType(navData)) continue;
+                ValidateOneJunctionPrimaryKey(owner, prop, navData, checkedJunctions);
+            }
+        }
+    }
+
+    // Per-relation body of ValidateJunctionPrimaryKeys, extracted verbatim (same conditions, order,
+    // and exception message) to keep the caller's cognitive complexity in check.
+    private static void ValidateOneJunctionPrimaryKey(
+        CollectionMetadata owner, PropertyInfo prop, CustomAttributeData navData, HashSet<Type> checkedJunctions)
+    {
+        var junctionType = NavigateMappingType(navData)!;
+        if (!checkedJunctions.Add(junctionType)) return; // already validated via another owner/relation
+
+        var pkCount = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Count(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true });
+        if (pkCount == 1) return;
+
+        throw new MetadataException(
+            $"Junction type '{junctionType.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare exactly one " +
+            "[SugarColumn(IsPrimaryKey = true)] property; the M2M sync updates junction rows by primary key.");
     }
 
     public static IReadOnlyDictionary<string, EntityDescriptor> ScanDescriptors(IEnumerable<Type> types)
@@ -404,6 +496,7 @@ public static class MetadataScanner
             Type target;
             RelationKind kind;
             string? fk = null;
+            string? junctionCollection = null;
 
             if (isCollection)
             {
@@ -416,6 +509,10 @@ public static class MetadataScanner
                     // ReverseForeignKeyProperty) so the frontend RelatedList knows
                     // which column to filter the child collection by.
                     fk = Camel(NavigateForeignKeyName(navData));
+                else if (NavigateMappingType(navData)?.GetCustomAttribute<CmsCollectionAttribute>() is not null)
+                    // The M2M junction is itself a [CmsCollection]: its non-FK, non-sort fields are
+                    // payload the API reads/writes alongside the relation (see RelationshipGraph).
+                    junctionCollection = Camel(NavigateMappingType(navData)!.Name);
             }
             else
             {
@@ -440,7 +537,8 @@ public static class MetadataScanner
                 PickerQuery = rel.PickerQuery,
                 OnDelete = rel.OnDelete,
                 Editable = rel.Editable,
-                SelfReferencing = target == type
+                SelfReferencing = target == type,
+                JunctionCollection = junctionCollection
             });
         }
         return list;

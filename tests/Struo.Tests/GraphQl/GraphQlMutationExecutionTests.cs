@@ -22,6 +22,7 @@ public class GraphQlMutationExecutionTests
         var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()

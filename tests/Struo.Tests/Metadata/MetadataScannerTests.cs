@@ -398,4 +398,33 @@ public class MetadataScannerTests
         // Missing property resolves to null (preserves the old `GetProperty(...)?.` null semantics).
         d.Properties.GetValueOrDefault("noSuchProperty").Should().BeNull();
     }
+
+    // The sample's article<->tag junction (ArticleTag) is a hidden [CmsCollection] carrying a Note
+    // payload and a Sort column (see ArticleTag.cs) — this pins the two things that make it a real
+    // demo of the junction-payload feature: the relation names its junction collection, and the M2M
+    // descriptor's payload is exactly the one non-FK, non-sort field.
+    [Fact]
+    public void Sample_article_tags_relation_names_the_hidden_junction_collection_with_note_payload()
+    {
+        var article = ArticleMeta();
+        var tags = article.Relations.Single(r => r.Name == "tags");
+        tags.JunctionCollection.Should().Be("articleTag");
+
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag), typeof(ArticleTag) };
+        var collections = MetadataScanner.ScanTypes(types);
+        var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["article"] = typeof(Article),
+            ["category"] = typeof(Category),
+            ["tag"] = typeof(Tag),
+            ["articleTag"] = typeof(ArticleTag),
+        };
+        var graph = new RelationshipGraph(collections, collectionTypes);
+        var desc = graph.M2MDescriptors("article").Single(d => d.RelationName == "tags");
+
+        desc.JunctionCollection.Should().Be("articleTag");
+        desc.HasPayload.Should().BeTrue();
+        desc.JunctionPayload!.Select(p => p.Name).Should().BeEquivalentTo(["note"]);
+        desc.SortProperty.Should().Be("Sort");
+    }
 }
