@@ -24,8 +24,7 @@ namespace Struo.Infrastructure.Query;
 /// </list>
 /// </remarks>
 public sealed class RelationExpander(
-    IItemRepository repository, RelationshipGraph graph,
-    IRelationFilterResolver filterResolver, StruoQueryOptions options)
+    IItemRepository repository, RelationshipGraph graph, StruoQueryOptions options)
     : IRelationExpander
 {
     // The per-call context ExpandAsync threads through its relation expansion, bundled so
@@ -55,12 +54,9 @@ public sealed class RelationExpander(
         string? locale = null, Func<string, bool>? canReadJunction = null, CancellationToken ct = default)
     {
         // options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
-        // ApplyListArgs below). Guarded here so a null DI registration fails fast. filterResolver
-        // is no longer consumed here — nested-filter push-down (O2M/M2M target-side) now goes
-        // straight through IItemRepository.QueryWhereInFilteredAsync's FilterTranslator instead of
-        // a pre-rewrite step. The constructor parameter stays (removed in a later task); this
-        // discard keeps it referenced so CS9113 ("parameter is unread") doesn't fail the build.
-        _ = filterResolver;
+        // ApplyListArgs below). Guarded here so a null DI registration fails fast. Nested-filter
+        // push-down (O2M/M2M target-side) goes straight through
+        // IItemRepository.QueryWhereInFilteredAsync's FilterTranslator.
         ArgumentNullException.ThrowIfNull(options);
 
         var ctx = new ExpandContext(projectTarget, parentId, readProp, locale, canReadJunction);

@@ -102,8 +102,7 @@ internal sealed class M2MRevertHarness : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());
-        var resolver = new RelationFilterResolver(repo, graph, provider, registry, new StruoQueryOptions());
-        var expander = new RelationExpander(repo, graph, resolver, new StruoQueryOptions());
+        var expander = new RelationExpander(repo, graph, new StruoQueryOptions());
         var languages = new LanguageProvider(db);
         var realStore = new SqlSugarRevisionStore(db, currentUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
@@ -111,7 +110,7 @@ internal sealed class M2MRevertHarness : IDisposable
         Repository = repo;
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, resolver, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
+            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
             currentUser, realStore, snapshotBuilder, new NoopUserSessionRevocationService());
     }
 

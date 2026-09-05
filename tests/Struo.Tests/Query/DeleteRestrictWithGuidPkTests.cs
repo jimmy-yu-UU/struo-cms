@@ -77,13 +77,9 @@ public class DeleteRestrictWithGuidPkTests
             Task.FromResult<IReadOnlyList<object>>([new GuidEntity()]);
         public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
-        public Task<IReadOnlyList<object>> QueryIdsAsync(string c, FilterNode f, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<object>>([]);
         public Task SyncManyToManyAsync(Type jt, string pfk, string tfk, string? sort, object pid, IReadOnlyList<JunctionLink> links, CancellationToken ct) =>
             Task.CompletedTask;
         public Task<IReadOnlyList<object>> LoadTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<object> pids, string? locale, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<object>>([]);
-        public Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(Type tt, string fk, string lp, string locale, FilterNode fc, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task SyncTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<string> fp, object pid, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> pl, CancellationToken ct) =>
             Task.CompletedTask;
@@ -130,12 +126,6 @@ public class DeleteRestrictWithGuidPkTests
             all.ToList();
     }
 
-    private sealed class StubFilterResolver : IRelationFilterResolver
-    {
-        public Task<FilterNode?> RewriteAsync(string c, FilterNode? f, string? locale, CancellationToken ct) =>
-            Task.FromResult(f);
-    }
-
     // meta.Revisions is always false for StubMeta's CollectionMetadata, so CaptureAsync/BuildAsync
     // are never invoked here — this stub only needs to satisfy the constructor.
     private sealed class StubRevisionStore : IRevisionStore
@@ -172,7 +162,7 @@ public class DeleteRestrictWithGuidPkTests
         var svc      = new ItemService(
             repo, meta, registry, new StubPermissions(),
             graph, new StubExpander(), new StubM2M(),
-            new StubFilterResolver(), new StubLanguages(),
+            new StubLanguages(),
             new StruoQueryOptions(), new GanssHtmlSanitizer(),
             new TestCurrentUserAccessor(Guid.Empty),
             new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()), new NoopUserSessionRevocationService());

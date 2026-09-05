@@ -197,4 +197,54 @@ public class CrossRelationFilterTests(ApiFactory factory)
         ids.Should().Contain(tagged);
         ids.Should().NotContain(untagged);
     }
+
+    private static async Task<List<string?>> IdsAsync(System.Net.Http.HttpClient c, string url) =>
+        Root(await (await c.GetAsync(url)).Content.ReadAsStringAsync()).GetProperty("data")
+            .EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
+
+    [Fact]
+    public async Task Some_predicate_via_query_string_and_envelope_binds_to_one_link()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var stamp = "Some" + Guid.NewGuid().ToString("N")[..6];
+        var guide = await Post(c, "tag", new { name = stamp + "-guide" });
+        var misc = await Post(c, "tag", new { name = stamp + "-misc" });
+        // hit: ONE link carrying name=guide AND note=hero; miss: guide/plain + misc/hero (cross-row only)
+        var hit = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "SomeHit" } },
+            tags = new object[] { new { id = guide, note = "hero" } } });
+        var miss = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "SomeMiss" } },
+            tags = new object[] { new { id = guide, note = "plain" }, new { id = misc, note = "hero" } } });
+
+        var viaQs = await IdsAsync(c, $"/api/items/article?filter%5Btags._some.name%5D%5B_eq%5D={stamp}-guide&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero");
+        viaQs.Should().Contain(hit).And.NotContain(miss);
+
+        var envelope = JsonSerializer.SerializeToElement(new
+        {
+            filter = new Dictionary<string, object>
+            {
+                ["tags"] = new Dictionary<string, object>
+                {
+                    ["_some"] = new Dictionary<string, object> { ["name"] = Eq(stamp + "-guide"), ["_junction.note"] = Eq("hero") }
+                }
+            }
+        });
+        var viaEnv = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync())
+            .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
+        viaEnv.Should().Contain(hit).And.NotContain(miss);
+
+        var each = await IdsAsync(c, $"/api/items/article?filter%5Btags.name%5D%5B_eq%5D={stamp}-guide&filter%5Btags._junction.note%5D%5B_eq%5D=hero");
+        each.Should().Contain(hit).And.Contain(miss);
+    }
+
+    [Fact]
+    public async Task None_predicate_includes_articles_without_tags()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var stamp = "None" + Guid.NewGuid().ToString("N")[..6];
+        var tag = await Post(c, "tag", new { name = stamp });
+        var tagged = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "T" } }, tags = new[] { tag } });
+        var bare = await Post(c, "article", new { status = "draft", translations = new { en = new { title = stamp } } });
+        var ids = await IdsAsync(c, $"/api/items/article?filter%5Btags._none.name%5D%5B_eq%5D={stamp}");
+        ids.Should().Contain(bare).And.NotContain(tagged);
+    }
 }

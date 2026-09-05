@@ -92,9 +92,9 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     private IItemRepository BuildRepo() => BuildRepoWithGraph().Repo;
 
-    // Same wiring as BuildRepo(), but also returns the RelationshipGraph/filter-resolver/options
-    // needed to drive RelationExpander directly (self-relation N+1 check on real PG).
-    private (IItemRepository Repo, RelationshipGraph Graph, IRelationFilterResolver FilterResolver, StruoQueryOptions Options)
+    // Same wiring as BuildRepo(), but also returns the RelationshipGraph/options needed to drive
+    // RelationExpander directly (self-relation N+1 check on real PG).
+    private (IItemRepository Repo, RelationshipGraph Graph, StruoQueryOptions Options)
         BuildRepoWithGraph()
     {
         GuardDisposableDatabase();
@@ -125,8 +125,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var options = new StruoQueryOptions();
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, options);
-        var filterResolver = new RelationFilterResolver(repo, graph, provider, registry, options);
-        return (repo, graph, filterResolver, options);
+        return (repo, graph, options);
     }
 
     // Wires an ItemDeserializer against the SAME repo/graph BuildRepoWithGraph() just built, so the
@@ -140,7 +139,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     private (IItemRepository Repo, ItemDeserializer Deserializer, IMetadataProvider Provider)
         BuildRepoWithDeserializer()
     {
-        var (repo, graph, _, _) = BuildRepoWithGraph();
+        var (repo, graph, _) = BuildRepoWithGraph();
         var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var provider = new CachedMetadataProvider(MetadataScanner.ScanTypes(types));
@@ -261,7 +260,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     public async Task Six_level_selfrelation_parent_chain_is_linear_and_correct_on_postgres()
     {
         if (!PgConfigured) return;
-        var (repo, graph, filterResolver, options) = BuildRepoWithGraph();
+        var (repo, graph, options) = BuildRepoWithGraph();
 
         // root -> A1 -> A2 -> A3 -> A4 -> A5 -> leaf: exactly 6 `parent` hops from leaf to root.
         var root = (Category)await repo.CreateAsync("category", new Category { Name = "PgRoot" });
@@ -276,7 +275,7 @@ public sealed class PostgresIntegrationTests : IDisposable
             "category", new Category { Name = "PgLeaf", ParentId = prevId });
 
         var counter = new CountingItemRepository(repo);
-        var expander = new RelationExpander(counter, graph, filterResolver, options);
+        var expander = new RelationExpander(counter, graph, options);
         var parents = await repo.QueryWhereInAsync("category", "id", new object[] { leaf.Id });
 
         DeepSpec? deep = null;
@@ -312,7 +311,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     public async Task Subquery_conditional_primitive_works_on_postgres()
     {
         if (!PgConfigured) return;
-        var (repo, _, _, _) = BuildRepoWithGraph();
+        var (repo, _, _) = BuildRepoWithGraph();
         _db!.CodeFirst.InitTables<Article>();
 
         var cat = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe O'Brien" });
@@ -589,60 +588,6 @@ public sealed class PostgresIntegrationTests : IDisposable
                 try { if (_db.DbMaintenance.IsAnyTable(name, false)) _db.DbMaintenance.DropTable(name); }
                 catch { /* best-effort cleanup */ }
         }
-    }
-
-    // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
-    // filter materializes before rewriting it into `id IN (...)`; uses category.parent (self-relation)
-    // so only the Category table is needed. PG-specific risk being covered: the resolved set is a list
-    // of Guids that has to bind as uuid, so a cap that fired on the wrong side of that binding — or a
-    // rewrite that produced an untyped IN list — would pass on SQLite and fail here.
-    [Fact]
-    public async Task Resolved_id_set_cap_rejects_an_over_wide_dotted_filter_on_postgres()
-    {
-        if (!PgConfigured) return;
-        var (repo, _, filterResolver, options) = BuildRepoWithGraph();
-
-        const string stamp = "PgCapWide";
-        for (var i = 0; i < 4; i++)
-            await repo.CreateAsync("category", new Category { Name = $"{stamp}-p{i}" });
-
-        options.MaxResolvedFilterIds = 3; // leaf resolves 4 parents -> over the cap
-
-        var act = async () => await filterResolver.RewriteAsync(
-            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp));
-
-        (await act.Should().ThrowAsync<QueryException>())
-            .WithMessage("*too many rows*")
-            .WithMessage("*MaxResolvedFilterIds*");
-    }
-
-    // Control for the cap: a filter resolving WITHIN the cap must still rewrite to the correct
-    // `id IN (...)` on Postgres, uuid-bound. Guards against the cap being enforced so eagerly that
-    // legitimate dotted filters break, and against the rewrite losing the ids.
-    [Fact]
-    public async Task Resolved_id_set_cap_leaves_a_within_cap_dotted_filter_correct_on_postgres()
-    {
-        if (!PgConfigured) return;
-        var (repo, _, filterResolver, options) = BuildRepoWithGraph();
-
-        const string stamp = "PgCapNarrow";
-        var parent = (Category)await repo.CreateAsync("category", new Category { Name = stamp });
-        var childA = (Category)await repo.CreateAsync(
-            "category", new Category { Name = $"{stamp}-a", ParentId = parent.Id });
-        var childB = (Category)await repo.CreateAsync(
-            "category", new Category { Name = $"{stamp}-b", ParentId = parent.Id });
-
-        options.MaxResolvedFilterIds = 50;
-
-        var rewritten = await filterResolver.RewriteAsync(
-            "category", new ComparisonFilter("parent.name", QueryOperator.Eq, stamp));
-
-        var comparison = rewritten.Should().BeOfType<ComparisonFilter>().Subject;
-        comparison.FieldPath.Should().Be("id");
-        comparison.Op.Should().Be(QueryOperator.In);
-        comparison.Value.Should().BeAssignableTo<IReadOnlyList<object>>();
-        ((IReadOnlyList<object>)comparison.Value!).Cast<Guid>()
-            .Should().BeEquivalentTo([childA.Id, childB.Id]);
     }
 
     // The create-binding allowlist (bf04229, ItemDeserializer.Deserialize) on real Postgres. Once a
