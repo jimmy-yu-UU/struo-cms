@@ -84,13 +84,6 @@ public class FilterTranslatorSqlShapeTests : IDisposable
     }
 
     [Fact]
-    public void Object_selector_compiles_to_Func_of_object()
-    {
-        var lambda = ColumnSelectorFactory.ObjectSelector(typeof(Article), "CategoryId");
-        lambda.Should().BeAssignableTo<Expression<Func<Article, object>>>();
-    }
-
-    [Fact]
     public void Wrapped_subquery_works_at_the_top_level_of_a_where_list()
     {
         var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };

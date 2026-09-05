@@ -58,7 +58,10 @@ internal sealed class SubQueryConditional : ICustomConditionalFunc
     // "@ConditName01" when both appear in the same subquery.
     private static (string Sql, SugarParameter[] Parameters) Renamed(KeyValuePair<string, List<SugarParameter>> sub)
     {
-        var prefix = $"sq{Interlocked.Increment(ref _sequence)}_";
+        // Cast to uint before formatting: past int.MaxValue, Interlocked.Increment wraps to a
+        // negative value, and a "-" in the prefix would produce an illegal SQL parameter name
+        // (e.g. "@sq-2147483648_ConditName0"), failing every relation-filtered query thereafter.
+        var prefix = $"sq{(uint)Interlocked.Increment(ref _sequence)}_";
         var sql = sub.Key;
         var parameters = new SugarParameter[sub.Value.Count];
         for (var i = 0; i < sub.Value.Count; i++)

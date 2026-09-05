@@ -11,7 +11,12 @@ public static class RelationQuantifierFolder
     public static IReadOnlyList<FilterNode> Fold(IReadOnlyList<ComparisonFilter> flat)
     {
         var result = new List<FilterNode>();
-        var groups = new Dictionary<(string Prefix, RelationQuantifier Q), List<ComparisonFilter>>();
+        // Prefix is grouped case-insensitively: `filter[Tags._some.name]` and
+        // `filter[tags._some.color]` refer to the same relation and must fold into ONE
+        // each-exists predicate, not two. The key's casing (used for the emitted
+        // RelationPredicateFilter's Path) is whichever variant is seen first, since
+        // Dictionary/List preserve the key object passed to the first Add.
+        var groups = new Dictionary<(string Prefix, RelationQuantifier Q), List<ComparisonFilter>>(PrefixKeyComparer.Instance);
         var order = new List<(string, RelationQuantifier)>();
 
         foreach (var c in flat)
@@ -47,5 +52,18 @@ public static class RelationQuantifierFolder
             return (string.Join('.', parts[..i]), q, string.Join('.', parts[(i + 1)..]));
         }
         return null;
+    }
+
+    /// <summary>Groups by (Prefix, Quantifier) with the Prefix compared <see cref="StringComparer.OrdinalIgnoreCase"/>,
+    /// so `Tags._some` and `tags._some` fold into one group instead of two.</summary>
+    private sealed class PrefixKeyComparer : IEqualityComparer<(string Prefix, RelationQuantifier Q)>
+    {
+        public static readonly PrefixKeyComparer Instance = new();
+
+        public bool Equals((string Prefix, RelationQuantifier Q) x, (string Prefix, RelationQuantifier Q) y) =>
+            x.Q == y.Q && string.Equals(x.Prefix, y.Prefix, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Prefix, RelationQuantifier Q) obj) =>
+            HashCode.Combine(obj.Prefix.ToUpperInvariant(), obj.Q);
     }
 }
