@@ -431,6 +431,129 @@ public sealed class PostgresIntegrationTests : IDisposable
         (await q.ToListAsync()).Should().ContainSingle().Which.Id.Should().Be(x.Id);
     }
 
+    // Task 4 relation-filter pushdown, on real Postgres: A1's two assertions (dotted each-exists vs
+    // _some same-row bind), _none on O2M/M2O, _junction same-row bind, and apostrophe escaping — the
+    // SqlSugarItemRepository-level scenarios SubqueryPushdownTests already covers on SQLite, replayed
+    // against PostgreSQL (uuid FK typing, lowercase quoted identifiers, no N' national-string prefix).
+    // Uses SubqueryPushdownHarness's fixture types directly, InitTables'd here and DropTable'd at the
+    // end (GuardDisposableDatabase refuses a non-"test" database first).
+    [Fact]
+    public async Task Pushdown_some_none_and_junction_on_postgres()
+    {
+        if (!PgConfigured) return;
+        GuardDisposableDatabase();
+        _db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
+            new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
+        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        foreach (var t in SubqueryPushdownHarness.Types) _db.CodeFirst.InitTables(t);
+        // Deterministic start (FK-safe order), in case a previous run was interrupted before DropTable.
+        _db.Deleteable<SqProductLabel>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqProperty>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqProduct>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqLabel>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqCategory>().Where(x => true).ExecuteCommand();
+
+        try
+        {
+            var collections = MetadataScanner.ScanTypes(SubqueryPushdownHarness.Types);
+            var metadata = new CachedMetadataProvider(collections);
+            var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(SubqueryPushdownHarness.Types));
+            var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sqCategory"] = typeof(SqCategory), ["sqProduct"] = typeof(SqProduct), ["sqProperty"] = typeof(SqProperty),
+                ["sqLabel"] = typeof(SqLabel), ["sqProductLabel"] = typeof(SqProductLabel),
+            });
+            var options = new StruoQueryOptions();
+            var repo = new SqlSugarItemRepository(_db, registry, graph, metadata, options);
+            var translator = new FilterTranslator(_db, graph, metadata, registry, options);
+
+            var tech = new SqCategory { Id = Guid.NewGuid(), Name = "PgTech" };
+            var archive = new SqCategory { Id = Guid.NewGuid(), Name = "PgArchive" };
+            _db.Insertable(new[] { tech, archive }).ExecuteCommand();
+
+            var cross = new SqProduct { Id = Guid.NewGuid(), Name = "pgcross", CategoryId = tech.Id };
+            var same = new SqProduct { Id = Guid.NewGuid(), Name = "pgsame", CategoryId = archive.Id };
+            var noProps = new SqProduct { Id = Guid.NewGuid(), Name = "pgbare", CategoryId = tech.Id };
+            var noCat = new SqProduct { Id = Guid.NewGuid(), Name = "pgnocat", CategoryId = null };
+            _db.Insertable(new[] { cross, same, noProps, noCat }).ExecuteCommand();
+            _db.Insertable(new[]
+            {
+                new SqProperty { Id = Guid.NewGuid(), ProductId = cross.Id, Code = "vds-v", ValueNum = 20 },
+                new SqProperty { Id = Guid.NewGuid(), ProductId = cross.Id, Code = "ptot-w", ValueNum = 100 },
+                new SqProperty { Id = Guid.NewGuid(), ProductId = same.Id, Code = "vds-v", ValueNum = 80 },
+                new SqProperty { Id = Guid.NewGuid(), ProductId = noCat.Id, Code = "o'neil", ValueNum = 1 },
+            }).ExecuteCommand();
+            var guide = new SqLabel { Id = Guid.NewGuid(), Name = "PgGuide" };
+            _db.Insertable(guide).ExecuteCommand();
+            _db.Insertable(new SqProductLabel { Id = Guid.NewGuid(), ProductId = cross.Id, LabelId = guide.Id, Note = "hero" }).ExecuteCommand();
+
+            async Task<List<Guid>> IdsAsync(FilterNode filter)
+            {
+                var q = new QueryModel(null, filter, [], 100, 0, null);
+                var r = await repo.QueryAsync("sqProduct", q, ["name"]);
+                return r.Rows.Cast<SqProduct>().Select(p => p.Id).ToList();
+            }
+
+            // A1a: dotted path — each-exists, matches across two different rows' own properties.
+            (await IdsAsync(new LogicalFilter(LogicalOperator.And,
+                [
+                    new ComparisonFilter("properties.code", QueryOperator.Eq, "vds-v"),
+                    new ComparisonFilter("properties.valueNum", QueryOperator.Gte, 60),
+                ])))
+                .Should().BeEquivalentTo([cross.Id, same.Id]);
+
+            // A1b: _some — binds both conditions to the SAME related row.
+            (await IdsAsync(new RelationPredicateFilter("properties", RelationQuantifier.Some,
+                new LogicalFilter(LogicalOperator.And,
+                [
+                    new ComparisonFilter("code", QueryOperator.Eq, "vds-v"),
+                    new ComparisonFilter("valueNum", QueryOperator.Gte, 60),
+                ]))))
+                .Should().BeEquivalentTo([same.Id]);
+
+            // _none on O2M: parents with no related rows are included.
+            (await IdsAsync(new RelationPredicateFilter(
+                "properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "vds-v"))))
+                .Should().BeEquivalentTo([noProps.Id, noCat.Id]);
+
+            // _none on M2O: null foreign keys are included.
+            (await IdsAsync(new RelationPredicateFilter(
+                "category", RelationQuantifier.None, new ComparisonFilter("name", QueryOperator.Eq, "PgTech"))))
+                .Should().BeEquivalentTo([same.Id, noCat.Id]);
+
+            // _junction: target and junction condition bound to the same link.
+            (await IdsAsync(new RelationPredicateFilter("labels", RelationQuantifier.Some,
+                new LogicalFilter(LogicalOperator.And,
+                [
+                    new ComparisonFilter("name", QueryOperator.Eq, "PgGuide"),
+                    new ComparisonFilter("_junction.note", QueryOperator.Eq, "hero"),
+                ]))))
+                .Should().BeEquivalentTo([cross.Id]);
+
+            // Apostrophe in the inner value is escaped, not a syntax error.
+            (await IdsAsync(new RelationPredicateFilter(
+                "properties", RelationQuantifier.Some, new ComparisonFilter("code", QueryOperator.Eq, "o'neil"))))
+                .Should().BeEquivalentTo([noCat.Id]);
+
+            // No SQL Server-style N'...' national-string prefix anywhere in the generated SQL.
+            var noneConds = translator.Translate("sqProduct",
+                new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")),
+                null, [], null);
+            _db.Queryable<SqProduct>().Where(noneConds).ToSql().Key.Should().NotContain("N'");
+
+            var m2mConds = translator.Translate(
+                "sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "PgGuide"), null, [], null);
+            _db.Queryable<SqProduct>().Where(m2mConds).ToSql().Key.Should().NotContain("N'");
+        }
+        finally
+        {
+            foreach (var name in new[] { "sq_product_labels", "sq_properties", "sq_products", "sq_labels", "sq_categories" })
+                try { if (_db.DbMaintenance.IsAnyTable(name, false)) _db.DbMaintenance.DropTable(name); }
+                catch { /* best-effort cleanup */ }
+        }
+    }
+
     // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
     // filter materializes before rewriting it into `id IN (...)`; uses category.parent (self-relation)
     // so only the Category table is needed. PG-specific risk being covered: the resolved set is a list

@@ -32,7 +32,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
 
         var filter = new ComparisonFilter("status", QueryOperator.Eq, "published");
         var rows = await repo.QueryWhereInFilteredAsync(
-            "article", "categoryId", new object[] { System.Guid.Parse(cat) }, filter);
+            "article", "categoryId", new object[] { System.Guid.Parse(cat) }, filter, null);
 
         rows.Should().HaveCount(1);
     }

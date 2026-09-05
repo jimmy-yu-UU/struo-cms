@@ -6,7 +6,7 @@ using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
 
-internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registry)
+internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registry, FilterTranslator filters)
 {
     private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
@@ -62,7 +62,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
 
     public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, CancellationToken ct = default)
+        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
         var d = RepositoryHelpers.Descriptor(registry, collection);
@@ -79,10 +79,10 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
                 CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
-        // AND the extra own-collection filter (already relation-rewritten). SqlSugar ANDs consecutive
-        // IConditionalModel entries. ConditionalModelTranslator maps camelCase field paths -> columns.
+        // AND the extra filter — relation paths/predicates and translatable leaves are pushed down as
+        // subqueries by FilterTranslator. SqlSugar ANDs consecutive IConditionalModel entries.
         if (extraFilter is not null)
-            conditionals.AddRange(ConditionalModelTranslator.Translate(extraFilter, null, [], d, db));
+            conditionals.AddRange(filters.Translate(collection, extraFilter, null, [], queryLocale));
 
         return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, ct);
     }

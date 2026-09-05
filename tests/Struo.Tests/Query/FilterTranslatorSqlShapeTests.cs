@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Domain.Query;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Sample.Blog;
@@ -262,5 +263,28 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         prefixes.Should().HaveCount(2, "two independent Wrap() calls (level2->level1, level1->outer) each allocate their own prefix");
 
         q.ToList().Should().ContainSingle().Which.CategoryId.Should().Be(tech.Id);
+    }
+
+    [Fact]
+    public void None_on_o2m_adds_the_is_not_null_guard_on_the_projected_fk()
+    {
+        using var h = new SubqueryPushdownHarness();
+        var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
+        var conds = t.Translate("sqProduct", new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")), null, [], null);
+        var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
+        // SqlSugar emits irregular internal whitespace around IS NOT NULL (e.g. "IS NOT  NULL" with a
+        // doubled space) — match with whitespace tolerance rather than a literal substring.
+        sql.Should().Contain("NOT IN (SELECT").And.MatchRegex(@"IS\s+NOT\s+NULL");
+    }
+
+    [Fact]
+    public void M2m_predicate_nests_target_subquery_inside_junction_subquery()
+    {
+        using var h = new SubqueryPushdownHarness();
+        var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
+        var conds = t.Translate("sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "Guide"), null, [], null);
+        var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
+        sql.Should().MatchRegex(@"IN \(SELECT [\s\S]*sq_product_labels[\s\S]* IN \(SELECT [\s\S]*sq_labels");
+        sql.Should().NotContain("SqlSugar.");
     }
 }

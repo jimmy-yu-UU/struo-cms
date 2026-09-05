@@ -54,10 +54,13 @@ public sealed class RelationExpander(
         Func<object, object> parentId, Func<object, string, object?> readProp,
         string? locale = null, Func<string, bool>? canReadJunction = null, CancellationToken ct = default)
     {
-        // filterResolver is consumed for nested-filter push-down (O2M/M2M target-side rewrite)
-        // and options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
-        // ApplyListArgs below). Guarded here too so a null DI registration fails fast.
-        ArgumentNullException.ThrowIfNull(filterResolver);
+        // options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
+        // ApplyListArgs below). Guarded here so a null DI registration fails fast. filterResolver
+        // is no longer consumed here — nested-filter push-down (O2M/M2M target-side) now goes
+        // straight through IItemRepository.QueryWhereInFilteredAsync's FilterTranslator instead of
+        // a pre-rewrite step. The constructor parameter stays (removed in a later task); this
+        // discard keeps it referenced so CS9113 ("parameter is unread") doesn't fail the build.
+        _ = filterResolver;
         ArgumentNullException.ThrowIfNull(options);
 
         var ctx = new ExpandContext(projectTarget, parentId, readProp, locale, canReadJunction);
@@ -102,10 +105,8 @@ public sealed class RelationExpander(
                 case RelationKind.OneToMany:
                 {
                     var ids = parents.Select(parentId).ToList();
-                    var o2mFilter = spec.Filter is null ? null
-                        : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, locale, ct);
                     var children = await repository.QueryWhereInFilteredAsync(
-                        rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, o2mFilter, ct);
+                        rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter, locale, ct);
                     var grouped = children
                         .GroupBy(ch => readProp(ch, desc.ReverseForeignKeyProperty!)!)
                         .ToDictionary(g => g.Key, g => g.ToList());
@@ -169,10 +170,8 @@ public sealed class RelationExpander(
             .Select(j => ctx.ReadProp(j, desc.JunctionTargetFk!)!)
             .Distinct()
             .ToList();
-        var m2mFilter = spec.Filter is null ? null
-            : await filterResolver.RewriteAsync(rel.TargetCollection, spec.Filter, ctx.Locale, ct);
         var targets = (await repository.QueryWhereInFilteredAsync(
-                rel.TargetCollection, "id", targetIds, m2mFilter, ct))
+                rel.TargetCollection, "id", targetIds, spec.Filter, ctx.Locale, ct))
             .ToDictionary(t => ctx.ReadProp(t, "id")!, t => t);
         var includeJunction = desc.JunctionPayload is { Count: > 0 }
             && desc.JunctionCollection is not null

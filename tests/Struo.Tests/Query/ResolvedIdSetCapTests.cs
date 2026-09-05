@@ -134,11 +134,15 @@ public class ResolvedIdSetCapTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Translatable_search_resolving_past_the_cap_is_rejected()
+    public async Task Translatable_search_beyond_the_old_cap_is_not_refused()
     {
-        // article's only Searchable field is the translatable ArticleTranslation.Title, so ?search=
-        // goes exclusively through the translation-sidecar parent-id union in SqlSugarItemRepository —
-        // a separate materialization site from RelationFilterResolver's.
+        // article's only Searchable field is the translatable ArticleTranslation.Title. This search
+        // used to be answered by materializing a parent-id set from the translation sidecar (capped by
+        // Query:MaxResolvedFilterIds, same as a cross-relation filter) — U3 pushed it down to a
+        // "<coll>.id IN (SELECT fk FROM translation WHERE locale = ? AND title LIKE ?)" subquery
+        // instead (FilterTranslator.TranslatableLeaf), so no id set is ever materialized here anymore.
+        // This mirrors SubqueryPushdownTests.Wide_related_set_beyond_the_old_cap_is_not_refused for the
+        // relation-filter case: exceeding the old cap must no longer be refused.
         var stamp = "CapSearch" + Guid.NewGuid().ToString("N")[..8];
         var admin = await _factory.CreateAuthenticatedClientAsync();
         for (var i = 0; i <= Cap; i++)
@@ -151,6 +155,7 @@ public class ResolvedIdSetCapTests(ApiFactory factory)
         var capped = CreateCappedClient();
         var response = await QueryArticlesAsync(capped, new { search = stamp });
 
-        await AssertCapRejectionAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        Root(await response.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(Cap + 1);
     }
 }

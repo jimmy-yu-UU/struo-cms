@@ -46,18 +46,27 @@ public static class ConditionalModelTranslator
         return models;
     }
 
+    /// <summary>
+    /// Translates a single <see cref="ComparisonFilter"/> leaf into a SqlSugar <see cref="ConditionalModel"/>.
+    /// Extracted from <see cref="ToModel"/> so relation-filter pushdown (<c>FilterTranslator</c>) can build
+    /// own-collection leaf conditionals — including on a synthetic <see cref="EntityDescriptor"/> for a
+    /// junction/translation entity — without going through the full <see cref="FilterNode"/> AST dispatch.
+    /// </summary>
+    public static ConditionalModel ToSingleModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
+        new()
+        {
+            FieldName = Column(d, db, c.FieldPath),
+            ConditionalType = MapOperator(c.Op),
+            FieldValue = ToFieldValue(c.Op, c.Value),
+            CSharpTypeName = ResolveCSharpTypeName(d, c.FieldPath, c.Op)
+        };
+
     private static IConditionalModel ToModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
     {
         switch (node)
         {
             case ComparisonFilter c:
-                return new ConditionalModel
-                {
-                    FieldName = Column(d, db, c.FieldPath),
-                    ConditionalType = MapOperator(c.Op),
-                    FieldValue = ToFieldValue(c.Op, c.Value),
-                    CSharpTypeName = ResolveCSharpTypeName(d, c.FieldPath, c.Op)
-                };
+                return ToSingleModel(c, d, db);
 
             case LogicalFilter l:
                 var wt = l.Op == LogicalOperator.And ? WhereType.And : WhereType.Or;

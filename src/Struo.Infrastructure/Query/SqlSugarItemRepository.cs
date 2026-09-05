@@ -20,27 +20,32 @@ public sealed class SqlSugarItemRepository(
     ILogger<SqlSugarItemRepository>? logger = null) : IItemRepository
 {
     // This class is a facade over IItemRepository. Two supporting types back it — GenericDispatcher
-    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the seven instance
-    // fields declared next: TransactionRunner, WhereInQueries, SoftDeleteOps, PurgeOps,
-    // ManyToManySync, TranslationStore, and OrderByExpressionBuilder. The facade itself still
-    // implements Query/GetById/Create/Update/Delete (the optimistic-concurrency check, the
+    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the eight instance
+    // fields declared next: TransactionRunner, FilterTranslator, WhereInQueries, SoftDeleteOps,
+    // PurgeOps, ManyToManySync, TranslationStore, and OrderByExpressionBuilder. The facade itself
+    // still implements Query/GetById/Create/Update/Delete (the optimistic-concurrency check, the
     // identity-PK read-back and the offset/limit paging all live in this file); every other
     // IItemRepository member just delegates to one of six fields — transactions, whereIn,
     // softDelete, purge, manyToMany, and translations; orderByBuilder is not a delegation
-    // target, it is used inside QueryAsync (orderByBuilder.BuildOrderBy(...)). Among the
-    // seven fields, OrderByExpressionBuilder is the only one registered as a scoped DI
+    // target, it is used inside QueryAsync (orderByBuilder.BuildOrderBy(...)), and filters is used
+    // inline in QueryAsync (filters.Translate(...)) rather than delegated to. Among the
+    // eight fields, OrderByExpressionBuilder is the only one registered as a scoped DI
     // service — kept registered for a future direct consumer, though none exists today. The
-    // other six are not registered:
+    // other seven are not registered:
     // nothing outside this class needs them, and the test suite constructs SqlSugarItemRepository
     // directly with this exact 5-arg constructor (26 test files do), so any new required
     // constructor parameter is not an option — `logger` above is optional (defaults to null) for
     // exactly that reason. manyToMany and translations take `new TransactionRunner(db)` rather
     // than the `transactions` field below because a field initializer cannot reference another
     // instance field (CS0236); TransactionRunner holds no state beyond `db`, so the second
+    // instance behaves identically to sharing the first. whereIn similarly takes a second, separate
+    // `new FilterTranslator(...)` rather than the `filters` field below it for the same CS0236
+    // reason; FilterTranslator holds no state beyond its constructor arguments, so the second
     // instance behaves identically to sharing the first.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
-    private readonly WhereInQueries whereIn = new(db, registry);
+    private readonly FilterTranslator filters = new(db, graph, metadata, registry, options);
+    private readonly WhereInQueries whereIn = new(db, registry, new FilterTranslator(db, graph, metadata, registry, options));
     private readonly SoftDeleteOps softDelete = new(db, registry);
     private readonly PurgeOps purge = new(db, registry);
     private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db), logger);
@@ -67,90 +72,7 @@ public sealed class SqlSugarItemRepository(
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var d = RepositoryHelpers.Descriptor(registry, collection);
-        var collMeta = metadata.GetCollection(collection);
-        var translatableFields = collMeta?.Translation?.Fields ?? [];
-
-        // Split searchable fields: non-translatable go into the normal LIKE OR group;
-        // translatable ones are resolved to parent id sets via the translation sidecar.
-        var nonTranslatableSearchable = searchableFields
-            .Where(f => !translatableFields.Any(t => string.Equals(t, f, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-
-        var conditionals = ConditionalModelTranslator.Translate(query.Filter, query.Search, nonTranslatableSearchable, d, db);
-
-        // Translatable search: union parent ids from each translatable searchable field at the query locale.
-        if (!string.IsNullOrWhiteSpace(query.Search) && queryLocale is not null)
-        {
-            var translatableSearchable = searchableFields
-                .Where(f => translatableFields.Any(t => string.Equals(t, f, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            if (translatableSearchable.Count > 0 && collMeta?.Translation is not null)
-            {
-                var tm = collMeta.Translation;
-                var allParentIds = new HashSet<string>();
-                foreach (var field in translatableSearchable)
-                {
-                    var fieldCondition = new ComparisonFilter(field, QueryOperator.Contains, query.Search);
-                    var parentIds = await translations.QueryTranslationParentIdsAsync(
-                        tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty,
-                        queryLocale, fieldCondition, ct);
-                    foreach (var pid in parentIds)
-                        allParentIds.Add(pid?.ToString() ?? "");
-                    // Checked INSIDE the loop, not once after it: the union across N translatable
-                    // searchable fields is what has to stay bounded, and a per-field check after the
-                    // fact would already have every field's ids in memory.
-                    ResolvedIdSetGuard.EnsureCount(
-                        allParentIds.Count, options.MaxResolvedFilterIds, $"search on '{field}'");
-                }
-                allParentIds.Remove("");
-
-                if (allParentIds.Count > 0)
-                {
-                    // Combine with existing conditionals using OR (non-translatable OR translatable parent id match).
-                    var idColumn = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
-                    var translationIdModel = new ConditionalModel
-                    {
-                        FieldName = idColumn,
-                        ConditionalType = SqlSugar.ConditionalType.In,
-                        FieldValue = string.Join(",", allParentIds),
-                        CSharpTypeName = RepositoryHelpers.TypeNameOfProperty(d.EntityType, d.IdProperty)  // PK is Guid -> uuid on PG
-                    };
-
-                    if (nonTranslatableSearchable.Count > 0)
-                    {
-                        // Both non-translatable LIKE group and translatable id-IN need to be OR'd together.
-                        // ConditionalModelTranslator.Translate emits the LIKE group as a ConditionalCollections
-                        // appended last.  We assert this explicitly rather than relying on position alone:
-                        // if the last element is NOT a ConditionalCollections, the LIKE group is missing
-                        // (e.g. future translator change) and we fall back to a simple append rather than
-                        // silently turning the translatable match into an AND by injecting into the wrong group.
-                        var lastConditional = conditionals.Count > 0 ? conditionals[^1] : null;
-                        if (lastConditional is SqlSugar.ConditionalCollections likeCollection)
-                        {
-                            // Verified: last element is the LIKE ConditionalCollections — safe to OR in.
-                            likeCollection.ConditionalList.Add(
-                                new KeyValuePair<SqlSugar.WhereType, SqlSugar.ConditionalModel>(
-                                    SqlSugar.WhereType.Or, translationIdModel));
-                        }
-                        else
-                        {
-                            // Fallback: no LIKE group found — append as a standalone AND condition.
-                            // This preserves correctness (rows matching the translatable term are still
-                            // returned) at the cost of not OR-ing with any non-translatable LIKE results,
-                            // which is safe because there are no non-translatable LIKE conditions here.
-                            conditionals.Add(translationIdModel);
-                        }
-                    }
-                    else
-                    {
-                        // No non-translatable searchable fields — just add the IN condition.
-                        conditionals.Add(translationIdModel);
-                    }
-                }
-            }
-        }
-
+        var conditionals = filters.Translate(collection, query.Filter, query.Search, searchableFields, queryLocale);
         var orderBy = orderByBuilder.BuildOrderBy(query.Sort, d, collection, queryLocale);
         return await RunQueryDispatcher.For(d.EntityType)(this, conditionals, orderBy, query.Limit, query.Offset, deleted, ct);
     }
@@ -329,8 +251,8 @@ public sealed class SqlSugarItemRepository(
 
     public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, CancellationToken ct = default) =>
-        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, ct);
+        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default) =>
+        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, ct);
 
     public Task<IReadOnlyList<object>> QueryIdsAsync(
         string collection, FilterNode leafCondition, CancellationToken ct = default) =>
