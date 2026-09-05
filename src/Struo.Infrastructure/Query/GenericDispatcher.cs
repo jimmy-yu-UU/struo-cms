@@ -1,5 +1,6 @@
 // src/Struo.Infrastructure/Query/GenericDispatcher.cs
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Struo.Infrastructure.Query;
@@ -52,6 +53,8 @@ internal sealed class BiGenericDispatcher<TDelegate> where TDelegate : Delegate
 
 internal static class GenericDispatcherSupport
 {
+    [SuppressMessage("Major Code Smell", "S3011:Reflection should not be used to increase accessibility of classes, methods, or fields",
+        Justification = "Binds the host's own private generic workers by nameof; not reachable from external input.")]
     public static MethodInfo ResolveDefinition(Type host, string methodName, Type[] parameterTypes)
     {
         var method = host.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, parameterTypes)
