@@ -27,11 +27,17 @@ public static class ConditionalModelTranslator
 
         if (!string.IsNullOrWhiteSpace(search) && searchableFields.Count > 0)
         {
+            // The FIRST entry's WhereType is the connector between this group and whatever
+            // precedes it in the enclosing plain list (or is harmlessly dropped when there is
+            // no predecessor); every OTHER entry joins the previous entry INSIDE the group's own
+            // parentheses (mirrors FilterTranslator.BuildOrCollection). A first entry of
+            // WhereType.Or renders "<precedingFilter> OR (a OR b)" — the connector defect fix
+            // round 3 removed from FilterTranslator; the first entry here must always be And.
             var or = new ConditionalCollections
             {
                 ConditionalList = searchableFields
-                    .Select(f => new KeyValuePair<WhereType, ConditionalModel>(
-                        WhereType.Or,
+                    .Select((f, i) => new KeyValuePair<WhereType, ConditionalModel>(
+                        i == 0 ? WhereType.And : WhereType.Or,
                         new ConditionalModel
                         {
                             FieldName = Column(descriptor, db, f),

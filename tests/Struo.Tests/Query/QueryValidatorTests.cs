@@ -432,7 +432,9 @@ public class QueryValidatorTests
         var opts = new StruoQueryOptions { MaxRelationDepth = 1 };
         var q = Q(Some("category", Some("articles", new ComparisonFilter("status", QueryOperator.Eq, "x"))));
         var act = () => QueryValidator.Validate(q, Meta(), opts, Graph, Md, Perms);
-        act.Should().Throw<QueryException>().WithMessage("*depth*");
+        // The message must state the CONFIGURED limit (1), not the remaining budget at the point of
+        // failure (0) — a nested predicate's second hop exhausts the budget, but the caller configured 1.
+        act.Should().Throw<QueryException>().WithMessage("*depth of 1*");
     }
 
     [Fact]

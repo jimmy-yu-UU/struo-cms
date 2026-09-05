@@ -34,6 +34,23 @@ public class SubqueryPushdownTests : IDisposable
         ids.Should().BeEquivalentTo([same]);
     }
 
+    [Fact]
+    public async Task Nested_some_predicates_bind_at_each_level()
+    {
+        // spec §7 acceptance: a `_some` predicate nested inside another `_some` predicate (properties
+        // is O2M; property.product is M2O back to the same product row it belongs to). The inner
+        // predicate binds "product.name = same" to EACH property's own (single) product, which — since
+        // every seeded property's ProductId points back to its own parent — reduces to "this product's
+        // own name is 'same' AND it has at least one property row":
+        //   cross  (name "cross", 2 properties): name != "same"           -> excluded
+        //   same   (name "same",  1 property):    name == "same", has 1   -> INCLUDED
+        //   noProps(name "bare",  0 properties):   no property to satisfy -> excluded
+        //   noCat  (name "nocat", 1 property):     name != "same"         -> excluded
+        var (_, same, _, _) = _h.SeedEav();
+        var ids = await _h.QueryIdsAsync(Some("properties", Some("product", Eq("name", "same"))));
+        ids.Should().BeEquivalentTo([same]);
+    }
+
     // ── _none ──────────────────────────────────────────────────────────────
     [Fact]
     public async Task None_on_o2m_includes_parents_with_no_related_rows()

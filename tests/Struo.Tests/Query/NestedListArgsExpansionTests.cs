@@ -38,6 +38,38 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task QueryWhereInFiltered_narrows_by_some_relation_predicate()
+    {
+        // A `_some` RelationPredicateFilter (not a dotted path) passed directly as the extraFilter —
+        // spec §7's acceptance case for a `_some` predicate reaching the nested-list path.
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "category", new { name = "SomePredicateCat" });
+        var wanted = await Post(c, "tag", new { name = "Wanted-Predicate" });
+        var other = await Post(c, "tag", new { name = "Other-Predicate" });
+        var articleWithWanted = await Post(c, "article", new
+        {
+            status = "draft", categoryId = cat, tags = new[] { wanted },
+            translations = new { en = new { title = "HasWanted" } }
+        });
+        await Post(c, "article", new
+        {
+            status = "draft", categoryId = cat, tags = new[] { other },
+            translations = new { en = new { title = "HasOther" } }
+        });
+
+        using var scope = _factory.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IItemRepository>();
+
+        var predicate = new RelationPredicateFilter(
+            "tags", RelationQuantifier.Some, new ComparisonFilter("name", QueryOperator.Eq, "Wanted-Predicate"));
+        var rows = await repo.QueryWhereInFilteredAsync(
+            "article", "categoryId", new object[] { System.Guid.Parse(cat) }, predicate, queryLocale: null);
+
+        rows.Should().HaveCount(1);
+        rows.Cast<Struo.Sample.Blog.Article>().Single().Id.Should().Be(System.Guid.Parse(articleWithWanted));
+    }
+
+    [Fact]
     public async Task Nested_o2m_filter_narrows_list()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();

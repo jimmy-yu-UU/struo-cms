@@ -59,7 +59,9 @@ which pushes the condition down into an `IN (SELECT …)` subquery against the t
 rather than resolving it in memory. That subquery construction is not special-cased to the
 *root* collection's own sidecar: a translatable leaf reached across one or more relation hops
 (`articles.title` when filtering `category`) goes through the identical recursive mechanism, so it
-resolves correctly at whatever collection it lands on — chapter 7 has the cross-hop transcript.
+resolves correctly at whatever collection it lands on — chapter 7's pushdown section on relation
+filtering across dotted paths walks through how a cross-hop translatable leaf is resolved via the
+sidecar at the effective query locale.
 Live-verified: filtering `file` by its translatable `title` succeeds with no `?locale=` supplied at
 all (the effective locale then defaults to `DefaultCode()`, `ItemService.QueryAsync`'s `queryLocale`
 default):

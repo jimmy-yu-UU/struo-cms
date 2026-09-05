@@ -195,8 +195,8 @@ public class CrossRelationFilterTests(ApiFactory factory)
     public async Task Filter_m2m_articles_by_tag_name()
     {
         // M2M cross-relation filter coverage, restored now that Tag exists again.
-        // Proves RelationFilterResolver's M2M hop (junction targetFk -> parentFk) end-to-end on SQLite:
-        // "articles that have AT LEAST ONE tag named X" (ANY/EXISTS).
+        // Proves FilterTranslator's M2M subquery pushdown (junction targetFk -> parentFk) end-to-end
+        // on SQLite: "articles that have AT LEAST ONE tag named X" (ANY/EXISTS).
         var c = await _factory.CreateAuthenticatedClientAsync();
         var tag = await Post(c, "tag", new { name = "M2MFilterTag" });
         var tagged = await Post(c, "article", new

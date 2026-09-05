@@ -50,10 +50,19 @@ public sealed class RelationPath
     /// scalar field on the terminal collection, or (when the second-to-last segment is
     /// <c>_junction</c>) a payload field on the preceding M2M relation's junction collection.
     /// </summary>
+    /// <param name="maxDepth">The remaining hop budget to check against (the configured limit minus
+    /// hops already consumed by an enclosing relation predicate); may be less than the configured
+    /// limit.</param>
+    /// <param name="configuredMaxDepth">The limit to report in the depth-exceeded message. Defaults
+    /// to <paramref name="maxDepth"/> for callers that pass the full configured limit as
+    /// <paramref name="maxDepth"/>; a caller that narrows <paramref name="maxDepth"/> by hops already
+    /// used (see <c>QueryValidator</c>) passes the true configured limit here so the message states
+    /// the limit the caller configured, not the remaining budget.</param>
     public static RelationPath Parse(
         string rootCollection, string path,
-        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth)
+        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth, int? configuredMaxDepth = null)
     {
+        var reportedMaxDepth = configuredMaxDepth ?? maxDepth;
         var parts = path.Split('.');
         if (parts.Length < 2)
             throw new QueryException($"'{path}' is not a relation path.");
@@ -62,12 +71,12 @@ public sealed class RelationPath
 
         var junctionIdx = Array.IndexOf(parts, FilterReservedTokens.Junction);
         if (junctionIdx >= 0)
-            return ParseJunctionLeaf(rootCollection, path, parts, junctionIdx, graph, metadata, maxDepth);
+            return ParseJunctionLeaf(rootCollection, path, parts, junctionIdx, graph, metadata, maxDepth, reportedMaxDepth);
 
         var relCount = parts.Length - 1;          // last part is the leaf field
         if (relCount > maxDepth)
             throw new QueryException(
-                $"Relation path '{path}' exceeds the maximum depth of {maxDepth}.");
+                $"Relation path '{path}' exceeds the maximum depth of {reportedMaxDepth}.");
 
         var (segments, current) = WalkSegments(rootCollection, parts, relCount, graph, path);
 
@@ -92,13 +101,13 @@ public sealed class RelationPath
     /// </summary>
     public static RelationPath ParseRelationOnly(
         string rootCollection, string path,
-        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth)
+        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth, int? configuredMaxDepth = null)
     {
         var parts = path.Split('.');
         var relCount = parts.Length;
         if (relCount > maxDepth)
             throw new QueryException(
-                $"Relation path '{path}' exceeds the maximum depth of {maxDepth}.");
+                $"Relation path '{path}' exceeds the maximum depth of {configuredMaxDepth ?? maxDepth}.");
 
         var (segments, current) = WalkSegments(rootCollection, parts, relCount, graph, path);
         _ = metadata.GetCollection(current)
@@ -109,7 +118,7 @@ public sealed class RelationPath
 
     private static RelationPath ParseJunctionLeaf(
         string rootCollection, string path, string[] parts, int junctionIdx,
-        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth)
+        IRelationshipGraph graph, IMetadataProvider metadata, int maxDepth, int configuredMaxDepth)
     {
         if (junctionIdx != parts.Length - 2)
             throw new QueryException($"'{path}': '_junction' must be followed by exactly one junction field.");
@@ -117,7 +126,7 @@ public sealed class RelationPath
         var relCount = junctionIdx;               // hops before "_junction"; the leaf does not count
         if (relCount > maxDepth)
             throw new QueryException(
-                $"Relation path '{path}' exceeds the maximum depth of {maxDepth}.");
+                $"Relation path '{path}' exceeds the maximum depth of {configuredMaxDepth}.");
 
         var (segments, _) = WalkSegments(rootCollection, parts, relCount, graph, path);
         var lastRelation = relCount > 0 ? segments[^1].Relation : null;

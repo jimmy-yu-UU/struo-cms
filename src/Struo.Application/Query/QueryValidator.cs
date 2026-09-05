@@ -87,7 +87,8 @@ public static class QueryValidator
             // for a different reason). The prefix has no leaf, so the walk is given a trailing "."
             // to make its (parts.Length - 1)-hop loop cover every segment.
             DenyUnreadableHops(meta.Name, p.RelationPath + ".");
-            var rp = RelationPath.ParseRelationOnly(meta.Name, p.RelationPath, graph, metadata, opts.MaxRelationDepth - hopsUsed);
+            var rp = RelationPath.ParseRelationOnly(
+                meta.Name, p.RelationPath, graph, metadata, opts.MaxRelationDepth - hopsUsed, opts.MaxRelationDepth);
             var target = metadata.GetCollection(rp.TerminalCollection)
                 ?? throw new QueryException($"Unknown collection '{rp.TerminalCollection}'.");
             ValidateFilter(p.Inner, target, hopsUsed + rp.Segments.Count, logicalDepth: 1, rp.Segments[^1].Relation);
@@ -147,7 +148,8 @@ public static class QueryValidator
                 // real payload field from an invented one by response code (400 vs 403) — the same
                 // oracle this walk exists to prevent for ordinary hops.
                 DenyUnreadableHops(meta.Name, path);
-                var rp = RelationPath.Parse(meta.Name, path, graph, metadata, opts.MaxRelationDepth - hopsUsed);
+                var rp = RelationPath.Parse(
+                    meta.Name, path, graph, metadata, opts.MaxRelationDepth - hopsUsed, opts.MaxRelationDepth);
                 if (forSort && !rp.IsSortable)
                     throw new QueryException($"Sort across to-many relations is not supported: '{path}'.");
                 return;

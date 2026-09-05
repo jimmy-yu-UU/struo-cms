@@ -247,32 +247,46 @@ signature and, if it wants junction-payload writes to actually take effect, appl
 dictionary itself; a fork that only calls through the framework's `SqlSugarItemRepository` is
 unaffected.
 
+**Second breaking change, from the same relation-filter-pushdown work**: `IItemRepository` lost the
+two single-condition id-lookup members (own-collection and translation-sidecar) that existed only to
+feed the retired two-phase id-resolution filter resolver; `QueryWhereInFilteredAsync` gained a
+`string? queryLocale` parameter (before its trailing `CancellationToken`) so it can resolve
+translatable leaves in its `extraFilter` at that locale. A fork with its own `IItemRepository`
+implementation must drop the two removed members and add the new parameter; a fork that only calls
+through `SqlSugarItemRepository` is unaffected.
+
 `SqlSugarItemRepository` is a facade: it keeps the `IItemRepository` members `QueryAsync`,
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
 `RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,
 `DeleteGenericAsync`, and `CloneEntity` those methods use internally), and delegates every other
-`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder`, the seventh,
-is used inside `QueryAsync` rather than delegated to — all in the same `Query/` folder. Each is
-initialized in a field initializer from the facade's primary-constructor parameters rather than
-injected as its own dependency — only `OrderByExpressionBuilder` is also registered scoped in DI.
-`ManyToManySync` and `TranslationStore` each get their own `new TransactionRunner(db)` instance (a
-field initializer cannot reference another instance field), rather than sharing the facade's own
-`transactions` field; `TransactionRunner` holds no state beyond `db`, so the extra instance behaves
-identically to sharing one:
+`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder` and
+`FilterTranslator` are also fields, but are used inline inside `QueryAsync`
+(`orderByBuilder.BuildOrderBy(...)`, `filters.Translate(...)`) rather than delegated to — all eight
+in the same `Query/` folder. Each is initialized in a field initializer from the facade's
+primary-constructor parameters rather than injected as its own dependency — only
+`OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync` and `TranslationStore`
+each get their own `new TransactionRunner(db)` instance, and `WhereInQueries` gets its own `new
+FilterTranslator(...)` rather than the facade's own `filters` field (a field initializer cannot
+reference another instance field — CS0236); neither type holds state beyond its constructor
+arguments, so the extra instance behaves identically to sharing one:
 
 - `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
-  query DSL; the only collaborator registered as a scoped DI service.
+  query DSL; the only collaborator registered as a scoped DI service. Not a delegation target —
+  used inline in `QueryAsync`.
+- `FilterTranslator` (`FilterTranslator.cs` + `FilterTranslator.Subquery.cs`) — translates the filter
+  DSL into SqlSugar conditionals, pushing relation paths and `_some`/`_none` predicates down as SQL
+  subqueries. Not a delegation target — used inline in `QueryAsync`; `WhereInQueries` holds its own
+  second instance (see above).
 - `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
 - `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
-  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, `QueryIdsAsync`, and
-  `QueryWhereInWithDeletedAsync`.
+  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, and `QueryWhereInWithDeletedAsync`.
 - `SoftDeleteOps` (`SoftDeleteOps.cs`) — `SoftDeleteAsync`/`RestoreAsync`, the atomic
   `UPDATE ... WHERE deletedat IS [NOT] NULL` with the version bump.
 - `PurgeOps` (`PurgeOps.cs`) — the purge referential-integrity primitives, `SetForeignKeyNullAsync`
   and `DeleteByPropertyAsync`.
 - `ManyToManySync` (`ManyToManySync.cs`) — `SyncManyToManyAsync`.
 - `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
-  `QueryTranslationParentIdsAsync`, `SyncTranslationsAsync`.
+  `SyncTranslationsAsync`.
 
 `RepositoryHelpers` (`RepositoryHelpers.cs`) is a static helper class — `TypeNameOf`,
 `TypeNameOfProperty`, `Descriptor`, `ConvertId` — used by the facade and by `WhereInQueries`,

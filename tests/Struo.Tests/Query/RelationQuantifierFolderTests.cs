@@ -31,6 +31,20 @@ public class RelationQuantifierFolderTests
     }
 
     [Fact]
+    public void Prefix_grouping_is_case_insensitive()
+    {
+        // filter[Tags._some.name] and filter[tags._some.color] name the same relation; they must
+        // fold into ONE each-exists predicate, not two (the prefix comparison must not be ordinal).
+        var r = RelationQuantifierFolder.Fold([Cmp("Tags._some.name", "a"), Cmp("tags._some.color", "red")]);
+        r.Should().ContainSingle();
+        var p = r.OfType<RelationPredicateFilter>().Single();
+        p.RelationPath.Should().Be("Tags");
+        p.Quantifier.Should().Be(RelationQuantifier.Some);
+        var inner = p.Inner.Should().BeOfType<LogicalFilter>().Subject;
+        inner.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath).Should().BeEquivalentTo(["name", "color"]);
+    }
+
+    [Fact]
     public void Some_and_none_on_the_same_prefix_are_two_predicates()
     {
         var r = RelationQuantifierFolder.Fold([Cmp("tags._some.name", "a"), Cmp("tags._none.name", "b")]);
