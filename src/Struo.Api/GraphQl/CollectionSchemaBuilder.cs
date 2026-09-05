@@ -53,7 +53,21 @@ internal sealed class CollectionSchemaBuilder(
 
         types.Add(BuildObjectType(meta, types, payloadRelations)); // Article + nested repeater item types + <Rel>Link/<Rel>Junction types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
-        types.Add(BuildFilterInput(meta));                         // ArticleFilterInput
+        types.Add(BuildFilterInput(meta, payloadRelations));       // ArticleFilterInput
+
+        // Relation-specific filter input pair, one per M2M relation carrying an exposable payload
+        // (parity with payloadRelations' Link/Junction pair above): <Parent><Rel>FilterInput (the
+        // target's filterable fields + and/or/some/none of itself + junction: <Parent><Rel>JunctionFilterInput)
+        // and <Parent><Rel>JunctionFilterInput itself. The junction filter input (and the parent
+        // relation filter input's "junction" field) is skipped entirely when the relation's payload
+        // has no filterable field — HotChocolate rejects a zero-field input type exactly like it
+        // rejects a zero-field object type (see HasExposablePayload's comment above).
+        foreach (var rel in payloadRelations)
+        {
+            var junctionFilterInput = BuildJunctionFilterInput(meta, rel);
+            types.Add(BuildRelationFilterInput(meta, rel, junctionFilterInput is not null));
+            if (junctionFilterInput is not null) types.Add(junctionFilterInput);
+        }
 
         // Repeater input item types — built ONCE per field, referenced by name in both inputs
         // (building them inside AddWritableFields would register a duplicate for create AND update).
@@ -347,13 +361,25 @@ internal sealed class CollectionSchemaBuilder(
         return ObjectType.CreateUnsafe(config);
     }
 
-    private InputObjectType BuildFilterInput(CollectionMetadata meta)
+    private InputObjectType BuildFilterInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
         var name = SchemaTypeMapper.TypeName(meta.Name) + "FilterInput";
-        var desc = registry.Get(meta.Name);
         var config = new InputObjectTypeConfiguration(name, null, typeof(IReadOnlyDictionary<string, object?>));
         config.Fields.Add(new InputFieldConfiguration("and", null, TypeReference.Parse($"[{name}!]")));
         config.Fields.Add(new InputFieldConfiguration("or", null, TypeReference.Parse($"[{name}!]")));
+        config.Fields.Add(new InputFieldConfiguration("some", null, TypeReference.Parse(name)));
+        config.Fields.Add(new InputFieldConfiguration("none", null, TypeReference.Parse(name)));
+        AddFilterFields(config, meta, payloadRelations);
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    // Own-field + relation filter fields shared by BuildFilterInput (meta = the collection itself)
+    // and BuildRelationFilterInput (meta = the RELATION'S TARGET collection — its own filterable
+    // fields and relations, embedded under the parent's relation-specific filter input).
+    private void AddFilterFields(
+        InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
+    {
+        var desc = registry.Get(meta.Name);
         config.Fields.Add(new InputFieldConfiguration("id", null, TypeReference.Parse("IdFilter")));
 
         foreach (var f in meta.Fields)
@@ -363,30 +389,84 @@ internal sealed class CollectionSchemaBuilder(
             var opInput = FilterInputTranslator.OperatorInputTypeName(f.Interface, ClrType(desc, f.Name));
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(opInput)));
         }
-        // Cross-relation filter inputs. M2O contributes its FK column as a filterable IdFilter
-        // (parity with the REST allowlist) PLUS a nested target FilterInput. O2M/M2M carry no FK
-        // on this collection, so they contribute only the nested target FilterInput (ANY/EXISTS
-        // via RelationFilterResolver's to-many hops). Referenced by name -> recursive /
-        // self-referential / cyclic input types resolve like and/or (no build loop). Flattened to
-        // a dotted FieldPath by FilterInputTranslator.
-        foreach (var rel in meta.Relations)
-        {
-            string? targetFilter = null;
-            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
-            {
-                config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
-                targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
-            }
-            else if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
-            {
-                targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
-            }
 
-            if (targetFilter is not null)
-                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse(targetFilter)));
+        foreach (var rel in meta.Relations)
+            AddRelationFilterField(config, meta, rel, payloadRelations);
+    }
+
+    // Cross-relation filter inputs. M2O contributes its FK column as a filterable IdFilter (parity
+    // with the REST allowlist) PLUS a nested target FilterInput. O2M/M2M carry no FK on this
+    // collection, so they contribute only the nested target FilterInput (ANY/EXISTS/predicate via
+    // FilterInputTranslator). A ManyToMany relation carrying an exposable junction payload uses the
+    // relation-specific <Parent><Rel>FilterInput instead of the plain <Target>FilterInput, so its
+    // "junction" field is reachable from here. Referenced by name -> recursive / self-referential /
+    // cyclic input types resolve like and/or (no build loop).
+    private static void AddRelationFilterField(
+        InputObjectTypeConfiguration config, CollectionMetadata meta, RelationMetadata rel,
+        IReadOnlyList<M2MDescriptor> payloadRelations)
+    {
+        string? targetFilter = null;
+        if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
+        {
+            config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
+            targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
+        }
+        else if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
+        {
+            targetFilter = rel.Kind == RelationKind.ManyToMany && DescriptorFor(payloadRelations, rel.Name) is not null
+                ? SchemaTypeMapper.RelationFilterInputName(meta.Name, rel.Name)
+                : SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
         }
 
+        if (targetFilter is not null)
+            config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse(targetFilter)));
+    }
+
+    // <Parent><Rel>FilterInput: the target collection's own filterable fields/relations (via
+    // AddFilterFields against the TARGET's metadata) plus and/or/some/none of itself, plus a
+    // `junction` field (only when the relation's payload has at least one filterable field —
+    // `hasJunctionFilter`, computed by the caller from BuildJunctionFilterInput's own result so the
+    // two can never disagree about whether the type/field pair exists).
+    private InputObjectType BuildRelationFilterInput(CollectionMetadata meta, M2MDescriptor descriptor, bool hasJunctionFilter)
+    {
+        var name = SchemaTypeMapper.RelationFilterInputName(meta.Name, descriptor.RelationName);
+        var config = new InputObjectTypeConfiguration(name, null, typeof(IReadOnlyDictionary<string, object?>));
+        config.Fields.Add(new InputFieldConfiguration("and", null, TypeReference.Parse($"[{name}!]")));
+        config.Fields.Add(new InputFieldConfiguration("or", null, TypeReference.Parse($"[{name}!]")));
+        config.Fields.Add(new InputFieldConfiguration("some", null, TypeReference.Parse(name)));
+        config.Fields.Add(new InputFieldConfiguration("none", null, TypeReference.Parse(name)));
+
+        var targetMeta = metadataProvider.GetCollection(descriptor.TargetCollection)!;
+        var targetPayloadRelations = m2mSource.M2MDescriptors(targetMeta.Name)
+            .Where(d => HasExposablePayload(d, metadataProvider))
+            .ToList();
+        AddFilterFields(config, targetMeta, targetPayloadRelations);
+
+        if (hasJunctionFilter)
+            config.Fields.Add(new InputFieldConfiguration(
+                "junction", null,
+                TypeReference.Parse(SchemaTypeMapper.JunctionFilterInputName(meta.Name, descriptor.RelationName))));
+
         return InputObjectType.CreateUnsafe(config);
+    }
+
+    // <Parent><Rel>JunctionFilterInput: one operator-input field per exposable junction payload
+    // field that is also filterable (IsFilterable — same allowlist as an own-field). Returns null
+    // when that set is empty, so the caller skips both this type AND the parent relation filter
+    // input's "junction" field — a zero-field input type is rejected by HotChocolate at
+    // schema-build time exactly like a zero-field object type (see HasExposablePayload's comment).
+    private InputObjectType? BuildJunctionFilterInput(CollectionMetadata meta, M2MDescriptor descriptor)
+    {
+        var name = SchemaTypeMapper.JunctionFilterInputName(meta.Name, descriptor.RelationName);
+        var config = new InputObjectTypeConfiguration(name, null, typeof(IReadOnlyDictionary<string, object?>));
+        foreach (var (pf, iface, _) in ExposableJunctionFields(descriptor, metadataProvider))
+        {
+            if (!IsFilterable(iface)) continue;
+            var clr = descriptor.JunctionType.GetProperty(pf.Property)?.PropertyType;
+            var opInput = FilterInputTranslator.OperatorInputTypeName(iface, clr);
+            config.Fields.Add(new InputFieldConfiguration(pf.Name, null, TypeReference.Parse(opInput)));
+        }
+        return config.Fields.Count == 0 ? null : InputObjectType.CreateUnsafe(config);
     }
 
     private InputObjectType BuildCreateInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)

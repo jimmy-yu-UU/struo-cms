@@ -228,4 +228,96 @@ public class FilterInputTranslatorTests
             }
         }).Should().BeNull();
     }
+
+    // relationTarget stub used by the some/none/junction tests below: "tags" (article->tag),
+    // "category" (article->category), "articles" (category->article) — mirrors the fixtures'
+    // article.tags/article.category/category.articles relations.
+    private static string? RelTargets(string coll, string key) => (coll, key) switch
+    {
+        ("article", "tags") => "tag", ("article", "category") => "category", ("category", "articles") => "article", _ => null
+    };
+
+    [Fact]
+    public void Some_inside_a_relation_becomes_a_predicate_rooted_at_the_target()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["tags"] = new Dictionary<string, object?>
+            {
+                ["some"] = new Dictionary<string, object?>
+                {
+                    ["name"] = new Dictionary<string, object?> { ["eq"] = "a" },
+                    ["junction"] = new Dictionary<string, object?> { ["note"] = new Dictionary<string, object?> { ["contains"] = "hero" } },
+                }
+            }
+        }, "article", RelTargets);
+
+        var p = f.Should().BeOfType<RelationPredicateFilter>().Subject;
+        p.RelationPath.Should().Be("tags");
+        p.Quantifier.Should().Be(RelationQuantifier.Some);
+        var inner = p.Inner.Should().BeOfType<LogicalFilter>().Subject;
+        inner.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath).Should().BeEquivalentTo(["name", "_junction.note"]);
+    }
+
+    [Fact]
+    public void None_and_plain_keys_coexist_in_one_relation_dict()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["tags"] = new Dictionary<string, object?>
+            {
+                ["none"] = new Dictionary<string, object?> { ["name"] = new Dictionary<string, object?> { ["eq"] = "x" } },
+                ["name"] = new Dictionary<string, object?> { ["eq"] = "y" },
+            }
+        }, "article", RelTargets);
+        var l = f.Should().BeOfType<LogicalFilter>().Subject;
+        // Expression-tree bodies can't contain `is` PATTERN matching (CS8122) — a plain type-check
+        // plus a cast avoids that while asserting the same shape.
+        l.Children.Should().ContainSingle(c =>
+            c is RelationPredicateFilter && ((RelationPredicateFilter)c).Quantifier == RelationQuantifier.None);
+        l.Children.Should().ContainSingle(c =>
+            c is ComparisonFilter && ((ComparisonFilter)c).FieldPath == "tags.name");
+    }
+
+    [Fact]
+    public void Junction_directly_under_a_relation_is_a_dotted_junction_path()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["tags"] = new Dictionary<string, object?>
+            {
+                ["junction"] = new Dictionary<string, object?> { ["note"] = new Dictionary<string, object?> { ["eq"] = "hero" } }
+            }
+        }, "article", RelTargets);
+        f.Should().BeOfType<ComparisonFilter>().Which.FieldPath.Should().Be("tags._junction.note");
+    }
+
+    [Fact]
+    public void Nested_relation_prefix_applies_to_predicates_too()
+    {
+        var f = FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            ["category"] = new Dictionary<string, object?>
+            {
+                ["articles"] = new Dictionary<string, object?>
+                {
+                    ["some"] = new Dictionary<string, object?> { ["status"] = new Dictionary<string, object?> { ["eq"] = "published" } }
+                }
+            }
+        }, "article", RelTargets);
+        f.Should().BeOfType<RelationPredicateFilter>().Which.RelationPath.Should().Be("category.articles");
+    }
+
+    [Theory]
+    [InlineData("some")]
+    [InlineData("none")]
+    [InlineData("junction")]
+    public void Reserved_keys_at_the_top_level_throw(string key)
+    {
+        var act = () => FilterInputTranslator.Translate(new Dictionary<string, object?>
+        {
+            [key] = new Dictionary<string, object?> { ["name"] = new Dictionary<string, object?> { ["eq"] = "a" } }
+        }, "article", RelTargets);
+        act.Should().Throw<QueryException>().WithMessage($"*'{key}'*relation*");
+    }
 }
