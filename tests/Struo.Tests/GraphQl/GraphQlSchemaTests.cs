@@ -206,4 +206,12 @@ public class GraphQlSchemaTests
         sdl.Should().Contain("articleRevisions(id: ID!): [Revision!]!");
         sdl.Should().Contain("articleRevision(id: ID!, revisionNumber: Int!): Revision");
     }
+
+    [Fact]
+    public async Task Filter_inputs_carry_some_and_none_of_their_own_type()
+    {
+        var sdl = await BuildSdlAsync();
+        sdl.Should().Contain("some: TagFilterInput").And.Contain("none: TagFilterInput");
+        sdl.Should().Contain("some: ArticleFilterInput").And.Contain("none: ArticleFilterInput");
+    }
 }

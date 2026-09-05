@@ -25,7 +25,8 @@ namespace Struo.Tests.GraphQl;
 public class GraphQlExecutionTests
 {
     private static async Task<IRequestExecutor> ExecutorAsync(FakeGraphQlDataSource ds)
-        => await new ServiceCollection()
+    {
+        var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
             .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
             .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
@@ -38,6 +39,15 @@ public class GraphQlExecutionTests
             // services (not schema-scoped activation) — must be registered explicitly (mirrors
             // GraphQlSchemaTests).
             .AddSingleton<StruoTypeModule>()
+            // StruoErrorFilter surfaces a QueryException's own message (e.g. a reserved
+            // some/none/junction key used outside a relation filter) instead of HotChocolate's
+            // generic masked "Unexpected Execution Error" — mirrors production wiring and
+            // JunctionPayloadGraphQlTests.ExecutorAsync. Needs HttpContextAccessor + logging.
+            .AddHttpContextAccessor()
+            .AddLogging();
+        services.AddErrorFilter<StruoErrorFilter>();
+
+        return await services
             .AddGraphQLServer()
             .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
             .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
@@ -50,6 +60,7 @@ public class GraphQlExecutionTests
             // this document-validation-time rule is the only reachable depth guard here).
             .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
             .BuildRequestExecutorAsync();
+    }
 
     /// <summary>
     /// Parses the operation JSON and returns the "data" element. Asserting through JsonDocument
@@ -690,5 +701,27 @@ public class GraphQlExecutionTests
         var logical = captured!.Filter.Should().BeOfType<LogicalFilter>().Subject;
         logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
             .Should().Contain(new[] { "status", "tags.name" });
+    }
+
+    [Fact]
+    public async Task Some_on_a_to_many_relation_arrives_as_a_predicate()
+    {
+        QueryModel? captured = null;
+        var ds = new FakeGraphQlDataSource { OnQuery = (_, q, _, _) => { captured = q; return new PagedResult([], 0, q.Limit, q.Offset); } };
+        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { tags: { some: { name: { eq: \"AI\" } } } }) { total } }");
+        ParseData(result);
+        var p = captured!.Filter.Should().BeOfType<RelationPredicateFilter>().Subject;
+        p.RelationPath.Should().Be("tags");
+        p.Inner.Should().BeOfType<ComparisonFilter>().Which.FieldPath.Should().Be("name");
+    }
+
+    [Fact]
+    public async Task Some_at_the_top_level_is_a_graphql_error()
+    {
+        var ds = new FakeGraphQlDataSource { OnQuery = (_, q, _, _) => new PagedResult([], 0, q.Limit, q.Offset) };
+        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
+            "{ articles(filter: { some: { status: { eq: \"x\" } } }) { total } }")).ToJson();
+        json.Should().Contain("errors").And.Contain("relation");
     }
 }
