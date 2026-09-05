@@ -14,22 +14,74 @@ public static class QueryValidator
         QueryModel q, CollectionMetadata meta, StruoQueryOptions opts,
         IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions)
     {
-        // Allowlist: a collection's own fields, plus its declared many-to-one relation
-        // foreign keys (e.g. "categoryId" on article) so callers (incl. the frontend
-        // RelatedList) can filter/sort by the FK column even though it carries no
-        // [CmsField]. Never widened to arbitrary non-relation columns.
-        //
-        // Hidden fields are excluded on purpose: they hold credentials (User.Password /
-        // User.AccessToken) that projection already refuses to serialize. If they stayed
-        // filterable/sortable, meta.total would become a blind-extraction oracle
-        // (?filter[password][_startsWith]=...) that leaks the value one character at a time.
-        var known = meta.Fields.Where(f => !f.Hidden).Select(f => f.Name)
-            .Concat(meta.Relations
-                .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
-                .Select(r => r.ForeignKey!))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ctx = new ValidationContext(opts, graph, metadata, permissions);
+        ctx.ValidateFilter(q.Filter, meta, hopsUsed: 0, logicalDepth: 1);
 
-        void CheckField(string path, bool forSort = false, bool allowRelation = true)
+        foreach (var s in q.Sort) ctx.CheckField(s.Field, meta, forSort: true);
+        if (q.Fields is not null) foreach (var f in q.Fields) ctx.CheckField(f, meta, allowRelation: false);
+
+        var limit = q.Limit <= 0 ? opts.DefaultLimit : Math.Min(q.Limit, opts.MaxLimit);
+        var offset = Math.Max(0, q.Offset);
+
+        return q with { Limit = limit, Offset = offset };
+    }
+
+    public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>
+        meta.Fields.Where(f => f.Searchable && !f.Hidden).Select(f => f.Name).ToList();
+
+    /// <summary>
+    /// Holds the per-request state (condition count, per-collection field allowlist cache) that used
+    /// to live as closures over local functions in <see cref="Validate"/>. Recursion into a quantified
+    /// relation predicate's inner filter needs that state to keep counting toward the same caps, so it
+    /// is threaded through as fields here instead.
+    /// </summary>
+    private sealed class ValidationContext(
+        StruoQueryOptions opts, IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions)
+    {
+        private int conditionCount;
+        private readonly Dictionary<string, HashSet<string>> knownCache = new(StringComparer.OrdinalIgnoreCase);
+
+        public void ValidateFilter(FilterNode? node, CollectionMetadata meta, int hopsUsed, int logicalDepth)
+        {
+            switch (node)
+            {
+                case null:
+                    return;
+                case ComparisonFilter c:
+                    CountCondition();
+                    CheckField(c.FieldPath, meta, hopsUsed: hopsUsed);
+                    return;
+                case LogicalFilter l:
+                    if (logicalDepth >= 2)
+                        throw new QueryException(
+                            "Nested logical groups are not supported; " +
+                            "use a single level of _and/_or over field conditions.");
+                    foreach (var child in l.Children) ValidateFilter(child, meta, hopsUsed, logicalDepth + 1);
+                    return;
+                case RelationPredicateFilter p:
+                    ValidatePredicate(p, meta, hopsUsed);
+                    return;
+                default:
+                    throw new QueryException($"Unsupported filter node '{node.GetType().Name}'.");
+            }
+        }
+
+        private void ValidatePredicate(RelationPredicateFilter p, CollectionMetadata meta, int hopsUsed)
+        {
+            // Same permission gate as a dotted field path: every collection the predicate's relation
+            // prefix traverses needs its own read grant, checked before the prefix is even parsed (a
+            // denied caller must not learn whether an unresolvable relation name would have failed
+            // for a different reason). The prefix has no leaf, so the walk is given a trailing "."
+            // to make its (parts.Length - 1)-hop loop cover every segment.
+            DenyUnreadableHops(meta.Name, p.RelationPath + ".");
+            var rp = RelationPath.ParseRelationOnly(meta.Name, p.RelationPath, graph, metadata, opts.MaxRelationDepth - hopsUsed);
+            var target = metadata.GetCollection(rp.TerminalCollection)
+                ?? throw new QueryException($"Unknown collection '{rp.TerminalCollection}'.");
+            ValidateFilter(p.Inner, target, hopsUsed + rp.Segments.Count, logicalDepth: 1);
+        }
+
+        public void CheckField(
+            string path, CollectionMetadata meta, bool forSort = false, bool allowRelation = true, int hopsUsed = 0)
         {
             if (RelationPath.IsRelationPath(path))
             {
@@ -48,71 +100,72 @@ public static class QueryValidator
                 // collection enumerate the field names of every collection reachable from it. An
                 // unresolvable hop breaks out rather than throwing, so Parse still owns that
                 // message — the collection it names is one the caller has already been cleared for.
-                DenyUnreadableHops(meta.Name, path, graph, permissions);
-                var rp = RelationPath.Parse(meta.Name, path, graph, metadata, opts.MaxRelationDepth);
+                // A trailing "_junction.<field>" resolves to no relation in this loop (it breaks out
+                // early), so the junction collection's own read grant is checked separately below,
+                // once Parse has told us which junction collection the leaf actually belongs to.
+                DenyUnreadableHops(meta.Name, path);
+                var rp = RelationPath.Parse(meta.Name, path, graph, metadata, opts.MaxRelationDepth - hopsUsed);
+                if (rp.IsJunctionLeaf && !permissions.CanRead(rp.JunctionCollection!))
+                    throw new PermissionDeniedException($"Read not permitted on '{rp.JunctionCollection}'.");
                 if (forSort && !rp.IsSortable)
                     throw new QueryException($"Sort across to-many relations is not supported: '{path}'.");
                 return;
             }
             // "id" is always projected (PK); it is not in meta.Fields but is always valid.
             if (string.Equals(path, "id", StringComparison.OrdinalIgnoreCase)) return;
-            if (!known.Contains(path))
+            if (!Known(meta).Contains(path))
                 throw new QueryException($"Unknown field '{path}' on collection '{meta.Name}'.");
         }
 
-        var conditionCount = 0;
-        void Walk(FilterNode? node, int logicalDepth)
+        // Allowlist: a collection's own fields, plus its declared many-to-one relation foreign keys
+        // (e.g. "categoryId" on article) so callers (incl. the frontend RelatedList) can filter/sort
+        // by the FK column even though it carries no [CmsField]. Never widened to arbitrary
+        // non-relation columns.
+        //
+        // Hidden fields are excluded on purpose: they hold credentials (User.Password /
+        // User.AccessToken) that projection already refuses to serialize. If they stayed
+        // filterable/sortable, meta.total would become a blind-extraction oracle
+        // (?filter[password][_startsWith]=...) that leaks the value one character at a time.
+        //
+        // Computed lazily per collection and cached: a quantified predicate's inner filter runs
+        // against the target collection's metadata, which differs from the root's on every recursion.
+        private HashSet<string> Known(CollectionMetadata meta)
         {
-            switch (node)
+            if (knownCache.TryGetValue(meta.Name, out var cached)) return cached;
+            var known = meta.Fields.Where(f => !f.Hidden).Select(f => f.Name)
+                .Concat(meta.Relations
+                    .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
+                    .Select(r => r.ForeignKey!))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            knownCache[meta.Name] = known;
+            return known;
+        }
+
+        private void CountCondition()
+        {
+            conditionCount++;
+            if (conditionCount > opts.MaxFilterConditions)
+                throw new QueryException($"Too many filter conditions (max {opts.MaxFilterConditions}).");
+        }
+
+        /// <summary>
+        /// Walks a dotted path hop by hop, refusing the first whose target collection the caller
+        /// cannot read. Stops at an unresolvable hop so <see cref="RelationPath.Parse"/> or
+        /// <see cref="RelationPath.ParseRelationOnly"/> keeps ownership of that error — every
+        /// collection reached before it is one the caller is cleared to know about.
+        /// </summary>
+        private void DenyUnreadableHops(string rootCollection, string path)
+        {
+            var parts = path.Split('.');
+            var current = rootCollection;
+            for (var i = 0; i < parts.Length - 1; i++)
             {
-                case null: return;
-                case ComparisonFilter c:
-                    conditionCount++;
-                    if (conditionCount > opts.MaxFilterConditions)
-                        throw new QueryException($"Too many filter conditions (max {opts.MaxFilterConditions}).");
-                    CheckField(c.FieldPath);
-                    break;
-                case LogicalFilter l:
-                    if (logicalDepth >= 2)
-                        throw new QueryException(
-                            "Nested logical groups are not supported; " +
-                            "use a single level of _and/_or over field conditions.");
-                    foreach (var child in l.Children) Walk(child, logicalDepth + 1);
-                    break;
+                var rel = graph.Resolve(current, parts[i]);
+                if (rel is null) return;
+                if (!permissions.CanRead(rel.TargetCollection))
+                    throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
+                current = rel.TargetCollection;
             }
         }
-
-        Walk(q.Filter, 1);
-
-        foreach (var s in q.Sort) CheckField(s.Field, forSort: true);
-        if (q.Fields is not null) foreach (var f in q.Fields) CheckField(f, allowRelation: false);
-
-        var limit = q.Limit <= 0 ? opts.DefaultLimit : Math.Min(q.Limit, opts.MaxLimit);
-        var offset = Math.Max(0, q.Offset);
-
-        return q with { Limit = limit, Offset = offset };
     }
-
-    /// <summary>
-    /// Walks a dotted path hop by hop, refusing the first whose target collection the caller cannot
-    /// read. Stops at an unresolvable hop so <see cref="RelationPath.Parse"/> keeps ownership of that
-    /// error — every collection reached before it is one the caller is cleared to know about.
-    /// </summary>
-    private static void DenyUnreadableHops(
-        string rootCollection, string path, IRelationshipGraph graph, IPermissionService permissions)
-    {
-        var parts = path.Split('.');
-        var current = rootCollection;
-        for (var i = 0; i < parts.Length - 1; i++)
-        {
-            var rel = graph.Resolve(current, parts[i]);
-            if (rel is null) return;
-            if (!permissions.CanRead(rel.TargetCollection))
-                throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
-            current = rel.TargetCollection;
-        }
-    }
-
-    public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>
-        meta.Fields.Where(f => f.Searchable && !f.Hidden).Select(f => f.Name).ToList();
 }

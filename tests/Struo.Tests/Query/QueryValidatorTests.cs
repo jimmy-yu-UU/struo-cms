@@ -40,7 +40,11 @@ public class QueryValidatorTests
             ("article", "category") => new RelationMetadata { Name = "category", Label = "Category",
                 Kind = RelationKind.ManyToOne, TargetCollection = "category", Interface = RelationInterface.Dropdown, ForeignKey = "categoryId" },
             ("article", "tags") => new RelationMetadata { Name = "tags", Label = "Tags",
-                Kind = RelationKind.ManyToMany, TargetCollection = "tag", Interface = RelationInterface.TagSelect },
+                Kind = RelationKind.ManyToMany, TargetCollection = "tag", Interface = RelationInterface.TagSelect,
+                JunctionCollection = "articleTag" },
+            ("category", "articles") => new RelationMetadata { Name = "articles", Label = "Articles",
+                Kind = RelationKind.OneToMany, TargetCollection = "article", Interface = RelationInterface.Dropdown,
+                ForeignKey = "categoryId" },
             _ => null
         };
     }
@@ -54,6 +58,13 @@ public class QueryValidatorTests
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
             "tag" => new CollectionMetadata { Name = "tag", Label = "Tag", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
+            "articleTag" => new CollectionMetadata { Name = "articleTag", Label = "Article tag", FieldGroups = [],
+                Fields =
+                [
+                    new FieldMetadata { Name = "note", Label = "Note", Interface = FieldInterface.Text },
+                    new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true },
+                ] },
+            "article" => Meta(),
             _ => null
         };
     }
@@ -355,5 +366,95 @@ public class QueryValidatorTests
         var q = new QueryModel(null, new ComparisonFilter("ghostRel.name", QueryOperator.Eq, "x"), [], 0, 0, null);
         var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("*ghostRel*");
+    }
+
+    private static QueryModel Q(FilterNode f) => new(null, f, [], 0, 0, null);
+    private static RelationPredicateFilter Some(string rel, FilterNode inner) => new(rel, RelationQuantifier.Some, inner);
+
+    [Fact]
+    public void Some_predicate_validates_inner_against_the_target_collection()
+    {
+        var q = Q(Some("tags", new ComparisonFilter("name", QueryOperator.Eq, "a")));
+        QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms).Filter.Should().BeOfType<RelationPredicateFilter>();
+    }
+
+    [Fact]
+    public void Some_predicate_rejects_unknown_inner_field_naming_the_target()
+    {
+        var act = () => QueryValidator.Validate(Q(Some("tags", new ComparisonFilter("title", QueryOperator.Eq, "a"))), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*'title'*tag*");
+    }
+
+    [Fact]
+    public void Some_predicate_rejects_a_scalar_field_as_relation_path()
+    {
+        var act = () => QueryValidator.Validate(Q(Some("status", new ComparisonFilter("x", QueryOperator.Eq, 1))), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*'status'*");
+    }
+
+    [Fact]
+    public void Some_predicate_on_m2o_is_accepted()
+    {
+        var q = Q(new RelationPredicateFilter("category", RelationQuantifier.None, new ComparisonFilter("name", QueryOperator.Eq, "x")));
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Inner_logical_depth_restarts_inside_a_predicate()
+    {
+        var inner = new LogicalFilter(LogicalOperator.Or, [new ComparisonFilter("name", QueryOperator.Eq, "a"), new ComparisonFilter("name", QueryOperator.Eq, "b")]);
+        var outer = new LogicalFilter(LogicalOperator.And, [Some("tags", inner), new ComparisonFilter("status", QueryOperator.Eq, "x")]);
+        var act = () => QueryValidator.Validate(Q(outer), Meta(), Opts, Graph, Md, Perms);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Nested_logical_inside_the_inner_still_throws()
+    {
+        var inner = new LogicalFilter(LogicalOperator.And, [new LogicalFilter(LogicalOperator.Or, [new ComparisonFilter("name", QueryOperator.Eq, "a")])]);
+        var act = () => QueryValidator.Validate(Q(Some("tags", inner)), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*Nested*");
+    }
+
+    [Fact]
+    public void Inner_conditions_count_toward_MaxFilterConditions()
+    {
+        var many = Enumerable.Range(0, Opts.MaxFilterConditions).Select(_ => (FilterNode)new ComparisonFilter("name", QueryOperator.Eq, "x")).ToList();
+        var q = Q(new LogicalFilter(LogicalOperator.And, [new ComparisonFilter("status", QueryOperator.Eq, "x"), Some("tags", new LogicalFilter(LogicalOperator.And, many))]));
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*conditions*");
+    }
+
+    [Fact]
+    public void Predicate_hops_accumulate_toward_MaxRelationDepth()
+    {
+        var opts = new StruoQueryOptions { MaxRelationDepth = 1 };
+        var q = Q(Some("category", Some("articles", new ComparisonFilter("status", QueryOperator.Eq, "x"))));
+        var act = () => QueryValidator.Validate(q, Meta(), opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*depth*");
+    }
+
+    [Fact]
+    public void Predicate_into_unreadable_collection_throws_PermissionDenied()
+    {
+        var act = () => QueryValidator.Validate(Q(Some("tags", new ComparisonFilter("name", QueryOperator.Eq, "a"))), Meta(), Opts, Graph, Md, new DenyReadOf("tag"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Junction_field_requires_read_on_the_junction_collection()
+    {
+        var q = Q(new ComparisonFilter("tags._junction.note", QueryOperator.Contains, "x"));
+        QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms).Should().NotBeNull();
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("articleTag"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Hidden_junction_field_is_reported_as_unknown()
+    {
+        var act = () => QueryValidator.Validate(Q(new ComparisonFilter("tags._junction.secret", QueryOperator.Eq, "x")), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("*Unknown field*");
     }
 }

@@ -23,7 +23,8 @@ public class RelationPathTests
             ("category", "parent") => new RelationMetadata { Name = "parent", Label = "Parent",
                 Kind = RelationKind.ManyToOne, TargetCollection = "category", Interface = RelationInterface.TreeSelect, ForeignKey = "parentId", SelfReferencing = true },
             ("article", "tags") => new RelationMetadata { Name = "tags", Label = "Tags",
-                Kind = RelationKind.ManyToMany, TargetCollection = "tag", Interface = RelationInterface.TagSelect },
+                Kind = RelationKind.ManyToMany, TargetCollection = "tag", Interface = RelationInterface.TagSelect,
+                JunctionCollection = "articleTag" },
             _ => null
         };
     }
@@ -44,6 +45,12 @@ public class RelationPathTests
                 ] },
             "tag" => new CollectionMetadata { Name = "tag", Label = "Tag", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
+            "articleTag" => new CollectionMetadata { Name = "articleTag", Label = "Article tag", FieldGroups = [],
+                Fields =
+                [
+                    new FieldMetadata { Name = "note", Label = "Note", Interface = FieldInterface.Text },
+                    new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true },
+                ] },
             _ => null
         };
     }
@@ -125,5 +132,50 @@ public class RelationPathTests
     {
         var act = () => RelationPath.Parse("article", "category.parent.name", Graph, Md, 1);
         act.Should().Throw<QueryException>().WithMessage("*depth*");
+    }
+
+    [Fact]
+    public void ParseRelationOnly_accepts_a_pure_relation_prefix()
+    {
+        var p = RelationPath.ParseRelationOnly("article", "category.parent", Graph, Md, 5);
+        p.Segments.Should().HaveCount(2);
+        p.TerminalCollection.Should().Be("category");
+        p.LeafField.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ParseRelationOnly_rejects_a_trailing_field()
+    {
+        var act = () => RelationPath.ParseRelationOnly("article", "category.name", Graph, Md, 5);
+        act.Should().Throw<QueryException>().WithMessage("*'name'*");
+    }
+
+    [Fact]
+    public void Junction_segment_after_payload_m2m_yields_a_junction_leaf()
+    {
+        var p = RelationPath.Parse("article", "tags._junction.note", Graph, Md, 5);
+        p.IsJunctionLeaf.Should().BeTrue();
+        p.JunctionCollection.Should().Be("articleTag");
+        p.LeafField.Should().Be("note");
+        p.Segments.Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("category._junction.name")]          // M2O has no junction
+    [InlineData("tags._junction.secret")]            // hidden payload field
+    [InlineData("tags._junction.nope")]              // unknown payload field
+    [InlineData("tags._junction")]                   // no leaf
+    [InlineData("tags._junction.note.more")]         // no hop after junction
+    public void Junction_segment_misuse_throws(string path)
+    {
+        var act = () => RelationPath.Parse("article", path, Graph, Md, 5);
+        act.Should().Throw<QueryException>();
+    }
+
+    [Fact]
+    public void Junction_segment_does_not_count_toward_depth()
+    {
+        var act = () => RelationPath.Parse("article", "tags._junction.note", Graph, Md, 1);
+        act.Should().NotThrow();
     }
 }
