@@ -89,4 +89,22 @@ public class TranslatablePushdownTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         (await Ids(c, $"/api/items/article?search={stamp}")).Should().Contain(byTitle);
     }
+
+    // Moved from the retired resolved-id-set-cap test suite: the translatable-field search union
+    // (FilterTranslator.SearchGroup) is answered by a subquery against the translation sidecar, not a
+    // materialized, cardinality-bounded id set, so a search matching several rows must return ALL of
+    // them, not just the first one.
+    [Fact]
+    public async Task Translatable_search_returns_every_row_in_a_wide_result_set()
+    {
+        var c = await factory.CreateAuthenticatedClientAsync();
+        var stamp = "WideSrch" + Guid.NewGuid().ToString("N")[..6];
+        const int matchCount = 3;
+        for (var i = 0; i < matchCount; i++)
+            await Post(c, "article", new { status = "draft", translations = new { en = new { title = $"{stamp} number {i}" } } });
+
+        var resp = await c.GetAsync($"/api/items/article?search={stamp}");
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await Ids(c, $"/api/items/article?search={stamp}")).Should().HaveCount(matchCount);
+    }
 }
