@@ -127,33 +127,91 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         rows.Should().ContainSingle();
     }
 
-    // Reproduces the exact collision the fix targets: an outer ConditionalModel and an inner
-    // (wrapped) subquery both filter Category.Name at conditional-list index 0, so SqlSugar
-    // independently assigns BOTH the same generated name ("@ConditName0") before renaming. Without
-    // SubQueryConditional renaming the inner subquery's parameter, the outer query's ADO parameter
-    // collection would carry two entries named "@ConditName0" with different values, and whichever
-    // one wins determines silently-wrong results.
+    // Reproduces the exact collision the fix targets: an outer ConditionalModel and an inner (wrapped)
+    // subquery both filter Category.Name at conditional-list index 0, in ONE plain top-level list —
+    // NOT inside a ConditionalCollections OR group, whose members get a 1000-offset index
+    // ("@ConditStatus1000") and so never actually collide with a plain list's "@ConditName0". The
+    // premise is enforced, not just commented: the outer leaf's OWN generated parameter name — built
+    // standalone, on a throwaway queryable, exactly as it will be built inside the real combined list
+    // below — is asserted equal to the inner subquery's pre-rename parameter name.
     [Fact]
     public void Outer_and_inner_parameters_with_the_same_generated_name_do_not_collide()
     {
         var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
         var news = new Category { Id = Guid.NewGuid(), Name = "News" };
-        var other = new Category { Id = Guid.NewGuid(), Name = "Other" };
-        _db.Insertable(new[] { tech, news, other }).ExecuteCommand();
+        _db.Insertable(new[] { tech, news }).ExecuteCommand();
 
         var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
-        var innerWrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("News"));
 
-        var group = new ConditionalCollections
+        ConditionalModel OuterNameLeaf(string name) => new() { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name };
+
+        // Enforce the premise: the outer leaf, built standalone as the sole/first entry of a plain
+        // top-level list, gets the SAME generated parameter name SqlSugar assigns to the inner
+        // subquery's own (also sole/first, also plain-top-level-list) filter.
+        var outerStandalone = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech") }).ToSql();
+        var innerSubTech = CategoryIdsNamed("Tech");
+        outerStandalone.Value.Select(p => p.ParameterName).Should().BeEquivalentTo(
+            innerSubTech.Value.Select(p => p.ParameterName),
+            "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
+
+        // Positive: Category.Name = 'Tech' AND Id IN (SELECT Id FROM categories WHERE Name = 'Tech') -> Tech only.
+        var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
+        var rowsPositive = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condTech }).ToList();
+        rowsPositive.Should().ContainSingle().Which.Name.Should().Be("Tech");
+
+        // Negative: same outer leaf, but the inner subquery now filters 'News' instead. If the outer
+        // value ('Tech') had clobbered the inner one (the actual collision symptom), this would still
+        // spuriously match Tech; it must instead return ZERO rows.
+        var condNews = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("News"));
+        var rowsNegative = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condNews }).ToList();
+        rowsNegative.Should().BeEmpty();
+    }
+
+    // A second, independent way the same collision could reappear: passing the SAME `sub`
+    // KeyValuePair to Wrap() twice. Proves Renamed() copies rather than mutates — the shared input
+    // parameters are untouched, and each wrapped conditional's SQL/parameters stay self-consistent
+    // (no cross-contamination), so both execute correctly even reading from the exact same `sub`.
+    [Fact]
+    public void Wrapping_the_same_subquery_twice_does_not_corrupt_either_copy()
+    {
+        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
+        _db.Insertable(tech).ExecuteCommand();
+        _db.Insertable(new[]
         {
-            ConditionalList =
-            [
-                new(WhereType.Or, new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "Tech" }),
-                new(WhereType.Or, innerWrapped),
-            ]
-        };
-        var rows = _db.Queryable<Category>().Where(new List<IConditionalModel> { group }).ToList();
-        rows.Select(c => c.Name).Should().BeEquivalentTo(["Tech", "News"]);
+            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
+            new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = tech.Id },
+        }).ExecuteCommand();
+
+        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var sub = CategoryIdsNamed("Tech");
+        var originalNames = sub.Value.Select(p => p.ParameterName).ToList();
+
+        var condDraft = SubQueryConditional.Wrap(SubQueryKind.In, col, sub);
+        var condPublished = SubQueryConditional.Wrap(SubQueryKind.In, col, sub);
+
+        // The shared input list must be untouched by either Wrap() call.
+        sub.Value.Select(p => p.ParameterName).Should().Equal(originalNames);
+
+        var qDraft = _db.Queryable<Article>().Where(new List<IConditionalModel>
+        {
+            new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "draft" },
+            condDraft,
+        });
+        var qPublished = _db.Queryable<Article>().Where(new List<IConditionalModel>
+        {
+            new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "published" },
+            condPublished,
+        });
+
+        var sqlDraft = qDraft.ToSql();
+        var sqlPublished = qPublished.ToSql();
+
+        // Each instance's SQL references exactly its own parameter names — no desync, no cross-read.
+        foreach (var p in sqlDraft.Value) sqlDraft.Key.Should().Contain(p.ParameterName);
+        foreach (var p in sqlPublished.Value) sqlPublished.Key.Should().Contain(p.ParameterName);
+
+        qDraft.ToList().Should().ContainSingle().Which.Status.Should().Be("draft");
+        qPublished.ToList().Should().ContainSingle().Which.Status.Should().Be("published");
     }
 
     // Two independent Wrap() calls, each nesting the previous level's ToSql() output: level 2 (a

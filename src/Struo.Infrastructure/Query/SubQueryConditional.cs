@@ -46,10 +46,16 @@ internal sealed class SubQueryConditional : ICustomConditionalFunc
     public static ConditionalModel Wrap(SubQueryKind kind, string column, KeyValuePair<string, List<SugarParameter>> sub) =>
         new() { FieldName = column, CustomConditionalFunc = new SubQueryConditional(kind, column, sub) };
 
-    // Allocates one prefix per instance (a single Interlocked.Increment, not per parameter), renames
-    // every parameter in sub.Value to "@sq{n}_{originalNameWithoutAt}", and rewrites sub.Key so the
-    // SQL text matches. The negative lookahead in the replace regex stops "@ConditName0" from also
-    // matching inside "@ConditName01" when both appear in the same subquery.
+    // Allocates one prefix per instance (a single Interlocked.Increment, not per parameter), and
+    // builds brand-new SugarParameter COPIES under that prefix — it never mutates the caller's input
+    // parameter objects. The input list can itself hold parameter objects owned by an earlier
+    // SubQueryConditional instance (a nested Wrap()'s own _parameters, merged into this subquery's
+    // ToSql().Value by SqlSugar when it was built); renaming those objects in place would desync that
+    // earlier instance's already-fixed _sql from its now-renamed _parameters — a silent parameter/bind
+    // mismatch. Copying instead keeps every instance's (_sql, _parameters) pair internally consistent
+    // forever, and lets the exact same `sub` KeyValuePair be passed to Wrap() more than once safely.
+    // The negative lookahead in the replace regex stops "@ConditName0" from also matching inside
+    // "@ConditName01" when both appear in the same subquery.
     private static (string Sql, SugarParameter[] Parameters) Renamed(KeyValuePair<string, List<SugarParameter>> sub)
     {
         var prefix = $"sq{Interlocked.Increment(ref _sequence)}_";
@@ -57,13 +63,37 @@ internal sealed class SubQueryConditional : ICustomConditionalFunc
         var parameters = new SugarParameter[sub.Value.Count];
         for (var i = 0; i < sub.Value.Count; i++)
         {
-            var parameter = sub.Value[i];
-            var oldName = parameter.ParameterName; // e.g. "@ConditName0"
+            var source = sub.Value[i];
+            var oldName = source.ParameterName; // e.g. "@ConditName0"
             var newName = $"@{prefix}{oldName.TrimStart('@')}"; // e.g. "@sq7_ConditName0"
             sql = Regex.Replace(sql, Regex.Escape(oldName) + "(?![A-Za-z0-9_])", newName);
-            parameter.ParameterName = newName;
-            parameters[i] = parameter;
+            parameters[i] = Copy(source, newName);
         }
         return (sql, parameters);
     }
+
+    // Every public settable member SugarParameter exposes (SqlSugarCore 5.1.4.217), except
+    // ParameterName — supplied here as the already-computed renamed value.
+    private static SugarParameter Copy(SugarParameter source, string newName) => new(newName, source.Value)
+    {
+        DbType = source.DbType,
+        CustomDbType = source.CustomDbType,
+        Direction = source.Direction,
+        IsNullable = source.IsNullable,
+        Precision = source.Precision,
+        Scale = source.Scale,
+        Size = source.Size,
+        SourceColumn = source.SourceColumn,
+        SourceColumnNullMapping = source.SourceColumnNullMapping,
+        SourceVersion = source.SourceVersion,
+        TypeName = source.TypeName,
+        UdtTypeName = source.UdtTypeName,
+        IsJson = source.IsJson,
+        IsArray = source.IsArray,
+        IsClob = source.IsClob,
+        IsNClob = source.IsNClob,
+        IsNvarchar2 = source.IsNvarchar2,
+        IsRefCursor = source.IsRefCursor,
+        TempDate = source.TempDate,
+    };
 }
