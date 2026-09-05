@@ -45,9 +45,8 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
         var graph = scope.ServiceProvider.GetRequiredService<RelationshipGraph>();
         var counter = new CountingItemRepository(real);
-        var relFilter = scope.ServiceProvider.GetRequiredService<IRelationFilterResolver>();
         var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
-        var expander = new RelationExpander(counter, graph, relFilter, opts);
+        var expander = new RelationExpander(counter, graph, opts);
 
         var parents = await real.QueryWhereInAsync("category", "id", new object[] { System.Guid.Parse(catId) });
 
@@ -96,10 +95,9 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         using var scope = _factory.Services.CreateScope();
         var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
         var graph = scope.ServiceProvider.GetRequiredService<RelationshipGraph>();
-        var relFilter = scope.ServiceProvider.GetRequiredService<IRelationFilterResolver>();
         var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
         var counter = new CountingItemRepository(real);
-        var expander = new RelationExpander(counter, graph, relFilter, opts);
+        var expander = new RelationExpander(counter, graph, opts);
 
         var parents = await real.QueryWhereInAsync("category", "id", new object[] { System.Guid.Parse(catId) });
 
@@ -168,10 +166,9 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         using var scope = _factory.Services.CreateScope();
         var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
         var graph = scope.ServiceProvider.GetRequiredService<RelationshipGraph>();
-        var relFilter = scope.ServiceProvider.GetRequiredService<IRelationFilterResolver>();
         var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
         var counter = new CountingItemRepository(real);
-        var expander = new RelationExpander(counter, graph, relFilter, opts);
+        var expander = new RelationExpander(counter, graph, opts);
 
         var parents = await real.QueryWhereInAsync(
             "category", "id", leafIds.Select(System.Guid.Parse).Cast<object>().ToList());

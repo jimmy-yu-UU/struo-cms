@@ -38,8 +38,16 @@ namespace Struo.Tests.Query;
 public sealed class PostgresCollectionDefinition { }
 
 [Collection("Postgres")]
-public sealed class PostgresIntegrationTests : IDisposable
+public sealed partial class PostgresIntegrationTests : IDisposable
 {
+    // Source-generated regexes (SYSLIB1045): the "sqN_" nesting-prefix SubQueryConditional
+    // allocates per Wrap() call (see Two_nesting_levels_compose_through_Wrap_on_postgres below).
+    [GeneratedRegex(@"sq(\d+)_")]
+    private static partial Regex SqPrefixWithGroupRegex();
+
+    [GeneratedRegex(@"sq\d+_")]
+    private static partial Regex SqPrefixRegex();
+
     private const string ConnEnv = "STRUO_TEST_PG_CONNECTION";
     private static readonly string? Conn = ResolveConnection();
     private ISqlSugarClient? _db;
@@ -92,9 +100,9 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     private IItemRepository BuildRepo() => BuildRepoWithGraph().Repo;
 
-    // Same wiring as BuildRepo(), but also returns the RelationshipGraph/filter-resolver/options
-    // needed to drive RelationExpander directly (self-relation N+1 check on real PG).
-    private (IItemRepository Repo, RelationshipGraph Graph, IRelationFilterResolver FilterResolver, StruoQueryOptions Options)
+    // Same wiring as BuildRepo(), but also returns the RelationshipGraph/options needed to drive
+    // RelationExpander directly (self-relation N+1 check on real PG).
+    private (IItemRepository Repo, RelationshipGraph Graph, StruoQueryOptions Options)
         BuildRepoWithGraph()
     {
         GuardDisposableDatabase();
@@ -125,8 +133,7 @@ public sealed class PostgresIntegrationTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var options = new StruoQueryOptions();
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, options);
-        var filterResolver = new RelationFilterResolver(repo, graph, provider, registry, options);
-        return (repo, graph, filterResolver, options);
+        return (repo, graph, options);
     }
 
     // Wires an ItemDeserializer against the SAME repo/graph BuildRepoWithGraph() just built, so the
@@ -140,7 +147,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     private (IItemRepository Repo, ItemDeserializer Deserializer, IMetadataProvider Provider)
         BuildRepoWithDeserializer()
     {
-        var (repo, graph, _, _) = BuildRepoWithGraph();
+        var (repo, graph, _) = BuildRepoWithGraph();
         var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var provider = new CachedMetadataProvider(MetadataScanner.ScanTypes(types));
@@ -261,7 +268,7 @@ public sealed class PostgresIntegrationTests : IDisposable
     public async Task Six_level_selfrelation_parent_chain_is_linear_and_correct_on_postgres()
     {
         if (!PgConfigured) return;
-        var (repo, graph, filterResolver, options) = BuildRepoWithGraph();
+        var (repo, graph, options) = BuildRepoWithGraph();
 
         // root -> A1 -> A2 -> A3 -> A4 -> A5 -> leaf: exactly 6 `parent` hops from leaf to root.
         var root = (Category)await repo.CreateAsync("category", new Category { Name = "PgRoot" });
@@ -276,7 +283,7 @@ public sealed class PostgresIntegrationTests : IDisposable
             "category", new Category { Name = "PgLeaf", ParentId = prevId });
 
         var counter = new CountingItemRepository(repo);
-        var expander = new RelationExpander(counter, graph, filterResolver, options);
+        var expander = new RelationExpander(counter, graph, options);
         var parents = await repo.QueryWhereInAsync("category", "id", new object[] { leaf.Id });
 
         DeepSpec? deep = null;
@@ -306,58 +313,365 @@ public sealed class PostgresIntegrationTests : IDisposable
         ancestor["name"].Should().Be("PgRoot"); // 6 hops up the chain lands exactly on root
     }
 
-    // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
-    // filter materializes before rewriting it into `id IN (...)`; uses category.parent (self-relation)
-    // so only the Category table is needed. PG-specific risk being covered: the resolved set is a list
-    // of Guids that has to bind as uuid, so a cap that fired on the wrong side of that binding — or a
-    // rewrite that produced an untyped IN list — would pass on SQLite and fail here.
+    // U3 primitive probe on real Postgres: the wrapped IN (SELECT …) conditional at the top level of a
+    // Where list, a typed one-column projection (quoted column, uuid), and an apostrophe literal.
     [Fact]
-    public async Task Resolved_id_set_cap_rejects_an_over_wide_dotted_filter_on_postgres()
+    public async Task Subquery_conditional_primitive_works_on_postgres()
     {
         if (!PgConfigured) return;
-        var (repo, _, filterResolver, options) = BuildRepoWithGraph();
+        var (repo, _, _) = BuildRepoWithGraph();
+        _db!.CodeFirst.InitTables<Article>();
 
-        const string stamp = "PgCapWide";
-        for (var i = 0; i < 4; i++)
-            await repo.CreateAsync("category", new Category { Name = $"{stamp}-p{i}" });
+        var cat = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe O'Brien" });
+        var other = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe other" });
+        await repo.CreateAsync("article", new Article { Status = "draft", CategoryId = cat.Id });
+        await repo.CreateAsync("article", new Article { Status = "draft", CategoryId = other.Id });
 
-        options.MaxResolvedFilterIds = 3; // leaf resolves 4 parents -> over the cap
+        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+        var sub = _db.Queryable<Category>()
+            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgProbe O'Brien" } })
+            .Select(sel).ToSql();
+        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { SubQueryConditional.Wrap(SubQueryKind.In, col, sub) });
 
-        var act = async () => await filterResolver.RewriteAsync(
-            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp));
-
-        (await act.Should().ThrowAsync<QueryException>())
-            .WithMessage("*too many rows*")
-            .WithMessage("*MaxResolvedFilterIds*");
+        q.ToSql().Key.Should().NotContain("N'");
+        (await q.ToListAsync()).Should().ContainSingle().Which.CategoryId.Should().Be(cat.Id);
     }
 
-    // Control for the cap: a filter resolving WITHIN the cap must still rewrite to the correct
-    // `id IN (...)` on Postgres, uuid-bound. Guards against the cap being enforced so eagerly that
-    // legitimate dotted filters break, and against the rewrite losing the ids.
+    // U3 primitive probe: reproduces the exact collision the fix targets, on real Postgres. An outer
+    // ConditionalModel and an inner (wrapped) subquery both filter Category.Name at conditional-list
+    // index 0, in ONE plain top-level list — NOT inside a ConditionalCollections OR group, whose
+    // members get a 1000-offset index and so never actually collide with a plain list's own naming.
+    // The premise is enforced, not just commented: the outer leaf's own generated parameter name,
+    // built standalone exactly as it will be built inside the real combined list below, is asserted
+    // equal to the inner subquery's pre-rename parameter name. Categories only — no Article needed.
     [Fact]
-    public async Task Resolved_id_set_cap_leaves_a_within_cap_dotted_filter_correct_on_postgres()
+    public async Task Subquery_conditional_parameters_do_not_collide_on_postgres()
     {
         if (!PgConfigured) return;
-        var (repo, _, filterResolver, options) = BuildRepoWithGraph();
+        BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
-        const string stamp = "PgCapNarrow";
-        var parent = (Category)await repo.CreateAsync("category", new Category { Name = stamp });
-        var childA = (Category)await repo.CreateAsync(
-            "category", new Category { Name = $"{stamp}-a", ParentId = parent.Id });
-        var childB = (Category)await repo.CreateAsync(
-            "category", new Category { Name = $"{stamp}-b", ParentId = parent.Id });
+        var tech = new Category { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
+        var news = new Category { Id = Guid.NewGuid(), Name = "PgCollide News" };
+        _db!.Insertable(new[] { tech, news }).ExecuteCommand();
 
-        options.MaxResolvedFilterIds = 50;
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
+        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
 
-        var rewritten = await filterResolver.RewriteAsync(
-            "category", new ComparisonFilter("parent.name", QueryOperator.Eq, stamp));
+        KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
+            _db.Queryable<Category>()
+                .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
+                .Select(sel).ToSql();
+        ConditionalModel OuterNameLeaf(string name) => new() { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name };
 
-        var comparison = rewritten.Should().BeOfType<ComparisonFilter>().Subject;
-        comparison.FieldPath.Should().Be("id");
-        comparison.Op.Should().Be(QueryOperator.In);
-        comparison.Value.Should().BeAssignableTo<IReadOnlyList<object>>();
-        ((IReadOnlyList<object>)comparison.Value!).Cast<Guid>()
-            .Should().BeEquivalentTo([childA.Id, childB.Id]);
+        // Enforce the premise: the outer leaf and the inner subquery's own filter are each index-0 of
+        // their own plain top-level list, so SqlSugar assigns them the SAME generated name pre-rename.
+        var outerStandalone = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech") }).ToSql();
+        var innerSubTech = CategoryIdsNamed("PgCollide Tech");
+        outerStandalone.Value.Select(p => p.ParameterName).Should().BeEquivalentTo(
+            innerSubTech.Value.Select(p => p.ParameterName),
+            "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
+
+        // Positive: Category.Name = 'PgCollide Tech' AND Id IN (SELECT Id FROM categories WHERE Name = 'PgCollide Tech') -> Tech only.
+        var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
+        var qPositive = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condTech });
+        qPositive.ToSql().Key.Should().NotContain("N'");
+        (await qPositive.ToListAsync()).Should().ContainSingle().Which.Name.Should().Be("PgCollide Tech");
+
+        // Negative: same outer leaf, but the inner subquery now filters 'PgCollide News'. If the outer
+        // value had clobbered the inner one (the actual collision symptom), this would still spuriously
+        // match Tech; it must instead return ZERO rows.
+        var condNews = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("PgCollide News"));
+        var qNegative = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condNews });
+        (await qNegative.ToListAsync()).Should().BeEmpty();
+    }
+
+    // Mirrors Two_nesting_levels_compose_through_Wrap on real Postgres, categories only: an outer
+    // Category.Name = 'X' leaf sits in the SAME top-level list as a wrapped subquery whose own filter
+    // is ALSO Category.Name = 'X' (self-referencing on Id), one level further wrapped again — proving
+    // composition through Wrap works at nesting depth 2 with two distinct parameter prefixes, on PG.
+    [Fact]
+    public async Task Two_nesting_levels_compose_through_Wrap_on_postgres()
+    {
+        if (!PgConfigured) return;
+        BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
+
+        var x = new Category { Id = Guid.NewGuid(), Name = "PgNest X" };
+        var other = new Category { Id = Guid.NewGuid(), Name = "PgNest Other" };
+        _db!.Insertable(new[] { x, other }).ExecuteCommand();
+
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
+        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+
+        KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
+            _db.Queryable<Category>()
+                .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
+                .Select(sel).ToSql();
+
+        // Level 2 (innermost): SELECT id FROM categories WHERE name = 'PgNest X'
+        var level2Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("PgNest X"));
+
+        // Level 1 (middle): SELECT id FROM categories WHERE name = 'PgNest X' AND id IN (level 2)
+        var level1 = _db.Queryable<Category>()
+            .Where(new List<IConditionalModel>
+            {
+                new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
+                level2Wrapped,
+            })
+            .Select(sel).ToSql();
+        var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, level1);
+
+        // Outer: Category.Name = 'PgNest X' AND Category.Id IN (level 1) — same top-level list.
+        var q = _db.Queryable<Category>().Where(new List<IConditionalModel>
+        {
+            new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
+            level1Wrapped,
+        });
+        var final = q.ToSql();
+
+        final.Key.Should().NotContain("N'");
+        var prefixes = SqPrefixWithGroupRegex().Matches(final.Key).Select(m => m.Groups[1].Value).Distinct().ToList();
+        prefixes.Should().HaveCount(2, "two independent Wrap() calls (level2->level1, level1->outer) each allocate their own prefix");
+        var doublyPrefixedName = final.Value.Select(p => p.ParameterName).Single(n => SqPrefixRegex().Count(n) == 2);
+        final.Key.Should().Contain(doublyPrefixedName);
+
+        (await q.ToListAsync()).Should().ContainSingle().Which.Id.Should().Be(x.Id);
+    }
+
+    // Task 4 relation-filter pushdown, on real Postgres: A1's two assertions (dotted each-exists vs
+    // _some same-row bind), _none on O2M/M2O, _junction same-row bind, and apostrophe escaping — the
+    // SqlSugarItemRepository-level scenarios SubqueryPushdownTests already covers on SQLite, replayed
+    // against PostgreSQL (uuid FK typing, lowercase quoted identifiers, no N' national-string prefix).
+    // Uses SubqueryPushdownHarness's fixture types directly, InitTables'd here and DropTable'd at the
+    // end (GuardDisposableDatabase refuses a non-"test" database first).
+    [Fact]
+    public async Task Pushdown_some_none_and_junction_on_postgres()
+    {
+        if (!PgConfigured) return;
+        GuardDisposableDatabase();
+        _db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
+            new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
+        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        foreach (var t in SubqueryPushdownHarness.Types) _db.CodeFirst.InitTables(t);
+        // Deterministic start (FK-safe order), in case a previous run was interrupted before DropTable.
+        _db.Deleteable<SqProductLabel>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqProperty>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqProduct>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqLabel>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqCategory>().Where(x => true).ExecuteCommand();
+
+        try
+        {
+            var collections = MetadataScanner.ScanTypes(SubqueryPushdownHarness.Types);
+            var metadata = new CachedMetadataProvider(collections);
+            var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(SubqueryPushdownHarness.Types));
+            var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sqCategory"] = typeof(SqCategory), ["sqProduct"] = typeof(SqProduct), ["sqProperty"] = typeof(SqProperty),
+                ["sqLabel"] = typeof(SqLabel), ["sqProductLabel"] = typeof(SqProductLabel),
+            });
+            var options = new StruoQueryOptions();
+            var repo = new SqlSugarItemRepository(_db, registry, graph, metadata, options);
+            var translator = new FilterTranslator(_db, graph, metadata, registry, options);
+
+            var tech = new SqCategory { Id = Guid.NewGuid(), Name = "PgTech" };
+            var archive = new SqCategory { Id = Guid.NewGuid(), Name = "PgArchive" };
+            _db.Insertable(new[] { tech, archive }).ExecuteCommand();
+
+            var cross = new SqProduct { Id = Guid.NewGuid(), Name = "pgcross", CategoryId = tech.Id };
+            var same = new SqProduct { Id = Guid.NewGuid(), Name = "pgsame", CategoryId = archive.Id };
+            var noProps = new SqProduct { Id = Guid.NewGuid(), Name = "pgbare", CategoryId = tech.Id };
+            var noCat = new SqProduct { Id = Guid.NewGuid(), Name = "pgnocat", CategoryId = null };
+            _db.Insertable(new[] { cross, same, noProps, noCat }).ExecuteCommand();
+            _db.Insertable(new[]
+            {
+                new SqProperty { Id = Guid.NewGuid(), ProductId = cross.Id, Code = "vds-v", ValueNum = 20 },
+                new SqProperty { Id = Guid.NewGuid(), ProductId = cross.Id, Code = "ptot-w", ValueNum = 100 },
+                new SqProperty { Id = Guid.NewGuid(), ProductId = same.Id, Code = "vds-v", ValueNum = 80 },
+                new SqProperty { Id = Guid.NewGuid(), ProductId = noCat.Id, Code = "o'neil", ValueNum = 1 },
+            }).ExecuteCommand();
+            var guide = new SqLabel { Id = Guid.NewGuid(), Name = "PgGuide" };
+            var misc = new SqLabel { Id = Guid.NewGuid(), Name = "PgMisc" };
+            _db.Insertable(new[] { guide, misc }).ExecuteCommand();
+            _db.Insertable(new[]
+            {
+                new SqProductLabel { Id = Guid.NewGuid(), ProductId = cross.Id, LabelId = guide.Id, Note = "hero" },
+                new SqProductLabel { Id = Guid.NewGuid(), ProductId = same.Id, LabelId = guide.Id, Note = "plain" },
+                new SqProductLabel { Id = Guid.NewGuid(), ProductId = same.Id, LabelId = misc.Id, Note = "hero" },
+            }).ExecuteCommand();
+
+            async Task<List<Guid>> IdsAsync(FilterNode filter)
+            {
+                var q = new QueryModel(null, filter, [], 100, 0, null);
+                var r = await repo.QueryAsync("sqProduct", q, ["name"]);
+                return r.Rows.Cast<SqProduct>().Select(p => p.Id).ToList();
+            }
+
+            // A1a: dotted path — each-exists, matches across two different rows' own properties.
+            (await IdsAsync(new LogicalFilter(LogicalOperator.And,
+                [
+                    new ComparisonFilter("properties.code", QueryOperator.Eq, "vds-v"),
+                    new ComparisonFilter("properties.valueNum", QueryOperator.Gte, 60),
+                ])))
+                .Should().BeEquivalentTo([cross.Id, same.Id]);
+
+            // A1b: _some — binds both conditions to the SAME related row.
+            (await IdsAsync(new RelationPredicateFilter("properties", RelationQuantifier.Some,
+                new LogicalFilter(LogicalOperator.And,
+                [
+                    new ComparisonFilter("code", QueryOperator.Eq, "vds-v"),
+                    new ComparisonFilter("valueNum", QueryOperator.Gte, 60),
+                ]))))
+                .Should().BeEquivalentTo([same.Id]);
+
+            // _none on O2M: parents with no related rows are included.
+            (await IdsAsync(new RelationPredicateFilter(
+                "properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "vds-v"))))
+                .Should().BeEquivalentTo([noProps.Id, noCat.Id]);
+
+            // _none on M2O: null foreign keys are included.
+            (await IdsAsync(new RelationPredicateFilter(
+                "category", RelationQuantifier.None, new ComparisonFilter("name", QueryOperator.Eq, "PgTech"))))
+                .Should().BeEquivalentTo([same.Id, noCat.Id]);
+
+            // _junction: target and junction condition bound to the same link.
+            (await IdsAsync(new RelationPredicateFilter("labels", RelationQuantifier.Some,
+                new LogicalFilter(LogicalOperator.And,
+                [
+                    new ComparisonFilter("name", QueryOperator.Eq, "PgGuide"),
+                    new ComparisonFilter("_junction.note", QueryOperator.Eq, "hero"),
+                ]))))
+                .Should().BeEquivalentTo([cross.Id]);
+
+            // Apostrophe in the inner value is escaped, not a syntax error.
+            (await IdsAsync(new RelationPredicateFilter(
+                "properties", RelationQuantifier.Some, new ComparisonFilter("code", QueryOperator.Eq, "o'neil"))))
+                .Should().BeEquivalentTo([noCat.Id]);
+
+            // _or over two relation conditions composes (fix round 1: merged into ONE conditional so no
+            // ConditionalCollections ever holds two adjacent SqlSugar ICustomConditionalFunc entries).
+            (await IdsAsync(new LogicalFilter(LogicalOperator.Or,
+                [
+                    new RelationPredicateFilter("labels", RelationQuantifier.Some, new ComparisonFilter("name", QueryOperator.Eq, "PgGuide")),
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgArchive"),
+                ])))
+                .Should().BeEquivalentTo([cross.Id, same.Id]);
+            (await IdsAsync(new LogicalFilter(LogicalOperator.Or,
+                [
+                    new RelationPredicateFilter("labels", RelationQuantifier.None, new ComparisonFilter("name", QueryOperator.Eq, "PgGuide")),
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgArchive"),
+                ])))
+                .Should().BeEquivalentTo([same.Id, noProps.Id, noCat.Id]);
+
+            // _or whose children are ALL subqueries (no scalar sibling) — the ConditionalCollections
+            // ends up with exactly one merged entry.
+            (await IdsAsync(new LogicalFilter(LogicalOperator.Or,
+                [
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgTech"),
+                    new ComparisonFilter("labels.name", QueryOperator.Eq, "PgMisc"),
+                ])))
+                .Should().BeEquivalentTo([cross.Id, noProps.Id, same.Id]);
+
+            // No SQL Server-style N'...' national-string prefix anywhere in the generated SQL.
+            var noneConds = translator.Translate("sqProduct",
+                new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")),
+                null, [], null);
+            _db.Queryable<SqProduct>().Where(noneConds).ToSql().Key.Should().NotContain("N'");
+
+            var m2mConds = translator.Translate(
+                "sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "PgGuide"), null, [], null);
+            _db.Queryable<SqProduct>().Where(m2mConds).ToSql().Key.Should().NotContain("N'");
+
+            var orConds = translator.Translate("sqProduct", new LogicalFilter(LogicalOperator.Or,
+                [
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgTech"),
+                    new ComparisonFilter("labels.name", QueryOperator.Eq, "PgMisc"),
+                ]), null, [], null);
+            _db.Queryable<SqProduct>().Where(orConds).ToSql().Key.Should().NotContain("N'");
+        }
+        finally
+        {
+            foreach (var name in new[] { "sq_product_labels", "sq_properties", "sq_products", "sq_labels", "sq_categories" })
+                try { if (_db.DbMaintenance.IsAnyTable(name, false)) _db.DbMaintenance.DropTable(name); }
+                catch { /* best-effort cleanup */ }
+        }
+    }
+
+    // Task 8, live PG: a two-hop self-relation dotted filter (category.parent.name) with a
+    // deliberately wide sibling set at the walk-back hop — the scenario the retired resolved-id-set
+    // cap used to bound as a materialized, cardinality-checked id set — is answered as a correlated
+    // SQL subquery (IN (SELECT …)) on real Postgres, and querying with those conditionals returns
+    // exactly the matching children.
+    [Fact]
+    public async Task Wide_dotted_filter_is_answered_in_sql_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, graph, options) = BuildRepoWithGraph();
+
+        var stamp = "PgCapWide" + Guid.NewGuid().ToString("N")[..8];
+        var parent = (Category)await repo.CreateAsync("category", new Category { Name = $"PgCapWideParent-{stamp}" });
+        var children = new List<Category>();
+        for (var i = 0; i < 4; i++)
+            children.Add((Category)await repo.CreateAsync(
+                "category", new Category { Name = $"PgCapWide-p{i}-{stamp}", ParentId = parent.Id }));
+
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var collections = MetadataScanner.ScanTypes(types);
+        var metadata = new CachedMetadataProvider(collections);
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var translator = new FilterTranslator(_db!, graph, metadata, registry, options);
+
+        var conds = translator.Translate(
+            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp), null, [], null);
+        var sql = _db!.Queryable<Category>().Where(conds).ToSql();
+        sql.Key.Should().Contain("IN (SELECT");
+        sql.Key.Should().NotContain("N'");
+
+        var rows = await _db.Queryable<Category>().Where(conds).ToListAsync();
+        rows.Select(c => c.Id).Should().BeEquivalentTo(children.Select(c => c.Id));
+    }
+
+    // Task 6, live PG: the translation-sidecar subquery's own shape — article_translations has a
+    // `long` identity PK (Id) and projects a `uuid` FK (ArticleId) that the outer article query
+    // compares its own uuid `id` column against. This is the SQLite-green/Postgres-risky combination
+    // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips_on_postgres above): a
+    // long-keyed sidecar table projecting a uuid column into an outer IN (SELECT …) must still bind
+    // that column as uuid, not text, on real Postgres.
+    [Fact]
+    public async Task Translatable_leaf_subquery_binds_uuid_fk_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, _, _) = BuildRepoWithGraph();
+        _db!.CodeFirst.InitTables<Article>();
+        _db.CodeFirst.InitTables<ArticleTranslation>();
+        _db.Deleteable<ArticleTranslation>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<Article>().Where(x => true).ExecuteCommand();
+
+        var stamp = "PgTr" + Guid.NewGuid().ToString("N")[..6];
+        var hit = (Article)await repo.CreateAsync("article", new Article { Status = "draft" });
+        var miss = (Article)await repo.CreateAsync("article", new Article { Status = "draft" });
+        _db.Insertable(new ArticleTranslation { ArticleId = hit.Id, Locale = "en", Title = stamp + "-en" }).ExecuteCommand();
+        _db.Insertable(new ArticleTranslation { ArticleId = miss.Id, Locale = "en", Title = "other-" + stamp }).ExecuteCommand();
+
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var collections = MetadataScanner.ScanTypes(types);
+        var metadata = new CachedMetadataProvider(collections);
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+        });
+        var translator = new FilterTranslator(_db, graph, metadata, registry, new StruoQueryOptions());
+
+        var conds = translator.Translate(
+            "article", new ComparisonFilter("title", QueryOperator.Eq, stamp + "-en"), null, [], "en");
+        var sql = _db.Queryable<Article>().Where(conds).ToSql();
+        sql.Key.Should().Contain("article_translations");
+        sql.Key.Should().NotContain("N'");
+
+        var rows = await _db.Queryable<Article>().Where(conds).ToListAsync();
+        rows.Should().ContainSingle().Which.Id.Should().Be(hit.Id);
     }
 
     // The create-binding allowlist (bf04229, ItemDeserializer.Deserialize) on real Postgres. Once a

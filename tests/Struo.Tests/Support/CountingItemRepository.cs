@@ -31,10 +31,10 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
 
     public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, CancellationToken ct = default)
+        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default)
     {
         System.Threading.Interlocked.Increment(ref _whereInCalls);
-        return inner.QueryWhereInFilteredAsync(collection, property, values, extraFilter, ct);
+        return inner.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, ct);
     }
 
     // Delegate every other member straight through (no counting).
@@ -68,10 +68,6 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     public Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct = default) =>
         inner.InTransactionAsync(body, ct);
 
-    public Task<IReadOnlyList<object>> QueryIdsAsync(
-        string collection, FilterNode leafCondition, CancellationToken ct = default) =>
-        inner.QueryIdsAsync(collection, leafCondition, ct);
-
     public Task SyncManyToManyAsync(
         Type junctionType, string parentFkProperty, string targetFkProperty, string? sortProperty,
         object parentId, IReadOnlyList<JunctionLink> links, CancellationToken ct = default) =>
@@ -81,11 +77,6 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         Type translationType, string fkProperty, string localeProperty,
         IReadOnlyList<object> parentIds, string? locale, CancellationToken ct = default) =>
         inner.LoadTranslationsAsync(translationType, fkProperty, localeProperty, parentIds, locale, ct);
-
-    public Task<IReadOnlyList<object>> QueryTranslationParentIdsAsync(
-        Type translationType, string fkProperty, string localeProperty, string locale,
-        FilterNode fieldCondition, CancellationToken ct = default) =>
-        inner.QueryTranslationParentIdsAsync(translationType, fkProperty, localeProperty, locale, fieldCondition, ct);
 
     public Task SyncTranslationsAsync(
         Type translationType, string fkProperty, string localeProperty,

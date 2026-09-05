@@ -22,7 +22,7 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
 - **`src/Struo.Application`** — application-layer abstractions and use cases: the metadata contracts
   (`Metadata/IMetadataProvider.cs`, `IEntityRegistry.cs`, `IEntityTypeCollector.cs`,
   `IRelationshipGraph.cs`), the query/item contracts (`Query/IItemUseCases.cs`, `IItemRepository.cs`,
-  `IRelationExpander.cs`, `IRelationFilterResolver.cs`), the write-path validators
+  `IRelationExpander.cs`), the write-path validators
   (`Query/Write/Validators/`), file storage and security abstractions (`Files/`, `Security/`),
   options records (`Configuration/`). References only `Struo.Domain`.
 - **`src/Struo.Infrastructure`** — the concrete implementations: SqlSugar wiring
@@ -30,7 +30,7 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
   caching (`Metadata/MetadataScanner.cs`, `CachedMetadataProvider.cs`, `EntityRegistry.cs`,
   `RelationshipGraph.cs`, `EntityTypeCollector.cs`, `FrameworkEntityTypes.cs`), the query
   implementations (`Query/SqlSugarItemRepository.cs`, `RelationExpander.cs`,
-  `RelationFilterResolver.cs`), identity (`Identity/`), files (`Files/`), revisions (`Revisions/`),
+  `FilterTranslator.cs`/`FilterTranslator.Subquery.cs`), identity (`Identity/`), files (`Files/`), revisions (`Revisions/`),
   settings (`Settings/`), health checks (`Health/`), and the general-purpose `AddStruoXxx`
   DI-registration extension methods (`DependencyInjection/`: `AddStruoData`, `AddStruoFiles`,
   `AddStruoMetadata` (two overloads), `AddStruoInfrastructure`) — the four host-specific ones
@@ -110,8 +110,8 @@ cached in a singleton — nothing about it re-runs per request. See
 
 For each interface below: what it does, where it lives, its real implementation(s), and how it is
 registered. `IMetadataProvider`, `IEntityRegistry`, `IEntityTypeCollector`, `IRelationshipGraph`,
-`IItemUseCases`, `IItemRepository`, `IRelationExpander`, and `IRelationFilterResolver` all exist under
-those exact names in `Struo.Application`.
+`IItemUseCases`, `IItemRepository`, and `IRelationExpander` all exist under those exact names in
+`Struo.Application`.
 
 ### `IMetadataProvider`
 
@@ -247,32 +247,46 @@ signature and, if it wants junction-payload writes to actually take effect, appl
 dictionary itself; a fork that only calls through the framework's `SqlSugarItemRepository` is
 unaffected.
 
+**Second breaking change, from the same relation-filter-pushdown work**: `IItemRepository` lost the
+two single-condition id-lookup members (own-collection and translation-sidecar) that existed only to
+feed the retired two-phase id-resolution filter resolver; `QueryWhereInFilteredAsync` gained a
+`string? queryLocale` parameter (before its trailing `CancellationToken`) so it can resolve
+translatable leaves in its `extraFilter` at that locale. A fork with its own `IItemRepository`
+implementation must drop the two removed members and add the new parameter; a fork that only calls
+through `SqlSugarItemRepository` is unaffected.
+
 `SqlSugarItemRepository` is a facade: it keeps the `IItemRepository` members `QueryAsync`,
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
 `RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,
 `DeleteGenericAsync`, and `CloneEntity` those methods use internally), and delegates every other
-`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder`, the seventh,
-is used inside `QueryAsync` rather than delegated to — all in the same `Query/` folder. Each is
-initialized in a field initializer from the facade's primary-constructor parameters rather than
-injected as its own dependency — only `OrderByExpressionBuilder` is also registered scoped in DI.
-`ManyToManySync` and `TranslationStore` each get their own `new TransactionRunner(db)` instance (a
-field initializer cannot reference another instance field), rather than sharing the facade's own
-`transactions` field; `TransactionRunner` holds no state beyond `db`, so the extra instance behaves
-identically to sharing one:
+`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder` and
+`FilterTranslator` are also fields, but are used inline inside `QueryAsync`
+(`orderByBuilder.BuildOrderBy(...)`, `filters.Translate(...)`) rather than delegated to — all eight
+in the same `Query/` folder. Each is initialized in a field initializer from the facade's
+primary-constructor parameters rather than injected as its own dependency — only
+`OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync` and `TranslationStore`
+each get their own `new TransactionRunner(db)` instance, and `WhereInQueries` gets its own `new
+FilterTranslator(...)` rather than the facade's own `filters` field (a field initializer cannot
+reference another instance field — CS0236); neither type holds state beyond its constructor
+arguments, so the extra instance behaves identically to sharing one:
 
 - `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
-  query DSL; the only collaborator registered as a scoped DI service.
+  query DSL; the only collaborator registered as a scoped DI service. Not a delegation target —
+  used inline in `QueryAsync`.
+- `FilterTranslator` (`FilterTranslator.cs` + `FilterTranslator.Subquery.cs`) — translates the filter
+  DSL into SqlSugar conditionals, pushing relation paths and `_some`/`_none` predicates down as SQL
+  subqueries. Not a delegation target — used inline in `QueryAsync`; `WhereInQueries` holds its own
+  second instance (see above).
 - `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
 - `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
-  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, `QueryIdsAsync`, and
-  `QueryWhereInWithDeletedAsync`.
+  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, and `QueryWhereInWithDeletedAsync`.
 - `SoftDeleteOps` (`SoftDeleteOps.cs`) — `SoftDeleteAsync`/`RestoreAsync`, the atomic
   `UPDATE ... WHERE deletedat IS [NOT] NULL` with the version bump.
 - `PurgeOps` (`PurgeOps.cs`) — the purge referential-integrity primitives, `SetForeignKeyNullAsync`
   and `DeleteByPropertyAsync`.
 - `ManyToManySync` (`ManyToManySync.cs`) — `SyncManyToManyAsync`.
 - `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
-  `QueryTranslationParentIdsAsync`, `SyncTranslationsAsync`.
+  `SyncTranslationsAsync`.
 
 `RepositoryHelpers` (`RepositoryHelpers.cs`) is a static helper class — `TypeNameOf`,
 `TypeNameOfProperty`, `Descriptor`, `ConvertId` — used by the facade and by `WhereInQueries`,
@@ -296,19 +310,32 @@ references SqlSugar internals. Implementation: `RelationExpander`
 `services.AddScoped<IRelationExpander, RelationExpander>()`
 (`DataServiceCollectionExtensions.cs`).
 
-### `IRelationFilterResolver`
+### `FilterTranslator` (not a DI seam)
 
-`src/Struo.Application/Query/IRelationFilterResolver.cs`: `RewriteAsync(rootCollection, filter,
-queryLocale, ct)` rewrites every dotted (cross-relation) filter node into an own-collection
-`id IN (...)` (or `id IS NULL`) condition by resolving the relation path to a set of root ids; when
-`queryLocale` is supplied it also rewrites translatable own-collection fields via the translation
-sidecar at that locale. Implementation: `RelationFilterResolver`
-(`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`). Registered scoped:
-`services.AddScoped<IRelationFilterResolver, RelationFilterResolver>()`
-(`DataServiceCollectionExtensions.cs`).
+`src/Struo.Infrastructure/Query/FilterTranslator.cs` (own-collection leaves, logical composition,
+the SqlSugar-adjacency-defect workarounds) and `FilterTranslator.Subquery.cs` (the actual subquery
+construction) together are the successor to the interface-backed cross-relation-filter resolver this
+codebase used to have, restructured around SQL pushdown rather than in-memory id resolution:
+`Translate(collection, filter, search, searchableFields,
+queryLocale)` turns a validated `FilterNode` tree (chapter 8's grammar, including `_some`/`_none`
+relation quantifiers and `_junction`) into a `List<IConditionalModel>` for **one** queryable over
+`collection` — a dotted (cross-relation) condition, a relation quantifier, and a translatable-field
+condition (own-collection or reached across a hop) all become a nested `IN (SELECT …)` subquery
+(`RelationPredicateFilter`/`ComparisonFilter` cases in `FilterTranslator.Subquery.cs`), never an
+intermediate id set. It is `internal`, not registered in DI at all — `SqlSugarItemRepository`
+constructs it directly with `new FilterTranslator(db, graph, metadata, registry, options)` (twice,
+once for its own use and once for `WhereInQueries`, since a field initializer cannot reference
+another instance field) exactly the way it constructs its other Query-folder collaborators. It also
+needs the graph parameter to actually be the **concrete** `RelationshipGraph`, not just an
+`IRelationshipGraph` — relation-subquery construction reads junction/reverse-FK descriptor
+information off the concrete type that an interface-level caller does not expose, so it casts and
+throws `InvalidOperationException` if handed anything else (never actually reachable in this
+codebase's own DI wiring, where `IRelationshipGraph` and `RelationshipGraph` are always bound to the
+same singleton instance — see `IRelationshipGraph` above).
 
-See `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md` for the query DSL these four
-query-layer seams jointly implement.
+See `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md` for the query DSL these three
+query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelationExpander`) — plus the
+non-DI-registered `FilterTranslator` above — jointly implement.
 
 ### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`)
 
@@ -424,9 +451,9 @@ enum." Two distinct extension motions:
 `ItemsController` (`src/Struo.Api/Controllers/ItemsController.cs`) is the one controller that serves
 every collection generically — it depends on `IItemUseCases`, never on `ItemService` directly. A read
 (`GetAsync`/`QueryAsync`) resolves the query through `QueryValidator` (whitelist/depth-cap validation,
-`src/Struo.Application/Query/QueryValidator.cs`), `IRelationFilterResolver` (cross-relation filter
-rewrite), `IItemRepository` (the actual SqlSugar query), and `IRelationExpander` (deep-relation
-batching) before `ItemProjector` (`src/Struo.Application/Query/Projection/ItemProjector.cs`) turns the
+`src/Struo.Application/Query/QueryValidator.cs`), `IItemRepository` (the actual SqlSugar query — a
+cross-relation filter is pushed down into a subquery by `FilterTranslator` inside this step, not
+rewritten beforehand), and `IRelationExpander` (deep-relation batching) before `ItemProjector` (`src/Struo.Application/Query/Projection/ItemProjector.cs`) turns the
 result into the camelCase dictionary the envelope serializes. A write (`CreateAsync`/`UpdateAsync`)
 goes through `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`, which also
 sanitizes non-translatable `RichText` fields via `RichTextCleaner` — a wrapper around `IHtmlSanitizer` —

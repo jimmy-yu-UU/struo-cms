@@ -155,9 +155,9 @@ collection**, and its `[CmsField]`s — other than the two foreign keys, the rel
 the link itself rather than to either endpoint (a note on why two rows are linked, a display weight
 distinct from ordering, an approval timestamp). `RelationshipGraph.JunctionPayloadOf`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) is the single place that computes a
-relation's payload field list; the write-side mixed-array binder (chapter 9), the `_junction` read
-projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there rather than
-re-deriving it themselves.
+relation's payload field list; the write-side mixed-array binder (REST, chapter 9), the `_junction`
+read projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there
+rather than re-deriving it themselves.
 
 Both of a junction collection's foreign keys **must** be declared as writable `[CmsField]`s (e.g.
 `Interface = FieldInterface.Uuid`) — the framework's own `UserRole`
@@ -174,7 +174,7 @@ it out of the admin sidebar — it stays a fully addressable collection everywhe
 /api/schema`, the RBAC permission matrix, and the generated GraphQL schema all include it exactly like
 a non-hidden collection. `RelationMetadata.JunctionCollection` (`junctionCollection` in `/api/schema`'s
 relation entry) names it, which is how a client discovers which collection needs its own write grant
-before it can send junction payload (chapter 9).
+before it can send junction payload (REST, chapter 9).
 
 **Caveat for forks**: if you add your own `[Navigate]`/`[CmsRelation]` picker relation directly on a
 junction entity (a many-to-one from the junction to some third collection — "linked by user", say),
@@ -282,21 +282,39 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bfolder.p
 
 ## Relation filtering across dotted paths
 
-A filter field path containing a `.` is treated as a relation path and resolved by
-`RelationFilterResolver` (`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`): it walks the
-path leaf-to-root, collecting target ids at each hop, and rewrites the original condition into a
-plain `id _in [...]` (or an always-false `id _null` if nothing matched) against the *root*
-collection — so the rest of the query pipeline never has to special-case relation paths. All three
-relation kinds are supported as hops, live-verified from the sample's `article`/`category` (opted in
-temporarily, as above):
+A filter field path containing a `.` is treated as a relation path. Rather than resolving it in two
+steps — first fetch matching related ids, then rewrite the condition into `id IN (<literal ids>)` —
+`FilterTranslator` (`src/Struo.Infrastructure/Query/FilterTranslator.cs`,
+`FilterTranslator.Subquery.cs`) pushes the whole condition down into **one nested SQL subquery**,
+shaped differently per relation kind but always ending in the same three forms
+(`<col> IN (<sql>)` / `<col> NOT IN (<sql>)` / `(<col> IS NULL OR <col> NOT IN (<sql>))`) wrapped as a
+single `ConditionalModel`. A list query is always exactly two SQL statements — one `COUNT`, one
+`SELECT` — no matter how many relation conditions it carries, and nothing is ever materialized as an
+in-memory id set:
+
+- **many-to-one**: `<declaring>.<fk> IN (SELECT id FROM <target> WHERE …)`
+- **one-to-many**: `<declaring>.id IN (SELECT <reverseFk> FROM <target> WHERE … AND <reverseFk> IS
+  NOT NULL)`
+- **many-to-many**: `<declaring>.id IN (SELECT <parentFk> FROM <junction> WHERE […] AND <targetFk>
+  IN (SELECT id FROM <target> WHERE …))`
+
+Each hop nests the next inside it, so a multi-hop path (`category.parent.name`) is one subquery
+chain, not one query per hop. All three relation kinds are supported, live-verified from the
+sample's `article`/`category`/`tag` (opted in temporarily, as above — `Engineering-u3doc0905` is a
+category, `Guide-u3doc0905` a tag):
 
 ```
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory.name%5D%5B_eq%5D=Engineering"    # many-to-one
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags.name%5D%5B_eq%5D=Guide"              # many-to-many
-$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Barticles.status%5D%5B_eq%5D=published"   # one-to-many
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Bcategory.name%5D%5B_eq%5D=Engineering-u3doc0905"    # many-to-one
+{"success":true,"data":[{"id":"...","translations":{"en":{"title":"Article B u3doc0905", ...}}}, {"id":"...","translations":{"en":{"title":"Article A u3doc0905", ...}}}],"meta":{"total":2,"limit":25,"offset":0}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags.name%5D%5B_eq%5D=Guide-u3doc0905"              # many-to-many
+{"success":true,"data":[{"id":"...","translations":{"en":{"title":"Article B u3doc0905", ...}}}, {"id":"...","translations":{"en":{"title":"Article A u3doc0905", ...}}}],"meta":{"total":2,"limit":25,"offset":0}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Bname%5D%5B_contains%5D=u3doc0905&filter%5Barticles.status%5D%5B_eq%5D=published"   # one-to-many
+{"success":true,"data":[{"id":"...","name":"Engineering-u3doc0905", ...}],"meta":{"total":1,"limit":25,"offset":0}}
 ```
 
-Each returned exactly the expected row. An unknown relation name in the path is rejected the same
+Each returned exactly the expected rows. An unknown relation name in the path is rejected the same
 way an unknown leaf field is (chapter 8 covers the full validation picture):
 
 ```
@@ -304,27 +322,125 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bbogus
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown relation 'bogus' on 'article' in path 'bogus.name'."}}
 ```
 
-**Combining conditions** on the same to-many relation path is *each-exists*, not same-row, because
-`RewriteAsync` resolves every `ComparisonFilter` on a relation path independently: each one walks
-leaf-to-root via `ResolveRootIdsAsync` and is rewritten into its own `id _in [...]` (or an
-always-false `id _null`); a `LogicalFilter` only recurses into its children and re-wraps the
-results, so nothing correlates which related row satisfied which condition. Take a `product`
-collection with a one-to-many `properties` relation to rows shaped `(code, valueNum)`:
-`filter[properties.code][_eq]=vds-v` combined (two filter keys on one request are AND-ed; the JSON
-envelope's `_and` behaves the same) with `filter[properties.valueNum][_gte]=60` also matches a
-product whose `properties` are `{code: "vds-v", valueNum: 20}` and `{code: "ptot-w", valueNum:
-100}` — the first row alone satisfies the `code` condition, the second row alone satisfies the
-`valueNum` condition, and each-exists is satisfied even though no single row satisfies both. No
-error is raised; the query simply returns products the caller did not intend, which is easy to miss
-coming from Prisma, where nested relation conditions bind to one related row (Directus's default
-o2m filtering has the same each-exists ambiguity, which is why it offers a `_some` operator).
-`MaxResolvedFilterIds` (chapter 8) still bounds each condition's leaf-to-root walk independently.
-The workaround for same-row semantics today is two requests: filter the child collection directly
-on its own fields, projecting the parent foreign key —
-`/api/items/property?filter[code][_eq]=vds-v&filter[valueNum][_gte]=60&fields=id,productId` — then
-filter `product` by `id _in` the returned `productId` values. A `_some` relation predicate that
-binds a to-many path's inner conditions to a single related row is on the roadmap; until it ships,
-the each-exists rule above is the only semantics dotted paths have.
+### Each-exists vs. same-row: dotted paths vs. `_some`/`_none`
+
+**A plain dotted path is *each-exists*, not same-row.** Every `ComparisonFilter` on a relation path
+is translated into its own, independent subquery; a `LogicalFilter` only recurses into its
+children, so nothing correlates which related row satisfied which condition. Two conditions on the
+same to-many relation path can each be satisfied by a *different* related row and the parent still
+matches. `_some` and `_none` are the two relation **quantifiers** that fix this: `_some`'s inner
+filter is translated as one single subquery over the target collection, so every condition inside
+it must hold for the *same* related row; `_none` is the same subquery, negated (`NOT IN`, or
+`IS NULL OR NOT IN` for many-to-one).
+
+| Written as | Semantics |
+|---|---|
+| `filter[tags.name][_eq]=a&filter[tags.color][_eq]=red` | Each-exists: some tag is named `a` **and** some tag is red — possibly two different tags. |
+| `filter[tags._some.name][_eq]=a&filter[tags._some.color][_eq]=red` | Same-row: **one** tag is both named `a` and red. |
+| `filter[tags._none.name][_eq]=a` | No tag is named `a` — including an article with no tags at all. |
+| `filter[category._none.name][_eq]=x` | The category is not named `x`, or there is no category. |
+| `filter[tags._some._junction.note][_contains]=hero` | Some article↔tag link's own `note` contains "hero". |
+
+Live-verified against a fixture with two tagged articles — `A` has one tag (`Guide-u3doc0905`,
+junction `note: "hero"`), `B` has two tags (`Guide-u3doc0905` with `note: "plain"` and
+`Misc-u3doc0905` with `note: "hero"`), `C` has no tags at all. The dotted (each-exists) form matches
+both `A` and `B` — `B`'s `Guide` tag alone satisfies the name condition, its *different* `Misc` tag
+alone satisfies the junction-note condition:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags.name%5D%5B_eq%5D=Guide-u3doc0905&filter%5Btags._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":2,"limit":25,"offset":0}}
+```
+
+The identical two conditions under `_some` match only `A`, whose single tag row satisfies both at
+once:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btags._some.name%5D%5B_eq%5D=Guide-u3doc0905&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<a-id>", ...}],"meta":{"total":1,"limit":25,"offset":0}}
+```
+
+`_none` matching the tag-less article (a relation quantifier is legal on a many-to-one too — see
+below — and a `_none` on an empty to-many relation is true, not an error):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags._none.name%5D%5B_eq%5D=Guide-u3doc0905"
+{"success":true,"data":[{"id":"<c-id>","translations":{"en":{"title":"Article C u3doc0905", ...}}}],"meta":{"total":1,"limit":25,"offset":0}}
+```
+
+**`_some`/`_none` are legal on a many-to-one relation too, not only to-many.** On a to-one, `_some`
+is equivalent to a dotted path over the same inner filter; `_none` means "no matching target, or the
+foreign key is null" — genuinely useful ("no category, or not named Archive"), verified against `C`
+(no category at all) alongside `A`/`B` (categorized, but not as `Archive-u3doc0905`):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Bcategory._none.name%5D%5B_eq%5D=Archive-u3doc0905"
+{"success":true,"data":[{"id":"<c-id>", ...},{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":3,"limit":25,"offset":0}}
+```
+
+That last result relies on a NULL-safety rule: a plain SQL `<fk> NOT IN (SELECT …)` goes
+empty the instant its subquery ever returns a NULL, and a nullable foreign key on the *outer* row —
+`C`'s `categoryId` — has the same failure mode with an ordinary `NOT IN`. `_none` on a many-to-one
+therefore generates `(<fk> IS NULL OR <fk> NOT IN (<sql>))`, and the `IS NOT NULL` guard on the
+*inner* side is scoped to exactly the columns that can actually be NULL, not applied uniformly: the
+one-to-many hop's `<reverseFk>` projection (the bullet above) is always guarded, quantifier or not,
+because that column is nullable regardless of which predicate is being translated. The many-to-one
+hop's own `target.id` projection is guarded the same way only when it is translating a `_none`
+predicate — a plain dotted path or `_some` on a many-to-one skips the guard, since a primary key is
+never NULL and there is nothing for the guard to protect against there. The many-to-many hop's inner
+`target.id` projection (feeding the `<targetFk> IN (…)` half of its junction subquery) is never
+guarded, `_none` included, for the same reason; only its *outer* `junction.<parentFk>` projection
+gets the same `_none`-only guard the many-to-one hop's `target.id` projection does.
+
+**Soft-delete inside a subquery never widens with `?deleted=`.** A relation subquery's
+`Where(...)` is built the same way regardless of the *outer* request's own `?deleted=only|with` —
+the soft-delete filter on the target collection is never cleared for it. A trashed related row never
+satisfies a dotted-path or quantifier condition, even when the caller is viewing the parent's trash.
+
+### `_junction`: filtering by the link's own payload
+
+For a many-to-many relation whose junction carries payload (above), `_junction.<field>` is a
+pseudo-segment that filters by the *link's own* field rather than either endpoint's — dotted (each
+article↔tag link, independently) or inside `_some`/`_none` (the same link the rest of that
+predicate matched):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":2,"limit":25,"offset":0}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle%5D%5B_contains%5D=u3doc0905&filter%5Btags._some.name%5D%5B_eq%5D=Misc-u3doc0905&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero"
+{"success":true,"data":[{"id":"<b-id>", ...}],"meta":{"total":1,"limit":25,"offset":0}}
+```
+
+`_junction` must immediately follow a many-to-many relation that has an
+[exposable payload](07-relations.md#junction-payload), and must be followed by exactly one
+non-`Hidden` payload field name with no further hop; it does not count toward the depth cap of 6
+above. It also needs its own read grant on the *junction* collection — a separate check from the
+grant on the relation's target collection. On a many-to-one, where there is no junction collection at
+all, it is rejected as `'_junction' is only valid after a many-to-many relation with a junction
+collection.`:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory._junction.note%5D%5B_eq%5D=x"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"'category._junction.note': '_junction' is only valid after a many-to-many relation with a junction collection."}}
+```
+
+**Combining `_some`/`_none` with plain conditions works exactly like any other filter** — including
+mixing a scalar condition with a relation predicate inside `_or`, and combining a relation
+quantifier with a translatable own-field leaf (`title`), which is itself pushed down through the
+identical mechanism:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/article/query -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"filter":{"_or":[{"categoryId":{"_eq":"<engineering-category-id>"}},{"tags":{"_some":{"name":{"_eq":"Misc-u3doc0905"}}}}]}}'
+{"success":true,"data":[{"id":"<b-id>", ...},{"id":"<a-id>", ...}],"meta":{"total":2,"limit":25,"offset":0}}
+```
+
+`_some`/`_none` recurse arbitrarily: the inner filter is a complete `filter` object over the target
+collection, and can itself contain dotted paths, further `_some`/`_none` (nested quantifiers), and a
+single level of `_and`/`_or` — see chapter 8 for the full grammar, the JSON-envelope form, and the
+query-string folding rule.
 
 **Sorting** across a relation path is narrower than filtering: only an all-many-to-one path is
 sortable (`RelationPath.IsSortable`), since a to-many hop has no single well-defined order to sort a
