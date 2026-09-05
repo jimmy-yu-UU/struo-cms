@@ -140,7 +140,12 @@ public class DistributedCacheLoginAttemptThrottleTests
     public async Task RetryAfterSeconds_decreases_as_the_window_elapses()
     {
         var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3);
+        // The throttle stores the window start at whole-second granularity (ToUnixTimeSeconds), so a
+        // 3-second window recorded at hh:mm:ss.999 effectively has ~2.0 s left. On a slow CI runner
+        // (coverage instrumentation) the 1.5 s delay below plus scheduling jitter then crossed the
+        // window end and `second.IsBlocked` flipped to false — a timing flake, not a throttle bug.
+        // A wide window keeps the "still blocked, but retry-after shrank" assertion deterministic.
+        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 30);
         const string email = "decreasing@struo.test";
 
         await throttle.RecordFailureAsync(email);
