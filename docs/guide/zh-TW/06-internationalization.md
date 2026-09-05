@@ -48,10 +48,14 @@ $ curl -s -b cookies.txt http://localhost:5221/api/languages
 `Translatable = true`)，所以一個可翻譯欄位*確實*可以像其他任何自有欄位一樣，透過一般的查詢 DSL
 白名單做篩選/排序 (`QueryValidator.Validate` 會從所有非 `Hidden` 的 `meta.Fields` 建構這份白名單，
 沒有排除 `Translatable`)——只是它是在有效查詢語言下，透過
-`RelationFilterResolver.IsTranslatableField`/`ResolveTranslatableIdsAsync`
-(`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`，第 7 章)，改對附屬資料表而非父資料列
-解析。已透過即時環境驗證:即使完全沒有帶上 `?locale=`，用可翻譯的 `title` 篩選 `file` 依然成功
-(此時有效語言會退回預設值 `DefaultCode()`，即 `ItemService.QueryAsync` 的 `queryLocale` 預設值):
+`FilterTranslator.IsTranslatable`/`TranslatableLeaf`
+(`src/Struo.Infrastructure/Query/FilterTranslator.cs`、`FilterTranslator.Subquery.cs`，第 7 章)，
+把條件下推成一個對翻譯附屬資料表的 `IN (SELECT …)` 子查詢，而不是在記憶體中解析。這個子查詢建構
+並不是只針對*根*集合自己的附屬資料表特別處理:一個跨一或多個關聯跳數才抵達的可翻譯葉欄位
+(篩選 `category` 時的 `articles.title`) 走的是完全相同的遞迴機制，所以無論它落在哪個集合上都能
+正確解析——第 7 章有跨跳數的實錄。已透過即時環境驗證:即使完全沒有帶上 `?locale=`，用可翻譯的
+`title` 篩選 `file` 依然成功 (此時有效語言會退回預設值 `DefaultCode()`，即 `ItemService.QueryAsync`
+的 `queryLocale` 預設值):
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Btitle%5D%5B_eq%5D=alpha-report"

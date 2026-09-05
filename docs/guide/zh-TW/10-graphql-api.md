@@ -198,13 +198,15 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 ## 篩選，包括跨關聯帶點號路徑
 
 `FileFilterInput` 帶有 `and`/`or` (各為 `[FileFilterInput!]`，恰好一層——與 REST 的 JSON 信封
-`_and`/`_or` (第 8 章) 有相同的限制)、`id: IdFilter`、每一個可篩選自有欄位各一個運算子輸入欄位
+`_and`/`_or` (第 8 章) 有相同的限制)、`some`/`none` (各為一個單純的 `FileFilterInput`——即下文
+涵蓋的關聯量詞;在這個根層級沒有意義，用在這裡會被拒絕)、`id: IdFilter`、每一個可篩選自有欄位
+各一個運算子輸入欄位
 (`StringFilter`/`IntFilter`/`FloatFilter`/`DateTimeFilter`/`BooleanFilter`/`IdFilter`——在
 `SharedFilterTypes.cs` 中只建構一次，並在每一個集合中重複使用)，以及——跨關聯的部分——一個關聯
 自身的外鍵欄位，以 `IdFilter` 的形式呈現 (與 REST 的外鍵篩選白名單 (第 8 章) 對等)，**再加上**
 一個對該關聯目標型別的巢狀篩選輸入。`FilterInputTranslator`
 (`src/Struo.Api/GraphQl/FilterInputTranslator.cs`) 會把一個巢狀關聯篩選，攤平成與第 8 章的
-`RelationFilterResolver` 早已改寫成 `id IN (…)` 相同的帶點號 `FieldPath` (`"folder.name"`)——
+`FilterTranslator` 下推成子查詢相同的帶點號 `FieldPath` (`"folder.name"`)——
 GraphQL 與 REST 的跨關聯路徑，會在抵達查詢驗證器之前，就先收斂成完全相同的 `FilterNode` 樹:
 
 ```
@@ -215,6 +217,46 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 
 每一個運算子輸入上的 `isNull: Boolean`，會渲染成與第 8 章記載的 `_null`/`_nnull` 完全相同的
 單純 `IS [NOT] NULL`——不會有任何比較值被送到資料庫。
+
+### 關聯量詞:`some`/`none`，以及透過 `<Parent><Rel>RelationFilterInput` 表達的 `_junction`
+
+每一個 `<T>FilterInput` 額外都帶有 `some: <T>FilterInput` 與 `none: <T>FilterInput`——即第 7/8
+章為 REST 涵蓋的同一組關聯量詞，以與 `and`/`or` 相同的方式保留。它們只有在**巢狀於某個關聯自己
+的 filter 字典之內**時才有意義;若用在任何 `filter` 引數的根層級 (自有欄位或某個巢狀清單自己的
+`filter` 引數)，就會被拒絕:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { article(id: \"<id>\") { id tags(filter: { some: { name: { eq: \"Guide\" } } }) { id } } }"}'
+{"errors":[{"message":"'some' is only valid inside a relation filter.","path":["article"],"extensions":{"code":"BAD_USER_INPUT"}}],"data":{"article":null}}
+```
+
+(最後這則查詢裡的 `tags(filter: ...)`，是一個 to-many *巢狀清單*引數，由下文同一套 `deep` 展開
+機制解析——它自己 `filter` 引數的型別，是單純、未經改動的 `TagFilterInput`，而不是接下來要
+描述的關聯專屬輸入;那裡的 `some`/`none` 是在該引數自己的根層級被求值的，正好就是上面錯誤訊息
+所指名的「根層級、沒有關聯情境」那種情況。)
+
+對一個 junction 帶有可揭露 payload 的 many-to-many 關聯而言 (第 7 章的 junction payload 與
+`_junction` 讀取投影)，父型別上該關聯的 filter 欄位**不是**單純的 `<Target>FilterInput`——而是
+一個關聯專屬的 `<Parent><Rel>RelationFilterInput`，除了目標自身的可篩選欄位與它自己的
+`and`/`or`/`some`/`none` 之外，還多加了一個 `junction: <Parent><Rel>JunctionFilterInput` 欄位
+(每一個可揭露 payload 欄位各一個運算子輸入欄位)。範例的 `Article.tags` (payload:`note`) 就是
+隨附出貨的例子——introspection 確認了型別名稱
+(`ArticleTagsRelationFilterInput`/`ArticleTagsJunctionFilterInput`，依循
+`SchemaTypeMapper.RelationFilterInputName`/`JunctionFilterInputName`)，而 `some` 加上
+`junction` 可以在同一個查詢中組合，完全就像 REST 的 `_some`/`_junction`:
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { articles(filter: { tags: { some: { name: { eq: \"Guide-u3doc0905\" }, junction: { note: { eq: \"hero\" } } } } }) { items { id } total } }"}'
+{"data":{"articles":{"items":[{"id":"<a-id>"}],"total":1}}}
+```
+
+一個 junction 不帶可揭露 payload 的關聯，仍維持單純、共用的 `<Target>FilterInput`——這個關聯
+專屬的改名，是本功能之下唯一會改變的 GraphQL 型別名稱:一個帶 payload 關聯的 filter 欄位，原本
+帶有單純、共用的 `<Target>FilterInput` 型別 (`Article.tags` 就是 `TagFilterInput`)，現在改為帶
+關聯專屬的 `ArticleTagsRelationFilterInput`——一個把該欄位型別明確宣告成 GraphQL 變數 (而不是
+讓查詢就地內嵌它) 的客戶端，必須更新它。
 
 ## 巢狀 to-many 清單與它們的引數
 
