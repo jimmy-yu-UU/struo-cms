@@ -155,9 +155,9 @@ collection**, and its `[CmsField]`s — other than the two foreign keys, the rel
 the link itself rather than to either endpoint (a note on why two rows are linked, a display weight
 distinct from ordering, an approval timestamp). `RelationshipGraph.JunctionPayloadOf`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) is the single place that computes a
-relation's payload field list; the write-side mixed-array binder (chapter 9), the `_junction` read
-projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there rather than
-re-deriving it themselves.
+relation's payload field list; the write-side mixed-array binder (REST, chapter 9), the `_junction`
+read projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there
+rather than re-deriving it themselves.
 
 Both of a junction collection's foreign keys **must** be declared as writable `[CmsField]`s (e.g.
 `Interface = FieldInterface.Uuid`) — the framework's own `UserRole`
@@ -174,7 +174,7 @@ it out of the admin sidebar — it stays a fully addressable collection everywhe
 /api/schema`, the RBAC permission matrix, and the generated GraphQL schema all include it exactly like
 a non-hidden collection. `RelationMetadata.JunctionCollection` (`junctionCollection` in `/api/schema`'s
 relation entry) names it, which is how a client discovers which collection needs its own write grant
-before it can send junction payload (chapter 9).
+before it can send junction payload (REST, chapter 9).
 
 **Caveat for forks**: if you add your own `[Navigate]`/`[CmsRelation]` picker relation directly on a
 junction entity (a many-to-one from the junction to some third collection — "linked by user", say),
@@ -381,9 +381,16 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle
 That last result relies on a NULL-safety rule: a plain SQL `<fk> NOT IN (SELECT …)` goes
 empty the instant its subquery ever returns a NULL, and a nullable foreign key on the *outer* row —
 `C`'s `categoryId` — has the same failure mode with an ordinary `NOT IN`. `_none` on a many-to-one
-therefore generates `(<fk> IS NULL OR <fk> NOT IN (<sql>))`, and every subquery this translator
-builds additionally guards its own projected column with `IS NOT NULL` before projecting it, so
-neither direction of NULL silently swallows a row that should have matched.
+therefore generates `(<fk> IS NULL OR <fk> NOT IN (<sql>))`, and the `IS NOT NULL` guard on the
+*inner* side is scoped to exactly the columns that can actually be NULL, not applied uniformly: the
+one-to-many hop's `<reverseFk>` projection (the bullet above) is always guarded, quantifier or not,
+because that column is nullable regardless of which predicate is being translated. The many-to-one
+hop's own `target.id` projection is guarded the same way only when it is translating a `_none`
+predicate — a plain dotted path or `_some` on a many-to-one skips the guard, since a primary key is
+never NULL and there is nothing for the guard to protect against there. The many-to-many hop's inner
+`target.id` projection (feeding the `<targetFk> IN (…)` half of its junction subquery) is never
+guarded, `_none` included, for the same reason; only its *outer* `junction.<parentFk>` projection
+gets the same `_none`-only guard the many-to-one hop's `target.id` projection does.
 
 **Soft-delete inside a subquery never widens with `?deleted=`.** A relation subquery's
 `Where(...)` is built the same way regardless of the *outer* request's own `?deleted=only|with` —
@@ -405,11 +412,13 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Btitle
 {"success":true,"data":[{"id":"<b-id>", ...}],"meta":{"total":1,"limit":25,"offset":0}}
 ```
 
-`_junction` must immediately follow a many-to-many relation that has an exposable payload (chapter
-9), must be followed by exactly one non-`Hidden` payload field name with no further hop, does not
-count toward the depth cap of 6 above, and needs its own read grant on the *junction* collection —
-rejected as `_junction' is only valid after a many-to-many relation with a junction collection.` on a
-many-to-one:
+`_junction` must immediately follow a many-to-many relation that has an
+[exposable payload](07-relations.md#junction-payload), and must be followed by exactly one
+non-`Hidden` payload field name with no further hop; it does not count toward the depth cap of 6
+above. It also needs its own read grant on the *junction* collection — a separate check from the
+grant on the relation's target collection. On a many-to-one, where there is no junction collection at
+all, it is rejected as `'_junction' is only valid after a many-to-many relation with a junction
+collection.`:
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5Bcategory._junction.note%5D%5B_eq%5D=x"
