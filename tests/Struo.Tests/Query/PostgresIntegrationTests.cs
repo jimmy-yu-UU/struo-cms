@@ -485,8 +485,14 @@ public sealed class PostgresIntegrationTests : IDisposable
                 new SqProperty { Id = Guid.NewGuid(), ProductId = noCat.Id, Code = "o'neil", ValueNum = 1 },
             }).ExecuteCommand();
             var guide = new SqLabel { Id = Guid.NewGuid(), Name = "PgGuide" };
-            _db.Insertable(guide).ExecuteCommand();
-            _db.Insertable(new SqProductLabel { Id = Guid.NewGuid(), ProductId = cross.Id, LabelId = guide.Id, Note = "hero" }).ExecuteCommand();
+            var misc = new SqLabel { Id = Guid.NewGuid(), Name = "PgMisc" };
+            _db.Insertable(new[] { guide, misc }).ExecuteCommand();
+            _db.Insertable(new[]
+            {
+                new SqProductLabel { Id = Guid.NewGuid(), ProductId = cross.Id, LabelId = guide.Id, Note = "hero" },
+                new SqProductLabel { Id = Guid.NewGuid(), ProductId = same.Id, LabelId = guide.Id, Note = "plain" },
+                new SqProductLabel { Id = Guid.NewGuid(), ProductId = same.Id, LabelId = misc.Id, Note = "hero" },
+            }).ExecuteCommand();
 
             async Task<List<Guid>> IdsAsync(FilterNode filter)
             {
@@ -536,6 +542,30 @@ public sealed class PostgresIntegrationTests : IDisposable
                 "properties", RelationQuantifier.Some, new ComparisonFilter("code", QueryOperator.Eq, "o'neil"))))
                 .Should().BeEquivalentTo([noCat.Id]);
 
+            // _or over two relation conditions composes (fix round 1: merged into ONE conditional so no
+            // ConditionalCollections ever holds two adjacent SqlSugar ICustomConditionalFunc entries).
+            (await IdsAsync(new LogicalFilter(LogicalOperator.Or,
+                [
+                    new RelationPredicateFilter("labels", RelationQuantifier.Some, new ComparisonFilter("name", QueryOperator.Eq, "PgGuide")),
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgArchive"),
+                ])))
+                .Should().BeEquivalentTo([cross.Id, same.Id]);
+            (await IdsAsync(new LogicalFilter(LogicalOperator.Or,
+                [
+                    new RelationPredicateFilter("labels", RelationQuantifier.None, new ComparisonFilter("name", QueryOperator.Eq, "PgGuide")),
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgArchive"),
+                ])))
+                .Should().BeEquivalentTo([same.Id, noProps.Id, noCat.Id]);
+
+            // _or whose children are ALL subqueries (no scalar sibling) — the ConditionalCollections
+            // ends up with exactly one merged entry.
+            (await IdsAsync(new LogicalFilter(LogicalOperator.Or,
+                [
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgTech"),
+                    new ComparisonFilter("labels.name", QueryOperator.Eq, "PgMisc"),
+                ])))
+                .Should().BeEquivalentTo([cross.Id, noProps.Id, same.Id]);
+
             // No SQL Server-style N'...' national-string prefix anywhere in the generated SQL.
             var noneConds = translator.Translate("sqProduct",
                 new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")),
@@ -545,6 +575,13 @@ public sealed class PostgresIntegrationTests : IDisposable
             var m2mConds = translator.Translate(
                 "sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "PgGuide"), null, [], null);
             _db.Queryable<SqProduct>().Where(m2mConds).ToSql().Key.Should().NotContain("N'");
+
+            var orConds = translator.Translate("sqProduct", new LogicalFilter(LogicalOperator.Or,
+                [
+                    new ComparisonFilter("category.name", QueryOperator.Eq, "PgTech"),
+                    new ComparisonFilter("labels.name", QueryOperator.Eq, "PgMisc"),
+                ]), null, [], null);
+            _db.Queryable<SqProduct>().Where(orConds).ToSql().Key.Should().NotContain("N'");
         }
         finally
         {
