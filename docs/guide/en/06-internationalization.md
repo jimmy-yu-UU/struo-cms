@@ -53,10 +53,16 @@ parent `CollectionMetadata.Fields` list too (marked `Translatable = true`), so a
 *is* filterable/sortable through the ordinary query DSL allowlist like any other own-field
 (`QueryValidator.Validate`'s field allowlist is built from all non-`Hidden` `meta.Fields`, with no
 `Translatable` exclusion) — it just resolves against the sidecar table instead of the parent row, at
-the effective query locale, via `RelationFilterResolver.IsTranslatableField`/`ResolveTranslatableIdsAsync`
-(`src/Struo.Infrastructure/Query/RelationFilterResolver.cs`, chapter 7). Live-verified: filtering
-`file` by its translatable `title` succeeds with no `?locale=` supplied at all (the effective locale
-then defaults to `DefaultCode()`, `ItemService.QueryAsync`'s `queryLocale` default):
+the effective query locale, via `FilterTranslator.IsTranslatable`/`TranslatableLeaf`
+(`src/Struo.Infrastructure/Query/FilterTranslator.cs`, `FilterTranslator.Subquery.cs`, chapter 7),
+which pushes the condition down into an `IN (SELECT …)` subquery against the translation sidecar
+rather than resolving it in memory. That subquery construction is not special-cased to the
+*root* collection's own sidecar: a translatable leaf reached across one or more relation hops
+(`articles.title` when filtering `category`) goes through the identical recursive mechanism, so it
+resolves correctly at whatever collection it lands on — chapter 7 has the cross-hop transcript.
+Live-verified: filtering `file` by its translatable `title` succeeds with no `?locale=` supplied at
+all (the effective locale then defaults to `DefaultCode()`, `ItemService.QueryAsync`'s `queryLocale`
+default):
 
 ```
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Btitle%5D%5B_eq%5D=alpha-report"
