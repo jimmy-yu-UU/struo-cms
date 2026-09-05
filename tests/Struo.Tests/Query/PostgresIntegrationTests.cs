@@ -333,8 +333,11 @@ public sealed class PostgresIntegrationTests : IDisposable
 
     // U3 primitive probe: reproduces the exact collision the fix targets, on real Postgres. An outer
     // ConditionalModel and an inner (wrapped) subquery both filter Category.Name at conditional-list
-    // index 0, so SqlSugar independently assigns the SAME generated parameter name to both before
-    // SubQueryConditional renames the inner one. Categories only — no Article needed for this case.
+    // index 0, in ONE plain top-level list — NOT inside a ConditionalCollections OR group, whose
+    // members get a 1000-offset index and so never actually collide with a plain list's own naming.
+    // The premise is enforced, not just commented: the outer leaf's own generated parameter name,
+    // built standalone exactly as it will be built inside the real combined list below, is asserted
+    // equal to the inner subquery's pre-rename parameter name. Categories only — no Article needed.
     [Fact]
     public async Task Subquery_conditional_parameters_do_not_collide_on_postgres()
     {
@@ -343,29 +346,89 @@ public sealed class PostgresIntegrationTests : IDisposable
 
         var tech = new Category { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
         var news = new Category { Id = Guid.NewGuid(), Name = "PgCollide News" };
-        var other = new Category { Id = Guid.NewGuid(), Name = "PgCollide Other" };
-        _db!.Insertable(new[] { tech, news, other }).ExecuteCommand();
+        _db!.Insertable(new[] { tech, news }).ExecuteCommand();
 
         var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
         var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
-        var innerSub = _db.Queryable<Category>()
-            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgCollide News" } })
+
+        KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
+            _db.Queryable<Category>()
+                .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
+                .Select(sel).ToSql();
+        ConditionalModel OuterNameLeaf(string name) => new() { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name };
+
+        // Enforce the premise: the outer leaf and the inner subquery's own filter are each index-0 of
+        // their own plain top-level list, so SqlSugar assigns them the SAME generated name pre-rename.
+        var outerStandalone = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech") }).ToSql();
+        var innerSubTech = CategoryIdsNamed("PgCollide Tech");
+        outerStandalone.Value.Select(p => p.ParameterName).Should().BeEquivalentTo(
+            innerSubTech.Value.Select(p => p.ParameterName),
+            "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
+
+        // Positive: Category.Name = 'PgCollide Tech' AND Id IN (SELECT Id FROM categories WHERE Name = 'PgCollide Tech') -> Tech only.
+        var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
+        var qPositive = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condTech });
+        qPositive.ToSql().Key.Should().NotContain("N'");
+        (await qPositive.ToListAsync()).Should().ContainSingle().Which.Name.Should().Be("PgCollide Tech");
+
+        // Negative: same outer leaf, but the inner subquery now filters 'PgCollide News'. If the outer
+        // value had clobbered the inner one (the actual collision symptom), this would still spuriously
+        // match Tech; it must instead return ZERO rows.
+        var condNews = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("PgCollide News"));
+        var qNegative = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condNews });
+        (await qNegative.ToListAsync()).Should().BeEmpty();
+    }
+
+    // Mirrors Two_nesting_levels_compose_through_Wrap on real Postgres, categories only: an outer
+    // Category.Name = 'X' leaf sits in the SAME top-level list as a wrapped subquery whose own filter
+    // is ALSO Category.Name = 'X' (self-referencing on Id), one level further wrapped again — proving
+    // composition through Wrap works at nesting depth 2 with two distinct parameter prefixes, on PG.
+    [Fact]
+    public async Task Two_nesting_levels_compose_through_Wrap_on_postgres()
+    {
+        if (!PgConfigured) return;
+        BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
+
+        var x = new Category { Id = Guid.NewGuid(), Name = "PgNest X" };
+        var other = new Category { Id = Guid.NewGuid(), Name = "PgNest Other" };
+        _db!.Insertable(new[] { x, other }).ExecuteCommand();
+
+        var idCol = _db.EntityMaintenance.GetDbColumnName("Id", typeof(Category));
+        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+
+        KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
+            _db.Queryable<Category>()
+                .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
+                .Select(sel).ToSql();
+
+        // Level 2 (innermost): SELECT id FROM categories WHERE name = 'PgNest X'
+        var level2Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("PgNest X"));
+
+        // Level 1 (middle): SELECT id FROM categories WHERE name = 'PgNest X' AND id IN (level 2)
+        var level1 = _db.Queryable<Category>()
+            .Where(new List<IConditionalModel>
+            {
+                new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
+                level2Wrapped,
+            })
             .Select(sel).ToSql();
-        var innerWrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSub);
+        var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, level1);
 
-        var group = new ConditionalCollections
+        // Outer: Category.Name = 'PgNest X' AND Category.Id IN (level 1) — same top-level list.
+        var q = _db.Queryable<Category>().Where(new List<IConditionalModel>
         {
-            ConditionalList =
-            [
-                new(WhereType.Or, new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgCollide Tech" }),
-                new(WhereType.Or, innerWrapped),
-            ]
-        };
-        var q = _db.Queryable<Category>().Where(new List<IConditionalModel> { group });
+            new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
+            level1Wrapped,
+        });
+        var final = q.ToSql();
 
-        q.ToSql().Key.Should().NotContain("N'");
-        var rows = await q.ToListAsync();
-        rows.Select(c => c.Name).Should().BeEquivalentTo(["PgCollide Tech", "PgCollide News"]);
+        final.Key.Should().NotContain("N'");
+        var prefixes = System.Text.RegularExpressions.Regex.Matches(final.Key, @"sq(\d+)_").Select(m => m.Groups[1].Value).Distinct().ToList();
+        prefixes.Should().HaveCount(2, "two independent Wrap() calls (level2->level1, level1->outer) each allocate their own prefix");
+        var doublyPrefixedName = final.Value.Select(p => p.ParameterName).Single(n => System.Text.RegularExpressions.Regex.Matches(n, "sq\\d+_").Count == 2);
+        final.Key.Should().Contain(doublyPrefixedName);
+
+        (await q.ToListAsync()).Should().ContainSingle().Which.Id.Should().Be(x.Id);
     }
 
     // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
