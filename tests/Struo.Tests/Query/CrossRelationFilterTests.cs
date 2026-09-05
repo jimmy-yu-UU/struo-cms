@@ -272,4 +272,36 @@ public class CrossRelationFilterTests(ApiFactory factory)
         var ids = await IdsAsync(c, $"/api/items/article?filter%5Btags._none.name%5D%5B_eq%5D={stamp}");
         ids.Should().Contain(bare).And.NotContain(tagged);
     }
+
+    // Investigation (docs implementer's observation): does a relation filter combine with `search`
+    // as AND, or does `search` silently widen the result to every search-matching row regardless of
+    // the filter? Both articles satisfy the relation filter (same stamped category); only one's title
+    // matches the search term.
+    [Fact]
+    public async Task Relation_filter_and_search_combine_as_and()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var stamp = "FS" + Guid.NewGuid().ToString("N")[..8];
+        var cat = await Post(c, "category", new { name = stamp });
+        var artX = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "X" } } });
+        var artY = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "Y" } } });
+
+        var ids = await IdsAsync(c, $"/api/items/article?filter%5Bcategory.name%5D%5B_eq%5D={stamp}&search={stamp}X");
+        ids.Should().Contain(artX).And.NotContain(artY);
+    }
+
+    // Same question for a plain own-field filter combined with search on the TRANSLATABLE `title`
+    // field (article's search path): both articles share the same title stamp; only one's status
+    // matches the filter.
+    [Fact]
+    public async Task Scalar_filter_and_translatable_search_combine_as_and()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var stamp = "FS2" + Guid.NewGuid().ToString("N")[..8];
+        var draftArt = await Post(c, "article", new { status = "draft", translations = new { en = new { title = stamp } } });
+        var publishedArt = await Post(c, "article", new { status = "published", translations = new { en = new { title = stamp } } });
+
+        var ids = await IdsAsync(c, $"/api/items/article?filter%5Bstatus%5D%5B_eq%5D=published&search={stamp}");
+        ids.Should().Contain(publishedArt).And.NotContain(draftArt);
+    }
 }

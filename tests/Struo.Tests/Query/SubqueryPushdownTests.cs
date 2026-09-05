@@ -184,4 +184,34 @@ public class SubqueryPushdownTests : IDisposable
         var withTrash = await _h.QueryIdsAsync(Eq("properties.product.name", "same"), deleted: DeletedFilter.With);
         withTrash.Should().BeEmpty();
     }
+
+    // ── Investigation: filter + search must combine as AND, relation predicates included ──────────
+    [Fact]
+    public async Task Scalar_relation_filter_and_search_combine_as_and()
+    {
+        var (cross, _, noProps, _) = _h.SeedEav();
+        // Both cross and noProps match the filter (category = Tech); only cross's name matches the search.
+        var ids = await _h.QueryIdsAsync(Eq("category.name", "Tech"), search: "cross");
+        ids.Should().BeEquivalentTo([cross]);
+        noProps.Should().NotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task Some_predicate_filter_and_search_combine_as_and()
+    {
+        var (cross, same, _, _) = _h.SeedEav();
+        // Both cross and same match the filter (a property with valueNum >= 50); only same's name matches the search.
+        var ids = await _h.QueryIdsAsync(Some("properties", Gte("valueNum", 50)), search: "same");
+        ids.Should().BeEquivalentTo([same]);
+        cross.Should().NotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task Own_field_filter_and_search_combine_as_and()
+    {
+        _h.SeedEav();
+        // Filter matches "bare" only; search matches "cross" only - the AND of the two must be empty.
+        var ids = await _h.QueryIdsAsync(Eq("name", "bare"), search: "cross");
+        ids.Should().BeEmpty();
+    }
 }
