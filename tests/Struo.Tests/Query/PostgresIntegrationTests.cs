@@ -306,6 +306,31 @@ public sealed class PostgresIntegrationTests : IDisposable
         ancestor["name"].Should().Be("PgRoot"); // 6 hops up the chain lands exactly on root
     }
 
+    // U3 primitive probe on real Postgres: the wrapped IN (SELECT …) conditional at the top level of a
+    // Where list, a typed one-column projection (quoted column, uuid), and an apostrophe literal.
+    [Fact]
+    public async Task Subquery_conditional_primitive_works_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, _, _, _) = BuildRepoWithGraph();
+        _db!.CodeFirst.InitTables<Article>();
+
+        var cat = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe O'Brien" });
+        var other = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe other" });
+        await repo.CreateAsync("article", new Article { Status = "draft", CategoryId = cat.Id });
+        await repo.CreateAsync("article", new Article { Status = "draft", CategoryId = other.Id });
+
+        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+        var sub = _db.Queryable<Category>()
+            .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.In, FieldValue = "PgProbe O'Brien" } })
+            .Select(sel).ToSql();
+        var col = _db.EntityMaintenance.GetDbColumnName("CategoryId", typeof(Article));
+        var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { SubQueryConditional.Wrap(SubQueryKind.In, col, sub) });
+
+        q.ToSql().Key.Should().NotContain("N'");
+        (await q.ToListAsync()).Should().ContainSingle().Which.CategoryId.Should().Be(cat.Id);
+    }
+
     // Query:MaxResolvedFilterIds on real Postgres. The cap bounds the intermediate id set a dotted
     // filter materializes before rewriting it into `id IN (...)`; uses category.parent (self-relation)
     // so only the Category table is needed. PG-specific risk being covered: the resolved set is a list
