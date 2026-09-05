@@ -61,19 +61,26 @@ internal sealed partial class FilterTranslator(
         _ => throw new InvalidOperationException($"Unknown filter node type: {node.GetType().Name}")
     };
 
-    // Builds an OR group as a ConditionalCollections whose ConditionalList holds AT MOST ONE
-    // ICustomConditionalFunc entry — the SqlSugar adjacency defect (see AppendModel above) fires only
-    // between two ADJACENT custom entries, so this is sufficient, not just convenient. 0 or 1 wrapped
-    // children pass through unchanged (today's behaviour, and the shape Task 1's
+    // Builds an OR group (an explicit `_or` FilterNode) from its already-translated children.
+    private ConditionalCollections OrGroup(string collection, LogicalFilter l, string? queryLocale) =>
+        BuildOrCollection(l.Children.Select(ch => LeafModel(collection, ch, queryLocale)).ToList());
+
+    // Builds a ConditionalCollections whose ConditionalList holds AT MOST ONE ICustomConditionalFunc
+    // entry — the SqlSugar adjacency defect (see AppendModel above) fires only between two ADJACENT
+    // custom entries, so this is sufficient, not just convenient. 0 or 1 wrapped children pass through
+    // unchanged (today's behaviour, and the shape Task 1's
     // Wrapped_subquery_inside_an_or_group_keeps_its_parentheses already proved safe); 2+ wrapped
-    // children are merged into ONE OrOfSubqueriesConditional first. An OR group whose children are ALL
+    // children are merged into ONE OrOfSubqueriesConditional first. A group whose children are ALL
     // wrapped (no scalar siblings) becomes a ConditionalCollections with exactly that one merged entry.
-    private ConditionalCollections OrGroup(string collection, LogicalFilter l, string? queryLocale)
+    // Shared by OrGroup (an explicit `_or` FilterNode) and SearchGroup (an implicit OR across
+    // searchable fields, one or more of which may be translatable and therefore also custom) — every
+    // ConditionalCollections this translator builds goes through this one method.
+    private static ConditionalCollections BuildOrCollection(List<ConditionalModel> children)
     {
-        var children = l.Children.Select(ch => LeafModel(collection, ch, queryLocale)).ToList();
         var wrapped = children.Where(c => c.CustomConditionalFunc is not null).ToList();
-        var scalars = children.Where(c => c.CustomConditionalFunc is null).ToList();
-        var entries = wrapped.Count >= 2 ? scalars.Append(OrOfSubqueriesConditional.Merge(wrapped)) : children.AsEnumerable();
+        var entries = wrapped.Count >= 2
+            ? children.Where(c => c.CustomConditionalFunc is null).Append(OrOfSubqueriesConditional.Merge(wrapped))
+            : children.AsEnumerable();
         return new ConditionalCollections
         {
             ConditionalList = entries
@@ -100,15 +107,13 @@ internal sealed partial class FilterTranslator(
     }
 
     // One OR group: LIKE per non-translatable searchable field, one translation-sidecar subquery per
-    // translatable searchable field (same group, so "non-translatable OR translatable" stays one statement).
-    private ConditionalCollections SearchGroup(string collection, string search, IReadOnlyList<string> searchableFields, string? queryLocale)
-    {
-        var list = searchableFields
-            .Select(f => new KeyValuePair<WhereType, ConditionalModel>(WhereType.Or,
-                Leaf(collection, new ComparisonFilter(f, QueryOperator.Contains, search), queryLocale)))
-            .ToList();
-        return new ConditionalCollections { ConditionalList = list };
-    }
+    // translatable searchable field (same group, so "non-translatable OR translatable" stays one
+    // statement) — routed through BuildOrCollection like OrGroup, since two or more translatable
+    // searchable fields would otherwise put two adjacent custom entries in one ConditionalCollections.
+    private ConditionalCollections SearchGroup(string collection, string search, IReadOnlyList<string> searchableFields, string? queryLocale) =>
+        BuildOrCollection(searchableFields
+            .Select(f => Leaf(collection, new ComparisonFilter(f, QueryOperator.Contains, search), queryLocale))
+            .ToList());
 
     private bool IsTranslatable(string collection, string field)
     {

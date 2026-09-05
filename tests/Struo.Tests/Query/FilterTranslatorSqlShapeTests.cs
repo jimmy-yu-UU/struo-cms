@@ -310,4 +310,28 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         sql.Key.Should().NotContain("AND  AND").And.NotContain("OR  OR").And.NotContain("OR  AND").And.NotContain("AND  OR");
         sql.Value.Select(p => p.ParameterName).Should().OnlyHaveUniqueItems();
     }
+
+    // Fix round 2: SearchGroup must route through the same merge as OrGroup — two translatable
+    // searchable fields ("title", "subtitle") each become a TranslatableLeaf (custom conditional), and
+    // without the merge that's two adjacent custom entries in one ConditionalCollections, the exact
+    // SqlSugar adjacency defect. "code" is a plain (non-translatable) searchable field on TsItem itself.
+    [Fact]
+    public void Search_across_two_translatable_fields_merges_into_one_conditional()
+    {
+        using var h = new TranslatableSearchHarness();
+        var conds = h.Translator.Translate("tsItem", null, "x", ["title", "subtitle", "code"], "en");
+
+        conds.Should().ContainSingle();
+        var group = conds[0].Should().BeOfType<ConditionalCollections>().Subject;
+        group.ConditionalList.Should().HaveCount(2, "one plain LIKE (code) plus one merged custom entry (title+subtitle)");
+        group.ConditionalList.Select(kv => kv.Value).Count(c => c.CustomConditionalFunc is not null).Should().Be(1);
+
+        var sql = h.Db.Queryable<TsItem>().Where(conds).ToSql();
+        sql.Key.Should().MatchRegex(@"\(\s*\S+\s+IN\s+\(SELECT[\s\S]*?\)\s+OR\s+\S+\s+IN\s+\(SELECT[\s\S]*?\)\s*\)");
+        sql.Key.Should().NotContain("AND  AND").And.NotContain("OR  OR").And.NotContain("OR  AND").And.NotContain("AND  OR");
+        sql.Value.Select(p => p.ParameterName).Should().OnlyHaveUniqueItems();
+
+        // Executes without throwing — proves the merged SQL is syntactically valid, not just shaped right.
+        h.Db.Queryable<TsItem>().Where(conds).ToList().Should().BeEmpty();
+    }
 }
