@@ -75,16 +75,25 @@ internal sealed partial class FilterTranslator(
     // Shared by OrGroup (an explicit `_or` FilterNode) and SearchGroup (an implicit OR across
     // searchable fields, one or more of which may be translatable and therefore also custom) — every
     // ConditionalCollections this translator builds goes through this one method.
+    //
+    // The FIRST entry's WhereType is the connector between this whole group and whatever precedes it
+    // in the enclosing plain list (or is harmlessly dropped when the group has no predecessor); every
+    // OTHER entry's WhereType is the operator joining it to the previous entry INSIDE the group's own
+    // parentheses. Measured on SqlSugarCore 5.1.4.217 (probe recorded in the fix-round-3 report): a
+    // group whose first entry is WhereType.Or renders "<predecessor> OR (a OR b)" — the historical bug,
+    // since every plain-list predecessor here (a filter, or nothing) needs AND, never OR. The first
+    // entry therefore always gets WhereType.And; the rest keep WhereType.Or (this method builds only
+    // OR-groups — an `_and` FilterNode never reaches here, see AppendModel/ToModel).
     private static ConditionalCollections BuildOrCollection(List<ConditionalModel> children)
     {
         var wrapped = children.Where(c => c.CustomConditionalFunc is not null).ToList();
-        var entries = wrapped.Count >= 2
+        var entries = (wrapped.Count >= 2
             ? children.Where(c => c.CustomConditionalFunc is null).Append(OrOfSubqueriesConditional.Merge(wrapped))
-            : children.AsEnumerable();
+            : children.AsEnumerable()).ToList();
         return new ConditionalCollections
         {
             ConditionalList = entries
-                .Select(c => new KeyValuePair<WhereType, ConditionalModel>(WhereType.Or, c))
+                .Select((c, i) => new KeyValuePair<WhereType, ConditionalModel>(i == 0 ? WhereType.And : WhereType.Or, c))
                 .ToList()
         };
     }

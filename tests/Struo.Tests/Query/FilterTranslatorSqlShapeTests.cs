@@ -331,6 +331,47 @@ public class FilterTranslatorSqlShapeTests : IDisposable
         sql.Value.Select(p => p.ParameterName).Should().OnlyHaveUniqueItems();
     }
 
+    // Fix round 3: the filter+search-combine-as-OR investigation. BuildOrCollection's first entry must
+    // connect to whatever precedes it (a preceding filter conditional, here) with AND, not OR — SqlSugar
+    // renders the FIRST ConditionalList entry's WhereType as the connector to the group's predecessor in
+    // the enclosing plain list, and every OTHER entry's WhereType as the operator inside the group's own
+    // parentheses (probe recorded in the report). Getting this wrong makes `filter` a no-op whenever
+    // `search` is also present — every search-matching row comes back regardless of the filter.
+    [Fact]
+    public void Search_group_connects_to_a_preceding_filter_with_and_not_or()
+    {
+        using var h = new SubqueryPushdownHarness();
+        var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
+        var conds = t.Translate("sqProduct", new ComparisonFilter("name", QueryOperator.Eq, "bare"), "cross", ["name"], null);
+        var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
+
+        sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(\s*[\s\S]*?LIKE");
+        sql.Should().NotMatchRegex(@"=\s*@\w+\s+OR\s*\(\s*[\s\S]*?LIKE");
+    }
+
+    // Same connector rule for an explicit `_or` FilterNode following a scalar leaf in a top-level `_and`
+    // (AppendModel flattens the `_and` into one plain list: [scalarLeaf, orGroupConditionalCollections]).
+    [Fact]
+    public void Or_group_following_a_scalar_leaf_connects_with_and_not_or()
+    {
+        using var h = new SubqueryPushdownHarness();
+        var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
+        var filter = new LogicalFilter(LogicalOperator.And,
+        [
+            new ComparisonFilter("name", QueryOperator.Eq, "x"),
+            new LogicalFilter(LogicalOperator.Or,
+            [
+                new ComparisonFilter("category.name", QueryOperator.Eq, "Tech"),
+                new ComparisonFilter("labels.name", QueryOperator.Eq, "Misc"),
+            ]),
+        ]);
+        var conds = t.Translate("sqProduct", filter, null, [], null);
+        var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
+
+        sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(");
+        sql.Should().NotMatchRegex(@"=\s*@\w+\s+OR\s*\(");
+    }
+
     // Fix round 2: SearchGroup must route through the same merge as OrGroup — two translatable
     // searchable fields ("title", "subtitle") each become a TranslatableLeaf (custom conditional), and
     // without the merge that's two adjacent custom entries in one ConditionalCollections, the exact
