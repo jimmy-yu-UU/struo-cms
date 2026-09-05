@@ -40,7 +40,7 @@ $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: a
 | Pagination | `limit=`, `offset=` | `"limit"`, `"offset"` | No `page` parameter exists — pagination is purely offset-based (see below). |
 | Fields | `fields=a,b,c` | `"fields": ["a","b","c"]` | Restricts which *own* fields are projected (relations and `translations` are unaffected — see below). |
 | Deep | `deep=rel1,rel2` | `"deep": { "rel1": {...} }` | Relation expansion; chapter 7 covers this in full. |
-| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4). |
+| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4); combines with `filter` on the same request as AND — a row must satisfy the filter *and* match the search term, not either one. |
 | Soft-delete | `deleted=exclude\|only\|with` | *(query-string only — `GET`/`POST query` both read it from the URL)* | See below. |
 | Locale | `locale=code` | *(query-string only, same as above)* | Effective query locale for translatable-field filter/sort/read (chapter 6). |
 
@@ -124,8 +124,9 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bsize%5D%
 
 There is also a hard cap on total filter conditions per query — `StruoQueryOptions.MaxFilterConditions`,
 default **50** — counted across every leaf `ComparisonFilter` the walk visits, regardless of how
-they're nested under `_and`/`_or`; exceeding it throws `"Too many filter conditions (max 50)."` before
-any query runs.
+they're nested under `_and`/`_or`, and including every leaf inside a `_some`/`_none` predicate's own
+inner filter (below) — a quantifier's inner filter does not get its own separate budget; exceeding it
+throws `"Too many filter conditions (max 50)."` before any query runs.
 
 A dotted (cross-relation) filter and a search over a translatable field are both answered by pushing
 the condition down into a nested SQL subquery — see chapter 7 for the exact shapes — rather than by

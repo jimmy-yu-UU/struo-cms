@@ -159,12 +159,17 @@ C# property initializer on `StruoQueryOptions`
 |---|---|---|---|
 | `Query:MaxLimit` | int | `100` | Upper bound on a page's `limit`. A larger request is clamped down to this value, not rejected. |
 | `Query:DefaultLimit` | int | `25` | The `limit` applied when a request omits it or sends a non-positive value. |
-| `Query:MaxFilterConditions` | int | `50` | Cap on total leaf conditions per query, counted across every `_and`/`_or` branch. Exceeding it throws `"Too many filter conditions (max 50)."` before any query runs. |
+| `Query:MaxFilterConditions` | int | `50` | Cap on total leaf conditions per query, counted across every `_and`/`_or` branch, including every leaf inside a `_some`/`_none` predicate's own inner filter. Exceeding it throws `"Too many filter conditions (max 50)."` before any query runs. |
 | `Query:MaxRelationDepth` | int | `6` | Cap on relation **hops** in a dotted path — in a filter, a sort key, or a nested `deep`. The final leaf field is not counted, so `folder.name` is 1 hop (chapter 7). `_junction` pseudo-segments do not count toward this cap. |
 
 All four are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
 negative override fails startup rather than producing a nonsensical bound. Chapter 8 covers what each
 cap bounds in context. Restart required.
+
+A leftover `Query:MaxResolvedFilterIds` key in a fork's `appsettings.*.json` — from before this
+setting was removed — does not fail startup: the options binder only ever populates properties that
+exist on `StruoQueryOptions`, so an unrecognized key under `Query` is silently ignored rather than
+rejected.
 
 ## `Auth:BootstrapAdmin`
 
