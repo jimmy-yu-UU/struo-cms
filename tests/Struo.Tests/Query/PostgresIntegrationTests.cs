@@ -590,6 +590,48 @@ public sealed class PostgresIntegrationTests : IDisposable
         }
     }
 
+    // Task 6, live PG: the translation-sidecar subquery's own shape — article_translations has a
+    // `long` identity PK (Id) and projects a `uuid` FK (ArticleId) that the outer article query
+    // compares its own uuid `id` column against. This is the SQLite-green/Postgres-risky combination
+    // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips_on_postgres above): a
+    // long-keyed sidecar table projecting a uuid column into an outer IN (SELECT …) must still bind
+    // that column as uuid, not text, on real Postgres.
+    [Fact]
+    public async Task Translatable_leaf_subquery_binds_uuid_fk_on_postgres()
+    {
+        if (!PgConfigured) return;
+        var (repo, _, _) = BuildRepoWithGraph();
+        _db!.CodeFirst.InitTables<Article>();
+        _db.CodeFirst.InitTables<ArticleTranslation>();
+        _db.Deleteable<ArticleTranslation>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<Article>().Where(x => true).ExecuteCommand();
+
+        var stamp = "PgTr" + Guid.NewGuid().ToString("N")[..6];
+        var hit = (Article)await repo.CreateAsync("article", new Article { Status = "draft" });
+        var miss = (Article)await repo.CreateAsync("article", new Article { Status = "draft" });
+        _db.Insertable(new ArticleTranslation { ArticleId = hit.Id, Locale = "en", Title = stamp + "-en" }).ExecuteCommand();
+        _db.Insertable(new ArticleTranslation { ArticleId = miss.Id, Locale = "en", Title = "other-" + stamp }).ExecuteCommand();
+
+        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var collections = MetadataScanner.ScanTypes(types);
+        var metadata = new CachedMetadataProvider(collections);
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+        });
+        var translator = new FilterTranslator(_db, graph, metadata, registry, new StruoQueryOptions());
+
+        var conds = translator.Translate(
+            "article", new ComparisonFilter("title", QueryOperator.Eq, stamp + "-en"), null, [], "en");
+        var sql = _db.Queryable<Article>().Where(conds).ToSql();
+        sql.Key.Should().Contain("article_translations");
+        sql.Key.Should().NotContain("N'");
+
+        var rows = await _db.Queryable<Article>().Where(conds).ToListAsync();
+        rows.Should().ContainSingle().Which.Id.Should().Be(hit.Id);
+    }
+
     // The create-binding allowlist (bf04229, ItemDeserializer.Deserialize) on real Postgres. Once a
     // client-supplied "id" is stripped from the body, the entity reaches
     // SqlSugarItemRepository.CreateAsync with Id == Guid.Empty — exactly the condition that makes it
