@@ -166,11 +166,15 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 - **`{collection}(id: ID!, locale: String)`**——單一個項目，或者對一個未知/預設下已軟刪除的
   id 回傳 `null` (沒有錯誤——GraphQL 的 null，意圖上與 REST 的 `404` 一致，但形狀不同)。
 - **`{collection}s(filter, sort: [String!], limit: Int, offset: Int, search: String, locale: String,
-  deleted: DeletedFilter)`**——一頁資料，以 `{ items: [X!]!, total: Int! }` 的形式回傳。
+  deleted: DeletedFilter, facets: [String!], aggregate: AggregateInput)`**——一頁資料，以
+  `{ items: [X!]!, total: Int!, facets: [FacetResult!]!, aggregate: Any }` 的形式回傳。
   `deleted` 是 SDL 列舉 `EXCLUDE`/`ONLY`/`WITH`，直接繫結到與 REST 相同的
   `Struo.Domain.Query.DeletedFilter`;要求 `ONLY`/`WITH` 會受到與 REST 的 `ItemsController`
   (第 8 章) 完全相同的 `DeletedAccessGuard.EnsureCanViewDeleted` 檢查把關——需要對該集合有刪除
-  權限。
+  權限。`facets`/`aggregate` 就是 REST 的 `facets=`/`aggregate[<op>]=` 所開放的同一項功能
+  (第 8 章「Facets 與彙總」有完整的語法、語意與錯誤目錄);回應上的 `facets`/`aggregate`
+  在本節後段涵蓋。只有這兩個根層級清單欄位帶這兩個引數——一個巢狀 to-many 清單欄位
+  (下文的 `article.tags(filter: …)`) 沒有。
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
@@ -181,6 +185,25 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
     -d '{"query":"query { files(filter: { size: { gte: 20 } }, sort: [\"-size\"], limit: 2, offset: 0) { items { id fileName size } total } }"}'
 {"data":{"files":{"items":[{"id":"...","fileName":"gamma-draft.txt","size":35},{"id":"...","fileName":"beta-notes.txt","size":23}],"total":3}}}
 ```
+
+清單欄位回應上的 `facets`/`aggregate`——`facets: [FacetResult!]!` (省略 `facets` 引數時為空陣列)
+與 `aggregate: Any` (省略 `aggregate` 引數時為 `null`)——共用 `SharedFacetTypes.Build`
+(`src/Struo.Api/GraphQl/SharedFacetTypes.cs`) 為每個集合只建構一次的兩個輸出型別:
+`FacetResult { field: String!, values: [FacetValue!]! }` 與 `FacetValue { value: Any, count: Int! }`，
+對應 domain 層的 `FacetResult`/`FacetBucket` record。引數型別 `AggregateInput` 每個彙總 op
+(`count`/`sum`/`min`/`max`/`avg`) 各有一個 `[String!]` 欄位，由 `QueryParser.AggregateOps`
+（REST 的 `aggregate[<op>]=` 鍵所用的同一組 op 集合）建構而成。實際輸出，對照第 8 章相同的
+fixture (一個分類底下三篇文章——兩篇 `published`、一篇 `draft`，兩篇共用一個標籤):
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { articles(filter: { categoryId: { eq: \"<category-id>\" } }, facets: [\"status\", \"tags\"], aggregate: { count: [\"publishedAt\"], max: [\"publishedAt\"] }) { total facets { field values { value count } } aggregate } }"}'
+{"data":{"articles":{"total":3,"facets":[{"field":"status","values":[{"value":"published","count":2},{"value":"draft","count":1}]},{"field":"tags","values":[{"value":"<tag-id>","count":2}]}],"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}}}}
+```
+
+`FacetValue.value` 的 `Any` 型別會保留原本的 JSON 種類——一個數值 facet 的 bucket 值回來時是
+GraphQL 數字，不會被字串化——`aggregate` 的 `Any` 也是同樣道理，讓 `count` 的整數與 `max` 的
+`DateTime` 字串保持各自的型別，而不是強制轉成單一 scalar 型別。
 
 一列已軟刪除的資料，其單筆項目欄位會解析為 `null` (不是錯誤)，而 `deleted: ONLY` 則會讓它出現在
 清單欄位中:
@@ -275,6 +298,12 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 一個 many-to-one 關聯 (例如 `File.folder`、`MediaFolder.parent`) 則維持是一個完全不帶任何
 引數的單純物件欄位——`CollectionSchemaBuilder` 只會把 `filter`/`sort`/`limit`/`offset` 附加在
 `OneToMany`/`ManyToMany` 欄位上，因為一個 M2O 那一側最多只會解析出一列資料。
+
+與上方兩個根層級清單欄位不同，一個巢狀 to-many 欄位的引數清單止步於
+`filter`/`sort`/`limit`/`offset`——`facets`/`aggregate` 在 v1 只限於根層級清單欄位
+(`AddRelationField`，`src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs`，永遠不會把它們加到一個
+關聯欄位上)，所以 `article.tags(facets: [...])` 並不是差一個 schema 錯誤就能動——它根本就不在
+產生出來的 schema 裡。
 
 ## Mutation:create、update、delete——型別化輸入與部分更新語意
 
