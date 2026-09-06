@@ -82,36 +82,12 @@ public sealed class SqlSugarItemRepository(
         DeletedFilter deleted, CancellationToken ct)
         where T : class, new()
     {
-        // Only/With lift the global soft-delete floor (registered in
-        // SqlSugarClientFactory) for this query; Only additionally restricts to trashed rows via
-        // an extra DeletedAt-IS-NOT-NULL conditional. It stays a ConditionalModel rather than a
-        // cast-based Where predicate on ISoftDeletable, which SqlSugar cannot translate reliably.
-        var isSoftDeletable = typeof(ISoftDeletable).IsAssignableFrom(typeof(T));
-        var effectiveConditionals = conditionals;
-        if (deleted == DeletedFilter.Only && isSoftDeletable)
-        {
-            effectiveConditionals = [.. conditionals, new ConditionalModel
-            {
-                FieldName = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T)),
-                ConditionalType = ConditionalType.IsNot,
-                FieldValue = null
-            }];
-        }
-
-        ISugarQueryable<T> NewQueryable()
-        {
-            var q = db.Queryable<T>();
-            if (deleted != DeletedFilter.Exclude && isSoftDeletable)
-                q = q.ClearFilter<ISoftDeletable>();
-            return q.Where(effectiveConditionals);
-        }
-
         // True offset/limit windowing: offset is an absolute row count and need NOT be a multiple of
         // limit. The old code turned offset into a 1-based page index by integer division, which
         // silently returned the wrong window for any non-page-aligned offset (e.g. offset=25,limit=20
         // skipped 20 instead of 25). Count + Skip/Take gives the exact window.
-        var total = await NewQueryable().CountAsync(ct);
-        var queryable = NewQueryable();
+        var total = await DeletedScope.Root<T>(db, conditionals, deleted).CountAsync(ct);
+        var queryable = DeletedScope.Root<T>(db, conditionals, deleted);
         if (!string.IsNullOrWhiteSpace(orderBy)) queryable = queryable.OrderBy(orderBy);
         var rows = await queryable.Skip(offset).Take(limit).ToListAsync(ct);
         return new QueryResult(rows.Cast<object>().ToList(), total);
