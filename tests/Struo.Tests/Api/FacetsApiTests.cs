@@ -16,6 +16,11 @@ public class FacetsApiTests(ApiFactory factory)
 
     private Task<(HttpClient Client, string CategoryId, string TagId)> SeedAsync() => FacetSeed.SeedAsync(_factory);
 
+    // Hoisted out of the envelope-query literal below (Sonar CA1861: prefer a static field over a
+    // constant array allocated fresh on every call).
+    private static readonly string[] StatusFacet = ["status"];
+    private static readonly string[] PublishedAtField = ["publishedAt"];
+
     [Fact]
     public async Task Facets_and_aggregate_appear_in_meta_only_when_requested()
     {
@@ -74,7 +79,7 @@ public class FacetsApiTests(ApiFactory factory)
         var qs = await Json(await client.GetAsync($"/api/items/article?filter[categoryId][_eq]={cat}&facets=status&aggregate[count]=publishedAt"));
         var env = await Json(await client.PostAsJsonAsync("/api/items/article/query", new
         {
-            filter = new { categoryId = new { _eq = cat } }, facets = new[] { "status" }, aggregate = new { count = new[] { "publishedAt" } },
+            filter = new { categoryId = new { _eq = cat } }, facets = StatusFacet, aggregate = new { count = PublishedAtField },
         }));
         env.RootElement.GetProperty("meta").GetProperty("facets").GetRawText().Should().Be(qs.RootElement.GetProperty("meta").GetProperty("facets").GetRawText());
         env.RootElement.GetProperty("meta").GetProperty("aggregate").GetRawText().Should().Be(qs.RootElement.GetProperty("meta").GetProperty("aggregate").GetRawText());

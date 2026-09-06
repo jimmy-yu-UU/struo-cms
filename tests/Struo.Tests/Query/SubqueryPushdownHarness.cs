@@ -155,7 +155,7 @@ public sealed class SubqueryPushdownHarness : IDisposable
         var meta = Metadata.GetCollection(collection)!;
         var resolved = FacetPathResolver.Resolve(meta, facet, Graph, Metadata);
         var q = new QueryModel(null, FacetFilterPruner.Prune(filter, resolved), [], 100, 0, search);
-        return Repo.FacetAsync(collection, q, resolved, ["name"], null, deleted, maxValues);
+        return Repo.FacetAsync(new FacetRequest(collection, q, resolved, ["name"], null, deleted, maxValues));
     }
 
     // searchableFields is only populated with "name" when a search term is actually supplied — an

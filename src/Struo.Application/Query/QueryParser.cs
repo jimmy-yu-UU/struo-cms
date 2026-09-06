@@ -40,7 +40,7 @@ public static class QueryParser
     private static AggregateOp ParseAggregateOp(string token) =>
         AggregateOps.TryGetValue(token, out var op) ? op : throw new QueryException($"Unknown aggregate op '{token}'.");
 
-    private static IReadOnlyList<string>? ParseFacetsQueryString(IReadOnlyDictionary<string, string?> query) =>
+    private static string[]? ParseFacetsQueryString(IReadOnlyDictionary<string, string?> query) =>
         query.TryGetValue("facets", out var fv) && !string.IsNullOrWhiteSpace(fv) ? SplitFacetsList(fv) : null;
 
     private static AggregateSpec? ParseAggregateQueryString(IReadOnlyDictionary<string, string?> query)
@@ -58,7 +58,7 @@ public static class QueryParser
         return fields.Count == 0 ? null : new AggregateSpec(fields);
     }
 
-    private static IReadOnlyList<string>? ParseFacetsEnvelope(JsonElement env)
+    private static List<string>? ParseFacetsEnvelope(JsonElement env)
     {
         if (!env.TryGetProperty("facets", out var f)) return null;
         if (f.ValueKind != JsonValueKind.Array || f.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String))

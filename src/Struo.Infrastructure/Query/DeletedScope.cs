@@ -20,7 +20,7 @@ internal static class DeletedScope
         if (deleted != DeletedFilter.Only) return q.Where(conditionals);
         var guard = new ConditionalModel
         {
-            FieldName = db.EntityMaintenance.GetDbColumnName(nameof(ISoftDeletable.DeletedAt), typeof(T)),
+            FieldName = db.EntityMaintenance.GetDbColumnName<T>(nameof(ISoftDeletable.DeletedAt)),
             ConditionalType = ConditionalType.IsNot,
             FieldValue = null,
         };

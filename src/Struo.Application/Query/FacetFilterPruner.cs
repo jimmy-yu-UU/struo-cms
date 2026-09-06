@@ -38,7 +38,7 @@ public static class FacetFilterPruner
     // A group is unchanged only when every child pruned back to the exact same reference it started
     // as — not merely when the surviving COUNT matches, since a nested group can shed some of its own
     // children (staying non-null, so still "kept" here) without losing any top-level sibling.
-    private static bool IsUnchanged(IReadOnlyList<FilterNode> original, IReadOnlyList<FilterNode?> pruned)
+    private static bool IsUnchanged(IReadOnlyList<FilterNode> original, List<FilterNode?> pruned)
     {
         if (original.Count != pruned.Count) return false;
         for (var i = 0; i < original.Count; i++)

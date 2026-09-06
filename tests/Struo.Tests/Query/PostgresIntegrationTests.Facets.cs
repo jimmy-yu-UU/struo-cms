@@ -77,7 +77,7 @@ public sealed partial class PostgresIntegrationTests
         await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "draft" });
 
         var facet = FacetPathResolver.Resolve(md.GetCollection("article")!, "categoryId", graph, md);
-        var b = await repo.FacetAsync("article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50);
+        var b = await repo.FacetAsync(new FacetRequest("article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
         b.Should().HaveCount(2);
         b[0].Should().Be(new FacetBucket(cat.Id.ToString(), 2));
         b[1].Should().Be(new FacetBucket(null, 1));
@@ -101,7 +101,7 @@ public sealed partial class PostgresIntegrationTests
         }).ExecuteCommand();
 
         var facet = FacetPathResolver.Resolve(md.GetCollection("article")!, "tags.name", graph, md);
-        var b = await repo.FacetAsync("article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50);
+        var b = await repo.FacetAsync(new FacetRequest("article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
         b.Select(x => (x.Value, x.Count)).Should().Equal(("Guide", 2), ("Misc", 1));
     }
 
@@ -117,9 +117,9 @@ public sealed partial class PostgresIntegrationTests
         _db!.Insertable(new ArticleTranslation { ArticleId = a1.Id, Locale = "zh-TW", Title = "甲" }).ExecuteCommand();
 
         var facet = FacetPathResolver.Resolve(md.GetCollection("category")!, "articles.title", graph, md);
-        var zh = await repo.FacetAsync("category", new QueryModel(null, null, [], 100, 0, null), facet, [], "zh-TW", DeletedFilter.Exclude, 50);
+        var zh = await repo.FacetAsync(new FacetRequest("category", new QueryModel(null, null, [], 100, 0, null), facet, [], "zh-TW", DeletedFilter.Exclude, 50));
         zh.Should().Equal(new FacetBucket("甲", 1));
-        var en = await repo.FacetAsync("category", new QueryModel(null, null, [], 100, 0, null), facet, [], "en", DeletedFilter.Exclude, 50);
+        var en = await repo.FacetAsync(new FacetRequest("category", new QueryModel(null, null, [], 100, 0, null), facet, [], "en", DeletedFilter.Exclude, 50));
         en.Should().Equal(new FacetBucket(null, 1));
     }
 
