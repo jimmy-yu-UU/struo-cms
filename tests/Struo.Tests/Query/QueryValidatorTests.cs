@@ -26,7 +26,20 @@ public class QueryValidatorTests
             // be usable as a filter/sort/search target — otherwise meta.total becomes a blind-extraction oracle.
             new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true, Searchable = true },
             new FieldMetadata { Name = "regions", Label = "Regions", Interface = FieldInterface.MultiSelect },
-        ]
+        ],
+        // A OneToMany relation sharing its FK column name ("categoryId") with the ManyToOne "category"
+        // relation below — mirrors the sample Category collection (M2O "parent" FK "parentId" / O2M
+        // "children" whose ForeignKey is also "parentId"). Listed FIRST so a permission-target lookup
+        // that naively does `Relations.FirstOrDefault(r => r.ForeignKey == head)` without a Kind guard
+        // would pick this one — the wrong collection — instead of the ManyToOne "category" relation
+        // the FK column actually belongs to on this root.
+        Relations =
+        [
+            new RelationMetadata { Name = "categoryArchive", Label = "Category archive", Kind = RelationKind.OneToMany,
+                TargetCollection = "categoryArchive", Interface = RelationInterface.RelatedList, ForeignKey = "categoryId" },
+            new RelationMetadata { Name = "category", Label = "Category", Kind = RelationKind.ManyToOne,
+                TargetCollection = "category", Interface = RelationInterface.Dropdown, ForeignKey = "categoryId" },
+        ],
     };
 
     private static readonly StruoQueryOptions Opts = new();
@@ -56,6 +69,8 @@ public class QueryValidatorTests
         public CollectionMetadata? GetCollection(string name) => name switch
         {
             "category" => new CollectionMetadata { Name = "category", Label = "Category", FieldGroups = [],
+                Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
+            "categoryArchive" => new CollectionMetadata { Name = "categoryArchive", Label = "Category archive", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
             "tag" => new CollectionMetadata { Name = "tag", Label = "Tag", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
@@ -578,6 +593,24 @@ public class QueryValidatorTests
         var opts = new StruoQueryOptions { MaxFacets = 2 };
         var act = () => QueryValidator.Validate(WithFacets("status", "categoryId", "tags"), Meta(), opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>().WithMessage("Too many facets (max 2).");
+    }
+
+    // Finding B: a bare-FK facet path ("categoryId") must be permission-checked against the
+    // ManyToOne relation that FK actually belongs to on THIS root — not against a OneToMany
+    // relation that merely happens to share the same ForeignKey string (the child's reverse-FK
+    // column, per MetadataScanner — see Meta().Relations above).
+    [Fact]
+    public void Fk_facet_is_checked_against_the_many_to_one_relation_even_when_an_o2m_shares_its_fk_name()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("categoryId"), Meta(), Opts, Graph, Md, new DenyReadOf("category"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Fk_facet_is_not_checked_against_an_o2m_relation_that_merely_shares_its_fk_name()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("categoryId"), Meta(), Opts, Graph, Md, new DenyReadOf("categoryArchive"));
+        act.Should().NotThrow();
     }
 
     [Fact]

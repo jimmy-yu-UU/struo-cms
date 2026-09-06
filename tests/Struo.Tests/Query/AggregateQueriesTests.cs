@@ -34,6 +34,17 @@ public class AggregateQueriesTests : IDisposable
         _h.SeedEav();
         var r = await _h.AggregateAsync("sqProperty", Spec((AggregateOp.Sum, ["valueNum"])), new ComparisonFilter("code", QueryOperator.Eq, "vds-v"));
         r.Values[AggregateOp.Sum]["valueNum"].Should().Be(100L);
+
+        // Search must scope the aggregate too, not merely the filter: "cross" (categoryId=tech) and
+        // "bare" (categoryId=tech) both satisfy an _in filter over their names, but only "cross"'s
+        // Name also matches search "cross" — so adding the search term must narrow the count from 2
+        // down to 1.
+        var filter = new ComparisonFilter("name", QueryOperator.In, new List<object> { "cross", "bare" });
+        var withoutSearch = await _h.AggregateAsync("sqProduct", Spec((AggregateOp.Count, ["name"])), filter);
+        withoutSearch.Values[AggregateOp.Count]["name"].Should().Be(2L);
+
+        var withSearch = await _h.AggregateAsync("sqProduct", Spec((AggregateOp.Count, ["name"])), filter, search: "cross");
+        withSearch.Values[AggregateOp.Count]["name"].Should().Be(1L);
     }
 
     [Fact]

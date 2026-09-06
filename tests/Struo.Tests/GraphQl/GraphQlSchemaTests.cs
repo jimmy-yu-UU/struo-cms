@@ -1,4 +1,5 @@
 // tests/Struo.Tests/GraphQl/GraphQlSchemaTests.cs
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Execution;
@@ -240,8 +241,12 @@ public class GraphQlSchemaTests
     {
         var sdl = await BuildSdlAsync();
 
-        sdl.Should().MatchRegex(@"facets:\s*\[FacetResult!\]!\r?\n");
-        sdl.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
+        // Scoped to the ArticleList type block itself (not merely "somewhere in the SDL") so this
+        // cannot pass by matching an unrelated *List type's facets/aggregate fields.
+        var block = Regex.Match(sdl, @"type ArticleList \{[^}]*\}");
+        block.Success.Should().BeTrue("the SDL should declare a type ArticleList block");
+        block.Value.Should().MatchRegex(@"facets:\s*\[FacetResult!\]!\r?\n");
+        block.Value.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
     }
 
     [Fact]

@@ -158,8 +158,12 @@ public sealed class SubqueryPushdownHarness : IDisposable
         return Repo.FacetAsync(collection, q, resolved, ["name"], null, deleted, maxValues);
     }
 
-    public Task<AggregateResult> AggregateAsync(string collection, AggregateSpec spec, FilterNode? filter = null, DeletedFilter deleted = DeletedFilter.Exclude) =>
-        Repo.AggregateAsync(collection, new QueryModel(null, filter, [], 100, 0, null), spec, [], null, deleted);
+    // searchableFields is only populated with "name" when a search term is actually supplied — an
+    // empty list when search is null matches how a caller with no searchable fields configured
+    // behaves, and keeps every existing filter-only call exercising exactly that path.
+    public Task<AggregateResult> AggregateAsync(
+        string collection, AggregateSpec spec, FilterNode? filter = null, DeletedFilter deleted = DeletedFilter.Exclude, string? search = null) =>
+        Repo.AggregateAsync(collection, new QueryModel(null, filter, [], 100, 0, search), spec, search is null ? [] : ["name"], null, deleted);
 
     public void Dispose() => _file.Dispose();
 }

@@ -27,6 +27,10 @@ public class FacetsApiTests(ApiFactory factory)
         var r = await client.GetAsync($"/api/items/article?filter[categoryId][_eq]={cat}&facets=status,tags,category.name&aggregate[count]=publishedAt&aggregate[max]=publishedAt");
         r.StatusCode.Should().Be(HttpStatusCode.OK, await r.Content.ReadAsStringAsync());
         var meta = (await Json(r)).RootElement.GetProperty("meta");
+        // The meta.facets object's own property names must enumerate in the SAME order the caller
+        // requested them (status, tags, category.name) — not alphabetical or insertion-into-a-set
+        // order, since a client renders facet groups top to bottom in the order it asked for them.
+        meta.GetProperty("facets").EnumerateObject().Select(p => p.Name).Should().Equal("status", "tags", "category.name");
         var status = meta.GetProperty("facets").GetProperty("status").EnumerateArray()
             .Select(b => (b.GetProperty("value").GetString(), b.GetProperty("count").GetInt64())).ToList();
         status.Should().Equal(("published", 2), ("draft", 1));

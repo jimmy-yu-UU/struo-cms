@@ -1,4 +1,5 @@
 // src/Struo.Application/Query/FacetFilterPruner.cs
+using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Query;
 
 namespace Struo.Application.Query;
@@ -50,7 +51,14 @@ public static class FacetFilterPruner
         if (facet.Kind == FacetPathKind.OwnField)
             return string.Equals(fieldPath, facet.OwnField, StringComparison.OrdinalIgnoreCase);
         var rel = facet.Relation!;
-        if (rel.ForeignKey is not null && string.Equals(fieldPath, rel.ForeignKey, StringComparison.OrdinalIgnoreCase)) return true;
+        // Only a ManyToOne's ForeignKey names a column on THIS root collection. For OneToMany (and
+        // ManyToMany) ForeignKey instead names a column on the CHILD/junction side (see
+        // MetadataScanner), so comparing it against a root-level fieldPath for those kinds would
+        // wrongly prune an unrelated root filter that merely shares the same column name (e.g. a
+        // "parent" ManyToOne FK "parentId" alongside a "children" OneToMany whose ForeignKey is also
+        // "parentId").
+        if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is not null
+            && string.Equals(fieldPath, rel.ForeignKey, StringComparison.OrdinalIgnoreCase)) return true;
         return MatchesRelation(fieldPath, rel.Name);
     }
 

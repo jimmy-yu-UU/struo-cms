@@ -45,4 +45,15 @@ public class AggregateValueNormalizerTests
     [Fact] public void Max_of_datetime_read_as_datetime_is_kept() =>
         AggregateValueNormalizer.Normalize(AggregateOp.Max, typeof(DateTime), new DateTime(2026, 1, 1))
             .Should().Be(new DateTime(2026, 1, 1));
+
+    // Finding D: Npgsql returns a `date`/`time` column's aggregate as a DateTime (midnight-anchored
+    // for `date`), not as a DateOnly/TimeOnly — Convert.ChangeType has no built-in conversion for
+    // either, so it throws without this special case.
+    [Fact] public void Max_of_dateonly_read_as_datetime_from_npgsql_is_converted() =>
+        AggregateValueNormalizer.Normalize(AggregateOp.Max, typeof(DateOnly), new DateTime(2026, 9, 5))
+            .Should().BeOfType<DateOnly>().And.Be(new DateOnly(2026, 9, 5));
+
+    [Fact] public void Min_of_timeonly_read_as_datetime_from_npgsql_is_converted() =>
+        AggregateValueNormalizer.Normalize(AggregateOp.Min, typeof(TimeOnly), new DateTime(1, 1, 1, 21, 8, 59))
+            .Should().BeOfType<TimeOnly>().And.Be(new TimeOnly(21, 8, 59));
 }
