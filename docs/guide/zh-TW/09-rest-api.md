@@ -25,7 +25,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&lim
 {"success":true,"data":[{"id":"...","fileName":"alpha-report.txt", ...}, ...],"meta":{"total":3,"limit":2,"offset":0}}
 ```
 
-`meta` 還會多兩個選擇性鍵，`facets`（分面計數）與 `aggregate`（彙總），但只有請求有要求時才會出現
+`meta` 還會多兩個選擇性鍵，`facets` (分面計數) 與 `aggregate` (彙總)，但只有請求有要求時才會出現
 (`facets=`/`aggregate[<op>]=`，第 8 章)——兩者各自是 `MetaInfo`
 (`src/Struo.Api/Http/Envelope.cs`) 上獨立的 `[JsonIgnore(Condition = WhenWritingNull)]`
 屬性，所以一個兩者都沒指名的請求兩個鍵都省略，只指名其中一個的請求就省略另一個——與 `meta`
