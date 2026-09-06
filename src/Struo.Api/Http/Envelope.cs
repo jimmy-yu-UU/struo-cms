@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Struo.Domain.Query;
 
 namespace Struo.Api.Http;
 
@@ -10,7 +11,12 @@ public sealed record ErrorBody(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<ValidationDetail>? Details = null);
 
-public sealed record MetaInfo(long Total, int Limit, int Offset);
+public sealed record MetaInfo(
+    long Total, int Limit, int Offset,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, IReadOnlyList<FacetBucket>>? Facets = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? Aggregate = null);
 
 /// <summary>Success wire envelope; <c>Meta</c> is omitted from JSON when null.</summary>
 public sealed record SuccessEnvelope(
@@ -22,7 +28,10 @@ public sealed record SuccessEnvelope(
 public sealed record ErrorEnvelope(bool Success, ErrorBody Error);
 
 /// <summary>Marker a controller returns for a paginated list; the result filter unwraps it to data + meta.</summary>
-public sealed record PagedResult(object Data, long Total, int Limit, int Offset);
+public sealed record PagedResult(
+    object Data, long Total, int Limit, int Offset,
+    IReadOnlyDictionary<string, IReadOnlyList<FacetBucket>>? Facets = null,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? Aggregate = null);
 
 public static class Envelope
 {
