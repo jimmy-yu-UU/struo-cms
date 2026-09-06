@@ -20,28 +20,28 @@ public sealed class SqlSugarItemRepository(
     ILogger<SqlSugarItemRepository>? logger = null) : IItemRepository
 {
     // This class is a facade over IItemRepository. Two supporting types back it — GenericDispatcher
-    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the nine instance
+    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the ten instance
     // fields declared next: TransactionRunner, FilterTranslator, WhereInQueries, SoftDeleteOps,
-    // PurgeOps, ManyToManySync, TranslationStore, OrderByExpressionBuilder, and FacetQueries. The
-    // facade itself still implements Query/GetById/Create/Update/Delete (the optimistic-concurrency
-    // check, the identity-PK read-back and the offset/limit paging all live in this file); every
-    // other IItemRepository member just delegates to one of seven fields — transactions, whereIn,
-    // softDelete, purge, manyToMany, translations, and facets; orderByBuilder is not a delegation
-    // target, it is used inside QueryAsync (orderByBuilder.BuildOrderBy(...)), and filters is used
-    // inline in QueryAsync (filters.Translate(...)) rather than delegated to. Among the
-    // nine fields, OrderByExpressionBuilder is the only one registered as a scoped DI
-    // service — kept registered for a future direct consumer, though none exists today. The
-    // other eight are not registered:
+    // PurgeOps, ManyToManySync, TranslationStore, OrderByExpressionBuilder, FacetQueries and
+    // AggregateQueries. The facade itself still implements Query/GetById/Create/Update/Delete (the
+    // optimistic-concurrency check, the identity-PK read-back and the offset/limit paging all live
+    // in this file); every other IItemRepository member just delegates to one of eight fields —
+    // transactions, whereIn, softDelete, purge, manyToMany, translations, facets and aggregates;
+    // orderByBuilder is not a delegation target, it is used inside QueryAsync
+    // (orderByBuilder.BuildOrderBy(...)), and filters is used inline in QueryAsync
+    // (filters.Translate(...)) rather than delegated to. Among the ten fields,
+    // OrderByExpressionBuilder is the only one registered as a scoped DI service — kept registered
+    // for a future direct consumer, though none exists today. The other nine are not registered:
     // nothing outside this class needs them, and the test suite constructs SqlSugarItemRepository
     // directly with this exact 5-arg constructor (26 test files do), so any new required
     // constructor parameter is not an option — `logger` above is optional (defaults to null) for
     // exactly that reason. manyToMany, translations and facets take `new TransactionRunner(db)`
     // rather than the `transactions` field below because a field initializer cannot reference another
     // instance field (CS0236); TransactionRunner holds no state beyond `db`, so the second
-    // instance behaves identically to sharing the first. whereIn and facets similarly take a second,
-    // separate `new FilterTranslator(...)` rather than the `filters` field below it for the same
-    // CS0236 reason; FilterTranslator holds no state beyond its constructor arguments, so the second
-    // instance behaves identically to sharing the first.
+    // instance behaves identically to sharing the first. whereIn, facets and aggregates similarly
+    // take a second, separate `new FilterTranslator(...)` rather than the `filters` field below it
+    // for the same CS0236 reason; FilterTranslator holds no state beyond its constructor arguments,
+    // so the second instance behaves identically to sharing the first.
     private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly FilterTranslator filters = new(db, graph, metadata, registry, options);
@@ -52,6 +52,7 @@ public sealed class SqlSugarItemRepository(
     private readonly TranslationStore translations = new(db, new TransactionRunner(db));
     private readonly FacetQueries facets = new(db, registry, graph, metadata,
         new FilterTranslator(db, graph, metadata, registry, options), new TranslationStore(db, new TransactionRunner(db)));
+    private readonly AggregateQueries aggregates = new(db, registry, new FilterTranslator(db, graph, metadata, registry, options));
 
     private static readonly GenericDispatcher<Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryDispatcher =
         new(typeof(SqlSugarItemRepository), nameof(RunQueryAsync),
@@ -265,6 +266,11 @@ public sealed class SqlSugarItemRepository(
         string collection, QueryModel prunedQuery, ResolvedFacetPath facet, IReadOnlyList<string> searchableFields,
         string? queryLocale, DeletedFilter deleted, int maxValues, CancellationToken ct = default) =>
         facets.FacetAsync(collection, prunedQuery, facet, searchableFields, queryLocale, deleted, maxValues, ct);
+
+    public Task<AggregateResult> AggregateAsync(
+        string collection, QueryModel query, AggregateSpec spec, IReadOnlyList<string> searchableFields,
+        string? queryLocale, DeletedFilter deleted, CancellationToken ct = default) =>
+        aggregates.AggregateAsync(collection, query, spec, searchableFields, queryLocale, deleted, ct);
 
     /// <summary>
     /// Shallow-clones an entity by copying each public read/write property by value.
