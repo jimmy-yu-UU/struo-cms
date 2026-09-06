@@ -218,6 +218,231 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&lim
 {"success":true,"data":[{"fileName":"beta-notes.txt", ...},{"fileName":"gamma-draft.txt", ...}],"meta":{"total":3,"limit":2,"offset":1}}
 ```
 
+## Facets and aggregates
+
+Two more list-only parameters compute summary data over the *whole* filtered result set alongside the
+current page: `facets=` (a value/count breakdown per requested path) and `aggregate[<op>]=` (`sum`/
+`avg`/`min`/`max`/`count` over own fields). Neither changes `data` or pagination — they only add keys
+to `meta` (REST) or fields to the list wrapper (GraphQL, chapter 10) — and neither is computed at all
+unless requested: an ordinary request's SQL and response are unchanged (`QueryValidator`/`ItemService`
+short-circuit on `null`).
+
+```
+?facets=status,categoryId,tags,category.name
+?aggregate[sum]=price&aggregate[max]=price,rating&aggregate[count]=publishedAt
+```
+
+- `facets` — a comma list of facet paths (query string) or a JSON array of the same strings
+  (envelope). Each path is one of the four forms below.
+- `aggregate[<op>]` — one query-string key per op (`count`/`sum`/`min`/`max`/`avg`), value a
+  comma list of own fields; the envelope form is `"aggregate": {"sum": ["price"], "max": [...]}`, one
+  array per op. An unknown op is rejected: `"Unknown aggregate op 'x'."`.
+
+Both compose with everything else in this chapter — `filter`, `search`, `sort`, `limit`/`offset`,
+`deep`, `locale`, `deleted` — and are validated by the same `QueryValidator` that whitelists
+`filter`/`sort`/`fields` (`ValidateFacets`/`ValidateAggregate`,
+`src/Struo.Application/Query/QueryValidator.cs`), so an unknown path, an unfacetable field, or an
+incompatible aggregate op all fail the request with `BAD_USER_INPUT` before any facet/aggregate SQL
+runs — same as an unknown filter field.
+
+### The four facet path forms
+
+`FacetPathResolver.Resolve` (`src/Struo.Application/Query/FacetPathResolver.cs`) accepts exactly these
+shapes — never more than one relation hop, never a quantifier or `_junction` segment:
+
+| Form | Example | Groups by | `value` |
+|---|---|---|---|
+| Own scalar field | `status` | the root field | the field's own value; `null` gets its own bucket |
+| Many-to-one foreign key | `categoryId` | the root FK column | target id as a string; `null` gets its own bucket |
+| Relation name (any kind) | `category`, `tags`, `articles` | the target id (M2O: root FK; O2M: child's own id; M2M: junction's target FK) | target id as a string; **no** "no relation" bucket |
+| One relation hop + a leaf field | `category.name`, `tags.name`, `articles.title` | same target-id grouping, then the leaf value swapped in | the leaf's value; a translatable leaf uses the sidecar row at the query's effective locale, and an id with no translation row at that locale gets a `null` bucket |
+
+A facetable field's interface must be one of `Text`, `Textarea`, `Slug`, `Email`, `Url`, `Color`,
+`Phone`, `Select`, `Radio`, `Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `DateTime`,
+`Time`, `Uuid`, `File`, `Image` (`FacetPathResolver.Facetable`) — own field and leaf field alike. Long-
+form text (`RichText`/`Markdown`/`Code`), every multi-value interface (`MultiSelect`/`CheckboxGroup`/
+`Tags`/`Repeater`), structured payloads (`Json`/`KeyValue`/`Files`), and `Hidden`/`Divider`/`Password`
+are all rejected — a `Hidden` field is rejected with the same `"Unknown field"` message an unresolvable
+name gets, so a facet path can never be used to probe for a hidden field's existence.
+
+### Disjunctive counts and the pruning rule
+
+A facet answers "if I picked each candidate value of this path instead, how many rows would match
+everything else in my request?" — not "how many rows in my *current* result set have this value?". To
+get that, `FacetFilterPruner.Prune` (`src/Struo.Application/Query/FacetFilterPruner.cs`, a pure
+function over the validated `FilterNode` tree) removes, for each facet, every condition on that same
+field/relation *family* before counting: an own field's condition on itself; a many-to-one FK's
+condition on the FK column *and* on any `<relation>.`-prefixed dotted path *and* on a
+`_some`/`_none` predicate against that relation — `categoryId` and `category.name` share one family and
+are pruned together. `search` is never pruned; **`aggregate` is never pruned** — it always runs against
+the request's full, unpruned filter. A pruned-to-empty logical group collapses (0 children → the whole
+node disappears, 1 surviving child → the group is replaced by it), so an entirely category-scoped
+filter can prune away to no filter at all when faceting on `category`/`categoryId`/`category.*`.
+
+Live, against a small fixture (one category "Facet Demo" holding three articles — two `published`, one
+`draft`, two sharing a tag): filtering to *only* the drafts still reports both statuses in the facet,
+because the `status` condition is removed before the `status` facet is counted:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5BcategoryId%5D%5B_eq%5D=<category-id>&filter%5Bstatus%5D%5B_eq%5D=draft&facets=status"
+{"success":true,"data":[{"id":"...","status":"draft", ...}],"meta":{"total":1,"limit":25,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]}}}
+```
+
+`data`/`total` are the one matching draft, as `filter` says — but `facets.status` shows `published: 2`
+and `draft: 1`, the split that would result from swapping the `status` condition for each candidate
+value in turn while leaving `categoryId` in place. This is also the acceptance oracle: for an own-field
+facet, `{"value": v, "count": n}` must equal `meta.total` of the same request with the facet's own
+condition replaced by `filter[field][_eq]=v` — confirmed above (`filter[status][_eq]=published` on this
+same category independently returns `"total":2`).
+
+Faceting on the *pruned* family itself demonstrates the "prunes away to nothing" case: requesting
+`category.name` alongside `filter[categoryId][_eq]=<category-id>` removes that filter entirely before
+counting `category.name`, so the facet spans every category in the database, not just the one the list
+was filtered to — live against this host's shared dev fixtures (unrelated categories left over from
+other verification runs included, since the pruned filter has nothing left to scope by):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5BcategoryId%5D%5B_eq%5D=<category-id>&facets=status,tags,category.name&aggregate%5Bcount%5D=publishedAt&aggregate%5Bmax%5D=publishedAt"
+{"success":true,"data":[ ... 3 articles ... ],"meta":{"total":3,"limit":25,"offset":0,
+  "facets":{
+    "status":[{"value":"published","count":2},{"value":"draft","count":1}],
+    "tags":[{"value":"<tag-id>","count":2}],
+    "category.name":[{"value":"Facet Demo","count":3},{"value":"GateCat A 1783050271","count":3},{"value":"catA-LG8c3b","count":3},{"value":"catC-LG8c3b","count":3},{"value":"E2E Guard Save b21784859754","count":2},{"value":"E2E Guard Save e2e saved","count":2},{"value":"Cat9c-1343377572","count":1},{"value":"Cat9c-1885194788","count":1},{"value":"GateCat B 1783050752","count":1},{"value":"GateCat B 1783051807","count":1},{"value":"catB-LG8c3b","count":1},{"value":"cjkDiagCat","count":1},{"value":"diagCat-r3","count":1}]
+  },
+  "aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}
+}}
+```
+
+`status` and `tags` stay scoped to the category (their family — an own field, and a relation unrelated
+to `category`/`categoryId` — is untouched by pruning `category.name`'s own family), but `category.name`
+spans every category on the host. `aggregate` ignores pruning altogether: `count`/`max` over
+`publishedAt` are computed against the *original* `categoryId` filter, matching only this category's two
+published articles, regardless of which facets were also requested in the same query.
+
+The JSON-envelope form (`POST /api/items/article/query`) is byte-for-byte equivalent to the query
+string above for the same request:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/article/query -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"filter":{"categoryId":{"_eq":"<category-id>"}},"facets":["status","tags","category.name"],"aggregate":{"count":["publishedAt"],"max":["publishedAt"]}}'
+# identical response to the query-string request above
+```
+
+A translatable leaf falls back to a `null` bucket per id with no translation row at the effective
+locale — live against the category, faceting on its `articles.title` (a one-hop O2M leaf onto the
+translation sidecar), with only one of the three articles carrying a `zh-TW` translation:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Bname%5D%5B_eq%5D=Facet%20Demo&facets=articles.title"
+{"success":true,"data":[{"id":"...","name":"Facet Demo", ...}],"meta":{"total":1,"limit":25,"offset":0,"facets":{"articles.title":[{"value":"Facet Demo Article One","count":1},{"value":"Facet Demo Article Three Draft","count":1},{"value":"Facet Demo Article Two","count":1}]}}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Bname%5D%5B_eq%5D=Facet%20Demo&facets=articles.title&locale=zh-TW"
+{"success":true,"data":[{"id":"...","name":"Facet Demo", ...}],"meta":{"total":1,"limit":25,"offset":0,"facets":{"articles.title":[{"value":null,"count":2},{"value":"Facet Demo Article Two zh","count":1}]}}}
+```
+
+At the default locale all three titles show (each article has an `en` row); at `zh-TW` only the one
+translated article keeps its own value and the other two — which have no `zh-TW` row — collapse into
+one `{"value": null, "count": 2}` bucket.
+
+### Count definition and a known limitation
+
+A facet's `count` is always the number of **distinct root rows** that would match that value, never a
+raw row count off a related table. For a to-many relation or leaf (`tags`, `articles.title`), the
+underlying SQL groups by the target/leaf value with `COUNT(DISTINCT <root-referencing column>)`
+(`SqlFunc.AggregateDistinctCount`) rather than plain `COUNT(*)` — otherwise a root row joined to two
+targets sharing one value would be counted twice. An own-field or many-to-one-FK facet needs no
+`DISTINCT` at all: each root row contributes to exactly one group already.
+
+**Known limitation**, inherent to the one-hop-plus-leaf form: it groups root rows by target *id* first
+in one query, then swaps in the leaf value and merges same-value groups in memory (a second query) —
+deliberately, so no join machinery is needed and a translatable leaf's sidecar lookup falls out of the
+same shape. That means a root row linked to **two different targets that happen to share the same leaf
+value** (e.g. two tags both named `"Guide"` on one article) is counted twice for that shared value —
+the two id-keyed groups (each already a correct distinct-root count under its own target id) both
+collapse into the merged leaf bucket and their counts are summed, rather than the union of root ids
+being re-deduplicated after the merge. This is a deliberate trade-off, not a defect: fixing it would
+require carrying root-id sets through the merge instead of counts, which no longer fits in two queries.
+
+### NULL buckets
+
+An own field or many-to-one FK's `NULL` value gets its own bucket (`{"value": null, "count": n}`) —
+own-field and FK facets group by a column that is genuinely part of the root row, so `NULL` is a real,
+countable group. A bare relation-name facet (`category`, `tags`, `articles`) never gets a "no relation"
+bucket: computing "how many roots have *no* related row" needs an anti-join the current implementation
+doesn't build, and in practice a caller wanting that count already has `_none` for it (chapter 7/8
+above). A translatable leaf's `null` bucket (previous section) is a third, distinct case: it means "a
+target id resolved fine, but no translation row exists at this locale," not "no target."
+
+### Ordering and the value cap
+
+Every facet is returned ordered by count **descending**, then value **ascending** as the tie-breaker,
+truncated to `StruoQueryOptions.MaxFacetValues` (default 50) — done in the database (`OrderBy` +
+`Take`), not after the fact; there is no `otherCount` remainder. Where the `NULL` bucket lands on an
+exact count tie is engine-dependent, since neither SQLite nor PostgreSQL is asked for an explicit
+`NULLS FIRST`/`NULLS LAST`: SQLite's default `ORDER BY value ASC` places `NULL` first, PostgreSQL's
+places it last.
+
+### How many queries this costs
+
+A plain list is 2 statements (`COUNT` + the page `SELECT`), unchanged by this feature. Each requested
+facet adds exactly 1 more (own field, FK, or bare relation name) or 2 (a one-hop-plus-leaf facet — the
+id/count query plus the leaf-value lookup); `aggregate` adds 1 more request-wide, batched across up to
+`StruoQueryOptions.MaxAggregates` (default 10) fields per statement, so a request within the default
+cap always costs exactly one aggregate statement regardless of how many ops/fields it names.
+`StruoQueryOptions.MaxFacets` (default 10) bounds the facet count, so the worst case for one request is
+`2 + 2·MaxFacets + ⌈aggregate field count / MaxAggregates⌉`.
+
+### Aggregate ops
+
+| Op | Works on | Result |
+|---|---|---|
+| `count` | any visible own field, including a many-to-one FK — counts non-`NULL` rows | integer (`0` on an empty set, never `null`) |
+| `sum`, `avg` | `Number`, `Slider`, `Rating` | `sum`: the field's own numeric type (an integer field → a wider integer, `decimal` → `decimal`, `double`/`float` → `double`); `avg`: always a `double`, regardless of the field's own type |
+| `min`, `max` | the three interfaces above, plus `Date`, `DateTime` | the field's own type |
+
+Every op other than `count` returns `null` over an empty matching set rather than `0`/`NaN`. Live,
+`count`/`max` over `publishedAt` for the two published articles in the fixture category (the third is
+still a draft, so its `publishedAt` is `null` and does not count):
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { articles(filter: { categoryId: { eq: \"<category-id>\" } }, facets: [\"status\", \"tags\"], aggregate: { count: [\"publishedAt\"], max: [\"publishedAt\"] }) { total facets { field values { value count } } aggregate } }"}'
+{"data":{"articles":{"total":3,"facets":[{"field":"status","values":[{"value":"published","count":2},{"value":"draft","count":1}]},{"field":"tags","values":[{"value":"<tag-id>","count":2}]}],"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}}}}
+```
+
+GraphQL's `aggregate` field is typed `Any` — chapter 10 covers the full shared-type surface
+(`AggregateInput`/`FacetResult`/`FacetValue`) and its own transcript.
+
+### Errors
+
+Four live examples — an unknown facet field, a facet path with more than one relation hop, a facet on
+an unfacetable interface (`Article.regions` is `MultiSelect`), and an aggregate op incompatible with the
+field's interface (`sum` over `Article.status`, a `Select`):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=bogusField"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown field 'bogusField' on collection 'article'."}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=category.parent.name"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Facet paths support exactly one relation hop: 'category.parent.name'."}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=regions"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'regions' on collection 'article' (MultiSelect) cannot be used as a facet."}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?aggregate%5Bsum%5D=status"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Aggregate 'sum' is not supported on field 'status' (Select)."}}
+```
+
+A facet count exceeding `MaxFacets`, or an aggregate field count exceeding `MaxAggregates`, is rejected
+the same way (`"Too many facets (max 10)."` / `"Too many aggregate fields (max 10)."`) before any
+facet/aggregate SQL runs; a duplicate facet path is silently deduplicated rather than rejected or
+computed twice. A facet whose relation hop targets a collection the caller cannot read fails
+permission-first, exactly like a dotted filter path: `FORBIDDEN`/`UNAUTHORIZED`
+(`"Read not permitted on '<collection>'."`), checked before the path's shape is even resolved, so an
+unreadable relation's field names stay unprobeable through facet validation errors the same way they
+are through filter validation errors (see "Validation" below).
+
 ## Field projection
 
 `fields=` restricts which of the collection's **own** fields are projected — `id` and the optimistic-
@@ -319,6 +544,13 @@ to read, and exposes an opaque id rather than anything from the target collectio
 lists a collection whose public filters or `deep=` traverse into a second collection, that second
 collection now needs its own entry, or those requests will start failing (filters) or returning
 without the nested object (`deep=`).
+
+`facets=`/`aggregate[<op>]=` go through this same `QueryValidator`: `ValidateAggregate` checks each
+field against the identical own-field-plus-FK allowlist (`Known`) `CheckField` uses, and `ValidateFacets`
+denies an unreadable facet target permission-first — its own single-segment
+`DenyUnreadableFacetTarget`, the facet-path analogue of `DenyUnreadableHops` above — before resolving
+the path's shape at all, so an unknown/hidden facet field and an unreadable relation target fail
+exactly the way an unknown filter field or an unreadable dotted filter path do.
 
 ## Worked end-to-end example
 
