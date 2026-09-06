@@ -207,4 +207,83 @@ public class QueryParserTests
         var env = QueryParser.ParseEnvelope(JsonDocument.Parse("""{ "filter": { "tags": { "_none": { "name": { "_eq": "internal" } } } } }""").RootElement).Filter;
         qs.Should().BeEquivalentTo(env, o => o.PreferringRuntimeMemberTypes());
     }
+
+    [Fact]
+    public void Query_string_facets_is_a_comma_list_in_request_order()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "status, categoryId,tags,category.name" });
+        q.Facets.Should().Equal("status", "categoryId", "tags", "category.name");
+    }
+
+    [Fact]
+    public void Query_string_without_facets_or_aggregate_leaves_both_null()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["limit"] = "5" });
+        q.Facets.Should().BeNull();
+        q.Aggregate.Should().BeNull();
+    }
+
+    [Fact]
+    public void Query_string_aggregate_keys_map_to_ops_with_field_lists()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?>
+        {
+            ["aggregate[sum]"] = "price", ["aggregate[max]"] = "price,rating", ["aggregate[count]"] = "publishedAt",
+        });
+        q.Aggregate!.Fields[AggregateOp.Sum].Should().Equal("price");
+        q.Aggregate.Fields[AggregateOp.Max].Should().Equal("price", "rating");
+        q.Aggregate.Fields[AggregateOp.Count].Should().Equal("publishedAt");
+        q.Aggregate.Fields.Should().NotContainKey(AggregateOp.Min);
+    }
+
+    [Fact]
+    public void Query_string_unknown_aggregate_op_throws()
+    {
+        var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate[median]"] = "price" });
+        act.Should().Throw<QueryException>().WithMessage("*Unknown aggregate op 'median'*");
+    }
+
+    [Fact]
+    public void Query_string_malformed_aggregate_key_throws()
+    {
+        var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate"] = "price" });
+        act.Should().Throw<QueryException>().WithMessage("*Malformed aggregate key*");
+    }
+
+    [Fact]
+    public void Envelope_facets_and_aggregate_are_equivalent_to_the_query_string()
+    {
+        var env = JsonDocument.Parse("""
+            {"facets":["status","tags","category.name"],
+             "aggregate":{"sum":["price"],"max":["price","rating"],"count":["publishedAt"]}}
+            """).RootElement;
+        var q = QueryParser.ParseEnvelope(env);
+        q.Facets.Should().Equal("status", "tags", "category.name");
+        q.Aggregate!.Fields[AggregateOp.Sum].Should().Equal("price");
+        q.Aggregate.Fields[AggregateOp.Max].Should().Equal("price", "rating");
+    }
+
+    [Fact]
+    public void Envelope_facets_must_be_an_array_of_strings()
+    {
+        var env = JsonDocument.Parse("""{"facets":"status"}""").RootElement;
+        var act = () => QueryParser.ParseEnvelope(env);
+        act.Should().Throw<QueryException>().WithMessage("*'facets' must be an array of strings*");
+    }
+
+    [Fact]
+    public void Envelope_aggregate_values_must_be_arrays_of_strings()
+    {
+        var env = JsonDocument.Parse("""{"aggregate":{"sum":"price"}}""").RootElement;
+        var act = () => QueryParser.ParseEnvelope(env);
+        act.Should().Throw<QueryException>().WithMessage("*'aggregate.sum' must be an array of strings*");
+    }
+
+    [Fact]
+    public void Envelope_unknown_aggregate_op_throws()
+    {
+        var env = JsonDocument.Parse("""{"aggregate":{"median":["price"]}}""").RootElement;
+        var act = () => QueryParser.ParseEnvelope(env);
+        act.Should().Throw<QueryException>().WithMessage("*Unknown aggregate op 'median'*");
+    }
 }
