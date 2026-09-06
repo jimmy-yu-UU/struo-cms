@@ -243,11 +243,15 @@ Both compose with everything else in this chapter — `filter`, `search`, `sort`
 `filter`/`sort`/`fields` (`ValidateFacets`/`ValidateAggregate`,
 `src/Struo.Application/Query/QueryValidator.cs`), so an unknown path, an unfacetable field, or an
 incompatible aggregate op all fail the request with `BAD_USER_INPUT` before any facet/aggregate SQL
-runs — same as an unknown filter field.
+runs — same as an unknown filter field. `deleted=` (see "Soft-delete filter" below for the base
+semantics) composes only with the **root** collection's own rows, though: a to-many facet's
+related/junction-side query never lifts the soft-delete filter, regardless of the outer request's
+`deleted=` mode — a `deleted=with` request's `tags` facet, for example, still excludes a trashed tag
+even while the article rows themselves include trashed ones.
 
 ### The four facet path forms
 
-`FacetPathResolver.Resolve` (`src/Struo.Application/Query/FacetPathResolver.cs`) accepts exactly these
+`FacetPathResolver.Resolve` (`src/Struo.Application/Query/FacetPath.cs`) accepts exactly these
 shapes — never more than one relation hop, never a quantifier or `_junction` segment:
 
 | Form | Example | Groups by | `value` |
@@ -348,11 +352,13 @@ one `{"value": null, "count": 2}` bucket.
 ### Count definition and a known limitation
 
 A facet's `count` is always the number of **distinct root rows** that would match that value, never a
-raw row count off a related table. For a to-many relation or leaf (`tags`, `articles.title`), the
-underlying SQL groups by the target/leaf value with `COUNT(DISTINCT <root-referencing column>)`
-(`SqlFunc.AggregateDistinctCount`) rather than plain `COUNT(*)` — otherwise a root row joined to two
-targets sharing one value would be counted twice. An own-field or many-to-one-FK facet needs no
-`DISTINCT` at all: each root row contributes to exactly one group already.
+raw row count off a related table. For a to-many relation (`tags`) or a to-many leaf
+(`articles.title`), the underlying SQL groups by the **target id** — never the leaf value directly,
+even for the leaf form (previous section's "one hop + leaf" row) — with
+`COUNT(DISTINCT <root-referencing column>)` (`SqlFunc.AggregateDistinctCount`) rather than plain
+`COUNT(*)` — otherwise a root row joined to two targets sharing one value would be counted twice. An
+own-field or many-to-one-FK facet needs no `DISTINCT` at all: each root row contributes to exactly one
+group already.
 
 **Known limitation**, inherent to the one-hop-plus-leaf form: it groups root rows by target *id* first
 in one query, then swaps in the leaf value and merges same-value groups in memory (a second query) —
@@ -363,6 +369,13 @@ the two id-keyed groups (each already a correct distinct-root count under its ow
 collapse into the merged leaf bucket and their counts are summed, rather than the union of root ids
 being re-deduplicated after the merge. This is a deliberate trade-off, not a defect: fixing it would
 require carrying root-id sets through the merge instead of counts, which no longer fits in two queries.
+
+A second, related consequence of the two-step shape: `MaxFacetValues` (next section) caps the
+**target-id** buckets from the first query, *before* the leaf-value merge runs — not the final,
+merged leaf-value buckets. A leaf value can therefore be missing from the response even when the
+target collection has fewer than `MaxFacetValues` distinct leaf values in total, if enough
+higher-count target ids were kept by the first cap that the id(s) carrying that leaf value fell
+outside it.
 
 ### NULL buckets
 
@@ -377,21 +390,34 @@ target id resolved fine, but no translation row exists at this locale," not "no 
 ### Ordering and the value cap
 
 Every facet is returned ordered by count **descending**, then value **ascending** as the tie-breaker,
-truncated to `StruoQueryOptions.MaxFacetValues` (default 50) — done in the database (`OrderBy` +
-`Take`), not after the fact; there is no `otherCount` remainder. Where the `NULL` bucket lands on an
-exact count tie is engine-dependent, since neither SQLite nor PostgreSQL is asked for an explicit
-`NULLS FIRST`/`NULLS LAST`: SQLite's default `ORDER BY value ASC` places `NULL` first, PostgreSQL's
-places it last.
+truncated to `StruoQueryOptions.MaxFacetValues` (default 50); there is no `otherCount` remainder. For
+the own-field, FK, and bare-relation-name forms this ordering and truncation happens in the database
+(`OrderBy` + `Take`, `FacetQueries.Group`), and where the `NULL` bucket lands on an exact count tie is
+engine-dependent, since neither SQLite nor PostgreSQL is asked for an explicit `NULLS FIRST`/
+`NULLS LAST`: SQLite's default `ORDER BY value ASC` places `NULL` first, PostgreSQL's places it last.
+
+The one-hop-plus-leaf form is different: its id-keyed buckets are ordered/truncated in the database
+same as above, but the leaf-value merge that follows (previous section) re-sorts and re-truncates the
+*merged* buckets **in memory** (`SwapLeafValues`, `FacetQueries.Leaf.cs`) — count descending, then a
+custom `LeafValueComparer` for the value tie-break, which places `null` **last** unconditionally, on
+every engine, rather than depending on the database's own NULL-ordering default the other three forms
+are subject to.
 
 ### How many queries this costs
 
 A plain list is 2 statements (`COUNT` + the page `SELECT`), unchanged by this feature. Each requested
 facet adds exactly 1 more (own field, FK, or bare relation name) or 2 (a one-hop-plus-leaf facet — the
-id/count query plus the leaf-value lookup); `aggregate` adds 1 more request-wide, batched across up to
-`StruoQueryOptions.MaxAggregates` (default 10) fields per statement, so a request within the default
-cap always costs exactly one aggregate statement regardless of how many ops/fields it names.
-`StruoQueryOptions.MaxFacets` (default 10) bounds the facet count, so the worst case for one request is
-`2 + 2·MaxFacets + ⌈aggregate field count / MaxAggregates⌉`.
+id/count query plus the leaf-value lookup); `aggregate` adds 1 more statement per 10 requested op/field
+slots, batched by the fixed constant `AggregateRow.SlotCount = 10`
+(`src/Struo.Infrastructure/Query/FacetRow.cs`, `AggregateQueries`'s `slots.Chunk(AggregateRow.SlotCount)`)
+— **not** by `Query:MaxAggregates`, which only caps how many op/field slots a request may name at all
+(`ValidateAggregate`) and is unrelated to the chunk size. At the default `Query:MaxAggregates` (10),
+every valid request's aggregate fields fit in the one 10-slot chunk, so it always costs exactly one
+aggregate statement; a fork that raises `Query:MaxAggregates` above 10 gets one additional aggregate
+statement per additional 10 fields requested, since the chunking constant itself does not change.
+`StruoQueryOptions.MaxFacets` (default 10) bounds the facet count, so the worst case for one request at
+the defaults is `2 + 2·MaxFacets + 1` — or, more generally,
+`2 + 2·MaxFacets + ⌈aggregate field count / 10⌉`.
 
 ### Aggregate ops
 
@@ -433,6 +459,13 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=regions
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?aggregate%5Bsum%5D=status"
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Aggregate 'sum' is not supported on field 'status' (Select)."}}
 ```
+
+Two more `FacetPathResolver.Resolve` messages round out the catalog, both `BAD_USER_INPUT`: an empty
+path segment (`facets=` with a blank entry in the comma list, or an empty string in the envelope's
+array) is `"Facet path must not be empty."`, and a one-hop-plus-leaf path whose *relation* segment
+(not the leaf) doesn't resolve — e.g. `facets=bogusRelation.name` — is `"Unknown relation
+'bogusRelation' on collection 'article'."`, distinct from the plain `"Unknown field"` message an
+unresolvable own field or a one-segment path gets.
 
 A facet count exceeding `MaxFacets`, or an aggregate field count exceeding `MaxAggregates`, is rejected
 the same way (`"Too many facets (max 10)."` / `"Too many aggregate fields (max 10)."`) before any

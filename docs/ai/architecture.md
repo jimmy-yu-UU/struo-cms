@@ -280,8 +280,8 @@ primary-constructor parameters rather than injected as its own dependency — on
 `FacetQueries` each get their own `new TransactionRunner(db)` instance, and `WhereInQueries`,
 `FacetQueries`, and `AggregateQueries` each get their own `new FilterTranslator(...)` rather than the
 facade's own `filters` field (a field initializer cannot reference another instance field — CS0236);
-neither type holds state beyond its constructor arguments, so the extra instances behave identically
-to sharing one:
+none of these types holds state beyond its constructor arguments, so the extra instances behave
+identically to sharing one:
 
 - `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
   query DSL; the only collaborator registered as a scoped DI service. Not a delegation target —
@@ -314,12 +314,14 @@ to sharing one:
 implementation of the "resolve a private open generic method, cache the closed open-instance delegate
 per entity type" pattern the facade and the collaborators that dispatch by entity type
 (`WhereInQueries`, `SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, `TranslationStore`, `FacetQueries`)
-use — `FacetQueries` is the one collaborator that needs `BiGenericDispatcher` (dispatching on two
-runtime types at once — entity type and the facet value's CLR type — not just one) alongside the
-ordinary single-type `GenericDispatcher`; `AggregateQueries` uses `GenericDispatcher` alone (dispatch
-on entity type only, since its projection carries every requested op/field in one row regardless of
-their individual value types). Not `TransactionRunner` (plain C# generics) or
-`OrderByExpressionBuilder` (a single reflection `GetProperty` lookup, no per-entity-type dispatch).
+use — `FacetQueries` also needs `BiGenericDispatcher` alongside the ordinary single-type
+`GenericDispatcher`, for the same reason `FilterTranslator.Subquery.cs`'s own `ProjectDispatcher`
+does (dispatching on two runtime types at once — here, entity type and the facet value's CLR type —
+not just one), rather than being the only collaborator that needs it. `AggregateQueries` uses
+`GenericDispatcher` alone (dispatch on entity type only, since its projection carries every requested
+op/field in one row regardless of their individual value types). Not `TransactionRunner` (plain C#
+generics) or `OrderByExpressionBuilder` (a single reflection `GetProperty` lookup, no per-entity-type
+dispatch).
 
 ### `IRelationExpander`
 
