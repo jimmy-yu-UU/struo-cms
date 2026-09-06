@@ -192,7 +192,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 `FacetResult { field: String!, values: [FacetValue!]! }` 與 `FacetValue { value: Any, count: Int! }`，
 對應 domain 層的 `FacetResult`/`FacetBucket` record。引數型別 `AggregateInput` 每個彙總 op
 (`count`/`sum`/`min`/`max`/`avg`) 各有一個 `[String!]` 欄位，由 `QueryParser.AggregateOps`
-（REST 的 `aggregate[<op>]=` 鍵所用的同一組 op 集合）建構而成。實際輸出，對照第 8 章相同的
+(REST 的 `aggregate[<op>]=` 鍵所用的同一組 op 集合) 建構而成。實際輸出，對照第 8 章相同的
 fixture (一個分類底下三篇文章——兩篇 `published`、一篇 `draft`，兩篇共用一個標籤):
 
 ```
@@ -201,7 +201,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 {"data":{"articles":{"total":3,"facets":[{"field":"status","values":[{"value":"published","count":2},{"value":"draft","count":1}]},{"field":"tags","values":[{"value":"<tag-id>","count":2}]}],"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}}}}
 ```
 
-`FacetValue.value` 的 `Any` 型別會保留原本的 JSON 種類——一個數值 facet 的 bucket 值回來時是
+`FacetValue.value` 的 `Any` 型別會保留原本的 JSON 種類——一個數值 facet (分面計數) 的 bucket 值回來時是
 GraphQL 數字，不會被字串化——`aggregate` 的 `Any` 也是同樣道理，讓 `count` 的整數與 `max` 的
 `DateTime` 字串保持各自的型別，而不是強制轉成單一 scalar 型別。
 

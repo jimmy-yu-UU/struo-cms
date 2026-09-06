@@ -149,9 +149,9 @@
 | `Query:DefaultLimit` | int | `25` | 當請求省略 `limit` 或送出非正值時所套用的 `limit`。 |
 | `Query:MaxFilterConditions` | int | `50` | 每次查詢的葉節點條件總數上限，跨每一個 `_and`/`_or` 分支一併計算，也包含 `_some`/`_none` 量詞自身內層 filter 裡的每一個葉節點。超過會在任何查詢執行之前擲出 `"Too many filter conditions (max 50)."`。 |
 | `Query:MaxRelationDepth` | int | `6` | 點狀路徑中關聯**跳數 (hop)** 的上限——filter、sort 鍵或巢狀 `deep` 皆適用。最後的葉欄位不計入，所以 `folder.name` 是 1 跳 (第 7 章)。`_junction` 這個偽片段不計入此上限。 |
-| `Query:MaxFacets` | int | `10` | 單一請求中相異的 `facets=`/`"facets"` 路徑數量上限（去重後計算）。超過會擲出 `"Too many facets (max 10)."`。 |
-| `Query:MaxFacetValues` | int | `50` | 每個 facet（分面計數）回傳的 `{ value, count }` bucket 數量上限——沒有 `otherCount` 餘量。own 欄位／FK／關聯名稱這三種形態是在資料庫層套用 (`ORDER BY count DESC, value ASC` 再 `Take`)；一跳加葉欄位形態則是在葉值合併**之前**先對 target-id bucket 套用此上限，合併後的結果會在記憶體中另外重新套用一次上限 (第 8 章「排序與數值上限」)。 |
-| `Query:MaxAggregates` | int | `10` | 單一請求中跨所有 op 的 `aggregate[<op>]=`/`"aggregate"` 欄位總數上限。超過會擲出 `"Too many aggregate fields (max 10)."`。這只是驗證用的上限，不是每條 SQL 陳述式的批次大小——批次大小是固定常數 `AggregateRow.SlotCount = 10` (第 8 章「這項功能要付出多少次查詢」)；在預設值下兩者恰好相等，所以上限內的請求永遠只花一條彙總陳述式；但若某個 fork 把這個選項調高超過 10，每多 10 個欄位就會多花一條彙總陳述式，因為分批用的常數並不會跟著調整。 |
+| `Query:MaxFacets` | int | `10` | 單一請求中相異的 `facets=`/`"facets"` 路徑數量上限 (去重後計算)。超過會擲出 `"Too many facets (max 10)."`。 |
+| `Query:MaxFacetValues` | int | `50` | 每個 facet (分面計數) 回傳的 `{ value, count }` bucket 數量上限——沒有 `otherCount` 餘量。自有欄位／外鍵／關聯名稱這三種形態是在資料庫層套用 (`ORDER BY count DESC, value ASC` 再 `Take`);一跳加葉欄位形態則是在葉值合併**之前**先對 target-id bucket 套用此上限，合併後的結果會在記憶體中另外重新套用一次上限 (第 8 章「排序與數值上限」)。 |
+| `Query:MaxAggregates` | int | `10` | 單一請求中跨所有 op 的 `aggregate[<op>]=`/`"aggregate"` 欄位總數上限。超過會擲出 `"Too many aggregate fields (max 10)."`。這只是驗證用的上限，不是每條 SQL 陳述式的批次大小——批次大小是固定常數 `AggregateRow.SlotCount = 10` (第 8 章「這項功能要付出多少次查詢」);在預設值下兩者恰好相等，所以上限內的請求永遠只花一條彙總陳述式;但若某個 fork 把這個選項調高超過 10，每多 10 個欄位就會多花一條彙總陳述式，因為分批用的常數並不會跟著調整。 |
 
 這七項都帶 `[Range(1, int.MaxValue)]` 驗證並以 `ValidateOnStart` 綁定，所以填 0 或負值的覆寫會讓啟動
 失敗，而不是產生一個沒有意義的上限。第 8 章說明每個上限在實際情境中約束的是什麼。需要重新啟動。
