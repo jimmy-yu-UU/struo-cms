@@ -16,7 +16,8 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 public sealed record PagedResult(
-    IReadOnlyList<IReadOnlyDictionary<string, object?>> Data, int Total, int Limit, int Offset);
+    IReadOnlyList<IReadOnlyDictionary<string, object?>> Data, int Total, int Limit, int Offset,
+    IReadOnlyList<FacetResult>? Facets = null, AggregateResult? Aggregate = null);
 
 public sealed class ItemService(
     IItemRepository repository,
@@ -68,7 +69,34 @@ public sealed class ItemService(
         var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
         await deepExpansion.ExpandAsync(collection, raw.Deep, entities, rows, queryLocale, ct);
         await overlay.ApplyAsync(meta, entities, rows, locale, ct);
-        return new PagedResult(rows, result.Total, validated.Limit, validated.Offset);
+        var facets = await FacetsAsync(collection, meta, validated, searchable, queryLocale, deleted, ct);
+        var aggregate = validated.Aggregate is null ? null
+            : await repository.AggregateAsync(collection, validated, validated.Aggregate, searchable, queryLocale, deleted, ct);
+        return new PagedResult(rows, result.Total, validated.Limit, validated.Offset, facets, aggregate);
+    }
+
+    /// <summary>
+    /// Computes one <see cref="FacetResult"/> per requested facet path, in request order. Returns
+    /// null when no facets were requested (spec R5: <c>meta.facets</c> must not appear at all in
+    /// that case). Each facet's own current-value filter is pruned from the query it is computed
+    /// under (<see cref="FacetFilterPruner"/>), so a facet's buckets reflect every OTHER active
+    /// filter but never narrow themselves out by their own selection — the root's paginated rows
+    /// keep the unpruned <paramref name="validated"/> filter throughout.
+    /// </summary>
+    private async Task<IReadOnlyList<FacetResult>?> FacetsAsync(
+        string collection, CollectionMetadata meta, QueryModel validated, IReadOnlyList<string> searchable,
+        string queryLocale, DeletedFilter deleted, CancellationToken ct)
+    {
+        if (validated.Facets is not { Count: > 0 }) return null;
+        var resolved = QueryValidator.ResolveFacets(validated, meta, graph, metadata);
+        var results = new List<FacetResult>(resolved.Count);
+        foreach (var facet in resolved)
+        {
+            var pruned = validated with { Filter = FacetFilterPruner.Prune(validated.Filter, facet) };
+            var buckets = await repository.FacetAsync(collection, pruned, facet, searchable, queryLocale, deleted, options.MaxFacetValues, ct);
+            results.Add(new FacetResult(facet.Raw, buckets));
+        }
+        return results;
     }
 
     public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(

@@ -32,7 +32,7 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
 
             // Paginated list marker → success envelope carrying meta.
             case ObjectResult { Value: PagedResult pr } paged:
-                return new ObjectResult(Envelope.Success(pr.Data, new MetaInfo(pr.Total, pr.Limit, pr.Offset)))
+                return new ObjectResult(Envelope.Success(pr.Data, new MetaInfo(pr.Total, pr.Limit, pr.Offset, pr.Facets, pr.Aggregate)))
                 { StatusCode = paged.StatusCode };
 
             // 201 with a Location. CreatedResult is an ObjectResult, so the generic case below would

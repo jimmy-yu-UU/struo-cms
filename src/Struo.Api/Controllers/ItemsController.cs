@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Struo.Api.Auth;
+using Struo.Api.Http;
 using Struo.Application.Query;
 using Struo.Application.Security;
 using Struo.Domain.Query;
@@ -20,7 +21,8 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
         var raw = QueryParser.ParseQueryString(qs);
         var mode = DeletedMode(collection);
         var result = await items.QueryAsync(collection, raw, Locale(), mode, ct);
-        return Ok(new Struo.Api.Http.PagedResult(result.Data, result.Total, result.Limit, result.Offset));
+        return Ok(new Struo.Api.Http.PagedResult(result.Data, result.Total, result.Limit, result.Offset,
+            MetaWire.Facets(result.Facets), MetaWire.Aggregate(result.Aggregate)));
     }
 
     [HttpPost("query")]
@@ -29,7 +31,8 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
         var raw = QueryParser.ParseEnvelope(body);
         var mode = DeletedMode(collection);
         var result = await items.QueryAsync(collection, raw, Locale(), mode, ct);
-        return Ok(new Struo.Api.Http.PagedResult(result.Data, result.Total, result.Limit, result.Offset));
+        return Ok(new Struo.Api.Http.PagedResult(result.Data, result.Total, result.Limit, result.Offset,
+            MetaWire.Facets(result.Facets), MetaWire.Aggregate(result.Aggregate)));
     }
 
     [HttpGet("{id}")]
