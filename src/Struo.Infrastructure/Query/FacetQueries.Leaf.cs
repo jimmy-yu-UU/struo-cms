@@ -1,6 +1,5 @@
 // src/Struo.Infrastructure/Query/FacetQueries.Leaf.cs
 using System.Reflection;
-using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Query;
@@ -44,6 +43,14 @@ internal sealed partial class FacetQueries
         var result = new Dictionary<object, object?>();
         if (translatable)
         {
+            // TranslationStore.LoadTranslationsAsync only filters by locale when one is given; a null
+            // queryLocale would return every locale's row for each id and let the last one win — silently
+            // nondeterministic. A translatable leaf facet requires a locale (ItemService always supplies
+            // one, falling back to the default language), so a caller that skips it fails loudly instead.
+            if (queryLocale is null)
+                throw new InvalidOperationException(
+                    $"A query locale is required to facet on translatable field '{facet.LeafField}' of collection '{facet.TargetCollection}'.");
+
             // Missing-translation handling: LoadTranslationsAsync only returns rows that actually exist
             // at queryLocale, so any id left at its seeded `null` below has no translation row for that
             // locale and lands in the null bucket — as opposed to the non-translatable branch, where a

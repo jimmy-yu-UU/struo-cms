@@ -217,4 +217,21 @@ public class TranslatableLeafFacetTests : IDisposable
         var zh = await _repo.FacetAsync("category", q, facet, [], "zh-TW", DeletedFilter.Exclude, 50);
         zh.Should().BeEquivalentTo([new FacetBucket("甲", 1), new FacetBucket(null, 1)]);
     }
+
+    [Fact]
+    public async Task Translatable_leaf_without_a_query_locale_throws()
+    {
+        var cat = new Category { Id = Guid.NewGuid(), Name = "C" };
+        _db.Insertable(cat).ExecuteCommand();
+        var a1 = new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
+        _db.Insertable(a1).ExecuteCommand();
+        _db.Insertable(new ArticleTranslation { ArticleId = a1.Id, Locale = "en", Title = "Alpha" }).ExecuteCommand();
+
+        var meta = _md.GetCollection("category")!;
+        var facet = FacetPathResolver.Resolve(meta, "articles.title", _graph, _md);
+        var q = new QueryModel(null, null, [], 100, 0, null);
+
+        Func<Task> act = async () => await _repo.FacetAsync("category", q, facet, [], null, DeletedFilter.Exclude, 50);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*query locale is required*");
+    }
 }
