@@ -220,7 +220,12 @@ translation-sidecar load/sync, and a set of purge referential-integrity primitiv
 primitives are declared with default bodies that `throw new NotSupportedException(...)` rather than a
 silent no-op — the interface's own comment explains why: a second implementation that forgot to
 override one of them would otherwise silently orphan referential rows on purge, exactly the defect
-class the defaults exist to prevent. Sole implementation: `SqlSugarItemRepository`
+class the defaults exist to prevent. Two more members, `FacetAsync` and `AggregateAsync` (the facet-
+bucket and aggregate-value computation behind `docs/guide/en/08-query-dsl.md`'s "Facets and
+aggregates"), follow the identical default-throw pattern for the identical reason — a fork with its own
+`IItemRepository` implementation that doesn't override them gets a clear `NotSupportedException` the
+moment a caller requests `facets=`/`aggregate[<op>]=`, not a silently empty or wrong result. Sole
+implementation: `SqlSugarItemRepository`
 (`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`). Registered scoped:
 `services.AddScoped<IItemRepository, SqlSugarItemRepository>()`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`). This is the seam
@@ -255,28 +260,37 @@ translatable leaves in its `extraFilter` at that locale. A fork with its own `II
 implementation must drop the two removed members and add the new parameter; a fork that only calls
 through `SqlSugarItemRepository` is unaffected.
 
+**Additive, but with the same catch as the purge primitives above**: `FacetAsync`/`AggregateAsync`
+(previous paragraph) compile-check clean for any existing `IItemRepository` implementation, thanks to
+their default-throw bodies — this is not a breaking change in the usual sense. A fork with its own
+repository implementation only needs to actually override them once it wants `facets=`/
+`aggregate[<op>]=` to work; until then, a request naming either gets `NotSupportedException` rather
+than a silently wrong answer.
+
 `SqlSugarItemRepository` is a facade: it keeps the `IItemRepository` members `QueryAsync`,
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
 `RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,
 `DeleteGenericAsync`, and `CloneEntity` those methods use internally), and delegates every other
-`IItemRepository` member to one of six collaborators — `OrderByExpressionBuilder` and
+`IItemRepository` member to one of eight collaborators — `OrderByExpressionBuilder` and
 `FilterTranslator` are also fields, but are used inline inside `QueryAsync`
-(`orderByBuilder.BuildOrderBy(...)`, `filters.Translate(...)`) rather than delegated to — all eight
+(`orderByBuilder.BuildOrderBy(...)`, `filters.Translate(...)`) rather than delegated to — all ten
 in the same `Query/` folder. Each is initialized in a field initializer from the facade's
 primary-constructor parameters rather than injected as its own dependency — only
-`OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync` and `TranslationStore`
-each get their own `new TransactionRunner(db)` instance, and `WhereInQueries` gets its own `new
-FilterTranslator(...)` rather than the facade's own `filters` field (a field initializer cannot
-reference another instance field — CS0236); neither type holds state beyond its constructor
-arguments, so the extra instance behaves identically to sharing one:
+`OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync`, `TranslationStore`, and
+`FacetQueries` each get their own `new TransactionRunner(db)` instance, and `WhereInQueries`,
+`FacetQueries`, and `AggregateQueries` each get their own `new FilterTranslator(...)` rather than the
+facade's own `filters` field (a field initializer cannot reference another instance field — CS0236);
+neither type holds state beyond its constructor arguments, so the extra instances behave identically
+to sharing one:
 
 - `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
   query DSL; the only collaborator registered as a scoped DI service. Not a delegation target —
   used inline in `QueryAsync`.
 - `FilterTranslator` (`FilterTranslator.cs` + `FilterTranslator.Subquery.cs`) — translates the filter
   DSL into SqlSugar conditionals, pushing relation paths and `_some`/`_none` predicates down as SQL
-  subqueries. Not a delegation target — used inline in `QueryAsync`; `WhereInQueries` holds its own
-  second instance (see above).
+  subqueries. Not a delegation target — used inline in `QueryAsync`; `WhereInQueries`, `FacetQueries`,
+  and `AggregateQueries` each hold their own separate instance (see above; the `FacetQueries`/
+  `AggregateQueries` subsection below covers why).
 - `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
 - `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
   `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, and `QueryWhereInWithDeletedAsync`.
@@ -287,17 +301,25 @@ arguments, so the extra instance behaves identically to sharing one:
 - `ManyToManySync` (`ManyToManySync.cs`) — `SyncManyToManyAsync`.
 - `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
   `SyncTranslationsAsync`.
+- `FacetQueries` (`FacetQueries.cs` + `FacetQueries.Leaf.cs`) — `FacetAsync`; see the dedicated
+  subsection below.
+- `AggregateQueries` (`AggregateQueries.cs`) — `AggregateAsync`; see the dedicated subsection below.
 
 `RepositoryHelpers` (`RepositoryHelpers.cs`) is a static helper class — `TypeNameOf`,
 `TypeNameOfProperty`, `Descriptor`, `ConvertId` — used by the facade and by `WhereInQueries`,
-`SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, and `TranslationStore`.
+`SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, `TranslationStore`, `FacetQueries`, and
+`AggregateQueries`.
 
 `GenericDispatcher<TDelegate>`/`BiGenericDispatcher<TDelegate>` (`GenericDispatcher.cs`) are the single
 implementation of the "resolve a private open generic method, cache the closed open-instance delegate
 per entity type" pattern the facade and the collaborators that dispatch by entity type
-(`WhereInQueries`, `SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, `TranslationStore`) use — not
-`TransactionRunner` (plain C# generics) or `OrderByExpressionBuilder` (a single reflection
-`GetProperty` lookup, no per-entity-type dispatch).
+(`WhereInQueries`, `SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, `TranslationStore`, `FacetQueries`)
+use — `FacetQueries` is the one collaborator that needs `BiGenericDispatcher` (dispatching on two
+runtime types at once — entity type and the facet value's CLR type — not just one) alongside the
+ordinary single-type `GenericDispatcher`; `AggregateQueries` uses `GenericDispatcher` alone (dispatch
+on entity type only, since its projection carries every requested op/field in one row regardless of
+their individual value types). Not `TransactionRunner` (plain C# generics) or
+`OrderByExpressionBuilder` (a single reflection `GetProperty` lookup, no per-entity-type dispatch).
 
 ### `IRelationExpander`
 
@@ -323,19 +345,56 @@ relation quantifiers and `_junction`) into a `List<IConditionalModel>` for **one
 condition (own-collection or reached across a hop) all become a nested `IN (SELECT …)` subquery
 (`RelationPredicateFilter`/`ComparisonFilter` cases in `FilterTranslator.Subquery.cs`), never an
 intermediate id set. It is `internal`, not registered in DI at all — `SqlSugarItemRepository`
-constructs it directly with `new FilterTranslator(db, graph, metadata, registry, options)` (twice,
-once for its own use and once for `WhereInQueries`, since a field initializer cannot reference
-another instance field) exactly the way it constructs its other Query-folder collaborators. It also
-needs the graph parameter to actually be the **concrete** `RelationshipGraph`, not just an
-`IRelationshipGraph` — relation-subquery construction reads junction/reverse-FK descriptor
-information off the concrete type that an interface-level caller does not expose, so it casts and
-throws `InvalidOperationException` if handed anything else (never actually reachable in this
-codebase's own DI wiring, where `IRelationshipGraph` and `RelationshipGraph` are always bound to the
-same singleton instance — see `IRelationshipGraph` above).
+constructs it directly with `new FilterTranslator(db, graph, metadata, registry, options)` (four
+times: its own `filters` field, plus one separate instance each for `WhereInQueries`, `FacetQueries`,
+and `AggregateQueries`, since a field initializer cannot reference another instance field) exactly the
+way it constructs its other Query-folder collaborators. It also needs the graph parameter to actually
+be the **concrete** `RelationshipGraph`, not just an `IRelationshipGraph` — relation-subquery
+construction reads junction/reverse-FK descriptor information off the concrete type that an
+interface-level caller does not expose, so it casts and throws `InvalidOperationException` if handed
+anything else (never actually reachable in this codebase's own DI wiring, where `IRelationshipGraph`
+and `RelationshipGraph` are always bound to the same singleton instance — see `IRelationshipGraph`
+above). `FacetQueries` needs the same concrete cast, for the same reason (junction/reverse-FK
+descriptors for its relation-name facet form) — see the next subsection.
+
+### `FacetQueries` / `AggregateQueries` (not a DI seam)
+
+`src/Struo.Infrastructure/Query/FacetQueries.cs` + `FacetQueries.Leaf.cs` and
+`src/Struo.Infrastructure/Query/AggregateQueries.cs` back `IItemRepository.FacetAsync`/`AggregateAsync`
+— the value/count-bucket and sum/min/max/avg/count computation behind
+`docs/guide/en/08-query-dsl.md`'s "Facets and aggregates". Both are `internal`, constructed directly
+by `SqlSugarItemRepository` in a field initializer exactly like `FilterTranslator` above, not
+registered in DI. `FacetQueries` additionally needs the **concrete** `RelationshipGraph` (its `Graph`
+property casts `IRelationshipGraph` and throws `InvalidOperationException` otherwise) — a facet on a
+relation name needs the same junction/reverse-FK descriptor information `FilterTranslator`'s subquery
+construction does, to know whether to group by the junction's target FK (M2M) or the child's own
+reverse FK (O2M).
+
+Both hold to the same **typed-API-only** constraint the rest of the query layer does: no
+`Select<T>(string)`/`GroupBy(string)`/`OrderBy(string)` or other string-accepting SqlSugar overload,
+and no hand-assembled SQL text. A facet's SqlSugar call shape is `GroupBy(key)`
+`.OrderBy(count, OrderByType.Desc).OrderBy(key)` `.Select(proj).Take(n)`, where `key`/`count`/`proj`
+are runtime-built `Expression<Func<T, …>>` lambdas assembled by `ColumnSelectorFactory`'s facet-
+specific factories (`BoxedSelector`, `CountSelector` — wrapping `SqlFunc.AggregateCount`/
+`AggregateDistinctCount` — and `FacetProjection`, which projects into the generic `FacetRow<TValue>` a
+facet's value type varies per field) from a runtime CLR `Type` plus a property name — never from a
+string fed straight to GroupBy/OrderBy/Select themselves. `AggregateQueries`'s single-statement,
+multi-field projection is the same idea one level up: `ColumnSelectorFactory.AggregateProjection`
+builds one `Select(lambda)` whose members cover every requested op/field pair (chunked at
+`AggregateRow.SlotCount`, 10, so a request within the default `Query:MaxAggregates` cap costs exactly
+one statement), each member built from `SqlFunc.AggregateSum`/`Min`/`Max`/`Avg`/`Count` the same way.
+The one place either collaborator's SQL is not entirely typed-API-composed is the same one every other
+relation-crossing query in this layer uses: the "filtered root ids" a to-many facet's related/junction
+side query needs are supplied through `SubQueryConditional.Wrap` over a plain `ToSql()` result — the
+same wrapper `FilterTranslator.Subquery.cs`'s relation-quantifier pushdown uses, and for the identical
+reason (`docs/ai/conventions.md`'s raw-SQL exception list covers this wrapper) — never SqlSugar's
+typed `In(Expression, ISugarQueryable)` overload, which cannot rename the inner query's parameters and
+so collides whenever two subqueries sit at the same level, as a to-many facet's own root-id subquery
+can with another subquery already at that level from the request's own filter.
 
 See `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md` for the query DSL these three
 query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelationExpander`) — plus the
-non-DI-registered `FilterTranslator` above — jointly implement.
+non-DI-registered `FilterTranslator`/`FacetQueries`/`AggregateQueries` above — jointly implement.
 
 ### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`)
 

@@ -266,8 +266,8 @@ generic message — the real exception is logged server-side, never leaked to th
 
 ## Input validation at boundaries
 
-- **Query DSL** (filter/sort/search/fields/deep paths): validated and whitelisted by `QueryValidator`
-  (`src/Struo.Application/Query/QueryValidator.cs`) against the scanned `CollectionMetadata` before any
+- **Query DSL** (filter/sort/search/fields/deep/facets/aggregate paths): validated and whitelisted by
+  `QueryValidator` (`src/Struo.Application/Query/QueryValidator.cs`) against the scanned `CollectionMetadata` before any
   SQL is built — an unknown field or relation path is rejected with `QueryException` /
   `BAD_USER_INPUT`, never passed through to the ORM. `QueryValidator` also enforces RBAC, not just
   metadata shape: `DenyUnreadableHops` walks a dotted filter/sort path hop by hop and throws
@@ -287,7 +287,26 @@ generic message — the real exception is logged server-side, never leaked to th
   of those, `(<sql1> OR <sql2> OR …)` (`OrOfSubqueriesConditional.cs`) — every other fragment of SQL
   text comes from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string. See
   `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting,
-  unknown paths, and the depth cap".
+  unknown paths, and the depth cap". `facets=`/`aggregate[<op>]=` (chapter 8's "Facets and aggregates")
+  are validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
+  at most one relation hop, never a quantifier or `_junction` segment, its own/leaf field's interface
+  must be in `FacetPathResolver.Facetable` (excludes long-form text, every multi-value interface,
+  structured payloads, and `Hidden`), and a relation hop's target collection needs its own read grant,
+  checked before the path's shape is resolved — same permission-first ordering `DenyUnreadableHops`
+  uses for a dotted filter path. `FacetFilterPruner.Prune`
+  (`src/Struo.Application/Query/FacetFilterPruner.cs`) then removes every filter condition on a
+  facet's own field/relation family (the FK column, any `<relation>.`-dotted path, and a
+  `_some`/`_none` predicate against that relation all count as one family) before that facet is
+  counted — a pure function over the already-validated `FilterNode` tree, never touching `search` or
+  the separately-validated `aggregate` spec. `ValidateAggregate` checks an op against a fixed
+  interface-compatibility table (`count` on any own field; `sum`/`avg` only `Number`/`Slider`/`Rating`;
+  `min`/`max` those plus `Date`/`DateTime`) before any aggregate SQL runs. `FacetQueries`
+  (`src/Struo.Infrastructure/Query/FacetQueries.cs`, `FacetQueries.Leaf.cs`) and `AggregateQueries`
+  (`src/Struo.Infrastructure/Query/AggregateQueries.cs`) hold to the same typed-API-only rule as
+  `FilterTranslator` above — `GroupBy`/`OrderBy`/`Select` are always given a runtime-built
+  `Expression<Func<T, …>>` lambda, never a string, and the one subquery each needs (a to-many facet's
+  filtered-root-ids side query) goes through the same `SubQueryConditional.Wrap` this section's raw-SQL
+  exception already covers, not a new one.
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
   not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a

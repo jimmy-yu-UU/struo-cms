@@ -161,8 +161,11 @@ C# property initializer on `StruoQueryOptions`
 | `Query:DefaultLimit` | int | `25` | The `limit` applied when a request omits it or sends a non-positive value. |
 | `Query:MaxFilterConditions` | int | `50` | Cap on total leaf conditions per query, counted across every `_and`/`_or` branch, including every leaf inside a `_some`/`_none` predicate's own inner filter. Exceeding it throws `"Too many filter conditions (max 50)."` before any query runs. |
 | `Query:MaxRelationDepth` | int | `6` | Cap on relation **hops** in a dotted path — in a filter, a sort key, or a nested `deep`. The final leaf field is not counted, so `folder.name` is 1 hop (chapter 7). `_junction` pseudo-segments do not count toward this cap. |
+| `Query:MaxFacets` | int | `10` | Cap on the number of distinct `facets=`/`"facets"` paths in one request, after deduplication. Exceeding it throws `"Too many facets (max 10)."`. |
+| `Query:MaxFacetValues` | int | `50` | Cap on the number of `{ value, count }` buckets returned per facet — applied in the database (`ORDER BY count DESC, value ASC` then `Take`), not after the fact; there is no `otherCount` remainder. |
+| `Query:MaxAggregates` | int | `10` | Cap on the total number of `aggregate[<op>]=`/`"aggregate"` fields across every op in one request. Exceeding it throws `"Too many aggregate fields (max 10)."`; it also bounds how many op/field slots fit in one aggregate SQL statement (chapter 8's "How many queries this costs"), so a request within the default cap always costs exactly one aggregate statement. |
 
-All four are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
+All seven are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
 negative override fails startup rather than producing a nonsensical bound. Chapter 8 covers what each
 cap bounds in context. Restart required.
 
