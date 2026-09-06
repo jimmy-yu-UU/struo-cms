@@ -19,6 +19,61 @@ public static class QueryParser
             ["_ends_with"] = QueryOperator.EndsWith,
         };
 
+    public static readonly IReadOnlyDictionary<string, AggregateOp> AggregateOps =
+        new Dictionary<string, AggregateOp>(StringComparer.Ordinal)
+        {
+            ["count"] = AggregateOp.Count, ["sum"] = AggregateOp.Sum,
+            ["min"] = AggregateOp.Min, ["max"] = AggregateOp.Max, ["avg"] = AggregateOp.Avg,
+        };
+
+    private static string[] SplitList(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static AggregateOp ParseAggregateOp(string token) =>
+        AggregateOps.TryGetValue(token, out var op) ? op : throw new QueryException($"Unknown aggregate op '{token}'.");
+
+    private static IReadOnlyList<string>? ParseFacetsQueryString(IReadOnlyDictionary<string, string?> query) =>
+        query.TryGetValue("facets", out var fv) && !string.IsNullOrWhiteSpace(fv) ? SplitList(fv) : null;
+
+    private static AggregateSpec? ParseAggregateQueryString(IReadOnlyDictionary<string, string?> query)
+    {
+        var fields = new Dictionary<AggregateOp, IReadOnlyList<string>>();
+        foreach (var (key, val) in query)
+        {
+            if (!key.StartsWith("aggregate", StringComparison.Ordinal)) continue;
+            if (!key.StartsWith("aggregate[", StringComparison.Ordinal) || !key.EndsWith(']'))
+                throw new QueryException($"Malformed aggregate key '{key}'.");
+            var op = ParseAggregateOp(key["aggregate[".Length..^1]);
+            if (string.IsNullOrWhiteSpace(val)) continue;
+            fields[op] = SplitList(val);
+        }
+        return fields.Count == 0 ? null : new AggregateSpec(fields);
+    }
+
+    private static IReadOnlyList<string>? ParseFacetsEnvelope(JsonElement env)
+    {
+        if (!env.TryGetProperty("facets", out var f)) return null;
+        if (f.ValueKind != JsonValueKind.Array || f.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String))
+            throw new QueryException("'facets' must be an array of strings.");
+        return f.EnumerateArray().Select(x => x.GetString()!).ToList();
+    }
+
+    private static AggregateSpec? ParseAggregateEnvelope(JsonElement env)
+    {
+        if (!env.TryGetProperty("aggregate", out var a)) return null;
+        if (a.ValueKind != JsonValueKind.Object) throw new QueryException("'aggregate' must be an object.");
+        var fields = new Dictionary<AggregateOp, IReadOnlyList<string>>();
+        foreach (var prop in a.EnumerateObject())
+        {
+            var op = ParseAggregateOp(prop.Name);
+            if (prop.Value.ValueKind != JsonValueKind.Array || prop.Value.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String))
+                throw new QueryException($"'aggregate.{prop.Name}' must be an array of strings.");
+            var list = prop.Value.EnumerateArray().Select(x => x.GetString()!).ToList();
+            if (list.Count > 0) fields[op] = list;
+        }
+        return fields.Count == 0 ? null : new AggregateSpec(fields);
+    }
+
     public static QueryModel ParseEnvelope(JsonElement env)
     {
         IReadOnlyList<string>? fields = null;
@@ -39,7 +94,7 @@ public static class QueryParser
         var search = env.TryGetProperty("search", out var se) ? se.GetString() : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
-        return model with { Deep = ParseDeepEnvelope(env) };
+        return model with { Deep = ParseDeepEnvelope(env), Facets = ParseFacetsEnvelope(env), Aggregate = ParseAggregateEnvelope(env) };
     }
 
     private static DeepSpec? ParseDeepEnvelope(JsonElement env) =>
@@ -206,6 +261,6 @@ public static class QueryParser
         var search = query.TryGetValue("search", out var se) ? se : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
-        return model with { Deep = ParseDeepQueryString(query) };
+        return model with { Deep = ParseDeepQueryString(query), Facets = ParseFacetsQueryString(query), Aggregate = ParseAggregateQueryString(query) };
     }
 }
