@@ -19,15 +19,26 @@ public static class QueryValidator
 
         foreach (var s in q.Sort) ctx.CheckField(s.Field, meta, forSort: true);
         if (q.Fields is not null) foreach (var f in q.Fields) ctx.CheckField(f, meta, allowRelation: false);
+        var facets = ctx.ValidateFacets(q.Facets, meta);
+        ctx.ValidateAggregate(q.Aggregate, meta);
 
         var limit = q.Limit <= 0 ? opts.DefaultLimit : Math.Min(q.Limit, opts.MaxLimit);
         var offset = Math.Max(0, q.Offset);
 
-        return q with { Limit = limit, Offset = offset };
+        return q with { Limit = limit, Offset = offset, Facets = facets };
     }
 
     public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>
         meta.Fields.Where(f => f.Searchable && !f.Hidden).Select(f => f.Name).ToList();
+
+    /// <summary>
+    /// Resolves each of a validated QueryModel's facet paths against the same collection metadata
+    /// <see cref="Validate"/> already checked them under, without re-checking permissions. Used by
+    /// ItemService after Validate has returned, once it needs the target rows' facet buckets computed.
+    /// </summary>
+    public static IReadOnlyList<ResolvedFacetPath> ResolveFacets(
+        QueryModel q, CollectionMetadata meta, IRelationshipGraph graph, IMetadataProvider metadata) =>
+        (q.Facets ?? []).Select(f => FacetPathResolver.Resolve(meta, f, graph, metadata)).ToList();
 
     /// <summary>
     /// Holds the per-request state (condition count, per-collection field allowlist cache) that used
@@ -40,6 +51,71 @@ public static class QueryValidator
     {
         private int conditionCount;
         private readonly Dictionary<string, HashSet<string>> knownCache = new(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly IReadOnlySet<FieldInterface> Numeric =
+            new HashSet<FieldInterface> { FieldInterface.Number, FieldInterface.Slider, FieldInterface.Rating };
+        private static readonly IReadOnlySet<FieldInterface> Temporal =
+            new HashSet<FieldInterface> { FieldInterface.Date, FieldInterface.DateTime };
+
+        /// <summary>
+        /// Validates and deduplicates (Ordinal, preserving first occurrence) the requested facet
+        /// paths, returning the deduplicated list to be stored back on the returned QueryModel. Each
+        /// path's relation target (if any) is permission-checked BEFORE its shape is resolved — same
+        /// reason as <see cref="DenyUnreadableHops"/>: an unresolvable path on an unreadable
+        /// collection must fail the same way a resolvable one would, so a caller cannot use the error
+        /// to learn whether a hidden field/relation exists.
+        /// </summary>
+        public IReadOnlyList<string>? ValidateFacets(IReadOnlyList<string>? facets, CollectionMetadata meta)
+        {
+            if (facets is null) return null;
+            var distinct = facets.Distinct(StringComparer.Ordinal).ToList();
+            if (distinct.Count > opts.MaxFacets) throw new QueryException($"Too many facets (max {opts.MaxFacets}).");
+            foreach (var raw in distinct)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) throw new QueryException("Facet path must not be empty.");
+                DenyUnreadableFacetTarget(meta, raw);
+                FacetPathResolver.Resolve(meta, raw, graph, metadata);
+            }
+            return distinct;
+        }
+
+        // Only the head segment can name a relation (facet paths cap at one hop), so unlike
+        // DenyUnreadableHops this checks a single segment rather than walking a chain.
+        private void DenyUnreadableFacetTarget(CollectionMetadata meta, string raw)
+        {
+            var head = raw.Split('.')[0];
+            if (meta.Fields.Any(f => string.Equals(f.Name, head, StringComparison.OrdinalIgnoreCase))) return;
+            var rel = graph.Resolve(meta.Name, head)
+                ?? meta.Relations.FirstOrDefault(r => string.Equals(r.ForeignKey, head, StringComparison.OrdinalIgnoreCase));
+            if (rel is null) return;
+            if (!permissions.CanRead(rel.TargetCollection))
+                throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
+        }
+
+        public void ValidateAggregate(AggregateSpec? spec, CollectionMetadata meta)
+        {
+            if (spec is null) return;
+            var total = spec.Fields.Sum(kv => kv.Value.Count);
+            if (total > opts.MaxAggregates) throw new QueryException($"Too many aggregate fields (max {opts.MaxAggregates}).");
+            foreach (var (op, fields) in spec.Fields)
+                foreach (var field in fields) ValidateAggregateField(op, field, meta);
+        }
+
+        private void ValidateAggregateField(AggregateOp op, string field, CollectionMetadata meta)
+        {
+            if (!Known(meta).Contains(field))
+                throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'.");
+            if (op == AggregateOp.Count) return;
+            var fm = meta.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase));
+            var iface = fm?.Interface ?? FieldInterface.Uuid;
+            var ok = op switch
+            {
+                AggregateOp.Sum or AggregateOp.Avg => Numeric.Contains(iface),
+                AggregateOp.Min or AggregateOp.Max => Numeric.Contains(iface) || Temporal.Contains(iface),
+                _ => false,
+            };
+            if (!ok) throw new QueryException($"Aggregate '{op.ToString().ToLowerInvariant()}' is not supported on field '{field}' ({iface}).");
+        }
 
         // predicateRelation: the enclosing RelationPredicateFilter's OWN last hop relation, threaded
         // through so a "_junction.<field>" leaf reached DIRECTLY in that predicate's inner (see
