@@ -33,6 +33,7 @@ public sealed class StruoTypeModule(
         types.Add(DeletedFilterEnumType());
         types.Add(RevisionResolvers.RevisionType());
         types.AddRange(SharedFilterTypes.Build());
+        types.AddRange(SharedFacetTypes.Build());
 
         var collections = metadata.GetCollections();
         foreach (var meta in collections)

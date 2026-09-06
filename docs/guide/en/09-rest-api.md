@@ -26,6 +26,29 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&lim
 {"success":true,"data":[{"id":"...","fileName":"alpha-report.txt", ...}, ...],"meta":{"total":3,"limit":2,"offset":0}}
 ```
 
+`meta` grows two more optional keys, `facets` and `aggregate`, only when the request asked for them
+(`facets=`/`aggregate[<op>]=`, chapter 8) — each is its own `[JsonIgnore(Condition =
+WhenWritingNull)]` property on `MetaInfo` (`src/Struo.Api/Http/Envelope.cs`), so a request that names
+neither omits both, one that names only one omits the other, exactly like `meta` itself omits from a
+non-paginated response:
+
+```
+"meta": {
+  "total": 42, "limit": 25, "offset": 0,
+  "facets": {
+    "status": [{"value": "published", "count": 30}, {"value": "draft", "count": 12}],
+    "category.name": [{"value": "Tech", "count": 25}, {"value": null, "count": 3}]
+  },
+  "aggregate": {"sum": {"price": 1234.5}, "max": {"price": 99, "rating": 5}, "count": {"publishedAt": 30}}
+}
+```
+
+`facets` is an object keyed by the request's facet path strings, in the order they were requested; each
+value is an array of `{ "value", "count" }` pairs, already ordered and capped per chapter 8's
+"Ordering and the value cap". `aggregate` is an object keyed by op, each holding an object keyed by
+field name — chapter 8's "Facets and aggregates" section has the full syntax, semantics, and live
+transcripts (query string, JSON envelope, and four validation-error examples) for both.
+
 An error response is always `{ "success": false, "error": { "code": "...", "message": "...", "details": [...] } }`
 — `details` (a list of `{ "field", "message" }` pairs) is present only for the `VALIDATION` code and
 otherwise omitted the same way `meta` is:
@@ -414,12 +437,13 @@ Content-Length: 0
 
 The generic CRUD surface over every `[CmsCollection]` — `language`, `permission`, `role`, `user`,
 `userRole`, `file`, `mediaFolder` on this host (no sample opted in). See chapter 8 for the full
-`filter`/`sort`/`limit`/`offset`/`fields`/`deep`/`search`/`locale`/`deleted` query surface.
+`filter`/`sort`/`limit`/`offset`/`fields`/`deep`/`search`/`locale`/`deleted`/`facets`/`aggregate` query
+surface.
 
 | Method & path | Query params | Body | Response | Auth | Permission |
 |---|---|---|---|---|---|
-| `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted` | — | `200`, list + `meta` | none (`[Authorize]`-absent; `Adaptive` still authenticates a cookie or bearer credential if present — see above) | `CanRead` |
-| `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8) | `200`, list + `meta` | none (same caveat) | `CanRead` |
+| `GET /api/items/{collection}` | `filter[...]`, `sort`, `limit`, `offset`, `fields`, `deep`, `search`, `locale`, `deleted`, `facets`, `aggregate[<op>]` | — | `200`, list + `meta` | none (`[Authorize]`-absent; `Adaptive` still authenticates a cookie or bearer credential if present — see above) | `CanRead` |
+| `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8), including `facets`/`aggregate` | `200`, list + `meta` | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`, `locale`, `deleted` | — | `200` item, or `404` | none (same caveat) | `CanRead` (`deleted=only\|with` additionally needs `CanDelete`) |
 | `POST /api/items/{collection}` | — | JSON object of writable fields (allowlisted — see above) | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |

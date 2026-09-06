@@ -41,6 +41,8 @@ internal static class CollectionResolvers
         config.Arguments.Add(new ArgumentConfiguration("search", null, TypeReference.Parse("String")));
         config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
         config.Arguments.Add(new ArgumentConfiguration("deleted", null, TypeReference.Parse("DeletedFilter")));
+        config.Arguments.Add(new ArgumentConfiguration("facets", null, TypeReference.Parse("[String!]")));
+        config.Arguments.Add(new ArgumentConfiguration("aggregate", null, TypeReference.Parse("AggregateInput")));
         return config;
     }
 
@@ -63,6 +65,8 @@ internal static class CollectionResolvers
         var search = ctx.ArgumentValue<string?>("search");
         var locale = ctx.ArgumentValue<string?>("locale");
         var deleted = ctx.ArgumentValue<DeletedFilter?>("deleted") ?? DeletedFilter.Exclude;
+        var facets = ctx.ArgumentValue<IReadOnlyList<string>?>("facets");
+        var aggregate = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("aggregate");
         // Only resolve the (scoped) permission service when a soft-delete view is actually requested,
         // preserving the original short-circuit; the gate logic + message live in the shared guard.
         if (deleted != DeletedFilter.Exclude)
@@ -70,9 +74,9 @@ internal static class CollectionResolvers
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);
         var query = GraphQlQueryBuilder.BuildQuery(
             filter, sort, limit, offset, search, deep,
-            collection, RelationTargets(metadata));
+            collection, RelationTargets(metadata), facets, aggregate);
         var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, deleted, ctx.RequestAborted);
-        return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total);
+        return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total, page.Facets ?? [], Http.MetaWire.Aggregate(page.Aggregate));
     }
 
     /// <summary>

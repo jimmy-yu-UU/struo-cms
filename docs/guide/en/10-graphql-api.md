@@ -170,10 +170,15 @@ Every collection gets exactly two root query fields (`CollectionResolvers.Single
 - **`{collection}(id: ID!, locale: String)`** — a single item, or `null` for an unknown/soft-deleted-by-
   default id (no error — GraphQL null, matching REST's `404` in intent but not in shape).
 - **`{collection}s(filter, sort: [String!], limit: Int, offset: Int, search: String, locale: String,
-  deleted: DeletedFilter)`** — a page, returned as `{ items: [X!]!, total: Int! }`. `deleted` is the SDL
-  enum `EXCLUDE`/`ONLY`/`WITH`, bound directly onto the same `Struo.Domain.Query.DeletedFilter` REST
-  uses; requesting `ONLY`/`WITH` is gated by the identical `DeletedAccessGuard.EnsureCanViewDeleted`
-  check REST's `ItemsController` uses (chapter 8) — it requires delete permission on the collection.
+  deleted: DeletedFilter, facets: [String!], aggregate: AggregateInput)`** — a page, returned as
+  `{ items: [X!]!, total: Int!, facets: [FacetResult!]!, aggregate: Any }`. `deleted` is the SDL enum
+  `EXCLUDE`/`ONLY`/`WITH`, bound directly onto the same `Struo.Domain.Query.DeletedFilter` REST uses;
+  requesting `ONLY`/`WITH` is gated by the identical `DeletedAccessGuard.EnsureCanViewDeleted` check
+  REST's `ItemsController` uses (chapter 8) — it requires delete permission on the collection. `facets`/
+  `aggregate` are the same feature REST's `facets=`/`aggregate[<op>]=` expose (chapter 8's "Facets and
+  aggregates" has the full syntax, semantics, and error catalog); `facets`/`aggregate` on the response
+  are covered later in this section. Only the two root list fields carry these two arguments — a nested
+  to-many list field (`article.tags(filter: …)`, below) does not.
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
@@ -184,6 +189,26 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
     -d '{"query":"query { files(filter: { size: { gte: 20 } }, sort: [\"-size\"], limit: 2, offset: 0) { items { id fileName size } total } }"}'
 {"data":{"files":{"items":[{"id":"...","fileName":"gamma-draft.txt","size":35},{"id":"...","fileName":"beta-notes.txt","size":23}],"total":3}}}
 ```
+
+`facets`/`aggregate` on the list field's response — `facets: [FacetResult!]!` (empty array when the
+`facets` argument was omitted) and `aggregate: Any` (`null` when the `aggregate` argument was omitted)
+— share the two output types `SharedFacetTypes.Build` (`src/Struo.Api/GraphQl/SharedFacetTypes.cs`)
+builds once for every collection: `FacetResult { field: String!, values: [FacetValue!]! }` and
+`FacetValue { value: Any, count: Int! }`, mirroring the domain `FacetResult`/`FacetBucket` records. The
+argument type `AggregateInput` has one `[String!]` field per aggregate op (`count`/`sum`/`min`/`max`/
+`avg`), built from the same op set `QueryParser.AggregateOps` uses for REST's `aggregate[<op>]=` keys.
+Live, against the same fixture as chapter 8 (one category holding three articles — two `published`, one
+`draft`, two sharing a tag):
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { articles(filter: { categoryId: { eq: \"<category-id>\" } }, facets: [\"status\", \"tags\"], aggregate: { count: [\"publishedAt\"], max: [\"publishedAt\"] }) { total facets { field values { value count } } aggregate } }"}'
+{"data":{"articles":{"total":3,"facets":[{"field":"status","values":[{"value":"published","count":2},{"value":"draft","count":1}]},{"field":"tags","values":[{"value":"<tag-id>","count":2}]}],"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}}}}
+```
+
+`FacetValue.value`'s `Any` type keeps its original JSON kind — a numeric facet's bucket values come
+back as GraphQL numbers, not stringified — the same way `aggregate`'s `Any` keeps `count`'s integer and
+`max`'s `DateTime` string distinct rather than coercing both to one scalar type.
 
 A soft-deleted row's single-item field resolves to `null` (not an error), and `deleted: ONLY` surfaces
 it in the list field:
@@ -280,6 +305,12 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 A many-to-one relation (e.g. `File.folder`, `MediaFolder.parent`) stays a bare object field with no
 arguments at all — `CollectionSchemaBuilder` only attaches `filter`/`sort`/`limit`/`offset` to
 `OneToMany`/`ManyToMany` fields, since an M2O side resolves to at most one row.
+
+Unlike the two root list fields above, a nested to-many field's argument list stops at
+`filter`/`sort`/`limit`/`offset` — `facets`/`aggregate` are v1-scoped to the root list fields only
+(`AddRelationField`, `src/Struo.Api/GraphQl/CollectionSchemaBuilder.cs`, never adds them to a relation
+field), so `article.tags(facets: [...])` is not a schema error away from working, it is simply not part
+of the generated schema at all.
 
 ## Mutations: create, update, delete — typed inputs and partial-update semantics
 

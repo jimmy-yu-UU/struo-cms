@@ -11,4 +11,7 @@ public sealed record QueryModel(
 {
     /// <summary>Optional read-time relation expansion request.</summary>
     public DeepSpec? Deep { get; init; }
+
+    public IReadOnlyList<string>? Facets { get; init; }
+    public AggregateSpec? Aggregate { get; init; }
 }

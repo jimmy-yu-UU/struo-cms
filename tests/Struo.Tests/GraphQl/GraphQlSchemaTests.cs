@@ -1,4 +1,5 @@
 // tests/Struo.Tests/GraphQl/GraphQlSchemaTests.cs
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Execution;
@@ -16,8 +17,13 @@ namespace Struo.Tests.GraphQl;
 /// asserts on the printed SDL — the schema-shape gate (object/list/filter types + root
 /// query fields per collection, incl. relations/files/repeater/translations, hidden/password excluded).
 /// </summary>
-public class GraphQlSchemaTests
+public partial class GraphQlSchemaTests
 {
+    // Source-generated regex (SYSLIB1045): scopes the assertion below to the ArticleList type block
+    // itself, not merely "somewhere in the SDL".
+    [GeneratedRegex(@"type ArticleList \{[^}]*\}")]
+    private static partial Regex ArticleListBlockRegex();
+
     private static async Task<string> BuildSdlAsync()
     {
         var services = new ServiceCollection()
@@ -213,5 +219,47 @@ public class GraphQlSchemaTests
         var sdl = await BuildSdlAsync();
         sdl.Should().Contain("some: TagFilterInput").And.Contain("none: TagFilterInput");
         sdl.Should().Contain("some: ArticleFilterInput").And.Contain("none: ArticleFilterInput");
+    }
+
+    [Fact]
+    public async Task AggregateInput_and_shared_facet_types_have_the_exact_SDL()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().MatchRegex(
+            @"input AggregateInput \{\s*count:\s*\[String!\]\s*sum:\s*\[String!\]\s*min:\s*\[String!\]\s*max:\s*\[String!\]\s*avg:\s*\[String!\]\s*\}");
+        sdl.Should().MatchRegex(@"type FacetValue \{\s*value:\s*Any\s*count:\s*Int!\s*\}");
+        sdl.Should().MatchRegex(@"type FacetResult \{\s*field:\s*String!\s*values:\s*\[FacetValue!\]!\s*\}");
+    }
+
+    [Fact]
+    public async Task Root_list_field_declares_facets_and_aggregate_arguments()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().MatchRegex(
+            @"articles\([^)]*facets:\s*\[String!\][^)]*aggregate:\s*AggregateInput[^)]*\):\s*ArticleList!");
+    }
+
+    [Fact]
+    public async Task ArticleList_declares_facets_and_aggregate_fields()
+    {
+        var sdl = await BuildSdlAsync();
+
+        // Scoped to the ArticleList type block itself (not merely "somewhere in the SDL") so this
+        // cannot pass by matching an unrelated *List type's facets/aggregate fields.
+        var block = ArticleListBlockRegex().Match(sdl);
+        block.Success.Should().BeTrue("the SDL should declare a type ArticleList block");
+        block.Value.Should().MatchRegex(@"facets:\s*\[FacetResult!\]!\r?\n");
+        block.Value.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
+    }
+
+    [Fact]
+    public async Task Nested_to_many_list_field_does_not_declare_the_facets_argument()
+    {
+        var sdl = await BuildSdlAsync();
+
+        // Article.tags is a nested (non-root) to-many list field: filter/sort/limit/offset only.
+        sdl.Should().Contain("tags(filter: TagFilterInput, sort: [String!], limit: Int, offset: Int): [Tag!]");
     }
 }

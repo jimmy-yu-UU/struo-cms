@@ -25,7 +25,21 @@ public class QueryValidatorTests
             // A hidden credential-style field (mirrors User.Password / User.AccessToken). It must never
             // be usable as a filter/sort/search target — otherwise meta.total becomes a blind-extraction oracle.
             new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true, Searchable = true },
-        ]
+            new FieldMetadata { Name = "regions", Label = "Regions", Interface = FieldInterface.MultiSelect },
+        ],
+        // A OneToMany relation sharing its FK column name ("categoryId") with the ManyToOne "category"
+        // relation below — mirrors the sample Category collection (M2O "parent" FK "parentId" / O2M
+        // "children" whose ForeignKey is also "parentId"). Listed FIRST so a permission-target lookup
+        // that naively does `Relations.FirstOrDefault(r => r.ForeignKey == head)` without a Kind guard
+        // would pick this one — the wrong collection — instead of the ManyToOne "category" relation
+        // the FK column actually belongs to on this root.
+        Relations =
+        [
+            new RelationMetadata { Name = "categoryArchive", Label = "Category archive", Kind = RelationKind.OneToMany,
+                TargetCollection = "categoryArchive", Interface = RelationInterface.RelatedList, ForeignKey = "categoryId" },
+            new RelationMetadata { Name = "category", Label = "Category", Kind = RelationKind.ManyToOne,
+                TargetCollection = "category", Interface = RelationInterface.Dropdown, ForeignKey = "categoryId" },
+        ],
     };
 
     private static readonly StruoQueryOptions Opts = new();
@@ -55,6 +69,8 @@ public class QueryValidatorTests
         public CollectionMetadata? GetCollection(string name) => name switch
         {
             "category" => new CollectionMetadata { Name = "category", Label = "Category", FieldGroups = [],
+                Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
+            "categoryArchive" => new CollectionMetadata { Name = "categoryArchive", Label = "Category archive", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
             "tag" => new CollectionMetadata { Name = "tag", Label = "Tag", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
@@ -516,5 +532,137 @@ public class QueryValidatorTests
         var act = () => QueryValidator.Validate(
             Q(Some("category", new ComparisonFilter("_junction.x", QueryOperator.Eq, "y"))), Meta(), Opts, Graph, Md, Perms);
         act.Should().Throw<QueryException>();
+    }
+
+    private static QueryModel WithFacets(params string[] facets) => new QueryModel(null, null, [], 0, 0, null) { Facets = facets };
+    private static QueryModel WithAggregate(AggregateOp op, params string[] fields) =>
+        new QueryModel(null, null, [], 0, 0, null) { Aggregate = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>> { [op] = fields }) };
+
+    [Fact]
+    public void Facets_are_validated_and_deduplicated_preserving_first_occurrence_order()
+    {
+        var v = QueryValidator.Validate(WithFacets("status", "title", "status", "category.name"), Meta(), Opts, Graph, Md, Perms);
+        v.Facets.Should().Equal("status", "title", "category.name");
+    }
+
+    [Fact]
+    public void Facet_on_unknown_field_throws_the_same_message_as_a_filter()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("nope"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Unknown field 'nope' on collection 'article'.");
+    }
+
+    [Fact]
+    public void Facet_on_a_multi_value_interface_is_rejected_with_field_and_interface()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("regions"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Field 'regions' on collection 'article' (MultiSelect) cannot be used as a facet.");
+    }
+
+    [Fact]
+    public void Facet_on_a_hidden_field_is_an_unknown_field()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("secret"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Unknown field 'secret' on collection 'article'.");
+    }
+
+    [Fact]
+    public void Facet_across_an_unreadable_relation_is_forbidden_before_the_leaf_is_resolved()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("category.nope"), Meta(), Opts, Graph, Md, new DenyReadOf("category"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Facet_by_relation_name_also_needs_read_on_the_target()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("tags"), Meta(), Opts, Graph, Md, new DenyReadOf("tag"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Empty_facet_path_is_rejected()
+    {
+        var act = () => QueryValidator.Validate(WithFacets(""), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Facet path must not be empty.");
+    }
+
+    [Fact]
+    public void Too_many_facets_is_rejected_with_the_cap_in_the_message()
+    {
+        var opts = new StruoQueryOptions { MaxFacets = 2 };
+        var act = () => QueryValidator.Validate(WithFacets("status", "categoryId", "tags"), Meta(), opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Too many facets (max 2).");
+    }
+
+    // Finding B: a bare-FK facet path ("categoryId") must be permission-checked against the
+    // ManyToOne relation that FK actually belongs to on THIS root — not against a OneToMany
+    // relation that merely happens to share the same ForeignKey string (the child's reverse-FK
+    // column, per MetadataScanner — see Meta().Relations above).
+    [Fact]
+    public void Fk_facet_is_checked_against_the_many_to_one_relation_even_when_an_o2m_shares_its_fk_name()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("categoryId"), Meta(), Opts, Graph, Md, new DenyReadOf("category"));
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
+    public void Fk_facet_is_not_checked_against_an_o2m_relation_that_merely_shares_its_fk_name()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("categoryId"), Meta(), Opts, Graph, Md, new DenyReadOf("categoryArchive"));
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Aggregate_count_accepts_any_known_field()
+    {
+        var act = () => QueryValidator.Validate(WithAggregate(AggregateOp.Count, "createdAt", "title"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Aggregate_sum_on_a_text_field_is_rejected()
+    {
+        var act = () => QueryValidator.Validate(WithAggregate(AggregateOp.Sum, "status"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Aggregate 'sum' is not supported on field 'status' (Select).");
+    }
+
+    [Fact]
+    public void Aggregate_min_on_a_datetime_field_is_accepted_and_sum_is_not()
+    {
+        QueryValidator.Validate(WithAggregate(AggregateOp.Min, "createdAt"), Meta(), Opts, Graph, Md, Perms);
+        var act = () => QueryValidator.Validate(WithAggregate(AggregateOp.Sum, "createdAt"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Aggregate 'sum' is not supported on field 'createdAt' (DateTime).");
+    }
+
+    [Fact]
+    public void Aggregate_on_an_unknown_or_hidden_field_is_an_unknown_field()
+    {
+        var act = () => QueryValidator.Validate(WithAggregate(AggregateOp.Count, "secret"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Unknown field 'secret' on collection 'article'.");
+    }
+
+    [Fact]
+    public void Too_many_aggregate_fields_counts_across_ops()
+    {
+        var opts = new StruoQueryOptions { MaxAggregates = 2 };
+        var q = new QueryModel(null, null, [], 0, 0, null)
+        {
+            Aggregate = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>>
+            {
+                [AggregateOp.Count] = ["createdAt", "status"], [AggregateOp.Min] = ["createdAt"],
+            }),
+        };
+        var act = () => QueryValidator.Validate(q, Meta(), opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Too many aggregate fields (max 2).");
+    }
+
+    [Fact]
+    public void ResolveFacets_returns_one_resolved_path_per_validated_facet_in_order()
+    {
+        var v = QueryValidator.Validate(WithFacets("status", "tags.name"), Meta(), Opts, Graph, Md, Perms);
+        var resolved = QueryValidator.ResolveFacets(v, Meta(), Graph, Md);
+        resolved.Select(r => r.Kind).Should().Equal(FacetPathKind.OwnField, FacetPathKind.RelationLeaf);
+        resolved[1].LeafField.Should().Be("name");
     }
 }

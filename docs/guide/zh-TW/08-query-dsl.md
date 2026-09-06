@@ -205,6 +205,247 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&lim
 {"success":true,"data":[{"fileName":"beta-notes.txt", ...},{"fileName":"gamma-draft.txt", ...}],"meta":{"total":3,"limit":2,"offset":1}}
 ```
 
+## Facets 與彙總
+
+另外還有兩個僅限清單使用的參數，會針對*整個*已篩選的結果集 (而不只是目前這一頁) 計算摘要資料:
+`facets=` (分面計數，每個請求路徑各一份 value/count 的分佈) 與 `aggregate[<op>]=` (`sum`/`avg`/`min`/`max`/
+`count`，僅限自有欄位)。兩者都不會改變 `data` 或分頁——只會在 `meta` (REST) 或清單包裝物件
+(GraphQL，第 10 章) 上多加鍵值/欄位——而且除非被要求，否則兩者都完全不會被計算:一個一般請求的
+SQL 與回應完全不受影響 (`QueryValidator`/`ItemService` 在值為 `null` 時直接短路)。
+
+```
+?facets=status,categoryId,tags,category.name
+?aggregate[sum]=price&aggregate[max]=price,rating&aggregate[count]=publishedAt
+```
+
+- `facets`——一份 facet 路徑的逗號清單 (查詢字串)，或同樣字串組成的 JSON 陣列 (信封)。每一條
+  路徑都是下面四種形態之一。
+- `aggregate[<op>]`——每個 op (`count`/`sum`/`min`/`max`/`avg`) 各一個查詢字串鍵，值是自有欄位的
+  逗號清單;信封形式是 `"aggregate": {"sum": ["price"], "max": [...]}`，每個 op 各一個陣列。未知的
+  op 會被拒絕:`"Unknown aggregate op 'x'."`。
+
+兩者都能與本章其餘的一切組合——`filter`、`search`、`sort`、`limit`/`offset`、`deep`、`locale`、
+`deleted`——並由同一個為 `filter`/`sort`/`fields` 做白名單驗證的 `QueryValidator`
+(`ValidateFacets`/`ValidateAggregate`，`src/Struo.Application/Query/QueryValidator.cs`) 驗證，所以
+一個未知的路徑、一個無法作為 facet 的欄位，或一個不相容的彙總 op，都會在任何 facet／彙總
+SQL 執行之前就以 `BAD_USER_INPUT` 讓請求失敗——與一個未知的 filter 欄位完全相同。不過 `deleted=`
+(基本語意見下文「軟刪除篩選」) 只會與**根**集合自己的資料列組合:一個 to-many facet 的關聯／
+junction 端查詢，永遠不會解除軟刪除篩選，不論外層請求的 `deleted=` 模式為何——舉例來說，一個
+`deleted=with` 請求的 `tags` facet，仍然會排除一個已被移入回收桶的標籤，即使文章資料列本身包含了
+已回收的項目。
+
+### 四種 facet 路徑形態
+
+`FacetPathResolver.Resolve` (`src/Struo.Application/Query/FacetPath.cs`) 只接受下面這幾種形態——
+絕不超過一個關聯跳，也絕不能是量詞或 `_junction` 片段:
+
+| 形態 | 範例 | 依什麼分組 | `value` |
+|---|---|---|---|
+| 自有純量欄位 | `status` | 根欄位本身 | 欄位自身的值;`null` 有自己的 bucket |
+| Many-to-one 外鍵 | `categoryId` | 根外鍵欄位 | 目標 id 的字串形式;`null` 有自己的 bucket |
+| 關聯名稱 (任何種類) | `category`、`tags`、`articles` | 目標 id (M2O:根外鍵;O2M:子項自己的 id;M2M:junction 的目標外鍵) | 目標 id 的字串形式;**沒有**「無關聯」的 bucket |
+| 一個關聯跳 + 一個葉欄位 | `category.name`、`tags.name`、`articles.title` | 同樣依目標 id 分組，再把葉值換入 | 葉欄位的值;一個可翻譯的葉欄位會使用查詢有效語言下的 sidecar 資料列，一個在該語言沒有翻譯列的 id 會得到一個 `null` bucket |
+
+一個可作為 facet 的欄位，其 interface 必須是下列之一:`Text`、`Textarea`、`Slug`、`Email`、`Url`、
+`Color`、`Phone`、`Select`、`Radio`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、
+`DateTime`、`Time`、`Uuid`、`File`、`Image` (`FacetPathResolver.Facetable`) ——自有欄位與葉欄位皆然。
+長文字 (`RichText`/`Markdown`/`Code`)、每一種多值 interface (`MultiSelect`/`CheckboxGroup`/`Tags`/
+`Repeater`)、結構化資料 (`Json`/`KeyValue`/`Files`)，以及 `Hidden`/`Divider`/`Password`，全部都會被
+拒絕——一個 `Hidden` 欄位會得到跟一個無法解析的名稱完全相同的 `"Unknown field"` 訊息，所以 facet 路徑
+永遠無法被用來探測一個隱藏欄位是否存在。
+
+### 自排除 (disjunctive) 計數與剪枝規則
+
+一個 facet 回答的是「如果我改選這條路徑的每一個候選值，我請求裡其餘的一切還會匹配多少列？」——
+而不是「我*目前*結果集裡有多少列帶這個值？」。要得到前者，`FacetFilterPruner.Prune`
+(`src/Struo.Application/Query/FacetFilterPruner.cs`，一個對已驗證的 `FilterNode` 樹做運算的
+純函式) 會針對每一個 facet，先移除同一個欄位/關聯*家族*上的每一個條件，才開始計數:一個自有
+欄位對自己的條件;一個 many-to-one 外鍵對外鍵欄位本身*以及*任何以 `<relation>.` 開頭的帶點號路徑
+*以及*一個針對該關聯的 `_some`/`_none` 量詞——`categoryId` 與 `category.name` 屬於同一個家族，會
+一起被剪掉。`search` 永遠不會被剪;**`aggregate` 永遠不會被剪**——它一律針對請求完整、未剪枝的
+filter 執行。一個被剪到空的邏輯群組會塌縮 (0 個子節點 → 整個節點消失，1 個倖存子節點 → 該群組被它
+取代)，所以一個完全以分類為範圍的 filter，在對 `category`/`categoryId`/`category.*` 做 facet 時，
+可能會整個剪成沒有任何 filter。
+
+實際對照一個小型 fixture (一個分類「Facet Demo」底下三篇文章——兩篇 `published`、一篇 `draft`，
+兩篇共用一個標籤):只篩選出草稿，facet 仍然回報兩種狀態都存在，因為 `status` 條件在 `status`
+facet 被計數之前就已經被移除:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5BcategoryId%5D%5B_eq%5D=<category-id>&filter%5Bstatus%5D%5B_eq%5D=draft&facets=status"
+{"success":true,"data":[{"id":"...","status":"draft", ...}],"meta":{"total":1,"limit":25,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]}}}
+```
+
+`data`/`total` 是唯一符合的那篇草稿，跟 `filter` 說的一致——但 `facets.status` 顯示
+`published: 2` 與 `draft: 1`，這正是把 `status` 條件輪流換成每個候選值、同時保留 `categoryId`
+不變會得到的結果。這同時也是驗收 oracle:對一個自有欄位 facet 而言，`{"value": v, "count": n}`
+必須等於把同一請求的 facet 自身條件換成 `filter[field][_eq]=v` 之後的 `meta.total`——上面已經
+驗證過 (`filter[status][_eq]=published` 在同一個分類上，獨立回傳的正是 `"total":2`)。
+
+對*被剪枝*的家族本身做 facet，正好展示了「剪到什麼都不剩」的情況:在
+`filter[categoryId][_eq]=<category-id>` 之外一併請求 `category.name`，會在計數 `category.name`
+之前把該 filter 完全移除，所以這個 facet 會涵蓋資料庫裡的每一個分類，而不只是清單原本篩選到的
+那一個——實際對照這個 host 共用的開發 fixture (包含其他驗證流程留下、彼此無關的分類，因為被剪掉
+的 filter 已經沒有任何東西可以拿來限縮範圍):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?filter%5BcategoryId%5D%5B_eq%5D=<category-id>&facets=status,tags,category.name&aggregate%5Bcount%5D=publishedAt&aggregate%5Bmax%5D=publishedAt"
+{"success":true,"data":[ ... 3 articles ... ],"meta":{"total":3,"limit":25,"offset":0,
+  "facets":{
+    "status":[{"value":"published","count":2},{"value":"draft","count":1}],
+    "tags":[{"value":"<tag-id>","count":2}],
+    "category.name":[{"value":"Facet Demo","count":3},{"value":"GateCat A 1783050271","count":3},{"value":"catA-LG8c3b","count":3},{"value":"catC-LG8c3b","count":3},{"value":"E2E Guard Save b21784859754","count":2},{"value":"E2E Guard Save e2e saved","count":2},{"value":"Cat9c-1343377572","count":1},{"value":"Cat9c-1885194788","count":1},{"value":"GateCat B 1783050752","count":1},{"value":"GateCat B 1783051807","count":1},{"value":"catB-LG8c3b","count":1},{"value":"cjkDiagCat","count":1},{"value":"diagCat-r3","count":1}]
+  },
+  "aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}
+}}
+```
+
+`status` 與 `tags` 仍然維持在該分類的範圍內 (它們的家族——一個自有欄位，以及一個與
+`category`/`categoryId` 無關的關聯——不受 `category.name` 自己家族被剪枝的影響)，但
+`category.name` 涵蓋了這個 host 上的每一個分類。`aggregate` 則完全無視剪枝:`publishedAt` 上的
+`count`/`max` 是針對*原始* `categoryId` filter 計算的，只匹配這個分類裡兩篇已發布的文章，不論
+同一個請求裡還一併要求了哪些 facet。
+
+JSON 信封形式 (`POST /api/items/article/query`) 與上面同一個請求的查詢字串形式，逐位元組完全等價:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/article/query -H "Content-Type: application/json" \
+    -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"filter":{"categoryId":{"_eq":"<category-id>"}},"facets":["status","tags","category.name"],"aggregate":{"count":["publishedAt"],"max":["publishedAt"]}}'
+# identical response to the query-string request above
+```
+
+一個可翻譯的葉欄位，對每一個在有效語言沒有翻譯列的 id，會退回一個 `null` bucket——實際對照這個
+分類，對它的 `articles.title` (一個一跳的 O2M 葉，落在翻譯 sidecar 上) 做 facet，三篇文章裡只有
+一篇帶有 `zh-TW` 翻譯:
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Bname%5D%5B_eq%5D=Facet%20Demo&facets=articles.title"
+{"success":true,"data":[{"id":"...","name":"Facet Demo", ...}],"meta":{"total":1,"limit":25,"offset":0,"facets":{"articles.title":[{"value":"Facet Demo Article One","count":1},{"value":"Facet Demo Article Three Draft","count":1},{"value":"Facet Demo Article Two","count":1}]}}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/category?filter%5Bname%5D%5B_eq%5D=Facet%20Demo&facets=articles.title&locale=zh-TW"
+{"success":true,"data":[{"id":"...","name":"Facet Demo", ...}],"meta":{"total":1,"limit":25,"offset":0,"facets":{"articles.title":[{"value":null,"count":2},{"value":"Facet Demo Article Two zh","count":1}]}}}
+```
+
+在預設語言下三個標題都會出現 (每篇文章都有一個 `en` 資料列);在 `zh-TW` 下只有那篇已翻譯的文章
+保留自己的值，另外兩篇——沒有 `zh-TW` 資料列——會塌縮成同一個 `{"value": null, "count": 2}` bucket。
+
+### Count 的定義與一項已知限制
+
+一個 facet 的 `count` 永遠是符合該值的**相異根資料列**數量，絕不是相關資料表上的原始列數。對一個
+to-many 關聯 (`tags`) 或一個 to-many 葉 (`articles.title`) 而言，底層 SQL 是依**目標 id** 分組——
+即使是葉形態 (上一節「一跳 + 葉」那一列) 也絕不會直接依葉值分組——並使用
+`COUNT(DISTINCT <指向根的欄位>)` (`SqlFunc.AggregateDistinctCount`) 而不是單純的 `COUNT(*)`——
+否則一個同時連到兩個共用同一個值的目標的根資料列會被算兩次。一個自有欄位或 many-to-one 外鍵的
+facet 完全不需要 `DISTINCT`:每一列根資料列本來就只會貢獻到一個群組。
+
+**已知限制**，這是一跳加葉這種形態固有的:它先在一次查詢裡依目標 *id* 把根資料列分組，接著才把
+葉值換進去、在記憶體中合併相同值的群組 (第二次查詢) ——這是刻意的設計，如此才不需要任何 join
+機制，而且一個可翻譯葉欄位的 sidecar 查找，也剛好落在同一個形狀裡。這代表一個同時連到**兩個
+恰好共用同一個葉值**的不同目標的根資料列 (例如一篇文章上兩個都叫做 `"Guide"` 的標籤)，在那個
+共用值上會被算兩次——那兩個以目標 id 分組的群組 (各自在自己的目標 id 底下都已經是正確的相異根
+計數) 會一起塌縮進合併後的葉值 bucket，兩者的 count 會被直接加總，而不是在合併之後把根 id 的
+聯集重新去重。這是一項刻意的取捨，不是缺陷:要修正它，就需要在合併過程中攜帶根 id 集合，而不是
+只帶 count，如此一來就再也塞不進兩次查詢裡了。
+
+兩步形態帶來的第二個、與此相關的後果:`MaxFacetValues` (下一節) 是在葉值合併**之前**，先對第一次
+查詢的**目標 id** bucket 套用上限——而不是對最終、合併後的葉值 bucket。因此，即使目標集合裡相異
+葉值的總數少於 `MaxFacetValues`，一個葉值仍然可能從回應中消失，只要第一道上限保留下來的、
+高 count 的目標 id，恰好沒有涵蓋到帶著那個葉值的 id。
+
+### NULL bucket
+
+一個自有欄位或 many-to-one 外鍵的 `NULL` 值會得到自己的 bucket (`{"value": null, "count": n}`) ——
+自有欄位與外鍵 facet 是依一個真正屬於根資料列一部分的欄位分組，所以 `NULL` 是一個真實、可計數的
+群組。一個裸關聯名稱的 facet (`category`、`tags`、`articles`) 絕不會有「無關聯」的 bucket:要計算
+「有多少根資料列*沒有*相關資料列」需要一個目前實作沒有建構的反向 join，而實務上一個想要這個數字的
+呼叫端已經有 `_none` 可用 (上文第 7/8 章)。一個可翻譯葉欄位的 `null` bucket (前一節) 是第三種、
+不同的情況:它代表「目標 id 解析成功，但在這個語言下沒有翻譯列」，而不是「沒有目標」。
+
+### 排序與數值上限
+
+每一個 facet 都會依 count **降冪**排序，再以 value **升冪**作為決勝，並截斷到
+`StruoQueryOptions.MaxFacetValues` (預設 50) ——沒有 `otherCount` 餘量。對自有欄位、外鍵，以及
+裸關聯名稱這三種形態而言，這個排序與截斷是在資料庫層完成的 (`OrderBy` + `Take`，
+`FacetQueries.Group`)，而 `NULL` bucket 在 count 完全打平時落在哪個位置，取決於資料庫引擎——因為
+不論 SQLite 或 PostgreSQL，都沒有被明確要求 `NULLS FIRST`/`NULLS LAST`:SQLite 預設的
+`ORDER BY value ASC` 把 `NULL` 排在最前面，PostgreSQL 的預設則把它排在最後面。
+
+一跳加葉這個形態不同:它以目標 id 分組的 bucket，跟上面一樣在資料庫層排序/截斷，但接下來的葉值
+合併 (前一節) 會對*合併後*的 bucket 在記憶體中重新排序與重新截斷 (`SwapLeafValues`，
+`FacetQueries.Leaf.cs`) ——一樣是 count 降冪，再用一個自訂的 `LeafValueComparer` 做 value 的決勝，
+它會無條件把 `null` 排在**最後**，不論在哪個引擎上，而不是像另外三種形態那樣，依賴資料庫自身
+NULL 排序的預設值。
+
+### 這項功能要付出多少次查詢
+
+一份單純的清單是 2 條陳述式 (`COUNT` + 該頁的 `SELECT`)，這項功能不會改變這一點。每一個請求的
+facet 會多加恰好 1 條 (自有欄位、外鍵，或裸關聯名稱) 或 2 條 (一跳加葉的 facet——id/count 查詢
+再加上葉值查找);`aggregate` 每 10 個請求的 op/欄位 slot 多加 1 條陳述式，以固定常數
+`AggregateRow.SlotCount = 10` (`src/Struo.Infrastructure/Query/FacetRow.cs`，`AggregateQueries` 的
+`slots.Chunk(AggregateRow.SlotCount)`) 分批——**不是**依 `Query:MaxAggregates`，後者只限制一個請求
+總共可以指名多少個 op/欄位 slot (`ValidateAggregate`)，跟分批大小無關。在預設的 `Query:MaxAggregates`
+(10) 之下，每一個合法請求的彙總欄位都恰好塞得進那唯一的一個 10-slot 分批，所以永遠只花一條彙總
+陳述式;但若某個 fork 把 `Query:MaxAggregates` 調高超過 10，每多請求 10 個欄位就會多花一條彙總
+陳述式，因為分批用的常數本身並不會跟著調整。`StruoQueryOptions.MaxFacets` (預設 10) 限制了 facet
+的數量，所以在預設值下，單一請求最糟的情況是 `2 + 2·MaxFacets + 1`——更一般地說，是
+`2 + 2·MaxFacets + ⌈彙總欄位數 / 10⌉`。
+
+### 彙總 op
+
+| Op | 適用對象 | 結果 |
+|---|---|---|
+| `count` | 任何可見的自有欄位，包含 many-to-one 外鍵——計算非 `NULL` 的資料列數 | 整數 (空集合為 `0`，絕不是 `null`) |
+| `sum`、`avg` | `Number`、`Slider`、`Rating` | `sum`:欄位自身的數值型別 (整數欄位 → 較寬的整數、`decimal` → `decimal`、`double`/`float` → `double`);`avg`:一律是 `double`，不論欄位本身的型別為何 |
+| `min`、`max` | 上面三種 interface，再加上 `Date`、`DateTime` | 欄位自身的型別 |
+
+除了 `count` 之外的每一個 op，在符合條件的集合為空時都會回傳 `null`，而不是 `0`/`NaN`。實際對照
+fixture 分類裡兩篇已發布文章的 `publishedAt` 上的 `count`/`max` (第三篇還是草稿，所以它的
+`publishedAt` 是 `null`，不計入):
+
+```
+$ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
+    -d '{"query":"query { articles(filter: { categoryId: { eq: \"<category-id>\" } }, facets: [\"status\", \"tags\"], aggregate: { count: [\"publishedAt\"], max: [\"publishedAt\"] }) { total facets { field values { value count } } aggregate } }"}'
+{"data":{"articles":{"total":3,"facets":[{"field":"status","values":[{"value":"published","count":2},{"value":"draft","count":1}]},{"field":"tags","values":[{"value":"<tag-id>","count":2}]}],"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-09-03T00:00:00"}}}}}
+```
+
+GraphQL 的 `aggregate` 欄位型別是 `Any`——第 10 章有完整的共用型別表面
+(`AggregateInput`/`FacetResult`/`FacetValue`) 與它自己的實際輸出。
+
+### 錯誤
+
+四個實際範例——一個未知的 facet 欄位、一條超過一個關聯跳的 facet 路徑、一個無法作為 facet 的
+interface (`Article.regions` 是 `MultiSelect`)，以及一個與欄位 interface 不相容的彙總 op
+(對一個 `Select` 的 `Article.status` 做 `sum`):
+
+```
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=bogusField"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown field 'bogusField' on collection 'article'."}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=category.parent.name"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Facet paths support exactly one relation hop: 'category.parent.name'."}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?facets=regions"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'regions' on collection 'article' (MultiSelect) cannot be used as a facet."}}
+
+$ curl -s -b cookies.txt "http://localhost:5221/api/items/article?aggregate%5Bsum%5D=status"
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Aggregate 'sum' is not supported on field 'status' (Select)."}}
+```
+
+還有兩個 `FacetPathResolver.Resolve` 的訊息補完整個目錄，都是 `BAD_USER_INPUT`:一個空的路徑片段
+(`facets=` 逗號清單裡的一個空項目，或信封陣列裡的一個空字串) 是 `"Facet path must not be empty."`;
+一個一跳加葉路徑，其*關聯*片段 (不是葉) 無法解析——例如 `facets=bogusRelation.name`——則是
+`"Unknown relation 'bogusRelation' on collection 'article'."`，這與一個無法解析的自有欄位、或
+單一片段路徑得到的單純 `"Unknown field"` 訊息不同。
+
+一個超過 `MaxFacets` 的 facet 數量，或一個超過 `MaxAggregates` 的彙總欄位數量，會以相同的方式被拒絕
+(`"Too many facets (max 10)."` / `"Too many aggregate fields (max 10)."`)，且發生在任何
+facet／彙總 SQL 執行之前;一個重複的 facet 路徑會被靜默去重，而不是被拒絕或計算兩次。一個關聯跳
+指向呼叫端無權讀取的集合的 facet，會以權限優先失敗，就跟一條帶點號的 filter 路徑一樣:
+`FORBIDDEN`/`UNAUTHORIZED` (`"Read not permitted on '<collection>'."`)，會在路徑的形狀甚至還沒被
+解析之前就先檢查——所以一個不可讀關聯的欄位名稱，一樣無法透過 facet 驗證錯誤被探測，就跟透過 filter
+驗證錯誤一樣不可行 (見下文「驗證」)。
+
 ## 欄位投影
 
 `fields=` 限制投影出集合的哪些**自有**欄位——`id` 與樂觀並行控制用的 `version`，無論如何都
@@ -298,6 +539,13 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bbogus%5D
 **對於開放匿名讀取的部署，這是一個破壞性變更。** 如果 `Rbac:PublicReadCollections` 列出的某個集合，
 其公開的 filter 或 `deep=` 會跨進第二個集合，那麼第二個集合現在也需要自己的項目，否則這些請求會開始
 失敗 (filter) 或回傳時少了巢狀物件 (`deep=`)。
+
+`facets=`/`aggregate[<op>]=` 也會經過同一個 `QueryValidator`:`ValidateAggregate` 會用跟
+`CheckField` 一模一樣的自有欄位加外鍵允許清單 (`Known`) 去檢查每一個欄位，而 `ValidateFacets`
+會以權限優先拒絕一個不可讀的 facet 目標——它自己的單一片段版本 `DenyUnreadableFacetTarget`，也就是
+上文 `DenyUnreadableHops` 的 facet 路徑對應版本——在完全解析路徑形狀之前就先做這個檢查，所以一個
+未知/隱藏的 facet 欄位，以及一個不可讀的關聯目標，失敗的方式都跟一個未知的 filter 欄位、或一條
+不可讀的帶點號 filter 路徑完全相同。
 
 ## 端對端完整範例
 
