@@ -262,10 +262,8 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default) =>
         translations.SyncTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
 
-    public Task<IReadOnlyList<FacetBucket>> FacetAsync(
-        string collection, QueryModel prunedQuery, ResolvedFacetPath facet, IReadOnlyList<string> searchableFields,
-        string? queryLocale, DeletedFilter deleted, int maxValues, CancellationToken ct = default) =>
-        facets.FacetAsync(collection, prunedQuery, facet, searchableFields, queryLocale, deleted, maxValues, ct);
+    public Task<IReadOnlyList<FacetBucket>> FacetAsync(FacetRequest request, CancellationToken ct = default) =>
+        facets.FacetAsync(request, ct);
 
     public Task<AggregateResult> AggregateAsync(
         string collection, QueryModel query, AggregateSpec spec, IReadOnlyList<string> searchableFields,

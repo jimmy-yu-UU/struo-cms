@@ -92,7 +92,7 @@ public class FacetSqlShapeTests : IDisposable
         var sub = _db.Queryable<Category>()
             .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "A" } })
             .Select((Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id")).ToSql();
-        var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, _db.EntityMaintenance.GetDbColumnName("ParentId", typeof(Category)), sub);
+        var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, _db.EntityMaintenance.GetDbColumnName<Category>("ParentId"), sub);
         var q = Facet<Category, string>(_db.Queryable<Category>().Where(new List<IConditionalModel> { wrapped }), "Name", "Id", false, 10);
         q.ToSql().Key.Should().MatchRegex(@"IN \(SELECT `Id` FROM `categories`");
         q.ToList().Select(r => r.Value).Should().Equal("B");

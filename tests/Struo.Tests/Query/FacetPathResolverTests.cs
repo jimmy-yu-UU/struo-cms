@@ -1,6 +1,5 @@
 // tests/Struo.Tests/Query/FacetPathResolverTests.cs
 using AwesomeAssertions;
-using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Query;
@@ -13,7 +12,7 @@ public class FacetPathResolverTests
 {
     private static readonly IReadOnlyList<Struo.Domain.Metadata.Models.CollectionMetadata> Collections =
         MetadataScanner.ScanTypes(SubqueryPushdownHarness.Types);
-    private static readonly IMetadataProvider Md = new CachedMetadataProvider(Collections);
+    private static readonly CachedMetadataProvider Md = new(Collections);
     private static readonly RelationshipGraph Graph = new(Collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
     {
         ["sqCategory"] = typeof(SqCategory), ["sqProduct"] = typeof(SqProduct), ["sqProperty"] = typeof(SqProperty),

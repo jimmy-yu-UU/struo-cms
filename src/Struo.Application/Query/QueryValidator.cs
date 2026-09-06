@@ -52,10 +52,10 @@ public static class QueryValidator
         private int conditionCount;
         private readonly Dictionary<string, HashSet<string>> knownCache = new(StringComparer.OrdinalIgnoreCase);
 
-        private static readonly IReadOnlySet<FieldInterface> Numeric =
-            new HashSet<FieldInterface> { FieldInterface.Number, FieldInterface.Slider, FieldInterface.Rating };
-        private static readonly IReadOnlySet<FieldInterface> Temporal =
-            new HashSet<FieldInterface> { FieldInterface.Date, FieldInterface.DateTime };
+        private static readonly HashSet<FieldInterface> Numeric =
+            new() { FieldInterface.Number, FieldInterface.Slider, FieldInterface.Rating };
+        private static readonly HashSet<FieldInterface> Temporal =
+            new() { FieldInterface.Date, FieldInterface.DateTime };
 
         /// <summary>
         /// Validates and deduplicates (Ordinal, preserving first occurrence) the requested facet
@@ -65,7 +65,7 @@ public static class QueryValidator
         /// collection must fail the same way a resolvable one would, so a caller cannot use the error
         /// to learn whether a hidden field/relation exists.
         /// </summary>
-        public IReadOnlyList<string>? ValidateFacets(IReadOnlyList<string>? facets, CollectionMetadata meta)
+        public List<string>? ValidateFacets(IReadOnlyList<string>? facets, CollectionMetadata meta)
         {
             if (facets is null) return null;
             var distinct = facets.Distinct(StringComparer.Ordinal).ToList();

@@ -93,7 +93,8 @@ public sealed class ItemService(
         foreach (var facet in resolved)
         {
             var pruned = validated with { Filter = FacetFilterPruner.Prune(validated.Filter, facet) };
-            var buckets = await repository.FacetAsync(collection, pruned, facet, searchable, queryLocale, deleted, options.MaxFacetValues, ct);
+            var request = new FacetRequest(collection, pruned, facet, searchable, queryLocale, deleted, options.MaxFacetValues);
+            var buckets = await repository.FacetAsync(request, ct);
             results.Add(new FacetResult(facet.Raw, buckets));
         }
         return results;

@@ -42,62 +42,68 @@ internal sealed partial class FacetQueries(
     private RelationshipGraph Graph => graph as RelationshipGraph
         ?? throw new InvalidOperationException("Facets need the concrete RelationshipGraph (junction/reverse-FK descriptors).");
 
-    public async Task<IReadOnlyList<FacetBucket>> FacetAsync(
-        string collection, QueryModel pruned, ResolvedFacetPath facet, IReadOnlyList<string> searchableFields,
-        string? queryLocale, DeletedFilter deleted, int maxValues, CancellationToken ct)
+    // The per-relation-facet inputs that ByRelation/ManyToOne/ToMany all need to reach the root's
+    // rows — bundled so those methods stay within the parameter-count limit (Sonar S107) without
+    // changing behaviour. Not every field is used by every method (e.g. ToMany never queries Root
+    // directly), same as FacetRequest at the public seam.
+    private readonly record struct RelationFacetContext(
+        string Collection, EntityDescriptor Root, object RootQueryable, List<IConditionalModel> Conds, DeletedFilter Deleted, int MaxValues);
+
+    public async Task<IReadOnlyList<FacetBucket>> FacetAsync(FacetRequest request, CancellationToken ct)
     {
-        var root = RepositoryHelpers.Descriptor(registry, collection);
-        var conds = filters.Translate(collection, pruned.Filter, pruned.Search, searchableFields, queryLocale);
-        var rootQ = RootDispatcher.For(root.EntityType)(this, conds, deleted);
+        var root = RepositoryHelpers.Descriptor(registry, request.Collection);
+        var conds = filters.Translate(
+            request.Collection, request.PrunedQuery.Filter, request.PrunedQuery.Search, request.SearchableFields, request.QueryLocale);
+        var rootQ = RootDispatcher.For(root.EntityType)(this, conds, request.Deleted);
+        var facet = request.Facet;
 
         switch (facet.Kind)
         {
             case FacetPathKind.OwnField:
-                return await Group(rootQ, root.EntityType, root.FieldToProperty[facet.OwnField!], root.IdProperty, false, maxValues, ct);
+                return await GroupBuckets(rootQ, root.EntityType, root.FieldToProperty[facet.OwnField!], root.IdProperty, false, request.MaxValues, ct);
             case FacetPathKind.ForeignKey:
-                return IdStrings(await Group(rootQ, root.EntityType, root.Properties[facet.OwnField!].Name, root.IdProperty, false, maxValues, ct));
+                return IdStrings(await GroupBuckets(rootQ, root.EntityType, root.Properties[facet.OwnField!].Name, root.IdProperty, false, request.MaxValues, ct));
             case FacetPathKind.Relation:
-                return IdStrings(await ByRelation(collection, root, rootQ, conds, deleted, facet.Relation!, maxValues, ct));
+                return IdStrings(await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct));
             case FacetPathKind.RelationLeaf:
                 // Feed ByRelation's raw (Guid) id buckets straight into SwapLeafValues — the translation
                 // sidecar FK and the target PK are both Guid, so the dictionary keys built in
                 // LeafValuesAsync must stay Guid too. Calling IdStrings here first would turn every
                 // bucket's Value into a string and none of them would match.
-                var ids = await ByRelation(collection, root, rootQ, conds, deleted, facet.Relation!, maxValues, ct);
-                return await SwapLeafValues(ids, facet, queryLocale, maxValues, ct);
+                var ids = await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct);
+                return await SwapLeafValues(ids, facet, request.QueryLocale, request.MaxValues, ct);
             default:
                 throw new InvalidOperationException($"Unknown facet kind {facet.Kind}.");
         }
     }
 
-    private Task<List<FacetBucket>> ByRelation(string collection, EntityDescriptor root, object rootQ, List<IConditionalModel> conds, DeletedFilter deleted,
-        RelationMetadata rel, int maxValues, CancellationToken ct)
+    private Task<List<FacetBucket>> ByRelation(RelationFacetContext ctx, RelationMetadata rel, CancellationToken ct)
     {
-        var desc = Graph.Descriptors(collection).First(d => string.Equals(d.Meta.Name, rel.Name, StringComparison.OrdinalIgnoreCase));
+        var desc = Graph.Descriptors(ctx.Collection).First(d => string.Equals(d.Meta.Name, rel.Name, StringComparison.OrdinalIgnoreCase));
         var target = RepositoryHelpers.Descriptor(registry, rel.TargetCollection);
         return rel.Kind switch
         {
-            RelationKind.ManyToOne => ManyToOne(root, conds, deleted, root.Properties[rel.ForeignKey!].Name, maxValues, ct),
-            RelationKind.OneToMany => ToMany(target.EntityType, root, rootQ, desc.ReverseForeignKeyProperty!, target.IdProperty, desc.ReverseForeignKeyProperty!, maxValues, ct),
-            RelationKind.ManyToMany => ToMany(desc.JunctionType!, root, rootQ, desc.JunctionParentFk!, desc.JunctionTargetFk!, desc.JunctionParentFk!, maxValues, ct),
+            RelationKind.ManyToOne => ManyToOne(ctx, ctx.Root.Properties[rel.ForeignKey!].Name, ct),
+            RelationKind.OneToMany => ToMany(ctx, target.EntityType, desc.ReverseForeignKeyProperty!, target.IdProperty, desc.ReverseForeignKeyProperty!, ct),
+            RelationKind.ManyToMany => ToMany(ctx, desc.JunctionType!, desc.JunctionParentFk!, desc.JunctionTargetFk!, desc.JunctionParentFk!, ct),
             _ => throw new QueryException($"Unsupported relation kind '{rel.Kind}'."),
         };
     }
 
-    private Task<List<FacetBucket>> ManyToOne(EntityDescriptor root, List<IConditionalModel> conds, DeletedFilter deleted, string fkProperty, int maxValues, CancellationToken ct)
+    private Task<List<FacetBucket>> ManyToOne(RelationFacetContext ctx, string fkProperty, CancellationToken ct)
     {
         var notNull = new ConditionalModel
         {
-            FieldName = db.EntityMaintenance.GetDbColumnName(fkProperty, root.EntityType), ConditionalType = ConditionalType.IsNot, FieldValue = null,
+            FieldName = db.EntityMaintenance.GetDbColumnName(fkProperty, ctx.Root.EntityType), ConditionalType = ConditionalType.IsNot, FieldValue = null,
         };
-        var q = RootDispatcher.For(root.EntityType)(this, [.. conds, notNull], deleted);
-        return Group(q, root.EntityType, fkProperty, root.IdProperty, false, maxValues, ct);
+        var q = RootDispatcher.For(ctx.Root.EntityType)(this, [.. ctx.Conds, notNull], ctx.Deleted);
+        return GroupBuckets(q, ctx.Root.EntityType, fkProperty, ctx.Root.IdProperty, false, ctx.MaxValues, ct);
     }
 
-    private Task<List<FacetBucket>> ToMany(Type sideType, EntityDescriptor root, object rootQ, string rootRefProperty, string valueProperty, string countProperty, int maxValues, CancellationToken ct)
+    private Task<List<FacetBucket>> ToMany(RelationFacetContext ctx, Type sideType, string rootRefProperty, string valueProperty, string countProperty, CancellationToken ct)
     {
-        var idType = ColumnSelectorFactory.PropertyType(root.EntityType, root.IdProperty);
-        var idsSql = IdsSqlDispatcher.For(root.EntityType, idType)(rootQ, root.IdProperty);
+        var idType = ColumnSelectorFactory.PropertyType(ctx.Root.EntityType, ctx.Root.IdProperty);
+        var idsSql = IdsSqlDispatcher.For(ctx.Root.EntityType, idType)(ctx.RootQueryable, ctx.Root.IdProperty);
         // Root ids feed the related/junction side as one subquery, composed the same way relation-filter
         // pushdown composes nested subqueries (FilterTranslator.Subquery.cs): through
         // SubQueryConditional.Wrap over a plain ToSql() KeyValuePair, never SqlSugar's
@@ -105,10 +111,14 @@ internal sealed partial class FacetQueries(
         // parameters and so collides whenever two subqueries sit at the same level.
         var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, db.EntityMaintenance.GetDbColumnName(rootRefProperty, sideType), idsSql);
         var q = RelatedDispatcher.For(sideType)(this, [wrapped]);
-        return Group(q, sideType, valueProperty, countProperty, true, maxValues, ct);
+        return GroupBuckets(q, sideType, valueProperty, countProperty, true, ctx.MaxValues, ct);
     }
 
-    private static Task<List<FacetBucket>> Group(object q, Type entityType, string valueProp, string countProp, bool distinct, int take, CancellationToken ct) =>
+    // Non-generic dispatch wrapper around the generic Group<T,TValue> static method above. Named
+    // distinctly (Sonar S4136: all overloads of one name must be adjacent) since GroupDispatcher
+    // resolves Group<T,TValue> by reflection via nameof(Group) and a same-named non-generic overload
+    // here would give that lookup two candidates.
+    private static Task<List<FacetBucket>> GroupBuckets(object q, Type entityType, string valueProp, string countProp, bool distinct, int take, CancellationToken ct) =>
         GroupDispatcher.For(entityType, ColumnSelectorFactory.PropertyType(entityType, valueProp))(q, valueProp, countProp, distinct, take, ct);
 
     private static List<FacetBucket> IdStrings(List<FacetBucket> buckets) =>

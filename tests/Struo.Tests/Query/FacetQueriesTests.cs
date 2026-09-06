@@ -2,7 +2,6 @@
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
-using Struo.Application.Metadata;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
@@ -172,7 +171,7 @@ public class TranslatableLeafFacetTests : IDisposable
     private readonly SqliteTestDatabase _file = new();
     private readonly ISqlSugarClient _db;
     private readonly SqlSugarItemRepository _repo;
-    private readonly IMetadataProvider _md;
+    private readonly CachedMetadataProvider _md;
     private readonly RelationshipGraph _graph;
 
     public TranslatableLeafFacetTests()
@@ -211,10 +210,10 @@ public class TranslatableLeafFacetTests : IDisposable
         var facet = FacetPathResolver.Resolve(meta, "articles.title", _graph, _md);
         var q = new QueryModel(null, null, [], 100, 0, null);
 
-        var en = await _repo.FacetAsync("category", q, facet, [], "en", DeletedFilter.Exclude, 50);
+        var en = await _repo.FacetAsync(new FacetRequest("category", q, facet, [], "en", DeletedFilter.Exclude, 50));
         en.Select(b => (b.Value, b.Count)).Should().Equal(("Alpha", 1), ("Beta", 1));
 
-        var zh = await _repo.FacetAsync("category", q, facet, [], "zh-TW", DeletedFilter.Exclude, 50);
+        var zh = await _repo.FacetAsync(new FacetRequest("category", q, facet, [], "zh-TW", DeletedFilter.Exclude, 50));
         zh.Should().BeEquivalentTo([new FacetBucket("甲", 1), new FacetBucket(null, 1)]);
     }
 
@@ -231,7 +230,7 @@ public class TranslatableLeafFacetTests : IDisposable
         var facet = FacetPathResolver.Resolve(meta, "articles.title", _graph, _md);
         var q = new QueryModel(null, null, [], 100, 0, null);
 
-        Func<Task> act = async () => await _repo.FacetAsync("category", q, facet, [], null, DeletedFilter.Exclude, 50);
+        Func<Task> act = async () => await _repo.FacetAsync(new FacetRequest("category", q, facet, [], null, DeletedFilter.Exclude, 50));
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*query locale is required*");
     }
 }

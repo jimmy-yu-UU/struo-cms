@@ -17,8 +17,13 @@ namespace Struo.Tests.GraphQl;
 /// asserts on the printed SDL — the schema-shape gate (object/list/filter types + root
 /// query fields per collection, incl. relations/files/repeater/translations, hidden/password excluded).
 /// </summary>
-public class GraphQlSchemaTests
+public partial class GraphQlSchemaTests
 {
+    // Source-generated regex (SYSLIB1045): scopes the assertion below to the ArticleList type block
+    // itself, not merely "somewhere in the SDL".
+    [GeneratedRegex(@"type ArticleList \{[^}]*\}")]
+    private static partial Regex ArticleListBlockRegex();
+
     private static async Task<string> BuildSdlAsync()
     {
         var services = new ServiceCollection()
@@ -243,7 +248,7 @@ public class GraphQlSchemaTests
 
         // Scoped to the ArticleList type block itself (not merely "somewhere in the SDL") so this
         // cannot pass by matching an unrelated *List type's facets/aggregate fields.
-        var block = Regex.Match(sdl, @"type ArticleList \{[^}]*\}");
+        var block = ArticleListBlockRegex().Match(sdl);
         block.Success.Should().BeTrue("the SDL should declare a type ArticleList block");
         block.Value.Should().MatchRegex(@"facets:\s*\[FacetResult!\]!\r?\n");
         block.Value.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
