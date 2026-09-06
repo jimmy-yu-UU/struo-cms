@@ -158,5 +158,8 @@ public sealed class SubqueryPushdownHarness : IDisposable
         return Repo.FacetAsync(collection, q, resolved, ["name"], null, deleted, maxValues);
     }
 
+    public Task<AggregateResult> AggregateAsync(string collection, AggregateSpec spec, FilterNode? filter = null, DeletedFilter deleted = DeletedFilter.Exclude) =>
+        Repo.AggregateAsync(collection, new QueryModel(null, filter, [], 100, 0, null), spec, [], null, deleted);
+
     public void Dispose() => _file.Dispose();
 }

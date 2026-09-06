@@ -172,4 +172,16 @@ public interface IItemRepository
         string? queryLocale, DeletedFilter deleted, int maxValues, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "IItemRepository.FacetAsync must be overridden by implementations that support facets.");
+
+    /// <summary>
+    /// Computes count/sum/min/max/avg over <paramref name="collection"/>, scoped by
+    /// <paramref name="query"/>'s filter/search and <paramref name="deleted"/> on the root rows.
+    /// <see cref="AggregateResult.Values"/>'s outer keys are only the ops present in
+    /// <paramref name="spec"/>; the inner keys keep the field spelling the caller requested.
+    /// </summary>
+    Task<AggregateResult> AggregateAsync(
+        string collection, QueryModel query, AggregateSpec spec, IReadOnlyList<string> searchableFields,
+        string? queryLocale, DeletedFilter deleted, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.AggregateAsync must be overridden by implementations that support aggregates.");
 }
