@@ -7,6 +7,7 @@ using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
+using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
 
@@ -358,6 +359,8 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(Field("items", $"[{SchemaTypeMapper.TypeName(meta.Name)}!]!",
             ctx => ctx.Parent<PagedResultView>().Items));
         config.Fields.Add(Field("total", "Int!", ctx => ctx.Parent<PagedResultView>().Total));
+        config.Fields.Add(Field("facets", "[FacetResult!]!", ctx => ctx.Parent<PagedResultView>().Facets));
+        config.Fields.Add(Field("aggregate", "Any", ctx => ctx.Parent<PagedResultView>().Aggregate));
         return ObjectType.CreateUnsafe(config);
     }
 
@@ -592,5 +595,8 @@ internal sealed class CollectionSchemaBuilder(
         => new(name, null, TypeReference.Parse(sdl), pureResolver: pure);
 }
 
-/// <summary>Adapter so the ArticleList type reads items/total from the Application PagedResult.</summary>
-internal sealed record PagedResultView(IReadOnlyList<object> Items, int Total);
+/// <summary>Adapter so the ArticleList type reads items/total/facets/aggregate from the
+/// Application PagedResult and MetaWire.Aggregate's wire shape.</summary>
+internal sealed record PagedResultView(
+    IReadOnlyList<object> Items, int Total,
+    IReadOnlyList<FacetResult> Facets, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? Aggregate);

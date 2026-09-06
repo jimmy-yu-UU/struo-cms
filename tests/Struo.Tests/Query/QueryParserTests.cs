@@ -207,4 +207,120 @@ public class QueryParserTests
         var env = QueryParser.ParseEnvelope(JsonDocument.Parse("""{ "filter": { "tags": { "_none": { "name": { "_eq": "internal" } } } } }""").RootElement).Filter;
         qs.Should().BeEquivalentTo(env, o => o.PreferringRuntimeMemberTypes());
     }
+
+    [Fact]
+    public void Query_string_facets_is_a_comma_list_in_request_order()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "status, categoryId,tags,category.name" });
+        q.Facets.Should().Equal("status", "categoryId", "tags", "category.name");
+    }
+
+    // Finding C: unlike the aggregate field-list split (which stays RemoveEmptyEntries-tolerant, see
+    // Query_string_aggregate_field_list_tolerates_a_trailing_comma below), the facets comma list must
+    // KEEP a blank entry so QueryValidator's "Facet path must not be empty." rejects it with a 400 —
+    // matching the manuals (docs/guide/{en,zh-TW}/08-query-dsl.md) and DSL spec §6.
+    [Fact]
+    public void Query_string_facets_keeps_a_blank_entry_in_the_comma_list()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "status,,tags" });
+        q.Facets.Should().Equal("status", "", "tags");
+    }
+
+    [Fact]
+    public void Query_string_facets_entirely_blank_means_not_requested()
+    {
+        QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "" }).Facets.Should().BeNull();
+        QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "  " }).Facets.Should().BeNull();
+    }
+
+    // Pins that the aggregate field-list split is a SEPARATE split from the facets one (finding C):
+    // it must stay tolerant of a trailing/empty entry, unlike facets above.
+    [Fact]
+    public void Query_string_aggregate_field_list_tolerates_a_trailing_comma()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate[sum]"] = "price," });
+        q.Aggregate!.Fields[AggregateOp.Sum].Should().Equal("price");
+    }
+
+    [Fact]
+    public void Query_string_without_facets_or_aggregate_leaves_both_null()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["limit"] = "5" });
+        q.Facets.Should().BeNull();
+        q.Aggregate.Should().BeNull();
+    }
+
+    [Fact]
+    public void Query_string_aggregate_keys_map_to_ops_with_field_lists()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?>
+        {
+            ["aggregate[sum]"] = "price", ["aggregate[max]"] = "price,rating", ["aggregate[count]"] = "publishedAt",
+        });
+        q.Aggregate!.Fields[AggregateOp.Sum].Should().Equal("price");
+        q.Aggregate.Fields[AggregateOp.Max].Should().Equal("price", "rating");
+        q.Aggregate.Fields[AggregateOp.Count].Should().Equal("publishedAt");
+        q.Aggregate.Fields.Should().NotContainKey(AggregateOp.Min);
+    }
+
+    [Fact]
+    public void Query_string_unknown_aggregate_op_throws()
+    {
+        var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate[median]"] = "price" });
+        act.Should().Throw<QueryException>().WithMessage("*Unknown aggregate op 'median'*");
+    }
+
+    [Fact]
+    public void Query_string_malformed_aggregate_key_throws()
+    {
+        var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate"] = "price" });
+        act.Should().Throw<QueryException>().WithMessage("*Malformed aggregate key*");
+    }
+
+    // Finding I (pin existing behaviour): a typo'd key that merely STARTS WITH "aggregate" but is not
+    // "aggregate[<op>]" — e.g. "aggregates" — deliberately still throws Malformed, naming the actual
+    // key, rather than being silently ignored as an unrelated query-string parameter.
+    [Fact]
+    public void Query_string_aggregate_like_typo_key_throws_malformed_with_the_key_named()
+    {
+        var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregates"] = "1" });
+        act.Should().Throw<QueryException>().WithMessage("*Malformed aggregate key 'aggregates'*");
+    }
+
+    [Fact]
+    public void Envelope_facets_and_aggregate_are_equivalent_to_the_query_string()
+    {
+        var env = JsonDocument.Parse("""
+            {"facets":["status","tags","category.name"],
+             "aggregate":{"sum":["price"],"max":["price","rating"],"count":["publishedAt"]}}
+            """).RootElement;
+        var q = QueryParser.ParseEnvelope(env);
+        q.Facets.Should().Equal("status", "tags", "category.name");
+        q.Aggregate!.Fields[AggregateOp.Sum].Should().Equal("price");
+        q.Aggregate.Fields[AggregateOp.Max].Should().Equal("price", "rating");
+    }
+
+    [Fact]
+    public void Envelope_facets_must_be_an_array_of_strings()
+    {
+        var env = JsonDocument.Parse("""{"facets":"status"}""").RootElement;
+        var act = () => QueryParser.ParseEnvelope(env);
+        act.Should().Throw<QueryException>().WithMessage("*'facets' must be an array of strings*");
+    }
+
+    [Fact]
+    public void Envelope_aggregate_values_must_be_arrays_of_strings()
+    {
+        var env = JsonDocument.Parse("""{"aggregate":{"sum":"price"}}""").RootElement;
+        var act = () => QueryParser.ParseEnvelope(env);
+        act.Should().Throw<QueryException>().WithMessage("*'aggregate.sum' must be an array of strings*");
+    }
+
+    [Fact]
+    public void Envelope_unknown_aggregate_op_throws()
+    {
+        var env = JsonDocument.Parse("""{"aggregate":{"median":["price"]}}""").RootElement;
+        var act = () => QueryParser.ParseEnvelope(env);
+        act.Should().Throw<QueryException>().WithMessage("*Unknown aggregate op 'median'*");
+    }
 }

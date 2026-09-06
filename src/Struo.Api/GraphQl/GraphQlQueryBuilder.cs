@@ -1,4 +1,5 @@
 // src/Struo.Api/GraphQl/GraphQlQueryBuilder.cs
+using Struo.Application.Query;
 using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
@@ -34,7 +35,9 @@ public static class GraphQlQueryBuilder
         string? search,
         DeepSpec? deep,
         string collection = "",
-        Func<string, string, string?>? relationTarget = null)
+        Func<string, string, string?>? relationTarget = null,
+        IReadOnlyList<string>? facets = null,
+        IReadOnlyDictionary<string, object?>? aggregate = null)
     {
         return new QueryModel(
             Fields: null,
@@ -44,7 +47,33 @@ public static class GraphQlQueryBuilder
             Offset: offset ?? 0,
             Search: string.IsNullOrWhiteSpace(search) ? null : search)
         {
-            Deep = deep
+            Deep = deep,
+            Facets = facets,
+            Aggregate = ParseAggregate(aggregate)
         };
+    }
+
+    /// <summary>
+    /// Turns the <c>aggregate</c> argument's raw input-object dictionary (op key -&gt; list of field
+    /// names) into an <see cref="AggregateSpec"/>. An op key not recognised by
+    /// <see cref="QueryParser.AggregateOps"/> throws — unreachable through the GraphQL schema (the
+    /// AggregateInput type only declares those five field names) but reachable from a caller that
+    /// hands in an arbitrary dictionary directly, e.g. a unit test. A null/absent value, or a value
+    /// that isn't itself an enumerable of strings, is skipped rather than treated as an error (mirrors
+    /// how an absent argument is represented). Returns null when no op ends up with any field name.
+    /// </summary>
+    public static AggregateSpec? ParseAggregate(IReadOnlyDictionary<string, object?>? input)
+    {
+        if (input is null) return null;
+        var fields = new Dictionary<AggregateOp, IReadOnlyList<string>>();
+        foreach (var (key, value) in input)
+        {
+            if (!QueryParser.AggregateOps.TryGetValue(key, out var op))
+                throw new QueryException($"Unknown aggregate op '{key}'.");
+            if (value is not IEnumerable<object?> list) continue;
+            var names = list.OfType<string>().ToList();
+            if (names.Count > 0) fields[op] = names;
+        }
+        return fields.Count == 0 ? null : new AggregateSpec(fields);
     }
 }

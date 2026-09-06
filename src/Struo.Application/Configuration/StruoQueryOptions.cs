@@ -17,4 +17,13 @@ public sealed class StruoQueryOptions
 
     [Range(1, int.MaxValue)]
     public int MaxRelationDepth { get; set; } = 6;
+
+    [Range(1, int.MaxValue)]
+    public int MaxFacets { get; set; } = 10;
+
+    [Range(1, int.MaxValue)]
+    public int MaxFacetValues { get; set; } = 50;
+
+    [Range(1, int.MaxValue)]
+    public int MaxAggregates { get; set; } = 10;
 }

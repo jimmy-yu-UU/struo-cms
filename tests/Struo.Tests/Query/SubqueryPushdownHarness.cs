@@ -149,5 +149,21 @@ public sealed class SubqueryPushdownHarness : IDisposable
         return r.Rows.Cast<SqProduct>().Select(p => p.Id).ToList();
     }
 
+    public Task<IReadOnlyList<FacetBucket>> FacetAsync(string facet, FilterNode? filter = null, string? search = null,
+        DeletedFilter deleted = DeletedFilter.Exclude, int maxValues = 50, string collection = "sqProduct")
+    {
+        var meta = Metadata.GetCollection(collection)!;
+        var resolved = FacetPathResolver.Resolve(meta, facet, Graph, Metadata);
+        var q = new QueryModel(null, FacetFilterPruner.Prune(filter, resolved), [], 100, 0, search);
+        return Repo.FacetAsync(new FacetRequest(collection, q, resolved, ["name"], null, deleted, maxValues));
+    }
+
+    // searchableFields is only populated with "name" when a search term is actually supplied — an
+    // empty list when search is null matches how a caller with no searchable fields configured
+    // behaves, and keeps every existing filter-only call exercising exactly that path.
+    public Task<AggregateResult> AggregateAsync(
+        string collection, AggregateSpec spec, FilterNode? filter = null, DeletedFilter deleted = DeletedFilter.Exclude, string? search = null) =>
+        Repo.AggregateAsync(collection, new QueryModel(null, filter, [], 100, 0, search), spec, search is null ? [] : ["name"], null, deleted);
+
     public void Dispose() => _file.Dispose();
 }

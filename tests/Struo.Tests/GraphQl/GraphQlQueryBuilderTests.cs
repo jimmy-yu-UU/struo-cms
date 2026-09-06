@@ -81,4 +81,48 @@ public class GraphQlQueryBuilderTests
         cmp.FieldPath.Should().Be("category.name");
         cmp.Value.Should().Be("Tech");
     }
+
+    [Fact]
+    public void Aggregate_input_dictionary_becomes_an_AggregateSpec()
+    {
+        var input = new Dictionary<string, object?>
+        {
+            ["sum"] = new List<object?> { "price" }, ["max"] = new List<object?> { "price", "rating" }, ["min"] = null,
+        };
+        var spec = GraphQlQueryBuilder.ParseAggregate(input)!;
+        spec.Fields[AggregateOp.Sum].Should().Equal("price");
+        spec.Fields[AggregateOp.Max].Should().Equal("price", "rating");
+        spec.Fields.Should().NotContainKey(AggregateOp.Min);
+    }
+
+    [Fact]
+    public void Null_or_empty_aggregate_input_is_null()
+    {
+        GraphQlQueryBuilder.ParseAggregate(null).Should().BeNull();
+        GraphQlQueryBuilder.ParseAggregate(new Dictionary<string, object?> { ["sum"] = new List<object?>() }).Should().BeNull();
+    }
+
+    [Fact]
+    public void Unknown_aggregate_op_key_throws_a_query_exception()
+    {
+        var act = () => GraphQlQueryBuilder.ParseAggregate(new Dictionary<string, object?> { ["median"] = new List<object?> { "price" } });
+        act.Should().Throw<QueryException>().WithMessage("Unknown aggregate op 'median'.");
+    }
+
+    [Fact]
+    public void BuildQuery_carries_facets_and_aggregate_onto_the_model()
+    {
+        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, null, "article", null,
+            facets: ["status", "tags.name"], aggregate: new Dictionary<string, object?> { ["count"] = new List<object?> { "publishedAt" } });
+        q.Facets.Should().Equal("status", "tags.name");
+        q.Aggregate!.Fields[AggregateOp.Count].Should().Equal("publishedAt");
+    }
+
+    [Fact]
+    public void BuildQuery_leaves_facets_and_aggregate_null_when_absent()
+    {
+        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, deep: null);
+        q.Facets.Should().BeNull();
+        q.Aggregate.Should().BeNull();
+    }
 }

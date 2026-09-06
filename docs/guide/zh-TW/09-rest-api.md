@@ -25,6 +25,28 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&lim
 {"success":true,"data":[{"id":"...","fileName":"alpha-report.txt", ...}, ...],"meta":{"total":3,"limit":2,"offset":0}}
 ```
 
+`meta` 還會多兩個選擇性鍵，`facets` (分面計數) 與 `aggregate` (彙總)，但只有請求有要求時才會出現
+(`facets=`/`aggregate[<op>]=`，第 8 章)——兩者各自是 `MetaInfo`
+(`src/Struo.Api/Http/Envelope.cs`) 上獨立的 `[JsonIgnore(Condition = WhenWritingNull)]`
+屬性，所以一個兩者都沒指名的請求兩個鍵都省略，只指名其中一個的請求就省略另一個——與 `meta`
+自身在非分頁回應中省略的方式完全相同:
+
+```
+"meta": {
+  "total": 42, "limit": 25, "offset": 0,
+  "facets": {
+    "status": [{"value": "published", "count": 30}, {"value": "draft", "count": 12}],
+    "category.name": [{"value": "Tech", "count": 25}, {"value": null, "count": 3}]
+  },
+  "aggregate": {"sum": {"price": 1234.5}, "max": {"price": 99, "rating": 5}, "count": {"publishedAt": 30}}
+}
+```
+
+`facets` 是一個以請求的 facet 路徑字串為鍵的物件，順序與請求時相同;每個值都是一個
+`{ "value", "count" }` 配對組成的陣列，已依第 8 章「排序與數值上限」排序並套用上限。
+`aggregate` 是一個以 op 為鍵的物件，每個值又是一個以欄位名稱為鍵的物件——第 8 章「Facets 與
+彙總」一節有兩者完整的語法、語意，以及實際輸出 (query string、JSON 信封、四個驗證錯誤範例)。
+
 一個錯誤回應永遠是 `{ "success": false, "error": { "code": "...", "message": "...", "details": [...] } }`
 ——`details` (一份 `{ "field", "message" }` 配對的清單) 只有 `VALIDATION` 代碼才會出現，其餘情況下
 會以與 `meta` 相同的方式省略:
@@ -397,12 +419,13 @@ Content-Length: 0
 對每一個 `[CmsCollection]` 的通用 CRUD 介面——在這個 host (即執行本章範例的 `Struo.Api` 執行個體)
 上是 `language`、`permission`、`role`、`user`、`userRole`、`file`、`mediaFolder` (沒有任何範例被
 選用啟用)。完整的
-`filter`/`sort`/`limit`/`offset`/`fields`/`deep`/`search`/`locale`/`deleted` 查詢介面請見第 8 章。
+`filter`/`sort`/`limit`/`offset`/`fields`/`deep`/`search`/`locale`/`deleted`/`facets`/`aggregate`
+查詢介面請見第 8 章。
 
 | 方法與路徑 | 查詢參數 | 本文 | 回應 | 驗證 | 權限 |
 |---|---|---|---|---|---|
-| `GET /api/items/{collection}` | `filter[...]`、`sort`、`limit`、`offset`、`fields`、`deep`、`search`、`locale`、`deleted` | — | `200`，清單 + `meta` | 無 (不帶 `[Authorize]`;但若請求帶有 cookie 或 bearer 憑證，`Adaptive` 仍會驗證它——見上文) | `CanRead` |
-| `POST /api/items/{collection}/query` | `locale`、`deleted` (即使在這裡也是從 URL 讀取) | JSON 信封 (第 8 章) | `200`，清單 + `meta` | 無 (同上) | `CanRead` |
+| `GET /api/items/{collection}` | `filter[...]`、`sort`、`limit`、`offset`、`fields`、`deep`、`search`、`locale`、`deleted`、`facets`、`aggregate[<op>]` | — | `200`，清單 + `meta` | 無 (不帶 `[Authorize]`;但若請求帶有 cookie 或 bearer 憑證，`Adaptive` 仍會驗證它——見上文) | `CanRead` |
+| `POST /api/items/{collection}/query` | `locale`、`deleted` (即使在這裡也是從 URL 讀取) | JSON 信封 (第 8 章)，包含 `facets`/`aggregate` | `200`，清單 + `meta` | 無 (同上) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`、`locale`、`deleted` | — | `200` 項目，或 `404` | 無 (同上) | `CanRead` (`deleted=only\|with` 額外需要 `CanDelete`) |
 | `POST /api/items/{collection}` | — | 可寫入欄位組成的 JSON 物件 (經過允許清單過濾——見上方) | `201` 已建立的項目，`Location: /api/items/{collection}/{id}` (見上方的「狀態碼慣例」) | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `PUT /api/items/{collection}/{id}` | — | JSON 物件，部分更新 (只有送出的鍵值會疊加——但請見上方 `Required` 欄位的但書) | `200` 已更新的項目，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
