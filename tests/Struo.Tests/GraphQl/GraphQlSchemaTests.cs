@@ -214,4 +214,42 @@ public class GraphQlSchemaTests
         sdl.Should().Contain("some: TagFilterInput").And.Contain("none: TagFilterInput");
         sdl.Should().Contain("some: ArticleFilterInput").And.Contain("none: ArticleFilterInput");
     }
+
+    [Fact]
+    public async Task AggregateInput_and_shared_facet_types_have_the_exact_SDL()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().MatchRegex(
+            @"input AggregateInput \{\s*count:\s*\[String!\]\s*sum:\s*\[String!\]\s*min:\s*\[String!\]\s*max:\s*\[String!\]\s*avg:\s*\[String!\]\s*\}");
+        sdl.Should().MatchRegex(@"type FacetValue \{\s*value:\s*Any\s*count:\s*Int!\s*\}");
+        sdl.Should().MatchRegex(@"type FacetResult \{\s*field:\s*String!\s*values:\s*\[FacetValue!\]!\s*\}");
+    }
+
+    [Fact]
+    public async Task Root_list_field_declares_facets_and_aggregate_arguments()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().MatchRegex(
+            @"articles\([^)]*facets:\s*\[String!\][^)]*aggregate:\s*AggregateInput[^)]*\):\s*ArticleList!");
+    }
+
+    [Fact]
+    public async Task ArticleList_declares_facets_and_aggregate_fields()
+    {
+        var sdl = await BuildSdlAsync();
+
+        sdl.Should().MatchRegex(@"facets:\s*\[FacetResult!\]!\r?\n");
+        sdl.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
+    }
+
+    [Fact]
+    public async Task Nested_to_many_list_field_does_not_declare_the_facets_argument()
+    {
+        var sdl = await BuildSdlAsync();
+
+        // Article.tags is a nested (non-root) to-many list field: filter/sort/limit/offset only.
+        sdl.Should().Contain("tags(filter: TagFilterInput, sort: [String!], limit: Int, offset: Int): [Tag!]");
+    }
 }
