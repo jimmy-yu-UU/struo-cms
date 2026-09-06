@@ -158,4 +158,18 @@ public interface IItemRepository
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "IItemRepository.QueryWhereInWithDeletedAsync must be overridden by implementations that support purge integrity.");
+
+    /// <summary>
+    /// Computes value/count buckets for one resolved facet path over <paramref name="collection"/>,
+    /// scoped by <paramref name="prunedQuery"/> (the facet's own current selection already pruned out —
+    /// see <see cref="FacetFilterPruner"/>). <paramref name="deleted"/> governs the root rows only; a
+    /// related/junction side queried for a relation or leaf facet always keeps the soft-delete floor.
+    /// Buckets are ordered by count descending then value ascending and capped at
+    /// <paramref name="maxValues"/> rows.
+    /// </summary>
+    Task<IReadOnlyList<FacetBucket>> FacetAsync(
+        string collection, QueryModel prunedQuery, ResolvedFacetPath facet, IReadOnlyList<string> searchableFields,
+        string? queryLocale, DeletedFilter deleted, int maxValues, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.FacetAsync must be overridden by implementations that support facets.");
 }
