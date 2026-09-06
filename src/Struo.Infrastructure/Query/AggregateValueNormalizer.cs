@@ -33,6 +33,15 @@ internal static class AggregateValueNormalizer
             if (target == typeof(DateOnly)) return DateOnly.Parse(s, CultureInfo.InvariantCulture);
             if (target == typeof(TimeOnly)) return TimeOnly.Parse(s, CultureInfo.InvariantCulture);
         }
+        // Npgsql returns a `date`/`time` column's min/max aggregate as a DateTime (midnight-anchored
+        // for `date`, epoch-date-anchored for `time`), never as DateOnly/TimeOnly directly.
+        // Convert.ChangeType has no built-in conversion between DateTime and either type and throws
+        // InvalidCastException, so it must be special-cased here before the generic fallback below.
+        if (raw is DateTime dt)
+        {
+            if (target == typeof(DateOnly)) return DateOnly.FromDateTime(dt);
+            if (target == typeof(TimeOnly)) return TimeOnly.FromDateTime(dt);
+        }
         return raw.GetType() == target ? raw : Convert.ChangeType(raw, target, CultureInfo.InvariantCulture);
     }
 }

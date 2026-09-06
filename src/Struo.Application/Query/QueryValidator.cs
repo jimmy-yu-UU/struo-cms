@@ -85,8 +85,16 @@ public static class QueryValidator
         {
             var head = raw.Split('.')[0];
             if (meta.Fields.Any(f => string.Equals(f.Name, head, StringComparison.OrdinalIgnoreCase))) return;
+            // The FK fallback must only ever match a ManyToOne relation: its ForeignKey is the only
+            // kind that names a column on THIS root. A OneToMany's ForeignKey instead names a column
+            // on the CHILD collection (see MetadataScanner), so without the Kind guard a root FK
+            // column whose name happens to be shared by an unrelated OneToMany relation (e.g. a
+            // ManyToOne "parent" with ForeignKey "parentId" alongside a OneToMany "children" whose
+            // ForeignKey is also "parentId") would be permission-checked against the wrong target
+            // collection. Mirrors the same guard in FacetPathResolver.ResolveSingle.
             var rel = graph.Resolve(meta.Name, head)
-                ?? meta.Relations.FirstOrDefault(r => string.Equals(r.ForeignKey, head, StringComparison.OrdinalIgnoreCase));
+                ?? meta.Relations.FirstOrDefault(r => r.Kind == RelationKind.ManyToOne
+                    && string.Equals(r.ForeignKey, head, StringComparison.OrdinalIgnoreCase));
             if (rel is null) return;
             if (!permissions.CanRead(rel.TargetCollection))
                 throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
@@ -107,6 +115,11 @@ public static class QueryValidator
                 throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'.");
             if (op == AggregateOp.Count) return;
             var fm = meta.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase));
+            // `field` can also be a many-to-one FK column (see Known/CheckField) which carries no
+            // [CmsField] and so has no FieldMetadata entry — fm is null in that case. Falling back to
+            // Uuid is deliberate: Uuid is absent from both Numeric and Temporal below, so every
+            // non-Count aggregate op on an FK column is rejected, which is correct — an FK scalar
+            // (an id) is never a meaningful sum/avg/min/max target.
             var iface = fm?.Interface ?? FieldInterface.Uuid;
             var ok = op switch
             {

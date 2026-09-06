@@ -215,6 +215,33 @@ public class QueryParserTests
         q.Facets.Should().Equal("status", "categoryId", "tags", "category.name");
     }
 
+    // Finding C: unlike the aggregate field-list split (which stays RemoveEmptyEntries-tolerant, see
+    // Query_string_aggregate_field_list_tolerates_a_trailing_comma below), the facets comma list must
+    // KEEP a blank entry so QueryValidator's "Facet path must not be empty." rejects it with a 400 —
+    // matching the manuals (docs/guide/{en,zh-TW}/08-query-dsl.md) and DSL spec §6.
+    [Fact]
+    public void Query_string_facets_keeps_a_blank_entry_in_the_comma_list()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "status,,tags" });
+        q.Facets.Should().Equal("status", "", "tags");
+    }
+
+    [Fact]
+    public void Query_string_facets_entirely_blank_means_not_requested()
+    {
+        QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "" }).Facets.Should().BeNull();
+        QueryParser.ParseQueryString(new Dictionary<string, string?> { ["facets"] = "  " }).Facets.Should().BeNull();
+    }
+
+    // Pins that the aggregate field-list split is a SEPARATE split from the facets one (finding C):
+    // it must stay tolerant of a trailing/empty entry, unlike facets above.
+    [Fact]
+    public void Query_string_aggregate_field_list_tolerates_a_trailing_comma()
+    {
+        var q = QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate[sum]"] = "price," });
+        q.Aggregate!.Fields[AggregateOp.Sum].Should().Equal("price");
+    }
+
     [Fact]
     public void Query_string_without_facets_or_aggregate_leaves_both_null()
     {
@@ -248,6 +275,16 @@ public class QueryParserTests
     {
         var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregate"] = "price" });
         act.Should().Throw<QueryException>().WithMessage("*Malformed aggregate key*");
+    }
+
+    // Finding I (pin existing behaviour): a typo'd key that merely STARTS WITH "aggregate" but is not
+    // "aggregate[<op>]" — e.g. "aggregates" — deliberately still throws Malformed, naming the actual
+    // key, rather than being silently ignored as an unrelated query-string parameter.
+    [Fact]
+    public void Query_string_aggregate_like_typo_key_throws_malformed_with_the_key_named()
+    {
+        var act = () => QueryParser.ParseQueryString(new Dictionary<string, string?> { ["aggregates"] = "1" });
+        act.Should().Throw<QueryException>().WithMessage("*Malformed aggregate key 'aggregates'*");
     }
 
     [Fact]

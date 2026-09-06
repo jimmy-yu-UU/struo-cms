@@ -29,11 +29,19 @@ public static class QueryParser
     private static string[] SplitList(string value) =>
         value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    // Unlike SplitList above, this deliberately KEEPS a blank entry (e.g. "status,,tags" ->
+    // ["status", "", "tags"]) so QueryValidator's per-entry "Facet path must not be empty." check can
+    // reject it with a 400 — matching the manuals (docs/guide/{en,zh-TW}/08-query-dsl.md) and DSL
+    // spec §6. SplitList itself stays RemoveEmptyEntries-tolerant for the aggregate field lists (e.g.
+    // "aggregate[sum]=price,"), which is intentionally more forgiving and must not change here.
+    private static string[] SplitFacetsList(string value) =>
+        value.Split(',', StringSplitOptions.TrimEntries);
+
     private static AggregateOp ParseAggregateOp(string token) =>
         AggregateOps.TryGetValue(token, out var op) ? op : throw new QueryException($"Unknown aggregate op '{token}'.");
 
     private static IReadOnlyList<string>? ParseFacetsQueryString(IReadOnlyDictionary<string, string?> query) =>
-        query.TryGetValue("facets", out var fv) && !string.IsNullOrWhiteSpace(fv) ? SplitList(fv) : null;
+        query.TryGetValue("facets", out var fv) && !string.IsNullOrWhiteSpace(fv) ? SplitFacetsList(fv) : null;
 
     private static AggregateSpec? ParseAggregateQueryString(IReadOnlyDictionary<string, string?> query)
     {

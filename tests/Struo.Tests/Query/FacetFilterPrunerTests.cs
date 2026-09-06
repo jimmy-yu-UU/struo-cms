@@ -96,4 +96,35 @@ public class FacetFilterPrunerTests
         var f = Eq("categoryIdBackup", "1");
         FacetFilterPruner.Prune(f, CategoryIdFacet).Should().BeSameAs(f);
     }
+
+    // Mirrors the sample Category collection: a ManyToOne "parent" (FK "parentId") and a OneToMany
+    // "children" whose ForeignKey also happens to be "parentId" (the child's reverse-FK column, per
+    // MetadataScanner) — the two relations share an FK string but only the ManyToOne one names a
+    // root-level column.
+    private static readonly RelationMetadata Children = new()
+    {
+        Name = "children", Label = "Children", Kind = RelationKind.OneToMany, TargetCollection = "sqCategory",
+        Interface = RelationInterface.RelatedList, ForeignKey = "parentId",
+    };
+    private static readonly ResolvedFacetPath ChildrenFacet = new("children", FacetPathKind.Relation, null, Children, null);
+
+    [Fact]
+    public void One_to_many_relation_facet_does_not_prune_a_root_field_that_merely_shares_its_child_fk_name()
+    {
+        var f = Eq("parentId", "1");
+        FacetFilterPruner.Prune(f, ChildrenFacet).Should().BeSameAs(f);
+    }
+
+    [Fact]
+    public void One_to_many_relation_facet_still_prunes_its_own_relation_dotted_condition()
+    {
+        FacetFilterPruner.Prune(Eq("children.name", "Tech"), ChildrenFacet).Should().BeNull();
+    }
+
+    [Fact]
+    public void One_to_many_relation_facet_still_prunes_its_own_relation_predicate()
+    {
+        var predicate = new RelationPredicateFilter("children", RelationQuantifier.Some, Eq("name", "Tech"));
+        FacetFilterPruner.Prune(predicate, ChildrenFacet).Should().BeNull();
+    }
 }
