@@ -12,7 +12,7 @@ namespace Struo.Infrastructure.Changes;
 /// </summary>
 public sealed class ItemChangeNotifier(IEnumerable<IItemChangeListener> listeners, ILogger<ItemChangeNotifier> logger) : IItemChangeNotifier
 {
-    private readonly IReadOnlyList<IItemChangeListener> listeners = listeners.ToList();
+    private readonly List<IItemChangeListener> listeners = listeners.ToList();
 
     public async Task NotifyAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default)
     {

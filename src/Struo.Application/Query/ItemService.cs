@@ -352,13 +352,13 @@ public sealed class ItemService(
             // orphan revision). Revision capture is gated on the atomic UPDATE actually having
             // affected the row, so a losing concurrent DELETE (or a repeat DELETE of an already-trashed
             // row) records nothing.
-            var softDeletedNow = false;
-            await repository.InTransactionAsync(async () =>
+            var softDeletedNow = await repository.InTransactionAsync(async () =>
             {
                 await this.purge.CheckRestrictAsync(collection, id, ct);
-                softDeletedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
-                if (softDeletedNow)
+                var trashedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+                if (trashedNow)
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
+                return trashedNow;
             }, ct);
             if (softDeletedNow)
                 await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed));
@@ -435,16 +435,13 @@ public sealed class ItemService(
         // snapshot — a pre-read check here would leave a TOCTOU window where two concurrent restores of
         // the same row could each pass the check and double-record a "restore" revision. An already-live
         // row (or one restored by a concurrent request first) is a no-op: no Version bump, no revision.
-        var restoredNow = false;
-        if (entity is ISoftDeletable)
+        var restoredNow = entity is ISoftDeletable && await repository.InTransactionAsync(async () =>
         {
-            await repository.InTransactionAsync(async () =>
-            {
-                restoredNow = await repository.RestoreAsync(collection, id, ct);
-                if (restoredNow)
-                    await CaptureRevisionAsync(collection, id, meta, "restore", ct);
-            }, ct);
-        }
+            var r = await repository.RestoreAsync(collection, id, ct);
+            if (r)
+                await CaptureRevisionAsync(collection, id, meta, "restore", ct);
+            return r;
+        }, ct);
         if (restoredNow)
             await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored));
 

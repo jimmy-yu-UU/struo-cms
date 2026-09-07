@@ -76,7 +76,7 @@ public class FileServiceTransactionTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new NoopStorage(), new NoopImages(), new FileStorageOptions(), _repo, new StubLanguages(),
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), _repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester));
     }
 
@@ -159,7 +159,7 @@ public class FileServiceTransactionTests : IDisposable
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 64 };
         var svc = new FileService(
-            _db, new NoopStorage(), new NoopImages(), opts, _repo, new StubLanguages(),
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), _repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester));
         var actualBytes = new byte[64];
 
@@ -176,7 +176,7 @@ public class FileServiceTransactionTests : IDisposable
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 64 };
         var svc = new FileService(
-            _db, new NoopStorage(), new NoopImages(), opts, _repo, new StubLanguages(),
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), _repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester));
         var actualBytes = new byte[65];
 

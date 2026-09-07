@@ -18,14 +18,16 @@ namespace Struo.Infrastructure.Files;
 /// </summary>
 public sealed class FileService(
     ISqlSugarClient db,
-    IFileStorage storage,
-    IImageDimensionReader images,
-    FileStorageOptions options,
+    FileStorageServices storage,
     IItemRepository repository,
     ILanguageProvider languages,
     ICurrentUserAccessor currentUser,
     IItemChangeNotifier? notifier = null)
 {
+    private readonly IFileStorage blobs = storage.Storage;
+    private readonly IImageDimensionReader imageReader = storage.Images;
+    private readonly FileStorageOptions fileOptions = storage.Options;
+
     // U5b: post-commit, best-effort, CancellationToken.None (the write already committed).
     private Task NotifyAsync(Guid id, ItemChangeKind kind)
     {
@@ -40,10 +42,10 @@ public sealed class FileService(
         CancellationToken ct = default)
     {
         if (length <= 0) throw new QueryException("Empty file.");
-        if (length > options.MaxUploadBytes)
-            throw new QueryException($"File exceeds the maximum size of {options.MaxUploadBytes} bytes.");
-        if (options.AllowedContentTypes.Length > 0 &&
-            !options.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
+        if (length > fileOptions.MaxUploadBytes)
+            throw new QueryException($"File exceeds the maximum size of {fileOptions.MaxUploadBytes} bytes.");
+        if (fileOptions.AllowedContentTypes.Length > 0 &&
+            !fileOptions.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             throw new QueryException($"Content type '{contentType}' is not allowed.");
 
         // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
@@ -64,7 +66,7 @@ public sealed class FileService(
         await using var buffer = new FileBufferingReadStream(
             content,
             memoryThreshold: 64 * 1024,
-            bufferLimit: options.MaxUploadBytes,
+            bufferLimit: fileOptions.MaxUploadBytes,
             tempFileDirectoryAccessor: () =>
                 Environment.GetEnvironmentVariable("ASPNETCORE_TEMP") is { Length: > 0 } dir
                     ? dir
@@ -81,7 +83,7 @@ public sealed class FileService(
                 throw new QueryException($"File contents do not match the declared content type '{contentType}'.");
 
             buffer.Position = 0;
-            var dims = images.TryRead(buffer, contentType);
+            var dims = imageReader.TryRead(buffer, contentType);
 
             // FileBufferingReadStream.Length only reflects bytes buffered SO FAR, not the true total,
             // until the inner stream has been fully consumed — S3FileStorage's PutObjectRequest reads
@@ -96,7 +98,7 @@ public sealed class FileService(
         catch (IOException ex) when (ex.Message.Contains("Buffer limit", StringComparison.OrdinalIgnoreCase))
         {
             throw new PayloadTooLargeException(
-                $"File exceeds the maximum size of {options.MaxUploadBytes} bytes.");
+                $"File exceeds the maximum size of {fileOptions.MaxUploadBytes} bytes.");
         }
     }
 
@@ -113,7 +115,7 @@ public sealed class FileService(
         }
 
         var key = StorageKey.Create(fileName);
-        await storage.SaveAsync(key, buffer, contentType, ct);
+        await blobs.SaveAsync(key, buffer, contentType, ct);
 
         var entity = new File
         {
@@ -200,7 +202,7 @@ public sealed class FileService(
 
         await NotifyAsync(id, ItemChangeKind.Purged);
         // storage.DeleteAsync stays outside the transaction: best-effort (row gone, bytes orphaned).
-        try { await storage.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
+        try { await blobs.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
         return true;
     }
 
@@ -209,12 +211,11 @@ public sealed class FileService(
     // deletedat IS NULL) instead of reimplementing that logic here.
     public async Task<bool> TrashAsync(Guid id, CancellationToken ct = default)
     {
-        bool trashed = false;
-        await repository.InTransactionAsync(async () =>
+        var trashed = await repository.InTransactionAsync(async () =>
         {
-            trashed = await repository.SoftDeleteAsync(
+            var trashedNow = await repository.SoftDeleteAsync(
                 FileCollection.Name, id.ToString(), DateTime.UtcNow, currentUser.GetCurrentUserId(), ct);
-            if (!trashed) return;
+            if (!trashedNow) return false;
             // A trashed file is filtered out of every read; if it is the current brand logo, clear the
             // reference now so ConfigController stops resolving it into a dead /content URL (mirrors
             // the logo-clear step in DeleteAsync/purge above).
@@ -222,6 +223,7 @@ public sealed class FileService(
                 .SetColumns(s => new SiteSettings { LogoFileId = null })
                 .Where(s => s.LogoFileId == id)
                 .ExecuteCommandAsync(ct);
+            return true;
         }, ct);
         if (trashed) await NotifyAsync(id, ItemChangeKind.Trashed);
         return trashed;   // blob + FileTranslation rows retained for restore
