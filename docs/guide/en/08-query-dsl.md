@@ -40,7 +40,7 @@ $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: a
 | Pagination | `limit=`, `offset=` | `"limit"`, `"offset"` | No `page` parameter exists — pagination is purely offset-based (see below). |
 | Fields | `fields=a,b,c` | `"fields": ["a","b","c"]` | Restricts which *own* fields are projected (relations and `translations` are unaffected — see below). |
 | Deep | `deep=rel1,rel2` | `"deep": { "rel1": {...} }` | Relation expansion; chapter 7 covers this in full. |
-| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4); combines with `filter` on the same request as AND — a row must satisfy the filter *and* match the search term, not either one. |
+| Search | `search=text` | `"search": "text"` | Free-text `LIKE` OR-ed across every `Searchable` field (chapter 4); combines with `filter` on the same request as AND — a row must satisfy the filter *and* match the search term, not either one. When a fork registers an `ISearchProvider` and it answers this request, a candidate id set replaces the `LIKE` search outright instead — see [Search providers](#search-providers) below. |
 | Soft-delete | `deleted=exclude\|only\|with` | *(query-string only — `GET`/`POST query` both read it from the URL)* | See below. |
 | Locale | `locale=code` | *(query-string only, same as above)* | Effective query locale for translatable-field filter/sort/read (chapter 6). |
 
@@ -217,6 +217,106 @@ with the *effective* (post-clamp) `limit`/`offset` plus the total row count matc
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&limit=2&offset=1"
 {"success":true,"data":[{"fileName":"beta-notes.txt", ...},{"fileName":"gamma-draft.txt", ...}],"meta":{"total":3,"limit":2,"offset":1}}
 ```
+
+## Search providers
+
+`search=` (above) is answered by a built-in `LIKE` scan by default. A fork may instead plug its own
+search engine (Meilisearch, Elasticsearch, PostgreSQL full-text, …) into this same request by
+registering `ISearchProvider` (`src/Struo.Application/Search/ISearchProvider.cs`) — the deliberate
+extension seam this section covers; chapter 1's "What is replaceable" places it alongside
+`IFileStorage`. The default registration, `NullSearchProvider`, never handles a search, so with no
+fork-supplied provider the `LIKE` path above runs completely unchanged.
+
+### The contract
+
+`ItemService.QueryAsync` asks the registered `ISearchProvider` once per list request — only when
+`search=` is non-blank, and never for a single-item `GET` — with a `SearchRequest`
+(`src/Struo.Application/Search/SearchRequest.cs`):
+
+| Field | Meaning |
+|---|---|
+| `Collection` | Collection name as the query DSL sees it (e.g. `article`). |
+| `Term` | The `search=` value verbatim — not trimmed, not lower-cased. |
+| `Locale` | Effective query locale (explicit `locale=`, or the site default). |
+| `SearchableFields` | Core's `Searchable && !Hidden` field names — a hint only; a provider may index other fields entirely. |
+
+The provider answers with a `SearchOutcome` (`src/Struo.Application/Search/SearchOutcome.cs`), one of
+two states:
+
+- **`SearchOutcome.NotHandled`** — core's built-in `LIKE` search runs exactly as it would with no
+  provider registered.
+- **`SearchOutcome.Candidates(ids)`** — the given root ids (as strings) become an `id IN (...)`
+  condition that replaces the `LIKE` search outright; the search term itself is not otherwise
+  consulted. An **empty** candidate list is a handled zero-hit search (`id IS NULL`), never a
+  fallback to `LIKE` — a provider that legitimately found nothing must still return
+  `Candidates([])`, not `NotHandled`.
+
+### How it composes with the rest of the request
+
+- **AND with `filter`, not a replacement for it.** The candidate condition and `filter` both apply —
+  a row must satisfy the filter *and* be one of the candidate ids, not either one.
+- **Independent of `deleted=`, permissions, and `Hidden`.** The candidate id set only says which rows
+  are eligible; the soft-delete mode, per-collection RBAC, and hidden-field handling all still apply
+  exactly as they do for an ordinary request — a candidate id for a row the caller cannot read, or one
+  currently outside the requested `deleted=` mode, is simply excluded downstream like any other row
+  would be.
+- **The list, every facet, and the aggregate all share the same candidate set** (see "Facets and
+  aggregates" below) — `ItemService.QueryAsync` resolves candidates once and threads the same
+  `QueryModel` through the page query, each facet, and the aggregate, so all three report against
+  identical rows.
+- **Candidate order does not affect result order.** The candidates only narrow *which* rows are
+  eligible; `sort=` (or its absence) still decides row order exactly as it would for any other
+  request. A provider's own relevance ranking is not preserved in this version — an external rank
+  survives to the query DSL, if at all, only in the shape of a follow-up feature, not in v1.
+
+### The id trust boundary and the cap
+
+The provider's returned ids are a **trust boundary**, not user input: `SearchCandidateResolver`
+(`src/Struo.Application/Search/SearchCandidateResolver.cs`) parses every id to the collection's
+primary-key CLR type before it ever reaches SQL, because `FilterTranslator` renders the resulting
+`id IN (...)` as typed literals. Only a `Guid` or an integer primary key (`long`/`int`/`short`) is
+supported; any other PK type is refused. The candidate count is also capped by
+`Query:MaxSearchCandidates` (chapter 3, default **1000**). Both an unparsable id and a count over the
+cap are **provider contract violations, not user mistakes** — they throw `InvalidOperationException`
+(→ `INTERNAL_SERVER_ERROR`/500), never `QueryException` (→ `BAD_USER_INPUT`/400), because the caller
+did nothing wrong; the fork's provider did. Duplicate ids across a provider's response are silently
+deduplicated.
+
+### When the provider itself is down
+
+A provider whose engine cannot answer at all (connection refused, timeout, missing index) should
+throw `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) rather
+than returning `NotHandled` — the request then fails with `SEARCH_UNAVAILABLE`/503 (chapter 9) instead
+of silently degrading to a `LIKE` scan the caller might not expect. A provider that would rather
+degrade gracefully to `LIKE` can catch its own exception internally and return `NotHandled` instead;
+both are legitimate choices and the seam does not force one over the other.
+
+### Registering a provider
+
+`AddStruoData()` registers `NullSearchProvider` with `TryAddScoped`, so a fork only needs to add its
+own registration *after* calling `AddStruoData()` (a registration made *before* is also honored,
+since `TryAddScoped` only backs off when something is already registered):
+
+```csharp
+public sealed class StaticSearchProvider : ISearchProvider
+{
+    public Task<SearchOutcome> SearchAsync(SearchRequest request, CancellationToken ct = default)
+    {
+        if (request.Collection != "article") return Task.FromResult(SearchOutcome.NotHandled);
+        IReadOnlyList<string> ids = MyIndex.Lookup(request.Term, request.Locale); // your engine call
+        return Task.FromResult(SearchOutcome.Candidates(ids));
+    }
+}
+// Program.cs, after AddStruoData():
+builder.Services.AddScoped<ISearchProvider, StaticSearchProvider>();
+```
+
+### What core does not do
+
+Keeping a fork's search index in sync with writes (create/update/delete) is deliberately **not**
+part of core — indexing strategy (synchronous, queued, batched) is specific to the search engine a
+fork chooses, so this is the fork's own responsibility today; a write-side sync hook is a possible
+future addition, not something this version provides.
 
 ## Facets and aggregates
 
@@ -417,7 +517,10 @@ aggregate statement; a fork that raises `Query:MaxAggregates` above 10 gets one 
 statement per additional 10 fields requested, since the chunking constant itself does not change.
 `StruoQueryOptions.MaxFacets` (default 10) bounds the facet count, so the worst case for one request at
 the defaults is `2 + 2·MaxFacets + 1` — or, more generally,
-`2 + 2·MaxFacets + ⌈aggregate field count / 10⌉`.
+`2 + 2·MaxFacets + ⌈aggregate field count / 10⌉`. A registered `ISearchProvider` answering the
+candidate path does not change any of this count: the provider call happens once, outside the
+database, before the query runs — it replaces the `LIKE` group with an `id IN (...)` condition inside
+the same statements, adding no extra query.
 
 ### Aggregate ops
 
@@ -584,6 +687,12 @@ denies an unreadable facet target permission-first — its own single-segment
 `DenyUnreadableFacetTarget`, the facet-path analogue of `DenyUnreadableHops` above — before resolving
 the path's shape at all, so an unknown/hidden facet field and an unreadable relation target fail
 exactly the way an unknown filter field or an unreadable dotted filter path do.
+
+A registered `ISearchProvider`'s returned candidate ids skip `QueryValidator` entirely — they are not
+user input, so there is no whitelist to check them against. Instead `SearchCandidateResolver`
+(previous section) parses each one to the collection's primary-key CLR type, and a parse failure is
+`InvalidOperationException`/500, not `QueryException`/400: the fork's provider is at fault, not the
+caller.
 
 ## Worked end-to-end example
 
