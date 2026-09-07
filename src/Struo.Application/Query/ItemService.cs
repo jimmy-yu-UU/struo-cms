@@ -35,7 +35,7 @@ public sealed class ItemService(
     IRevisionStore revisions,
     RevisionSnapshotBuilder snapshotBuilder,
     IUserSessionRevocationService sessionRevocation,
-    // U5: trailing and optional — 22 test files construct ItemService directly (necessary
+    // U5: trailing and optional — existing test files construct ItemService directly (necessary
     // constructor args are not optional there), and DI always injects the AddStruoData-registered
     // instance; null (direct construction) means the built-in LIKE search only.
     ISearchProvider? searchProvider = null) : IItemUseCases
@@ -74,7 +74,10 @@ public sealed class ItemService(
         var searchable = QueryValidator.SearchableFields(meta);
         // A registered ISearchProvider may answer the search with candidate ids (spec §3.2); the same
         // `validated` then feeds the list, every facet and the aggregate, so all three agree (R3).
-        validated = await searchCandidates.ResolveAsync(collection, validated, searchable, queryLocale, ct);
+        // meta.Name (not the raw `collection` argument) is the canonical camelCase collection name:
+        // the REST route segment is case-insensitive (e.g. "/api/items/Article" resolves fine), so a
+        // provider must always see the same name regardless of how the caller cased the request.
+        validated = await searchCandidates.ResolveAsync(meta.Name, validated, searchable, queryLocale, ct);
         var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, deleted, ct);
 
         var entities = result.Rows;

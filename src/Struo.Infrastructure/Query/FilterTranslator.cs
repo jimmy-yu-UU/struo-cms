@@ -12,7 +12,12 @@ namespace Struo.Infrastructure.Query;
 /// paths, relation predicates and translatable leaves become IN (SELECT …) subquery conditionals built in
 /// FilterTranslator.Subquery.cs. When a registered ISearchProvider already resolved the search term to a
 /// candidate root-id set (<c>searchCandidates</c>), a typed `id IN (...)`/`id IS NULL` conditional replaces
-/// the LIKE search group outright. Pure construction — never touches the database.</summary>
+/// the LIKE search group outright — and the <c>search</c> term itself is then ignored even if it is
+/// blank or null, since <c>searchCandidates</c> non-null is what drives the branch, not <c>search</c>'s
+/// own content. The only producer of a non-null <c>searchCandidates</c> is
+/// <see cref="Struo.Application.Search.SearchCandidateResolver"/>, which sets one only for a
+/// non-blank term (see <c>QueryValidator.Validate</c>, which clears any other inbound value). Pure
+/// construction — never touches the database.</summary>
 internal sealed partial class FilterTranslator(
     ISqlSugarClient db, IRelationshipGraph graph, IMetadataProvider metadata, IEntityRegistry registry, StruoQueryOptions options)
 {
