@@ -138,7 +138,9 @@
 ## `Query`
 
 查詢 DSL (第 8 章) 的各項上限，由 `QueryValidator`，以及它所驗證的關聯子查詢下推機制
-`FilterTranslator` (第 7 章) 共同執行。這一節**不在**出貨的 `appsettings.json` 裡——下方每一個
+`FilterTranslator` (第 7 章) 共同執行;下方的 `Query:MaxSearchCandidates` 則改由 `SearchCandidateResolver`
+執行 (第 8 章的[搜尋提供者（Search providers）](08-query-dsl.md#搜尋提供者-search-providers))。這一節
+**不在**出貨的 `appsettings.json` 裡——下方每一個
 預設值都來自 `StruoQueryOptions`
 (`src/Struo.Application/Configuration/StruoQueryOptions.cs`) 的 C# 屬性初始化式;只有在你要覆寫某一項
 時才需要新增 `"Query"` 區塊。
@@ -152,8 +154,9 @@
 | `Query:MaxFacets` | int | `10` | 單一請求中相異的 `facets=`/`"facets"` 路徑數量上限 (去重後計算)。超過會擲出 `"Too many facets (max 10)."`。 |
 | `Query:MaxFacetValues` | int | `50` | 每個 facet (分面計數) 回傳的 `{ value, count }` bucket 數量上限——沒有 `otherCount` 餘量。自有欄位／外鍵／關聯名稱這三種形態是在資料庫層套用 (`ORDER BY count DESC, value ASC` 再 `Take`);一跳加葉欄位形態則是在葉值合併**之前**先對 target-id bucket 套用此上限，合併後的結果會在記憶體中另外重新套用一次上限 (第 8 章「排序與數值上限」)。 |
 | `Query:MaxAggregates` | int | `10` | 單一請求中跨所有 op 的 `aggregate[<op>]=`/`"aggregate"` 欄位總數上限。超過會擲出 `"Too many aggregate fields (max 10)."`。這只是驗證用的上限，不是每條 SQL 陳述式的批次大小——批次大小是固定常數 `AggregateRow.SlotCount = 10` (第 8 章「這項功能要付出多少次查詢」);在預設值下兩者恰好相等，所以上限內的請求永遠只花一條彙總陳述式;但若某個 fork 把這個選項調高超過 10，每多 10 個欄位就會多花一條彙總陳述式，因為分批用的常數並不會跟著調整。 |
+| `Query:MaxSearchCandidates` | int | `1000` | 一個已註冊的 `ISearchProvider` 為單一請求可回傳的候選 id 數量上限 (第 8 章的[搜尋提供者（Search providers）](08-query-dsl.md#搜尋提供者-search-providers))。超過此上限並非截斷，而是 provider 違反契約:`SearchCandidateResolver` 會擲出 `InvalidOperationException` (→ `INTERNAL_SERVER_ERROR`/500)，與一個無法解析為集合主鍵型別的 id 完全相同。 |
 
-這七項都帶 `[Range(1, int.MaxValue)]` 驗證並以 `ValidateOnStart` 綁定，所以填 0 或負值的覆寫會讓啟動
+這八項都帶 `[Range(1, int.MaxValue)]` 驗證並以 `ValidateOnStart` 綁定，所以填 0 或負值的覆寫會讓啟動
 失敗，而不是產生一個沒有意義的上限。第 8 章說明每個上限在實際情境中約束的是什麼。需要重新啟動。
 
 一個 fork 的 `appsettings.*.json` 裡若殘留這項設定被移除之前留下的 `Query:MaxResolvedFilterIds` 鍵，
