@@ -160,7 +160,7 @@ public sealed class ItemPurgePipeline(
         if (srcDesc is null || srcIdProp is null) return;
 
         var srcName = Meta(inbound.SourceCollection).Name;
-        foreach (var row in await repository.QueryWhereInAsync(inbound.SourceCollection, "id", parentIds, ct))
+        foreach (var row in await repository.QueryWhereInAsync(inbound.SourceCollection, srcDesc.IdProperty, parentIds, ct))
         {
             var parentId = srcIdProp.GetValue(row)?.ToString();
             if (parentId is not null) changes.Add(srcName, parentId, ItemChangeKind.Updated);

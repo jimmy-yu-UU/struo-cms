@@ -49,8 +49,11 @@ public static class DataServiceCollectionExtensions
         services.TryAddScoped<ISearchProvider, NullSearchProvider>();
         // Write-side change notifications (U5b). The notifier is always registered; listeners are not —
         // a fork adds `services.AddScoped<IItemChangeListener, MyIndexer>()` (any number). With no
-        // listener registered the notifier returns immediately.
-        services.AddScoped<IItemChangeNotifier, ItemChangeNotifier>();
+        // listener registered the notifier returns immediately. TryAdd so a fork that registers its own
+        // IItemChangeNotifier BEFORE AddStruoData keeps it; one registered AFTER wins anyway (last
+        // registration resolves for a single-service GetRequiredService) — either way it must keep the
+        // never-throw contract IItemChangeNotifier documents.
+        services.TryAddScoped<IItemChangeNotifier, ItemChangeNotifier>();
         services.AddScoped<ItemService>();
         // Expose the use-case seam controllers depend on, forwarding to the SAME scoped
         // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.
