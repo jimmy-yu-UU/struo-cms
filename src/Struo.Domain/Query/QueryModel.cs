@@ -14,4 +14,12 @@ public sealed record QueryModel(
 
     public IReadOnlyList<string>? Facets { get; init; }
     public AggregateSpec? Aggregate { get; init; }
+
+    /// <summary>
+    /// Set by <c>SearchCandidateResolver</c> when a registered <c>ISearchProvider</c> answered this
+    /// request's <see cref="Search"/>: the candidate root ids, already parsed to the PK CLR type and
+    /// deduplicated. Non-null replaces the built-in LIKE search with <c>id IN (…)</c> (an empty list
+    /// matches nothing); null means "no provider answered" and <see cref="Search"/> is used as before.
+    /// </summary>
+    public IReadOnlyList<object>? SearchCandidates { get; init; }
 }
