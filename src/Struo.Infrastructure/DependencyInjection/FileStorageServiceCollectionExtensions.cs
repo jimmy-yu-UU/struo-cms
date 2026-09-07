@@ -38,6 +38,11 @@ public static class FileStorageServiceCollectionExtensions
 
         services.AddSingleton<IImageDimensionReader, ImageDimensionReader>();
 
+        // Parameter object grouping the three storage-side collaborators FileService needs (S107:
+        // keeps its constructor within the parameter-count guideline).
+        services.AddSingleton(sp => new FileStorageServices(
+            sp.GetRequiredService<IFileStorage>(), sp.GetRequiredService<IImageDimensionReader>(), sp.GetRequiredService<FileStorageOptions>()));
+
         // On-the-fly image transform (endpoint wiring) + its disk-backed variant cache.
         // NetVipsImageTransformer is stateless (no fields) so a Singleton is safe and avoids a
         // per-request allocation. DiskImageVariantCache is also stateless beyond its root path.

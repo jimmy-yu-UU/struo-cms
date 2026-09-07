@@ -78,7 +78,7 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
-        _svc = new FileService(_db, _storage, new NoopImages(), new FileStorageOptions(), _repo, new StubLanguages(),
+        _svc = new FileService(_db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), _repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester),
             notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()));
     }
@@ -136,7 +136,7 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Without_a_notifier_the_service_behaves_as_before()
     {
-        var plain = new FileService(_db, _storage, new NoopImages(), new FileStorageOptions(), _repo, new StubLanguages(),
+        var plain = new FileService(_db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), _repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester));
         var f = await plain.UploadAsync(new MemoryStream([1]), "b.bin", "application/octet-stream", 1);
         (await plain.TrashAsync(f.Id)).Should().BeTrue();
