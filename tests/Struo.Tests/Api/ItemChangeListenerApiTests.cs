@@ -1,5 +1,6 @@
 // tests/Struo.Tests/Api/ItemChangeListenerApiTests.cs
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
@@ -95,6 +96,28 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
         b.Calls.Should().ContainSingle();
         a.All.Should().ContainSingle().Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Trashed));
         b.All.Should().ContainSingle().Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Trashed));
+    }
+
+    // Proves DI actually injects the notifier into FileService: it is registered in AddStruoFiles(),
+    // a DIFFERENT extension method from AddStruoData() (which registers IItemChangeNotifier itself),
+    // so a wiring regression there would not be caught by the generic-item tests above.
+    [Fact]
+    public async Task Rest_file_upload_reaches_every_registered_listener_once()
+    {
+        var (client, a, b) = await HostAsync();
+
+        // application/octet-stream is not in FileStorageOptions.AllowedContentTypes (appsettings.json);
+        // text/plain is, and matches the multipart pattern other Files tests already use.
+        var content = new ByteArrayContent([1, 2, 3]) { Headers = { ContentType = new MediaTypeHeaderValue("text/plain") } };
+        using var form = new MultipartFormDataContent { { content, "file", "u5b.txt" } };
+        var uploaded = await client.PostAsync("/api/files", form);
+        uploaded.StatusCode.Should().Be(HttpStatusCode.Created, await uploaded.Content.ReadAsStringAsync());
+        var id = await IdOf(uploaded);
+
+        foreach (var l in new[] { a, b })
+            l.Calls.Should().ContainSingle()
+                .Which.Should().ContainSingle()
+                .Which.Should().Be(new ItemChange("file", id, ItemChangeKind.Created));
     }
 
     [Fact]
