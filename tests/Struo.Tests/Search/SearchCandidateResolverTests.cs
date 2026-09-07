@@ -41,7 +41,8 @@ public class SearchCandidateResolverTests
         var provider = new ScriptedSearchProvider(_ => SearchOutcome.NotHandled);
         await Resolver(provider).ResolveAsync("category", Query("  Hello "), ["name"], "zh-TW", default);
         provider.Requests.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new SearchRequest("category", "  Hello ", "zh-TW", ["name"]));
+            .Which.Should().BeEquivalentTo(new SearchRequest("category", "  Hello ", "zh-TW", ["name"]),
+                o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -90,6 +91,47 @@ public class SearchCandidateResolverTests
     }
 
     [Fact]
+    public async Task Int_pk_collections_parse_int_ids()
+    {
+        var registry = new EntityRegistry(new Dictionary<string, EntityDescriptor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["intKeyed"] = new(typeof(IntKeyed), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["id"] = "Id" }, "Id"),
+        });
+        var resolver = new SearchCandidateResolver(
+            new ScriptedSearchProvider(_ => SearchOutcome.Candidates(["7", "42"])), new StruoQueryOptions(), registry);
+        var result = await resolver.ResolveAsync("intKeyed", Query("x"), [], "en", default);
+        result.SearchCandidates.Should().Equal(7, 42);
+        result.SearchCandidates![0].Should().BeOfType<int>();
+    }
+
+    [Fact]
+    public async Task Short_pk_collections_parse_short_ids()
+    {
+        var registry = new EntityRegistry(new Dictionary<string, EntityDescriptor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["shortKeyed"] = new(typeof(ShortKeyed), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["id"] = "Id" }, "Id"),
+        });
+        var resolver = new SearchCandidateResolver(
+            new ScriptedSearchProvider(_ => SearchOutcome.Candidates(["7", "42"])), new StruoQueryOptions(), registry);
+        var result = await resolver.ResolveAsync("shortKeyed", Query("x"), [], "en", default);
+        result.SearchCandidates.Should().Equal((short)7, (short)42);
+        result.SearchCandidates![0].Should().BeOfType<short>();
+    }
+
+    [Fact]
+    public async Task A_descriptor_whose_FieldToProperty_lacks_id_throws()
+    {
+        var registry = new EntityRegistry(new Dictionary<string, EntityDescriptor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["noId"] = new(typeof(IntKeyed), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), "Id"),
+        });
+        var resolver = new SearchCandidateResolver(
+            new ScriptedSearchProvider(_ => SearchOutcome.Candidates(["7"])), new StruoQueryOptions(), registry);
+        var act = () => resolver.ResolveAsync("noId", Query("x"), [], "en", default);
+        (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage("*exposes no 'id' field*");
+    }
+
+    [Fact]
     public async Task More_candidates_than_MaxSearchCandidates_is_a_provider_contract_violation()
     {
         var ids = Enumerable.Range(0, 3).Select(_ => Guid.NewGuid().ToString()).ToList();
@@ -123,4 +165,6 @@ public class SearchCandidateResolverTests
     }
 
     private sealed class StrKeyed { public string Id { get; set; } = ""; }
+    private sealed class IntKeyed { public int Id { get; set; } }
+    private sealed class ShortKeyed { public short Id { get; set; } }
 }
