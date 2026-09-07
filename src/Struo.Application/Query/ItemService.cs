@@ -1,6 +1,7 @@
 // src/Struo.Application/Query/ItemService.cs
 using System.Text.Json;
 using Struo.Application.Abstractions;
+using Struo.Application.Changes;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Application.Localization;
@@ -38,7 +39,10 @@ public sealed class ItemService(
     // U5: trailing and optional — existing test files construct ItemService directly (necessary
     // constructor args are not optional there), and DI always injects the AddStruoData-registered
     // instance; null (direct construction) means the built-in LIKE search only.
-    ISearchProvider? searchProvider = null) : IItemUseCases
+    ISearchProvider? searchProvider = null,
+    // U5b: trailing and optional, same rationale as searchProvider above; null means no listener
+    // is registered (or a test harness doesn't care), so NotifyAsync below is a no-op.
+    IItemChangeNotifier? notifier = null) : IItemUseCases
 {
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
@@ -172,10 +176,11 @@ public sealed class ItemService(
         // otherwise a failure after the parent insert leaves a row that violates invariants the API
         // enforces (e.g. "default-locale translation required").
         object created = null!;
+        object createdId = null!;
         await repository.InTransactionAsync(async () =>
         {
             created = await repository.CreateAsync(collection, entity, ct);
-            var createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
+            createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
             if (meta.Revisions)
@@ -185,6 +190,7 @@ public sealed class ItemService(
             }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
+        await NotifyAsync(SingleChange(meta.Name, createdId, ItemChangeKind.Created));
         return projector.Project(created, meta, null);
     }
 
@@ -256,11 +262,12 @@ public sealed class ItemService(
 
         // Parent row + M2M + translations commit atomically (see CreateAsync).
         object? updated = null;
+        object updatedId = null!;
         await repository.InTransactionAsync(async () =>
         {
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
-            var updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
+            updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
@@ -274,6 +281,7 @@ public sealed class ItemService(
         }, ct);
         if (updated is null) return null;
         InvalidateLanguagesIfNeeded(collection);
+        await NotifyAsync(SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
         return projector.Project(updated, meta, null);
     }
 
@@ -344,19 +352,24 @@ public sealed class ItemService(
             // orphan revision). Revision capture is gated on the atomic UPDATE actually having
             // affected the row, so a losing concurrent DELETE (or a repeat DELETE of an already-trashed
             // row) records nothing.
+            var softDeletedNow = false;
             await repository.InTransactionAsync(async () =>
             {
                 await this.purge.CheckRestrictAsync(collection, id, ct);
-                var softDeletedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
+                softDeletedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
                 if (softDeletedNow)
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
             }, ct);
+            if (softDeletedNow)
+                await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed));
             await RevokeSessionsIfUserAsync(collection, id);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
+        var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(
-            () => this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), ct), ct);
+            () => this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
+        if (existed) await NotifyAsync(changes);
         if (existed) await RevokeSessionsIfUserAsync(collection, id);
         return existed;
     }
@@ -415,15 +428,18 @@ public sealed class ItemService(
         // snapshot — a pre-read check here would leave a TOCTOU window where two concurrent restores of
         // the same row could each pass the check and double-record a "restore" revision. An already-live
         // row (or one restored by a concurrent request first) is a no-op: no Version bump, no revision.
+        var restoredNow = false;
         if (entity is ISoftDeletable)
         {
             await repository.InTransactionAsync(async () =>
             {
-                var restoredNow = await repository.RestoreAsync(collection, id, ct);
+                restoredNow = await repository.RestoreAsync(collection, id, ct);
                 if (restoredNow)
                     await CaptureRevisionAsync(collection, id, meta, "restore", ct);
             }, ct);
         }
+        if (restoredNow)
+            await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored));
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : projector.Project(restored, meta, null);
@@ -510,6 +526,18 @@ public sealed class ItemService(
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
         return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, m2mSource.M2MDescriptors(collection)) };
+    }
+
+    // U5b: post-commit change notification. CancellationToken.None on purpose — the write already
+    // committed, so a disconnecting caller must not leave a listener (an index) behind.
+    private Task NotifyAsync(ItemChangeSet changes) =>
+        notifier is null || changes.Count == 0 ? Task.CompletedTask : notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
+
+    private static ItemChangeSet SingleChange(string collection, object id, ItemChangeKind kind)
+    {
+        var set = new ItemChangeSet();
+        set.Add(collection, id.ToString()!, kind);
+        return set;
     }
 
     private CollectionMetadata Meta(string collection) =>

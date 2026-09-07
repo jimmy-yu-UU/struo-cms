@@ -1,4 +1,5 @@
 // src/Struo.Application/Query/Write/ItemPurgePipeline.cs
+using Struo.Application.Changes;
 using Struo.Application.Metadata;
 using Struo.Application.Revisions;
 using Struo.Domain.Metadata.Models;
@@ -53,9 +54,14 @@ public sealed class ItemPurgePipeline(
     /// Cascade-deleted rows go through steps 1-7 too, so their own junctions/translations/revisions
     /// are cleaned up exactly like the top-level target. Returns whether the row existed (step 7's
     /// result) — false for an id that does not exist, or one already visited in this purge.
+    /// <paramref name="changes"/> collects the whole cascade's <see cref="ItemChange"/>s (one
+    /// <see cref="ItemChangeKind.Purged"/> per deleted row, one <see cref="ItemChangeKind.Updated"/>
+    /// per live SetNull child) across every recursive call sharing the same set, for the caller to
+    /// raise as ONE post-commit notification.
     /// </summary>
     public async Task<bool> PurgeCoreAsync(
-        string collection, string id, HashSet<(string Collection, string Id)> visited, CancellationToken ct)
+        string collection, string id, HashSet<(string Collection, string Id)> visited,
+        ItemChangeSet changes, CancellationToken ct)
     {
         if (!visited.Add((collection, id))) return false;
 
@@ -64,7 +70,10 @@ public sealed class ItemPurgePipeline(
         var typedId = TypedId(collection, id);
 
         foreach (var (sourceCollection, foreignKey) in graph.InboundSetNull(collection))
+        {
+            await CollectSetNullUpdatesAsync(sourceCollection, foreignKey, typedId, changes, ct);
             await repository.SetForeignKeyNullAsync(sourceCollection, foreignKey, typedId, ct);
+        }
 
         foreach (var (sourceCollection, foreignKey) in graph.InboundCascade(collection))
         {
@@ -80,7 +89,7 @@ public sealed class ItemPurgePipeline(
             {
                 var childId = srcIdProp.GetValue(row)?.ToString();
                 if (childId is not null)
-                    await PurgeCoreAsync(sourceCollection, childId, visited, ct);
+                    await PurgeCoreAsync(sourceCollection, childId, visited, changes, ct);
             }
         }
 
@@ -96,7 +105,27 @@ public sealed class ItemPurgePipeline(
         if (meta.Revisions)
             await revisions.DeleteForItemAsync(collection, id, ct);
 
-        return await repository.DeleteAsync(collection, id, ct);
+        var deleted = await repository.DeleteAsync(collection, id, ct);
+        if (deleted) changes.Add(meta.Name, typedId.ToString()!, ItemChangeKind.Purged);
+        return deleted;
+    }
+
+    // U5b: a SetNull child's document changes too (its FK is about to be cleared), so record an
+    // Updated for every LIVE row that still points at the purge target — read before the UPDATE,
+    // through the same typed QueryWhereInAsync the Restrict guard uses. Trashed children are skipped:
+    // they are not in any index and a later restore raises its own Restored.
+    private async Task CollectSetNullUpdatesAsync(
+        string sourceCollection, string foreignKey, object typedId, ItemChangeSet changes, CancellationToken ct)
+    {
+        var srcDesc = registry.Get(sourceCollection);
+        var srcIdProp = srcDesc?.EntityType.GetProperty(srcDesc.IdProperty);
+        if (srcDesc is null || srcIdProp is null) return;
+        var srcName = Meta(sourceCollection).Name;
+        foreach (var row in await repository.QueryWhereInAsync(sourceCollection, foreignKey, [typedId], ct))
+        {
+            var childId = srcIdProp.GetValue(row)?.ToString();
+            if (childId is not null) changes.Add(srcName, childId, ItemChangeKind.Updated);
+        }
     }
 
     /// <summary>Coerces a string id to <paramref name="collection"/>'s PK CLR type (e.g. Guid, long).</summary>
