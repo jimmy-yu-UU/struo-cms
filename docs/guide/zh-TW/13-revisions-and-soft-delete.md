@@ -363,7 +363,12 @@ Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = de
   `try`/`catch` 裡，依註冊順序呼叫每一個已註冊的 listener：一個擲出例外的 listener 會被記錄在
   `Error` 等級(listener 的型別名稱、批次大小、一份逐 kind 的計數摘要)，而**下一個 listener
   仍然會執行**。寫入的*結果*在通知執行之前就已經決定——在 `NotifyAsync` 被呼叫的那一刻就已經
-  確定了——一個 listener 的成功或失敗都無法改變它；也沒有重試。但這個呼叫是在 HTTP 回應被產生
+  確定了——一個 listener 的成功或失敗都無法改變它；也沒有重試。不過反過來卻不成立：一個
+  listener 已經被呼叫過，並不能證明客戶端看到的就是成功。一次 `user` 的移入回收桶或清除，仍然
+  會在通知 listener*之後*執行 session 撤銷，而這個步驟仍然可能讓這次請求失敗，回傳
+  `SESSION_REVOCATION_FAILED`(第 12 章)；還原也一樣，會在通知*之後*才重新讀回這筆資料列，
+  用來建構它的回應。所以「listener 執行過了」並不代表「這次寫入，以客戶端所經歷到的結果而言，
+  是成功的」。但這個呼叫是在 HTTP 回應被產生
   之前、以內嵌的方式被 `await`，所以 listener 會在同一個請求上一個接著一個依序執行：一個緩慢的
   listener 會拖慢這次寫入的回應時間。這正是應該把工作放進佇列、在 listener 內部處理，而不是
   內嵌呼叫一個緩慢外部系統的實際理由——理由不是持久性，而是延遲。一個需要讓遞送在 listener
@@ -443,15 +448,20 @@ services.AddScoped<IItemChangeListener, SearchIndexListener>();
 
 Listener 是以 `IEnumerable<IItemChangeListener>` 解析的——與 `ISearchProvider` 單一插槽的
 `TryAddScoped` 不同，可以註冊任意數量，而註冊順序只決定它們被呼叫的先後，而不是它們是否會被
-呼叫。
+呼叫。請像上面那樣把 listener 註冊為 scoped；一個 **singleton** listener 絕不能在建構函式裡
+捕捉一個 scoped 服務(一個 captive dependency)——要嘛讓它自己的相依項也全部是 singleton，要嘛
+改成透過 `IServiceScopeFactory`，在每次呼叫時自行解析出一個 scope。
 
 在沒有任何 listener 註冊的情況下，建立/更新/移入回收桶/還原除了寫入本身之外不會多做任何事——
 `ItemChangeNotifier.NotifyAsync` 在面對一個空的 listener 清單時會立刻回傳。即使如此，
 **清除**也並非完全沒有成本：`ItemService.DeleteAsync` 一律會配置一個 `ItemChangeSet`，而
-`ItemPurgePipeline.PurgeCoreAsync` 一律會針對每一個傳入的 `OnDelete.SetNull` 關聯，以及
-每一個傳入的多對多 junction，多執行一次額外的型別化讀取——`CollectSetNullUpdatesAsync`/
-`CollectInboundM2MUpdatesAsync`——藉此知道它即將影響哪些存活中的資料列，不論是否有任何
-listener 註冊來聽取這件事。
+`ItemPurgePipeline.PurgeCoreAsync` 一律會針對每一個傳入的 `OnDelete.SetNull` 關聯，多執行一次
+額外的型別化讀取(`CollectSetNullUpdatesAsync`)；而針對每一個傳入的多對多 junction，則會多執行
+**兩次**額外的型別化讀取(`CollectInboundM2MUpdatesAsync`：先讀 junction 資料列本身，再針對
+這些資料列點名的父層 id，做一次存活父層過濾)——藉此知道它即將影響哪些存活中的資料列，不論是
+否有任何 listener 註冊來聽取這件事。清除一個被廣泛參照的目標(例如一個掛在 5 萬篇文章上的
+tag)，因此會針對每一個父層 id 建出一個 `IN` 子句，並在這次請求裡，把這麼大的一批資料一次性、
+同步地交給 listener。
 
 ### 可觀測性、對帳與重入
 

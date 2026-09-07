@@ -391,7 +391,12 @@ at the SQL level (zero rows affected, same gate the revision-capture table above
   logged at `Error` (listener type name, batch size, a per-kind count summary) and the **next
   listener still runs**. The write's *result* is decided before notification runs — it is already
   determined by the point `NotifyAsync` is called — and a listener's success or failure cannot change
-  it; there is no retry. But the call is `await`ed inline, before the HTTP response is produced, so
+  it; there is no retry. The converse does not hold, though: a listener having been called is not
+  proof the client saw success. A `user` trash or purge still runs session revocation *after*
+  notifying listeners, and that step can still fail the request with `SESSION_REVOCATION_FAILED`
+  (Chapter 12); a restore, too, re-reads the row *after* notifying, to build its
+  response. So "the listener ran" does not imply "the write, as the client experienced it, succeeded."
+  But the call is `await`ed inline, before the HTTP response is produced, so
   listeners run one after another on the same request: a slow listener slows the write's response
   time. That is the practical reason to queue work inside a listener rather than call a slow external
   system inline — not durability, but latency. A fork that needs delivery to survive a listener crash
@@ -475,15 +480,20 @@ services.AddScoped<IItemChangeListener, SearchIndexListener>();
 
 Listeners resolve as `IEnumerable<IItemChangeListener>` — unlike `ISearchProvider`'s single-slot
 `TryAddScoped`, any number can be registered, and registration order only decides the order they are
-called in, not whether they are.
+called in, not whether they are. Register listeners scoped, as shown above; a **singleton** listener
+must not capture a scoped service in its constructor (a captive dependency) — keep its own
+dependencies singleton too, or resolve a scope per call via `IServiceScopeFactory`.
 
 With no listener registered, create/update/trash/restore add nothing beyond the write itself —
 `ItemChangeNotifier.NotifyAsync` returns immediately on an empty listener list. A **purge** is not
 quite free even then: `ItemService.DeleteAsync` always allocates an `ItemChangeSet`, and
 `ItemPurgePipeline.PurgeCoreAsync` always runs one extra typed read per inbound `OnDelete.SetNull`
-relation and per inbound many-to-many junction — `CollectSetNullUpdatesAsync` /
-`CollectInboundM2MUpdatesAsync` — to know which live rows it is about to affect, whether or not any
-listener is registered to hear about it.
+relation (`CollectSetNullUpdatesAsync`) and, per inbound many-to-many junction, **two** extra typed
+reads (`CollectInboundM2MUpdatesAsync`: the junction rows themselves, then a live-parent filter over
+the parent ids they named) — to know which live rows it is about to affect, whether or not any
+listener is registered to hear about it. Purging a widely-referenced target (a tag on 50k articles,
+say) therefore builds one `IN` clause over every one of those parent ids, and hands listeners a
+single synchronous batch of that size inside the request.
 
 ### Observability, reconciliation, and re-entrancy
 
