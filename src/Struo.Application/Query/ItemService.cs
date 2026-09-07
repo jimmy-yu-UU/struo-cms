@@ -369,8 +369,11 @@ public sealed class ItemService(
         var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(
             () => this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
-        if (existed) await NotifyAsync(changes);
-        if (existed) await RevokeSessionsIfUserAsync(collection, id);
+        if (existed)
+        {
+            await NotifyAsync(changes);
+            await RevokeSessionsIfUserAsync(collection, id);
+        }
         return existed;
     }
 
@@ -529,7 +532,11 @@ public sealed class ItemService(
     }
 
     // U5b: post-commit change notification. CancellationToken.None on purpose — the write already
-    // committed, so a disconnecting caller must not leave a listener (an index) behind.
+    // committed, so a disconnecting caller must not leave a listener (an index) behind. The
+    // never-throw guarantee (a listener failure must not fail the write) lives in the notifier
+    // implementation itself (Struo.Infrastructure.Changes.ItemChangeNotifier) — a fork replacing
+    // IItemChangeNotifier must preserve it, or a bad listener would turn a successful write into an
+    // error response.
     private Task NotifyAsync(ItemChangeSet changes) =>
         notifier is null || changes.Count == 0 ? Task.CompletedTask : notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
 

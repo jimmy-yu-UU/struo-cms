@@ -56,7 +56,8 @@ public sealed class ItemPurgePipeline(
     /// result) — false for an id that does not exist, or one already visited in this purge.
     /// <paramref name="changes"/> collects the whole cascade's <see cref="ItemChange"/>s (one
     /// <see cref="ItemChangeKind.Purged"/> per deleted row, one <see cref="ItemChangeKind.Updated"/>
-    /// per live SetNull child) across every recursive call sharing the same set, for the caller to
+    /// per live SetNull child, and one <see cref="ItemChangeKind.Updated"/> per live parent that loses
+    /// an inbound M2M link) across every recursive call sharing the same set, for the caller to
     /// raise as ONE post-commit notification.
     /// </summary>
     public async Task<bool> PurgeCoreAsync(
@@ -96,8 +97,11 @@ public sealed class ItemPurgePipeline(
         foreach (var desc in m2mSource.M2MDescriptors(collection))
             await repository.DeleteByPropertyAsync(desc.JunctionType, desc.ParentFkProperty, typedId, ct);
         foreach (var inboundDesc in m2mSource.InboundM2MDescriptors(collection))
+        {
+            await CollectInboundM2MUpdatesAsync(inboundDesc, typedId, changes, ct);
             await repository.DeleteByPropertyAsync(
                 inboundDesc.Descriptor.JunctionType, inboundDesc.Descriptor.TargetFkProperty, typedId, ct);
+        }
 
         if (meta.Translation is { } tm)
             await repository.DeleteByPropertyAsync(tm.TranslationEntityType, tm.ForeignKeyProperty, typedId, ct);
@@ -125,6 +129,41 @@ public sealed class ItemPurgePipeline(
         {
             var childId = srcIdProp.GetValue(row)?.ToString();
             if (childId is not null) changes.Add(srcName, childId, ItemChangeKind.Updated);
+        }
+    }
+
+    // U5b fix round 1 (spec R4 extension): purging a target whose inbound M2M junction rows are about
+    // to be deleted also changes each LIVE parent that carried the link — e.g. purging a Tag drops it
+    // from every Article that referenced it. Reads the junction rows via the same typed
+    // QueryEntityWhereInAsync the delete just below uses, resolves each row's parent id (reflection on
+    // the junction type, same style as the Cascade/SetNull id reads above), then keeps only LIVE
+    // parents via QueryWhereInAsync (soft-delete floor applies), mirroring CollectSetNullUpdatesAsync's
+    // own live-only semantics — a trashed parent is skipped, not raised.
+    private async Task CollectInboundM2MUpdatesAsync(
+        InboundM2MDescriptor inbound, object typedId, ItemChangeSet changes, CancellationToken ct)
+    {
+        var desc = inbound.Descriptor;
+        var junctionRows = await repository.QueryEntityWhereInAsync(desc.JunctionType, desc.TargetFkProperty, [typedId], ct);
+        if (junctionRows.Count == 0) return;
+
+        var parentFkProp = desc.JunctionType.GetProperty(desc.ParentFkProperty);
+        if (parentFkProp is null) return;
+        var parentIds = junctionRows
+            .Select(row => parentFkProp.GetValue(row))
+            .Where(v => v is not null)
+            .Select(v => v!)
+            .ToList();
+        if (parentIds.Count == 0) return;
+
+        var srcDesc = registry.Get(inbound.SourceCollection);
+        var srcIdProp = srcDesc?.EntityType.GetProperty(srcDesc.IdProperty);
+        if (srcDesc is null || srcIdProp is null) return;
+
+        var srcName = Meta(inbound.SourceCollection).Name;
+        foreach (var row in await repository.QueryWhereInAsync(inbound.SourceCollection, "id", parentIds, ct))
+        {
+            var parentId = srcIdProp.GetValue(row)?.ToString();
+            if (parentId is not null) changes.Add(srcName, parentId, ItemChangeKind.Updated);
         }
     }
 

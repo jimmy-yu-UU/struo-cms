@@ -109,6 +109,12 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
 
+    /// <summary>The SQLite connection string backing this harness's DB file — lets a test open a
+    /// genuinely separate <c>ISqlSugarClient</c> on the same file (e.g. to prove a listener runs
+    /// post-commit: only a second connection can discriminate "row visible" from "same-connection
+    /// read", since the latter would see an uncommitted row too).</summary>
+    public string ConnectionString => _file.ConnectionString;
+
     /// <summary>The real revision store — always DB-backed, even when <see cref="Service"/> itself
     /// was wired with a throwing wrapper around it (rollback-atomicity test).</summary>
     public IRevisionStore RevisionStore { get; }

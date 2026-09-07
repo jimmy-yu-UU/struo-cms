@@ -1,9 +1,12 @@
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using Struo.Application.Changes;
-using Struo.Domain.Query;
+using Struo.Application.Configuration;
 using Struo.Infrastructure.Changes;
+using Struo.Infrastructure.Persistence;
+using Struo.Sample.Blog;
 using Struo.Tests.Query;
 using Struo.Tests.Support;
 using Xunit;
@@ -35,6 +38,13 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
         var parentPart = parentId is null ? "" : $",\"parentId\":\"{parentId}\"";
         return $"{{\"name\":\"{name}\",\"translations\":{{\"en\":{{\"title\":\"{name}\"}}}}{parentPart}}}";
     }
+
+    // Plain interpolation (not a raw string) — the JSON's own "}}" runs around "translations"/"en"
+    // repeatedly collide with raw-interpolated-string brace-counting rules (see the CS9007 note on
+    // Create_with_relations_and_translations_is_still_one_call below), so this sidesteps that class
+    // of literal-vs-interpolation ambiguity entirely.
+    private static string ArticleBody(string title, string tagId) =>
+        $"{{\"status\":\"draft\",\"translations\":{{\"en\":{{\"title\":\"{title}\"}}}},\"tags\":[\"{tagId}\"]}}";
 
     private async Task<string> CreateAsync(string collection, string json)
     {
@@ -122,6 +132,27 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     }
 
     [Fact]
+    public async Task Purge_raises_Updated_for_live_parents_that_lose_an_inbound_M2M_link()
+    {
+        // Fix round 1 (spec R4 extension): purging a Tag deletes the INBOUND article_tags junction
+        // rows (Article declares the M2M, Tag does not), so every LIVE article that carried the tag
+        // must itself get an Updated. a3 is linked too but trashed before the purge — mirroring
+        // CollectSetNullUpdatesAsync's live-only semantics, a trashed parent must NOT be raised.
+        var tag = await CreateAsync("tag", """{"name":"t"}""");
+        var a1 = await CreateAsync("article", ArticleBody("A1", tag));
+        var a2 = await CreateAsync("article", ArticleBody("A2", tag));
+        var a3 = await CreateAsync("article", ArticleBody("A3", tag));
+        await _h.Service.DeleteAsync("article", a3); // trash a3 — must be excluded below
+        _listener.Calls.Clear();
+
+        await _h.Service.DeleteAsync("tag", tag, purge: true);
+
+        var call = _listener.Calls.Should().ContainSingle().Subject;
+        call.Select(c => (c.Collection, c.Id, c.Kind)).Should().BeEquivalentTo(
+            [("tag", tag, ItemChangeKind.Purged), ("article", a1, ItemChangeKind.Updated), ("article", a2, ItemChangeKind.Updated)]);
+    }
+
+    [Fact]
     public async Task Purge_of_an_unknown_id_raises_nothing()
     {
         await _h.Service.DeleteAsync("category", Guid.NewGuid().ToString(), purge: true);
@@ -131,14 +162,23 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Listener_runs_after_commit_and_can_read_the_new_row()
     {
-        // The probe reads through the SAME harness's repository (a separate connection would not see an
-        // uncommitted row on SQLite either, but reading via the harness proves the row is committed
-        // and visible to ordinary reads by the time the listener runs).
-        object? seen = null;
+        // Fix round 1: reads through a SECOND ISqlSugarClient opened on the same SQLite file, not
+        // through the harness's own repository/connection. A same-connection read is not a real
+        // discriminator — SQLite's own connection would see its own uncommitted row too, so that
+        // would "pass" even if NotifyAsync ran BEFORE the commit. A genuinely separate connection can
+        // only see the row once the write has actually committed, which is the property this test
+        // means to prove.
+        Category? seen = null;
         PurgeIntegrityHarness h = null!;
         var probe = new RecordingItemChangeListener
         {
-            OnCall = async changes => seen = await h.Repository.GetByIdAsync(changes[0].Collection, changes[0].Id),
+            OnCall = async changes =>
+            {
+                var db = SqlSugarClientFactory.Create(
+                    new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = h.ConnectionString },
+                    new TestCurrentUserAccessor(Guid.Empty));
+                seen = await db.Queryable<Category>().In(Guid.Parse(changes[0].Id)).FirstAsync();
+            },
         };
         h = PurgeIntegrityHarness.Create(notifier: new ItemChangeNotifier([probe], _log));
         using (h)
