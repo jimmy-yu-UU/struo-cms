@@ -255,19 +255,21 @@ two states:
 
 - **AND with `filter`, not a replacement for it.** The candidate condition and `filter` both apply —
   a row must satisfy the filter *and* be one of the candidate ids, not either one.
-- **Independent of `deleted=`, permissions, and `Hidden`.** The candidate id set only says which rows
-  are eligible; the soft-delete mode, per-collection RBAC, and hidden-field handling all still apply
-  exactly as they do for an ordinary request — a candidate id for a row the caller cannot read, or one
-  currently outside the requested `deleted=` mode, is simply excluded downstream like any other row
-  would be.
+- **Independent of `deleted=`, permissions, and `Hidden`.** Core's read permission check is
+  collection-level, not per-row (`ItemService.QueryAsync` already ran `CanRead` and would have thrown
+  `PermissionDeniedException` before the provider is ever asked), so there is no per-row RBAC for a
+  candidate id to bypass; `Hidden` field handling is likewise per-field, unrelated to which rows are
+  eligible. The one thing that does filter candidate rows downstream is the soft-delete mode: a
+  candidate id for a row currently outside the requested `deleted=` mode (e.g. a trashed row under the
+  default `exclude`) is excluded exactly like any other row would be.
 - **The list, every facet, and the aggregate all share the same candidate set** (see "Facets and
   aggregates" below) — `ItemService.QueryAsync` resolves candidates once and threads the same
   `QueryModel` through the page query, each facet, and the aggregate, so all three report against
   identical rows.
 - **Candidate order does not affect result order.** The candidates only narrow *which* rows are
   eligible; `sort=` (or its absence) still decides row order exactly as it would for any other
-  request. A provider's own relevance ranking is not preserved in this version — an external rank
-  survives to the query DSL, if at all, only in the shape of a follow-up feature, not in v1.
+  request. A provider's own relevance ranking is not preserved in this version — preserving it is a
+  possible follow-up, not something this version provides.
 
 ### The id trust boundary and the cap
 
@@ -279,8 +281,10 @@ supported; any other PK type is refused. The candidate count is also capped by
 `Query:MaxSearchCandidates` (chapter 3, default **1000**). Both an unparsable id and a count over the
 cap are **provider contract violations, not user mistakes** — they throw `InvalidOperationException`
 (→ `INTERNAL_SERVER_ERROR`/500), never `QueryException` (→ `BAD_USER_INPUT`/400), because the caller
-did nothing wrong; the fork's provider did. Duplicate ids across a provider's response are silently
-deduplicated.
+did nothing wrong; the fork's provider did. `StruoExceptionHandler.Map` logs every
+`INTERNAL_SERVER_ERROR` case at `Error` server-side, so a misbehaving provider's violation is not
+silent to the operator even though the client only ever sees the masked generic message. Duplicate ids
+across a provider's response are silently deduplicated.
 
 ### When the provider itself is down
 

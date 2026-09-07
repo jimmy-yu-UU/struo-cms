@@ -487,13 +487,15 @@ construction) simply means "the built-in `LIKE` search only," identical to what 
 (`NullSearchProvider`) also yields. `ItemService.QueryAsync` consults the provider through
 `SearchCandidateResolver` (`src/Struo.Application/Search/SearchCandidateResolver.cs`) exactly once per
 list request, only when `Search` is non-blank: it asks the provider, and when the outcome is
-`Candidates`, parses each returned id to the collection's primary-key CLR type (only `Guid` or an
-integer type is supported — anything else is refused), caps the count at
-`StruoQueryOptions.MaxSearchCandidates` (default 1000), and deduplicates. Any violation of those three
-rules — an unparsable id, an unsupported PK type, or a count over the cap — throws
-`InvalidOperationException`: the provider's own contract was violated, not the caller's input, so this
-is a 500 (`SEARCH_UNAVAILABLE` is reserved for `SearchUnavailableException` instead — see the REST/error
-chapters). The resolved ids are written onto `QueryModel.SearchCandidates`
+`Candidates`, checks the **raw returned count** against `StruoQueryOptions.MaxSearchCandidates`
+(default 1000) first — before deduplication, so a provider cannot sneak an over-cap response past the
+check by returning duplicate ids — then resolves the collection's primary-key CLR type (only `Guid` or
+an integer type is supported — anything else is refused), then parses every id to that type and
+deduplicates. Any violation of those rules — a count over the cap, an unsupported PK type, or an
+unparsable id — throws `InvalidOperationException`: the provider's own contract was violated, not the
+caller's input, so this is a 500 (`SEARCH_UNAVAILABLE` is reserved for `SearchUnavailableException`
+instead — see the REST/error chapters), and `StruoExceptionHandler.Map` logs it server-side at `Error`
+like every other `INTERNAL_SERVER_ERROR` case. The resolved ids are written onto `QueryModel.SearchCandidates`
 (`src/Struo.Domain/Query/QueryModel.cs`), which the page query, every facet, and the aggregate all
 share, so all three report against the same candidate set. See
 `docs/guide/en/08-query-dsl.md`'s "Search providers" for the full contract, composition rules, and a
