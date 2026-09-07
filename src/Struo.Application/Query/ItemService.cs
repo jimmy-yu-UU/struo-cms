@@ -369,6 +369,10 @@ public sealed class ItemService(
         var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(
             () => this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
+        // Gated on the top-level row having existed: with no DB-level FKs, a dangling child row (its FK
+        // pointing at an id that was never a real row) could otherwise still be found by the Cascade/
+        // SetNull/M2M scans above and raise its own Updated/Purged even though nothing here actually
+        // existed to purge. Accepted — the only way to hit it is already-inconsistent data.
         if (existed)
         {
             await NotifyAsync(changes);
