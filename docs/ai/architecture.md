@@ -480,7 +480,7 @@ fork registration the built-in `LIKE` search (`FilterTranslator.SearchGroup`) ru
 zero-hit search, not a fallback).
 
 `ItemService`'s constructor takes `ISearchProvider? searchProvider = null` as its **trailing, optional**
-parameter — the same rationale `SqlSugarItemRepository`'s `logger` parameter documents: the 22+ test
+parameter — the same rationale `SqlSugarItemRepository`'s `logger` parameter documents: the existing test
 files that construct `ItemService` directly pass every other (non-optional) constructor argument
 explicitly, and DI always injects the `AddStruoData`-registered instance regardless, so `null` (direct
 construction) simply means "the built-in `LIKE` search only," identical to what the DI default
