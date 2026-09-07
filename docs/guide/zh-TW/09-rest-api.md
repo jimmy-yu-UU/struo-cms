@@ -79,7 +79,7 @@ $ curl -s http://localhost:5221/api/languages
 
 ## 錯誤代碼
 
-`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) 恰好宣告了以下這十四個穩定的 `code` 值。這正是
+`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) 恰好宣告了以下這十五個穩定的 `code` 值。這正是
 GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉例來說，一個
 `PermissionDeniedException` 在兩種協定上都會對應到相同的代碼——所以一個已經處理過 GraphQL 錯誤的
 客戶端，也能透過同一組字串辨識出 REST 的錯誤。
@@ -101,6 +101,7 @@ GraphQL 的 `StruoErrorFilter` 所使用的同一份目錄 (第 10 章)——舉
 | `NO_LOCAL_PASSWORD` | 400 | 在一個完全透過外部 OIDC 建立的帳號上，嘗試自助式變更密碼——它儲存的雜湊值是空字串，因為它從來沒有本機密碼。 |
 | `ACCOUNT_INACTIVE` | 401 | `POST /api/auth/login` 以*正確*密碼登入一個已停用的帳號。只有在雜湊驗證成功之後才會抵達這裡，所以揭露它並不會洩漏呼叫端尚未證明過的任何資訊——不同於把「密碼錯誤」與「沒有這個帳號」拆開，那兩者仍合併在上方的 `UNAUTHORIZED` 之下 (原因見第 12 章)。 |
 | `SESSION_REVOCATION_FAILED` | 500 | `SessionRevocationFailedException`——變更密碼或刪除使用者已經成功提交，但後續撤銷 session 的步驟卻失敗了，因此該使用者原有的部分 session 可能仍然存活 (第 12 章)。`DomainErrorMap.StatusFor` 並沒有為這個代碼準備專屬分支，所以會落到預設的 500 狀態；即便如此，代碼與訊息本身仍是專屬的，而不是 `INTERNAL_SERVER_ERROR` 通常帶有的那個遮蔽用通用字串。 |
+| `SEARCH_UNAVAILABLE` | 503 | `SearchUnavailableException`——一個已註冊的 `ISearchProvider` (第 8 章的[搜尋提供者（Search providers）](08-query-dsl.md#搜尋提供者-search-providers)) 因為它自己的搜尋引擎無法回應而擲出 (連線被拒、逾時、索引缺失)。給客戶端看到的訊息永遠是固定字串 `"Search is temporarily unavailable."` (`DomainErrorMap.SearchUnavailableMessage`)——provider 自己的例外訊息可能帶有內部主機名稱，只會進入伺服器端的 Warning 記錄，絕不會出現在回應中。本章並未即時演練這個項目——要觸發它需要一個真的會失敗的已註冊 provider，範例用的 host 並沒有這種東西——但這個對應是真實的:`DomainErrorMap.StatusFor` → 503。 |
 
 `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) 是例外對應到代碼的唯一來源，與 GraphQL
 的錯誤過濾器逐字共用:
@@ -115,10 +116,11 @@ RelationConflictException => (ErrorCodes.Conflict, exception.Message),
 QueryException => (ErrorCodes.BadUserInput, exception.Message),
 PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
+SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-下方即時觸發的範例，涵蓋了以上除了 `PAYLOAD_TOO_LARGE`(已在上方自己的那一列中說明為何略過)、`INTERNAL_SERVER_ERROR`(在下文中說明為何略過)，以及另外三個代碼之外的每一個代碼——`INVALID_CURRENT_PASSWORD` 在下方的 Users 章節有自己的即時範例;`NO_LOCAL_PASSWORD` 與 `ACCOUNT_INACTIVE` 則本章完全沒有即時觸發過:
+下方即時觸發的範例，涵蓋了以上除了 `PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE`(兩者皆已在上方自己的那一列中說明為何略過)、`INTERNAL_SERVER_ERROR`(在下文中說明為何略過)，以及另外三個代碼之外的每一個代碼——`INVALID_CURRENT_PASSWORD` 在下方的 Users 章節有自己的即時範例;`NO_LOCAL_PASSWORD` 與 `ACCOUNT_INACTIVE` 則本章完全沒有即時觸發過:
 
 ```
 $ curl -s http://localhost:5221/api/languages
@@ -181,6 +183,7 @@ $ for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code} " -X POST http:
 | `409 Conflict` | `CONFLICT` 或 `VERSION_CONFLICT`。 |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`。 |
 | `429 Too Many Requests` | `TOO_MANY_REQUESTS` (登入端點的兩道防線之一，或改密碼限制器——見上文)。 |
+| `503 Service Unavailable` | `SEARCH_UNAVAILABLE`。 |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`。 |
 
 ```

@@ -132,6 +132,13 @@ override 需要 `[SugarColumn(IsPrimaryKey = true)]`、`[ColumnShape]` 整體—
 `SqlSugarItemRepository`——不是為了讓 fork 換 ORM 而設計的抽象層;不論由誰實作這個介面，content
 entity 上的 SqlSugar attribute 都仍然綁定 SqlSugar。
 
+`ISearchProvider` (`src/Struo.Application/Search/ISearchProvider.cs`) 是另一種 seam——它是 core
+刻意交給 fork 的接縫，跟 `IFileStorage` 一樣。Core 只出貨預設的 `NullSearchProvider`，它從不處理任何
+搜尋，所以在沒有 fork 註冊自己的 provider 之前，內建的 `LIKE` 掃描會維持原樣不受影響，直到 fork 註冊
+自己的實作，指向它選擇的任何搜尋引擎 (Meilisearch、Elasticsearch、PostgreSQL 全文搜尋……)。與上方的
+`IItemRepository` 不同，第二個 `ISearchProvider` 實作正是這個模板刻意設計的擴充方式——契約與一個實作
+範例見第 8 章的[搜尋提供者（Search providers）](08-query-dsl.md#搜尋提供者-search-providers)。
+
 實際影響是:SqlSugar 的大版本升級，或是像 `[SugarIndex]` 這類 attribute 語意上的變動，會直接
 衝擊每一個 fork 的 entity 類別——core 不會、也無法替 fork 吸收這類變動。有兩個過去屬於這種情況的
 DDL 決策現在不再是了:單純的 `[SugarColumn(IsJson = true)]` 欄位寬度、以及翻譯附屬資料表的
