@@ -292,7 +292,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     {
         using var h = new SubqueryPushdownHarness();
         var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
-        var conds = t.Translate("sqProduct", new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")), null, [], null);
+        var conds = t.Translate("sqProduct", new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")), null, null, [], null);
         var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
         // SqlSugar emits irregular internal whitespace around IS NOT NULL (e.g. "IS NOT  NULL" with a
         // doubled space) — match with whitespace tolerance rather than a literal substring.
@@ -304,7 +304,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     {
         using var h = new SubqueryPushdownHarness();
         var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
-        var conds = t.Translate("sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "Guide"), null, [], null);
+        var conds = t.Translate("sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "Guide"), null, null, [], null);
         var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
         sql.Should().MatchRegex(@"IN \(SELECT [\s\S]*sq_product_labels[\s\S]* IN \(SELECT [\s\S]*sq_labels");
         sql.Should().NotContain("SqlSugar.");
@@ -323,7 +323,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
             new ComparisonFilter("category.name", QueryOperator.Eq, "Tech"),
             new ComparisonFilter("labels.name", QueryOperator.Eq, "Misc"),
         ]);
-        var conds = t.Translate("sqProduct", filter, null, [], null);
+        var conds = t.Translate("sqProduct", filter, null, null, [], null);
         var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql();
 
         // Exactly one OR between two "IN (SELECT" fragments, inside one pair of parentheses.
@@ -344,7 +344,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     {
         using var h = new SubqueryPushdownHarness();
         var t = new FilterTranslator(h.Db, h.Graph, h.Metadata, h.Registry, h.Options);
-        var conds = t.Translate("sqProduct", new ComparisonFilter("name", QueryOperator.Eq, "bare"), "cross", ["name"], null);
+        var conds = t.Translate("sqProduct", new ComparisonFilter("name", QueryOperator.Eq, "bare"), "cross", null, ["name"], null);
         var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
 
         sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(\s*[\s\S]*?LIKE");
@@ -367,7 +367,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
                 new ComparisonFilter("labels.name", QueryOperator.Eq, "Misc"),
             ]),
         ]);
-        var conds = t.Translate("sqProduct", filter, null, [], null);
+        var conds = t.Translate("sqProduct", filter, null, null, [], null);
         var sql = h.Db.Queryable<SqProduct>().Where(conds).ToSql().Key;
 
         sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(");
@@ -382,7 +382,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     public void Search_across_two_translatable_fields_merges_into_one_conditional()
     {
         using var h = new TranslatableSearchHarness();
-        var conds = h.Translator.Translate("tsItem", null, "x", ["title", "subtitle", "code"], "en");
+        var conds = h.Translator.Translate("tsItem", null, "x", null, ["title", "subtitle", "code"], "en");
 
         conds.Should().ContainSingle();
         var group = conds[0].Should().BeOfType<ConditionalCollections>().Subject;
@@ -409,7 +409,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     public void Search_over_translatable_and_plain_fields_is_one_or_group_with_a_sidecar_subquery()
     {
         var translator = BuildSampleTranslator();
-        var conds = translator.Translate("article", null, "x", ["title", "status"], "en");
+        var conds = translator.Translate("article", null, "x", null, ["title", "status"], "en");
 
         var group = conds.Should().ContainSingle().Which.Should().BeOfType<ConditionalCollections>().Subject;
         group.ConditionalList.Should().HaveCount(2, "one plain LIKE (status) plus one translation-sidecar subquery (title)");
