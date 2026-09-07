@@ -466,7 +466,8 @@ actually running against a syntactically/structurally valid request — keeps th
 at `200`; the caller is expected to inspect `extensions.code` per error rather than the status line.
 `SEARCH_UNAVAILABLE` (chapter 8's [Search providers](08-query-dsl.md#search-providers)) is no
 exception to this: GraphQL still answers with `200` and the code in `extensions.code`, even though
-REST maps the same `SearchUnavailableException` to HTTP `503` instead:
+REST maps the same `SearchUnavailableException` to HTTP `503` instead. The transcript below shows the
+`200`-plus-`extensions.code` shape with a permission error:
 
 ```
 $ curl -s -i -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -d '{"query":"query { users { total } }"}'

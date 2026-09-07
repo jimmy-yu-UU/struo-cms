@@ -458,7 +458,7 @@ resolver/action 擲出的，都會蓋上相同的代碼)。這種情況——一
 `extensions.code`，而不是依賴狀態列。`SEARCH_UNAVAILABLE` (第 8 章的
 [搜尋提供者（Search providers）](08-query-dsl.md#搜尋提供者-search-providers)) 也不例外:GraphQL
 仍然以 `200` 回應，並在 `extensions.code` 中帶上代碼，即使 REST 把相同的 `SearchUnavailableException`
-對應成 HTTP `503`:
+對應成 HTTP `503`。下面的實錄以一個權限錯誤示範這種「`200` 加 `extensions.code`」的形狀:
 
 ```
 $ curl -s -i -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -d '{"query":"query { users { total } }"}'
