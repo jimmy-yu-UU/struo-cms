@@ -39,6 +39,12 @@ public sealed class StruoErrorFilter(
                 .WithException(null!); // IError has no RemoveException() in the installed HotChocolate version
         }
 
+        if (code == Http.ErrorCodes.SearchUnavailable)
+        {
+            logger.LogWarning(exception, "Search provider unavailable");
+            return error.WithMessage(message).WithCode(code).WithException(null!);
+        }
+
         return error.WithMessage(message).WithCode(code);
     }
 }

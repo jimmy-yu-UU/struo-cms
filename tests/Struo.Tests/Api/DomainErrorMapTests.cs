@@ -135,4 +135,22 @@ public class DomainErrorMapTests
     [Fact]
     public void ForStatus_413_is_PAYLOAD_TOO_LARGE()
         => ErrorCodes.ForStatus(413).Should().Be("PAYLOAD_TOO_LARGE");
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SearchUnavailable_is_SEARCH_UNAVAILABLE_with_a_fixed_message_regardless_of_auth(bool authenticated)
+    {
+        var (code, message) = DomainErrorMap.Map(new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused"), authenticated);
+        code.Should().Be("SEARCH_UNAVAILABLE");
+        message.Should().Be("Search is temporarily unavailable.");
+        message.Should().NotContain("10.0.0.5", "the provider's own message must never reach a client");
+    }
+
+    [Fact]
+    public void SEARCH_UNAVAILABLE_is_503_in_both_directions()
+    {
+        DomainErrorMap.StatusFor("SEARCH_UNAVAILABLE").Should().Be(503);
+        ErrorCodes.ForStatus(503).Should().Be("SEARCH_UNAVAILABLE");
+    }
 }

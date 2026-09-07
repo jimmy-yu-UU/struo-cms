@@ -87,4 +87,13 @@ public class StruoErrorFilterTests
         var validationError = ErrorBuilder.New().SetMessage("parse error").Build();
         _filter.OnError(validationError).Should().BeSameAs(validationError);
     }
+
+    [Fact]
+    public void SearchUnavailable_maps_to_SEARCH_UNAVAILABLE_with_fixed_message_and_no_exception()
+    {
+        var e = _filter.OnError(Wrap(new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
+        e.Code.Should().Be("SEARCH_UNAVAILABLE");
+        e.Message.Should().Be("Search is temporarily unavailable.");
+        e.Exception.Should().BeNull("the raw exception (and its host name) must not leak through GraphQL error details");
+    }
 }
