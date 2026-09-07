@@ -386,6 +386,12 @@ row entirely, so there is nothing left for any `deleted=` mode to find.)
 The purged file's blob was confirmed removed from `App_Data/uploads` on disk (no orphaned file under
 its storage key remained).
 
+Each of the four operations above — upload, trash, restore, purge — also raises a post-commit
+`IItemChangeListener` notification (`Created`/`Trashed`/`Restored`/`Purged` respectively) through the
+same `FileService`, since `FileService` bypasses `ItemService` entirely and so raises its own. See
+chapter 13's [Reacting to writes: `IItemChangeListener`](13-revisions-and-soft-delete.md#reacting-to-writes-iitemchangelistener)
+for the full contract.
+
 ## Next steps
 
 - Chapter 3, [Configuration Reference](03-configuration-reference.md), for every `Struo:Files:*` key's
