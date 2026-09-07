@@ -1,7 +1,6 @@
 using System.Text.Json;
 using AwesomeAssertions;
 using Struo.Application.Configuration;
-using Struo.Application.Localization;
 using Struo.Application.Query;
 using Struo.Application.Search;
 using Struo.Domain.Query;
@@ -22,7 +21,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
 {
     private readonly SqliteTestDatabase _file = new();
     private readonly List<string> _sql = [];
-    private readonly ILanguageProvider _languages;
+    private readonly LanguageProvider _languages;
     private Func<SearchRequest, SearchOutcome> _script = _ => SearchOutcome.NotHandled;
     private readonly ScriptedSearchProvider _provider;
     private readonly ItemService _svc;
@@ -78,7 +77,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
 
     private static QueryModel Q(string? search, FilterNode? filter = null) => new(null, filter, [], 25, 0, search);
 
-    private static IReadOnlyList<string> Names(PagedResult r) => r.Data.Select(d => (string)d["name"]!).ToList();
+    private static List<string> Names(PagedResult r) => r.Data.Select(d => (string)d["name"]!).ToList();
 
     [Fact]
     public async Task Blank_search_does_not_call_the_provider()
