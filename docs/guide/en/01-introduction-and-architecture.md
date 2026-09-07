@@ -139,6 +139,14 @@ its sole implementation is `SqlSugarItemRepository` — not an ORM-abstraction l
 reimplement in order to swap ORMs; a content entity's SqlSugar attributes stay bound to SqlSugar
 regardless of what implements that interface.
 
+`ISearchProvider` (`src/Struo.Application/Search/ISearchProvider.cs`) is a different kind of seam —
+one core deliberately hands to a fork, the same way `IFileStorage` is. Core ships only the default,
+`NullSearchProvider`, which never handles a search, so the built-in `LIKE` scan runs unmodified until a
+fork registers its own implementation pointing at whatever search engine it chooses (Meilisearch,
+Elasticsearch, PostgreSQL full-text, …). Unlike `IItemRepository` above, a second `ISearchProvider`
+implementation is exactly the intended way to extend this template — see chapter 8's
+[Search providers](08-query-dsl.md#search-providers) for the contract and a worked example.
+
 Practical consequence: a SqlSugar major-version upgrade, or a change in what an attribute like
 `[SugarIndex]` means, lands directly on every fork's entity classes — core does not, and cannot, absorb
 that change on a fork's behalf. Two DDL decisions that used to work this way no longer do: a bare

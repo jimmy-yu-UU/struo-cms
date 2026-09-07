@@ -25,7 +25,11 @@ public static class QueryValidator
         var limit = q.Limit <= 0 ? opts.DefaultLimit : Math.Min(q.Limit, opts.MaxLimit);
         var offset = Math.Max(0, q.Offset);
 
-        return q with { Limit = limit, Offset = offset, Facets = facets };
+        // Defence in depth: no parser sets QueryModel.SearchCandidates today, but a future
+        // JSON-bound request surface must not be able to smuggle one in — SearchCandidateResolver
+        // (which FilterTranslator trusts to have already parsed every id to the PK CLR type) must
+        // stay the ONLY writer of this field.
+        return q with { Limit = limit, Offset = offset, Facets = facets, SearchCandidates = null };
     }
 
     public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>

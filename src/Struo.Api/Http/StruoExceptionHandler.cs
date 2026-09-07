@@ -31,6 +31,8 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
         var (code, message) = DomainErrorMap.Map(exception, authenticated);
         if (code == ErrorCodes.Internal)
             logger?.LogError(exception, "Unhandled API exception");
+        else if (code == ErrorCodes.SearchUnavailable)
+            logger?.LogWarning(exception, "Search provider unavailable");
         return (DomainErrorMap.StatusFor(code), new ErrorBody(code, message));
     }
 }

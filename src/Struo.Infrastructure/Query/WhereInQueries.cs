@@ -79,7 +79,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         // AND the extra filter — relation paths/predicates and translatable leaves are pushed down as
         // subqueries by FilterTranslator. SqlSugar ANDs consecutive IConditionalModel entries.
         if (extraFilter is not null)
-            conditionals.AddRange(filters.Translate(collection, extraFilter, null, [], queryLocale));
+            conditionals.AddRange(filters.Translate(collection, extraFilter, null, null, [], queryLocale));
 
         return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, ct);
     }

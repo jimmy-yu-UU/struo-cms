@@ -26,4 +26,8 @@ public sealed class StruoQueryOptions
 
     [Range(1, int.MaxValue)]
     public int MaxAggregates { get; set; } = 10;
+
+    /// <summary>Upper bound on the candidate ids an <c>ISearchProvider</c> may return for one request; more is a provider contract violation (500), never a truncation.</summary>
+    [Range(1, int.MaxValue)]
+    public int MaxSearchCandidates { get; set; } = 1000;
 }

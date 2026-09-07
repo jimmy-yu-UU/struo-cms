@@ -10,18 +10,44 @@ namespace Struo.Infrastructure.Query;
 /// <summary>Turns a validated FilterNode tree (plus a search term) into SqlSugar conditionals for ONE
 /// queryable over <c>collection</c>. Own-collection leaves go through ConditionalModelTranslator; relation
 /// paths, relation predicates and translatable leaves become IN (SELECT …) subquery conditionals built in
-/// FilterTranslator.Subquery.cs. Pure construction — never touches the database.</summary>
+/// FilterTranslator.Subquery.cs. When a registered ISearchProvider already resolved the search term to a
+/// candidate root-id set (<c>searchCandidates</c>), a typed `id IN (...)`/`id IS NULL` conditional replaces
+/// the LIKE search group outright — and the <c>search</c> term itself is then ignored even if it is
+/// blank or null, since <c>searchCandidates</c> non-null is what drives the branch, not <c>search</c>'s
+/// own content. The only producer of a non-null <c>searchCandidates</c> is
+/// <see cref="Struo.Application.Search.SearchCandidateResolver"/>, which sets one only for a
+/// non-blank term (see <c>QueryValidator.Validate</c>, which clears any other inbound value). Pure
+/// construction — never touches the database.</summary>
 internal sealed partial class FilterTranslator(
     ISqlSugarClient db, IRelationshipGraph graph, IMetadataProvider metadata, IEntityRegistry registry, StruoQueryOptions options)
 {
     public List<IConditionalModel> Translate(
-        string collection, FilterNode? filter, string? search, IReadOnlyList<string> searchableFields, string? queryLocale)
+        string collection, FilterNode? filter, string? search, IReadOnlyList<object>? searchCandidates,
+        IReadOnlyList<string> searchableFields, string? queryLocale)
     {
         var models = new List<IConditionalModel>();
         if (filter is not null) AppendModel(models, collection, filter, queryLocale);
-        if (!string.IsNullOrWhiteSpace(search) && searchableFields.Count > 0)
+        if (searchCandidates is not null)
+            models.Add(CandidateConditional(collection, searchCandidates));
+        else if (!string.IsNullOrWhiteSpace(search) && searchableFields.Count > 0)
             models.Add(SearchGroup(collection, search, searchableFields, queryLocale));
         return models;
+    }
+
+    // A registered ISearchProvider answered this request: its candidate root ids replace the LIKE
+    // group outright (the search term is not consulted). Rendered through the same typed `_in` path
+    // the query DSL uses (CSharpTypeName from the PK CLR type), which SqlSugar emits as LITERALS with
+    // no parameters — measured 2026-09-07 on both engines up to 5000 ids — so the values MUST already
+    // be parsed to the PK type (SearchCandidateResolver guarantees this). An empty set becomes
+    // `id IS NULL`: always false on a non-null PK, portable, and deterministic under our control
+    // (SqlSugar's own rendering of an empty IN, `IN (null)`, happens to work too but is undocumented).
+    private ConditionalModel CandidateConditional(string collection, IReadOnlyList<object> ids)
+    {
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        var leaf = ids.Count == 0
+            ? new ComparisonFilter("id", QueryOperator.Null, null)
+            : new ComparisonFilter("id", QueryOperator.In, ids);
+        return ConditionalModelTranslator.ToSingleModel(leaf, d, db);
     }
 
     // Appends node's translation into a PLAIN list (SqlSugar ANDs consecutive top-level

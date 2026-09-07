@@ -458,12 +458,16 @@ form there too.
 `StruoExceptionHandler`: it maps a **resolver** exception through the same `DomainErrorMap` and stamps
 the result's `extensions.code` with the identical stable code string REST uses (`UNAUTHORIZED`,
 `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VERSION_CONFLICT`, `BAD_USER_INPUT`, `PAYLOAD_TOO_LARGE`,
-`SESSION_REVOCATION_FAILED`, `INTERNAL_SERVER_ERROR` — `DomainErrorMap.Map` makes no distinction
-between REST and GraphQL callers, so every mapped exception type, `PayloadTooLargeException` included,
-stamps the same code regardless of which protocol's resolver/action threw it). This case — an
-exception thrown while a resolver is
+`SEARCH_UNAVAILABLE`, `SESSION_REVOCATION_FAILED`, `INTERNAL_SERVER_ERROR` — `DomainErrorMap.Map`
+makes no distinction between REST and GraphQL callers, so every mapped exception type,
+`PayloadTooLargeException` included, stamps the same code regardless of which protocol's
+resolver/action threw it). This case — an exception thrown while a resolver is
 actually running against a syntactically/structurally valid request — keeps the transport HTTP status
-at `200`; the caller is expected to inspect `extensions.code` per error rather than the status line:
+at `200`; the caller is expected to inspect `extensions.code` per error rather than the status line.
+`SEARCH_UNAVAILABLE` (chapter 8's [Search providers](08-query-dsl.md#search-providers)) is no
+exception to this: GraphQL still answers with `200` and the code in `extensions.code`, even though
+REST maps the same `SearchUnavailableException` to HTTP `503` instead. The transcript below shows the
+`200`-plus-`extensions.code` shape with a permission error:
 
 ```
 $ curl -s -i -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -d '{"query":"query { users { total } }"}'
