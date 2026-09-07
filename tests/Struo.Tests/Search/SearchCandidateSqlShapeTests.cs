@@ -13,8 +13,18 @@ namespace Struo.Tests.Search;
 /// harness: SQL shape (typed `id IN` literals / `IS NULL`, never LIKE) and the three call sites
 /// (list, facet, aggregate) all honouring the same candidate set.
 /// </summary>
-public sealed class SearchCandidateSqlShapeTests : IDisposable
+public sealed partial class SearchCandidateSqlShapeTests : IDisposable
 {
+    // Source-generated regexes (SYSLIB1045) for the two constant patterns pinning the candidate
+    // branch's typed `id` shapes — mirrors FilterTranslatorSqlShapeTests.SqPrefixRegex. The
+    // interpolated-Guid patterns elsewhere in this file stay dynamic (a literal id per test run) and
+    // so cannot be source-generated.
+    [GeneratedRegex(@"`Id`\s+IS\s+NULL")]
+    private static partial Regex IdIsNullRegex();
+
+    [GeneratedRegex(@"`Id`\s+IN\s+\(([^)]*)\)")]
+    private static partial Regex IdInRegex();
+
     private readonly SubqueryPushdownHarness _h = new();
     private readonly List<string> _sql = [];
     private readonly Guid _alpha1 = Guid.NewGuid(), _alpha2 = Guid.NewGuid(), _beta = Guid.NewGuid();
@@ -69,7 +79,7 @@ public sealed class SearchCandidateSqlShapeTests : IDisposable
         var r = await ListAsync(Q("alpha", []));
         r.Total.Should().Be(0);
         r.Rows.Should().BeEmpty();
-        _sql.Should().OnlyContain(s => Regex.IsMatch(s, @"`Id`\s+IS\s+NULL"));
+        _sql.Should().OnlyContain(s => IdIsNullRegex().IsMatch(s));
         _sql.Should().NotContain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -95,7 +105,7 @@ public sealed class SearchCandidateSqlShapeTests : IDisposable
         var expected = new[] { _alpha1, _beta, _alpha2 }.Select(g => g.ToString()).ToHashSet();
         foreach (var s in _sql)
         {
-            var match = Regex.Match(s, @"`Id`\s+IN\s+\(([^)]*)\)");
+            var match = IdInRegex().Match(s);
             match.Success.Should().BeTrue($"expected a typed `Id` IN (...) clause in: {s}");
             match.Groups[1].Value.Should().NotContain("@");
             match.Groups[1].Value.Split(',').Select(v => v.Trim().Trim('\'')).ToHashSet()

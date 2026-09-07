@@ -27,7 +27,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     private readonly ScriptedSearchProvider _provider;
     private readonly ItemService _svc;
     private readonly StruoQueryOptions _options = new();
-    private string _alpha = "", _beta = "", _gamma = "";
+    private string _alpha, _beta, _gamma;
 
     public SearchProviderItemServiceTests()
     {
@@ -94,7 +94,8 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     {
         await _svc.QueryAsync("category", Q("Alp"));
         _provider.Requests.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new SearchRequest("category", "Alp", _languages.DefaultCode(), ["name"]));
+            .Which.Should().BeEquivalentTo(new SearchRequest("category", "Alp", _languages.DefaultCode(), ["name"]),
+                o => o.WithStrictOrdering());
         _provider.Requests.Clear();
         await _svc.QueryAsync("category", Q("Alp"), locale: "zh-TW");
         _provider.Requests.Single().Locale.Should().Be("zh-TW");
@@ -107,6 +108,14 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         Names(r).Should().Equal("Alpha");
         r.Total.Should().Be(1);
         _sql.Should().Contain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
+        _provider.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Provider_receives_the_canonical_collection_name_even_for_a_differently_cased_request()
+    {
+        await _svc.QueryAsync("Category", Q("Alp"));
+        _provider.Requests.Single().Collection.Should().Be("category");
     }
 
     [Fact]
