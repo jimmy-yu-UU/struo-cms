@@ -450,11 +450,15 @@ GraphQL 層的程式碼;REST 相同的版本紀錄端點 (第 9 章) 是目前�
 `StruoExceptionHandler` 在 GraphQL 這一側的孿生對照:它會透過相同的 `DomainErrorMap`，對應一個
 **resolver** 例外，並把結果的 `extensions.code`，蓋上與 REST 完全相同的穩定代碼字串
 (`UNAUTHORIZED`、`FORBIDDEN`、`NOT_FOUND`、`CONFLICT`、`VERSION_CONFLICT`、`BAD_USER_INPUT`、
-`PAYLOAD_TOO_LARGE`、`SESSION_REVOCATION_FAILED`、`INTERNAL_SERVER_ERROR`——`DomainErrorMap.Map`
+`PAYLOAD_TOO_LARGE`、`SEARCH_UNAVAILABLE`、`SESSION_REVOCATION_FAILED`、`INTERNAL_SERVER_ERROR`——
+`DomainErrorMap.Map`
 完全不區分 REST 與 GraphQL 呼叫端，所以每一個被對應到的例外型別，包括 `PayloadTooLargeException` 在內，無論是哪一種協定的
 resolver/action 擲出的，都會蓋上相同的代碼)。這種情況——一個例外，是在 resolver 針對一個語法/結構
 上合法的請求真正執行時擲出的——會讓傳輸層的 HTTP 狀態維持在 `200`;呼叫端應該逐一檢視每個錯誤的
-`extensions.code`，而不是依賴狀態列:
+`extensions.code`，而不是依賴狀態列。`SEARCH_UNAVAILABLE` (第 8 章的
+[搜尋提供者（Search providers）](08-query-dsl.md#搜尋提供者-search-providers)) 也不例外:GraphQL
+仍然以 `200` 回應，並在 `extensions.code` 中帶上代碼，即使 REST 把相同的 `SearchUnavailableException`
+對應成 HTTP `503`:
 
 ```
 $ curl -s -i -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -d '{"query":"query { users { total } }"}'
