@@ -21,8 +21,8 @@ public sealed partial class PostgresIntegrationTests
         return (a, b, c);
     }
 
-    private static QueryModel WithCandidates(IReadOnlyList<object> ids) =>
-        new QueryModel(null, null, [], 100, 0, "ignored-by-the-candidate-branch") { SearchCandidates = ids };
+    private static QueryModel WithCandidates(IReadOnlyList<object> ids, string search = "ignored-by-the-candidate-branch") =>
+        new QueryModel(null, null, [], 100, 0, search) { SearchCandidates = ids };
 
     [Fact]
     public async Task Search_candidates_bind_uuid_ids_in_on_postgres()
@@ -41,7 +41,11 @@ public sealed partial class PostgresIntegrationTests
         if (!PgConfigured) return;
         var repo = BuildRepo();
         SeedThreeCategories();
-        var r = await repo.QueryAsync("category", WithCandidates([]), ["name"], null);
+        // "u5-" collides via LIKE '%u5-%' with all four seeded names, so if a regression ever treated
+        // an empty candidate list like "no candidates" (falling back to the LIKE search on this term),
+        // this would come back with 4 rows instead of 0 — proving the assertion below actually
+        // exercises the empty-candidates `id IS NULL` branch, not an accidentally-unmatched search term.
+        var r = await repo.QueryAsync("category", WithCandidates([], search: "u5-"), ["name"], null);
         r.Total.Should().Be(0);
         r.Rows.Should().BeEmpty();
     }
@@ -55,5 +59,6 @@ public sealed partial class PostgresIntegrationTests
         var ids = Enumerable.Range(0, 997).Select(_ => (object)Guid.NewGuid()).Append(a).Append(b).Append(c).ToList();
         var r = await repo.QueryAsync("category", WithCandidates(ids), ["name"], null);
         r.Total.Should().Be(3);
+        r.Rows.Cast<Category>().Select(x => x.Id).Should().BeEquivalentTo([a, b, c]);
     }
 }
