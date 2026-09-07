@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.WebUtilities;
 using SqlSugar;
 using Struo.Application.Abstractions;
+using Struo.Application.Changes;
 using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Query;
@@ -12,7 +13,8 @@ namespace Struo.Infrastructure.Files;
 /// <summary>
 /// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a published
 /// <see cref="File"/> row) and file lookup/trash/restore/purge. Lives in Infrastructure so it can
-/// reference the framework <see cref="File"/> entity directly.
+/// reference the framework <see cref="File"/> entity directly. Bypasses <c>ItemService</c>, so each
+/// write path raises its own post-commit <see cref="IItemChangeNotifier"/> notification.
 /// </summary>
 public sealed class FileService(
     ISqlSugarClient db,
@@ -21,8 +23,18 @@ public sealed class FileService(
     FileStorageOptions options,
     IItemRepository repository,
     ILanguageProvider languages,
-    ICurrentUserAccessor currentUser)
+    ICurrentUserAccessor currentUser,
+    IItemChangeNotifier? notifier = null)
 {
+    // U5b: post-commit, best-effort, CancellationToken.None (the write already committed).
+    private Task NotifyAsync(Guid id, ItemChangeKind kind)
+    {
+        if (notifier is null) return Task.CompletedTask;
+        var set = new ItemChangeSet();
+        set.Add(FileCollection.Name, id.ToString(), kind);
+        return notifier.NotifyAsync(set.ToList(), CancellationToken.None);
+    }
+
     public async Task<File> UploadAsync(
         Stream content, string fileName, string contentType, long length, Guid? folderId = null,
         CancellationToken ct = default)
@@ -140,6 +152,7 @@ public sealed class FileService(
             await db.Insertable(entity).ExecuteCommandAsync(ct);
             await db.Insertable(translation).ExecuteCommandAsync(ct);
         }, ct);
+        await NotifyAsync(entity.Id, ItemChangeKind.Created);
         return entity;
     }
 
@@ -185,6 +198,7 @@ public sealed class FileService(
                 .ExecuteCommandAsync(ct);
         }, ct);
 
+        await NotifyAsync(id, ItemChangeKind.Purged);
         // storage.DeleteAsync stays outside the transaction: best-effort (row gone, bytes orphaned).
         try { await storage.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
         return true;
@@ -209,9 +223,14 @@ public sealed class FileService(
                 .Where(s => s.LogoFileId == id)
                 .ExecuteCommandAsync(ct);
         }, ct);
+        if (trashed) await NotifyAsync(id, ItemChangeKind.Trashed);
         return trashed;   // blob + FileTranslation rows retained for restore
     }
 
-    public Task<bool> RestoreAsync(Guid id, CancellationToken ct = default) =>
-        repository.RestoreAsync(FileCollection.Name, id.ToString(), ct);
+    public async Task<bool> RestoreAsync(Guid id, CancellationToken ct = default)
+    {
+        var restored = await repository.RestoreAsync(FileCollection.Name, id.ToString(), ct);
+        if (restored) await NotifyAsync(id, ItemChangeKind.Restored);
+        return restored;
+    }
 }
