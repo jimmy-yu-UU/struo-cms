@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Search/SearchCandidateSqlShapeTests.cs
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Struo.Application.Query;
 using Struo.Domain.Query;
@@ -58,7 +59,7 @@ public sealed class SearchCandidateSqlShapeTests : IDisposable
         // `IN (...)` (measured 2026-09-07 — the brief's IN-literal probe used two ids and did not
         // cover this case); either rendering is a typed, unparameterized literal comparing `Id`
         // against exactly `_beta`, so both are accepted here.
-        _sql.Should().OnlyContain(s => System.Text.RegularExpressions.Regex.IsMatch(
+        _sql.Should().OnlyContain(s => Regex.IsMatch(
             s, @"`Id`\s+(=\s*'" + _beta + @"'|IN\s+\('" + _beta + @"'\))"));
     }
 
@@ -68,7 +69,7 @@ public sealed class SearchCandidateSqlShapeTests : IDisposable
         var r = await ListAsync(Q("alpha", []));
         r.Total.Should().Be(0);
         r.Rows.Should().BeEmpty();
-        _sql.Should().OnlyContain(s => System.Text.RegularExpressions.Regex.IsMatch(s, @"`Id`\s+IS\s+NULL"));
+        _sql.Should().OnlyContain(s => Regex.IsMatch(s, @"`Id`\s+IS\s+NULL"));
         _sql.Should().NotContain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -86,6 +87,20 @@ public sealed class SearchCandidateSqlShapeTests : IDisposable
         var q = new QueryModel(null, null, [new SortField("name", Descending: true)], 100, 0, "x") { SearchCandidates = [_alpha1, _beta, _alpha2] };
         var r = await ListAsync(q);
         r.Rows.Cast<SqProduct>().Select(p => p.Name).Should().Equal("beta", "alpha two", "alpha one");
+
+        // Pins the multi-id typed literal shape — the 1-id test above only proves the SqlSugar
+        // single-value `=` collapse; a real 3-id candidate set must still render as `Id` IN (...)
+        // with every id present as a quoted literal (order unconstrained — SqlSugar's own), and
+        // never as an `@`-parameterized placeholder in that clause.
+        var expected = new[] { _alpha1, _beta, _alpha2 }.Select(g => g.ToString()).ToHashSet();
+        foreach (var s in _sql)
+        {
+            var match = Regex.Match(s, @"`Id`\s+IN\s+\(([^)]*)\)");
+            match.Success.Should().BeTrue($"expected a typed `Id` IN (...) clause in: {s}");
+            match.Groups[1].Value.Should().NotContain("@");
+            match.Groups[1].Value.Split(',').Select(v => v.Trim().Trim('\'')).ToHashSet()
+                .Should().BeEquivalentTo(expected);
+        }
     }
 
     [Fact]
