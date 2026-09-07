@@ -150,7 +150,9 @@ Unlike most of this chapter, this key is read straight from `IConfiguration` rat
 ## `Query`
 
 Bounds on the query DSL (chapter 8), enforced by `QueryValidator` and, for the relation-subquery
-pushdown it validates, `FilterTranslator` (chapter 7). This section is **not** in the shipped
+pushdown it validates, `FilterTranslator` (chapter 7); `Query:MaxSearchCandidates` below is enforced by
+`SearchCandidateResolver` instead (chapter 8's [Search providers](08-query-dsl.md#search-providers)).
+This section is **not** in the shipped
 `appsettings.json` — every default below comes from a
 C# property initializer on `StruoQueryOptions`
 (`src/Struo.Application/Configuration/StruoQueryOptions.cs`); add a `"Query"` block only to override one.
