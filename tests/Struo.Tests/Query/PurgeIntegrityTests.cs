@@ -1,6 +1,7 @@
 // tests/Struo.Tests/Query/PurgeIntegrityTests.cs
 using System.Text.Json;
 using SqlSugar;
+using Struo.Application.Changes;
 using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Query;
@@ -112,7 +113,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     /// was wired with a throwing wrapper around it (rollback-atomicity test).</summary>
     public IRevisionStore RevisionStore { get; }
 
-    private PurgeIntegrityHarness(bool failDeleteRevision)
+    private PurgeIntegrityHarness(bool failDeleteRevision, IItemChangeNotifier? notifier)
     {
         var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
@@ -160,10 +161,12 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
+            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService(),
+            notifier: notifier);
     }
 
-    public static PurgeIntegrityHarness Create(bool failDeleteRevision = false) => new(failDeleteRevision);
+    public static PurgeIntegrityHarness Create(bool failDeleteRevision = false, IItemChangeNotifier? notifier = null) =>
+        new(failDeleteRevision, notifier);
 
     public void Dispose() => _file.Dispose();
 
