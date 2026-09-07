@@ -235,7 +235,7 @@ fork-supplied provider the `LIKE` path above runs completely unchanged.
 
 | Field | Meaning |
 |---|---|
-| `Collection` | Collection name as the query DSL sees it (e.g. `article`). |
+| `Collection` | The collection's canonical camelCase name (`CollectionMetadata.Name`, e.g. `article`) — regardless of how the REST route segment itself was cased (`/api/items/Article` resolves case-insensitively), the provider always sees the one canonical form. |
 | `Term` | The `search=` value verbatim — not trimmed, not lower-cased. |
 | `Locale` | Effective query locale (explicit `locale=`, or the site default). |
 | `SearchableFields` | Core's `Searchable && !Hidden` field names — a hint only; a provider may index other fields entirely. |
@@ -314,6 +314,11 @@ public sealed class StaticSearchProvider : ISearchProvider
 // Program.cs, after AddStruoData():
 builder.Services.AddScoped<ISearchProvider, StaticSearchProvider>();
 ```
+
+Register with a scoped (or transient) lifetime unless the provider is genuinely stateless: a provider
+registered as a singleton that captures a scoped dependency (a `DbContext`, `ISqlSugarClient`, or
+similar) is a captive dependency — it either throws at startup under `ValidateScopes`, or, worse,
+silently reuses the first request's scoped instance for the lifetime of the app.
 
 ### What core does not do
 

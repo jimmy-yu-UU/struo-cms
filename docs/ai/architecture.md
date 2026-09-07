@@ -486,7 +486,9 @@ explicitly, and DI always injects the `AddStruoData`-registered instance regardl
 construction) simply means "the built-in `LIKE` search only," identical to what the DI default
 (`NullSearchProvider`) also yields. `ItemService.QueryAsync` consults the provider through
 `SearchCandidateResolver` (`src/Struo.Application/Search/SearchCandidateResolver.cs`) exactly once per
-list request, only when `Search` is non-blank: it asks the provider, and when the outcome is
+list request, only when `Search` is non-blank, passing the collection's canonical `CollectionMetadata.Name`
+rather than the raw route/argument string (so a differently-cased request still reaches the provider
+with the one canonical name): it asks the provider, and when the outcome is
 `Candidates`, checks the **raw returned count** against `StruoQueryOptions.MaxSearchCandidates`
 (default 1000) first — before deduplication, so a provider cannot sneak an over-cap response past the
 check by returning duplicate ids — then resolves the collection's primary-key CLR type (only `Guid` or
@@ -497,7 +499,10 @@ caller's input, so this is a 500 (`SEARCH_UNAVAILABLE` is reserved for `SearchUn
 instead — see the REST/error chapters), and `StruoExceptionHandler.Map` logs it server-side at `Error`
 like every other `INTERNAL_SERVER_ERROR` case. The resolved ids are written onto `QueryModel.SearchCandidates`
 (`src/Struo.Domain/Query/QueryModel.cs`), which the page query, every facet, and the aggregate all
-share, so all three report against the same candidate set. See
+share, so all three report against the same candidate set. `QueryValidator.Validate` clears any
+inbound `SearchCandidates` on the way in (defence in depth — no parser sets it today), so
+`SearchCandidateResolver` stays the field's only writer, which is what lets `FilterTranslator` trust
+its contents as already-parsed PK-typed values rather than arbitrary caller input. See
 `docs/guide/en/08-query-dsl.md`'s "Search providers" for the full contract, composition rules, and a
 worked provider example.
 

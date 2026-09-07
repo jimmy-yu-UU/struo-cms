@@ -221,7 +221,7 @@ Elasticsearch、PostgreSQL 全文搜尋……) 插進同一個請求——這正
 
 | 欄位 | 意義 |
 |---|---|
-| `Collection` | 查詢 DSL 所見的集合名稱 (例如 `article`)。 |
+| `Collection` | 集合的標準 camelCase 名稱 (`CollectionMetadata.Name`，例如 `article`)——不論 REST 路由區段本身是用什麼大小寫 (`/api/items/Article` 也能不分大小寫地解析)，provider 看到的永遠是同一個標準形式。 |
 | `Term` | `search=` 的值，逐字保留——不修剪、不轉小寫。 |
 | `Locale` | 有效查詢語言 (明確的 `locale=`，或站台預設值)。 |
 | `SearchableFields` | Core 的 `Searchable && !Hidden` 欄位名稱——僅供參考;provider 可以索引完全不同的欄位。 |
@@ -292,6 +292,11 @@ public sealed class StaticSearchProvider : ISearchProvider
 // Program.cs, after AddStruoData():
 builder.Services.AddScoped<ISearchProvider, StaticSearchProvider>();
 ```
+
+除非 provider 真的是無狀態的，否則請以 scoped (或 transient) 生命週期註冊:一個以 singleton
+註冊、卻捕捉了 scoped 相依 (`DbContext`、`ISqlSugarClient` 或類似物件) 的 provider 是一個
+captive dependency——它要嘛在啟動時因 `ValidateScopes` 而擲出例外，要嘛更糟，在整個應用程式的
+生命週期中，都默默重複使用第一個請求的 scoped 實例。
 
 ### Core 不做什麼
 
