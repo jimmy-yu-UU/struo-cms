@@ -368,6 +368,7 @@ and `ItemChangeKind` (`src/Struo.Application/Changes/ItemChangeKind.cs`) has exa
 | Trash (soft delete), only when the atomic trash `UPDATE` actually affected a row | `Trashed` |
 | Restore, only when the atomic restore `UPDATE` actually affected a row | `Restored` |
 | Purge — the purged row itself | `Purged` |
+| Purge — a descendant row reached via `OnDelete.Cascade` and itself deleted | `Purged` |
 | Purge — a live child row whose foreign key was set to null (`OnDelete.SetNull`) | `Updated` |
 | Purge — a live parent row that lost an inbound many-to-many link | `Updated` |
 | File upload (`FileService.UploadAsync`) | `Created` |
@@ -382,16 +383,20 @@ at the SQL level (zero rows affected, same gate the revision-capture table above
 
 ### Timing and failure semantics
 
-- **Post-commit.** A listener is called only after the write's transaction has committed
-  (`repository.InTransactionAsync` has returned) — a listener reading the affected row back sees the
-  committed state, never an uncommitted one that might still roll back.
-- **Best-effort, never fails the write.** `ItemChangeNotifier`
-  (`src/Struo.Infrastructure/Changes/ItemChangeNotifier.cs`) calls every registered listener in
-  registration order inside its own `try`/`catch`: a throwing listener is logged at `Error` (listener
-  type name, batch size, a per-kind count summary) and the **next listener still runs**. The write's own
-  result — the `200`/`201`/`204` already sent to the caller — is unaffected either way; there is no
-  retry. A fork that needs delivery to survive a listener crash queues durably inside its own listener
-  (an outgoing outbox) — that is explicitly outside what this seam provides.
+- **Post-commit.** A listener is called only after the write has committed — a listener reading the
+  affected row back sees the committed state, never an uncommitted one that might still roll back.
+- **Best-effort, never fails the write — but runs synchronously inside the request.**
+  `ItemChangeNotifier` (`src/Struo.Infrastructure/Changes/ItemChangeNotifier.cs`) calls every
+  registered listener in registration order inside its own `try`/`catch`: a throwing listener is
+  logged at `Error` (listener type name, batch size, a per-kind count summary) and the **next
+  listener still runs**. The write's *result* is decided before notification runs — it is already
+  determined by the point `NotifyAsync` is called — and a listener's success or failure cannot change
+  it; there is no retry. But the call is `await`ed inline, before the HTTP response is produced, so
+  listeners run one after another on the same request: a slow listener slows the write's response
+  time. That is the practical reason to queue work inside a listener rather than call a slow external
+  system inline — not durability, but latency. A fork that needs delivery to survive a listener crash
+  also queues durably inside its own listener (an outgoing outbox) — that is explicitly outside what
+  this seam provides.
 - **One call per write operation, not per item.** A single write raises exactly one
   `NotifyAsync(IReadOnlyList<ItemChange>, ct)` call carrying every `ItemChange` that operation touched —
   a purge cascade with a dozen affected rows is still one call with a dozen entries, not a dozen calls.
@@ -432,12 +437,17 @@ Raised for: ordinary item writes through the generic API — both REST (`ItemsCo
 protocols raise identically — and file uploads/trash/restore/purge through `FilesController` /
 `FileService`.
 
-**Not** raised for: the identity collections (`user`, `role`, `permission`, `userRole`) written through
-`UsersController`/`RolesController` rather than `ItemService`; site settings; the many-to-many
-**inverse** side on an ordinary write (changing an article's `tags` does not notify the tag it added or
-removed — only a *purge*'s forced junction cleanup raises for the parent, as described above); and any
-write made outside this API entirely — a fork's own ETL or direct database access never goes through
-`ItemService`/`FileService`, so it never reaches a listener.
+**Not** raised for: writes made through the dedicated identity endpoints —
+`UsersController` (accounts/credentials/tokens, via `IUserAccountStore`/`IUserCredentialStore`),
+`RolesController`'s permission-grant writes (via `IPermissionGrantStore`), and the auth/password
+flows — which bypass `ItemService` entirely; site settings; the many-to-many **inverse** side on an
+ordinary write (changing an article's `tags` does not notify the tag it added or removed — only a
+*purge*'s forced junction cleanup raises for the parent, as described above); and any write made
+outside this API entirely — a fork's own ETL or direct database access never goes through
+`ItemService`/`FileService`, so it never reaches a listener. The same `user`/`role`/`permission`/
+`userRole` collections written through the *generic* items API (`/api/items/{collection}`) instead —
+which the schema does allow — go through `ItemService` exactly like any other collection and **do**
+raise.
 
 ### Registering a listener
 
@@ -460,12 +470,20 @@ public sealed class SearchIndexListener(IMySearchIndex index) : IItemChangeListe
 ```
 
 ```csharp
-// Program.cs, after AddStruoData()
 services.AddScoped<IItemChangeListener, SearchIndexListener>();
 ```
 
-With no listener registered, `ItemChangeNotifier.NotifyAsync` returns immediately — the seam costs
-nothing when nothing is listening.
+Listeners resolve as `IEnumerable<IItemChangeListener>` — unlike `ISearchProvider`'s single-slot
+`TryAddScoped`, any number can be registered, and registration order only decides the order they are
+called in, not whether they are.
+
+With no listener registered, create/update/trash/restore add nothing beyond the write itself —
+`ItemChangeNotifier.NotifyAsync` returns immediately on an empty listener list. A **purge** is not
+quite free even then: `ItemService.DeleteAsync` always allocates an `ItemChangeSet`, and
+`ItemPurgePipeline.PurgeCoreAsync` always runs one extra typed read per inbound `OnDelete.SetNull`
+relation and per inbound many-to-many junction — `CollectSetNullUpdatesAsync` /
+`CollectInboundM2MUpdatesAsync` — to know which live rows it is about to affect, whether or not any
+listener is registered to hear about it.
 
 ### Observability, reconciliation, and re-entrancy
 

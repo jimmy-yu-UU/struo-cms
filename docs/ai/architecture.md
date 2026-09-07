@@ -533,12 +533,16 @@ Both write-side consumers take the notifier as a **trailing, optional** construc
 same rationale `ISearchProvider` above documents: `ItemService(..., IItemChangeNotifier? notifier =
 null)` and `FileService(..., IItemChangeNotifier? notifier = null)`, so existing direct-construction
 test files keep compiling and `null` behaves identically to "no listener registered." Both call the
-notifier only **after** their write's `repository.InTransactionAsync` has returned — `ItemService`'s own
-`NotifyAsync` helper doc comment states the ordering explicitly: commit → cache invalidation
-(`InvalidateLanguagesIfNeeded`) → notify → session revocation, always with `CancellationToken.None`
-(the write already committed, so a disconnecting caller must not also skip notifying listeners or
-revoking a deleted user's sessions). `FileService` bypasses `ItemService` entirely for every file
-operation, so it raises its own notification per write rather than sharing `ItemService`'s call sites:
+notifier only **after their write has committed**, always with `CancellationToken.None` (the write
+already committed, so a disconnecting caller must not also skip notifying listeners). The exact
+ordering differs by operation, not a single fixed sequence — `ItemService`'s create/update path is
+commit → `InvalidateLanguagesIfNeeded` (a no-op outside the `language` collection) → notify; its
+trash/purge path is commit → notify → `RevokeSessionsIfUserAsync` (a no-op outside the `user`
+collection); its restore path is commit → notify, with no cache-invalidation or session step at all.
+`FileService` bypasses `ItemService` entirely for every file operation, so it raises its own
+notification per write rather than sharing `ItemService`'s call sites, immediately after each write
+commits (`RestoreAsync` in particular has no `InTransactionAsync` wrapper of its own — it is a single
+atomic `UPDATE`, and the notification follows straight after it):
 `UploadAsync` → `Created`, `TrashAsync` → `Trashed` (only when the atomic trash `UPDATE` affected a
 row), `RestoreAsync` → `Restored` (same gate), `DeleteAsync` (purge) → `Purged`.
 
