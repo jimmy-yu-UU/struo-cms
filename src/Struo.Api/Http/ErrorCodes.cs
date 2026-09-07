@@ -45,6 +45,12 @@ public static class ErrorCodes
     // the SPA) can tell "nothing happened" apart from "it happened, but isn't fully cleaned up".
     public const string SessionRevocationFailed = "SESSION_REVOCATION_FAILED";
 
+    // A registered ISearchProvider threw SearchUnavailableException (its engine is unreachable). 503 so
+    // clients and operators can tell "search is down" from a generic 500; the response message is a
+    // FIXED string (DomainErrorMap.SearchUnavailableMessage) — the provider's own message, which may
+    // name hosts, only goes to the Warning log.
+    public const string SearchUnavailable = "SEARCH_UNAVAILABLE";
+
     public static string ForStatus(int status) => status switch
     {
         400 => BadUserInput,
@@ -54,6 +60,7 @@ public static class ErrorCodes
         409 => Conflict,
         413 => PayloadTooLarge,
         429 => TooManyRequests,
+        503 => SearchUnavailable,
         _ => Internal,
     };
 }

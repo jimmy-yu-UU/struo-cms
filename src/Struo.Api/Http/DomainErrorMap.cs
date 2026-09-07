@@ -19,7 +19,10 @@ public static class DomainErrorMap
     /// <see cref="ErrorCodes"/> constants. An unauthenticated <see cref="PermissionDeniedException"/>
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
     /// yields <see cref="ErrorCodes.Forbidden"/>. Mapped domain exceptions surface their
-    /// client-safe <see cref="System.Exception.Message"/> verbatim. Any unmapped type collapses to
+    /// client-safe <see cref="System.Exception.Message"/> verbatim — except
+    /// <see cref="SearchUnavailableException"/>, which is the deliberate exception to "verbatim": its
+    /// message may name a provider's internal host and is replaced with the FIXED
+    /// <see cref="SearchUnavailableMessage"/>. Any unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
     /// </summary>
@@ -35,8 +38,16 @@ public static class DomainErrorMap
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
+            SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
+
+    /// <summary>
+    /// Fixed client-facing message for <see cref="ErrorCodes.SearchUnavailable"/>. Never the
+    /// exception's own <see cref="System.Exception.Message"/>, which may name an internal provider
+    /// host — that detail only ever reaches the Warning-level server log.
+    /// </summary>
+    public const string SearchUnavailableMessage = "Search is temporarily unavailable.";
 
     /// <summary>
     /// REST-only: derives the HTTP status for a mapped <paramref name="code"/>. Co-located with the
@@ -53,6 +64,7 @@ public static class DomainErrorMap
         ErrorCodes.BadUserInput => StatusCodes.Status400BadRequest,
         ErrorCodes.Validation => StatusCodes.Status400BadRequest,
         ErrorCodes.PayloadTooLarge => StatusCodes.Status413PayloadTooLarge,
+        ErrorCodes.SearchUnavailable => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status500InternalServerError,
     };
 }
