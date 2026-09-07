@@ -110,8 +110,8 @@ cached in a singleton — nothing about it re-runs per request. See
 
 For each interface below: what it does, where it lives, its real implementation(s), and how it is
 registered. `IMetadataProvider`, `IEntityRegistry`, `IEntityTypeCollector`, `IRelationshipGraph`,
-`IItemUseCases`, `IItemRepository`, `IRelationExpander`, and `ISearchProvider` all exist under those
-exact names in `Struo.Application`.
+`IItemUseCases`, `IItemRepository`, `IRelationExpander`, `ISearchProvider`, and `IItemChangeListener`
+all exist under those exact names in `Struo.Application`.
 
 ### `IMetadataProvider`
 
@@ -506,6 +506,59 @@ its contents as already-parsed PK-typed values rather than arbitrary caller inpu
 `docs/guide/en/08-query-dsl.md`'s "Search providers" for the full contract, composition rules, and a
 worked provider example.
 
+### Change notifications (`IItemChangeListener` / `IItemChangeNotifier`)
+
+The write-side notification seam lives split across two layers, for the same reason
+`ItemChangeNotifier` states directly in its own doc comment. The contract —
+`IItemChangeListener`, `IItemChangeNotifier`, `ItemChange`, `ItemChangeKind`, `ItemChangeSet` — is
+declared in `src/Struo.Application/Changes/` with no logging dependency at all. The fan-out
+implementation, `ItemChangeNotifier` (`src/Struo.Infrastructure/Changes/ItemChangeNotifier.cs`), lives
+in `Struo.Infrastructure` instead of alongside the contract **because `Struo.Application` has no
+logging dependency** — the notifier's per-listener isolation depends on `ILogger<T>` to record a
+failing listener at `Error`, so it cannot live in the layer that declares the interface. It calls every
+registered `IItemChangeListener` in registration order inside its own `try`/`catch`; a throwing listener
+is logged (type name, batch size, a `GroupBy(Kind)` count summary) and the loop continues — the method
+itself never throws, since callers have already committed and a listener failure must not turn a
+successful write into an error response. Registered in
+`DataServiceCollectionExtensions.AddStruoData`
+(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`):
+```csharp
+services.AddScoped<IItemChangeNotifier, ItemChangeNotifier>();
+```
+The notifier itself is always registered; listeners are not — a fork adds any number with
+`services.AddScoped<IItemChangeListener, MyIndexer>()`, and with none registered
+`ItemChangeNotifier.NotifyAsync` returns immediately on its `listeners.Count == 0` check.
+
+Both write-side consumers take the notifier as a **trailing, optional** constructor parameter — the
+same rationale `ISearchProvider` above documents: `ItemService(..., IItemChangeNotifier? notifier =
+null)` and `FileService(..., IItemChangeNotifier? notifier = null)`, so existing direct-construction
+test files keep compiling and `null` behaves identically to "no listener registered." Both call the
+notifier only **after** their write's `repository.InTransactionAsync` has returned — `ItemService`'s own
+`NotifyAsync` helper doc comment states the ordering explicitly: commit → cache invalidation
+(`InvalidateLanguagesIfNeeded`) → notify → session revocation, always with `CancellationToken.None`
+(the write already committed, so a disconnecting caller must not also skip notifying listeners or
+revoking a deleted user's sessions). `FileService` bypasses `ItemService` entirely for every file
+operation, so it raises its own notification per write rather than sharing `ItemService`'s call sites:
+`UploadAsync` → `Created`, `TrashAsync` → `Trashed` (only when the atomic trash `UPDATE` affected a
+row), `RestoreAsync` → `Restored` (same gate), `DeleteAsync` (purge) → `Purged`.
+
+A purge's cascade is the one path that raises more than a single-item change, collected by
+`ItemPurgePipeline.PurgeCoreAsync`'s `changes` parameter — one `ItemChangeSet`
+(`src/Struo.Application/Changes/ItemChangeSet.cs`) instance threaded through every recursive call in the
+cascade, so the whole tree reaches `ItemService.DeleteAsync`'s caller as one batch. Inside
+`PurgeCoreAsync`: each row `DeleteAsync` actually removes (the target and every `OnDelete.Cascade`
+descendant reached recursively through the same method) adds `Purged`. Each `OnDelete.SetNull` inbound
+row is read via `CollectSetNullUpdatesAsync` — a `QueryWhereInAsync` (the soft-delete floor applies, so
+only **live** rows are read) — **before** `SetForeignKeyNullAsync` runs the actual `UPDATE`, and each
+row found adds `Updated`; a trashed child is silently skipped. Each parent losing an inbound
+many-to-many link is read the same way, via `CollectInboundM2MUpdatesAsync` — the junction rows are
+read (resolving each row's parent id by reflection on the junction type) before
+`DeleteByPropertyAsync` deletes them, then filtered to live parents only via `QueryWhereInAsync` — and
+adds `Updated` for each. `ItemChangeSet.Add` deduplicates by `(collection, id)`
+(`StringComparer.OrdinalIgnoreCase`), with `Purged` always overwriting any other kind already recorded
+for that key — a row first reached earlier in the same cascade as a `SetNull` target, then purged later
+in it, ends up in the batch once, as `Purged`.
+
 ### File storage backends (`IFileStorage`)
 
 The extension point for file storage backends is `IFileStorage`
@@ -576,7 +629,9 @@ sanitizes non-translatable `RichText` fields via `RichTextCleaner` — a wrapper
 before required-field validation; translatable `RichText` fields are sanitized separately, per locale,
 in `ItemWriteSideSync.SyncTranslationsAsync`) and the `FieldValidatorRegistry`-driven per-`FieldInterface` validators
 (`src/Struo.Application/Query/Write/FieldValidatorRegistry.cs`) before `IItemRepository` commits inside
-a transaction (`InTransactionAsync`). Every response — success or error — passes through
+a transaction (`InTransactionAsync`), after which `IItemChangeNotifier` fans the write's `ItemChange`(s)
+out to every registered `IItemChangeListener` (see "Change notifications" above). Every response —
+success or error — passes through
 `EnvelopeResultFilter`/`StruoExceptionHandler` (`src/Struo.Api/Http/`) so the wire shape is uniform. See
 `docs/guide/en/08-query-dsl.md` and `docs/guide/en/09-rest-api.md`.
 
