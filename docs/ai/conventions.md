@@ -264,6 +264,14 @@ drift apart. A new domain exception type that should surface a client-safe messa
 generic message — the real exception is logged server-side, never leaked to the response. See
 `docs/guide/en/09-rest-api.md`.
 
+`SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
+exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`
+(`SEARCH_UNAVAILABLE`/503) with the fixed client-facing message
+`DomainErrorMap.SearchUnavailableMessage` ("Search is temporarily unavailable.") rather than the
+exception's own `Message`, since a fork's `ISearchProvider` may put an internal host or endpoint into
+that message — it is logged server-side at `Warning` (both `StruoExceptionHandler` and GraphQL's
+`StruoErrorFilter`) and never reaches the response.
+
 ## Input validation at boundaries
 
 - **Query DSL** (filter/sort/search/fields/deep/facets/aggregate paths): validated and whitelisted by
@@ -306,7 +314,15 @@ generic message — the real exception is logged server-side, never leaked to th
   `FilterTranslator` above — `GroupBy`/`OrderBy`/`Select` are always given a runtime-built
   `Expression<Func<T, …>>` lambda, never a string, and the one subquery each needs (a to-many facet's
   filtered-root-ids side query) goes through the same `SubQueryConditional.Wrap` this section's raw-SQL
-  exception already covers, not a new one.
+  exception already covers, not a new one. A registered `ISearchProvider`'s returned candidate ids are a
+  **trust boundary distinct from user input**: `SearchCandidateResolver`
+  (`src/Struo.Application/Search/SearchCandidateResolver.cs`) parses each one to the collection's
+  primary-key CLR type (only `Guid` or an integer type is accepted — anything else is refused) and caps
+  the count at `Query:MaxSearchCandidates`. Both a rejected PK type/unparsable id and an over-cap count
+  throw `InvalidOperationException` (→ `INTERNAL_SERVER_ERROR`/500) rather than `QueryException` (→
+  `BAD_USER_INPUT`/400) — the violation is the fork's provider misbehaving, not something the caller
+  sent, so it must not be reported as a client mistake. See `docs/guide/en/08-query-dsl.md`'s "Search
+  providers".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
   not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a

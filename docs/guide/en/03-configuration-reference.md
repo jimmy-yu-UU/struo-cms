@@ -164,8 +164,9 @@ C# property initializer on `StruoQueryOptions`
 | `Query:MaxFacets` | int | `10` | Cap on the number of distinct `facets=`/`"facets"` paths in one request, after deduplication. Exceeding it throws `"Too many facets (max 10)."`. |
 | `Query:MaxFacetValues` | int | `50` | Cap on the number of `{ value, count }` buckets returned per facet — no `otherCount` remainder. For the own-field/FK/relation-name forms it is applied in the database (`ORDER BY count DESC, value ASC` then `Take`); for the one-hop-plus-leaf form it caps the target-id buckets before the leaf-value merge, and the merged result is separately re-capped in memory (chapter 8's "Ordering and the value cap"). |
 | `Query:MaxAggregates` | int | `10` | Cap on the total number of `aggregate[<op>]=`/`"aggregate"` fields across every op in one request. Exceeding it throws `"Too many aggregate fields (max 10)."`. This is only a validation cap, not the per-statement batch size — that is the fixed constant `AggregateRow.SlotCount = 10` (chapter 8's "How many queries this costs"); at the default value the two happen to match, so a request within the cap always costs exactly one aggregate statement, but a fork that raises this option above 10 gets one additional aggregate statement per additional 10 fields, since the chunking constant does not move with it. |
+| `Query:MaxSearchCandidates` | int | `1000` | Upper bound on the candidate ids a registered `ISearchProvider` may return for one request (chapter 8's [Search providers](08-query-dsl.md#search-providers)). Exceeding it is a provider contract violation, not a truncation: `SearchCandidateResolver` throws `InvalidOperationException` (→ `INTERNAL_SERVER_ERROR`/500), the same as an id that fails to parse to the collection's primary-key type. |
 
-All seven are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
+All eight are `[Range(1, int.MaxValue)]`-validated and bound with `ValidateOnStart`, so a zero or
 negative override fails startup rather than producing a nonsensical bound. Chapter 8 covers what each
 cap bounds in context. Restart required.
 

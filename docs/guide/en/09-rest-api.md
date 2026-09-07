@@ -82,7 +82,7 @@ identical regardless of which layer answered:
 
 ## Error codes
 
-`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) declares exactly these fourteen stable `code` values. This
+`ErrorCodes` (`src/Struo.Api/Http/ErrorCodes.cs`) declares exactly these fifteen stable `code` values. This
 is the same catalog GraphQL's `StruoErrorFilter` uses (chapter 10) — a `PermissionDeniedException`
 maps to the identical code on both protocols, for example — so a client that already handles GraphQL
 errors recognizes REST errors by the same string.
@@ -103,6 +103,7 @@ errors recognizes REST errors by the same string.
 | `NO_LOCAL_PASSWORD` | 400 | Self-service password change attempted on an account provisioned entirely through external OIDC, whose stored hash is the empty string because it never had a local password. |
 | `ACCOUNT_INACTIVE` | 401 | `POST /api/auth/login` with a *correct* password on a deactivated account. Only reachable after a successful hash verify, so surfacing it leaks nothing the caller hadn't already proven — unlike splitting "wrong password" from "no such account", which stays merged under `UNAUTHORIZED` above (chapter 12 covers why). |
 | `SESSION_REVOCATION_FAILED` | 500 | `SessionRevocationFailedException` — a password change or a user delete already committed successfully, but the follow-up session-revocation step then failed, so some of that user's existing sessions may still be live (chapter 12). `DomainErrorMap.StatusFor` has no dedicated arm for this code, so it falls through to the default 500 status even though the code and message are specific, not the masked generic string `INTERNAL_SERVER_ERROR` otherwise carries. |
+| `SEARCH_UNAVAILABLE` | 503 | `SearchUnavailableException` — a registered `ISearchProvider` (chapter 8's [Search providers](08-query-dsl.md#search-providers)) threw because its own search engine could not answer (connection refused, timeout, missing index). The client-facing message is always the fixed string `"Search is temporarily unavailable."` (`DomainErrorMap.SearchUnavailableMessage`) — the provider's own exception message, which may name an internal host, only reaches the server-side Warning log, never the response. |
 
 `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) is the single source of the exception→code
 mapping, shared verbatim with GraphQL's error filter:
@@ -117,10 +118,11 @@ RelationConflictException => (ErrorCodes.Conflict, exception.Message),
 QueryException => (ErrorCodes.BadUserInput, exception.Message),
 PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
 SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
+SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
 _ => (ErrorCodes.Internal, "An internal error occurred."),
 ```
 
-Live-triggered examples below cover every code above except `PAYLOAD_TOO_LARGE` (excused above, in its own row), `INTERNAL_SERVER_ERROR` (excused below), and three more codes: `INVALID_CURRENT_PASSWORD` gets its own live example in the Users section further down instead; `NO_LOCAL_PASSWORD` and `ACCOUNT_INACTIVE` are not live-triggered anywhere in this chapter:
+Live-triggered examples below cover every code above except `PAYLOAD_TOO_LARGE` and `SEARCH_UNAVAILABLE` (both excused above, in their own row — the latter needs a registered `ISearchProvider` that actively fails, which the sample host does not carry), `INTERNAL_SERVER_ERROR` (excused below), and three more codes: `INVALID_CURRENT_PASSWORD` gets its own live example in the Users section further down instead; `NO_LOCAL_PASSWORD` and `ACCOUNT_INACTIVE` are not live-triggered anywhere in this chapter:
 
 ```
 $ curl -s http://localhost:5221/api/languages
@@ -184,6 +186,7 @@ the masked/logged behavior are read directly from `StruoExceptionHandler`/`Domai
 | `409 Conflict` | `CONFLICT` or `VERSION_CONFLICT`. |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE`. |
 | `429 Too Many Requests` | `TOO_MANY_REQUESTS` (either login-endpoint defense or the password-change limiter — see above). |
+| `503 Service Unavailable` | `SEARCH_UNAVAILABLE`. |
 | `500 Internal Server Error` | `INTERNAL_SERVER_ERROR`. |
 
 ```

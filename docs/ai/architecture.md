@@ -110,8 +110,8 @@ cached in a singleton — nothing about it re-runs per request. See
 
 For each interface below: what it does, where it lives, its real implementation(s), and how it is
 registered. `IMetadataProvider`, `IEntityRegistry`, `IEntityTypeCollector`, `IRelationshipGraph`,
-`IItemUseCases`, `IItemRepository`, and `IRelationExpander` all exist under those exact names in
-`Struo.Application`.
+`IItemUseCases`, `IItemRepository`, `IRelationExpander`, and `ISearchProvider` all exist under those
+exact names in `Struo.Application`.
 
 ### `IMetadataProvider`
 
@@ -340,13 +340,21 @@ references SqlSugar internals. Implementation: `RelationExpander`
 the SqlSugar-adjacency-defect workarounds) and `FilterTranslator.Subquery.cs` (the actual subquery
 construction) together are the successor to the interface-backed cross-relation-filter resolver this
 codebase used to have, restructured around SQL pushdown rather than in-memory id resolution:
-`Translate(collection, filter, search, searchableFields,
+`Translate(collection, filter, search, searchCandidates, searchableFields,
 queryLocale)` turns a validated `FilterNode` tree (chapter 8's grammar, including `_some`/`_none`
 relation quantifiers and `_junction`) into a `List<IConditionalModel>` for **one** queryable over
 `collection` — a dotted (cross-relation) condition, a relation quantifier, and a translatable-field
 condition (own-collection or reached across a hop) all become a nested `IN (SELECT …)` subquery
 (`RelationPredicateFilter`/`ComparisonFilter` cases in `FilterTranslator.Subquery.cs`), never an
-intermediate id set. It is `internal`, not registered in DI at all — `SqlSugarItemRepository`
+intermediate id set. When `searchCandidates` (an `IReadOnlyList<object>?` of ids already parsed to the
+collection's primary-key CLR type — see "Search providers" above) is non-null, `CandidateConditional`
+builds a typed `id IN (...)` condition from it and that **replaces** the `LIKE` search group outright
+(`search` itself is not consulted in that branch); an empty candidate list becomes `id IS NULL`
+instead of an empty `IN (...)`, portably matching nothing. Both render through the same typed
+`ConditionalModelTranslator.ToSingleModel` path the query DSL's own comparison operators use, which
+SqlSugar renders as SQL **literals**, not parameters — which is exactly why the ids must already be
+parsed to the PK type before reaching this translator; `SearchCandidateResolver` is what guarantees
+that. It is `internal`, not registered in DI at all — `SqlSugarItemRepository`
 constructs it directly with `new FilterTranslator(db, graph, metadata, registry, options)` (four
 times: its own `filters` field, plus one separate instance each for `WhereInQueries`, `FacetQueries`,
 and `AggregateQueries`, since a field initializer cannot reference another instance field) exactly the
@@ -454,6 +462,43 @@ behavior. Note the guard bans raw ORM access only: three controllers still depen
 `Struo.Infrastructure.Files.FileService` (aliased, so its `File` type doesn't collide with
 `System.IO.File`), which is a service rather than an ORM handle.
 
+### Search providers (`ISearchProvider`)
+
+`src/Struo.Application/Search/ISearchProvider.cs`: one method,
+`Task<SearchOutcome> SearchAsync(SearchRequest request, CancellationToken ct = default)`. This is a
+seam core deliberately hands to a fork, the same class as `IFileStorage` below — not an internal
+implementation detail like `IItemRepository` above. Default registration:
+`services.TryAddScoped<ISearchProvider, NullSearchProvider>()` in
+`DataServiceCollectionExtensions.AddStruoData`
+(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`) — `TryAddScoped` so
+a fork's own registration, whether added before or after `AddStruoData()` in `Program.cs`, wins over
+the default. `NullSearchProvider.SearchAsync` always returns `SearchOutcome.NotHandled`, so with no
+fork registration the built-in `LIKE` search (`FilterTranslator.SearchGroup`) runs unchanged.
+`SearchRequest`/`SearchOutcome` (`src/Struo.Application/Search/`) are the request/response records:
+`SearchRequest` carries `Collection`/`Term`/`Locale`/`SearchableFields`; `SearchOutcome` is either
+`NotHandled` or `Candidates(ids)` (an `IReadOnlyList<string>` of root ids — empty is a handled
+zero-hit search, not a fallback).
+
+`ItemService`'s constructor takes `ISearchProvider? searchProvider = null` as its **trailing, optional**
+parameter — the same rationale `SqlSugarItemRepository`'s `logger` parameter documents: the 22+ test
+files that construct `ItemService` directly pass every other (non-optional) constructor argument
+explicitly, and DI always injects the `AddStruoData`-registered instance regardless, so `null` (direct
+construction) simply means "the built-in `LIKE` search only," identical to what the DI default
+(`NullSearchProvider`) also yields. `ItemService.QueryAsync` consults the provider through
+`SearchCandidateResolver` (`src/Struo.Application/Search/SearchCandidateResolver.cs`) exactly once per
+list request, only when `Search` is non-blank: it asks the provider, and when the outcome is
+`Candidates`, parses each returned id to the collection's primary-key CLR type (only `Guid` or an
+integer type is supported — anything else is refused), caps the count at
+`StruoQueryOptions.MaxSearchCandidates` (default 1000), and deduplicates. Any violation of those three
+rules — an unparsable id, an unsupported PK type, or a count over the cap — throws
+`InvalidOperationException`: the provider's own contract was violated, not the caller's input, so this
+is a 500 (`SEARCH_UNAVAILABLE` is reserved for `SearchUnavailableException` instead — see the REST/error
+chapters). The resolved ids are written onto `QueryModel.SearchCandidates`
+(`src/Struo.Domain/Query/QueryModel.cs`), which the page query, every facet, and the aggregate all
+share, so all three report against the same candidate set. See
+`docs/guide/en/08-query-dsl.md`'s "Search providers" for the full contract, composition rules, and a
+worked provider example.
+
 ### File storage backends (`IFileStorage`)
 
 The extension point for file storage backends is `IFileStorage`
@@ -512,7 +557,10 @@ enum." Two distinct extension motions:
 `ItemsController` (`src/Struo.Api/Controllers/ItemsController.cs`) is the one controller that serves
 every collection generically — it depends on `IItemUseCases`, never on `ItemService` directly. A read
 (`GetAsync`/`QueryAsync`) resolves the query through `QueryValidator` (whitelist/depth-cap validation,
-`src/Struo.Application/Query/QueryValidator.cs`), `IItemRepository` (the actual SqlSugar query — a
+`src/Struo.Application/Query/QueryValidator.cs`) — for `QueryAsync` only, immediately after validation,
+`SearchCandidateResolver` asks the registered `ISearchProvider` once, and a `Candidates` outcome is
+threaded onto `QueryModel.SearchCandidates` before the query proceeds (see "Search providers" above) —
+`IItemRepository` (the actual SqlSugar query — a
 cross-relation filter is pushed down into a subquery by `FilterTranslator` inside this step, not
 rewritten beforehand), and `IRelationExpander` (deep-relation batching) before `ItemProjector` (`src/Struo.Application/Query/Projection/ItemProjector.cs`) turns the
 result into the camelCase dictionary the envelope serializes. A write (`CreateAsync`/`UpdateAsync`)
