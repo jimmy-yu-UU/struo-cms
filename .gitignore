@@ -44,3 +44,6 @@ TestResults/
 
 # OS
 .DS_Store
+
+# Semgrep Guardian plugin scratch (guardian.yml + lock), written next to every scanned project root; never tracked.
+.semgrep/
