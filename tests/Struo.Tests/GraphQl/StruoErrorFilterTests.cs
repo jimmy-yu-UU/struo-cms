@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Struo.Api.GraphQl;
 using Struo.Domain.Query;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.GraphQl;
@@ -86,5 +87,19 @@ public class StruoErrorFilterTests
     {
         var validationError = ErrorBuilder.New().SetMessage("parse error").Build();
         _filter.OnError(validationError).Should().BeSameAs(validationError);
+    }
+
+    [Fact]
+    public void SearchUnavailable_maps_to_SEARCH_UNAVAILABLE_with_fixed_message_and_no_exception()
+    {
+        var logger = new ListLogger<StruoErrorFilter>();
+        var filter = new StruoErrorFilter(logger, new HttpContextAccessor { HttpContext = null });
+
+        var e = filter.OnError(Wrap(new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
+
+        e.Code.Should().Be("SEARCH_UNAVAILABLE");
+        e.Message.Should().Be("Search is temporarily unavailable.");
+        e.Exception.Should().BeNull("the raw exception (and its host name) must not leak through GraphQL error details");
+        logger.Entries.Should().ContainSingle(x => x.Level == LogLevel.Warning);
     }
 }

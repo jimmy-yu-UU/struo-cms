@@ -6,6 +6,7 @@ using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Revisions;
+using Struo.Application.Search;
 using Struo.Application.Security;
 using Struo.Domain.Auditing;
 using Struo.Domain.Localization;
@@ -33,7 +34,11 @@ public sealed class ItemService(
     ICurrentUserAccessor currentUser,
     IRevisionStore revisions,
     RevisionSnapshotBuilder snapshotBuilder,
-    IUserSessionRevocationService sessionRevocation) : IItemUseCases
+    IUserSessionRevocationService sessionRevocation,
+    // U5: trailing and optional — existing test files construct ItemService directly (necessary
+    // constructor args are not optional there), and DI always injects the AddStruoData-registered
+    // instance; null (direct construction) means the built-in LIKE search only.
+    ISearchProvider? searchProvider = null) : IItemUseCases
 {
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
@@ -47,6 +52,10 @@ public sealed class ItemService(
         new(repository, registry, new(registry, permissions, metadata), permissions);
     private readonly DeepExpansionCoordinator deepExpansion =
         new(options, graph, metadata, registry, expander, new(registry, permissions, metadata), permissions);
+    // U5: consulted once per list request by QueryAsync; null (direct construction in tests) means
+    // the built-in LIKE search only, exactly what the DI default NullSearchProvider also yields.
+    private readonly SearchCandidateResolver searchCandidates =
+        new(searchProvider ?? NullSearchProvider.Instance, options, registry);
 
     public async Task<PagedResult> QueryAsync(
         string collection, QueryModel raw, string? locale = null,
@@ -63,6 +72,12 @@ public sealed class ItemService(
 
         var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions);
         var searchable = QueryValidator.SearchableFields(meta);
+        // A registered ISearchProvider may answer the search with candidate ids (spec §3.2); the same
+        // `validated` then feeds the list, every facet and the aggregate, so all three agree (R3).
+        // meta.Name (not the raw `collection` argument) is the canonical camelCase collection name:
+        // the REST route segment is case-insensitive (e.g. "/api/items/Article" resolves fine), so a
+        // provider must always see the same name regardless of how the caller cased the request.
+        validated = await searchCandidates.ResolveAsync(meta.Name, validated, searchable, queryLocale, ct);
         var result = await repository.QueryAsync(collection, validated, searchable, queryLocale, deleted, ct);
 
         var entities = result.Rows;

@@ -38,7 +38,7 @@ $ curl -s -X POST http://localhost:5221/api/items/file/query -H "Content-Type: a
 | 分頁 (Pagination) | `limit=`、`offset=` | `"limit"`、`"offset"` | 不存在任何 `page` 參數——分頁純粹以 offset 為基礎 (見下文)。 |
 | 欄位投影 (Fields) | `fields=a,b,c` | `"fields": ["a","b","c"]` | 限制投影出哪些*自有*欄位 (關聯與 `translations` 不受影響——見下文)。 |
 | 關聯展開 (Deep) | `deep=rel1,rel2` | `"deep": { "rel1": {...} }` | 關聯展開;第 7 章完整涵蓋。 |
-| 搜尋 (Search) | `search=text` | `"search": "text"` | 自由文字 `LIKE`，以 OR 連接跨越每一個 `Searchable` 欄位 (第 4 章);在同一個請求上與 `filter` 以 AND 組合——一列必須同時滿足 filter*且*符合搜尋詞，而非兩者擇一。 |
+| 搜尋 (Search) | `search=text` | `"search": "text"` | 自由文字 `LIKE`，以 OR 連接跨越每一個 `Searchable` 欄位 (第 4 章);在同一個請求上與 `filter` 以 AND 組合——一列必須同時滿足 filter*且*符合搜尋詞，而非兩者擇一。當一個 fork 註冊了 `ISearchProvider` 且它回應了這個請求時，一組候選 id 會直接取代 `LIKE` 搜尋——見下方的[搜尋提供者（Search providers）](#搜尋提供者-search-providers)。 |
 | 軟刪除 (Soft-delete) | `deleted=exclude\|only\|with` | *(僅限查詢字串——`GET`/`POST query` 都是從 URL 讀取它)* | 見下文。 |
 | 語言 (Locale) | `locale=code` | *(僅限查詢字串，同上)* | 可翻譯欄位篩選/排序/讀取時使用的有效查詢語言 (第 6 章)。 |
 
@@ -204,6 +204,105 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=-size,fileNa
 $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?sort=fileName&limit=2&offset=1"
 {"success":true,"data":[{"fileName":"beta-notes.txt", ...},{"fileName":"gamma-draft.txt", ...}],"meta":{"total":3,"limit":2,"offset":1}}
 ```
+
+## 搜尋提供者（Search providers）
+
+`search=` (上文) 預設由內建的 `LIKE` 掃描回應。一個 fork 可以改為註冊 `ISearchProvider`
+(`src/Struo.Application/Search/ISearchProvider.cs`)，把自己的搜尋引擎 (Meilisearch、
+Elasticsearch、PostgreSQL 全文搜尋……) 插進同一個請求——這正是本節要說明的刻意擴充接縫;第 1 章的
+「什麼可以換、什麼不能換」把它與 `IFileStorage` 並列。預設的註冊 `NullSearchProvider` 從不處理任何
+搜尋，所以在沒有 fork 提供 provider 的情況下，上面的 `LIKE` 路徑會完全維持原樣不受影響。
+
+### 契約
+
+`ItemService.QueryAsync` 只在 `search=` 非空白，且僅限清單請求 (絕不用於單筆 `GET`) 時，向已註冊的
+`ISearchProvider` 詢問一次，帶著一個 `SearchRequest`
+(`src/Struo.Application/Search/SearchRequest.cs`):
+
+| 欄位 | 意義 |
+|---|---|
+| `Collection` | 集合的標準 camelCase 名稱 (`CollectionMetadata.Name`，例如 `article`)——不論 REST 路由區段本身是用什麼大小寫 (`/api/items/Article` 也能不分大小寫地解析)，provider 看到的永遠是同一個標準形式。 |
+| `Term` | `search=` 的值，逐字保留——不修剪、不轉小寫。 |
+| `Locale` | 有效查詢語言 (明確的 `locale=`，或站台預設值)。 |
+| `SearchableFields` | Core 的 `Searchable && !Hidden` 欄位名稱——僅供參考;provider 可以索引完全不同的欄位。 |
+
+Provider 以一個 `SearchOutcome` (`src/Struo.Application/Search/SearchOutcome.cs`) 回應，二選一:
+
+- **`SearchOutcome.NotHandled`**——core 內建的 `LIKE` 搜尋會照常執行，就跟沒有註冊 provider 時完全
+  一樣。
+- **`SearchOutcome.Candidates(ids)`**——給定的根 id (以字串形式) 會變成一個 `id IN (...)` 條件，
+  直接取代 `LIKE` 搜尋;搜尋詞本身不會再被參照。**空**候選清單是一次已處理、零命中的搜尋 (`id IS
+  NULL`)，絕不會回退到 `LIKE`——一個確實沒找到任何東西的 provider 仍必須回傳 `Candidates([])`，
+  而不是 `NotHandled`。
+
+### 如何與請求的其餘部分組合
+
+- **與 `filter` 是 AND，不是取代它。** 候選條件與 `filter` 都會套用——一列必須同時滿足 filter
+  *且*是其中一個候選 id，而非兩者擇一。
+- **與 `deleted=`、權限、`Hidden` 各自獨立。** Core 的讀取權限檢查是集合層級，不是逐列的
+  (`ItemService.QueryAsync` 在向 provider 詢問之前就已經跑過 `CanRead`，若失敗早已擲出
+  `PermissionDeniedException`)，所以沒有任何逐列 RBAC 是候選 id 可以繞過的;`Hidden` 欄位的處理
+  同樣是逐欄位的，與哪些列符合資格無關。唯一會在下游過濾候選列的是軟刪除模式:一個目前落在請求的
+  `deleted=` 模式之外的候選 id (例如預設 `exclude` 下一列已被移入回收桶) 會跟任何其他資料列一樣
+  被排除。
+- **清單、每一個 facet，以及彙總，都共用同一組候選集** (見下方「Facets 與彙總」)——
+  `ItemService.QueryAsync` 只解析候選一次，並把同一個 `QueryModel` 貫穿分頁查詢、每一個 facet，
+  以及彙總，所以三者回報的都是完全相同的資料列。
+- **候選的順序不影響結果順序。** 候選只會縮小*哪些*列符合資格;`sort=` (或它的缺席) 仍然完全照舊
+  決定列的順序。這個版本並不會保留 provider 自己的相關性排序——保留它是一個可能的後續項目，不是
+  這個版本提供的東西。
+
+### id 信任邊界與上限
+
+Provider 回傳的 id 是一個**信任邊界**，不是使用者輸入:`SearchCandidateResolver`
+(`src/Struo.Application/Search/SearchCandidateResolver.cs`) 會在每一個 id 進入 SQL 之前，先把它
+解析為集合主鍵的 CLR 型別，因為 `FilterTranslator` 會把最終的 `id IN (...)` 渲染成型別化的字面值。
+只支援 `Guid` 或整數型別的主鍵 (`long`/`int`/`short`);其他任何主鍵型別都會被拒絕。候選數量同時也受
+`Query:MaxSearchCandidates` (第 3 章，預設 **1000**) 上限約束。一個無法解析的 id，以及一個超過上限
+的數量，都是 **provider 違反契約，而非使用者的錯誤**——它們會擲出 `InvalidOperationException`
+(→ `INTERNAL_SERVER_ERROR`/500)，絕不是 `QueryException` (→ `BAD_USER_INPUT`/400)，因為呼叫端什麼
+都沒做錯;是 fork 的 provider 有問題。`StruoExceptionHandler.Map` 會在伺服器端以 `Error` 等級記錄每
+一個 `INTERNAL_SERVER_ERROR` 情況，所以一個行為異常的 provider 的違規，對維運者而言並不是無聲的，
+即使客戶端看到的只是遮蔽過的通用訊息。同一個 provider 回應中重複的 id 會被靜默去重。
+
+### 當 provider 本身無法回應時
+
+一個完全無法回應的 provider (連線被拒、逾時、索引缺失) 應該擲出 `SearchUnavailableException`
+(`src/Struo.Domain/Query/SearchUnavailableException.cs`)，而不是回傳 `NotHandled`——這樣請求就會以
+`SEARCH_UNAVAILABLE`/503 (第 9 章) 失敗，而不是無聲降級成呼叫端可能沒有預期到的 `LIKE` 掃描。一個
+想優雅降級到 `LIKE` 的 provider，可以在內部自行攔截它自己的例外並改回傳 `NotHandled`；兩者都是合法
+的選擇，這道接縫並不強制其中一種。
+
+### 註冊一個 provider
+
+`AddStruoData()` 以 `TryAddScoped` 註冊 `NullSearchProvider`，所以一個 fork 只需要在呼叫
+`AddStruoData()` *之後*加入自己的註冊 (在它*之前*註冊也一樣有效，因為 `TryAddScoped` 只有在已經有
+東西被註冊時才會退讓):
+
+```csharp
+public sealed class StaticSearchProvider : ISearchProvider
+{
+    public Task<SearchOutcome> SearchAsync(SearchRequest request, CancellationToken ct = default)
+    {
+        if (request.Collection != "article") return Task.FromResult(SearchOutcome.NotHandled);
+        IReadOnlyList<string> ids = MyIndex.Lookup(request.Term, request.Locale); // your engine call
+        return Task.FromResult(SearchOutcome.Candidates(ids));
+    }
+}
+// Program.cs, after AddStruoData():
+builder.Services.AddScoped<ISearchProvider, StaticSearchProvider>();
+```
+
+除非 provider 真的是無狀態的，否則請以 scoped (或 transient) 生命週期註冊:一個以 singleton
+註冊、卻捕捉了 scoped 相依 (`DbContext`、`ISqlSugarClient` 或類似物件) 的 provider 是一個
+captive dependency——它要嘛在啟動時因 `ValidateScopes` 而擲出例外，要嘛更糟，在整個應用程式的
+生命週期中，都默默重複使用第一個請求的 scoped 實例。
+
+### Core 不做什麼
+
+讓 fork 的搜尋索引與寫入 (新增/更新/刪除) 保持同步——也就是寫入側索引同步——刻意**不是** core 的
+一部分:索引策略 (同步、排入佇列、批次) 取決於 fork 選擇的搜尋引擎，所以現階段這是 fork 自己的責任；
+一個寫入側同步 hook 是一個可能的未來項目，不是這個版本提供的東西。
 
 ## Facets 與彙總
 
@@ -389,7 +488,9 @@ facet 會多加恰好 1 條 (自有欄位、外鍵，或裸關聯名稱) 或 2 �
 陳述式;但若某個 fork 把 `Query:MaxAggregates` 調高超過 10，每多請求 10 個欄位就會多花一條彙總
 陳述式，因為分批用的常數本身並不會跟著調整。`StruoQueryOptions.MaxFacets` (預設 10) 限制了 facet
 的數量，所以在預設值下，單一請求最糟的情況是 `2 + 2·MaxFacets + 1`——更一般地說，是
-`2 + 2·MaxFacets + ⌈彙總欄位數 / 10⌉`。
+`2 + 2·MaxFacets + ⌈彙總欄位數 / 10⌉`。一個已註冊的 `ISearchProvider` 回應候選路徑，並不會改變這個
+計數:provider 呼叫只發生一次，在資料庫之外、查詢執行之前——它只是把同樣這些陳述式裡的 `LIKE`
+群組換成一個 `id IN (...)` 條件，不會多加任何查詢。
 
 ### 彙總 op
 
@@ -546,6 +647,11 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?filter%5Bbogus%5D
 上文 `DenyUnreadableHops` 的 facet 路徑對應版本——在完全解析路徑形狀之前就先做這個檢查，所以一個
 未知/隱藏的 facet 欄位，以及一個不可讀的關聯目標，失敗的方式都跟一個未知的 filter 欄位、或一條
 不可讀的帶點號 filter 路徑完全相同。
+
+一個已註冊的 `ISearchProvider` 所回傳的候選 id，完全跳過 `QueryValidator`——它們不是使用者輸入，
+所以沒有白名單需要比對。取而代之的是 `SearchCandidateResolver` (上一節) 會把每一個 id 解析為集合
+主鍵的 CLR 型別，解析失敗會是 `InvalidOperationException`/500，而不是 `QueryException`/400:是
+fork 的 provider 有問題，不是呼叫端。
 
 ## 端對端完整範例
 
