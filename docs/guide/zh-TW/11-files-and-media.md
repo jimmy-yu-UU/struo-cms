@@ -376,6 +376,14 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/file?deleted=with&sort
 已確認被清除檔案的 blob，已從磁碟上的 `App_Data/uploads` 中移除 (它的儲存鍵底下沒有留下任何
 孤兒檔案)。
 
+上傳、移入回收桶、還原與清除——`FileService` 的四條寫入路徑 (上傳見[上方](#上傳))——每一條也都會
+透過同一個 `FileService`，觸發一次 commit 之後的 `IItemChangeListener` 變更通知 (依序為
+`Created`/`Trashed`/`Restored`/`Purged`)，因為 `FileService` 完全繞過了 `ItemService`，所以要
+自行觸發。把目前的品牌 logo 移入回收桶或清除，會在與該次移入回收桶/清除相同的交易中清除
+`site_settings.logofileid` (見上文)，但不會為 site settings 本身觸發任何通知——只有該檔案資料列的
+`Trashed`/`Purged` 變更。完整契約見第 13 章的
+[回應寫入：`IItemChangeListener`](13-revisions-and-soft-delete.md#回應寫入-iitemchangelistener)。
+
 ## 接下來該去哪
 
 - 第 3 章 [設定參考](03-configuration-reference.md)，個別涵蓋每一個 `Struo:Files:*` 鍵的

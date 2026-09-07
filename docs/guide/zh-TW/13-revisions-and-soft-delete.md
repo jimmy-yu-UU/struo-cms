@@ -315,6 +315,157 @@ db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
   過去的欄位狀態下完全恢復現行有效，一次針對目前已在回收桶中資料列的還原之後，仍然需要一次明確的
   `restore`。
 
+## 回應寫入：`IItemChangeListener`
+
+上面這兩項功能，對 fork 自己的集合來說都是選用的。與這兩者正交、且不論如何每一次寫入都已經會流經的，
+是一個寫入端的接縫：`IItemChangeListener`
+(`src/Struo.Application/Changes/IItemChangeListener.cs`)，這是 fork 用來回應內容寫入的介面——
+同步搜尋索引、觸發 webhook、讓快取失效——而 core 的寫入路徑完全不需要知道 fork 下游系統的任何事。
+
+### 契約
+
+一個 listener 實作一個方法：
+
+```csharp
+Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default);
+```
+
+`ItemChange` (`src/Struo.Application/Changes/ItemChange.cs`) 是一個 `record Collection, Id, Kind`
+三元組，而 `ItemChangeKind` (`src/Struo.Application/Changes/ItemChangeKind.cs`) 恰好有五個值：
+`Created`、`Updated`、`Trashed`、`Restored`、`Purged`。哪一條寫入路徑觸發哪一種 kind：
+
+| 寫入路徑 | Kind |
+|---|---|
+| 建立 (`ItemService.CreateAsync`) | `Created` |
+| 更新，包括還原(版本紀錄) (`ItemService.UpdateCoreAsync`，`operation` 為 `"update"` 或 `"revert"`) | `Updated` |
+| 移入回收桶(軟刪除)，只有在原子性的移入回收桶 `UPDATE` 確實影響到一列時才會觸發 | `Trashed` |
+| 還原(回收桶)，只有在原子性的還原 `UPDATE` 確實影響到一列時才會觸發 | `Restored` |
+| 清除——被清除的資料列本身 | `Purged` |
+| 清除——透過 `OnDelete.Cascade` 抵達並被一併刪除的子孫資料列 | `Purged` |
+| 清除——外鍵被設為 null 的一筆存活中子資料列 (`OnDelete.SetNull`) | `Updated` |
+| 清除——失去一筆傳入多對多連結的一筆存活中父資料列 | `Updated` |
+| 檔案上傳 (`FileService.UploadAsync`) | `Created` |
+| 檔案移入回收桶 (`FileService.TrashAsync`) | `Trashed` |
+| 檔案還原 (`FileService.RestoreAsync`) | `Restored` |
+| 檔案清除 (`FileService.DeleteAsync`) | `Purged` |
+
+一次還原(版本紀錄)是一個 `Updated`，而不是它自己的 kind——就機制而言它*就是*另一次
+`UpdateCoreAsync` 呼叫(見上文)。一列已經在回收桶中的資料再次被移入回收桶，或一列已存活的資料
+再次被還原，在 SQL 層級是一個無操作(零列受影響，與上方版本紀錄擷取表格使用的同一個關卡)，並且
+**不會**觸發任何東西——冪等的移入回收桶/還原是無聲的，而不是重複的 `Trashed`/`Restored`。
+
+### 時機與失敗語意
+
+- **Commit 之後。** 一個 listener 只會在寫入 commit 之後才被呼叫——一個把受影響資料列讀回來的
+  listener，看到的一定是已經 commit 的狀態，絕不會是一個可能還會被回滾的未 commit 狀態。
+- **盡力而為、絕不會讓寫入失敗——但會在請求內同步執行。**
+  `ItemChangeNotifier` (`src/Struo.Infrastructure/Changes/ItemChangeNotifier.cs`) 會在自己的
+  `try`/`catch` 裡，依註冊順序呼叫每一個已註冊的 listener：一個擲出例外的 listener 會被記錄在
+  `Error` 等級(listener 的型別名稱、批次大小、一份逐 kind 的計數摘要)，而**下一個 listener
+  仍然會執行**。寫入的*結果*在通知執行之前就已經決定——在 `NotifyAsync` 被呼叫的那一刻就已經
+  確定了——一個 listener 的成功或失敗都無法改變它；也沒有重試。但這個呼叫是在 HTTP 回應被產生
+  之前、以內嵌的方式被 `await`，所以 listener 會在同一個請求上一個接著一個依序執行：一個緩慢的
+  listener 會拖慢這次寫入的回應時間。這正是應該把工作放進佇列、在 listener 內部處理，而不是
+  內嵌呼叫一個緩慢外部系統的實際理由——理由不是持久性，而是延遲。一個需要讓遞送在 listener
+  崩潰後仍能存活的 fork，同樣要在自己的 listener 內部做持久佇列(一個外送 outbox)——這明確地
+  落在這個接縫所提供的範圍之外。
+- **每次寫入操作一次呼叫，而不是每個項目一次。** 單一次寫入恰好觸發一次
+  `NotifyAsync(IReadOnlyList<ItemChange>, ct)` 呼叫，攜帶該操作觸及的每一筆 `ItemChange`——
+  一次影響十幾列資料的清除級聯，仍然是帶著十幾筆項目的一次呼叫，而不是十幾次呼叫。
+- **`CancellationToken.None`。** 到 `NotifyAsync` 執行時，寫入早已 commit 完成，所以一個中途
+  斷線的呼叫端不能連帶跳過通知 listener——一個已取消的請求 token 絕不會被傳進這次呼叫。
+
+### 級聯涵蓋範圍
+
+一次清除的級聯，是由 `ItemPurgePipeline.PurgeCoreAsync`
+(`src/Struo.Application/Query/Write/ItemPurgePipeline.cs`) 收集進一個在每一次遞迴呼叫之間
+共用的 `ItemChangeSet` (`src/Struo.Application/Changes/ItemChangeSet.cs`)，所以整個級聯會以
+單一批次的形式抵達呼叫端：
+
+- 每一列真正被刪除的資料——清除目標本身，以及每一列透過 `OnDelete.Cascade` 抵達的資料——都會
+  新增一筆 `Purged` 項目。
+- 每一列外鍵即將被設為 null 的**存活中**資料 (`OnDelete.SetNull`) 都會在該 `UPDATE` 執行
+  **之前**被讀取，並為自己新增一筆 `Updated` 項目；一個已經在回收桶中的子項會被跳過(它不在
+  任何索引裡，之後的一次還原會觸發它自己的 `Restored`)。
+- 每一個在目標的 junction 資料列被刪除時，失去一筆傳入多對多連結的**存活中**父項，同樣會
+  新增一筆 `Updated` 項目——舉例來說，清除一個 tag，會改變每一篇曾參照它的存活中 article，
+  即使 article 資料列本身從未被寫入過。
+- `ItemChangeSet` 會以 `(collection, id)` 不分大小寫去除重複，對同一個項目而言，`Purged`
+  永遠會勝過任何其他已記錄的 kind——一列資料若在同一次級聯中先被當成 `SetNull` 目標抵達，
+  之後在同一次級聯中又被清除，最終在批次中只會出現一次，以 `Purged` 的形式。
+
+### 集合名稱與 id 形式
+
+`ItemChange.Collection` 永遠是正規的集合名稱 (`CollectionMetadata.Name`，例如 `article`)，
+絕不會是 client 送來的原始路由或查詢字串片段。`ItemChange.Id` 是主鍵的字串形式，`Guid` id
+會以小寫輸出。
+
+### 涵蓋範圍，以及未涵蓋範圍
+
+會觸發：透過通用 API 的一般項目寫入——REST (`ItemsController`，經由 `IItemUseCases`) 與
+GraphQL (產生出來的 mutation，經由包裝同一個 `ItemService` 實例的 `IGraphQlDataSource`) 最終
+都會呼叫上面描述的同一批 `ItemService` 方法，所以兩種協定觸發的結果完全一致——以及透過
+`FilesController`/`FileService` 的檔案上傳/移入回收桶/還原/清除。
+
+**不會**觸發：透過專屬身分端點所做的寫入——`UsersController` (帳號/憑證/token，經由
+`IUserAccountStore`/`IUserCredentialStore`)、`RolesController` 的權限授予寫入 (經由
+`IPermissionGrantStore`)，以及 auth/密碼流程——這些完全繞過了 `ItemService`；site settings；
+一般寫入時多對多的**反向**那一側 (更動一篇 article 的 `tags`，不會通知被加入或移除的 tag——
+只有*清除*操作強制的 junction 清理，才會依上文所述為父項觸發)；以及任何完全在這個 API 之外
+所做的寫入——一個 fork 自己的 ETL 或直接的資料庫存取絕不會經過 `ItemService`/`FileService`，
+所以也絕不會抵達任何 listener。反之，同樣的 `user`/`role`/`permission`/`userRole` 集合，若
+改透過*通用*的項目 API (`/api/items/{collection}`) 寫入——schema 確實允許這麼做——就會像其他
+任何集合一樣經過 `ItemService`，而且**會**觸發。
+
+### 註冊一個 listener
+
+notifier 本身一律會被註冊；listener 則不會——一個 fork 可以新增任意數量自己的：
+
+```csharp
+public sealed class SearchIndexListener(IMySearchIndex index) : IItemChangeListener
+{
+    public async Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default)
+    {
+        foreach (var change in changes)
+        {
+            if (change.Kind == ItemChangeKind.Purged)
+                await index.DeleteAsync(change.Collection, change.Id, ct);
+            else
+                await index.UpsertAsync(change.Collection, change.Id, ct);
+        }
+    }
+}
+```
+
+```csharp
+services.AddScoped<IItemChangeListener, SearchIndexListener>();
+```
+
+Listener 是以 `IEnumerable<IItemChangeListener>` 解析的——與 `ISearchProvider` 單一插槽的
+`TryAddScoped` 不同，可以註冊任意數量，而註冊順序只決定它們被呼叫的先後，而不是它們是否會被
+呼叫。
+
+在沒有任何 listener 註冊的情況下，建立/更新/移入回收桶/還原除了寫入本身之外不會多做任何事——
+`ItemChangeNotifier.NotifyAsync` 在面對一個空的 listener 清單時會立刻回傳。即使如此，
+**清除**也並非完全沒有成本：`ItemService.DeleteAsync` 一律會配置一個 `ItemChangeSet`，而
+`ItemPurgePipeline.PurgeCoreAsync` 一律會針對每一個傳入的 `OnDelete.SetNull` 關聯，以及
+每一個傳入的多對多 junction，多執行一次額外的型別化讀取——`CollectSetNullUpdatesAsync`/
+`CollectInboundM2MUpdatesAsync`——藉此知道它即將影響哪些存活中的資料列，不論是否有任何
+listener 註冊來聽取這件事。
+
+### 可觀測性、對帳與重入
+
+這個接縫觸發通知；它不會追蹤一個 listener 的下游效果是否真的落地。一個 listener 依賴外部系統
+(搜尋索引、webhook 端點) 的 fork，要自行負責自己的健康監控——透過 `AddHealthChecks()` 註冊一個
+`IHealthCheck`——以及在那個系統可能漂移失步時，自行負責自己的對帳方案；StruoCMS 本身不會重試
+一次失敗的 `OnChangedAsync` 呼叫(用於保證遞送的 outbox 是 fork 自己要處理的事，不是這個接縫
+所提供的)。
+
+一個本身會透過 `ItemService` 寫入的 listener (例如附加到一個稽核記錄集合) *本身就是一次寫入*，
+並會觸發進一步的通知——這裡沒有任何防止重入的機制。設計這樣的 listener 時要把這一點放在心上
+(寫入一個沒有任何東西在監聽的集合，或者用其他方式避免循環)，而不要假設 notifier 會抑制遞迴
+呼叫。
+
 ## 接下來該去哪
 
 - 第 8 章 [查詢 DSL](08-query-dsl.md)，涵蓋 `DeletedFilter`/`deleted=` 作為一般查詢 DSL 概念，並針對
