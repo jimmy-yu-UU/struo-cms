@@ -1,3 +1,4 @@
+using System.Reflection;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
@@ -37,8 +38,14 @@ public sealed class SearchCandidateResolver(ISearchProvider provider, StruoQuery
     private Type PrimaryKeyType(string collection)
     {
         var d = registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
-        var declared = d.EntityType.GetProperty(d.IdProperty)!.PropertyType;
-        var t = Nullable.GetUnderlyingType(declared) ?? declared;
+        // Resolve the PK property the same way the translator resolves the "id" column
+        // (ConditionalModelTranslator.ResolveClrType): FieldToProperty["id"] -> the CLR property
+        // name, looked up case-insensitively on EntityType, rather than trusting d.IdProperty's
+        // exact casing to already be a valid property name.
+        if (!d.FieldToProperty.TryGetValue("id", out var idProp)
+            || d.EntityType.GetProperty(idProp, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not { } pi)
+            throw new InvalidOperationException($"Collection '{collection}' exposes no 'id' field; search candidates need one.");
+        var t = Nullable.GetUnderlyingType(pi.PropertyType) ?? pi.PropertyType;
         if (t == typeof(Guid) || t == typeof(long) || t == typeof(int) || t == typeof(short)) return t;
         throw new InvalidOperationException(
             $"Search candidates are only supported for Guid or integer primary keys; collection '{collection}' has a {t.Name} key.");
