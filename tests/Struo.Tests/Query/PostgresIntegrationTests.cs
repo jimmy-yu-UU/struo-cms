@@ -576,18 +576,18 @@ public sealed partial class PostgresIntegrationTests : IDisposable
             // No SQL Server-style N'...' national-string prefix anywhere in the generated SQL.
             var noneConds = translator.Translate("sqProduct",
                 new RelationPredicateFilter("properties", RelationQuantifier.None, new ComparisonFilter("code", QueryOperator.Eq, "x")),
-                null, [], null);
+                null, null, [], null);
             _db.Queryable<SqProduct>().Where(noneConds).ToSql().Key.Should().NotContain("N'");
 
             var m2mConds = translator.Translate(
-                "sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "PgGuide"), null, [], null);
+                "sqProduct", new ComparisonFilter("labels.name", QueryOperator.Eq, "PgGuide"), null, null, [], null);
             _db.Queryable<SqProduct>().Where(m2mConds).ToSql().Key.Should().NotContain("N'");
 
             var orConds = translator.Translate("sqProduct", new LogicalFilter(LogicalOperator.Or,
                 [
                     new ComparisonFilter("category.name", QueryOperator.Eq, "PgTech"),
                     new ComparisonFilter("labels.name", QueryOperator.Eq, "PgMisc"),
-                ]), null, [], null);
+                ]), null, null, [], null);
             _db.Queryable<SqProduct>().Where(orConds).ToSql().Key.Should().NotContain("N'");
         }
         finally
@@ -623,7 +623,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         var translator = new FilterTranslator(_db!, graph, metadata, registry, options);
 
         var conds = translator.Translate(
-            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp), null, [], null);
+            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp), null, null, [], null);
         var sql = _db!.Queryable<Category>().Where(conds).ToSql();
         sql.Key.Should().Contain("IN (SELECT");
         sql.Key.Should().NotContain("N'");
@@ -665,7 +665,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         var translator = new FilterTranslator(_db, graph, metadata, registry, new StruoQueryOptions());
 
         var conds = translator.Translate(
-            "article", new ComparisonFilter("title", QueryOperator.Eq, stamp + "-en"), null, [], "en");
+            "article", new ComparisonFilter("title", QueryOperator.Eq, stamp + "-en"), null, null, [], "en");
         var sql = _db.Queryable<Article>().Where(conds).ToSql();
         sql.Key.Should().Contain("article_translations");
         sql.Key.Should().NotContain("N'");
