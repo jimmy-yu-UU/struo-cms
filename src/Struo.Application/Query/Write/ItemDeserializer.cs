@@ -23,6 +23,16 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null);
 
     /// <summary>
+    /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
+    /// per-interface validation as <see cref="Deserialize"/>, but WITHOUT the Required check:
+    /// <see cref="ItemService.UpdateCoreAsync"/> is a merge that only overlays fields the client
+    /// actually sent, so a Required field this body omits must not fail here — it fails, if at
+    /// all, once the caller re-runs <see cref="EnforceRequiredFields"/> against the merged entity.
+    /// </summary>
+    public object DeserializeForUpdate(string collection, JsonElement body, CollectionMetadata meta) =>
+        DeserializeCore(collection, body, meta, enforceRequired: false, onlyFields: null);
+
+    /// <summary>
     /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
     /// RichText, MaxLength and per-interface validation as <see cref="Deserialize"/>, but only for the
     /// camelCase fields in <paramref name="onlyFields"/> that are present in <paramref name="body"/>, and
@@ -193,8 +203,11 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     // required validation — skip translatable fields (they live on the sidecar entity and are
-    // validated per-locale in SyncTranslationsAsync, not on the parent).
-    private static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
+    // validated per-locale in SyncTranslationsAsync, not on the parent). Called here for CREATE
+    // (enforceRequired: true) and again by ItemService.UpdateCoreAsync, against the merged entity,
+    // after both its overlay loops have run — an update only fails Required when the client
+    // explicitly wipes the field (null/blank/Guid.Empty), never merely by omitting it.
+    internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {
         foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
         {
