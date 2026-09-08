@@ -149,8 +149,8 @@ collection** 的東西，而它除了兩個外鍵、該關聯的 `SortField` (�
 備註、有別於排序的顯示權重、核准時間戳)。`MetadataScanner.ResolveJunctionPayloadFields`
 (`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) 會在 `ScanTypes` 收尾階段算出
 `RelationMetadata.JunctionPayloadFields`——這些 payload 欄位的 camelCase 名稱，含 hidden 欄位
-在內——旁邊還有該關聯自己的 `RelationMetadata.SortField` (來自上文的
-`[CmsRelation(SortField = ...)]`)。`RelationshipGraph.JunctionPayloadOf`
+在內。該關聯自己的 `RelationMetadata.SortField` 則是更早，在依
+`[CmsRelation(SortField = ...)]` (見上文) 建置這個關聯本身時就已經設定好的。`RelationshipGraph.JunctionPayloadOf`
 (`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) 不會重新推導這份清單，只把
 `MetadataScanner` 已經算好的名稱解析成 CLR 屬性;寫入端的混合陣列繫結器 (REST，第 9 章)、
 `_junction` 讀取投影 (見下文)、修訂版本 (第 13 章)，以及 GraphQL (第 10 章) 都是透過
@@ -173,8 +173,9 @@ FieldInterface.Uuid)"`。
 它，讓客戶端知道要對哪個集合另外申請寫入授權，才能寫入 junction payload (REST，第 9 章)。
 
 同一個關聯項目裡也帶著 `junctionPayloadFields` 與 `sortField` 這兩個 key;出貨的管理後台 SPA
-就是靠它們判斷一個 `TagSelect` 關聯要不要改用列表編輯器，而不是普通的標籤 picker (見下方
-「管理後台 picker」)。
+就是靠它們——把 `junctionPayloadFields` 篩到各欄位自己 `Hidden` 為否的那些——判斷一個
+`TagSelect` 關聯是否帶有*可見*的 payload，或是有 `sortField`，因而要不要改用列表編輯器，而不是
+普通的標籤 picker (見下方「管理後台 picker」)。
 
 **給 fork 的但書**:如果你在一個 junction entity 上直接加上自己的
 `[Navigate]`/`[CmsRelation]` picker 關聯 (例如從該 junction 到某個第三方集合的 many-to-one，
@@ -442,8 +443,8 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 | `RelationInterface` | 管理後台元件 | 行為 |
 |---|---|---|
 | `Dropdown` | `RelationPicker` (vendored `ui/combobox`) | 單值 picker;在使用者輸入時，對目標集合做去抖動 (debounce) 的 `search=`。 |
-| `TagSelect` | `RelationPicker` (vendored `ui/combobox`) | 沒有 junction payload、也沒有 `SortField`:適用於 many-to-many 關聯的多值標籤 picker，搜尋行為與 `Dropdown` 相同。 |
-| `TagSelect` | `JunctionLinksEditor` | 有 junction payload 和/或 `SortField`:每個已選取的 target 各佔一列，列內是該連結的 junction payload 欄位 (與 `ItemForm` 相同的欄位型別註冊表) 與一個移除鈕，再加上——只有在關聯宣告了 `SortField` 時——排序用的上下箭頭。下方的 combobox 只負責增減成員。 |
+| `TagSelect` | `RelationPicker` (vendored `ui/combobox`) | 沒有*可見*的 junction payload、也沒有 `SortField`:適用於 many-to-many 關聯的多值標籤 picker，搜尋行為與 `Dropdown` 相同。 |
+| `TagSelect` | `JunctionLinksEditor` | 有可見的 junction payload 和/或 `SortField`:每個已選取的 target 各佔一列，列內是該連結可見的 junction payload 欄位 (與 `ItemForm` 相同的欄位型別註冊表) 與一個移除鈕，再加上——只有在關聯宣告了 `SortField` 時——排序用的上下箭頭。下方的 combobox 只負責增減成員。 |
 | `TreeSelect` | `RelationPicker` (`form/TreeSelect`) | 建立在一棵樹狀結構上的單值 picker，該樹由一個自我參照 many-to-one 的目標資料列建構而成。 |
 | `RelatedList` | `RelatedList` (vendored `data/DataTable`) | 目標集合的唯讀、分頁、延遲載入清單，依關聯的反向外鍵過濾;點擊一列會導向該列自己的項目編輯頁面。只有在父項已經儲存之後才會顯示 (一個全新、尚未儲存的父項，還沒有 id 可以拿來過濾)。 |
 
@@ -452,7 +453,7 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 `AdminOnly` 而呼叫者不是 super admin)——payload 欄位會唯讀顯示，儲存時只送出裸 id:只更新成員，以及
 在關聯有 `SortField` 時的順序。伺服器端回傳的 payload 驗證錯誤，會落到表單最上方的錯誤 banner
 裡;客戶端自己則會在送出前先擋掉 `required`／`maxLength`。這套判斷邏輯位於
-`frontend/src/lib/junctionLinks.ts` (`usesLinksEditor`、`canWriteJunction`)。
+`frontend/src/lib/junctionLinks.ts` (`canReadJunction`、`canWriteJunction`)。
 
 `relationInputKind.ts` 仍然保留一個無條件的 fallback，用於它的對應表不認得的介面:一個單純的
 <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span>，而不是一個輸入元素，

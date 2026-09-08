@@ -127,15 +127,16 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   `<Parent><Rel>Junction`, `<Parent><Rel>LinkInput`, `<rel>Links`) are the ordinary
   `Pascal`/`Camel` mechanical naming above, applied to the relation's owning collection and relation
   name (`SchemaTypeMapper.LinkTypeName`/`JunctionTypeName`/`LinkInputName`/`LinksFieldName`).
-- **`FormModel.relations` value shapes**: three possible shapes per relation name — a bare `string` for
-  a many-to-one, a `string[]` for a `tagSelect` relation whose junction carries neither payload nor a
-  `SortField`, or a `RelationLink[]` (`{ id, junction }`, `frontend/src/types/itemForm.ts`) for a
-  `tagSelect` relation with either. `usesLinksEditor` (`frontend/src/lib/junctionLinks.ts`) is the
-  single point that decides which shape a given relation uses, so `RelationInput`, `buildItemPayload`,
-  and `JunctionLinksEditor` never diverge on the question. `buildItemPayload` sends `{id, ...payload}`
-  object elements — rather than bare ids — only when three things all hold: the caller passed a
-  `resolveCollection`, the relation has at least one visible payload field, and `canWriteJunction`
-  (also `junctionLinks.ts`) returns true for it.
+- **`FormModel.relations` value shapes**: three possible shapes per relation name — a bare `string` (or
+  `null`, `frontend/src/lib/parseItemToForm.ts`'s `nested?.id ?? null`) for a many-to-one, a `string[]`
+  for a `tagSelect` relation whose junction carries no *visible* payload and no `SortField`, or a
+  `RelationLink[]` (`{ id, junction }`, `frontend/src/types/itemForm.ts`) for a `tagSelect` relation
+  with either. `usesLinksEditor` (`frontend/src/lib/junctionLinks.ts`) is the single point that decides
+  which shape a given relation uses, so `RelationInput`, `buildItemPayload`, and `JunctionLinksEditor`
+  never diverge on the question. `buildItemPayload` sends `{id, ...payload}` object elements — rather
+  than bare ids — only when three things all hold: the caller passed a `resolveCollection`, the
+  relation has at least one visible payload field, and `canWriteJunction` (also `junctionLinks.ts`)
+  returns true for it.
 
 ## Column type mapping
 
@@ -209,15 +210,21 @@ by uniqueness and column coverage, not by name, and throws with an actionable me
 
 A relation's payload field list — which of a junction collection's `[CmsField]`s (beyond its two
 foreign keys and the relation's `SortField`) are exposed as the link's own data — is computed in
-exactly one place: `RelationshipGraph.JunctionPayloadOf`
-(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`). Every downstream consumer — the REST
-mixed-array write binder (`ItemWriteSideSync.SyncM2MAsync`), the diff-and-patch sync
-(`ManyToManySync`), the `_junction` read projection (`RelationExpander`), revision snapshots
+exactly one place: `MetadataScanner.ResolveJunctionPayloadFields`
+(`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`), which excludes the two FKs and the sort
+column and keeps only the fields that survive the `!IsSystem && !ReadOnly` filter, writing the
+surviving names into `RelationMetadata.JunctionPayloadFields`. `RelationshipGraph.JunctionPayloadOf`
+(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) never re-derives that list; it only resolves
+those already-chosen names into CLR properties (plus each field's `Hidden` flag) as
+`M2MDescriptor.JunctionPayload`. Every downstream consumer — the REST mixed-array write binder
+(`ItemWriteSideSync.SyncM2MAsync`), the diff-and-patch sync (`ManyToManySync`), the `_junction` read
+projection (`RelationExpander`), revision snapshots
 (`RevisionSnapshotBuilder`/`RevisionSnapshotRedactor`), and the GraphQL `<rel>Links` surface
-(`CollectionSchemaBuilder`) — reads `M2MDescriptor.JunctionPayload` rather than re-deriving which
-fields count as payload; a field only reaches any of those surfaces if `JunctionPayloadOf` already
-excluded it from "structural" (the two FKs, and the sort column when the relation declares one) and it
-survives the `!IsSystem && !ReadOnly` filter applied there.
+(`CollectionSchemaBuilder`) — reads `M2MDescriptor.JunctionPayload` through `JunctionPayloadOf` rather
+than re-deriving which fields count as payload; a field only reaches any of those surfaces if
+`MetadataScanner.ResolveJunctionPayloadFields` already excluded it from "structural" (the two FKs, and
+the sort column when the relation declares one) and it survived the `!IsSystem && !ReadOnly` filter
+applied there.
 
 A many-to-many relation's write-side array element (REST body key, or GraphQL `<rel>Links` entry after
 `MutationResolvers.FoldLinks` folds it into the REST shape) is one of two forms: a **bare id** (link
