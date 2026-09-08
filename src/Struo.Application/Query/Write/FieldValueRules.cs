@@ -11,7 +11,13 @@ namespace Struo.Application.Query;
 internal static class FieldValueRules
 {
     internal static bool IsMissing(object? value) =>
-        value is null || (value is string s && string.IsNullOrWhiteSpace(s));
+        value is null
+        || (value is string s && string.IsNullOrWhiteSpace(s))
+        // A non-nullable Guid FK (e.g. Permission.RoleId, UserRole.UserId/RoleId) can never be
+        // null, so without this an omitted Required Guid field would silently bind to its CLR
+        // default and insert a dangling row. Scoped to Guid only — 0 and other falsy scalars stay
+        // legal values for a Required field.
+        || (value is Guid g && g == Guid.Empty);
 
     internal static void RequireParent(string fieldName, object? value)
     {
