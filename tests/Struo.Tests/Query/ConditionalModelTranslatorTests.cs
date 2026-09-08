@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Query/ConditionalModelTranslatorTests.cs
+using System.Globalization;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
@@ -203,6 +204,55 @@ public class ConditionalModelTranslatorTests
             sql.Should().ContainEquivalentOf("IS NOT NULL");
             sql.Should().NotContain("= ''");
             sql.Should().NotContain("=''");
+        }
+    }
+
+    [Fact]
+    public void Decimal_value_renders_with_a_dot_under_a_comma_decimal_culture()
+    {
+        // A bare decimal.ToString() renders with CultureInfo.CurrentCulture, so under de-DE (comma
+        // decimal separator) an unguarded ToFieldValue would emit "1234,5" into what must be a
+        // dot-decimal SQL literal. Swap the culture only for the call under test and restore it in
+        // `finally` regardless of outcome, so a failing assertion cannot leak the culture change
+        // into any other test running in this process.
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+        try
+        {
+            var (db, d, file) = Setup();
+            using (file)
+            {
+                var list = ConditionalModelTranslator.Translate(
+                    new ComparisonFilter("status", QueryOperator.Gt, 1234.5m), null, [], d, db);
+
+                ((ConditionalModel)list[0]).FieldValue.Should().Be("1234.5");
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
+    public void Decimal_in_list_renders_with_a_dot_under_a_comma_decimal_culture()
+    {
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+        try
+        {
+            var (db, d, file) = Setup();
+            using (file)
+            {
+                var filter = new ComparisonFilter("status", QueryOperator.In, new List<object?> { 1.5m, 2.5m });
+                var list = ConditionalModelTranslator.Translate(filter, null, [], d, db);
+
+                ((ConditionalModel)list[0]).FieldValue.Should().Be("1.5,2.5");
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
         }
     }
 
