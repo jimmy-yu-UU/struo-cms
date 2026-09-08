@@ -75,7 +75,7 @@ public sealed class SqlSugarItemRepository(
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var d = RepositoryHelpers.Descriptor(registry, collection);
-        var conditionals = filters.Translate(collection, query.Filter, query.Search, query.SearchCandidates, searchableFields, queryLocale);
+        var conditionals = filters.Translate(collection, query.Filter, query.Search, query.SearchCandidates, searchableFields, queryLocale, d);
         var orderBy = orderByBuilder.BuildOrderBy(query.Sort, d, collection, queryLocale);
         return await RunQueryDispatcher.For(d.EntityType)(this, conditionals, orderBy, query.Limit, query.Offset, deleted, ct);
     }

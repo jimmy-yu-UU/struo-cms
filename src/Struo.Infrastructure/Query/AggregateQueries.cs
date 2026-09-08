@@ -19,7 +19,7 @@ internal sealed class AggregateQueries(ISqlSugarClient db, IEntityRegistry regis
         string? queryLocale, DeletedFilter deleted, CancellationToken ct)
     {
         var d = RepositoryHelpers.Descriptor(registry, collection);
-        var conds = filters.Translate(collection, query.Filter, query.Search, query.SearchCandidates, searchableFields, queryLocale);
+        var conds = filters.Translate(collection, query.Filter, query.Search, query.SearchCandidates, searchableFields, queryLocale, d);
         var slots = Enum.GetValues<AggregateOp>()
             .Where(spec.Fields.ContainsKey)
             .SelectMany(op => spec.Fields[op].Select(field => (Op: op, Field: field, Property: PropertyFor(d, field))))
