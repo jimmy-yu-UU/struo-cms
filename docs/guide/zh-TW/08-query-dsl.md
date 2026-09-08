@@ -333,6 +333,11 @@ junction 端查詢，永遠不會解除軟刪除篩選，不論外層請求的 `
 `deleted=with` 請求的 `tags` facet，仍然會排除一個已被移入回收桶的標籤，即使文章資料列本身包含了
 已回收的項目。
 
+這一點在 id、leaf 與可翻譯 leaf 三種桶形態上都一致成立——一個已被軟刪除的目標永遠不會貢獻出一個
+桶，可翻譯 leaf 的附屬資料表查找也不會再顯示一個已被移入回收桶目標的翻譯內容。這個過濾動作是在
+`MaxFacetValues` (下一節) 已經把 id 桶截頂**之後**才執行的，所以如果被保留下來的前幾名 id 之中，
+有一個或多個所指的目標後來被移入了回收桶，回應中的桶數就可能少於這個上限。
+
 ### 四種 facet 路徑形態
 
 `FacetPathResolver.Resolve` (`src/Struo.Application/Query/FacetPath.cs`) 只接受下面這幾種形態——
