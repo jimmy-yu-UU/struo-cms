@@ -243,6 +243,30 @@ the translation sidecar sync, not on the parent deserialize (see `ItemWriteSideS
 `Guid.Empty` (a non-nullable one can never be sent as an actual `null` at all) — see chapter 4's
 `Required` field-attribute row.
 
+A field-shape error follows the same `BAD_USER_INPUT` envelope. When a request body's JSON value is
+the wrong shape for its bound property — an empty string for an `int?`, a number for a string, an
+object where a `KeyValue` entry expects a string — `ItemDeserializer`'s `DeserializeElement` names the
+offending field from System.Text.Json's own parse-error path (`FieldFromJsonPath`) instead of the
+generic parse-failure message:
+
+```
+$ curl -s -X POST http://localhost:5221/api/items/<collection> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"weight":""}'
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'weight' has an invalid value."}}
+```
+
+The generic `"Request body could not be parsed."` message still surfaces for a structural error the
+parser cannot attribute to any one field (a truncated body, for instance).
+
+A junction payload object (an M2M relation array element carrying `id` plus payload fields, chapter 6)
+raises the same field-shape or `MaxLength` error through its own binder, `ItemWriteSideSync`'s
+`ParseLinkElement` — but a form editing several links at once needs to know which relation and which
+target row the error came from, not just the field name, so the message is prefixed with both:
+
+```
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'children', target '<id>': Field 'weight' has an invalid value."}}
+```
+
+
 ## Authentication: cookie or bearer
 
 Two schemes are accepted, both registered in `AuthWiring.AddStruoAuth` (`src/Struo.Api/Auth/AuthWiring.cs`):

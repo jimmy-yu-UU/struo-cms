@@ -358,6 +358,12 @@ related/junction-side query never lifts the soft-delete filter, regardless of th
 `deleted=` mode — a `deleted=with` request's `tags` facet, for example, still excludes a trashed tag
 even while the article rows themselves include trashed ones.
 
+This holds uniformly across the id, leaf, and translatable-leaf bucket forms alike — a soft-deleted
+target never contributes a bucket, and a translatable leaf's sidecar lookup no longer surfaces a
+trashed target's translation either. The drop runs after `MaxFacetValues` (next section) has already
+capped the id buckets, so a response can hold fewer buckets than the cap when one or more of the
+kept top-ranked ids named a target that was since trashed.
+
 ### The four facet path forms
 
 `FacetPathResolver.Resolve` (`src/Struo.Application/Query/FacetPath.cs`) accepts exactly these
