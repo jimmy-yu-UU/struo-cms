@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Query/ConditionalModelTranslatorTests.cs
+using System.Globalization;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
@@ -203,6 +204,101 @@ public class ConditionalModelTranslatorTests
             sql.Should().ContainEquivalentOf("IS NOT NULL");
             sql.Should().NotContain("= ''");
             sql.Should().NotContain("=''");
+        }
+    }
+
+    // ── culture round-trip (translator render -> SqlSugar re-parse) ────────────────────────
+    // A dedicated fixture with REAL decimal/DateTime columns: Article has neither (its own fields
+    // are string/Guid/nullable-DateTime-as-null-check only), and SqlSugar only re-parses
+    // ConditionalModel.FieldValue through CSharpTypeName-driven type conversion when the column's
+    // CLR type is actually numeric/date. Kept separate from Setup()/Article so the rest of this
+    // file (and its Article-based fixture) stays untouched.
+
+    [SugarTable("cmt_culture_probe")]
+    private sealed class CultureProbeRow
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public decimal Price { get; set; }
+        public DateTime OccurredAt { get; set; }
+    }
+
+    private static (ISqlSugarClient db, EntityDescriptor d, SqliteTestDatabase file) SetupCultureProbe()
+    {
+        var file = new SqliteTestDatabase();
+        var db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        db.CodeFirst.InitTables<CultureProbeRow>();
+        var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["id"] = "Id", ["price"] = "Price", ["occurredAt"] = "OccurredAt",
+        };
+        var d = new EntityDescriptor(typeof(CultureProbeRow), fieldToProp, "Id");
+        return (db, d, file);
+    }
+
+    [Fact]
+    public void Decimal_comparison_round_trips_correctly_under_the_invariant_culture()
+    {
+        // ConditionalModelTranslator always RENDERS a filter value with CultureInfo.InvariantCulture
+        // (ToFieldValue), but SqlSugar re-parses ConditionalModel.FieldValue back to the column's
+        // real CLR type using CultureInfo.CurrentCulture, keyed off CSharpTypeName — verified against
+        // SqlSugarCore 5.1.4.217: under de-DE (comma decimal separator), a rendered "1.5" reparses as
+        // 15, because SqlSugar has no way to be told "parse this literal invariantly" — there is no
+        // override. The render and reparse steps therefore only ever agree when the PROCESS's current
+        // culture is ALSO invariant, which is exactly what Program.cs now sets at startup
+        // (CultureInfo.DefaultThreadCurrentCulture). This test proves the render+reparse PAIR is
+        // self-consistent under that culture, by running the real, unparameterized SQL literal
+        // (ToSqlString()) SqlSugar emits back through Convert; ProgramCultureTests (API-level) proves
+        // Program.cs actually sets it for every real request, not just this direct unit-level pairing.
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        try
+        {
+            var (db, d, file) = SetupCultureProbe();
+            using (file)
+            using (db)
+            {
+                var list = ConditionalModelTranslator.Translate(
+                    new ComparisonFilter("price", QueryOperator.Gt, 1.5m), null, [], d, db);
+                var sql = db.Queryable<CultureProbeRow>().Where(list).ToSqlString();
+
+                sql.Should().Contain("1.5", "the invariant-rendered literal must re-parse back to 1.5, not 15 (a de-DE misparse) or 1,5");
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
+    public void DateTime_comparison_round_trips_correctly_under_the_invariant_culture()
+    {
+        // Same pairing as the decimal test above, but for a DateTime column: Convert.ToString(DateTime,
+        // InvariantCulture) renders month-before-day ("08/09/2026 …", invariant's short-date pattern),
+        // which SqlSugar's own re-parse (CultureInfo.CurrentCulture-driven) would silently read as
+        // day-before-month under a culture like de-DE — turning August 9 into September 8 with no
+        // exception. Proven only under the invariant culture, for the same reason as the decimal test.
+        var original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        try
+        {
+            var (db, d, file) = SetupCultureProbe();
+            using (file)
+            using (db)
+            {
+                var when = new DateTime(2026, 8, 9, 3, 0, 0, DateTimeKind.Unspecified);
+                var list = ConditionalModelTranslator.Translate(
+                    new ComparisonFilter("occurredAt", QueryOperator.Eq, when), null, [], d, db);
+                var sql = db.Queryable<CultureProbeRow>().Where(list).ToSqlString();
+
+                sql.Should().Contain("2026-08-09", "August 9 must not have been misread as day-before-month (September 8)");
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
         }
     }
 

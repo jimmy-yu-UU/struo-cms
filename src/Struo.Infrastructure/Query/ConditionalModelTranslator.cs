@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/ConditionalModelTranslator.cs
+using System.Globalization;
 using System.Reflection;
 using SqlSugar;
 using Struo.Application.Metadata;
@@ -118,12 +119,15 @@ public static class ConditionalModelTranslator
         if (op is QueryOperator.Null or QueryOperator.NNull)
             return null;
 
+        // Convert.ToString(v, InvariantCulture) rather than v.ToString(): a bare ToString() on
+        // decimal/double/DateTime renders using CultureInfo.CurrentCulture, so a comma-decimal
+        // locale (e.g. de-DE) would emit "1,5" into what must be a dot-decimal SQL literal.
         return value switch
         {
             null => null,
             System.Collections.IEnumerable list when value is not string =>
-                string.Join(",", list.Cast<object?>().Select(v => v?.ToString())),
-            _ => value.ToString()
+                string.Join(",", list.Cast<object?>().Select(v => v is null ? null : Convert.ToString(v, CultureInfo.InvariantCulture))),
+            _ => Convert.ToString(value, CultureInfo.InvariantCulture)
         };
     }
 

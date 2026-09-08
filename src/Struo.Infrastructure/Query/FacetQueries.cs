@@ -54,7 +54,7 @@ internal sealed partial class FacetQueries(
         var root = RepositoryHelpers.Descriptor(registry, request.Collection);
         var conds = filters.Translate(
             request.Collection, request.PrunedQuery.Filter, request.PrunedQuery.Search, request.PrunedQuery.SearchCandidates,
-            request.SearchableFields, request.QueryLocale);
+            request.SearchableFields, request.QueryLocale, root);
         var rootQ = RootDispatcher.For(root.EntityType)(this, conds, request.Deleted);
         var facet = request.Facet;
 

@@ -18,6 +18,16 @@ using Struo.Infrastructure.Health;
 using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 
+// A headless JSON API has no culture-formatted output of its own (outbound JSON is always
+// camelCase/invariant), but SqlSugar re-parses ConditionalModel.FieldValue back with
+// CultureInfo.CurrentCulture according to CSharpTypeName, while ConditionalModelTranslator renders
+// that same value with CultureInfo.InvariantCulture — so the process's default culture MUST be
+// invariant too, or the two disagree (e.g. a rendered "1.5" would re-parse as 15 under de-DE). Set
+// before anything else runs, so every thread the host later spins up (including ones
+// WebApplication.CreateBuilder starts) inherits it as its default.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+
 Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger();
 
 try
