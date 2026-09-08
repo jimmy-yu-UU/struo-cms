@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button'
 import { X } from '@lucide/vue'
 import SortableList from '@/components/form/SortableList.vue'
 import RelationPicker from './RelationPicker.vue'
+import FieldInput from './FieldInput.vue'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useAuthStore } from '../../stores/authStore'
-import { getFieldType } from '../../lib/fieldTypes/registry'
 import {
-  visiblePayloadFields, canReadJunction, canWriteJunction, emptyLink, isRelationLinks,
+  visiblePayloadFields, canReadJunction, canWriteJunction, emptyLink, isRelationLinks, junctionAccessFrom,
 } from '../../lib/junctionLinks'
 import type { RelationMeta, FieldMeta } from '../../types/schema'
 import type { RelationLink } from '../../types/itemForm'
@@ -32,11 +32,7 @@ const auth = useAuthStore()
 const links = computed<RelationLink[]>(() => (isRelationLinks(props.modelValue) ? props.modelValue : []))
 const ids = computed(() => links.value.map((l) => l.id))
 const resolve = (name: string) => schema.get(name)
-const access = computed(() => ({
-  canRead: (c: string) => auth.canRead(c),
-  canWrite: (c: string) => auth.canWrite(c),
-  isSuperAdmin: auth.user?.isSuperAdmin === true,
-}))
+const access = computed(() => junctionAccessFrom(auth))
 // Permission ladder (spec §3.3): no junction read grant -> the server omits `_junction`, so showing
 // inputs would present registry defaults as saved values; hide them. Read but no write -> inputs
 // render read-only (buildItemPayload then sends bare ids). The parent's own `disabled` wins over both.
@@ -108,12 +104,11 @@ function fieldId(id: string, name: string): string { return `${uid}-${id}-${name
               <label class="text-xs text-muted-foreground" :for="fieldId(item.id, f.name)">
                 {{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span>
               </label>
-              <component
-                :is="getFieldType(f.interface).component"
+              <FieldInput
                 :id="fieldId(item.id, f.name)"
                 :field="f"
                 :model-value="item.junction[f.name]"
-                :disabled="!payloadEditable || f.readOnly"
+                :disabled="!payloadEditable"
                 @update:model-value="(v: unknown) => setPayload(item.id, f.name, v)"
               />
             </div>

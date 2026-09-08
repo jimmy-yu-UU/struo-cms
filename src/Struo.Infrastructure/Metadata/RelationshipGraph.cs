@@ -36,6 +36,16 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
     private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundSetNull;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundCascade;
 
+    /// <summary>
+    /// <paramref name="collections"/> must come from <see cref="MetadataScanner.ScanTypes"/> /
+    /// <see cref="MetadataScanner.Scan"/> — their post-pass is what populates each relation's
+    /// <see cref="RelationMetadata.JunctionPayloadFields"/> in the first place, by matching the
+    /// junction entity's own property names to <paramref name="collections"/>' field names.
+    /// <see cref="JunctionPayloadOf"/> below only resolves names <c>JunctionPayloadFields</c>
+    /// already lists; it never derives them itself. Hand-built <see cref="CollectionMetadata"/> that
+    /// bypasses the scanner therefore leaves <c>JunctionPayloadFields</c> unset, and every such
+    /// relation silently resolves to no junction payload rather than throwing.
+    /// </summary>
     public RelationshipGraph(
         IReadOnlyList<CollectionMetadata> collections,
         IReadOnlyDictionary<string, Type> collectionTypes)

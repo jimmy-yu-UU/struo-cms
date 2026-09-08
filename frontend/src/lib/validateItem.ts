@@ -29,6 +29,7 @@ export function validateItem(
   model: FormModel,
   defaultCode: string,
   resolveCollection?: ResolveCollection,
+  canWriteJunction?: (rel: RelationMeta) => boolean,
 ): Record<string, string> {
   const { shared, translatable } = splitFields(meta)
   const errors: Record<string, string> = {}
@@ -45,6 +46,11 @@ export function validateItem(
     for (const rel of meta.relations ?? []) {
       const v = model.relations[rel.name]
       if (!isRelationLinks(v)) continue
+      // A relation whose junction the caller cannot write sends bare ids regardless of what the
+      // (possibly disabled/hidden) payload inputs currently hold — validating that unsent payload
+      // would block a save the user has no way to fix. Without `canWriteJunction`, behaviour is
+      // unchanged: every relation is validated (existing callers/tests).
+      if (canWriteJunction && !canWriteJunction(rel)) continue
       const err = firstLinkError(rel, v, visiblePayloadFields(rel, resolveCollection))
       if (err) errors[rel.name] = err
     }

@@ -483,7 +483,10 @@ grant, or the junction collection is `AdminOnly` and the caller isn't a super ad
 render read-only, and saving sends bare ids: only membership and, when the relation has a `SortField`,
 order are updated. A server-side payload validation error lands in the form's top-level error banner;
 the client itself pre-checks `required`/`maxLength` before that round trip. This ladder is decided by
-`frontend/src/lib/junctionLinks.ts` (`canReadJunction`, `canWriteJunction`).
+`frontend/src/lib/junctionLinks.ts` (`canReadJunction`, `canWriteJunction`). A numeric or boolean
+payload field left blank is saved as `null`, not an empty string, so a fork should declare such
+junction columns nullable or mark them `Required` — the form blocks an empty `Required` field before
+it is ever sent.
 
 `relationInputKind.ts` still has a final, unconditional fallback for an interface its map does not
 recognize — a bare <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span> rather

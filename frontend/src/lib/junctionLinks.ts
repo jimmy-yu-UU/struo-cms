@@ -16,6 +16,25 @@ export type JunctionAccess = {
   isSuperAdmin: boolean
 }
 
+// Structural source for junctionAccessFrom below — the pinia auth store's shape (canRead/canWrite
+// getters plus the current user), passed by duck typing so this module stays store-free.
+export type JunctionAccessSource = {
+  canRead(collection: string): boolean
+  canWrite(collection: string): boolean
+  user: { isSuperAdmin: boolean } | null
+}
+
+// Builds the JunctionAccess adapter from the auth store (or anything shaped like it). Both
+// ItemFormView.vue and JunctionLinksEditor.vue need the identical { canRead, canWrite, isSuperAdmin }
+// object over `auth`; this is that one definition so the two call sites can't drift.
+export function junctionAccessFrom(auth: JunctionAccessSource): JunctionAccess {
+  return {
+    canRead: (c) => auth.canRead(c),
+    canWrite: (c) => auth.canWrite(c),
+    isSuperAdmin: auth.user?.isSuperAdmin === true,
+  }
+}
+
 // The junction collection's fields named by the relation's junctionPayloadFields, minus Hidden ones
 // (the API never returns those in `_junction`, so the SPA must not edit them), in field sort order.
 export function visiblePayloadFields(rel: RelationMeta, resolve: ResolveCollection): FieldMeta[] {

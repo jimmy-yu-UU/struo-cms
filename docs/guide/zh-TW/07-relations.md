@@ -453,7 +453,9 @@ $ curl -s -b cookies.txt "http://localhost:5221/api/items/article?sort=tags.name
 `AdminOnly` 而呼叫者不是 super admin)——payload 欄位會唯讀顯示，儲存時只送出裸 id:只更新成員，以及
 在關聯有 `SortField` 時的順序。伺服器端回傳的 payload 驗證錯誤，會落到表單最上方的錯誤 banner
 裡;客戶端自己則會在送出前先擋掉 `required`／`maxLength`。這套判斷邏輯位於
-`frontend/src/lib/junctionLinks.ts` (`canReadJunction`、`canWriteJunction`)。
+`frontend/src/lib/junctionLinks.ts` (`canReadJunction`、`canWriteJunction`)。數值或布林 payload 欄位若留空，
+會被存成 `null`，而非空字串，所以 fork 應該把這類 junction 欄位宣告為可為 null，或者標記為
+`Required`——表單會在送出前先擋掉空的 `Required` 欄位。
 
 `relationInputKind.ts` 仍然保留一個無條件的 fallback，用於它的對應表不認得的介面:一個單純的
 <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span>，而不是一個輸入元素，

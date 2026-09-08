@@ -68,4 +68,15 @@ describe('validateItem junction links', () => {
     const bad = { ...base, relations: { tags: [{ id: 't1', junction: { note: '' } }] } }
     expect(validateItem(articleMeta, bad, 'en')).toEqual({})
   })
+
+  describe('canWriteJunction (finding #2: no unsaveable form for a relation the user cannot write)', () => {
+    const requiredEmpty = { ...base, relations: { tags: [{ id: 't1', junction: { note: '', weight: 1 } }] } }
+    it('skips payload validation for a relation whose junction the caller cannot write', () => {
+      expect(validateItem(articleMeta, requiredEmpty, 'en', resolve, () => false)).toEqual({})
+    })
+    it('still validates a relation the caller can write, unchanged from the no-canWriteJunction case', () => {
+      expect(validateItem(articleMeta, requiredEmpty, 'en', resolve, () => true))
+        .toEqual({ tags: 'Tags › note is required (row 1).' })
+    })
+  })
 })
