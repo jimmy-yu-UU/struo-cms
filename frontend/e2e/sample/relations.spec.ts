@@ -341,3 +341,63 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
 
   navCreated.push({ collection: 'article', id: page.url().match(/\/collections\/article\/([^/]+)$/)![1] })
 })
+
+// Like pickFirstFromPicker but clicks the option with THIS label (needed to select a specific
+// second tag without toggling the first one back off). Same retry/scoping reasoning as above.
+async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLabel>, label: string): Promise<void> {
+  const trigger = field.locator('[data-slot="combobox-trigger"]')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-slot="combobox-list"]')).toHaveCount(0)
+  await expect(async () => {
+    if ((await trigger.getAttribute('data-state')) !== 'open') await trigger.click()
+    const listId = await trigger.getAttribute('aria-controls')
+    const option = page.locator(`#${listId}`).getByRole('option', { name: label, exact: true })
+    await expect(option).toBeVisible({ timeout: 1000 })
+    await option.click({ timeout: 2000 })
+  }).toPass({ timeout: 20000 })
+  await page.keyboard.press('Escape')
+}
+
+// Article.Tags' junction (ArticleTag, chapter 16) is a [CmsCollection] with a Note payload field and
+// the relation's SortField, so ItemFormView renders JunctionLinksEditor for it: one row per linked
+// tag (label badge + inline Note input + move arrows) instead of RelationPicker's chips. Live gate for
+// the payload round-trip: Note typed in a row and a reorder both survive Save and a fresh reload.
+test('junction links editor: tag Note and order survive save + reload', async ({ page }) => {
+  await login(page)
+  const csrf = { headers: { 'X-Struo-CSRF': '1' } }
+  const tagA = `E2E Link A ${STAMP}`
+  const tagB = `E2E Link B ${STAMP}`
+  for (const name of [tagA, tagB]) {
+    const res = await page.request.post(`${API}/api/items/tag`, { data: { name }, ...csrf })
+    navCreated.push({ collection: 'tag', id: String((await res.json()).data.id) })
+  }
+
+  const title = `E2E Junction Title ${STAMP}`
+  await page.goto('/collections/article/new')
+  await chooseStatus(page, 'Draft')
+  await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
+  const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
+  await body.click()
+  await page.keyboard.type('E2E junction body content.')
+
+  const tags = fieldByLabel(page, 'Tags')
+  await pickOptionByLabel(page, tags, tagA)
+  await pickOptionByLabel(page, tags, tagB)
+  const rowLabels = tags.locator('.junction-link__label')
+  await expect(rowLabels).toHaveText([tagA, tagB])
+  const rowA = tags.locator('.junction-link', { has: page.getByText(tagA, { exact: true }) })
+  await rowA.getByLabel('Note').fill(`note ${STAMP}`)
+  // Move A below B: the arrows are SortableList's, rendered as siblings of the row content in its <li>.
+  await rowA.locator('xpath=ancestor::li[1]').getByTestId('move-down').click()
+  await expect(rowLabels).toHaveText([tagB, tagA])
+
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page).toHaveURL(/\/collections\/article$/)
+  await openArticleByTitle(page, title)
+  navCreated.push({ collection: 'article', id: page.url().split('/').pop()! })
+
+  const reloaded = fieldByLabel(page, 'Tags')
+  await expect(reloaded.locator('.junction-link__label')).toHaveText([tagB, tagA])
+  await expect(reloaded.locator('.junction-link', { has: page.getByText(tagA, { exact: true }) }).getByLabel('Note')).toHaveValue(`note ${STAMP}`)
+  await expect(reloaded.locator('.junction-link', { has: page.getByText(tagB, { exact: true }) }).getByLabel('Note')).toHaveValue('')
+})
