@@ -335,8 +335,9 @@ row. **Chapter 9's `Required`-field semantics apply identically here**: the prun
 carries the keys `SentFieldsOnly` found in the request literal, and `ItemService.UpdateCoreAsync`
 validates `Required` against the entity that merge produces (chapter 9), not against the raw input — so
 `updateRole` can omit `name` (`Required=true`) and still succeed, keeping the role's stored name, while
-explicitly sending `name: null` still fails with `BAD_USER_INPUT`. This is not a REST-vs-GraphQL
-difference, it's the same shared write path:
+explicitly sending `name: null` still fails with `BAD_USER_INPUT` — and the same holds for a Required
+list/map input such as a Repeater field: omitted, it keeps its stored value; sent as an empty list, it
+still fails Required. This is not a REST-vs-GraphQL difference, it's the same shared write path:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
