@@ -216,8 +216,11 @@ $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/
 `ItemService.UpdateCoreAsync` 「只疊加客戶端有送出的欄位」這個合併邏輯 (見上方)，會從既有的資料列
 開始;而 Required 檢查現在是對照這個**合併後**的實體執行，而不是對照剛剛解析出的請求本文:一個這次
 `PUT` 單純省略的 `Required` 欄位，會保留其既有值，寫入照樣成功;但若明確送出 `null` 或一個只有空白
-字元的字串，仍會以 `BAD_USER_INPUT` 失敗——那是真的想清空這個欄位，不是單純沒送出這個鍵。建立
-(create) 不受影響:`ItemDeserializer.Deserialize`
+字元的字串，仍會以 `BAD_USER_INPUT` 失敗——那是真的想清空這個欄位，不是單純沒送出這個鍵。這對每一
+種欄位介面都同樣適用，包括一個 Required 的清單/映射欄位 (`Files`、`KeyValue`、
+`MultiSelect`/`CheckboxGroup`、`Tags`、`Repeater`):一個被省略的欄位會保留其既有值，但一個請求本文
+確實送出的欄位——即使是明確送出的空 `[]`/`{}`——仍會執行完整的驗證，仍可能以同樣的
+`Field '<name>' is required.` 訊息失敗。建立 (create) 不受影響:`ItemDeserializer.Deserialize`
 (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) 在那裡仍然對照剛剛解析出的請求本文，
 驗證每一個 `Required` 欄位，因為建立時根本沒有既有的資料列可以合併:
 
