@@ -25,7 +25,7 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, isDirty, unsavedConfirm } from '../lib/formDirty'
-import { canWriteJunction } from '../lib/junctionLinks'
+import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 import type { RelationMeta } from '../types/schema'
@@ -55,11 +55,7 @@ const canDelete = computed(() => auth.canDelete(name.value))
 // Junction payload grants for the links editor (spec U2b §3.3): passed as plain functions so
 // parse/build/validate stay store-free.
 const resolveCollection = (n: string) => schema.get(n)
-const junctionAccess = computed(() => ({
-  canRead: (c: string) => auth.canRead(c),
-  canWrite: (c: string) => auth.canWrite(c),
-  isSuperAdmin: auth.user?.isSuperAdmin === true,
-}))
+const junctionAccess = computed(() => junctionAccessFrom(auth))
 function canWriteJunctionFor(rel: RelationMeta): boolean {
   return canWriteJunction(rel, resolveCollection, junctionAccess.value)
 }
@@ -161,7 +157,7 @@ async function init(): Promise<void> {
 
 async function onSubmit(): Promise<void> {
   if (!meta.value) return
-  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection)
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor)
   if (Object.keys(errors.value).length > 0) return
   submitting.value = true
   serverError.value = ''

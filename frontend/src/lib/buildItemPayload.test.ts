@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildItemPayload } from './buildItemPayload'
+import { emptyLink, visiblePayloadFields } from './junctionLinks'
 import type { CollectionMeta, FieldMeta, RelationMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
@@ -164,5 +165,13 @@ describe('buildItemPayload junction links', () => {
     const sortOnly: CollectionMeta = { ...articleMeta, relations: [{ ...tagsRel, junctionPayloadFields: null }] }
     const m: FormModel = { ...model, relations: { tags: [{ id: 't2', junction: {} }, { id: 't1', junction: {} }] } }
     expect(buildItemPayload(sortOnly, m, junctionLocales, 'update', { resolveCollection: resolve, canWriteJunction: () => true }).tags).toEqual(['t2', 't1'])
+  })
+  it('a freshly-added link (emptyLink defaults) serializes its numeric field as null, not "" (spec finding #1: '
+    + 'a blank number would otherwise 400 the whole save)', () => {
+    const link = emptyLink('t3', visiblePayloadFields(tagsRel, resolve))
+    expect(link.junction).toEqual({ note: '', weight: '' }) // registry default, pre-serialize
+    const m: FormModel = { ...model, relations: { tags: [link], roles: [] } }
+    const p = buildItemPayload(articleMeta, m, junctionLocales, 'update', { resolveCollection: resolve, canWriteJunction: () => true })
+    expect(p.tags).toEqual([{ id: 't3', note: '', weight: null }])
   })
 })

@@ -1262,4 +1262,57 @@ describe('ItemFormView', () => {
     await flushPromises()
     expect(update.mock.calls[0][2].tags).toEqual([{ id: 't1', note: 'bye' }])
   })
+
+  it('without junction write grant, a required-but-blank payload field does not block submit and bare ids are sent (spec finding #2)', async () => {
+    routeParams = { name: 'article', id: 'a1' }
+    const noteField = { name: 'note', label: 'Note', interface: 'text', required: true, searchable: false,
+      sortable: false, readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false }
+    const nameField = { name: 'name', label: 'Name', interface: 'text', required: false, searchable: false,
+      sortable: false, readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false }
+    const tagsRel = {
+      name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect',
+      foreignKey: null, displayTemplate: null, editable: true, selfReferencing: false,
+      junctionCollection: 'articleTag', junctionPayloadFields: ['note'], sortField: 'sort',
+    }
+    const articleMeta = { name: 'article', label: 'Article', fields: [], relations: [tagsRel] }
+    const articleTagMeta = { name: 'articleTag', label: 'Article tag', hidden: true, fields: [noteField], relations: [] }
+    const tagMeta = { name: 'tag', label: 'Tag', defaultDisplayField: 'name', fields: [nameField], relations: [] }
+
+    const auth = useAuthStore()
+    auth.user = {
+      id: '1', isSuperAdmin: false, permissions: {
+        article: { read: true, write: true, delete: false },
+        articleTag: { read: true, write: false, delete: false },
+        tag: { read: true, write: true, delete: false },
+      },
+    }
+    const schema = useSchemaStore()
+    schema.load = vi.fn().mockResolvedValue(undefined)
+    schema.get = vi.fn((n: string) =>
+      (n === 'article' ? articleMeta : n === 'articleTag' ? articleTagMeta : n === 'tag' ? tagMeta : undefined)) as never
+    const lang = useLanguageStore()
+    lang.load = vi.fn().mockResolvedValue(undefined)
+    lang.languages = [{ code: 'en', name: 'English', isDefault: true }]
+
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({
+      id: 'a1', version: 1, tags: [{ id: 't1', name: 'One', _junction: { note: '' } }],
+    })
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 't1', name: 'One' }], total: 1 })
+
+    const w = mount(ItemFormView, {
+      global: { plugins: [i18n], stubs: { Combobox: true, RevisionHistoryDrawer: true, teleport: true, Button: true } },
+    })
+    await w.vm.init()
+    await flushPromises()
+
+    const editor = w.findComponent(JunctionLinksEditor)
+    expect(editor.exists()).toBe(true)
+    expect((editor.find('.junction-link input').element as HTMLInputElement).disabled).toBe(true)
+
+    const update2 = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'a1', version: 2 })
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect((w.vm as any).errors.tags).toBeUndefined()
+    expect(update2.mock.calls[0][2].tags).toEqual(['t1'])
+  })
 })

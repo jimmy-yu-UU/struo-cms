@@ -19,8 +19,9 @@ const { t } = useI18n()
 // Duplicate itemKey() results across rows would make v-for's :key ambiguous (two <li>s claiming
 // the same key). Not guarded here, same as any other v-for :key: it is the caller's
 // responsibility to hand back unique keys, and detecting the duplicate here would only mask that
-// caller bug rather than fix it. FilesField's file ids, this component's only consumer, are
-// unique by construction.
+// caller bug rather than fix it. FilesField's file ids are unique by construction; the other
+// consumer, JunctionLinksEditor, keys by server-side link id, unique per relation by the M2M set
+// invariant (a target can appear in a given relation's link set at most once).
 function move(from: number, to: number): void {
   const next = reorder(props.modelValue, from, to)
   // reorder() returns the SAME reference when the move was out of bounds -- that is what tells

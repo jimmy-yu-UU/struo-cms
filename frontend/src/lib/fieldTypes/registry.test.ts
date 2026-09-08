@@ -48,11 +48,23 @@ describe('field-type registry', () => {
     expect(getFieldType('file').parse(undefined, field({ interface: 'file' }))).toBeNull()
   })
 
-  it('serialize coerces empty string to null only for file/image', () => {
+  it('serialize coerces empty string to null for file/image and passes non-empty values through', () => {
     expect(getFieldType('file').serialize('', field({ interface: 'file' }))).toBeNull()
     expect(getFieldType('image').serialize('', field({ interface: 'image' }))).toBeNull()
     expect(getFieldType('file').serialize('id1', field({ interface: 'file' }))).toBe('id1')
     expect(getFieldType('text').serialize('', field({ interface: 'text' }))).toBe('')
+  })
+
+  it('serialize coerces empty string to null for non-string-backed interfaces (number/slider/rating/boolean/checkbox/uuid), leaving text-like interfaces alone', () => {
+    for (const i of ['number', 'slider', 'rating', 'boolean', 'checkbox', 'uuid']) {
+      expect(getFieldType(i).serialize('', field({ interface: i })), i).toBeNull()
+    }
+    expect(getFieldType('number').serialize(2, field({ interface: 'number' }))).toBe(2)
+    expect(getFieldType('boolean').serialize(false, field({ interface: 'boolean' }))).toBe(false)
+    expect(getFieldType('uuid').serialize('abc-123', field({ interface: 'uuid' }))).toBe('abc-123')
+    for (const i of ['text', 'textarea', 'select', 'radio', 'hidden']) {
+      expect(getFieldType(i).serialize('', field({ interface: i })), i).toBe('')
+    }
   })
 
   it('serialize coerces empty date/time/dateTime to null and passes ISO strings through', () => {

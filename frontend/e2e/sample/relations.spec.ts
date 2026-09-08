@@ -10,7 +10,7 @@
 // CI runs neither `pnpm e2e:sample` nor this spec — end-to-end coverage needs a live API and
 // database alongside the frontend dev server, so running it is a local, pre-merge discipline, not
 // an automated gate. Run it by hand after any change to RelationPicker.vue, MultiSelectField.vue,
-// or the combobox/select vendored atoms.
+// JunctionLinksEditor.vue, SortableList.vue, or the combobox/select vendored atoms.
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 

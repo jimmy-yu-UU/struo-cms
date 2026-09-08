@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   visiblePayloadFields, usesLinksEditor, canReadJunction, canWriteJunction, emptyLink, isRelationLinks,
-  type JunctionAccess,
+  junctionAccessFrom, type JunctionAccess, type JunctionAccessSource,
 } from './junctionLinks'
 import type { CollectionMeta, FieldMeta, RelationMeta } from '../types/schema'
 
@@ -91,5 +91,29 @@ describe('emptyLink / isRelationLinks', () => {
     expect(isRelationLinks([{ id: 1, junction: {} }])).toBe(false)
     expect(isRelationLinks([{ id: 'a' }])).toBe(false)
     expect(isRelationLinks([{ id: 'a', junction: null }])).toBe(false)
+  })
+})
+
+describe('junctionAccessFrom (finding #3: single adapter shared by ItemFormView and JunctionLinksEditor)', () => {
+  function source(over: Partial<JunctionAccessSource> = {}): JunctionAccessSource {
+    return { canRead: () => true, canWrite: () => true, user: { isSuperAdmin: false }, ...over }
+  }
+  it('delegates canRead/canWrite straight to the source, by collection name', () => {
+    const seenRead: string[] = []
+    const seenWrite: string[] = []
+    const a = junctionAccessFrom(source({
+      canRead: (c) => { seenRead.push(c); return true }, canWrite: (c) => { seenWrite.push(c); return false },
+    }))
+    expect(a.canRead('articleTag')).toBe(true)
+    expect(a.canWrite('articleTag')).toBe(false)
+    expect(seenRead).toEqual(['articleTag'])
+    expect(seenWrite).toEqual(['articleTag'])
+  })
+  it('isSuperAdmin is true only for a logged-in super-admin user', () => {
+    expect(junctionAccessFrom(source({ user: { isSuperAdmin: true } })).isSuperAdmin).toBe(true)
+    expect(junctionAccessFrom(source({ user: { isSuperAdmin: false } })).isSuperAdmin).toBe(false)
+  })
+  it('isSuperAdmin is false with no logged-in user', () => {
+    expect(junctionAccessFrom(source({ user: null })).isSuperAdmin).toBe(false)
   })
 })
