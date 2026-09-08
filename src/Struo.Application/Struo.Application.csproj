@@ -4,4 +4,8 @@
     <ProjectReference Include="..\Struo.Domain\Struo.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Struo.Tests" />
+  </ItemGroup>
+
 </Project>
