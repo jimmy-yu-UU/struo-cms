@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/ManyToManySync.cs
+using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -46,7 +47,6 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
             : type.GetProperty(sortProperty, BindingFlags.Public | BindingFlags.Instance)!;
         var pkProp     = type.GetProperty(db.EntityMaintenance.GetEntityInfo<T>().Columns.Single(c => c.IsPrimarykey).PropertyName)!;
         var tableName  = db.EntityMaintenance.GetTableName<T>();
-        var pkColumn   = db.EntityMaintenance.GetDbColumnName(pkProp.Name, type);
 
         // Payload keys are CLR property names; these are the structural columns a payload dictionary
         // must never be allowed to overwrite. The Application-layer M2MDescriptor already excludes
@@ -75,13 +75,17 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
         await transactions.InTransactionAsync(async () =>
         {
             // Ordered by ascending PK so that when a target has more than one row (legacy duplicate),
-            // "keep the first" deterministically means "keep the lowest PK" on every backend.
+            // "keep the first" deterministically means "keep the lowest PK" on every backend. Typed
+            // OrderBy: a runtime-built `x => (object)x.{Pk}` selector (ColumnSelectorFactory.BoxedSelector,
+            // the same helper FacetQueries uses for its runtime group/order keys) rather than
+            // OrderBy(string) — the junction PK property is only known by name at this point.
             // NOTE: this read goes through db.Queryable<T>(), which is subject to the global
             // soft-delete query filter. A junction type that implements ISoftDeletable would have its
             // trashed rows silently excluded from this diff (and so never deleted/updated/reconciled
             // here) — an unusual shape, not supported by design; junctions are membership/payload rows,
             // not independently soft-deletable entities. No behaviour change.
-            var existing = await db.Queryable<T>().Where(parentConditional).OrderBy($"{pkColumn} ASC").ToListAsync(ct);
+            var pkOrder = (Expression<Func<T, object>>)ColumnSelectorFactory.BoxedSelector(type, pkProp.Name);
+            var existing = await db.Queryable<T>().Where(parentConditional).OrderBy(pkOrder).ToListAsync(ct);
 
             var byTarget = await ResolveExistingByTargetAsync(existing, targetProp, pkProp, tableName, parentId, ct);
 
