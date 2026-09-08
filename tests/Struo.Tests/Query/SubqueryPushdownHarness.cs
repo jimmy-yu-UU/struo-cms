@@ -18,8 +18,9 @@ namespace Struo.Tests.Query;
 // ── fixtures: an EAV-shaped product catalogue ────────────────────────────────
 // product ─M2O→ category; product ─O2M→ property(code, valueNum); product ─M2M(payload note)→ label
 // product ─M2M→ soft-label: a second many-to-many target, distinct from label, that DOES implement
-// ISoftDeletable — label itself deliberately does not, so the soft-delete-consistency tests (#3)
-// need their own target rather than overloading the existing label fixture and its assertions.
+// ISoftDeletable — label itself deliberately does not, so the tests that check soft-deleted relation
+// targets are dropped from facet buckets need their own target rather than overloading the existing
+// label fixture and its assertions.
 
 [SugarTable("sq_categories")]
 [CmsCollection("Sq category")]
@@ -84,8 +85,8 @@ public sealed class SqProductLabel
 }
 
 /// <summary>A many-to-many target that DOES implement <see cref="ISoftDeletable"/> — mirrors
-/// <see cref="SqLabel"/>'s shape so the #3 soft-delete-consistency tests can trash one row and assert
-/// it drops out of the id, leaf, and (for a `deleted=with` root) still-excluded facet buckets.</summary>
+/// <see cref="SqLabel"/>'s shape so a test can trash one row and assert it drops out of the id and
+/// leaf facet buckets, and stays dropped even when the root query itself uses `deleted=with`.</summary>
 [SugarTable("sq_soft_labels")]
 [CmsCollection("Sq soft label")]
 public sealed class SqSoftLabel : AuditableEntity, ISoftDeletable
@@ -176,8 +177,8 @@ public sealed class SubqueryPushdownHarness : IDisposable
     }
 
     // Attaches two soft-deletable labels ("Alive", "Trashed") to the given product — the caller then
-    // soft-deletes "Trashed" (via Repo.SoftDeleteAsync("sqSoftLabel", ...)) to exercise the #3
-    // drop-soft-deleted-targets fix on the id, leaf, and translatable-leaf facet forms alike.
+    // soft-deletes "Trashed" (via Repo.SoftDeleteAsync("sqSoftLabel", ...)) to exercise the
+    // drop-soft-deleted-targets fix on the id and leaf facet forms, including a `deleted=with` root query.
     public (Guid Live, Guid Trashed) SeedSoftLabels(Guid productId)
     {
         var live = new SqSoftLabel { Id = Guid.NewGuid(), Name = "Alive" };

@@ -171,7 +171,7 @@ public class FacetQueriesTests : IDisposable
 
         var b = await _h.FacetAsync("softLabels");
 
-        b.Select(x => x.Value).Should().Equal(live.ToString());
+        Pairs(b).Should().Equal((live.ToString(), 1L));
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class FacetQueriesTests : IDisposable
 
         var b = await _h.FacetAsync("softLabels.name");
 
-        b.Select(x => x.Value).Should().Equal("Alive");
+        Pairs(b).Should().Equal(("Alive", 1L));
     }
 
     [Fact]
@@ -198,7 +198,27 @@ public class FacetQueriesTests : IDisposable
 
         var b = await _h.FacetAsync("softLabels", deleted: DeletedFilter.With);
 
-        b.Select(x => x.Value).Should().Equal(live.ToString());
+        Pairs(b).Should().Equal((live.ToString(), 1L));
+    }
+
+    [Fact]
+    public async Task Soft_deletable_relation_facet_costs_one_extra_statement_for_id_and_leaf_forms()
+    {
+        // The drop adds exactly one extra typed In(ids) query on a soft-deletable target: one for
+        // the id form (ByRelation + DropSoftDeletedTargets) and one for the non-translatable leaf
+        // form (ByRelation + LeafValuesAsync's own LoadByIds<T>, unchanged by this fix) — both land
+        // at 2 statements, the same count the leaf form already paid for a non-soft-deletable target
+        // (Own_facet_is_one_statement_and_leaf_facet_is_two's "labels.name" case above).
+        var (crossRow, _, _, _) = _h.SeedEav();
+        _h.SeedSoftLabels(crossRow);
+
+        _h.ResetSqlCount();
+        await _h.FacetAsync("softLabels");
+        _h.SqlStatements.Should().Be(2);
+
+        _h.ResetSqlCount();
+        await _h.FacetAsync("softLabels.name");
+        _h.SqlStatements.Should().Be(2);
     }
 }
 

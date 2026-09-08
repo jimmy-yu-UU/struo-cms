@@ -15,25 +15,31 @@ internal sealed partial class FacetQueries
     private async Task<IReadOnlyList<object>> LoadByIds<T>(object[] ids, CancellationToken ct) where T : class, new() =>
         (await db.Queryable<T>().In(ids).ToListAsync(ct)).Cast<object>().ToList();
 
-    // A relation facet's id buckets come from the junction/reverse-FK side, which survives a target
-    // row's soft-delete — trashing the target leaves the junction row (or child's own FK) untouched —
-    // so a trashed target would otherwise still contribute an id bucket (#3). Drop any bucket whose
-    // target id is no longer live, via the same typed `db.Queryable<T>().In(ids)` LeafValuesAsync's
-    // own non-translatable branch below already uses: its global ISoftDeletable filter is what does
-    // the dropping, so the related side never lifts the filter regardless of the root's own
-    // `deleted=` mode. Called uniformly from FacetAsync for every relation kind (not just
-    // ManyToMany) rather than special-casing OneToMany, whose side query already carries the filter
-    // at the source: the ISoftDeletable check below is a type check, so a non-soft-deletable target
-    // or an already-empty bucket list skips the extra query entirely and costs nothing there.
-    private async Task<List<FacetBucket>> DropSoftDeletedTargets(List<FacetBucket> idBuckets, EntityDescriptor target, CancellationToken ct)
+    // The extra typed `In(ids)` cost this drop adds is paid in exactly two places: once here, for a
+    // many-to-one/many-to-many id-bucket facet on a soft-deletable target (FacetQueries.FacetAsync's
+    // Relation case, one-to-many skipped there since its own side query already carries the global
+    // filter), and once more inside LeafValuesAsync's translatable branch below, for the equivalent
+    // leaf form. Everywhere else — own-field, FK, one-to-many id buckets, and the non-translatable
+    // leaf branch (already going through LoadByIds<T> for its own reasons) — nothing extra runs.
+    private async Task<object[]> LiveIds(EntityDescriptor target, object[] ids, CancellationToken ct)
     {
-        if (idBuckets.Count == 0 || !typeof(ISoftDeletable).IsAssignableFrom(target.EntityType))
-            return idBuckets;
+        if (ids.Length == 0 || !typeof(ISoftDeletable).IsAssignableFrom(target.EntityType))
+            return ids;
 
-        var ids = idBuckets.Select(b => b.Value!).ToArray();
         var live = await LoadByIdsDispatcher.For(target.EntityType)(this, ids, ct);
         var idProp = target.Properties[target.IdProperty];
-        var liveIds = live.Select(e => idProp.GetValue(e)!).ToHashSet();
+        return live.Select(e => idProp.GetValue(e)!).ToArray();
+    }
+
+    // A many-to-many/many-to-one relation facet's id bucket comes from the junction row or the
+    // root's own FK column — both survive a target row's soft-delete — so a trashed target would
+    // otherwise still contribute an id bucket. Drop any bucket whose target id is no longer live.
+    private async Task<List<FacetBucket>> DropSoftDeletedTargets(List<FacetBucket> idBuckets, EntityDescriptor target, CancellationToken ct)
+    {
+        if (idBuckets.Count == 0) return idBuckets;
+
+        var ids = idBuckets.Select(b => b.Value!).ToArray();
+        var liveIds = (await LiveIds(target, ids, ct)).ToHashSet();
         return idBuckets.Where(b => liveIds.Contains(b.Value!)).ToList();
     }
 
@@ -74,14 +80,22 @@ internal sealed partial class FacetQueries
                 throw new InvalidOperationException(
                     $"A query locale is required to facet on translatable field '{facet.LeafField}' of collection '{facet.TargetCollection}'.");
 
+            // The translation sidecar is keyed by the target's id and has no soft-delete concept of
+            // its own — a trashed target's translation row (if any) would otherwise still surface
+            // through the lookup below. Drop a soft-deleted id BEFORE the sidecar read (rather than
+            // filtering the returned rows after) so it never gets seeded into `result` at all — SwapLeafValues
+            // above then treats it exactly like the non-translatable branch's missing dictionary
+            // entry: skipped, not merged into a null bucket.
+            var liveIds = await LiveIds(target, ids, ct);
+
             // Missing-translation handling: LoadTranslationsAsync only returns rows that actually exist
             // at queryLocale, so any id left at its seeded `null` below has no translation row for that
             // locale and lands in the null bucket — as opposed to the non-translatable branch, where a
-            // missing target row (soft-deleted) drops the id's bucket entirely instead.
-            var rows = await translations.LoadTranslationsAsync(tm!.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, ids, queryLocale, ct);
+            // missing target row (hard-deleted / dangling junction FK) drops the id's bucket entirely instead.
+            var rows = await translations.LoadTranslationsAsync(tm!.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, liveIds, queryLocale, ct);
             var fk = tm.TranslationEntityType.GetProperty(tm.ForeignKeyProperty)!;
             var leaf = tm.TranslationEntityType.GetProperty(facet.LeafField!, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)!;
-            foreach (var id in ids) result[id] = null;
+            foreach (var id in liveIds) result[id] = null;
             foreach (var r in rows) result[fk.GetValue(r)!] = leaf.GetValue(r);
             return result;
         }
