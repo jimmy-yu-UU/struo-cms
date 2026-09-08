@@ -115,7 +115,7 @@ property and declares:
 |---|---|---|
 | `Label` | `string?` | Display label; falls back to the CLR property name if omitted. |
 | `Interface` | `FieldInterface` | Which storage/editor mapping applies (chapter 5 covers the full set); defaults to `Text`. |
-| `Required` | `bool` | Enforced on write for non-translatable fields; on create the field must be sent, but on update an omitted field keeps its stored value — only an explicit `null`/blank fails (chapter 9). A non-nullable `Guid` field also treats the all-zero `Guid.Empty` as missing, since it can never be sent as `null`. |
+| `Required` | `bool` | Enforced on write for non-translatable fields; on create the field must be sent, but on update an omitted field keeps its stored value — only an explicit `null`/blank fails (chapter 9). A `Guid` field also treats the all-zero `Guid.Empty` as missing (a non-nullable one can never be sent as `null` at all). |
 | `Searchable` | `bool` | Included in the collection's free-text search whitelist (chapter 8). |
 | `Sortable` | `bool` | Allowed as a query-DSL sort key. |
 | `Sort` | `int` | Field ordering in the admin form and (indirectly) the collection list columns. |
