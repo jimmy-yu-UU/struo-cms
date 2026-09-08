@@ -361,7 +361,10 @@ public sealed class ItemService(
                 return trashedNow;
             }, ct);
             if (softDeletedNow)
+            {
+                InvalidateLanguagesIfNeeded(collection);
                 await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed));
+            }
             await RevokeSessionsIfUserAsync(collection, id);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
@@ -375,6 +378,7 @@ public sealed class ItemService(
         // existed to purge. Accepted — the only way to hit it is already-inconsistent data.
         if (existed)
         {
+            InvalidateLanguagesIfNeeded(collection);
             await NotifyAsync(changes);
             await RevokeSessionsIfUserAsync(collection, id);
         }
@@ -443,7 +447,10 @@ public sealed class ItemService(
             return r;
         }, ct);
         if (restoredNow)
+        {
+            InvalidateLanguagesIfNeeded(collection);
             await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored));
+        }
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : projector.Project(restored, meta, null);
