@@ -43,7 +43,7 @@ public class ItemServiceMultiValueTests : IDisposable
         [CmsOptions("b2b:B2B", "b2c:B2C")]
         public List<string> Audiences { get; set; } = [];
 
-        [CmsField(Label = "Keywords", Interface = FieldInterface.Tags)]
+        [CmsField(Label = "Keywords", Interface = FieldInterface.Tags, Required = true)]
         public List<TagItem> Keywords { get; set; } = [];
     }
 
@@ -88,6 +88,8 @@ public class ItemServiceMultiValueTests : IDisposable
         return doc.RootElement.Clone();
     }
 
+    private static object[] OneKeyword => [new { value = "seed" }];
+
     [Fact]
     public async Task Create_round_trips_all_three_multi_value_shapes()
     {
@@ -111,7 +113,7 @@ public class ItemServiceMultiValueTests : IDisposable
     [Fact]
     public async Task Create_rejects_option_value_not_in_options()
     {
-        var body = Body(new { regions = new[] { "apac", "mars" } });
+        var body = Body(new { regions = new[] { "apac", "mars" }, keywords = OneKeyword });
         var act = () => _svc.CreateAsync("mvthing", body);
         await act.Should().ThrowAsync<QueryException>()
             .WithMessage("Field 'regions' has value 'mars' not in its options.");
@@ -120,10 +122,19 @@ public class ItemServiceMultiValueTests : IDisposable
     [Fact]
     public async Task Create_rejects_required_multi_value_when_empty()
     {
-        var body = Body(new { audiences = new[] { "b2b" } }); // regions (required) omitted
+        var body = Body(new { audiences = new[] { "b2b" }, keywords = OneKeyword }); // regions (required) omitted
         var act = () => _svc.CreateAsync("mvthing", body);
         await act.Should().ThrowAsync<QueryException>()
             .WithMessage("Field 'regions' is required.");
+    }
+
+    [Fact]
+    public async Task Create_rejects_required_tags_when_empty()
+    {
+        var body = Body(new { regions = new[] { "apac" } }); // keywords (required) omitted
+        var act = () => _svc.CreateAsync("mvthing", body);
+        await act.Should().ThrowAsync<QueryException>()
+            .WithMessage("Field 'keywords' is required.");
     }
 
     [Fact]
@@ -158,7 +169,7 @@ public class ItemServiceMultiValueTests : IDisposable
     [Fact]
     public async Task Update_omitting_the_required_regions_keeps_the_stored_value()
     {
-        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" } }));
+        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" }, keywords = OneKeyword }));
         var id = created["id"]!.ToString()!;
 
         var updated = await _svc.UpdateAsync("mvthing", id, Body(new { audiences = new[] { "b2b" } }));
@@ -171,11 +182,36 @@ public class ItemServiceMultiValueTests : IDisposable
     [Fact]
     public async Task Update_sending_an_empty_array_for_the_required_regions_is_rejected()
     {
-        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" } }));
+        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" }, keywords = OneKeyword }));
         var id = created["id"]!.ToString()!;
 
         var act = () => _svc.UpdateAsync("mvthing", id, Body(new { regions = Array.Empty<string>() }));
 
         await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'regions' is required.");
+    }
+
+    [Fact]
+    public async Task Update_omitting_the_required_keywords_keeps_the_stored_value()
+    {
+        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" }, keywords = OneKeyword }));
+        var id = created["id"]!.ToString()!;
+
+        var updated = await _svc.UpdateAsync("mvthing", id, Body(new { audiences = new[] { "b2b" } }));
+
+        updated.Should().NotBeNull();
+        var kws = ((IEnumerable<TagItem>)updated!["keywords"]!).ToList();
+        kws.Should().Equal(new TagItem("seed"));
+        ((IEnumerable<string>)updated["audiences"]!).Should().Equal("b2b");
+    }
+
+    [Fact]
+    public async Task Update_sending_an_empty_array_for_the_required_keywords_is_rejected()
+    {
+        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" }, keywords = OneKeyword }));
+        var id = created["id"]!.ToString()!;
+
+        var act = () => _svc.UpdateAsync("mvthing", id, Body(new { keywords = Array.Empty<object>() }));
+
+        await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'keywords' is required.");
     }
 }
