@@ -322,10 +322,12 @@ query 會產生的相同形狀 (關聯/翻譯都可解析)——若這次重新�
 的引數字面量，重新推導出*實際送出*的鍵值集合 (並遞迴進入巢狀輸入——例如一個 Repeater/Translation
 子物件——所以一個被省略的巢狀欄位同樣不會被回填)，然後才把修剪過的字典交給 `ItemService`，由它
 自身的 `bodyKeys` 合併邏輯 (第 9 章) 只把這些鍵值疊加到既有的資料列上。**第 9 章記載的 `Required`
-欄位但書，在這裡同樣適用**:`ItemDeserializer` 仍然會對照修剪過、但仍是剛剛解析出的請求本文，
-驗證每一個 `Required` 欄位，所以每一次 `updateX` 都必須重新送出一個 `Required` 欄位，否則這次
-mutation 會以 `BAD_USER_INPUT` 失敗——這不是 REST 與 GraphQL 之間的差異，而是同一條共用的寫入
-路徑:
+欄位語意，在這裡同樣適用**:修剪過的字典只會帶有 `SentFieldsOnly` 在請求字面量中找到的鍵，而
+`ItemService.UpdateCoreAsync` 是對照這個合併產生的實體 (第 9 章) 驗證 `Required`，而不是對照原始
+輸入——所以 `updateRole` 可以省略 `name` (`Required=true`) 仍然成功，並保留該角色既有的名稱;但明確
+送出 `name: null` 仍會以 `BAD_USER_INPUT` 失敗——一個 Required 的清單/映射輸入 (例如一個 Repeater
+欄位) 也是同樣的道理:省略它會保留其既有值;送出一個空清單，仍會讓 Required 檢查失敗。這不是 REST
+與 GraphQL 之間的差異，而是同一條共用的寫入路徑:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
@@ -334,7 +336,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
     -d '{"query":"mutation { updateRole(id: \"<id>\", input: { description: \"Updated via GraphQL\" }) { id name description } }"}'
-{"errors":[{"message":"Field 'name' is required.","path":["updateRole"],"extensions":{"code":"BAD_USER_INPUT"}}],"data":{"updateRole":null}}
+{"data":{"updateRole":{"id":"...","name":"Reviewer","description":"Updated via GraphQL"}}}
 
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
     -d '{"query":"mutation { deleteRole(id: \"<id>\") }"}'

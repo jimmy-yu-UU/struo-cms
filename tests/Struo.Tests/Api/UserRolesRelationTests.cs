@@ -33,9 +33,9 @@ public class UserRolesRelationTests(ApiFactory factory)
         var roleId = await CreateRoleAsync(admin, $"batch-b-{Guid.NewGuid():N}");
         var userId = await CreateUserAsync(admin);
 
-        // The item write path validates Required own-fields on every PUT (no partial-patch
-        // semantics), so `email` must be echoed back alongside the new `roles` value. Also echo
-        // the optimistic-concurrency token if the item carries one.
+        // A PUT is a merge — an omitted Required field keeps its stored value — so `email` need
+        // not be echoed back here; it still is, only to keep this call site's shape obvious. Also
+        // echo the optimistic-concurrency token if the item carries one, to avoid a 409.
         var item = (await admin.GetFromJsonAsync<JsonElement>($"/api/items/user/{userId}")).GetProperty("data");
         var email = item.GetProperty("email").GetString();
         var body = item.TryGetProperty("version", out var v)

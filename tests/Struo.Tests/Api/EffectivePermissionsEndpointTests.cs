@@ -29,8 +29,10 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
             .GetProperty("data").GetProperty("id").GetGuid();
         if (roleIds.Length > 0)
         {
-            // The item write path validates Required own-fields on every PUT (no partial-patch
-            // semantics), so `email` must be echoed back alongside the new `roles` value.
+            // A PUT is a merge — an omitted Required field keeps its stored value — so `email`
+            // need not be echoed back here; it still is, only to keep this helper's shape obvious
+            // at the call site. The optimistic-concurrency token, if the item carries one, still
+            // must be echoed to avoid a 409.
             var item = (await admin.GetFromJsonAsync<JsonElement>($"/api/items/user/{userId}")).GetProperty("data");
             var email = item.GetProperty("email").GetString();
             var body = item.TryGetProperty("version", out var v)
