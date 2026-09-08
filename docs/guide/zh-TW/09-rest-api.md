@@ -233,9 +233,9 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 ```
 
 可翻譯的 `Required` 欄位完全不受這一節影響——它們是在翻譯附屬資料表的同步過程中，逐 locale 各自
-驗證的，而不是在父層的反序列化階段 (見 `ItemWriteSideSync` 與第 6 章)。一個不可為 null 的 `Guid`
-外鍵 (例如 `UserRole.RoleId`) 還多一種算作缺漏的情況:全零的 `Guid.Empty`，因為客戶端不可能對一個
-不可為 null 的實值型別真的送出 `null`——見第 4 章 `Required` 欄位屬性那一列。
+驗證的，而不是在父層的反序列化階段 (見 `ItemWriteSideSync` 與第 6 章)。一個 `Guid` 的
+`[CmsField]` (例如 `UserRole.RoleId`) 還多一種算作缺漏的情況:全零的 `Guid.Empty` (一個不可為
+null 的 `Guid` 本來就不可能真的送出 `null`)——見第 4 章 `Required` 欄位屬性那一列。
 
 ## 驗證:cookie 或 bearer
 
