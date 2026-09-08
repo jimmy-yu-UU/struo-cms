@@ -19,4 +19,16 @@ public sealed record RelationMetadata
     /// <summary>camelCase name of the junction collection when the M2M junction type is itself a
     /// [CmsCollection]; null for plain junction entities and for non-M2M relations.</summary>
     public string? JunctionCollection { get; init; }
+
+    /// <summary>camelCase name of the junction column that orders the target rows
+    /// (<c>[CmsRelation(SortField = ...)]</c>); null when unset or for non-M2M relations.</summary>
+    public string? SortField { get; init; }
+
+    /// <summary>camelCase names of the junction collection's payload fields — its non-system, non-readonly
+    /// <c>[CmsField]</c>s other than the two foreign keys and <see cref="SortField"/> — hidden ones included
+    /// (a client filters on the junction collection's own field metadata). Null unless
+    /// <see cref="JunctionCollection"/> is set and at least one such field exists. Computed once by
+    /// <c>MetadataScanner</c>; <c>RelationshipGraph</c> resolves CLR properties from this list rather than
+    /// re-deriving it.</summary>
+    public IReadOnlyList<string>? JunctionPayloadFields { get; init; }
 }

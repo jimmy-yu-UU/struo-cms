@@ -190,7 +190,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
             var parentFk = MetadataScanner.NavigateMappingA(navData)!;
             var targetFk = MetadataScanner.NavigateMappingB(navData)!;
             var sort = prop.GetCustomAttribute<Struo.Domain.Metadata.Attributes.CmsRelationAttribute>()?.SortField;
-            var (junctionCollection, payload) = JunctionPayloadOf(junctionType, parentFk, targetFk, sort);
+            var (junctionCollection, payload) = JunctionPayloadOf(r, junctionType);
             return new RelationDescriptor(r, junctionType, parentFk, targetFk, sort, null, junctionCollection, payload);
         }
 
@@ -210,26 +210,22 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         return new RelationDescriptor(r, null, null, null, null, null);
     }
 
-    // Single source of the junction payload field list: everything downstream that needs to know which
-    // extra columns a M2M junction collection carries (beyond its two FKs and its sort column) reads
-    // M2MDescriptor.JunctionPayload rather than re-deriving this itself.
+    // Resolves RelationMetadata.JunctionPayloadFields (the single source, computed by MetadataScanner)
+    // into CLR property names + Hidden flags for the expander, the write-side binder and revisions.
+    // Never filters on its own: a name the scanner listed is a payload field, full stop.
     private (string? Collection, IReadOnlyList<JunctionPayloadField>? Payload) JunctionPayloadOf(
-        Type junctionType, string parentFk, string targetFk, string? sortProperty)
+        RelationMetadata r, Type junctionType)
     {
-        var name = System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(junctionType.Name);
-        var meta = _collections.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (r.JunctionCollection is null) return (null, null);
+        var meta = _collections.FirstOrDefault(c => string.Equals(c.Name, r.JunctionCollection, StringComparison.OrdinalIgnoreCase));
         if (meta is null) return (null, null);
 
-        var excluded = new HashSet<string>(StringComparer.Ordinal) { parentFk, targetFk };
-        if (sortProperty is not null) excluded.Add(sortProperty);
-
         var props = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        var payload = meta.Fields
-            .Where(f => !f.IsSystem && !f.ReadOnly)
-            .Select(f => (Field: f, Prop: props.FirstOrDefault(p =>
-                string.Equals(System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name), f.Name, StringComparison.OrdinalIgnoreCase))))
-            .Where(x => x.Prop is not null && !excluded.Contains(x.Prop.Name))
-            .Select(x => new JunctionPayloadField(x.Field.Name, x.Prop!.Name, x.Field.Hidden))
+        var payload = (r.JunctionPayloadFields ?? [])
+            .Select(name => (
+                Field: meta.Fields.First(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)),
+                Prop: props.First(p => string.Equals(System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name), name, StringComparison.OrdinalIgnoreCase))))
+            .Select(x => new JunctionPayloadField(x.Field.Name, x.Prop.Name, x.Field.Hidden))
             .ToList();
         return (meta.Name, payload);
     }
