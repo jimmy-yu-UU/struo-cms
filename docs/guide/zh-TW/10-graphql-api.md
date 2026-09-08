@@ -325,8 +325,9 @@ query 會產生的相同形狀 (關聯/翻譯都可解析)——若這次重新�
 欄位語意，在這裡同樣適用**:修剪過的字典只會帶有 `SentFieldsOnly` 在請求字面量中找到的鍵，而
 `ItemService.UpdateCoreAsync` 是對照這個合併產生的實體 (第 9 章) 驗證 `Required`，而不是對照原始
 輸入——所以 `updateRole` 可以省略 `name` (`Required=true`) 仍然成功，並保留該角色既有的名稱;但明確
-送出 `name: null` 仍會以 `BAD_USER_INPUT` 失敗。這不是 REST 與 GraphQL 之間的差異，而是同一條共用的
-寫入路徑:
+送出 `name: null` 仍會以 `BAD_USER_INPUT` 失敗——一個 Required 的清單/映射輸入 (例如一個 Repeater
+欄位) 也是同樣的道理:省略它會保留其既有值;送出一個空清單，仍會讓 Required 檢查失敗。這不是 REST
+與 GraphQL 之間的差異，而是同一條共用的寫入路徑:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
