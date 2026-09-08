@@ -256,7 +256,7 @@ Four framework collections model RBAC, all `[CmsCollection(..., AdminOnly = true
 
 | Collection | Table | Key columns | Notes |
 |---|---|---|---|
-| `user` | `users` | `email` (unique), `password` (Argon2id hash, `Hidden`+`ReadOnly`), `name`, `isActive`, `accessToken` (SHA-256 of the bearer token, `Hidden`+`ReadOnly`) | `Roles` is a `TagSelect` many-to-many to `role` via the `userRole` junction — edited on the User form as tag-picked role names, not by hand-crafting junction rows. |
+| `user` | `users` | `email` (unique), `password` (Argon2id hash, `Hidden`+`ReadOnly`), `name`, `isActive`, `accessToken` (SHA-256 of the bearer token, `Hidden`+`ReadOnly`) | `Roles` is a `TagSelect` many-to-many to `role` via the `userRole` junction — edited on the User form as tag-picked role names, not by hand-crafting junction rows. `userRole` carries no payload and no `SortField`, so it stays the plain chip picker (chapter 7, Admin pickers). |
 | `role` | `roles` | `name` (unique), `isSuperAdmin`, `description` | `isSuperAdmin = true` short-circuits every permission check to allow-all (see `EffectivePermissions` below). |
 | `permission` | `permissions` | `roleId`, `collection`, `canRead`, `canWrite`, `canDelete` | Unique on `(roleId, collection)`; `Hidden` (no dedicated admin screen — edited only through the Role permission matrix, see below). |
 | `userRole` | `user_roles` | `userId`, `roleId` | Unique on `(userId, roleId)`; `Hidden`, pure junction. |
