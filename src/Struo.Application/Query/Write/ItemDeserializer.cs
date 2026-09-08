@@ -23,6 +23,16 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null);
 
     /// <summary>
+    /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
+    /// per-interface validation as <see cref="Deserialize"/>, but WITHOUT the Required check:
+    /// <see cref="ItemService.UpdateCoreAsync"/> is a merge that only overlays fields the client
+    /// actually sent, so a Required field this body omits must not fail here — it fails, if at
+    /// all, once the caller re-runs <see cref="EnforceRequiredFields"/> against the merged entity.
+    /// </summary>
+    public object DeserializeForUpdate(string collection, JsonElement body, CollectionMetadata meta) =>
+        DeserializeCore(collection, body, meta, enforceRequired: false, onlyFields: null);
+
+    /// <summary>
     /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
     /// RichText, MaxLength and per-interface validation as <see cref="Deserialize"/>, but only for the
     /// camelCase fields in <paramref name="onlyFields"/> that are present in <paramref name="body"/>, and
@@ -36,9 +46,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (body.ValueKind != JsonValueKind.Object) return result;
 
-        // JsonElement.TryGetProperty is case-sensitive; onlyFields (and DeserializeCore's allowedKeys)
-        // compare OrdinalIgnoreCase, so match "is this field present in body" the same way.
-        var presentNames = body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var presentNames = PresentNames(body);
         foreach (var name in onlyFields)
         {
             if (!presentNames.Contains(name)) continue;
@@ -68,10 +76,32 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         if (enforceRequired) EnforceRequiredFields(meta, d, entity);
 
         EnforceMaxLength(meta, d, entity);
-        RunPerInterfaceValidators(meta, d, entity);
+
+        // When Required isn't enforced above (update / partial bind), gate the per-interface
+        // validators on body presence too: an omitted field is never overlaid by the caller
+        // (ItemService.UpdateCoreAsync's bodyKeys merge, or DeserializePartial's own
+        // onlyFields∩presence extraction), so validating/normalizing it here is pointless — and
+        // for a Required list-type field (Files/KeyValue/MultiSelect/CheckboxGroup/Tags/Repeater)
+        // it's actively wrong: the freshly-deserialized entity holds an EMPTY list/map for a field
+        // the body never mentioned, and each validator's own unconditional Required check would
+        // reject that exactly as if the client had explicitly wiped it. A field the body DOES send
+        // — including an explicit "[]"/"{}" — still runs its full validator and can still fail
+        // Required; only "never mentioned" is exempt. enforceRequired: true (create) keeps
+        // validating every field regardless of presence, same as before.
+        RunPerInterfaceValidators(meta, d, entity, enforceRequired ? null : PresentNames(body));
 
         return entity;
     }
+
+    // OrdinalIgnoreCase set of body property names actually sent (empty when body isn't an
+    // object). JsonElement.TryGetProperty is case-sensitive; field names and onlyFields compare
+    // OrdinalIgnoreCase, so "is this field present in body" must match that same way. Internal so
+    // ItemService.UpdateCoreAsync's own bodyKeys can share this exact construction rather than
+    // keeping a second copy that could silently drift from this one.
+    internal static HashSet<string> PresentNames(JsonElement body) =>
+        body.ValueKind == JsonValueKind.Object
+            ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     // Strip M2M relation keys (e.g. "tags": [1,2]) from the body before deserializing into the
     // entity type — those keys hold id arrays, not nested objects, so JSON deserialization would
@@ -193,8 +223,11 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     // required validation — skip translatable fields (they live on the sidecar entity and are
-    // validated per-locale in SyncTranslationsAsync, not on the parent).
-    private static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
+    // validated per-locale in SyncTranslationsAsync, not on the parent). Called here for CREATE
+    // (enforceRequired: true) and again by ItemService.UpdateCoreAsync, against the merged entity,
+    // after both its overlay loops have run — an update only fails Required when the client
+    // explicitly wipes the field (null/blank/Guid.Empty), never merely by omitting it.
+    internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {
         foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
         {
@@ -221,12 +254,17 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // as the field overlays above (FieldToProperty → OrdinalIgnoreCase Properties map; skip if not
     // writable), then dispatches to the phase's validator. The phase order is observable
     // (exception precedence when several fields are invalid) and preserved by FieldValidatorRegistry.
-    private void RunPerInterfaceValidators(CollectionMetadata meta, EntityDescriptor d, object entity)
+    // presentNames is null for CREATE (every field validates regardless of presence, as before) and
+    // the body's OrdinalIgnoreCase present-key set for update/partial binds (a field the body never
+    // mentioned is skipped entirely — see DeserializeCore).
+    private void RunPerInterfaceValidators(
+        CollectionMetadata meta, EntityDescriptor d, object entity, HashSet<string>? presentNames)
     {
         foreach (var (interfaces, validators) in validatorRegistry.Phases)
         {
             foreach (var field in meta.Fields.Where(f => interfaces.Contains(f.Interface) && !f.Translatable))
             {
+                if (presentNames is not null && !presentNames.Contains(field.Name)) continue;
                 if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
                 var pi = d.Properties.GetValueOrDefault(prop);
                 if (pi is not { CanWrite: true }) continue;

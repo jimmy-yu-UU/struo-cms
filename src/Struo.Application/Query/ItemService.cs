@@ -217,10 +217,13 @@ public sealed class ItemService(
         // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
         var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
-        var incoming = deserializer.Deserialize(collection, body, meta);
-        var bodyKeys = body.ValueKind == JsonValueKind.Object
-            ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // No Required check here — an update only overlays fields the client actually sent (see
+        // the loops below), so a Required field this body omits must not fail on the freshly-parsed
+        // `incoming` alone; the Required check re-runs against the merged `existing` entity below.
+        var incoming = deserializer.DeserializeForUpdate(collection, body, meta);
+        // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
+        // silently drift apart on what counts as "the client sent this key".
+        var bodyKeys = ItemDeserializer.PresentNames(body);
         foreach (var field in meta.Fields)
         {
             if (field.IsSystem || field.ReadOnly) continue;
@@ -248,6 +251,18 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
             pi.SetValue(existing, pi.GetValue(incoming));
         }
+
+        // Required check runs here — against the MERGED entity, after both overlay loops above —
+        // rather than while deserializing `incoming`: an omitted Required field keeps whatever
+        // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
+        // field still 400s with the same message CREATE uses. Required is also evaluated LAST here:
+        // MaxLength and the per-interface validator phases already ran on `incoming` inside
+        // DeserializeForUpdate above, before this line is ever reached, so a body that violates both
+        // one of those rules AND Required (on the merged entity) reports the earlier failure — which
+        // can differ from what CREATE (Required checked first) would report for the identical shape.
+        // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
+        // the same values a full PUT would.
+        ItemDeserializer.EnforceRequiredFields(meta, d, existing);
 
         // Self-referencing tree collections: reject a parentId that points at the item itself or
         // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.

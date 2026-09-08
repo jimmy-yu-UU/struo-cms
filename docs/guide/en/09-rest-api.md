@@ -215,24 +215,33 @@ $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Password must be at least 8 characters."}}
 ```
 
-**A `Required` `[CmsField]` must be resent on every write, including a partial update.** This is easy to
-miss: `ItemService.UpdateCoreAsync`'s "only overlay fields the client sent" merge only decides whether a
-sent field *overwrites* the existing row — but `ItemDeserializer.Deserialize` (shared by create and
-update, `src/Struo.Application/Query/Write/ItemDeserializer.cs`) validates every `Required` field against
-the **freshly parsed request body** before that merge ever runs, regardless of whether the field was
-part of this particular call's intent. Omitting a `Required` field from an otherwise-valid partial `PUT`
-fails with `BAD_USER_INPUT`, not silently keeping the existing value:
+**A `Required` `[CmsField]` need not be resent on a partial update, but it cannot be explicitly
+cleared.** `ItemService.UpdateCoreAsync`'s "only overlay fields the client sent" merge (above) starts
+from the existing row, and the Required check now runs against that **merged** entity rather than the
+freshly parsed request body: a `Required` field this `PUT` simply omits keeps its stored value and the
+write succeeds, while sending it explicitly as `null` or a whitespace-only string still fails with
+`BAD_USER_INPUT` — that is a genuine attempt to blank the field, not an absent key. This applies
+identically to every field interface, including a Required list/map field (`Files`, `KeyValue`,
+`MultiSelect`/`CheckboxGroup`, `Tags`, `Repeater`): an omitted one keeps its stored value, but one the
+body DOES send — including an explicit empty `[]`/`{}` — still runs its full validator and can still
+fail Required with the same `Field '<name>' is required.` message. Create is unaffected either way:
+`ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) still
+validates every `Required` field against the freshly parsed body there, since there is no existing row
+to merge with:
 
 ```
 $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"description":"partial update, no name"}'
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'name' is required."}}
+{"success":true,"data":{"id":"...","version":1,"name":"Demo9","isSuperAdmin":false,"description":"partial update, no name", ...}}
 
-$ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"name":"Demo9","description":"partial update, name resent"}'
-{"success":true,"data":{"id":"...","version":1,"name":"Demo9","isSuperAdmin":false,"description":"partial update, name resent", ...}}
+$ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"name":null}'
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'name' is required."}}
 ```
 
-Translatable `Required` fields are exempt from this — they validate per-locale inside the translation
-sidecar sync, not on the parent deserialize (see `ItemWriteSideSync` and chapter 6).
+Translatable `Required` fields are exempt from this section entirely — they validate per-locale inside
+the translation sidecar sync, not on the parent deserialize (see `ItemWriteSideSync` and chapter 6). A
+`Guid` `[CmsField]` (e.g. `UserRole.RoleId`) has one more way to count as missing: the all-zero
+`Guid.Empty` (a non-nullable one can never be sent as an actual `null` at all) — see chapter 4's
+`Required` field-attribute row.
 
 ## Authentication: cookie or bearer
 
@@ -449,7 +458,7 @@ surface.
 | `POST /api/items/{collection}/query` | `locale`, `deleted` (read from the URL even here) | JSON envelope (chapter 8), including `facets`/`aggregate` | `200`, list + `meta` | none (same caveat) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`, `locale`, `deleted` | — | `200` item, or `404` | none (same caveat) | `CanRead` (`deleted=only\|with` additionally needs `CanDelete`) |
 | `POST /api/items/{collection}` | — | JSON object of writable fields (allowlisted — see above) | `201` created item, `Location: /api/items/{collection}/{id}` (see Status-code conventions above) | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
-| `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — but see the `Required`-field caveat above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
+| `PUT /api/items/{collection}/{id}` | — | JSON object, partial (only sent keys overlay — an omitted `Required` field keeps its stored value, see above) | `200` updated item, or `404` | Cookie or Bearer | `CanWrite` (+ super-admin if `AdminOnly`) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool, default `false`) | — | `204`, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` restored item, or `404` | Cookie or Bearer | `CanDelete` (+ super-admin if `AdminOnly`) |
 | `GET /api/items/{collection}/{id}/revisions` | — | — | `200`, array of `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber }` (`[]` when the collection has no `Revisions=true`) | none (same caveat) | `CanRead` |

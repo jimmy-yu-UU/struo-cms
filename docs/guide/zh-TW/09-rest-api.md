@@ -212,23 +212,30 @@ $ curl -s -X POST http://localhost:5221/api/users -H "Content-Type: application/
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Password must be at least 8 characters."}}
 ```
 
-**一個 `Required` 的 `[CmsField]`，必須在每一次寫入時重新送出，包括一次部分更新在內。** 這一點很
-容易被忽略:`ItemService.UpdateCoreAsync` 「只疊加客戶端有送出的欄位」這個合併邏輯，只決定了一個
-送出的欄位是否會*覆蓋*既有的資料列——但 `ItemDeserializer.Deserialize` (由建立與更新共用，
-`src/Struo.Application/Query/Write/ItemDeserializer.cs`) 會在那次合併執行之前，就對照**剛剛解析出
-的請求本文**，驗證每一個 `Required` 欄位，無論那個欄位是否屬於這次呼叫原本的意圖。從一個原本合法
-的部分 `PUT` 中省略一個 `Required` 欄位，會以 `BAD_USER_INPUT` 失敗，而不是靜默保留既有值:
+**一個 `Required` 的 `[CmsField]`，在一次部分更新中不必重新送出，但不能被明確清空。**
+`ItemService.UpdateCoreAsync` 「只疊加客戶端有送出的欄位」這個合併邏輯 (見上方)，會從既有的資料列
+開始;而 Required 檢查現在是對照這個**合併後**的實體執行，而不是對照剛剛解析出的請求本文:一個這次
+`PUT` 單純省略的 `Required` 欄位，會保留其既有值，寫入照樣成功;但若明確送出 `null` 或一個只有空白
+字元的字串，仍會以 `BAD_USER_INPUT` 失敗——那是真的想清空這個欄位，不是單純沒送出這個鍵。這對每一
+種欄位介面都同樣適用，包括一個 Required 的清單/映射欄位 (`Files`、`KeyValue`、
+`MultiSelect`/`CheckboxGroup`、`Tags`、`Repeater`):一個被省略的欄位會保留其既有值，但一個請求本文
+確實送出的欄位——即使是明確送出的空 `[]`/`{}`——仍會執行完整的驗證，仍可能以同樣的
+`Field '<name>' is required.` 訊息失敗。建立 (create) 不受影響:`ItemDeserializer.Deserialize`
+(`src/Struo.Application/Query/Write/ItemDeserializer.cs`) 在那裡仍然對照剛剛解析出的請求本文，
+驗證每一個 `Required` 欄位，因為建立時根本沒有既有的資料列可以合併:
 
 ```
 $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"description":"partial update, no name"}'
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'name' is required."}}
+{"success":true,"data":{"id":"...","version":1,"name":"Demo9","isSuperAdmin":false,"description":"partial update, no name", ...}}
 
-$ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"name":"Demo9","description":"partial update, name resent"}'
-{"success":true,"data":{"id":"...","version":1,"name":"Demo9","isSuperAdmin":false,"description":"partial update, name resent", ...}}
+$ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"name":null}'
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'name' is required."}}
 ```
 
-可翻譯的 `Required` 欄位不受此限——它們是在翻譯附屬資料表的同步過程中，逐 locale 各自驗證的，而不是
-在父層的反序列化階段 (見 `ItemWriteSideSync` 與第 6 章)。
+可翻譯的 `Required` 欄位完全不受這一節影響——它們是在翻譯附屬資料表的同步過程中，逐 locale 各自
+驗證的，而不是在父層的反序列化階段 (見 `ItemWriteSideSync` 與第 6 章)。一個 `Guid` 的
+`[CmsField]` (例如 `UserRole.RoleId`) 還多一種算作缺漏的情況:全零的 `Guid.Empty` (一個不可為
+null 的 `Guid` 本來就不可能真的送出 `null`)——見第 4 章 `Required` 欄位屬性那一列。
 
 ## 驗證:cookie 或 bearer
 
@@ -431,7 +438,7 @@ Content-Length: 0
 | `POST /api/items/{collection}/query` | `locale`、`deleted` (即使在這裡也是從 URL 讀取) | JSON 信封 (第 8 章)，包含 `facets`/`aggregate` | `200`，清單 + `meta` | 無 (同上) | `CanRead` |
 | `GET /api/items/{collection}/{id}` | `deep`、`locale`、`deleted` | — | `200` 項目，或 `404` | 無 (同上) | `CanRead` (`deleted=only\|with` 額外需要 `CanDelete`) |
 | `POST /api/items/{collection}` | — | 可寫入欄位組成的 JSON 物件 (經過允許清單過濾——見上方) | `201` 已建立的項目，`Location: /api/items/{collection}/{id}` (見上方的「狀態碼慣例」) | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
-| `PUT /api/items/{collection}/{id}` | — | JSON 物件，部分更新 (只有送出的鍵值會疊加——但請見上方 `Required` 欄位的但書) | `200` 已更新的項目，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
+| `PUT /api/items/{collection}/{id}` | — | JSON 物件，部分更新 (只有送出的鍵值會疊加——一個省略的 `Required` 欄位會保留其既有值，見上方) | `200` 已更新的項目，或 `404` | Cookie or Bearer | `CanWrite` (若為 `AdminOnly` 則另需超級管理員) |
 | `DELETE /api/items/{collection}/{id}` | `purge` (bool，預設 `false`) | — | `204`，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
 | `POST /api/items/{collection}/{id}/restore` | — | — | `200` 已還原的項目，或 `404` | Cookie or Bearer | `CanDelete` (若為 `AdminOnly` 則另需超級管理員) |
 | `GET /api/items/{collection}/{id}/revisions` | — | — | `200`，`{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber }` 的陣列 (若該集合沒有 `Revisions=true`則為 `[]`) | 無 (同上) | `CanRead` |
