@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Identity;
@@ -19,11 +20,12 @@ public class DistributedCacheLoginAttemptThrottleTests
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     private static DistributedCacheLoginAttemptThrottle Throttle(
-        IDistributedCache cache, int permitLimit = 3, int windowSeconds = 60, bool enabled = true) =>
+        IDistributedCache cache, int permitLimit = 3, int windowSeconds = 60, bool enabled = true,
+        TimeProvider? clock = null) =>
         new(cache, Options.Create(new LoginAccountRateLimitOptions
         {
             Enabled = enabled, PermitLimit = permitLimit, WindowSeconds = windowSeconds,
-        }));
+        }), clock);
 
     [Fact]
     public async Task CheckAsync_is_not_blocked_before_any_failure_is_recorded()
@@ -121,16 +123,23 @@ public class DistributedCacheLoginAttemptThrottleTests
         // if a SECOND failure, recorded while still inside the original window, incorrectly restarted
         // the window's clock, blocking would still be in effect at t≈3.2s (1.5s past the second
         // failure's own would-be 3s window). Observing NOT-blocked at that point instead proves the
-        // window's expiry stayed anchored to the FIRST failure's timestamp the whole time.
+        // window's expiry stayed anchored to the FIRST failure's timestamp the whole time. The clock
+        // is a fake advanced by hand rather than a real Task.Delay, so the test is instant and cannot
+        // flake on scheduler jitter. The real MemoryDistributedCache entry's own AbsoluteExpiration is
+        // still computed from the fake clock's (advancing) "now" but checked against the REAL wall
+        // clock, which has barely moved during this test — so it stays comfortably in the future and
+        // never interferes with the assertions below, which are purely about the throttle's own
+        // fixed-window math.
+        var clock = new FakeTimeProvider();
         var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3);
+        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3, clock: clock);
         const string email = "fixed-window@struo.test";
 
         await throttle.RecordFailureAsync(email); // count=1, window starts at t=0, ends at t=3s
-        await Task.Delay(1500); // t≈1.5s — still inside the original window
+        clock.Advance(TimeSpan.FromSeconds(1.5)); // t≈1.5s — still inside the original window
         await throttle.RecordFailureAsync(email); // count=2, SAME window if fixed; a fresh one (ending ≈4.5s) if sliding
 
-        await Task.Delay(1700); // t≈3.2s: past the ORIGINAL window's end, short of a slid one's
+        clock.Advance(TimeSpan.FromSeconds(1.7)); // t≈3.2s: past the ORIGINAL window's end, short of a slid one's
         (await throttle.CheckAsync(email)).IsBlocked.Should().BeFalse(
             "the window must have expired at its original 3s mark, not been pushed out to ~4.5s by " +
             "the second failure");
@@ -139,20 +148,19 @@ public class DistributedCacheLoginAttemptThrottleTests
     [Fact]
     public async Task RetryAfterSeconds_decreases_as_the_window_elapses()
     {
+        // A fake, hand-advanced clock removes the real-clock timing concerns the previous version of
+        // this test worked around (CI jitter crossing the window boundary) — the window can go back
+        // to a natural small size since the advance is exact, not a Task.Delay guess.
+        var clock = new FakeTimeProvider();
         var cache = MemoryCache();
-        // The throttle stores the window start at whole-second granularity (ToUnixTimeSeconds), so a
-        // 3-second window recorded at hh:mm:ss.999 effectively has ~2.0 s left. On a slow CI runner
-        // (coverage instrumentation) the 1.5 s delay below plus scheduling jitter then crossed the
-        // window end and `second.IsBlocked` flipped to false — a timing flake, not a throttle bug.
-        // A wide window keeps the "still blocked, but retry-after shrank" assertion deterministic.
-        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 30);
+        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3, clock: clock);
         const string email = "decreasing@struo.test";
 
         await throttle.RecordFailureAsync(email);
         var first = await throttle.CheckAsync(email);
         first.IsBlocked.Should().BeTrue();
 
-        await Task.Delay(1500);
+        clock.Advance(TimeSpan.FromSeconds(1.5));
         var second = await throttle.CheckAsync(email);
         second.IsBlocked.Should().BeTrue();
 
