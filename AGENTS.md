@@ -91,15 +91,20 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `(<col> IS NULL OR <col> NOT IN (<sql>))` and `(<sql1> OR <sql2> …)` — where `<col>` always comes from
   `GetDbColumnName` and `<sql>` from `ToSql()`.
   The fourth is `OrderByExpressionBuilder`'s ORDER BY text
-  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`), the only caller of
-  `queryable.OrderBy(string)` in `SqlSugarItemRepository.cs`: it assembles exactly three forms — a
-  plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated subquery with one JOIN
-  per hop (`RelationOrderExpr`), and a translatable-field sort as a correlated subquery against the
-  translation sidecar with the query locale embedded as an escaped string literal
-  (`TranslatableOrderExpr`; the locale has already passed `ItemService.ValidateLocale`, and the
-  quote-doubling on the literal is a second, sink-level guard, not the primary one). Every table and
-  column name in all three forms comes from `db.EntityMaintenance.GetDbColumnName`/`GetTableName`,
-  never a hardcoded string. Nothing else may assemble SQL text, and SqlSugar's own string overloads
+  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`), the sole source of the string passed
+  to the one `queryable.OrderBy(string)` call, at `SqlSugarItemRepository.cs:94`: it assembles three
+  per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated
+  subquery with one JOIN per hop (`RelationOrderExpr`), and a translatable-field sort as a correlated
+  subquery against the translation sidecar with the query locale embedded as an escaped string literal
+  (`TranslatableOrderExpr`; the locale is either a request locale already validated by
+  `ItemService.ValidateLocale`, or — when no `?locale=` was given — the configured default code
+  (`ItemService.QueryAsync`'s `locale ?? languages.DefaultCode()`), whose format is guarded only on
+  write, by `ValidateLanguageCodeIfNeeded`; the quote-doubling on the literal at this sink remains
+  either way) — plus the no-client-sort default clause (`<created> DESC, <id> ASC`, or `<id> ASC`
+  alone when the entity has no `CreatedAt`) and the `, <id> ASC` pagination tiebreak/comma-join that
+  wrap every sort. Every column name across all of it comes from
+  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string. Nothing else may
+  assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
   SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
