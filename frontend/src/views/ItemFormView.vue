@@ -25,8 +25,10 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, isDirty, unsavedConfirm } from '../lib/formDirty'
+import { canWriteJunction } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
+import type { RelationMeta } from '../types/schema'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,6 +51,18 @@ const editableRelations = computed(() =>
 )
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
+
+// Junction payload grants for the links editor (spec U2b §3.3): passed as plain functions so
+// parse/build/validate stay store-free.
+const resolveCollection = (n: string) => schema.get(n)
+const junctionAccess = computed(() => ({
+  canRead: (c: string) => auth.canRead(c),
+  canWrite: (c: string) => auth.canWrite(c),
+  isSuperAdmin: auth.user?.isSuperAdmin === true,
+}))
+function canWriteJunctionFor(rel: RelationMeta): boolean {
+  return canWriteJunction(rel, resolveCollection, junctionAccess.value)
+}
 
 // RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
 // grant on role/user could open the form, but the matrix/preview endpoints would 403.
@@ -126,14 +140,14 @@ async function init(): Promise<void> {
   await Promise.all([schema.load(), langStore.load()])
   if (!meta.value) { loading.value = false; return }
   if (isCreate.value) {
-    setModel(blankItemForm(meta.value, langStore.languages))
+    setModel(blankItemForm(meta.value, langStore.languages, resolveCollection))
   } else {
     try {
       const item = await itemsApi.get(name.value, id.value!, {
         deep: editableRelations.value,
         locale: langStore.defaultCode,
       })
-      setModel(parseItemToForm(meta.value, item, langStore.languages))
+      setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
       // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
       if (name.value === ROLE_COLLECTION)
         savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
@@ -147,12 +161,13 @@ async function init(): Promise<void> {
 
 async function onSubmit(): Promise<void> {
   if (!meta.value) return
-  errors.value = validateItem(meta.value, model, langStore.defaultCode)
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection)
   if (Object.keys(errors.value).length > 0) return
   submitting.value = true
   serverError.value = ''
   try {
-    const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update')
+    const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update',
+      { resolveCollection, canWriteJunction: canWriteJunctionFor })
     // Capture the created item so a role-create can PUT its buffered grants against the
     // freshly-minted id (created.id) below.
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
@@ -245,7 +260,7 @@ async function recoverFromConflict(): Promise<void> {
       deep: editableRelations.value,
       locale: langStore.defaultCode,
     })
-    latestFromServer = parseItemToForm(meta.value, latest, langStore.languages)
+    latestFromServer = parseItemToForm(meta.value, latest, langStore.languages, resolveCollection)
     // Only refresh the token; keep the user's edits so a re-save overwrites the server copy.
     model.version = latestFromServer.version
     conflict.value = true
@@ -281,7 +296,7 @@ async function onReverted(): Promise<void> {
       deep: editableRelations.value,
       locale: langStore.defaultCode,
     })
-    setModel(parseItemToForm(meta.value, item, langStore.languages))
+    setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
     errors.value = {}
     serverError.value = ''
   } catch (e) {

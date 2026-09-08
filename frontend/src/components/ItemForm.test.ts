@@ -125,6 +125,13 @@ describe('ItemForm', () => {
     expect(w.find('.relations .field').exists()).toBe(true)
     expect(w.find('.relations h3').exists()).toBe(false)
   })
+  it('shows a FieldError under a relation when errors carry its name', () => {
+    const relMeta: CollectionMeta = { ...meta, relations: [{ name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag',
+      interface: 'tagSelect', foreignKey: null, displayTemplate: null, editable: true, selfReferencing: false }] }
+    const w = mountForm({ meta: relMeta, model: { ...model, relations: { tags: [] } }, locales, errors: { tags: 'Tags › Note is required (row 1).' } },
+      { RelationInput: { props: ['relation', 'modelValue'], template: '<div class="relation-input" />' } })
+    expect(w.text()).toContain('Tags › Note is required (row 1).')
+  })
   it('keeps the .field wrapper class on each of the three call sites the e2e suite locates fields by', () => {
     const w = mountForm({ meta, model, locales, errors: {} })
     // Six e2e specs find a field by label inside `.field` / `.field:visible`. This is a contract,
