@@ -154,4 +154,28 @@ public class ItemServiceMultiValueTests : IDisposable
         kws.Should().ContainSingle();
         kws[0].Should().Be(new TagItem("tech")); // blank label -> null; second "tech" dropped
     }
+
+    [Fact]
+    public async Task Update_omitting_the_required_regions_keeps_the_stored_value()
+    {
+        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" } }));
+        var id = created["id"]!.ToString()!;
+
+        var updated = await _svc.UpdateAsync("mvthing", id, Body(new { audiences = new[] { "b2b" } }));
+
+        updated.Should().NotBeNull();
+        ((IEnumerable<string>)updated!["regions"]!).Should().Equal("apac");
+        ((IEnumerable<string>)updated["audiences"]!).Should().Equal("b2b");
+    }
+
+    [Fact]
+    public async Task Update_sending_an_empty_array_for_the_required_regions_is_rejected()
+    {
+        var created = await _svc.CreateAsync("mvthing", Body(new { regions = new[] { "apac" } }));
+        var id = created["id"]!.ToString()!;
+
+        var act = () => _svc.UpdateAsync("mvthing", id, Body(new { regions = Array.Empty<string>() }));
+
+        await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'regions' is required.");
+    }
 }

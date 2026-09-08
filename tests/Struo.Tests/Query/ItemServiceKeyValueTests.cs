@@ -126,4 +126,34 @@ public class ItemServiceKeyValueTests : IDisposable
         await act.Should().ThrowAsync<QueryException>()
             .WithMessage("Field 'requiredMeta' is required.");
     }
+
+    [Fact]
+    public async Task Update_omitting_the_required_map_keeps_the_stored_value()
+    {
+        var created = await _svc.CreateAsync("kvthing",
+            Body(new { requiredMeta = new Dictionary<string, string> { ["k"] = "v" } }));
+        var id = created["id"]!.ToString()!;
+
+        var updated = await _svc.UpdateAsync("kvthing", id,
+            Body(new { meta = new Dictionary<string, string> { ["a"] = "b" } }));
+
+        updated.Should().NotBeNull();
+        var requiredMeta = (IDictionary<string, string>)updated!["requiredMeta"]!;
+        requiredMeta.Should().ContainKey("k");
+        requiredMeta["k"].Should().Be("v");
+        var meta = (IDictionary<string, string>)updated["meta"]!;
+        meta["a"].Should().Be("b");
+    }
+
+    [Fact]
+    public async Task Update_sending_an_empty_map_for_the_required_map_is_rejected()
+    {
+        var created = await _svc.CreateAsync("kvthing",
+            Body(new { requiredMeta = new Dictionary<string, string> { ["k"] = "v" } }));
+        var id = created["id"]!.ToString()!;
+
+        var act = () => _svc.UpdateAsync("kvthing", id, Body(new { requiredMeta = new Dictionary<string, string>() }));
+
+        await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'requiredMeta' is required.");
+    }
 }

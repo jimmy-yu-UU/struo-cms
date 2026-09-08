@@ -46,9 +46,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (body.ValueKind != JsonValueKind.Object) return result;
 
-        // JsonElement.TryGetProperty is case-sensitive; onlyFields (and DeserializeCore's allowedKeys)
-        // compare OrdinalIgnoreCase, so match "is this field present in body" the same way.
-        var presentNames = body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var presentNames = PresentNames(body);
         foreach (var name in onlyFields)
         {
             if (!presentNames.Contains(name)) continue;
@@ -78,10 +76,30 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         if (enforceRequired) EnforceRequiredFields(meta, d, entity);
 
         EnforceMaxLength(meta, d, entity);
-        RunPerInterfaceValidators(meta, d, entity);
+
+        // When Required isn't enforced above (update / partial bind), gate the per-interface
+        // validators on body presence too: an omitted field is never overlaid by the caller
+        // (ItemService.UpdateCoreAsync's bodyKeys merge, or DeserializePartial's own
+        // onlyFields∩presence extraction), so validating/normalizing it here is pointless — and
+        // for a Required list-type field (Files/KeyValue/MultiSelect/CheckboxGroup/Tags/Repeater)
+        // it's actively wrong: the freshly-deserialized entity holds an EMPTY list/map for a field
+        // the body never mentioned, and each validator's own unconditional Required check would
+        // reject that exactly as if the client had explicitly wiped it. A field the body DOES send
+        // — including an explicit "[]"/"{}" — still runs its full validator and can still fail
+        // Required; only "never mentioned" is exempt. enforceRequired: true (create) keeps
+        // validating every field regardless of presence, same as before.
+        RunPerInterfaceValidators(meta, d, entity, enforceRequired ? null : PresentNames(body));
 
         return entity;
     }
+
+    // OrdinalIgnoreCase set of body property names actually sent (empty when body isn't an
+    // object). JsonElement.TryGetProperty is case-sensitive; field names and onlyFields compare
+    // OrdinalIgnoreCase, so "is this field present in body" must match that same way.
+    private static HashSet<string> PresentNames(JsonElement body) =>
+        body.ValueKind == JsonValueKind.Object
+            ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     // Strip M2M relation keys (e.g. "tags": [1,2]) from the body before deserializing into the
     // entity type — those keys hold id arrays, not nested objects, so JSON deserialization would
@@ -234,12 +252,17 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // as the field overlays above (FieldToProperty → OrdinalIgnoreCase Properties map; skip if not
     // writable), then dispatches to the phase's validator. The phase order is observable
     // (exception precedence when several fields are invalid) and preserved by FieldValidatorRegistry.
-    private void RunPerInterfaceValidators(CollectionMetadata meta, EntityDescriptor d, object entity)
+    // presentNames is null for CREATE (every field validates regardless of presence, as before) and
+    // the body's OrdinalIgnoreCase present-key set for update/partial binds (a field the body never
+    // mentioned is skipped entirely — see DeserializeCore).
+    private void RunPerInterfaceValidators(
+        CollectionMetadata meta, EntityDescriptor d, object entity, IReadOnlySet<string>? presentNames)
     {
         foreach (var (interfaces, validators) in validatorRegistry.Phases)
         {
             foreach (var field in meta.Fields.Where(f => interfaces.Contains(f.Interface) && !f.Translatable))
             {
+                if (presentNames is not null && !presentNames.Contains(field.Name)) continue;
                 if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
                 var pi = d.Properties.GetValueOrDefault(prop);
                 if (pi is not { CanWrite: true }) continue;
