@@ -24,6 +24,35 @@ function firstLinkError(rel: RelationMeta, links: RelationLink[], fields: FieldM
   return null
 }
 
+// Shared per-field precedence (required first, then maxLength), used for both the shared and the
+// translatable field loops in validateItem.
+function validateFields(fields: FieldMeta[], values: Record<string, unknown>, errors: Record<string, string>): void {
+  for (const f of fields) {
+    if (f.required && isEmpty(values[f.name])) errors[f.name] = `${f.label} is required.`
+    else if (tooLong(f, values[f.name])) errors[f.name] = `${f.label} must be at most ${f.maxLength} characters.`
+  }
+}
+
+function validateLinks(
+  meta: CollectionMeta,
+  model: FormModel,
+  resolveCollection: ResolveCollection,
+  canWriteJunction: ((rel: RelationMeta) => boolean) | undefined,
+  errors: Record<string, string>,
+): void {
+  for (const rel of meta.relations ?? []) {
+    const v = model.relations[rel.name]
+    if (!isRelationLinks(v)) continue
+    // A relation whose junction the caller cannot write sends bare ids regardless of what the
+    // (possibly disabled/hidden) payload inputs currently hold — validating that unsent payload
+    // would block a save the user has no way to fix. Without `canWriteJunction`, behaviour is
+    // unchanged: every relation is validated (existing callers/tests).
+    if (canWriteJunction && !canWriteJunction(rel)) continue
+    const err = firstLinkError(rel, v, visiblePayloadFields(rel, resolveCollection))
+    if (err) errors[rel.name] = err
+  }
+}
+
 export function validateItem(
   meta: CollectionMeta,
   model: FormModel,
@@ -33,27 +62,9 @@ export function validateItem(
 ): Record<string, string> {
   const { shared, translatable } = splitFields(meta)
   const errors: Record<string, string> = {}
-  for (const f of shared) {
-    if (f.required && isEmpty(model.shared[f.name])) errors[f.name] = `${f.label} is required.`
-    else if (tooLong(f, model.shared[f.name])) errors[f.name] = `${f.label} must be at most ${f.maxLength} characters.`
-  }
+  validateFields(shared, model.shared, errors)
   const defaultValues = model.translations[defaultCode] ?? {}
-  for (const f of translatable) {
-    if (f.required && isEmpty(defaultValues[f.name])) errors[f.name] = `${f.label} is required.`
-    else if (tooLong(f, defaultValues[f.name])) errors[f.name] = `${f.label} must be at most ${f.maxLength} characters.`
-  }
-  if (resolveCollection) {
-    for (const rel of meta.relations ?? []) {
-      const v = model.relations[rel.name]
-      if (!isRelationLinks(v)) continue
-      // A relation whose junction the caller cannot write sends bare ids regardless of what the
-      // (possibly disabled/hidden) payload inputs currently hold — validating that unsent payload
-      // would block a save the user has no way to fix. Without `canWriteJunction`, behaviour is
-      // unchanged: every relation is validated (existing callers/tests).
-      if (canWriteJunction && !canWriteJunction(rel)) continue
-      const err = firstLinkError(rel, v, visiblePayloadFields(rel, resolveCollection))
-      if (err) errors[rel.name] = err
-    }
-  }
+  validateFields(translatable, defaultValues, errors)
+  if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors)
   return errors
 }
