@@ -2,6 +2,7 @@
 using System.Reflection;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Domain.Auditing;
 using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
@@ -13,6 +14,28 @@ internal sealed partial class FacetQueries
 
     private async Task<IReadOnlyList<object>> LoadByIds<T>(object[] ids, CancellationToken ct) where T : class, new() =>
         (await db.Queryable<T>().In(ids).ToListAsync(ct)).Cast<object>().ToList();
+
+    // A relation facet's id buckets come from the junction/reverse-FK side, which survives a target
+    // row's soft-delete — trashing the target leaves the junction row (or child's own FK) untouched —
+    // so a trashed target would otherwise still contribute an id bucket (#3). Drop any bucket whose
+    // target id is no longer live, via the same typed `db.Queryable<T>().In(ids)` LeafValuesAsync's
+    // own non-translatable branch below already uses: its global ISoftDeletable filter is what does
+    // the dropping, so the related side never lifts the filter regardless of the root's own
+    // `deleted=` mode. Called uniformly from FacetAsync for every relation kind (not just
+    // ManyToMany) rather than special-casing OneToMany, whose side query already carries the filter
+    // at the source: the ISoftDeletable check below is a type check, so a non-soft-deletable target
+    // or an already-empty bucket list skips the extra query entirely and costs nothing there.
+    private async Task<List<FacetBucket>> DropSoftDeletedTargets(List<FacetBucket> idBuckets, EntityDescriptor target, CancellationToken ct)
+    {
+        if (idBuckets.Count == 0 || !typeof(ISoftDeletable).IsAssignableFrom(target.EntityType))
+            return idBuckets;
+
+        var ids = idBuckets.Select(b => b.Value!).ToArray();
+        var live = await LoadByIdsDispatcher.For(target.EntityType)(this, ids, ct);
+        var idProp = target.Properties[target.IdProperty];
+        var liveIds = live.Select(e => idProp.GetValue(e)!).ToHashSet();
+        return idBuckets.Where(b => liveIds.Contains(b.Value!)).ToList();
+    }
 
     private async Task<IReadOnlyList<FacetBucket>> SwapLeafValues(List<FacetBucket> idBuckets, ResolvedFacetPath facet, string? queryLocale, int maxValues, CancellationToken ct)
     {

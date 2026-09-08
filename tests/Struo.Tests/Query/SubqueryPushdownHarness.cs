@@ -17,6 +17,9 @@ namespace Struo.Tests.Query;
 
 // ── fixtures: an EAV-shaped product catalogue ────────────────────────────────
 // product ─M2O→ category; product ─O2M→ property(code, valueNum); product ─M2M(payload note)→ label
+// product ─M2M→ soft-label: a second many-to-many target, distinct from label, that DOES implement
+// ISoftDeletable — label itself deliberately does not, so the soft-delete-consistency tests (#3)
+// need their own target rather than overloading the existing label fixture and its assertions.
 
 [SugarTable("sq_categories")]
 [CmsCollection("Sq category")]
@@ -44,6 +47,9 @@ public sealed class SqProduct : AuditableEntity, ISoftDeletable
     [Navigate(typeof(SqProductLabel), nameof(SqProductLabel.ProductId), nameof(SqProductLabel.LabelId))]
     [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
     [SugarColumn(IsIgnore = true)] public List<SqLabel> Labels { get; set; } = [];
+    [Navigate(typeof(SqProductSoftLabel), nameof(SqProductSoftLabel.ProductId), nameof(SqProductSoftLabel.SoftLabelId))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
+    [SugarColumn(IsIgnore = true)] public List<SqSoftLabel> SoftLabels { get; set; } = [];
 }
 
 [SugarTable("sq_properties")]
@@ -77,6 +83,28 @@ public sealed class SqProductLabel
     [SugarColumn(IsNullable = true)] [CmsField(Label = "Note", Interface = FieldInterface.Text)] public string? Note { get; set; }
 }
 
+/// <summary>A many-to-many target that DOES implement <see cref="ISoftDeletable"/> — mirrors
+/// <see cref="SqLabel"/>'s shape so the #3 soft-delete-consistency tests can trash one row and assert
+/// it drops out of the id, leaf, and (for a `deleted=with` root) still-excluded facet buckets.</summary>
+[SugarTable("sq_soft_labels")]
+[CmsCollection("Sq soft label")]
+public sealed class SqSoftLabel : AuditableEntity, ISoftDeletable
+{
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+    [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+}
+
+[SugarTable("sq_product_soft_labels")]
+[CmsCollection("Sq product soft label", Hidden = true)]
+public sealed class SqProductSoftLabel
+{
+    [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    [CmsField(Label = "Product", Interface = FieldInterface.Uuid)] public Guid ProductId { get; set; }
+    [CmsField(Label = "Soft label", Interface = FieldInterface.Uuid)] public Guid SoftLabelId { get; set; }
+}
+
 public sealed class SubqueryPushdownHarness : IDisposable
 {
     private readonly SqliteTestDatabase _file = new();
@@ -88,7 +116,11 @@ public sealed class SubqueryPushdownHarness : IDisposable
     public StruoQueryOptions Options { get; } = new();
     public int SqlStatements { get; private set; }
 
-    public static readonly Type[] Types = [typeof(SqCategory), typeof(SqProduct), typeof(SqProperty), typeof(SqLabel), typeof(SqProductLabel)];
+    public static readonly Type[] Types =
+    [
+        typeof(SqCategory), typeof(SqProduct), typeof(SqProperty), typeof(SqLabel), typeof(SqProductLabel),
+        typeof(SqSoftLabel), typeof(SqProductSoftLabel),
+    ];
 
     public SubqueryPushdownHarness()
     {
@@ -103,6 +135,7 @@ public sealed class SubqueryPushdownHarness : IDisposable
         {
             ["sqCategory"] = typeof(SqCategory), ["sqProduct"] = typeof(SqProduct), ["sqProperty"] = typeof(SqProperty),
             ["sqLabel"] = typeof(SqLabel), ["sqProductLabel"] = typeof(SqProductLabel),
+            ["sqSoftLabel"] = typeof(SqSoftLabel), ["sqProductSoftLabel"] = typeof(SqProductSoftLabel),
         });
         Repo = new SqlSugarItemRepository(Db, Registry, Graph, Metadata, Options, NullLogger<SqlSugarItemRepository>.Instance);
         Db.Aop.OnLogExecuting = (_, _) => SqlStatements++;
@@ -140,6 +173,22 @@ public sealed class SubqueryPushdownHarness : IDisposable
             new SqProductLabel { Id = Guid.NewGuid(), ProductId = sameRow.Id,  LabelId = misc.Id,  Note = "hero" },
         }).ExecuteCommand();
         return (crossRow.Id, sameRow.Id, noProps.Id, noCat.Id);
+    }
+
+    // Attaches two soft-deletable labels ("Alive", "Trashed") to the given product — the caller then
+    // soft-deletes "Trashed" (via Repo.SoftDeleteAsync("sqSoftLabel", ...)) to exercise the #3
+    // drop-soft-deleted-targets fix on the id, leaf, and translatable-leaf facet forms alike.
+    public (Guid Live, Guid Trashed) SeedSoftLabels(Guid productId)
+    {
+        var live = new SqSoftLabel { Id = Guid.NewGuid(), Name = "Alive" };
+        var trashed = new SqSoftLabel { Id = Guid.NewGuid(), Name = "Trashed" };
+        Db.Insertable(new[] { live, trashed }).ExecuteCommand();
+        Db.Insertable(new[]
+        {
+            new SqProductSoftLabel { Id = Guid.NewGuid(), ProductId = productId, SoftLabelId = live.Id },
+            new SqProductSoftLabel { Id = Guid.NewGuid(), ProductId = productId, SoftLabelId = trashed.Id },
+        }).ExecuteCommand();
+        return (live.Id, trashed.Id);
     }
 
     public async Task<List<Guid>> QueryIdsAsync(FilterNode? filter, string? search = null, DeletedFilter deleted = DeletedFilter.Exclude)
