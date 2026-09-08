@@ -127,6 +127,12 @@ checksum/down-migration/dry-run)——全部收錄於 **`db/migrations/README.md
 
 ## 啟動行為與失敗模式
 
+- **不變的文化特性（invariant culture），在其他一切之前設定：** `Program.cs` 在其頂層陳述式的最上方——
+  甚至早於 host 建立之前——就把 `CultureInfo.DefaultThreadCurrentCulture` 與 `DefaultThreadCurrentUICulture`
+  設為 `CultureInfo.InvariantCulture`：SqlSugar 會用行程目前的文化特性，重新解析一個查詢篩選條件已經
+  渲染好的字面值，因此兩邊必須一致，否則在非不變文化特性下，一個十進位或日期值可能會被靜默地解析成
+  錯誤的值。維運人員這裡不需要設定任何東西：不需要釘選 `LANG` 或 `DOTNET_SYSTEM_GLOBALIZATION_*`，
+  因為這個 API 本身的 JSON 輸出從來就不是依文化特性格式化的。
 - **快速失敗的選項驗證：** `Database`、`Struo:Files`、`Oidc`、`Query` 與 `Auth:Password` 都以
   `ValidateOnStart` 繫結；一個缺少的 `Database:ConnectionString`、一個缺少 `ClientId` 的
   `Oidc:Enabled=true` 設定，
