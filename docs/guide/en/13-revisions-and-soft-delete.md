@@ -341,6 +341,174 @@ create/update/list/view/revert cycle demonstrated above:
   above), so a revert against a currently-trashed row would still need an explicit `restore` afterward if
   the goal is a fully-live item at a past field state.
 
+## Reacting to writes: `IItemChangeListener`
+
+Both features above are opt-in for a fork's own collections. Orthogonal to either one is a write-side
+seam every write already flows through regardless: `IItemChangeListener`
+(`src/Struo.Application/Changes/IItemChangeListener.cs`), the interface a fork implements to react to
+content writes — synchronizing a search index, firing a webhook, invalidating a cache — without the
+core write path knowing anything about that fork's downstream system.
+
+### The contract
+
+A listener implements one method:
+
+```csharp
+Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default);
+```
+
+`ItemChange` (`src/Struo.Application/Changes/ItemChange.cs`) is a `record Collection, Id, Kind` triple,
+and `ItemChangeKind` (`src/Struo.Application/Changes/ItemChangeKind.cs`) has exactly five values:
+`Created`, `Updated`, `Trashed`, `Restored`, `Purged`. Which write path raises which kind:
+
+| Write path | Kind |
+|---|---|
+| Create (`ItemService.CreateAsync`) | `Created` |
+| Update, including a revert (`ItemService.UpdateCoreAsync`, `operation` `"update"` or `"revert"`) | `Updated` |
+| Trash (soft delete), only when the atomic trash `UPDATE` actually affected a row | `Trashed` |
+| Restore, only when the atomic restore `UPDATE` actually affected a row | `Restored` |
+| Purge — the purged row itself | `Purged` |
+| Purge — a descendant row reached via `OnDelete.Cascade` and itself deleted | `Purged` |
+| Purge — a live child row whose foreign key was set to null (`OnDelete.SetNull`) | `Updated` |
+| Purge — a live parent row that lost an inbound many-to-many link | `Updated` |
+| File upload (`FileService.UploadAsync`) | `Created` |
+| File trash (`FileService.TrashAsync`) | `Trashed` |
+| File restore (`FileService.RestoreAsync`) | `Restored` |
+| File purge (`FileService.DeleteAsync`) | `Purged` |
+
+A revert is an `Updated`, not its own kind — mechanically it *is* just another `UpdateCoreAsync` call
+(see above). An already-trashed row trashed again, or an already-live row restored again, is a no-op
+at the SQL level (zero rows affected, same gate the revision-capture table above uses) and raises
+**nothing** — idempotent trash/restore are silent, not a repeated `Trashed`/`Restored`.
+
+### Timing and failure semantics
+
+- **Post-commit.** A listener is called only after the write has committed — a listener reading the
+  affected row back sees the committed state, never an uncommitted one that might still roll back.
+- **Best-effort, never fails the write — but runs synchronously inside the request.**
+  `ItemChangeNotifier` (`src/Struo.Infrastructure/Changes/ItemChangeNotifier.cs`) calls every
+  registered listener in registration order inside its own `try`/`catch`: a throwing listener is
+  logged at `Error` (listener type name, batch size, a per-kind count summary) and the **next
+  listener still runs**. The write's *result* is decided before notification runs — it is already
+  determined by the point `NotifyAsync` is called — and a listener's success or failure cannot change
+  it; there is no retry. The converse does not hold, though: a listener having been called is not
+  proof the client saw success. A `user` trash or purge still runs session revocation *after*
+  notifying listeners, and that step can still fail the request with `SESSION_REVOCATION_FAILED`
+  (Chapter 12); a restore, too, re-reads the row *after* notifying, to build its
+  response. So "the listener ran" does not imply "the write, as the client experienced it, succeeded."
+  But the call is `await`ed inline, before the HTTP response is produced, so
+  listeners run one after another on the same request: a slow listener slows the write's response
+  time. That is the practical reason to queue work inside a listener rather than call a slow external
+  system inline — not durability, but latency. A fork that needs delivery to survive a listener crash
+  also queues durably inside its own listener (an outgoing outbox) — that is explicitly outside what
+  this seam provides.
+- **One call per write operation, not per item.** A single write raises exactly one
+  `NotifyAsync(IReadOnlyList<ItemChange>, ct)` call carrying every `ItemChange` that operation touched —
+  a purge cascade with a dozen affected rows is still one call with a dozen entries, not a dozen calls.
+- **`CancellationToken.None`.** The write already committed by the time `NotifyAsync` runs, so a
+  disconnecting caller must not also skip notifying listeners — a cancelled request token is never
+  threaded into this call.
+
+### Cascade coverage
+
+A purge's cascade is collected by `ItemPurgePipeline.PurgeCoreAsync`
+(`src/Struo.Application/Query/Write/ItemPurgePipeline.cs`) into one `ItemChangeSet`
+(`src/Struo.Application/Changes/ItemChangeSet.cs`) shared across every recursive call, so the whole
+cascade reaches the caller as a single batch:
+
+- Every row actually deleted — the purge target itself and every row reached via `OnDelete.Cascade` —
+  adds a `Purged` entry.
+- Every **live** row whose foreign key is about to be set to null (`OnDelete.SetNull`) is read
+  **before** that `UPDATE` runs and adds an `Updated` entry for itself; an already-trashed child is
+  skipped (it isn't in any index, and a later restore raises its own `Restored`).
+- Every **live** parent that loses an inbound many-to-many link when the target's junction rows are
+  deleted also adds an `Updated` entry — purging a tag, say, changes every live article that referenced
+  it, even though the article row itself was never written.
+- `ItemChangeSet` deduplicates by `(collection, id)` case-insensitively, with `Purged` always winning
+  over any other kind recorded for the same item — a row first reached as a `SetNull` target earlier in
+  the same cascade, then purged later in it, ends up in the batch once, as `Purged`.
+
+### Collection name and id form
+
+`ItemChange.Collection` is always the canonical collection name (`CollectionMetadata.Name`, e.g.
+`article`), never the raw route or query-string segment a client sent. `ItemChange.Id` is the primary
+key's string form, with a `Guid` id emitted lower-case.
+
+### What is, and is not, covered
+
+Raised for: ordinary item writes through the generic API — both REST (`ItemsController`, via
+`IItemUseCases`) and GraphQL (the generated mutations, via `IGraphQlDataSource` wrapping the same
+`ItemService` instance) end up calling the same `ItemService` methods described above, so both
+protocols raise identically — and file uploads/trash/restore/purge through `FilesController` /
+`FileService`.
+
+**Not** raised for: writes made through the dedicated identity endpoints —
+`UsersController` (accounts/credentials/tokens, via `IUserAccountStore`/`IUserCredentialStore`),
+`RolesController`'s permission-grant writes (via `IPermissionGrantStore`), and the auth/password
+flows — which bypass `ItemService` entirely; site settings; the many-to-many **inverse** side on an
+ordinary write (changing an article's `tags` does not notify the tag it added or removed — only a
+*purge*'s forced junction cleanup raises for the parent, as described above); and any write made
+outside this API entirely — a fork's own ETL or direct database access never goes through
+`ItemService`/`FileService`, so it never reaches a listener. The same `user`/`role`/`permission`/
+`userRole` collections written through the *generic* items API (`/api/items/{collection}`) instead —
+which the schema does allow — go through `ItemService` exactly like any other collection and **do**
+raise.
+
+### Registering a listener
+
+The notifier itself is always registered; listeners are not — a fork adds any number of its own:
+
+```csharp
+public sealed class SearchIndexListener(IMySearchIndex index) : IItemChangeListener
+{
+    public async Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default)
+    {
+        foreach (var change in changes)
+        {
+            if (change.Kind == ItemChangeKind.Purged)
+                await index.DeleteAsync(change.Collection, change.Id, ct);
+            else
+                await index.UpsertAsync(change.Collection, change.Id, ct);
+        }
+    }
+}
+```
+
+```csharp
+services.AddScoped<IItemChangeListener, SearchIndexListener>();
+```
+
+Listeners resolve as `IEnumerable<IItemChangeListener>` — unlike `ISearchProvider`'s single-slot
+`TryAddScoped`, any number can be registered, and registration order only decides the order they are
+called in, not whether they are. Register listeners scoped, as shown above; a **singleton** listener
+must not capture a scoped service in its constructor (a captive dependency) — keep its own
+dependencies singleton too, or resolve a scope per call via `IServiceScopeFactory`.
+
+With no listener registered, create/update/trash/restore add nothing beyond the write itself —
+`ItemChangeNotifier.NotifyAsync` returns immediately on an empty listener list. A **purge** is not
+quite free even then: `ItemService.DeleteAsync` always allocates an `ItemChangeSet`, and
+`ItemPurgePipeline.PurgeCoreAsync` always runs one extra typed read per inbound `OnDelete.SetNull`
+relation (`CollectSetNullUpdatesAsync`) and, per inbound many-to-many junction, **two** extra typed
+reads (`CollectInboundM2MUpdatesAsync`: the junction rows themselves, then a live-parent filter over
+the parent ids they named) — to know which live rows it is about to affect, whether or not any
+listener is registered to hear about it. Purging a widely-referenced target (a tag on 50k articles,
+say) therefore builds one `IN` clause over every one of those parent ids, and hands listeners a
+single synchronous batch of that size inside the request.
+
+### Observability, reconciliation, and re-entrancy
+
+This seam raises notifications; it does not track whether a listener's downstream effect actually
+landed. A fork whose listener depends on an external system (a search index, a webhook endpoint) is
+responsible for its own health monitoring — registering an `IHealthCheck` via `AddHealthChecks()` — and
+for its own reconciliation story if that system can drift out of sync; StruoCMS does not retry a failed
+`OnChangedAsync` call itself (an outbox for guaranteed delivery is a fork concern, not something this
+seam provides).
+
+A listener that itself writes through `ItemService` (e.g. appending to an audit-log collection) *is
+itself a write* and triggers further notifications — there is no re-entrancy guard against this. Design
+such a listener with that in mind (write to a collection nothing listens on, or otherwise avoid a cycle)
+rather than assuming the notifier suppresses recursive calls.
+
 ## Next steps
 
 - Chapter 8, [Query DSL](08-query-dsl.md), for `DeletedFilter`/`deleted=` as a general query-DSL concept,

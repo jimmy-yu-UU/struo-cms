@@ -147,6 +147,15 @@ Elasticsearch, PostgreSQL full-text, …). Unlike `IItemRepository` above, a sec
 implementation is exactly the intended way to extend this template — see chapter 8's
 [Search providers](08-query-dsl.md#search-providers) for the contract and a worked example.
 
+`IItemChangeListener` (`src/Struo.Application/Changes/IItemChangeListener.cs`) is the same kind of
+deliberately-handed seam: core ships no implementation at all (only the always-registered
+`ItemChangeNotifier`, which fans out to whatever a fork registers), so with nothing registered a write
+simply notifies zero listeners. A fork registers any number of its own — one to keep a search index in
+sync, another to fire a webhook — each reacting to the same post-commit batch of `ItemChange`s
+independently. See chapter 13's
+[Reacting to writes: `IItemChangeListener`](13-revisions-and-soft-delete.md#reacting-to-writes-iitemchangelistener)
+for the full contract.
+
 Practical consequence: a SqlSugar major-version upgrade, or a change in what an attribute like
 `[SugarIndex]` means, lands directly on every fork's entity classes — core does not, and cannot, absorb
 that change on a fork's behalf. Two DDL decisions that used to work this way no longer do: a bare
