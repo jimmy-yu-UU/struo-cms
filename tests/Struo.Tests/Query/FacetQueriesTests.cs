@@ -161,6 +161,45 @@ public class FacetQueriesTests : IDisposable
         _h.SeedEav();
         (await _h.FacetAsync("labels", Eq("name", "does-not-exist"))).Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Soft_deleted_relation_target_is_dropped_from_the_id_bucket()
+    {
+        var (crossRow, _, _, _) = _h.SeedEav();
+        var (live, trashed) = _h.SeedSoftLabels(crossRow);
+        await _h.Repo.SoftDeleteAsync("sqSoftLabel", trashed.ToString(), DateTime.UtcNow, null);
+
+        var b = await _h.FacetAsync("softLabels");
+
+        b.Select(x => x.Value).Should().Equal(live.ToString());
+    }
+
+    [Fact]
+    public async Task Soft_deleted_relation_target_is_dropped_from_the_leaf_bucket()
+    {
+        var (crossRow, _, _, _) = _h.SeedEav();
+        var (_, trashed) = _h.SeedSoftLabels(crossRow);
+        await _h.Repo.SoftDeleteAsync("sqSoftLabel", trashed.ToString(), DateTime.UtcNow, null);
+
+        var b = await _h.FacetAsync("softLabels.name");
+
+        b.Select(x => x.Value).Should().Equal("Alive");
+    }
+
+    [Fact]
+    public async Task A_deleted_with_root_query_still_drops_the_trashed_target_from_the_relation_facet()
+    {
+        // The related side never lifts the soft-delete filter, regardless of the outer request's
+        // `deleted=` mode — same contract as the existing many-to-one leaf case
+        // (Soft_deleted_roots_follow_the_deleted_mode) exercises for the ROOT side.
+        var (crossRow, _, _, _) = _h.SeedEav();
+        var (live, trashed) = _h.SeedSoftLabels(crossRow);
+        await _h.Repo.SoftDeleteAsync("sqSoftLabel", trashed.ToString(), DateTime.UtcNow, null);
+
+        var b = await _h.FacetAsync("softLabels", deleted: DeletedFilter.With);
+
+        b.Select(x => x.Value).Should().Equal(live.ToString());
+    }
 }
 
 // A second facet fixture — over the real sample Article/Category graph — pins down the translatable-leaf

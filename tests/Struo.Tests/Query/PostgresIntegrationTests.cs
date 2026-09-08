@@ -470,6 +470,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
             {
                 ["sqCategory"] = typeof(SqCategory), ["sqProduct"] = typeof(SqProduct), ["sqProperty"] = typeof(SqProperty),
                 ["sqLabel"] = typeof(SqLabel), ["sqProductLabel"] = typeof(SqProductLabel),
+                ["sqSoftLabel"] = typeof(SqSoftLabel), ["sqProductSoftLabel"] = typeof(SqProductSoftLabel),
             });
             var options = new StruoQueryOptions();
             var repo = new SqlSugarItemRepository(_db, registry, graph, metadata, options);

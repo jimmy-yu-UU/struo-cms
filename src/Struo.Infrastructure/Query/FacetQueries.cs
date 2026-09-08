@@ -65,14 +65,22 @@ internal sealed partial class FacetQueries(
             case FacetPathKind.ForeignKey:
                 return IdStrings(await GroupBuckets(rootQ, root.EntityType, root.Properties[facet.OwnField!].Name, root.IdProperty, false, request.MaxValues, ct));
             case FacetPathKind.Relation:
-                return IdStrings(await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct));
+            {
+                var idBuckets = await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct);
+                var target = RepositoryHelpers.Descriptor(registry, facet.Relation!.TargetCollection);
+                return IdStrings(await DropSoftDeletedTargets(idBuckets, target, ct));
+            }
             case FacetPathKind.RelationLeaf:
+            {
                 // Feed ByRelation's raw (Guid) id buckets straight into SwapLeafValues — the translation
                 // sidecar FK and the target PK are both Guid, so the dictionary keys built in
                 // LeafValuesAsync must stay Guid too. Calling IdStrings here first would turn every
                 // bucket's Value into a string and none of them would match.
-                var ids = await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct);
+                var idBuckets = await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct);
+                var target = RepositoryHelpers.Descriptor(registry, facet.Relation!.TargetCollection);
+                var ids = await DropSoftDeletedTargets(idBuckets, target, ct);
                 return await SwapLeafValues(ids, facet, request.QueryLocale, request.MaxValues, ct);
+            }
             default:
                 throw new InvalidOperationException($"Unknown facet kind {facet.Kind}.");
         }
