@@ -76,6 +76,30 @@ public sealed class JunctionPayloadWriteTests
     }
 
     [Fact]
+    public async Task Payload_field_shape_error_is_prefixed_with_the_relation_and_target_id()
+    {
+        using var h = new JunctionPayloadHarness();
+        var c1 = await h.CreateChildAsync("a");
+
+        var act = () => h.CreateParentAsync(new object[] { new { id = c1, weight = "" } });
+
+        (await act.Should().ThrowAsync<QueryException>())
+            .WithMessage($"Relation 'children', target '{c1}': Field 'weight' has an invalid value.");
+    }
+
+    [Fact]
+    public async Task Payload_MaxLength_error_is_prefixed_with_the_relation_and_target_id()
+    {
+        using var h = new JunctionPayloadHarness();
+        var c1 = await h.CreateChildAsync("a");
+
+        var act = () => h.CreateParentAsync(new object[] { new { id = c1, note = new string('x', 21) } });
+
+        (await act.Should().ThrowAsync<QueryException>())
+            .WithMessage($"Relation 'children', target '{c1}': Field 'note' exceeds maximum length 20.");
+    }
+
+    [Fact]
     public async Task Unknown_payload_keys_are_ignored_and_fks_cannot_be_overridden()
     {
         using var h = new JunctionPayloadHarness();
