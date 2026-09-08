@@ -127,4 +127,30 @@ public class ItemServiceFilesFieldTests : IDisposable
         var act = () => _svc.CreateAsync("filesthing", body);
         await act.Should().ThrowAsync<QueryException>(); // STJ JsonException -> QueryException (400), not 500
     }
+
+    [Fact]
+    public async Task Update_omitting_the_required_gallery_keeps_the_stored_value()
+    {
+        var created = await _svc.CreateAsync("filesthing", Body(new { requiredGallery = new[] { A } }));
+        var id = created["id"]!.ToString()!;
+
+        var updated = await _svc.UpdateAsync("filesthing", id, Body(new { gallery = new[] { B } }));
+
+        updated.Should().NotBeNull();
+        var requiredGallery = ((IEnumerable<Guid>)updated!["requiredGallery"]!).Select(g => g.ToString()).ToList();
+        requiredGallery.Should().Equal(A);
+        var gallery = ((IEnumerable<Guid>)updated["gallery"]!).Select(g => g.ToString()).ToList();
+        gallery.Should().Equal(B);
+    }
+
+    [Fact]
+    public async Task Update_sending_an_empty_array_for_the_required_gallery_is_rejected()
+    {
+        var created = await _svc.CreateAsync("filesthing", Body(new { requiredGallery = new[] { A } }));
+        var id = created["id"]!.ToString()!;
+
+        var act = () => _svc.UpdateAsync("filesthing", id, Body(new { requiredGallery = Array.Empty<string>() }));
+
+        await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'requiredGallery' is required.");
+    }
 }
