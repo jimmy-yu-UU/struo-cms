@@ -127,6 +127,15 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   `<Parent><Rel>Junction`, `<Parent><Rel>LinkInput`, `<rel>Links`) are the ordinary
   `Pascal`/`Camel` mechanical naming above, applied to the relation's owning collection and relation
   name (`SchemaTypeMapper.LinkTypeName`/`JunctionTypeName`/`LinkInputName`/`LinksFieldName`).
+- **`FormModel.relations` value shapes**: three possible shapes per relation name — a bare `string` for
+  a many-to-one, a `string[]` for a `tagSelect` relation whose junction carries neither payload nor a
+  `SortField`, or a `RelationLink[]` (`{ id, junction }`, `frontend/src/types/itemForm.ts`) for a
+  `tagSelect` relation with either. `usesLinksEditor` (`frontend/src/lib/junctionLinks.ts`) is the
+  single point that decides which shape a given relation uses, so `RelationInput`, `buildItemPayload`,
+  and `JunctionLinksEditor` never diverge on the question. `buildItemPayload` sends `{id, ...payload}`
+  object elements — rather than bare ids — only when three things all hold: the caller passed a
+  `resolveCollection`, the relation has at least one visible payload field, and `canWriteJunction`
+  (also `junctionLinks.ts`) returns true for it.
 
 ## Column type mapping
 

@@ -98,7 +98,8 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 schema、GraphQL 與項目投影之外的 `Hidden` 文字欄位。它還宣告了兩個關聯：`Category`(一個多對一的
 `Dropdown`，`OnDelete = SetNull`)與 `Tags`(一個透過 `ArticleTag` junction 建立的多對多
 `TagSelect`，藉由 `[Navigate(typeof(ArticleTag), ...)]`，並由
-`[CmsRelation(SortField = nameof(ArticleTag.Sort))]` 排序)。標題與內文**不在**這裡——它們位於
+`[CmsRelation(SortField = nameof(ArticleTag.Sort))]` 排序)，因此 Article 表單能就地編輯每個標籤的
+`Note` 與標籤順序 (第 7 章，管理後台 picker)。標題與內文**不在**這裡——它們位於
 翻譯附屬資料表上，接下來就會談到。
 
 ### `ArticleTranslation.cs`——翻譯附屬資料表

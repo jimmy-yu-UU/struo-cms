@@ -105,7 +105,8 @@ falls back to the raw value), `Audiences` (`CheckboxGroup`), `Keywords` (`Tags`,
 excluded from schema, GraphQL and item projections. It also declares two relations: `Category` (a
 many-to-one `Dropdown`, `OnDelete = SetNull`) and `Tags` (a many-to-many `TagSelect` through the
 `ArticleTag` junction, via `[Navigate(typeof(ArticleTag), ...)]`, ordered by
-`[CmsRelation(SortField = nameof(ArticleTag.Sort))]`). Title and body are **not** here — they live on
+`[CmsRelation(SortField = nameof(ArticleTag.Sort))]`), so the Article form edits each tag's `Note` and
+the tag order inline (chapter 7, Admin pickers). Title and body are **not** here — they live on
 the translation sidecar, next.
 
 ### `ArticleTranslation.cs` — the translation sidecar
