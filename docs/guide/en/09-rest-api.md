@@ -239,9 +239,9 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 
 Translatable `Required` fields are exempt from this section entirely — they validate per-locale inside
 the translation sidecar sync, not on the parent deserialize (see `ItemWriteSideSync` and chapter 6). A
-non-nullable `Guid` foreign key (e.g. `UserRole.RoleId`) has one more way to count as missing: the
-all-zero `Guid.Empty`, since a client can never send an actual `null` for a non-nullable value type —
-see chapter 4's `Required` field-attribute row.
+`Guid` `[CmsField]` (e.g. `UserRole.RoleId`) has one more way to count as missing: the all-zero
+`Guid.Empty` (a non-nullable one can never be sent as an actual `null` at all) — see chapter 4's
+`Required` field-attribute row.
 
 ## Authentication: cookie or bearer
 
