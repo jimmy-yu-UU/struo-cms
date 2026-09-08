@@ -87,4 +87,9 @@ describe('emptyLink / isRelationLinks', () => {
     expect(isRelationLinks(['a', 'b'])).toBe(false)
     expect(isRelationLinks(null)).toBe(false)
   })
+  it('rejects elements with a non-string id or a missing/null junction', () => {
+    expect(isRelationLinks([{ id: 1, junction: {} }])).toBe(false)
+    expect(isRelationLinks([{ id: 'a' }])).toBe(false)
+    expect(isRelationLinks([{ id: 'a', junction: null }])).toBe(false)
+  })
 })

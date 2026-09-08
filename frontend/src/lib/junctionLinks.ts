@@ -26,7 +26,6 @@ export function visiblePayloadFields(rel: RelationMeta, resolve: ResolveCollecti
   const wanted = new Set(names)
   return junction.fields
     .filter((f) => wanted.has(f.name) && !f.hidden)
-    .slice()
     .sort((a, b) => a.sort - b.sort)
 }
 
@@ -44,11 +43,12 @@ export function canReadJunction(rel: RelationMeta, access: JunctionAccess): bool
 
 // Mirrors the server's write-side gate (ItemWriteSideSync.EnsureJunctionPayloadGrant): write grant on
 // the junction collection, plus super-admin when it is AdminOnly. Read is a precondition because
-// without `_junction` in the response there is nothing truthful to edit.
+// without `_junction` in the response there is nothing truthful to edit. Checks junctionCollection,
+// canRead and canWrite inline (rather than delegating to canReadJunction) so the null narrowing on
+// `junction` is visible to the compiler without a cast.
 export function canWriteJunction(rel: RelationMeta, resolve: ResolveCollection, access: JunctionAccess): boolean {
-  if (!canReadJunction(rel, access)) return false
-  const junction = rel.junctionCollection as string
-  if (!access.canWrite(junction)) return false
+  const junction = rel.junctionCollection
+  if (!junction || !access.canRead(junction) || !access.canWrite(junction)) return false
   const meta = resolve(junction)
   return !(meta?.adminOnly === true && !access.isSuperAdmin)
 }
@@ -59,6 +59,21 @@ export function emptyLink(id: string, fields: FieldMeta[]): RelationLink {
   return { id, junction }
 }
 
+// Boundary guard against API-shaped data (repo rule: never trust external data). Narrows only when
+// every element truly has the RelationLink shape — a string id and a non-null, non-array junction
+// object — so a malformed element (numeric id, missing/null junction) falls through to `false` rather
+// than letting callers dereference `link.junction[...]` on `undefined`.
 export function isRelationLinks(v: unknown): v is RelationLink[] {
-  return Array.isArray(v) && v.every((x) => x !== null && typeof x === 'object' && 'id' in (x as object))
+  return (
+    Array.isArray(v) &&
+    v.every(
+      (x) =>
+        x !== null &&
+        typeof x === 'object' &&
+        typeof (x as { id?: unknown }).id === 'string' &&
+        typeof (x as { junction?: unknown }).junction === 'object' &&
+        (x as { junction?: unknown }).junction !== null &&
+        !Array.isArray((x as { junction?: unknown }).junction),
+    )
+  )
 }
