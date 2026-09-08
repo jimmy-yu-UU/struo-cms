@@ -304,7 +304,7 @@ none is ever surfaced client-side.
   text comes from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string. Sort is the
   other place SqlSugar's typed surface runs out: `OrderByExpressionBuilder`
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) is the sole source of the string
-  passed to the one `queryable.OrderBy(string)` call, at `SqlSugarItemRepository.cs:94`, and it
+  passed to the one `queryable.OrderBy(string)` call, in `SqlSugarItemRepository.RunQueryAsync`, and it
   assembles three per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as
   a correlated subquery with one JOIN per hop (`RelationOrderExpr`), and a translatable-field sort as
   a correlated subquery against the translation sidecar with the query locale embedded as an escaped
