@@ -150,12 +150,11 @@ public sealed class SubqueryPushdownHarness : IDisposable
     }
 
     public Task<IReadOnlyList<FacetBucket>> FacetAsync(string facet, FilterNode? filter = null, string? search = null,
-        DeletedFilter deleted = DeletedFilter.Exclude, int maxValues = 50, string collection = "sqProduct",
-        IReadOnlyList<object>? candidates = null)
+        DeletedFilter deleted = DeletedFilter.Exclude, int maxValues = 50, string collection = "sqProduct")
     {
         var meta = Metadata.GetCollection(collection)!;
         var resolved = FacetPathResolver.Resolve(meta, facet, Graph, Metadata);
-        var q = new QueryModel(null, FacetFilterPruner.Prune(filter, resolved), [], 100, 0, search) { SearchCandidates = candidates };
+        var q = new QueryModel(null, FacetFilterPruner.Prune(filter, resolved), [], 100, 0, search);
         return Repo.FacetAsync(new FacetRequest(collection, q, resolved, ["name"], null, deleted, maxValues));
     }
 
