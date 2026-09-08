@@ -456,9 +456,11 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         foreach (var t in SubqueryPushdownHarness.Types) _db.CodeFirst.InitTables(t);
         // Deterministic start (FK-safe order), in case a previous run was interrupted before DropTable.
         _db.Deleteable<SqProductLabel>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqProductSoftLabel>().Where(x => true).ExecuteCommand();
         _db.Deleteable<SqProperty>().Where(x => true).ExecuteCommand();
         _db.Deleteable<SqProduct>().Where(x => true).ExecuteCommand();
         _db.Deleteable<SqLabel>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<SqSoftLabel>().Where(x => true).ExecuteCommand();
         _db.Deleteable<SqCategory>().Where(x => true).ExecuteCommand();
 
         try
@@ -593,7 +595,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         }
         finally
         {
-            foreach (var name in new[] { "sq_product_labels", "sq_properties", "sq_products", "sq_labels", "sq_categories" })
+            foreach (var name in new[] { "sq_product_soft_labels", "sq_soft_labels", "sq_product_labels", "sq_properties", "sq_products", "sq_labels", "sq_categories" })
                 try { if (_db.DbMaintenance.IsAnyTable(name, false)) _db.DbMaintenance.DropTable(name); }
                 catch { /* best-effort cleanup */ }
         }

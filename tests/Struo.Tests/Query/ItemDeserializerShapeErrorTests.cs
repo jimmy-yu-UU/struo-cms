@@ -9,7 +9,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// <see cref="ItemDeserializer.DeserializeElement"/>'s field-level message when a JSON value is the
-/// wrong shape for its bound property (#14) — as opposed to <see cref="ItemDeserializerPartialTests"/>,
+/// wrong shape for its bound property — as opposed to <see cref="ItemDeserializerPartialTests"/>,
 /// which exercises <c>DeserializePartial</c>'s allowlist/presence contract, not this error path.
 /// </summary>
 public sealed class ItemDeserializerShapeErrorTests
