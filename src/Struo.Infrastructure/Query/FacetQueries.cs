@@ -79,7 +79,7 @@ internal sealed partial class FacetQueries(
                 // no-op there, so skip it rather than pay for a redundant query.
                 if (facet.Relation!.Kind != RelationKind.OneToMany)
                 {
-                    var target = RepositoryHelpers.Descriptor(registry, facet.Relation!.TargetCollection);
+                    var target = RepositoryHelpers.Descriptor(registry, facet.Relation.TargetCollection);
                     idBuckets = await DropSoftDeletedTargets(idBuckets, target, ct);
                 }
                 return IdStrings(idBuckets);
