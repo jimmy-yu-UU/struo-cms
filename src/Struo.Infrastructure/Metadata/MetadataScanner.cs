@@ -218,7 +218,7 @@ public static class MetadataScanner
     /// records (CollectionMetadata/RelationMetadata are immutable) — collections without any junction
     /// collection relation are returned as-is.
     /// </summary>
-    private static IReadOnlyList<CollectionMetadata> ResolveJunctionPayloadFields(
+    private static List<CollectionMetadata> ResolveJunctionPayloadFields(
         IReadOnlyList<CollectionMetadata> collections, IReadOnlyList<Type> types)
     {
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
@@ -233,7 +233,7 @@ public static class MetadataScanner
     }
 
     private static RelationMetadata WithJunctionPayloadFields(
-        RelationMetadata r, Type ownerType, IReadOnlyDictionary<string, CollectionMetadata> byName)
+        RelationMetadata r, Type ownerType, Dictionary<string, CollectionMetadata> byName)
     {
         if (r.JunctionCollection is null || !byName.TryGetValue(r.JunctionCollection, out var junction)) return r;
         var prop = ownerType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
