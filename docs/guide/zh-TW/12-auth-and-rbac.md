@@ -229,7 +229,7 @@ Core claim-type 名稱)，並從 userinfo 端點取得額外的 claim。在 `Oid
 
 | 集合 | 資料表 | 主要欄位 | 備註 |
 |---|---|---|---|
-| `user` | `users` | `email`(唯一)、`password`(Argon2id 雜湊，`Hidden`+`ReadOnly`)、`name`、`isActive`、`accessToken`(bearer token 的 SHA-256，`Hidden`+`ReadOnly`) | `Roles` 是一個透過 `userRole` junction 與 `role` 建立的多對多 `TagSelect`——在 User 表單上以標籤選取角色名稱的方式編輯，而不是手動建立 junction 資料列。 |
+| `user` | `users` | `email`(唯一)、`password`(Argon2id 雜湊，`Hidden`+`ReadOnly`)、`name`、`isActive`、`accessToken`(bearer token 的 SHA-256，`Hidden`+`ReadOnly`) | `Roles` 是一個透過 `userRole` junction 與 `role` 建立的多對多 `TagSelect`——在 User 表單上以標籤選取角色名稱的方式編輯，而不是手動建立 junction 資料列。`userRole` 沒有 payload，也沒有 `SortField`，所以仍然是普通的標籤 picker (第 7 章，管理後台 picker)。 |
 | `role` | `roles` | `name`(唯一)、`isSuperAdmin`、`description` | `isSuperAdmin = true` 會讓每一項權限檢查直接短路為全部允許(見下方的 `EffectivePermissions`)。 |
 | `permission` | `permissions` | `roleId`、`collection`、`canRead`、`canWrite`、`canDelete` | 在 `(roleId, collection)` 上唯一；`Hidden`(沒有專屬的管理後台畫面——只能透過下方的角色權限矩陣編輯)。 |
 | `userRole` | `user_roles` | `userId`、`roleId` | 在 `(userId, roleId)` 上唯一；`Hidden`，純粹的 junction。 |

@@ -90,4 +90,16 @@ describe('SortableList', () => {
     expect(btns).toHaveLength(6) // 3 rows x 2 controls
     for (const btn of btns) expect(btn.attributes('type')).toBe('button')
   })
+
+  it('hides both arrows when reorderable is false and keeps them by default', () => {
+    const w = mount(RowSortableList, {
+      props: { modelValue: ROWS, itemKey: (r: Row) => r.id, reorderable: false },
+      slots: { item: '<template #item="{ item }"><span class="row-name">{{ item.name }}</span></template>' },
+      ...opts,
+    })
+    expect(w.findAll('[data-testid="move-up"]')).toHaveLength(0)
+    expect(w.findAll('[data-testid="move-down"]')).toHaveLength(0)
+    expect(w.findAll('.row-name')).toHaveLength(3)
+    expect(mountList().findAll('[data-testid="move-up"]')).toHaveLength(3)
+  })
 })

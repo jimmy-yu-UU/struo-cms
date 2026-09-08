@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
 import RelationInput from './RelationInput.vue'
 import RelationPicker from './RelationPicker.vue'
 import RelatedList from './RelatedList.vue'
+import JunctionLinksEditor from './JunctionLinksEditor.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -12,7 +13,10 @@ import type { RelationMeta, CollectionMeta } from '../../types/schema'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { loadOptionsFailed: 'Failed to load options.', noRelatedItems: 'No related items.' } } },
+  messages: { en: { fields: {
+    loadOptionsFailed: 'Failed to load options.', noRelatedItems: 'No related items.',
+    noItems: 'No items', removeOption: 'Remove {label}',
+  } } },
 })
 
 const push = vi.fn()
@@ -87,6 +91,19 @@ describe('RelationInput', () => {
     const picker = w.findComponent(RelationPicker)
     expect(picker.exists()).toBe(true)
     expect(picker.props('multiple')).toBe(true)
+  })
+
+  it('dispatches a payload-bearing tagSelect to JunctionLinksEditor', () => {
+    const { schema } = setupStores()
+    const junction: CollectionMeta = { name: 'articleTag', label: 'Article tag', relations: [], fields: [
+      { name: 'note', label: 'Note', interface: 'text', required: false, searchable: false, sortable: false,
+        readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false } ] }
+    schema.get = vi.fn((n: string) => (n === 'articleTag' ? junction : targetMeta)) as never
+    const w = mount(RelationInput, {
+      props: { relation: rel({ interface: 'tagSelect', kind: 'manyToMany', junctionCollection: 'articleTag', junctionPayloadFields: ['note'] }), modelValue: [] },
+      global: { plugins: [i18n], stubs },
+    })
+    expect(w.findComponent(JunctionLinksEditor).exists()).toBe(true)
   })
 
   it('dispatches treeSelect interface to RelationPicker as tree with excludeId', () => {

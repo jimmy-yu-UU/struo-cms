@@ -32,11 +32,11 @@ i18n、欄位編輯器、品牌設定，以及開發伺服器如何連到 API—
 |---|---|
 | `api/` | 每個 REST 資源各有一個薄模組——`apiClient.ts` 是共用、能理解信封格式的 fetch 包裝器；`itemsApi.ts`、`schemaApi.ts`、`filesApi.ts`、`languagesApi.ts`、`rbacApi.ts`、`settingsApi.ts`、`appConfigApi.ts`——都是型別化呼叫，不含任何商業邏輯。 |
 | `assets/` | `theme.css`——這個應用程式沒有分層 (unlayered) 的全域樣式層：第一方 scoped CSS 所讀取的頁面/表面/前景色以及狀態/陰影/遮罩/字型自訂屬性(`--bg`、`--surface`、`--fg`、`--warn`、`--danger`、`--shadow-*`、`--overlay`、`--font`、`--mono`……)，加上 `html`/`body` 重設、主題切換轉場規則，以及 `.app-breadcrumb`。`tokens.css`——Tailwind v4 的進入點(`@import "tailwindcss"`)，以及供應商 `ui/` 元件與 Tailwind utility 兩者共同讀取的 shadcn 語意 token 層(`--background`、`--primary`、`--radius`……)。 |
-| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章)、`common/`(`PageHeader`、`ListToolbar`——都是純 Tailwind/shadcn 元件；`MediaLibraryView` 使用 `ListToolbar` 作為搜尋框與篩選插槽，而 `CollectionListView` 則是建構在 `data/` 的基元之上)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`media/`、`revisions/`、`rbac/`。 |
+| `components/` | 直接位於 `components/` 底下的 `ItemForm.vue`(生成出來的項目表單)，加上 `ui/`(供應商 shadcn 原子元件——`button`、`table`、`select`、`dialog`、`sidebar`……——生成輸出；**唯讀**，不得編輯、也不得對它 `:deep()`)、`data/`(`DataTable`、`SortableHeader`、`DataTablePagination`、`FilterBuilder`——`CollectionListView` 賴以建構的 TanStack-table 列表基元)、`fields/`(每個欄位介面各一個編輯器元件，第 5 章，另外還有用於帶 payload 或可排序多對多關聯的 `JunctionLinksEditor`，第 7 章)、`common/`(`PageHeader`、`ListToolbar`——都是純 Tailwind/shadcn 元件；`MediaLibraryView` 使用 `ListToolbar` 作為搜尋框與篩選插槽，而 `CollectionListView` 則是建構在 `data/` 的基元之上)、`shell/`(topbar、側邊欄導覽項目、主題切換器、UI 語言切換器、品牌標誌)、`media/`、`revisions/`、`rbac/`。 |
 | `composables/` | 跨切面的響應式邏輯，例如 `useConfirm.ts`。 |
 | `i18n/` | `index.ts`——`vue-i18n` 執行個體(`legacy: false`)，接到 `locales/`。 |
 | `layouts/` | `AppShell.vue`——每個已驗證路由都渲染於其中的 topbar + 側邊欄 + 內容格線。 |
-| `lib/` | 不依賴框架的輔助函式：`fieldTypes/`(欄位型別註冊表，下方)，加上 view 與欄位元件共用的格式化/驗證/查詢輔助函式。 |
+| `lib/` | 不依賴框架的輔助函式：`fieldTypes/`(欄位型別註冊表，下方)，加上 view 與欄位元件共用的格式化/驗證/查詢輔助函式，以及 `junctionLinks.ts`(列表編輯器背後共用的邏輯，第 7 章)。 |
 | `locales/` | `en.ts` / `zh-TW.ts`——管理 UI 自身的訊息目錄，有別於內容語言(第 6 章)。 |
 | `router/` | `index.ts`(路由)、`guard.ts`(驗證/權限導覽守衛)。 |
 | `stores/` | Pinia store：`authStore`、`appConfigStore`、`schemaStore`、`themeStore`、`uiLocaleStore`、`sidebarStore`、`languageStore`。 |
