@@ -481,6 +481,23 @@ describe('RelationPicker', () => {
     expect(items[1].attributes('aria-selected')).toBe('true')
   })
 
+  // "live" (not the plain "stubs") so the trigger's own count text actually renders: Combobox is
+  // itself named "Combobox" and auto-stubbed by "stubs", and an auto-stub does not render its
+  // default slot (renderStubDefaultSlot defaults to false) -- with the plain "stubs" global this
+  // assertion would see an empty trigger regardless of showChips. The chip assertion is
+  // unaffected either way, since the chip row sits outside <Combobox>, as a sibling.
+  it('multiple: showChips=false renders no chips but keeps the trigger count', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'c1', name: 'One' }, { id: 'c2', name: 'Two' }], total: 2 })
+    const w = mount(RelationPicker, {
+      props: { relation: { ...relation, interface: 'tagSelect', kind: 'manyToMany' }, modelValue: ['c1'], multiple: true, showChips: false },
+      global: live,
+    })
+    await flushPromises()
+    expect(w.findAll('[data-slot="badge"]')).toHaveLength(0)
+    expect(w.text()).toContain('1 selected')
+  })
+
   it('folds the selected count into the multi-select trigger\'s accessible name', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({

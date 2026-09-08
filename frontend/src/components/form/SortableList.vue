@@ -4,11 +4,14 @@ import { Button } from '@/components/ui/button'
 import { ArrowDown, ArrowUp } from '@lucide/vue'
 import { reorder } from './sortableReorder'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: T[]
   itemKey: (item: T, index: number) => string
   disabled?: boolean
-}>()
+  // false hides the arrows entirely (a relation without a SortField has no order to edit --
+  // disabled arrows would wrongly advertise one); the list then only supplies the per-row shell.
+  reorderable?: boolean
+}>(), { reorderable: true })
 const emit = defineEmits<{ (e: 'update:modelValue', v: T[]): void }>()
 defineSlots<{ item(props: { item: T; index: number }): unknown }>()
 const { t } = useI18n()
@@ -33,34 +36,36 @@ function move(from: number, to: number): void {
       <div class="min-w-0 flex-1">
         <slot name="item" :item="item" :index="i" />
       </div>
-      <!--
-        type="button" is load-bearing: this list is dispatched inside ItemForm.vue's
-        <form @submit.prevent>, and a native <button> defaults to type="submit" -- an untyped
-        control here would save the whole record on every reorder click instead of just
-        reordering this field's local array.
-      -->
-      <Button
-        type="button"
-        data-testid="move-up"
-        variant="ghost"
-        size="icon"
-        :disabled="disabled || i === 0"
-        :aria-label="t('fields.moveUp')"
-        @click="move(i, i - 1)"
-      >
-        <ArrowUp class="size-4" />
-      </Button>
-      <Button
-        type="button"
-        data-testid="move-down"
-        variant="ghost"
-        size="icon"
-        :disabled="disabled || i === modelValue.length - 1"
-        :aria-label="t('fields.moveDown')"
-        @click="move(i, i + 1)"
-      >
-        <ArrowDown class="size-4" />
-      </Button>
+      <template v-if="reorderable">
+        <!--
+          type="button" is load-bearing: this list is dispatched inside ItemForm.vue's
+          <form @submit.prevent>, and a native <button> defaults to type="submit" -- an untyped
+          control here would save the whole record on every reorder click instead of just
+          reordering this field's local array.
+        -->
+        <Button
+          type="button"
+          data-testid="move-up"
+          variant="ghost"
+          size="icon"
+          :disabled="disabled || i === 0"
+          :aria-label="t('fields.moveUp')"
+          @click="move(i, i - 1)"
+        >
+          <ArrowUp class="size-4" />
+        </Button>
+        <Button
+          type="button"
+          data-testid="move-down"
+          variant="ghost"
+          size="icon"
+          :disabled="disabled || i === modelValue.length - 1"
+          :aria-label="t('fields.moveDown')"
+          @click="move(i, i + 1)"
+        >
+          <ArrowDown class="size-4" />
+        </Button>
+      </template>
     </li>
   </ul>
 </template>
