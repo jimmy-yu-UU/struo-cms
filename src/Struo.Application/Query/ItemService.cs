@@ -221,9 +221,9 @@ public sealed class ItemService(
         // the loops below), so a Required field this body omits must not fail on the freshly-parsed
         // `incoming` alone; the Required check re-runs against the merged `existing` entity below.
         var incoming = deserializer.DeserializeForUpdate(collection, body, meta);
-        var bodyKeys = body.ValueKind == JsonValueKind.Object
-            ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
+        // silently drift apart on what counts as "the client sent this key".
+        var bodyKeys = ItemDeserializer.PresentNames(body);
         foreach (var field in meta.Fields)
         {
             if (field.IsSystem || field.ReadOnly) continue;
@@ -255,9 +255,13 @@ public sealed class ItemService(
         // Required check runs here — against the MERGED entity, after both overlay loops above —
         // rather than while deserializing `incoming`: an omitted Required field keeps whatever
         // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
-        // field still 400s with the same message CREATE uses. A revert (operation == "revert")
-        // passes a full snapshot as its body, so every field is re-sent and this check is
-        // unaffected by the special-cased includeDeleted below.
+        // field still 400s with the same message CREATE uses. Required is also evaluated LAST here:
+        // MaxLength and the per-interface validator phases already ran on `incoming` inside
+        // DeserializeForUpdate above, before this line is ever reached, so a body that violates both
+        // one of those rules AND Required (on the merged entity) reports the earlier failure — which
+        // can differ from what CREATE (Required checked first) would report for the identical shape.
+        // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
+        // the same values a full PUT would.
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
 
         // Self-referencing tree collections: reject a parentId that points at the item itself or
