@@ -301,7 +301,16 @@ none is ever surfaced client-side.
   exactly four SQL string forms and nothing else — `<col> IN (<sql>)`, `<col> NOT IN (<sql>)`,
   `(<col> IS NULL OR <col> NOT IN (<sql>))` (`SubQueryConditional.cs`), and the OR-merge of two or more
   of those, `(<sql1> OR <sql2> OR …)` (`OrOfSubqueriesConditional.cs`) — every other fragment of SQL
-  text comes from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string. See
+  text comes from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string. Sort is the
+  other place SqlSugar's typed surface runs out: `OrderByExpressionBuilder`
+  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) is the sole caller of
+  `queryable.OrderBy(string)` (`SqlSugarItemRepository.cs`), and it assembles exactly three forms — a
+  plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated subquery with one JOIN
+  per hop (`RelationOrderExpr`), and a translatable-field sort as a correlated subquery against the
+  translation sidecar with the query locale embedded as an escaped string literal
+  (`TranslatableOrderExpr`; the locale has already passed `ItemService.ValidateLocale`). Every table
+  and column name in all three forms comes from `db.EntityMaintenance.GetDbColumnName`/`GetTableName`.
+  This is the fourth of `AGENTS.md`'s four raw-SQL exceptions — see
   `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting,
   unknown paths, and the depth cap". `facets=`/`aggregate[<op>]=` (chapter 8's "Facets and aggregates")
   are validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
