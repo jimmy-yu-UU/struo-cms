@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildItemPayload } from './buildItemPayload'
-import type { CollectionMeta, FieldMeta, LanguageInfo } from '../types/schema'
+import type { CollectionMeta, FieldMeta, RelationMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
 function field(name: string, over: Partial<FieldMeta> = {}): FieldMeta {
@@ -131,5 +131,38 @@ describe('buildItemPayload relations', () => {
     const payload = buildItemPayload(meta, model, langs, 'update')
     expect(payload.categoryId).toBeNull()
     expect(payload.tags).toEqual([])
+  })
+})
+
+describe('buildItemPayload junction links', () => {
+  const tagsRel: RelationMeta = { name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect',
+    foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false,
+    junctionCollection: 'articleTag', junctionPayloadFields: ['note', 'weight', 'secret'], sortField: 'sort' }
+  const rolesRel: RelationMeta = { ...tagsRel, name: 'roles', label: 'Roles', targetCollection: 'role',
+    junctionCollection: 'userRole', junctionPayloadFields: null, sortField: null }
+  const articleMeta: CollectionMeta = { name: 'article', label: 'Article', fields: [field('status')], relations: [tagsRel, rolesRel] }
+  const junctionMeta: CollectionMeta = { name: 'articleTag', label: 'Article tag', relations: [], fields: [
+    field('articleId', { interface: 'uuid' }), field('tagId', { interface: 'uuid' }),
+    field('note', { sort: 1, maxLength: 5, required: true }), field('weight', { interface: 'number', sort: 2 }),
+    field('secret', { hidden: true }), field('sort', { interface: 'number' }),
+  ] }
+  const resolve = (n: string) => (n === 'articleTag' ? junctionMeta : undefined)
+  const junctionLocales: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
+
+  const model: FormModel = { shared: { status: 'draft' }, translations: {}, version: 3,
+    relations: { tags: [{ id: 't1', junction: { note: 'x', weight: 2 } }, { id: 't2', junction: { note: '', weight: null } }], roles: ['r1'] } }
+  it('sends {id, ...payload} objects in order when the junction is writable', () => {
+    const p = buildItemPayload(articleMeta, model, junctionLocales, 'update', { resolveCollection: resolve, canWriteJunction: () => true })
+    expect(p.tags).toEqual([{ id: 't1', note: 'x', weight: 2 }, { id: 't2', note: '', weight: null }])
+    expect(p.roles).toEqual(['r1'])
+  })
+  it('sends bare ids when the junction is not writable, and without options', () => {
+    expect(buildItemPayload(articleMeta, model, junctionLocales, 'update', { resolveCollection: resolve, canWriteJunction: () => false }).tags).toEqual(['t1', 't2'])
+    expect(buildItemPayload(articleMeta, model, junctionLocales, 'update').tags).toEqual(['t1', 't2'])
+  })
+  it('sends bare ids for a sortField-only relation even when writable (the server rejects objects there)', () => {
+    const sortOnly: CollectionMeta = { ...articleMeta, relations: [{ ...tagsRel, junctionPayloadFields: null }] }
+    const m: FormModel = { ...model, relations: { tags: [{ id: 't2', junction: {} }, { id: 't1', junction: {} }] } }
+    expect(buildItemPayload(sortOnly, m, junctionLocales, 'update', { resolveCollection: resolve, canWriteJunction: () => true }).tags).toEqual(['t2', 't1'])
   })
 })
