@@ -77,7 +77,7 @@ public class FileServiceSoftDeleteTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, _storage, new NoopImages(), new FileStorageOptions(), repo, new StubLanguages(),
+            _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), repo, new StubLanguages(),
             new TestCurrentUserAccessor(Tester));
     }
 

@@ -386,6 +386,15 @@ row entirely, so there is nothing left for any `deleted=` mode to find.)
 The purged file's blob was confirmed removed from `App_Data/uploads` on disk (no orphaned file under
 its storage key remained).
 
+Upload, trash, restore and purge — `FileService`'s four write paths (upload is [above](#upload)) —
+each also raise a post-commit `IItemChangeListener` notification (`Created`/`Trashed`/`Restored`/
+`Purged` respectively) through the same `FileService`, since `FileService` bypasses `ItemService`
+entirely and so raises its own. Trashing or purging the file that is the current brand logo clears
+`site_settings.logofileid` in the same transaction as the trash/purge (see above) but raises nothing
+for site settings itself — only the `Trashed`/`Purged` change for the file row. See chapter 13's
+[Reacting to writes: `IItemChangeListener`](13-revisions-and-soft-delete.md#reacting-to-writes-iitemchangelistener)
+for the full contract.
+
 ## Next steps
 
 - Chapter 3, [Configuration Reference](03-configuration-reference.md), for every `Struo:Files:*` key's

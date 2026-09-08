@@ -1,6 +1,7 @@
 // tests/Struo.Tests/Query/PurgeIntegrityTests.cs
 using System.Text.Json;
 using SqlSugar;
+using Struo.Application.Changes;
 using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Query;
@@ -108,11 +109,17 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
 
+    /// <summary>The SQLite connection string backing this harness's DB file — lets a test open a
+    /// genuinely separate <c>ISqlSugarClient</c> on the same file (e.g. to prove a listener runs
+    /// post-commit: only a second connection can discriminate "row visible" from "same-connection
+    /// read", since the latter would see an uncommitted row too).</summary>
+    public string ConnectionString => _file.ConnectionString;
+
     /// <summary>The real revision store — always DB-backed, even when <see cref="Service"/> itself
     /// was wired with a throwing wrapper around it (rollback-atomicity test).</summary>
     public IRevisionStore RevisionStore { get; }
 
-    private PurgeIntegrityHarness(bool failDeleteRevision)
+    private PurgeIntegrityHarness(bool failDeleteRevision, IItemChangeNotifier? notifier)
     {
         var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
@@ -160,10 +167,12 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         RevisionStore = realStore;
         Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
+            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService(),
+            notifier: notifier);
     }
 
-    public static PurgeIntegrityHarness Create(bool failDeleteRevision = false) => new(failDeleteRevision);
+    public static PurgeIntegrityHarness Create(bool failDeleteRevision = false, IItemChangeNotifier? notifier = null) =>
+        new(failDeleteRevision, notifier);
 
     public void Dispose() => _file.Dispose();
 

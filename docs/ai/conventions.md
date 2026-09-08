@@ -272,6 +272,14 @@ exception's own `Message`, since a fork's `ISearchProvider` may put an internal 
 that message — it is logged server-side at `Warning` (both `StruoExceptionHandler` and GraphQL's
 `StruoErrorFilter`) and never reaches the response.
 
+A registered `IItemChangeListener` (`src/Struo.Application/Changes/IItemChangeListener.cs`) that throws
+follows a different rule from every exception above: it never reaches `DomainErrorMap` or the envelope
+at all. `ItemChangeNotifier` (`src/Struo.Infrastructure/Changes/ItemChangeNotifier.cs`) catches it
+directly, logs it at `Error`, and moves on to the next listener — the write already committed before
+notification ran, so the response the caller receives is exactly what it would have been with no
+listener registered (or a listener that succeeded). There is no error code for a listener failure and
+none is ever surfaced client-side.
+
 ## Input validation at boundaries
 
 - **Query DSL** (filter/sort/search/fields/deep/facets/aggregate paths): validated and whitelisted by
