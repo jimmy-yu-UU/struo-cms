@@ -331,10 +331,12 @@ resolvers guard against this with `SentFieldsOnly`, which re-derives the *actual
 the request's own argument literal (recursing into nested inputs — a Repeater/Translation sub-object —
 so an omitted nested field isn't backfilled either) before handing the pruned dictionary to
 `ItemService`, whose own `bodyKeys` merge (chapter 9) then overlays only those keys onto the existing
-row. **The `Required`-field caveat chapter 9 documents applies identically here**: `ItemDeserializer`
-still validates every `Required` field against the pruned-but-still-freshly-parsed body, so a `Required`
-field must be resent on every `updateX`, or the mutation fails with `BAD_USER_INPUT` — this is not a
-REST-vs-GraphQL difference, it's the same shared write path:
+row. **Chapter 9's `Required`-field semantics apply identically here**: the pruned dictionary only
+carries the keys `SentFieldsOnly` found in the request literal, and `ItemService.UpdateCoreAsync`
+validates `Required` against the entity that merge produces (chapter 9), not against the raw input — so
+`updateRole` can omit `name` (`Required=true`) and still succeed, keeping the role's stored name, while
+explicitly sending `name: null` still fails with `BAD_USER_INPUT`. This is not a REST-vs-GraphQL
+difference, it's the same shared write path:
 
 ```
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
@@ -343,7 +345,7 @@ $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/js
 
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
     -d '{"query":"mutation { updateRole(id: \"<id>\", input: { description: \"Updated via GraphQL\" }) { id name description } }"}'
-{"errors":[{"message":"Field 'name' is required.","path":["updateRole"],"extensions":{"code":"BAD_USER_INPUT"}}],"data":{"updateRole":null}}
+{"data":{"updateRole":{"id":"...","name":"Reviewer","description":"Updated via GraphQL"}}}
 
 $ curl -s -X POST http://localhost:5221/graphql -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt \
     -d '{"query":"mutation { deleteRole(id: \"<id>\") }"}'
