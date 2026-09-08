@@ -201,7 +201,7 @@ public class ItemServiceRepeaterTests : IDisposable
         var created = await _svc.CreateAsync("repeaterthing", Body(new { requiredFaqs = new[] { OneRequired } }));
         var id = created["id"]!.ToString()!;
 
-        var act = () => _svc.UpdateAsync("repeaterthing", id, Body(new { requiredFaqs = new object[0] }));
+        var act = () => _svc.UpdateAsync("repeaterthing", id, Body(new { requiredFaqs = Array.Empty<object>() }));
 
         await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'requiredFaqs' is required.");
     }

@@ -258,7 +258,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // the body's OrdinalIgnoreCase present-key set for update/partial binds (a field the body never
     // mentioned is skipped entirely — see DeserializeCore).
     private void RunPerInterfaceValidators(
-        CollectionMetadata meta, EntityDescriptor d, object entity, IReadOnlySet<string>? presentNames)
+        CollectionMetadata meta, EntityDescriptor d, object entity, HashSet<string>? presentNames)
     {
         foreach (var (interfaces, validators) in validatorRegistry.Phases)
         {
