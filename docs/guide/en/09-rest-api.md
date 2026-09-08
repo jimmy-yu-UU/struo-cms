@@ -220,10 +220,14 @@ cleared.** `ItemService.UpdateCoreAsync`'s "only overlay fields the client sent"
 from the existing row, and the Required check now runs against that **merged** entity rather than the
 freshly parsed request body: a `Required` field this `PUT` simply omits keeps its stored value and the
 write succeeds, while sending it explicitly as `null` or a whitespace-only string still fails with
-`BAD_USER_INPUT` — that is a genuine attempt to blank the field, not an absent key. Create is unaffected
-either way: `ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`)
-still validates every `Required` field against the freshly parsed body there, since there is no existing
-row to merge with:
+`BAD_USER_INPUT` — that is a genuine attempt to blank the field, not an absent key. This applies
+identically to every field interface, including a Required list/map field (`Files`, `KeyValue`,
+`MultiSelect`/`CheckboxGroup`, `Tags`, `Repeater`): an omitted one keeps its stored value, but one the
+body DOES send — including an explicit empty `[]`/`{}` — still runs its full validator and can still
+fail Required with the same `Field '<name>' is required.` message. Create is unaffected either way:
+`ItemDeserializer.Deserialize` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) still
+validates every `Required` field against the freshly parsed body there, since there is no existing row
+to merge with:
 
 ```
 $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: application/json" -H "X-Struo-CSRF: 1" -b cookies.txt -d '{"description":"partial update, no name"}'
