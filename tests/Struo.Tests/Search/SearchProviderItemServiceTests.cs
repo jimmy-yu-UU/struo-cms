@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AwesomeAssertions;
+using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Query;
 using Struo.Application.Search;
@@ -20,6 +21,7 @@ namespace Struo.Tests.Search;
 public sealed class SearchProviderItemServiceTests : IDisposable
 {
     private readonly SqliteTestDatabase _file = new();
+    private readonly ISqlSugarClient _db;
     private readonly List<string> _sql = [];
     private readonly LanguageProvider _languages;
     private Func<SearchRequest, SearchOutcome> _script = _ => SearchOutcome.NotHandled;
@@ -30,7 +32,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
 
     public SearchProviderItemServiceTests()
     {
-        var db = SqlSugarClientFactory.Create(
+        var db = _db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
@@ -73,7 +75,13 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         return (string)_svc.CreateAsync("category", body.RootElement).GetAwaiter().GetResult()["id"]!.ToString()!;
     }
 
-    public void Dispose() => _file.Dispose();
+    // Dispose the SqlSugarClient's own connection before deleting the underlying SQLite file —
+    // an undisposed connection can hold the file locked on Windows, making the file cleanup flaky.
+    public void Dispose()
+    {
+        _db.Dispose();
+        _file.Dispose();
+    }
 
     private static QueryModel Q(string? search, FilterNode? filter = null) => new(null, filter, [], 25, 0, search);
 
