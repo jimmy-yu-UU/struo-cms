@@ -187,6 +187,45 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Candidates_restrict_a_to_many_facets_buckets_to_the_candidate_rows()
+    {
+        // "articles" is category's O2M relation (Category.Articles, reverse of Article.CategoryId) —
+        // a to-many facet path, unlike every other facet exercised in this file. One article under
+        // Alpha, one under Beta: with no candidate restriction both show up; restricting the
+        // candidate set to Alpha alone must drop Beta's article from the bucket count entirely, not
+        // merely from the paginated category rows/total (which the sibling candidate tests above
+        // already cover for an own-field facet) — this is the assertion that fails if a to-many
+        // facet ever stopped honouring the candidate set.
+        var articleInAlpha = await CreateArticle(_alpha);
+        var articleInBeta = await CreateArticle(_beta);
+        // "a" (lowercase, case-insensitive LIKE) matches every seeded category name (Alpha/Beta/
+        // Gamma) so the unrestricted call's own LIKE fallback does not itself narrow the root rows —
+        // the only thing that should narrow them below is the candidate restriction.
+        var q = Q("a") with { Facets = ["articles"] };
+
+        _script = _ => SearchOutcome.NotHandled;
+        var unrestricted = await _svc.QueryAsync("category", q);
+        unrestricted.Facets!.Single().Values.Select(b => (string?)b.Value)
+            .Should().BeEquivalentTo([articleInAlpha, articleInBeta]);
+
+        _script = _ => SearchOutcome.Candidates([_alpha]);
+        var restricted = await _svc.QueryAsync("category", q);
+        restricted.Facets!.Single().Values.Select(b => (string?)b.Value)
+            .Should().Equal(articleInAlpha);
+    }
+
+    private async Task<string> CreateArticle(string categoryId)
+    {
+        // $$$$ (four dollars): the JSON ends in three consecutive closing braces
+        // ("...{"title":"t"}}}"), which a 3-dollar raw interpolated string cannot disambiguate from
+        // an interpolation-close (CS9007) — same fix as ItemServiceChangeNotificationTests.
+        using var body = JsonDocument.Parse(
+            $$$$"""{"status":"draft","categoryId":"{{{{categoryId}}}}","translations":{"en":{"title":"t"}}}""");
+        var dict = await _svc.CreateAsync("article", body.RootElement);
+        return dict["id"]!.ToString()!;
+    }
+
+    [Fact]
     public async Task Provider_contract_violations_surface_as_InvalidOperationException()
     {
         _options.MaxSearchCandidates = 1;
