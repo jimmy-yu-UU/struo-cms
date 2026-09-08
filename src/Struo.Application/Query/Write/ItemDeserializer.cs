@@ -95,8 +95,10 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     // OrdinalIgnoreCase set of body property names actually sent (empty when body isn't an
     // object). JsonElement.TryGetProperty is case-sensitive; field names and onlyFields compare
-    // OrdinalIgnoreCase, so "is this field present in body" must match that same way.
-    private static HashSet<string> PresentNames(JsonElement body) =>
+    // OrdinalIgnoreCase, so "is this field present in body" must match that same way. Internal so
+    // ItemService.UpdateCoreAsync's own bodyKeys can share this exact construction rather than
+    // keeping a second copy that could silently drift from this one.
+    internal static HashSet<string> PresentNames(JsonElement body) =>
         body.ValueKind == JsonValueKind.Object
             ? body.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
