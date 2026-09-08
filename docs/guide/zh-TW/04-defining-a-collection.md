@@ -111,7 +111,7 @@ public sealed class Announcement : AuditableEntity
 |---|---|---|
 | `Label` | `string?` | 顯示標籤;省略時會退回使用 CLR 屬性名稱。 |
 | `Interface` | `FieldInterface` | 決定套用哪一種儲存/編輯器對應 (完整清單見第 5 章);預設為 `Text`。 |
-| `Required` | `bool` | 對非可翻譯欄位，在寫入 (新增/更新) 時強制執行。 |
+| `Required` | `bool` | 對非可翻譯欄位在寫入時強制執行;新增時該欄位必須送出，但更新時省略該欄位會保留其既有值——只有明確送出 `null`/空白才會失敗 (第 9 章)。一個不可為 null 的 `Guid` 欄位還會把全零的 `Guid.Empty` 視為缺漏，因為它永遠不可能被送成 `null`。 |
 | `Searchable` | `bool` | 納入該集合的自由文字搜尋白名單 (第 8 章)。 |
 | `Sortable` | `bool` | 允許做為查詢 DSL 的排序鍵。 |
 | `Sort` | `int` | 決定欄位在管理後台表單中的順序，並間接影響集合清單的欄位順序。 |
