@@ -106,6 +106,7 @@ defineExpose({ activeLocale })
           :parent-id="itemId"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
         />
+        <FieldError v-if="errors[rel.name]" role="alert">{{ errors[rel.name] }}</FieldError>
       </Field>
     </section>
   </form>
