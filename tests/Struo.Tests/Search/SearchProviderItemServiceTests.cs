@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AwesomeAssertions;
+using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Query;
 using Struo.Application.Search;
@@ -20,6 +21,7 @@ namespace Struo.Tests.Search;
 public sealed class SearchProviderItemServiceTests : IDisposable
 {
     private readonly SqliteTestDatabase _file = new();
+    private readonly ISqlSugarClient _db;
     private readonly List<string> _sql = [];
     private readonly LanguageProvider _languages;
     private Func<SearchRequest, SearchOutcome> _script = _ => SearchOutcome.NotHandled;
@@ -30,7 +32,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
 
     public SearchProviderItemServiceTests()
     {
-        var db = SqlSugarClientFactory.Create(
+        var db = _db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
@@ -73,7 +75,13 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         return (string)_svc.CreateAsync("category", body.RootElement).GetAwaiter().GetResult()["id"]!.ToString()!;
     }
 
-    public void Dispose() => _file.Dispose();
+    // Dispose the SqlSugarClient's own connection before deleting the underlying SQLite file —
+    // an undisposed connection can hold the file locked on Windows, making the file cleanup flaky.
+    public void Dispose()
+    {
+        _db.Dispose();
+        _file.Dispose();
+    }
 
     private static QueryModel Q(string? search, FilterNode? filter = null) => new(null, filter, [], 25, 0, search);
 
@@ -176,6 +184,45 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         _script = _ => throw new InvalidOperationException("must not be called");
         (await _svc.GetAsync("category", _alpha)).Should().NotBeNull();
         _provider.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Candidates_restrict_a_to_many_facets_buckets_to_the_candidate_rows()
+    {
+        // "articles" is category's O2M relation (Category.Articles, reverse of Article.CategoryId) —
+        // a to-many facet path, unlike every other facet exercised in this file. One article under
+        // Alpha, one under Beta: with no candidate restriction both show up; restricting the
+        // candidate set to Alpha alone must drop Beta's article from the bucket count entirely, not
+        // merely from the paginated category rows/total (which the sibling candidate tests above
+        // already cover for an own-field facet) — this is the assertion that fails if a to-many
+        // facet ever stopped honouring the candidate set.
+        var articleInAlpha = await CreateArticle(_alpha);
+        var articleInBeta = await CreateArticle(_beta);
+        // "a" (lowercase, case-insensitive LIKE) matches every seeded category name (Alpha/Beta/
+        // Gamma) so the unrestricted call's own LIKE fallback does not itself narrow the root rows —
+        // the only thing that should narrow them below is the candidate restriction.
+        var q = Q("a") with { Facets = ["articles"] };
+
+        _script = _ => SearchOutcome.NotHandled;
+        var unrestricted = await _svc.QueryAsync("category", q);
+        unrestricted.Facets!.Single().Values.Select(b => (string?)b.Value)
+            .Should().BeEquivalentTo([articleInAlpha, articleInBeta]);
+
+        _script = _ => SearchOutcome.Candidates([_alpha]);
+        var restricted = await _svc.QueryAsync("category", q);
+        restricted.Facets!.Single().Values.Select(b => (string?)b.Value)
+            .Should().Equal(articleInAlpha);
+    }
+
+    private async Task<string> CreateArticle(string categoryId)
+    {
+        // $$$$ (four dollars): the JSON ends in three consecutive closing braces
+        // ("...{"title":"t"}}}"), which a 3-dollar raw interpolated string cannot disambiguate from
+        // an interpolation-close (CS9007) — same fix as ItemServiceChangeNotificationTests.
+        using var body = JsonDocument.Parse(
+            $$$$"""{"status":"draft","categoryId":"{{{{categoryId}}}}","translations":{"en":{"title":"t"}}}""");
+        var dict = await _svc.CreateAsync("article", body.RootElement);
+        return dict["id"]!.ToString()!;
     }
 
     [Fact]

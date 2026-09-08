@@ -129,6 +129,13 @@ table above applies to that diff exactly as it does anywhere else.
 
 ## Startup behavior and failure modes
 
+- **Invariant culture, set before anything else:** `Program.cs` sets `CultureInfo.DefaultThreadCurrentCulture`
+  and `DefaultThreadCurrentUICulture` to `CultureInfo.InvariantCulture` at the very top of its top-level
+  statements, before the host is even built — SqlSugar re-parses a query filter's already-rendered literal
+  value with the process's current culture, so the two must agree or a decimal/date value can silently
+  come out wrong under a non-invariant one. Nothing for an operator to configure here: there is no need to
+  pin `LANG` or `DOTNET_SYSTEM_GLOBALIZATION_*`, since the API's own JSON output was never
+  culture-formatted to begin with.
 - **Fail-fast options validation:** `Database`, `Struo:Files`, `Oidc`, `Query` and `Auth:Password` are
   all bound with `ValidateOnStart`; a missing `Database:ConnectionString`, an `Oidc:Enabled=true`
   configuration missing `ClientId`, or an out-of-range `Query:MaxLimit` all throw

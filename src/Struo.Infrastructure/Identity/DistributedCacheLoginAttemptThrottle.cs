@@ -32,10 +32,14 @@ namespace Struo.Infrastructure.Identity;
 /// </para>
 /// </summary>
 public sealed class DistributedCacheLoginAttemptThrottle(
-    IDistributedCache cache, IOptions<LoginAccountRateLimitOptions> options)
+    IDistributedCache cache, IOptions<LoginAccountRateLimitOptions> options, TimeProvider? clock = null)
     : ILoginAttemptThrottle
 {
     private const string KeyPrefix = "login-throttle:";
+
+    // Trailing optional so DI (AddSingleton<ILoginAttemptThrottle, DistributedCacheLoginAttemptThrottle>())
+    // keeps resolving unchanged; tests pass a fake to advance the clock without a real Task.Delay.
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     private sealed record WindowState(int Count, long WindowStartUnixSeconds);
 
@@ -47,7 +51,7 @@ public sealed class DistributedCacheLoginAttemptThrottle(
         var state = await ReadAsync(email, ct);
         if (state is null) return new LoginThrottleState(false, 0);
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
         var windowEnd = state.WindowStartUnixSeconds + opts.WindowSeconds;
         if (now >= windowEnd || state.Count < opts.PermitLimit)
             return new LoginThrottleState(false, 0);
@@ -60,7 +64,7 @@ public sealed class DistributedCacheLoginAttemptThrottle(
         var opts = options.Value;
         if (!opts.Enabled) return;
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
         var state = await ReadAsync(email, ct);
 
         // A missing or already-expired window starts a fresh one at `now`; an active window keeps
