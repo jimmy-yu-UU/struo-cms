@@ -21,14 +21,19 @@ namespace Struo.Infrastructure.Query;
 internal sealed partial class FilterTranslator(
     ISqlSugarClient db, IRelationshipGraph graph, IMetadataProvider metadata, IEntityRegistry registry, StruoQueryOptions options)
 {
+    // `rootDescriptor` is trailing and optional: every production caller (SqlSugarItemRepository,
+    // FacetQueries, AggregateQueries) already resolves `collection`'s EntityDescriptor for its own
+    // use just before calling Translate, so passing it here lets the search-candidate branch below
+    // reuse that lookup instead of re-resolving it from the registry. Null (the default; every
+    // existing direct-call test omits it) falls back to resolving it here exactly as before.
     public List<IConditionalModel> Translate(
         string collection, FilterNode? filter, string? search, IReadOnlyList<object>? searchCandidates,
-        IReadOnlyList<string> searchableFields, string? queryLocale)
+        IReadOnlyList<string> searchableFields, string? queryLocale, EntityDescriptor? rootDescriptor = null)
     {
         var models = new List<IConditionalModel>();
         if (filter is not null) AppendModel(models, collection, filter, queryLocale);
         if (searchCandidates is not null)
-            models.Add(CandidateConditional(collection, searchCandidates));
+            models.Add(CandidateConditional(collection, searchCandidates, rootDescriptor));
         else if (!string.IsNullOrWhiteSpace(search) && searchableFields.Count > 0)
             models.Add(SearchGroup(collection, search, searchableFields, queryLocale));
         return models;
@@ -41,9 +46,9 @@ internal sealed partial class FilterTranslator(
     // be parsed to the PK type (SearchCandidateResolver guarantees this). An empty set becomes
     // `id IS NULL`: always false on a non-null PK, portable, and deterministic under our control
     // (SqlSugar's own rendering of an empty IN, `IN (null)`, happens to work too but is undocumented).
-    private ConditionalModel CandidateConditional(string collection, IReadOnlyList<object> ids)
+    private ConditionalModel CandidateConditional(string collection, IReadOnlyList<object> ids, EntityDescriptor? rootDescriptor)
     {
-        var d = RepositoryHelpers.Descriptor(registry, collection);
+        var d = rootDescriptor ?? RepositoryHelpers.Descriptor(registry, collection);
         var leaf = ids.Count == 0
             ? new ComparisonFilter("id", QueryOperator.Null, null)
             : new ComparisonFilter("id", QueryOperator.In, ids);
