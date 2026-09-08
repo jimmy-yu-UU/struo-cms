@@ -97,7 +97,7 @@ public static class MetadataScanner
         ValidateReservedNames(collections);
         ValidateJunctionCollections(collections, typeList);
         ValidateJunctionPrimaryKeys(collections, typeList);
-        return collections;
+        return ResolveJunctionPayloadFields(collections, typeList);
     }
 
     /// <summary>
@@ -207,6 +207,49 @@ public static class MetadataScanner
         throw new MetadataException(
             $"Junction type '{junctionType.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare exactly one " +
             "[SugarColumn(IsPrimaryKey = true)] property; the M2M sync updates junction rows by primary key.");
+    }
+
+    /// <summary>
+    /// Single source of every M2M relation's junction payload field list (spec U2b §3.1): once all
+    /// collections are known, each relation whose junction is itself a [CmsCollection] gets
+    /// <see cref="RelationMetadata.JunctionPayloadFields"/> = the junction's non-system, non-readonly fields
+    /// minus the two FKs and the SortField property, in field order, hidden ones included.
+    /// <c>RelationshipGraph.JunctionPayloadOf</c> consumes this list instead of re-deriving it. Returns new
+    /// records (CollectionMetadata/RelationMetadata are immutable) — collections without any junction
+    /// collection relation are returned as-is.
+    /// </summary>
+    private static IReadOnlyList<CollectionMetadata> ResolveJunctionPayloadFields(
+        IReadOnlyList<CollectionMetadata> collections, IReadOnlyList<Type> types)
+    {
+        var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+        var typeByName = types
+            .Where(t => t.GetCustomAttribute<CmsCollectionAttribute>() is not null)
+            .ToDictionary(t => Camel(t.Name), StringComparer.OrdinalIgnoreCase);
+        return collections
+            .Select(c => c.Relations.Any(r => r.JunctionCollection is not null)
+                ? c with { Relations = c.Relations.Select(r => WithJunctionPayloadFields(r, typeByName[c.Name], byName)).ToList() }
+                : c)
+            .ToList();
+    }
+
+    private static RelationMetadata WithJunctionPayloadFields(
+        RelationMetadata r, Type ownerType, IReadOnlyDictionary<string, CollectionMetadata> byName)
+    {
+        if (r.JunctionCollection is null || !byName.TryGetValue(r.JunctionCollection, out var junction)) return r;
+        var prop = ownerType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .First(p => string.Equals(Camel(p.Name), r.Name, StringComparison.OrdinalIgnoreCase));
+        var navData = prop.CustomAttributes.First(a => a.AttributeType == typeof(Navigate));
+        var junctionType = NavigateMappingType(navData)!;
+        var excluded = new HashSet<string>(StringComparer.Ordinal) { NavigateMappingA(navData)!, NavigateMappingB(navData)! };
+        if (prop.GetCustomAttribute<CmsRelationAttribute>()?.SortField is { } sortProperty) excluded.Add(sortProperty);
+        var props = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var names = junction.Fields
+            .Where(f => !f.IsSystem && !f.ReadOnly)
+            .Select(f => (Field: f, Prop: props.FirstOrDefault(p => string.Equals(Camel(p.Name), f.Name, StringComparison.OrdinalIgnoreCase))))
+            .Where(x => x.Prop is not null && !excluded.Contains(x.Prop.Name))
+            .Select(x => x.Field.Name)
+            .ToList();
+        return r with { JunctionPayloadFields = names.Count > 0 ? names : null };
     }
 
     public static IReadOnlyDictionary<string, EntityDescriptor> ScanDescriptors(IEnumerable<Type> types)
@@ -559,7 +602,8 @@ public static class MetadataScanner
                 OnDelete = rel.OnDelete,
                 Editable = rel.Editable,
                 SelfReferencing = target == type,
-                JunctionCollection = junctionCollection
+                JunctionCollection = junctionCollection,
+                SortField = kind == RelationKind.ManyToMany && rel.SortField is not null ? Camel(rel.SortField) : null
             });
         }
         return list;

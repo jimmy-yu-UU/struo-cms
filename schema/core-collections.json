@@ -250,7 +250,9 @@
         "onDelete": "restrict",
         "editable": true,
         "selfReferencing": false,
-        "junctionCollection": null
+        "junctionCollection": null,
+        "sortField": null,
+        "junctionPayloadFields": null
       }
     ],
     "translation": {
@@ -556,7 +558,9 @@
         "onDelete": "restrict",
         "editable": true,
         "selfReferencing": true,
-        "junctionCollection": null
+        "junctionCollection": null,
+        "sortField": null,
+        "junctionPayloadFields": null
       }
     ],
     "translation": null
@@ -1033,7 +1037,9 @@
         "onDelete": "restrict",
         "editable": true,
         "selfReferencing": false,
-        "junctionCollection": "userRole"
+        "junctionCollection": "userRole",
+        "sortField": null,
+        "junctionPayloadFields": null
       }
     ],
     "translation": null
