@@ -18,14 +18,17 @@ import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
 import type { RelationMeta } from '../../types/schema'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   relation: RelationMeta
   modelValue: unknown
   multiple?: boolean
   tree?: boolean
   disabled?: boolean
   excludeId?: string
-}>()
+  // multiple only. JunctionLinksEditor renders each selection as its own payload row and turns the
+  // chips off; every other caller keeps them.
+  showChips?: boolean
+}>(), { showChips: true })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 const { t } = useI18n()
@@ -199,7 +202,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
       <!-- Chips live outside the trigger, not inside it: the trigger renders as a <button>, and a
            remove control nested inside another <button> is invalid HTML with real focus/click
            hazards. -->
-      <div v-if="multipleSelectedOptions.length" class="flex flex-wrap gap-1.5">
+      <div v-if="showChips && multipleSelectedOptions.length" class="flex flex-wrap gap-1.5">
         <Badge v-for="opt in multipleSelectedOptions" :key="opt.id" variant="secondary" class="gap-1 py-0.5 pr-1">
           {{ opt.label }}
           <button

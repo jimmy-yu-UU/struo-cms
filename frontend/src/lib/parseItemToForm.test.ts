@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseItemToForm, blankItemForm } from './parseItemToForm'
-import type { CollectionMeta, FieldMeta, LanguageInfo } from '../types/schema'
+import type { CollectionMeta, FieldMeta, RelationMeta, LanguageInfo } from '../types/schema'
 
 function field(name: string, over: Partial<FieldMeta> = {}): FieldMeta {
   return { name, label: name, interface: 'text', required: false, searchable: false, sortable: false,
@@ -73,5 +73,42 @@ describe('parseItemToForm relations', () => {
     const model = blankItemForm(relMeta(), langs)
     expect(model.relations.category).toBeNull()
     expect(model.relations.tags).toEqual([])
+  })
+})
+
+describe('parseItemToForm junction links', () => {
+  const tagsRel: RelationMeta = { name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect',
+    foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false,
+    junctionCollection: 'articleTag', junctionPayloadFields: ['note', 'weight', 'secret'], sortField: 'sort' }
+  const rolesRel: RelationMeta = { ...tagsRel, name: 'roles', label: 'Roles', targetCollection: 'role',
+    junctionCollection: 'userRole', junctionPayloadFields: null, sortField: null }
+  const articleMeta: CollectionMeta = { name: 'article', label: 'Article', fields: [field('status')], relations: [tagsRel, rolesRel] }
+  const junctionMeta: CollectionMeta = { name: 'articleTag', label: 'Article tag', relations: [], fields: [
+    field('articleId', { interface: 'uuid' }), field('tagId', { interface: 'uuid' }),
+    field('note', { sort: 1, maxLength: 5, required: true }), field('weight', { interface: 'number', sort: 2 }),
+    field('secret', { hidden: true }), field('sort', { interface: 'number' }),
+  ] }
+  const resolve = (n: string) => (n === 'articleTag' ? junctionMeta : undefined)
+  const junctionLocales: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
+
+  const item = { id: 'a1', status: 'draft', version: 3,
+    tags: [
+      { id: 't1', name: 'One', _junction: { note: 'hello', weight: 2 } },
+      { id: 't2', name: 'Two' }, // no _junction (e.g. no read grant) -> empty junction
+    ],
+    roles: [{ id: 'r1' }] }
+  it('maps payload relations to RelationLink[] when a resolver is given', () => {
+    const m = parseItemToForm(articleMeta, item, junctionLocales, resolve)
+    expect(m.relations.tags).toEqual([
+      { id: 't1', junction: { note: 'hello', weight: 2 } },
+      { id: 't2', junction: { note: '', weight: '' } }, // number.parse(undefined) -> '' per registry.ts, not null
+    ])
+  })
+  it('keeps id[] for relations without payload or sortField, and without a resolver', () => {
+    expect(parseItemToForm(articleMeta, item, junctionLocales, resolve).relations.roles).toEqual(['r1'])
+    expect(parseItemToForm(articleMeta, item, junctionLocales).relations.tags).toEqual(['t1', 't2'])
+  })
+  it('blankItemForm yields an empty link array for payload relations', () => {
+    expect(blankItemForm(articleMeta, junctionLocales, resolve).relations.tags).toEqual([])
   })
 })

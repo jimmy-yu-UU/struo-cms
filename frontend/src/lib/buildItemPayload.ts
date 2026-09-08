@@ -1,12 +1,35 @@
-import type { CollectionMeta, LanguageInfo } from '../types/schema'
-import type { FormModel } from '../types/itemForm'
+import type { CollectionMeta, LanguageInfo, RelationMeta } from '../types/schema'
+import type { FormModel, RelationLink } from '../types/itemForm'
 import { splitFields } from './splitFields'
 import { relationInputKind } from './relationInputKind'
 import { getFieldType } from './fieldTypes/registry'
 import { isEmpty } from './fieldTypes/types'
+import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
 
 function camel(s: string): string {
   return s.length ? s[0].toLowerCase() + s.slice(1) : s
+}
+
+export type BuildItemPayloadOptions = {
+  resolveCollection?: ResolveCollection
+  canWriteJunction?: (rel: RelationMeta) => boolean
+}
+
+// Mixed-array write shape (chapter 9): an object element `{id, ...payload}` merges the named payload
+// fields into the junction row and needs the junction collection's write grant; a bare id only
+// manages membership/order. Bare ids are therefore the fallback whenever payload cannot or need not
+// be sent — no grant, no visible payload fields (a sortField-only relation has no payload and the
+// server rejects object elements on it), or a caller that passed no options.
+function serializeLinks(rel: RelationMeta, links: RelationLink[], options: BuildItemPayloadOptions): unknown[] {
+  const resolve = options.resolveCollection
+  const fields = resolve ? visiblePayloadFields(rel, resolve) : []
+  const writable = options.canWriteJunction?.(rel) === true
+  if (!writable || fields.length === 0) return links.map((l) => l.id)
+  return links.map((l) => {
+    const out: Record<string, unknown> = { id: l.id }
+    for (const f of fields) out[f.name] = getFieldType(f.interface).serialize(l.junction[f.name], f)
+    return out
+  })
 }
 
 export function buildItemPayload(
@@ -14,6 +37,7 @@ export function buildItemPayload(
   model: FormModel,
   locales: LanguageInfo[],
   mode: 'create' | 'update',
+  options: BuildItemPayloadOptions = {},
 ): Record<string, unknown> {
   const { shared, translatable } = splitFields(meta)
   const payload: Record<string, unknown> = {}
@@ -46,7 +70,8 @@ export function buildItemPayload(
     if (kind === 'dropdown' || kind === 'treeSelect') {
       if (rel.foreignKey) payload[camel(rel.foreignKey)] = relations[rel.name] ?? null
     } else if (kind === 'tagSelect') {
-      payload[rel.name] = relations[rel.name] ?? []
+      const v = relations[rel.name]
+      payload[rel.name] = isRelationLinks(v) ? serializeLinks(rel, v, options) : (v ?? [])
     }
     // relatedList / readonly: never written
   }

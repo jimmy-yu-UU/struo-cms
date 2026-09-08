@@ -153,11 +153,15 @@ When a junction type *also* carries `[CmsCollection]` it becomes what this manua
 collection**, and its `[CmsField]`s — other than the two foreign keys, the relation's `SortField`
 (above), and any `IsSystem`/`ReadOnly` field — become the relation's **payload**: data that belongs to
 the link itself rather than to either endpoint (a note on why two rows are linked, a display weight
-distinct from ordering, an approval timestamp). `RelationshipGraph.JunctionPayloadOf`
-(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) is the single place that computes a
-relation's payload field list; the write-side mixed-array binder (REST, chapter 9), the `_junction`
-read projection (below), revisions (chapter 13), and GraphQL (chapter 10) all read it from there
-rather than re-deriving it themselves.
+distinct from ordering, an approval timestamp). `MetadataScanner.ResolveJunctionPayloadFields`
+(`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) computes `RelationMetadata.JunctionPayloadFields`
+— the camelCase names of those payload fields, hidden ones included — as the last step of `ScanTypes`;
+the relation's own `RelationMetadata.SortField` is set earlier, when the relation itself is built from
+`[CmsRelation(SortField = ...)]` (above). `RelationshipGraph.JunctionPayloadOf`
+(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) never
+re-derives that list; it only resolves the names `MetadataScanner` already computed into CLR properties.
+The write-side mixed-array binder (REST, chapter 9), the `_junction` read projection (below), revisions
+(chapter 13), and GraphQL (chapter 10) all go through `JunctionPayloadOf` for that resolution.
 
 Both of a junction collection's foreign keys **must** be declared as writable `[CmsField]`s (e.g.
 `Interface = FieldInterface.Uuid`) — the framework's own `UserRole`
@@ -175,6 +179,11 @@ it out of the admin sidebar — it stays a fully addressable collection everywhe
 a non-hidden collection. `RelationMetadata.JunctionCollection` (`junctionCollection` in `/api/schema`'s
 relation entry) names it, which is how a client discovers which collection needs its own write grant
 before it can send junction payload (REST, chapter 9).
+
+That same relation entry also carries `junctionPayloadFields` and `sortField`; the shipped admin SPA
+reads both — filtering `junctionPayloadFields` down to each field's own non-`Hidden` ones — to decide
+whether a `TagSelect` relation has *visible* payload, or a `sortField`, and so needs the links editor
+instead of the plain chip picker (below, Admin pickers).
 
 **Caveat for forks**: if you add your own `[Navigate]`/`[CmsRelation]` picker relation directly on a
 junction entity (a many-to-one from the junction to some third collection — "linked by user", say),
@@ -463,9 +472,21 @@ shipped admin SPA wires every one of them to a real input
 | `RelationInterface` | Admin component | Behavior |
 |---|---|---|
 | `Dropdown` | `RelationPicker` (vendored `ui/combobox`) | Single-value picker; debounced `search=` against the target collection as the user types. |
-| `TagSelect` | `RelationPicker` (vendored `ui/combobox`) | Multi-value picker for many-to-many relations, same search behavior. |
+| `TagSelect` | `RelationPicker` (vendored `ui/combobox`) | No *visible* junction payload and no `SortField`: multi-value chip picker for many-to-many relations, same search behavior as `Dropdown`. |
+| `TagSelect` | `JunctionLinksEditor` | Visible junction payload and/or `SortField` present: one row per selected target, holding that link's visible junction payload fields (the same field-type registry `ItemForm` uses) and a remove button, plus — only when the relation declares a `SortField` — reorder arrows. The combobox underneath only adds and removes members. |
 | `TreeSelect` | `RelationPicker` (`form/TreeSelect`) | Single-value picker over a tree built from a self-referencing many-to-one's target rows. |
 | `RelatedList` | `RelatedList` (vendored `data/DataTable`) | Read-only, paginated, lazy-loaded list of the target collection filtered by the relation's reverse FK; clicking a row navigates to that row's own item-edit page. Shows only after the parent has been saved (a brand-new, unsaved parent has no id to filter by yet). |
+
+**Grants**: no junction read grant — the row still appears, but no payload field is shown at all (the
+server omits `_junction` from the response, so there is nothing truthful to render). Read but no write
+grant, or the junction collection is `AdminOnly` and the caller isn't a super admin — payload fields
+render read-only, and saving sends bare ids: only membership and, when the relation has a `SortField`,
+order are updated. A server-side payload validation error lands in the form's top-level error banner;
+the client itself pre-checks `required`/`maxLength` before that round trip. This ladder is decided by
+`frontend/src/lib/junctionLinks.ts` (`canReadJunction`, `canWriteJunction`). A numeric or boolean
+payload field left blank is saved as `null`, not an empty string, so a fork should declare such
+junction columns nullable or mark them `Required` — the form blocks an empty `Required` field before
+it is ever sent.
 
 `relationInputKind.ts` still has a final, unconditional fallback for an interface its map does not
 recognize — a bare <span v-pre>`<span class="readonly-relation">{{ relation.label }} (read-only)</span>`</span> rather

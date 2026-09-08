@@ -111,7 +111,15 @@ const fileSerialize = (v: unknown): unknown => (v === '' ? null : v)
 // backend's DateTime? deserialiser never receives "" (JsonException -> 400). Valid ISO strings pass
 // through unchanged. `empty`/`parse`/`defaultValue` stay '' — this only affects the outbound payload.
 const dateTimeSerialize = (v: unknown): unknown => (v === '' || v == null ? null : v)
+// number/slider/rating (numeric CLR types), boolean/checkbox (bool) and uuid (Guid) all fall back to
+// def()'s `empty: ''`, but their backend property is never a string: an unfilled instance (e.g. a
+// junction-links-editor row seeded by emptyLink(), spec U2b) must serialise to null, not '', or the
+// server's JSON deserialiser throws (JsonException -> 400). Mirrors fileSerialize/dateTimeSerialize
+// above — only the outbound payload changes; `empty`/`parse`/`defaultValue` stay ''. Text-like
+// interfaces are deliberately excluded: a cleared text field must still send '' so it clears.
+const emptyToNull = (v: unknown): unknown => (v === '' ? null : v)
 const readonlyDef = def({ component: ReadonlyField })
+const uuidDef = def({ component: ReadonlyField, serialize: emptyToNull })
 
 const jsonDef: FieldTypeDef = {
   component: JsonField,
@@ -196,11 +204,11 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   // richText is the only field whose component pulls in TipTap/ProseMirror, the
   // largest dependency in the SPA, so it alone is loaded on demand.
   richText: def({ component: defineAsyncComponent(() => import('../../components/fields/RichTextField.vue')) }),
-  number: def({ component: NumberField, listColumn: asString }),
-  slider: def({ component: NumberField, listColumn: asString }),
-  rating: def({ component: NumberField, listColumn: asString }),
-  boolean: def({ component: BooleanField, listColumn: asYesNo }),
-  checkbox: def({ component: BooleanField, listColumn: asYesNo }),
+  number: def({ component: NumberField, serialize: emptyToNull, listColumn: asString }),
+  slider: def({ component: NumberField, serialize: emptyToNull, listColumn: asString }),
+  rating: def({ component: NumberField, serialize: emptyToNull, listColumn: asString }),
+  boolean: def({ component: BooleanField, serialize: emptyToNull, listColumn: asYesNo }),
+  checkbox: def({ component: BooleanField, serialize: emptyToNull, listColumn: asYesNo }),
   date: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
   time: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
   dateTime: def({ component: DateField, serialize: dateTimeSerialize, listColumn: asDate }),
@@ -217,7 +225,7 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   repeater: repeaterDef,
   files: filesDef,
   hidden: readonlyDef,
-  uuid: readonlyDef,
+  uuid: uuidDef,
 }
 
 export function getFieldType(iface: string): FieldTypeDef {

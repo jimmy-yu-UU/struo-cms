@@ -51,4 +51,20 @@ public class RelationSchemaTests(ApiFactory factory)
         body.Should().Contain("\"selfReferencing\":true");
         body.Should().Contain("\"name\":\"children\"");
     }
+
+    [Fact]
+    public async Task Article_tags_relation_exposes_junction_payload_fields_and_sort_field()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var body = await (await client.GetAsync("/api/schema/article")).Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        var relations = doc.RootElement.GetProperty("data").GetProperty("relations").EnumerateArray().ToList();
+        var tags = relations.Single(r => r.GetProperty("name").GetString() == "tags");
+        tags.GetProperty("junctionCollection").GetString().Should().Be("articleTag");
+        tags.GetProperty("sortField").GetString().Should().Be("sort");
+        tags.GetProperty("junctionPayloadFields").EnumerateArray().Select(e => e.GetString()).Should().Equal("note");
+        var category = relations.Single(r => r.GetProperty("name").GetString() == "category");
+        category.GetProperty("sortField").ValueKind.Should().Be(JsonValueKind.Null);
+        category.GetProperty("junctionPayloadFields").ValueKind.Should().Be(JsonValueKind.Null);
+    }
 }

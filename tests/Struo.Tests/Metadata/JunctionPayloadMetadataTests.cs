@@ -137,6 +137,40 @@ public sealed class JunctionPayloadMetadataTests
     }
 
     [Fact]
+    public void Relation_metadata_lists_junction_payload_field_names_including_hidden_ones()
+    {
+        var (_, collections) = Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
+        var rel = collections.Single(c => c.Name == "jpmParent").Relations.Single(r => r.Name == "children");
+        rel.JunctionPayloadFields.Should().Equal("note", "secret"); // FKs and Sort excluded; Hidden kept (the SPA filters Hidden itself)
+    }
+
+    [Fact]
+    public void Relation_metadata_carries_the_camel_cased_sort_field()
+    {
+        var (_, collections) = Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
+        collections.Single(c => c.Name == "jpmParent").Relations.Single().SortField.Should().Be("sort");
+    }
+
+    [Fact]
+    public void Plain_junction_relation_has_null_payload_fields_and_null_sort_field()
+    {
+        var (_, collections) = Build(typeof(JpmPlainParent), typeof(JpmChild), typeof(JpmPlainLink));
+        var rel = collections.Single(c => c.Name == "jpmPlainParent").Relations.Single();
+        rel.JunctionPayloadFields.Should().BeNull();
+        rel.SortField.Should().BeNull();
+    }
+
+    [Fact]
+    public void Graph_descriptor_payload_is_derived_from_relation_metadata_not_recomputed()
+    {
+        // Single-source guard: the descriptor's payload names must be exactly the metadata's list, in order.
+        var (graph, collections) = Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
+        var rel = collections.Single(c => c.Name == "jpmParent").Relations.Single();
+        graph.M2MDescriptors("jpmParent").Single().JunctionPayload!.Select(p => p.Name)
+            .Should().Equal(rel.JunctionPayloadFields!);
+    }
+
+    [Fact]
     public void Relation_metadata_names_the_junction_collection_when_the_junction_is_a_collection()
     {
         var (_, collections) = Build(typeof(JpmParent), typeof(JpmChild), typeof(JpmLink));
