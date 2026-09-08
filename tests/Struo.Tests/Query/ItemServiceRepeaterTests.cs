@@ -178,4 +178,31 @@ public class ItemServiceRepeaterTests : IDisposable
         var act = () => _svc.CreateAsync("repeaterthing", body);
         await act.Should().ThrowAsync<QueryException>(); // STJ JsonException -> QueryException (400)
     }
+
+    [Fact]
+    public async Task Update_omitting_the_required_faqs_keeps_the_stored_value()
+    {
+        var created = await _svc.CreateAsync("repeaterthing", Body(new { requiredFaqs = new[] { OneRequired } }));
+        var id = created["id"]!.ToString()!;
+
+        var updated = await _svc.UpdateAsync("repeaterthing", id,
+            Body(new { faqs = new[] { new { question = "new", answer = "", category = (string?)null } } }));
+
+        updated.Should().NotBeNull();
+        var requiredFaqs = ((IEnumerable<Faq>)updated!["requiredFaqs"]!).ToList();
+        requiredFaqs.Select(f => f.Question).Should().Equal("r");
+        var faqs = ((IEnumerable<Faq>)updated["faqs"]!).ToList();
+        faqs.Select(f => f.Question).Should().Equal("new");
+    }
+
+    [Fact]
+    public async Task Update_sending_an_empty_array_for_the_required_faqs_is_rejected()
+    {
+        var created = await _svc.CreateAsync("repeaterthing", Body(new { requiredFaqs = new[] { OneRequired } }));
+        var id = created["id"]!.ToString()!;
+
+        var act = () => _svc.UpdateAsync("repeaterthing", id, Body(new { requiredFaqs = new object[0] }));
+
+        await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'requiredFaqs' is required.");
+    }
 }
