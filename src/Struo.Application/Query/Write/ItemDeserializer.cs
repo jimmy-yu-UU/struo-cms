@@ -169,12 +169,27 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             return element.Deserialize(entityType, JsonOpts)
                    ?? throw new QueryException("Request body could not be parsed.");
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            // A field's JSON value is the wrong shape for its bound property (e.g. a KeyValue
-            // entry given a number/object instead of a string) — a client error, not a 500.
-            throw new QueryException("Request body could not be parsed.");
+            // A field's JSON value is the wrong shape for its bound property (e.g. "" into an int?, a
+            // number into a string, an object into a KeyValue entry). System.Text.Json reports the JSON
+            // path of the offending token ("$.weight", "$.faqs[0].answer"); surface it so the client can
+            // name the field instead of guessing from a body-wide message. Path is null for structural
+            // errors (truncated body) — keep the generic message there.
+            throw new QueryException(FieldFromJsonPath(ex.Path) is { } field
+                ? $"Field '{field}' has an invalid value."
+                : "Request body could not be parsed.");
         }
+    }
+
+    // System.Text.Json's JsonException.Path is "$" for the document root and "$.foo"/"$.faqs[0].answer"
+    // for a nested token — strip the leading "$." so the field name reads the way every other
+    // per-field message in this codebase does ("Field 'weight' has an invalid value.", not
+    // "Field '$.weight' ..."). Null/empty/root-only paths carry no field to name.
+    internal static string? FieldFromJsonPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path) || path == "$") return null;
+        return path.StartsWith("$.", StringComparison.Ordinal) ? path[2..] : path;
     }
 
     // Set each Json field's string property from the original body's raw text (stripped above).
