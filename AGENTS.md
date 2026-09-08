@@ -92,8 +92,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `GetDbColumnName` and `<sql>` from `ToSql()`.
   The fourth is `OrderByExpressionBuilder`'s ORDER BY text
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`), the sole source of the string passed
-  to the one `queryable.OrderBy(string)` call, at `SqlSugarItemRepository.cs:94`: it assembles three
-  per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated
+  to the one `queryable.OrderBy(string)` call, in `SqlSugarItemRepository.RunQueryAsync`: it assembles
+  three per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated
   subquery with one JOIN per hop (`RelationOrderExpr`), and a translatable-field sort as a correlated
   subquery against the translation sidecar with the query locale embedded as an escaped string literal
   (`TranslatableOrderExpr`; the locale is either a request locale already validated by
