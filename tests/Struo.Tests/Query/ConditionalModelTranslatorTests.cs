@@ -221,6 +221,7 @@ public class ConditionalModelTranslatorTests
         {
             var (db, d, file) = Setup();
             using (file)
+            using (db)
             {
                 var list = ConditionalModelTranslator.Translate(
                     new ComparisonFilter("status", QueryOperator.Gt, 1234.5m), null, [], d, db);
@@ -243,6 +244,7 @@ public class ConditionalModelTranslatorTests
         {
             var (db, d, file) = Setup();
             using (file)
+            using (db)
             {
                 var filter = new ComparisonFilter("status", QueryOperator.In, new List<object?> { 1.5m, 2.5m });
                 var list = ConditionalModelTranslator.Translate(filter, null, [], d, db);
