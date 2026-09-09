@@ -237,7 +237,17 @@ public sealed class ItemWriteSideSync(
                     JsonValueKind.String => idEl.GetString() ?? string.Empty,
                     _ => throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid."),
                 };
-                var bound = deserializer.DeserializePartial(desc.JunctionCollection!, e, junctionMeta!, payloadNames!);
+                IReadOnlyDictionary<string, object?> bound;
+                try
+                {
+                    bound = deserializer.DeserializePartial(desc.JunctionCollection!, e, junctionMeta!, payloadNames!);
+                }
+                catch (QueryException ex)
+                {
+                    // The payload binder reports errors by field name only; a form editing several
+                    // links needs to know which relation and which target row the field belonged to.
+                    throw new QueryException($"Relation '{desc.RelationName}', target '{id}': {ex.Message}");
+                }
                 return new JunctionLink(id, bound);
             }
             default:

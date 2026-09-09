@@ -237,6 +237,20 @@ $ curl -s -X PUT http://localhost:5221/api/items/role/<id> -H "Content-Type: app
 `[CmsField]` (例如 `UserRole.RoleId`) 還多一種算作缺漏的情況:全零的 `Guid.Empty` (一個不可為
 null 的 `Guid` 本來就不可能真的送出 `null`)——見第 4 章 `Required` 欄位屬性那一列。
 
+一個欄位形狀錯誤，走的是同一個 `BAD_USER_INPUT` 信封，但會指名出錯的欄位，而不是使用通用訊息。
+當請求本文中某個欄位的 JSON 值，其形狀和它所綁定的屬性不相容時——例如給一個 `int?` 送出空字串、
+給一個字串欄位送出數字、給一個 `KeyValue` 項目 (該處期望字串) 送出一個物件——`ItemDeserializer`
+的 `DeserializeElement` 會從 System.Text.Json 自己回報的解析錯誤路徑 (`FieldFromJsonPath`) 組出
+訊息，例如 `Field 'weight' has an invalid value.`。那個通用的
+`"Request body could not be parsed."` 訊息，在解析器無法把錯誤歸咎到任何單一欄位的結構性錯誤時
+(例如一個被截斷的本文) 仍然會出現。
+
+一個 junction payload 物件 (一個 M2M 關聯陣列元素，帶有 `id` 加上 payload 欄位，見第 6 章)，透過
+它自己的綁定器——`ItemWriteSideSync` 的 `ParseLinkElement`——拋出同樣的欄位形狀或 `MaxLength`
+錯誤;但一次編輯多個連結的表單，需要知道錯誤是來自哪一個關聯、哪一筆目標資料列，不能只有欄位
+名稱，所以訊息會同時加上這兩者的前綴，例如
+`Relation 'children', target '<id>': Field 'weight' has an invalid value.`。
+
 ## 驗證:cookie 或 bearer
 
 有兩種機制被接受，兩者都註冊在 `AuthWiring.AddStruoAuth`

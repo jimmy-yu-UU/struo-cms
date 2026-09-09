@@ -63,14 +63,35 @@ internal sealed partial class FacetQueries(
             case FacetPathKind.OwnField:
                 return await GroupBuckets(rootQ, root.EntityType, root.FieldToProperty[facet.OwnField!], root.IdProperty, false, request.MaxValues, ct);
             case FacetPathKind.ForeignKey:
+                // A many-to-one FK facets the ROOT's own column (categoryId, say) — it is not a
+                // relation traversal, so a trashed target's id is not dropped here: see
+                // "The four facet path forms" (chapter 8) for the documented split between this
+                // form and the Relation form below.
                 return IdStrings(await GroupBuckets(rootQ, root.EntityType, root.Properties[facet.OwnField!].Name, root.IdProperty, false, request.MaxValues, ct));
             case FacetPathKind.Relation:
-                return IdStrings(await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct));
+            {
+                var idBuckets = await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct);
+                // A many-to-one id bucket comes from the root's own FK column and a many-to-many
+                // one from the junction row — neither query touches the target table, so a
+                // trashed target's id survives unless dropped explicitly. A one-to-many bucket
+                // instead comes from a query over the child (=target) type itself, which already
+                // carries the global ISoftDeletable filter — the drop would be a same-result
+                // no-op there, so skip it rather than pay for a redundant query.
+                if (facet.Relation!.Kind != RelationKind.OneToMany)
+                {
+                    var target = RepositoryHelpers.Descriptor(registry, facet.Relation.TargetCollection);
+                    idBuckets = await DropSoftDeletedTargets(idBuckets, target, ct);
+                }
+                return IdStrings(idBuckets);
+            }
             case FacetPathKind.RelationLeaf:
                 // Feed ByRelation's raw (Guid) id buckets straight into SwapLeafValues — the translation
                 // sidecar FK and the target PK are both Guid, so the dictionary keys built in
                 // LeafValuesAsync must stay Guid too. Calling IdStrings here first would turn every
-                // bucket's Value into a string and none of them would match.
+                // bucket's Value into a string and none of them would match. SwapLeafValues/
+                // LeafValuesAsync drop a soft-deleted target's bucket themselves — the non-translatable
+                // branch via LoadByIds<T>'s own global filter, the translatable branch via its own
+                // liveness check before the sidecar lookup — so no separate drop belongs here.
                 var ids = await ByRelation(new RelationFacetContext(request.Collection, root, rootQ, conds, request.Deleted, request.MaxValues), facet.Relation!, ct);
                 return await SwapLeafValues(ids, facet, request.QueryLocale, request.MaxValues, ct);
             default:
