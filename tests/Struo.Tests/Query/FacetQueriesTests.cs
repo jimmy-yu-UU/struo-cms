@@ -161,6 +161,65 @@ public class FacetQueriesTests : IDisposable
         _h.SeedEav();
         (await _h.FacetAsync("labels", Eq("name", "does-not-exist"))).Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Soft_deleted_relation_target_is_dropped_from_the_id_bucket()
+    {
+        var (crossRow, _, _, _) = _h.SeedEav();
+        var (live, trashed) = _h.SeedSoftLabels(crossRow);
+        await _h.Repo.SoftDeleteAsync("sqSoftLabel", trashed.ToString(), DateTime.UtcNow, null);
+
+        var b = await _h.FacetAsync("softLabels");
+
+        Pairs(b).Should().Equal((live.ToString(), 1L));
+    }
+
+    [Fact]
+    public async Task Soft_deleted_relation_target_is_dropped_from_the_leaf_bucket()
+    {
+        var (crossRow, _, _, _) = _h.SeedEav();
+        var (_, trashed) = _h.SeedSoftLabels(crossRow);
+        await _h.Repo.SoftDeleteAsync("sqSoftLabel", trashed.ToString(), DateTime.UtcNow, null);
+
+        var b = await _h.FacetAsync("softLabels.name");
+
+        Pairs(b).Should().Equal(("Alive", 1L));
+    }
+
+    [Fact]
+    public async Task A_deleted_with_root_query_still_drops_the_trashed_target_from_the_relation_facet()
+    {
+        // The related side never lifts the soft-delete filter, regardless of the outer request's
+        // `deleted=` mode — same contract as the existing many-to-one leaf case
+        // (Soft_deleted_roots_follow_the_deleted_mode) exercises for the ROOT side.
+        var (crossRow, _, _, _) = _h.SeedEav();
+        var (live, trashed) = _h.SeedSoftLabels(crossRow);
+        await _h.Repo.SoftDeleteAsync("sqSoftLabel", trashed.ToString(), DateTime.UtcNow, null);
+
+        var b = await _h.FacetAsync("softLabels", deleted: DeletedFilter.With);
+
+        Pairs(b).Should().Equal((live.ToString(), 1L));
+    }
+
+    [Fact]
+    public async Task Soft_deletable_relation_facet_costs_one_extra_statement_for_id_and_leaf_forms()
+    {
+        // The drop adds exactly one extra typed In(ids) query on a soft-deletable target: one for
+        // the id form (ByRelation + DropSoftDeletedTargets) and one for the non-translatable leaf
+        // form (ByRelation + LeafValuesAsync's own LoadByIds<T>, unchanged by this fix) — both land
+        // at 2 statements, the same count the leaf form already paid for a non-soft-deletable target
+        // (Own_facet_is_one_statement_and_leaf_facet_is_two's "labels.name" case above).
+        var (crossRow, _, _, _) = _h.SeedEav();
+        _h.SeedSoftLabels(crossRow);
+
+        _h.ResetSqlCount();
+        await _h.FacetAsync("softLabels");
+        _h.SqlStatements.Should().Be(2);
+
+        _h.ResetSqlCount();
+        await _h.FacetAsync("softLabels.name");
+        _h.SqlStatements.Should().Be(2);
+    }
 }
 
 // A second facet fixture — over the real sample Article/Category graph — pins down the translatable-leaf

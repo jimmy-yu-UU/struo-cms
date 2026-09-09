@@ -17,6 +17,7 @@ public class FacetPathResolverTests
     {
         ["sqCategory"] = typeof(SqCategory), ["sqProduct"] = typeof(SqProduct), ["sqProperty"] = typeof(SqProperty),
         ["sqLabel"] = typeof(SqLabel), ["sqProductLabel"] = typeof(SqProductLabel),
+        ["sqSoftLabel"] = typeof(SqSoftLabel), ["sqProductSoftLabel"] = typeof(SqProductSoftLabel),
     });
     private static Struo.Domain.Metadata.Models.CollectionMetadata Product => Md.GetCollection("sqProduct")!;
 
