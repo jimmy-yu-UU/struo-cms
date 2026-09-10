@@ -12,30 +12,30 @@
 任何一個鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；唯一的例
 外是 `Testing:PostgresConnection`，見本章最後一節。
 
-以下每一節的表格列鍵、型別與預設值，表格下面只寫設錯會怎樣。改任何一個鍵都要重啟行程才生效。
+改任何一個鍵都要重啟行程才生效。表格下面寫『沒有驗證規則』的鍵，指的是型別正確的值不會被檢
+查；型別對不上（例如 `Database:DbType` 拼錯、數字欄位填了文字）在用 `ValidateOnStart` 綁定
+的區段會在啟動時失敗，其他區段要到第一次用到時才會出錯。
 
-表格下面寫「沒有驗證規則」的鍵，指的是型別正確的值不會被檢查；型別對不上（例如
-`Database:DbType` 拼錯、數字欄位填了文字）仍會在啟動時綁定失敗。
-
-陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短出廠設定檔已經填滿的陣列，沒被覆寫
-的索引維持原值。內建預設值非空的兩個陣列型鍵——`Oidc:Scopes` 與
-`Struo:Files:ImageTransform:AllowedFormats`——就是這樣填出來的。陣列元素用索引：
+陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短出廠設定檔已經填滿的陣列，沒被覆
+寫的索引維持原值。出廠設定檔填滿的四個陣列是 `Oidc:Scopes`、
+`Struo:Files:ImageTransform:AllowedFormats`、`Struo:Files:AllowedContentTypes`、
+`Serilog:WriteTo`；前兩個即使整段刪掉，啟動時也會補回內建預設值。陣列元素用索引：
 `Oidc__Scopes__0=openid`；要縮短陣列就改設定檔本身。
 
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
-| `ASPNETCORE_ENVIRONMENT` | 環境變數 | `Production` |
+| `ASPNETCORE_ENVIRONMENT` | 環境變數 | 未設定時為 `Production` |
 
-這個環境變數決定套用哪一個 `appsettings.{Environment}.json`，也決定這一章裡每一個「只在
-Development」的行為：
+`launchSettings.json` 的兩個 profile 都把它設成 `Development`，所以第 3 章的 `dotnet run`
+跑的是 Development。
 
-- Scalar／OpenAPI
-- `GraphQl:ExposeSchema` 的預設值
-- Nitro 瀏覽器 IDE
-- `AutoSyncSchema`
-- schema guard
-- cookie 的 `SecurePolicy`
-- 預設密碼的警告
+`ASPNETCORE_ENVIRONMENT` 決定讀哪個 `appsettings.{Environment}.json`，也決定下面這些依環境
+切換的行為：
+
+- 只在 Development 開：`GraphQl:ExposeSchema` 的預設值、Nitro IDE、`Database:AutoSyncSchema`、
+  schema guard。
+- 只在非 Production 開：`/scalar` 與 `/openapi/v1.json`。
+- 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`、預設管理員密碼未改的警告。
 
 以下四個是 `docker-compose.yml` 的 host 對外埠，不會傳進 API 的設定：
 
@@ -243,8 +243,8 @@ seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `ad
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
-這三組沒有一個鍵在啟動時被驗證：把 `PermitLimit` 設成 `0` 一樣能開機，只是所有請求都會被擋下
-來。被擋下的請求一律回 429，訊息依各自的策略命名，有 `Retry-After` 時會一併帶出。
+這九個鍵都沒有啟動時驗證，設錯的值要到請求進來才會出錯。兩個限流政策被擋下時回 429，訊息依
+政策命名，有 `Retry-After` 時一併帶出；`LoginAccount` 的 429 由登入端點自己回，訊息固定。
 
 `Login:*` 是以用戶端 IP 分桶的固定視窗限制，只保護 `POST /api/auth/login`；預設關閉，因為後
 台使用者常共用同一個對外 IP，開啟後容易連坐擋下整個辦公室，即使 `UseForwardedHeaders` 設定正
