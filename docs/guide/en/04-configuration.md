@@ -170,10 +170,10 @@ Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 ```
 
 Leaving `AllowedFormats` empty or deleting it restores the built-in `webp`/`jpeg`/`png`/`avif` at
-startup, so there is no way to configure "no format allowed"; the list is also only checked when the
-caller asks for an explicit `format`. To turn transforms off entirely, set `Enabled=false`. A transform
-only happens when the caller requests a width, height, or format, the file itself is an image, and
-`Enabled` is `true`; otherwise the original file is streamed as-is.
+startup, so there is no way to configure "no format allowed"; the list is also only checked when
+the caller asks for an explicit `format`. To turn transforms off entirely, set `Enabled=false`.
+A transform only happens when the caller requests a width, height, or format, the file itself is
+an image, and `Enabled` is `true`; otherwise the original file is streamed as-is.
 
 When `CachePath` is a relative path, it's relative to the application's content root, not the
 process's current working directory. This matters for where the cache actually ends up when
@@ -380,7 +380,8 @@ relying on the defaults.
 | `Serilog:MinimumLevel:Override` | map | `{"Microsoft.AspNetCore":"Warning"}` |
 | `Serilog:WriteTo` | array | see below |
 
-Two sinks are configured by default: the console, and a daily-rolling `logs/struo-.log` (`shared: true`).
+Two sinks are configured by default: the console, and a daily-rolling `logs/struo-.log`
+(`shared: true`).
 
 This section isn't bound to a custom options class; Serilog's own configuration reader parses it
 directly. Serilog builds its two loggers once each, at startup, so changing a level requires

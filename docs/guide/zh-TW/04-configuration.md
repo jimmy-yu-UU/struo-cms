@@ -228,9 +228,9 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 |---|---|---|
 | `GraphQl:ExposeSchema` | 布林（可留空） | 無（依環境判斷） |
 
-留空時只有 Development 預設開放，其他環境（含 Production）一律預設關閉；管的只是 schema 能不能被查詢（introspection 與
-`GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器 IDE 另外只認開發環
-境，不受這個鍵控制。
+留空時只有 Development 預設開放，其他環境（含 Production）一律預設關閉；管的只是 schema 能不能被
+查詢（introspection 與 `GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器
+IDE 另外只認開發環境，不受這個鍵控制。
 
 ## RateLimiting
 

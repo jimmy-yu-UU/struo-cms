@@ -107,10 +107,10 @@ every entity class a fork has written. Before upgrading, check the `SqlSugarCore
 `Directory.Packages.props` and read that version's changelog.
 
 The bare JSON column width, tied to framework tables, is computed inside `SqlSugarClientFactory`.
-The translation sidecar's unique index is applied (not computed) by that same factory. The
-soft-delete filter condition is registered
-by the same factory, as a query filter (`db.QueryFilter.AddTableFilter<ISoftDeletable>`); a fork
-does not need to recompute or re-register either.
+The translation sidecar's unique index is derived by `TranslationSidecarIndexPolicy` and applied
+by that same factory. The soft-delete filter condition is registered by the same factory, as a
+query filter (`db.QueryFilter.AddTableFilter<ISoftDeletable>`); a fork does not need to recompute
+or re-register any of them.
 
 Every database access goes through SqlSugar. Only four deliberate exceptions assemble string SQL:
 the scripts under `db/migrations/`, `SchemaGuard`'s read-only queries used only in development, the
