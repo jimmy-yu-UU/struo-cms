@@ -1,9 +1,9 @@
 # 2. Architecture
 
-Once you fork StruoCMS and start adding content or swapping a component, you need to know how the
-system is layered and which parts are the core you should not touch.
+After you fork StruoCMS, you will add content and swap out components. First you need to know how
+the system is layered, and which parts are the core you should not touch.
 
-## Four Projects and the Dependency Direction
+## Four projects and the dependency direction
 
 The backend solution under `src/` has four projects, each responsible for one layer:
 
@@ -26,7 +26,7 @@ The test project `tests/Struo.Tests` is the only place that references all four 
 sample project. `Struo.Application` and `Struo.Infrastructure` both grant it `InternalsVisibleTo`;
 if a fork renames the test project, both `InternalsVisibleTo` declarations need to change together.
 
-## The Core/Sample Boundary
+## The core/sample boundary
 
 The core is every file under `src/Struo.*`, plus the entities the framework itself persists. Those
 entities are collected in `FrameworkEntityTypes.All`, eleven in total:
@@ -52,8 +52,8 @@ Seven of the eleven are themselves collections — they declare `[CmsCollection]
 The core also has two folders outside `src/Struo.*`, plus `db/migrations/README.md`, that a fork
 keeps:
 
-- `frontend/`: the admin backend.
-- `schema/`: the snapshots the schema gate uses to compare the front-end and back-end contracts.
+- `frontend/`: the admin SPA.
+- `schema/`: the snapshots the schema gate uses to compare the frontend and backend contracts.
 
 The only core-owned file under `db/migrations/` is a `README.md` documenting the mechanism:
 CodeFirst creates the framework tables itself on any environment, on any configured database, so the
@@ -61,19 +61,19 @@ core needs no startup SQL script; scripts a fork adds of its own belong to that 
 
 Framework code never references anything under `samples/`; a test enforces that boundary.
 
-## One Declaration Drives Everything
+## One declaration drives everything
 
 A single entity class declaration determines the shape of five things: the database table schema,
-the REST endpoints, the GraphQL schema, the query DSL, and the admin-backend form.
+the REST endpoints, the GraphQL schema, the query DSL, and the admin SPA form.
 
-On a content entity class, SqlSugar's own `[SugarTable]`, `[SugarColumn]`, `[SugarIndex]`,
-`[Navigate]`, and StruoCMS's `[CmsCollection]`/`[CmsField]` all live on the same class — not managed
-by two separate layers.
+A content entity class carries both sets of attributes together: SqlSugar's own `[SugarTable]`,
+`[SugarColumn]`, `[SugarIndex]`, `[Navigate]`, and StruoCMS's `[CmsCollection]`/`[CmsField]`. Two
+separate layers do not each manage their own.
 
 These attributes are scanned only once at startup; the result is cached in a singleton metadata
 provider and never rescanned per request.
 
-## What Can Be Swapped, What Can't
+## What can be swapped, what can't
 
 Swappable parts:
 
@@ -81,14 +81,14 @@ Swappable parts:
   what changes is the provider underneath SqlSugar, not SqlSugar itself. CodeFirst relies on
   vendor-neutral `[ColumnShape]`/`ColumnTypeMap` mapping, so all five engines share one
   table-creation path; chapter 1 lists which engines are verified.
-- **File backend**: `IFileStorage` is the interface the core hands off; local disk and
+- **File backend**: `IFileStorage` is an interface the core hands to a fork; local disk and
   S3-compatible storage are both implementations of it.
-- **Search provider**: `ISearchProvider` is another such interface. The core ships only a
-  `NullSearchProvider` (registered with `TryAddScoped`, and it never handles a search), so until a
-  fork registers its own implementation, search falls back to the built-in LIKE scan.
-- **Change notifications**: `IItemChangeListener` is likewise handed off; the core provides only a
-  default-registered `ItemChangeNotifier` to dispatch them. When a fork registers no listener, a
-  write notifies zero listeners; a fork can register any number.
+- **Search provider**: `ISearchProvider` is another interface the core hands to a fork. The core's
+  only built-in implementation is `NullSearchProvider`, registered with `TryAddScoped`, and it never
+  handles a search. Until a fork registers its own provider, search runs the built-in LIKE scan.
+- **Change notifications**: `IItemChangeListener` is another interface the core hands to a fork; the
+  core provides only a default-registered `ItemChangeNotifier` to dispatch the notifications. When a
+  fork registers no listener, a write notifies zero listeners; a fork can register any number.
 - **Identity stores**: identity data access sits behind several interfaces too —
   `IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`,
   `IExternalUserStore`, `IUserSessionStore` — all under `Struo.Application/Security/`. Each has a
@@ -102,9 +102,9 @@ SqlSugar's attributes directly, so every entity a fork writes inherits that laye
 `IItemRepository` likewise has only one implementation, `SqlSugarItemRepository` — not a removable
 ORM abstraction layer.
 
-A SqlSugar major-version upgrade, or a semantic change to an attribute like `[SugarIndex]`, reaches
-every entity class a fork has written; the core cannot absorb that for you. Before upgrading, check
-the `SqlSugarCore` version in `Directory.Packages.props` and read that version's changelog first.
+A SqlSugar major-version upgrade, or a semantic change to an attribute like `[SugarIndex]`, hits
+every entity class a fork has written. Before upgrading, check the `SqlSugarCore` version in
+`Directory.Packages.props` and read that version's changelog.
 
 The bare JSON column width and the translation sidecar's unique index, both tied to framework
 tables, are computed inside `SqlSugarClientFactory`. The soft-delete filter condition is registered
@@ -115,7 +115,7 @@ Every database access goes through SqlSugar. Only four deliberate exceptions ass
 the scripts under `db/migrations/`, `SchemaGuard`'s read-only queries used only in development, the
 four string forms assembled for relation-filter subqueries, and the strings used for ORDER BY.
 
-## Technology Stack
+## Technology stack
 
 | Layer | Technology | Version or source |
 |---|---|---|
@@ -133,7 +133,7 @@ four string forms assembled for relation-filter subqueries, and the strings used
 without setting them up again. `global.json`'s pinned `10.0.0` plus `latestMinor` and CI's installed
 `10.0.x` are two separate pins, not the same thing.
 
-The two outer projects' package lists are best read from their own `.csproj`: `Struo.Api` carries
+Read the two outer projects' package lists straight from their own `.csproj`: `Struo.Api` carries
 GraphQL, OpenAPI, and Serilog; `Struo.Infrastructure` carries `SqlSugarCore`, S3, password hashing,
 and image processing.
 
@@ -142,19 +142,19 @@ API documentation uses Scalar, with the Mars theme, and JavaScript/Axios as the 
 When `Redis:ConnectionString` is configured, Redis stores cookie-authentication session tickets in
 addition to caching.
 
-## Where a Request Passes Through
+## Where a request passes through
 
 Before reaching a controller, a request passes through, in order: the nosniff header, Serilog
 request logging, CORS, exception handling, authentication, authorization, CSRF protection,
 permission resolution, the rate limiter, and finally the controller or GraphQL. Exception handling
 is deliberately placed ahead of authentication, so a failure during the authentication stage itself
-still returns a wrapped 500.
+still returns an enveloped 500.
 
 Query parameters are validated against metadata by `QueryValidator` before they become SQL. Once
 inside a controller, data access has exactly one path: `IItemRepository` has a single
 implementation, `SqlSugarItemRepository`; no controller touches `ISqlSugarClient` directly.
 
-## What's Next
+## What's next
 
-You have seen the layers and the boundaries; next, get the API and admin backend actually running:
-read [Chapter 3: Getting Started](03-getting-started.md).
+You have seen the layers and the boundaries; next, get the API and admin SPA actually running: read
+[Chapter 3: Getting Started](03-getting-started.md).
