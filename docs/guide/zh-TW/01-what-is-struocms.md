@@ -56,7 +56,8 @@ build 失敗；完整的移除步驟留到之後專門介紹範例專案的章�
 - 後台側欄沒有內容群組，只有 System：對 super-admin 來說，裡面是 Language、Role、User。System
   只列出這三項，是因為 File、MediaFolder、Permission、UserRole 這四個框架集合宣告了
   `Hidden = true`——這是顯示層的旗標，不是權限。
-- Dashboard 固定顯示；Media Library 與 Settings 依權限顯示。
+- Dashboard 固定顯示；Media Library 要有 `file.read` 權限（或 super-admin），Settings 只有
+  super-admin 看得到。
 
 這是正確的狀態，不是安裝有問題——核心刻意不帶任何內容，等你自己的集合加進來把它填滿。
 
