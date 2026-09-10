@@ -4,7 +4,9 @@ This manual documents the StruoCMS template itself — the framework, its config
 extend it. It is written in two languages, chapter-for-chapter, with the same chapters in the same
 order in both. For the one-page overview, quick start and license, see the project
 [`README.md`](../README.md). Start with [Chapter 1](guide/en/01-what-is-struocms.md) in English or
-[第 1 章](guide/zh-TW/01-what-is-struocms.md) in Traditional Chinese.
+[第 1 章](guide/zh-TW/01-what-is-struocms.md) in Traditional Chinese. If you are working on the
+repository with an AI coding agent, start from [`AGENTS.md`](../AGENTS.md), which points at the
+reference set under `docs/ai/`.
 
 ## Reading this manual in a browser
 

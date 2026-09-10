@@ -6,7 +6,7 @@ StruoCMS 把它們變成資料表、API 與後台介面。
 
 內容模型從你這邊開始：剛裝好的 StruoCMS 一個內容集合都沒有，Article、Tag、Category 這些集合都由你自
 己宣告。`samples/Struo.Sample.Blog` 是一個可選的示範專案，示範怎麼用核心提供的工具定義自己的集合，學
-完之後可以刪掉——移除步驟在範例專案的章節。
+完之後可以刪掉；完整的移除步驟留到之後專門介紹範例專案的章節。
 
 [![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
