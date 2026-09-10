@@ -144,3 +144,18 @@ test('the body ends at the first blank line', () => {
   const md = ['| a | b |', '|---|---|', '| 1 | 2 |', '', '| p | q | r | s | t |'].join('\n')
   assert.deepEqual(checkTables(md, LIMITS), [])
 })
+
+test('a setext heading underline is not a table delimiter', () => {
+  const md = [`${'p'.repeat(70)}`, '---', '', 'prose'].join('\n')
+  assert.deepEqual(checkTables(md, LIMITS), [])
+})
+
+test('YAML frontmatter is not a table', () => {
+  const md = ['---', `title: ${'t'.repeat(70)}`, '---', '', '# Heading', ''].join('\n')
+  assert.deepEqual(checkTables(md, LIMITS), [])
+})
+
+test('a header with pipes over a pipe-less delimiter row is still a table', () => {
+  const md = ['a | b | c | d | e', '--- | --- | --- | --- | ---'].join('\n')
+  assert.equal(checkTables(md, LIMITS).length, 1)
+})

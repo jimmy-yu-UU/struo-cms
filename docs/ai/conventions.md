@@ -27,7 +27,7 @@ the text you are cutting, move it somewhere durable first.
 
 Third, **cite constructs, not lines** — a class, method, branch or distinguishing property, never a
 line range; the rule and its one exception are in "Citing code from docs and comments" below, and
-`CodeCitationConventionTests` enforces it across the manual and the reference set alike.
+`CodeCitationConventionTests` enforces it on the manual chapters and the reference set.
 
 ### For the manual
 

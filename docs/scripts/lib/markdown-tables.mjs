@@ -3,15 +3,18 @@
 // unacceptable on 2026-09-10: a wide cell is as unreadable as a long paragraph.
 // Nothing in `vitepress build` measures this, so the guard lives here.
 //
-// The check is deliberately mechanical and source-side. It finds tables by
-// their delimiter row, the way markdown-it (VitePress's renderer) does, so a
-// row missing its outer pipes or a table indented inside a list item is still
-// found — neither hides a table from markdown-it, so neither hides one here.
-// It measures the text a reader will see — inline code, link targets and
-// emphasis markers stripped — with CJK characters counted double, because at
-// the manual's font size one CJK glyph takes about the space of two Latin
-// ones. There is no per-table exemption on purpose: a table that cannot fit
-// must be rewritten as a list or a section, not waved through.
+// The check is deliberately mechanical and source-side. It finds tables the
+// way markdown-it (VitePress's renderer) does: a delimiter row anchors a
+// table only when the header line above it contains a pipe, so a table
+// missing its outer pipes or indented inside a list item is still found —
+// neither hides a table from markdown-it, so neither hides one here — while a
+// setext heading underline or YAML frontmatter's `---` never anchors one,
+// because their header line has no pipe. It measures the text a reader will
+// see — inline code, link targets and emphasis markers stripped — with CJK
+// characters counted double, because at the manual's font size one CJK glyph
+// takes about the space of two Latin ones. There is no per-table exemption on
+// purpose: a table that cannot fit must be rewritten as a list or a section,
+// not waved through.
 
 // Spec thresholds (docs/_archive-local/superpowers/specs/2026-09-10-docs-rewrite-design.md §5).
 // One definition, shared by the CLI and its tests.
@@ -44,16 +47,21 @@ export function cellText(rawCell) {
 
 // Same fence rule as check-rendered-chapters.mjs: 3+ backticks or tildes,
 // indented up to 3 spaces; the closer reuses the opener's character and is at
-// least as long. Tables in code samples must never be measured — that false
-// positive is exactly what would get this guard deleted later.
+// least as long. Tables in fenced code samples must never be measured — that
+// false positive is exactly what would get this guard deleted later.
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/
 
 // A delimiter row, after stripping leading whitespace and one optional
 // leading/trailing pipe: one or more `-`-only cells (each optionally
 // colon-anchored for alignment), separated by `|`. This is the anchor for
-// table detection — the header is whatever non-blank, non-fence line sits
-// immediately above it, and the body is the consecutive lines that follow.
+// table detection, but only when the header line above it also contains a
+// pipe — markdown-it's table rule requires that too, which is what keeps a
+// setext heading underline (`prose` / `---`) or YAML frontmatter's `---`
+// fences from being mistaken for one. The header is whatever non-blank,
+// non-fence line sits immediately above the delimiter row, and the body is
+// the consecutive lines that follow.
 const DELIMITER_ROW = /^:?-+:?$/
+const HAS_UNESCAPED_PIPE = /(?<!\\)\|/
 
 // Strip leading whitespace, one leading `|` and one trailing `|` (after
 // trailing whitespace), then split on unescaped `|`. A row with no pipes at
@@ -135,7 +143,12 @@ export function checkTables(markdown, limits) {
 
     const headerIndex = index - 1
     const headerLine = headerIndex >= 0 ? lines[headerIndex] : undefined
-    if (headerIndex < 0 || fenceAt[headerIndex] || isBlank(headerLine)) {
+    if (
+      headerIndex < 0 ||
+      fenceAt[headerIndex] ||
+      isBlank(headerLine) ||
+      !HAS_UNESCAPED_PIPE.test(headerLine)
+    ) {
       index += 1
       continue
     }
