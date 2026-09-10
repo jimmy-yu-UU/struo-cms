@@ -20,28 +20,30 @@ const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide
 // The root may come from the command line (the tests point it at a temp
 // directory), so it is canonicalised and confined to the working directory
 // before anything under it is read — the standard mitigation Sonar expects
-// for a CLI an agent might invoke with a crafted argument (S8707).
+// for a CLI an agent might invoke with a crafted argument (S8707). The
+// order matters to that analysis: resolve, then confine, then touch.
 function confinedDirectory(candidate) {
   let resolved
   try {
     resolved = realpathSync(candidate)
   } catch {
-    return null
-  }
-  if (!statSync(resolved).isDirectory()) {
-    return null
+    throw new Error(`${candidate}: not a directory`)
   }
   const base = realpathSync(process.cwd())
   if (resolved !== base && !resolved.startsWith(base + sep)) {
-    process.stderr.write(`${candidate}: outside the working directory ${base}\n`)
-    process.exit(1)
+    throw new Error(`${candidate}: outside the working directory ${base}`)
+  }
+  if (!statSync(resolved).isDirectory()) {
+    throw new Error(`${candidate}: not a directory`)
   }
   return resolved
 }
 
-const guideRoot = confinedDirectory(process.argv[2] ?? DEFAULT_GUIDE)
-if (guideRoot === null) {
-  process.stderr.write(`${process.argv[2] ?? DEFAULT_GUIDE}: not a directory\n`)
+let guideRoot
+try {
+  guideRoot = confinedDirectory(process.argv[2] ?? DEFAULT_GUIDE)
+} catch (error) {
+  process.stderr.write(`${error.message}\n`)
   process.exit(1)
 }
 
