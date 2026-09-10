@@ -15,34 +15,37 @@ Any key can be overridden with an environment variable by replacing `:` with `__
 `Database__ConnectionString`. The one exception is `Testing:PostgresConnection`, covered in the last
 section of this chapter.
 
-Changing any key requires restarting the process to take effect. Where a table below says a key has
-"no validation rule", that means a correctly typed value is never checked further; a type mismatch (a
-misspelled `Database:DbType`, or text in a numeric field) still fails — at startup, for a section
-bound with `ValidateOnStart`; most other sections only fail when the value is first used.
+Changing any key requires restarting the process to take effect. Where a paragraph below a table
+says a key has "no validation rule", a correctly typed value is never checked further. A type
+mismatch — a misspelled `Database:DbType`, or text in a numeric field — still fails: at startup for
+a section bound with `ValidateOnStart`, and in most other sections only when the value is first
+used.
 
-An array-valued key has to be replaced as a whole: setting only the first few elements at a
-higher-precedence layer doesn't shorten an array the shipped file already fills in — indices you
-don't override keep their original value. The shipped file fully populates four arrays:
-`Oidc:Scopes`, `Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:AllowedContentTypes`, and
-`Serilog:WriteTo`; the first two fall back to their built-in default even if you delete them entirely.
-Array elements use an index, e.g. `Oidc__Scopes__0=openid`; to actually shorten an array, edit the
+An array-valued key has to be replaced as a whole: at a higher-precedence layer, indices you don't
+override keep the shipped value, so filling in only the first few elements doesn't shorten the
+array.
+
+The shipped file fully populates four arrays: `Oidc:Scopes`,
+`Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:AllowedContentTypes`, and
+`Serilog:WriteTo`; the first two fall back to their built-in default even if you delete them
+entirely. Array elements use an index, e.g. `Oidc__Scopes__0=openid`; to shorten an array, edit the
 settings file itself.
 
 | Key | Type | Default |
 |---|---|---|
 | `ASPNETCORE_ENVIRONMENT` | environment variable | `Production` when unset |
 
-Both profiles in `launchSettings.json` set it to `Development`, so the `dotnet run` in chapter 3 runs
-as Development.
+Both profiles in `launchSettings.json` set it to `Development`, so the `dotnet run` in chapter 3
+runs as Development.
 
 `ASPNETCORE_ENVIRONMENT` decides which `appsettings.{Environment}.json` is read, and also gates the
 following environment-specific behavior:
 
-- Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE, `Database:AutoSyncSchema`,
-  the schema guard.
+- Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE,
+  `Database:AutoSyncSchema`, the schema guard.
 - Non-Production only: `/scalar` and `/openapi/v1.json`.
-- Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an unchanged
-  default admin password.
+- Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an
+  unchanged default admin password.
 
 These four are host-facing ports in `docker-compose.yml`; they never reach the API's own
 configuration:
@@ -68,26 +71,25 @@ This is the actual value, not the nested form used in `appsettings.json`:
 Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME
 ```
 
-Leaving `ConnectionString` empty or omitted fails startup immediately, rather than surfacing as an
-error on first query. The framework's own tables are always created automatically and need no
-configuration.
+Leaving `ConnectionString` empty or omitted fails startup, not the first query. The framework's own
+tables are always created automatically and need no configuration.
 
 `MigrationsPath` is only for applying migration scripts you prepare yourself; leaving it empty
-disables it. It runs on every backend, without checking whether a script was written for that
-backend — a script written for the wrong backend simply fails when it's applied. The migration runner
-takes no mutual-exclusion lock, so multiple replicas starting together can try to apply the same file
-at the same time.
+disables it. It runs on every backend, without checking which backend a script was written for; one
+written for the wrong backend fails outright when it's applied. The migration runner takes no
+mutual-exclusion lock, so multiple replicas starting together can try to apply the same file at
+once.
 
 The startup order is: snapshot the existing tables → create any missing tables → (Development)
 structural sync → (when `MigrationsPath` is set) apply SQL scripts → (Development) schema guard →
-seed data; seeding only touches tables created during this startup. CodeFirst creates tables first and
-scripts run after, so your own migrations should only `ALTER` existing tables.
+seed data; seeding only touches tables created during this startup. CodeFirst creates tables first
+and scripts run after, so your own migrations should only `ALTER` existing tables.
 
-`AutoSyncSchema=true` syncs existing tables to match the entity classes' structure — adding,
-modifying, and even dropping columns. It only takes effect in Development; in any other environment
-it's ignored and logs a warning. Against a table that already holds data, that column-drop behavior
-can make data disappear outright, and whether it actually drops columns depends on the backend:
-PostgreSQL really drops them, SQLite doesn't.
+`AutoSyncSchema=true` syncs existing tables to match the entity classes' structure. It adds,
+modifies, and even drops columns. It only takes effect in Development; in any other environment it's
+ignored and logs a warning. Against a table that already holds data, that column-drop behavior can
+make data disappear outright, and whether columns are dropped depends on the backend: PostgreSQL
+really drops them, SQLite doesn't.
 
 ## Struo:ContentAssemblies
 
@@ -95,13 +97,14 @@ PostgreSQL really drops them, SQLite doesn't.
 |---|---|---|
 | `Struo:ContentAssemblies` | string array | `[]` |
 
-Every assembly name in the list must resolve through `Assembly.Load`, which in practice means the API
-host project references it directly; an unresolvable name fails startup rather than being skipped.
+Every assembly name in the list must resolve through `Assembly.Load`, which in practice means the
+API host project references it directly; an unresolvable name fails startup rather than being
+skipped.
 
 This key is read directly from `builder.Configuration` before `builder.Build()` runs, bypassing
-`IOptions<T>`. That means it sees every normal configuration source installed before startup, but a
-custom configuration provider you register after `CreateBuilder` won't be visible to it — and nothing
-reports an error when that happens.
+`IOptions<T>`. So it sees every normal configuration source installed before startup, but a custom
+configuration provider you register after `CreateBuilder` won't be visible to it, with no error
+reported.
 
 ## Struo:Files
 
@@ -113,8 +116,8 @@ reports an error when that happens.
 | `Struo:Files:PresignedRedirect` | bool | `false` |
 
 `Backend` is the only top-level key in this section that's actually validated at startup: an
-unrecognized value fails startup immediately, and the required fields of whichever backend you picked
-(see Local/S3 below) are validated along with it. `MaxUploadBytes`, `AllowedContentTypes`,
+unrecognized value fails startup immediately, and the required fields of whichever backend you
+picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`, `AllowedContentTypes`,
 `PresignedRedirect`, and the whole `ImageTransform` section have no validation rule — a correctly
 typed value is never checked further.
 
@@ -122,9 +125,9 @@ typed value is never checked further.
   about the length is still limited.
 - `AllowedContentTypes`: leaving it empty means no format is restricted; the shipped file already
   lists 18 MIME types.
-- `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL; the
-  default `false` has the API stream the bytes itself, which suits setups where the browser can't
-  reach storage directly.
+- `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL;
+  the default `false` has the API stream the bytes itself, which suits setups where the browser
+  can't reach storage directly.
 
 ### Local
 
@@ -147,8 +150,8 @@ When `Backend="local"`, `RootPath` is the only field validated at startup.
 | `Struo:Files:S3:PresignTtlSeconds` | integer (seconds) | `300` |
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
-startup; the shipped value is the placeholder `REPLACE_ME`, waiting to be replaced. Getting `Region`,
-`ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup.
+startup; the shipped value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
+`Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup.
 
 ### ImageTransform
 
@@ -171,7 +174,7 @@ caller requests a width, height, or format, the file itself is an image, and `En
 otherwise the original file is streamed as-is.
 
 When `CachePath` is a relative path, it's relative to the application's content root, not the
-process's current working directory — this matters for where the cache actually ends up when
+process's current working directory. This matters for where the cache actually ends up when
 something like systemd starts the process from a different directory.
 
 ## Struo:Cors
@@ -180,15 +183,16 @@ something like systemd starts the process from a different directory.
 |---|---|---|
 | `Struo:Cors:AllowedOrigins` | string array | `[]` |
 
-When `AllowedOrigins` is empty, `UseCors` isn't called at all, and no response carries a CORS header;
-leave it empty for any same-origin setup (the Vite dev proxy, or deploying the admin SPA and the API
-on the same domain). This key is read directly from `IConfiguration` and has no startup validation of
-its own.
+When `AllowedOrigins` is empty, `UseCors` isn't called at all, and no response carries a CORS
+header; leave it empty for any same-origin setup (the Vite dev proxy, or deploying the admin SPA and
+the API on the same domain). This key is read directly from `IConfiguration` and has no startup
+validation of its own.
 
 Configuring even one origin also switches the session cookie to `SameSite=None` plus
-`SecurePolicy=Always`, and opens the CORS policy to those origins with `AllowCredentials`, any header,
-and any method. Browsers only honor `SameSite=None` over HTTPS, so once this key is non-empty, both
-the front end and the API must run over HTTPS, or authentication silently stops working.
+`SecurePolicy=Always`, and opens the CORS policy to those origins with `AllowCredentials`, any
+header, and any method. Browsers only honor `SameSite=None` over HTTPS, so once this key is
+non-empty, both the admin SPA and the API must run over HTTPS, or authentication silently stops
+working.
 
 ## Query
 
@@ -207,15 +211,14 @@ All eight keys carry `[Range(1, int.MaxValue)]` validation and are bound with `V
 setting one to zero or a negative number fails startup immediately. A key name outside this list (a
 typo, say) is silently ignored, with no error.
 
-A `limit` above `MaxLimit` is clamped to the ceiling, not rejected; omitting `limit`, or supplying a
-non-positive value, falls back to `DefaultLimit`. Exceeding `MaxFilterConditions`, `MaxFacets`, or
-`MaxAggregates` instead throws an exception naming the specific limit, and the query is stopped before
-it executes.
+A `limit` above `MaxLimit` is clamped, not rejected; omitting `limit`, or supplying a non-positive
+value, falls back to `DefaultLimit`. Exceeding `MaxFilterConditions`, `MaxFacets`, or
+`MaxAggregates` instead throws an exception naming the limit, and the query never executes.
 
 `MaxRelationDepth` counts the number of relation hops in a path; the final field itself and the
-`_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate the
-results — it's treated as an `ISearchProvider` returning more than it should, and throws an exception
-(500) instead.
+`_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate
+the results. It's treated as an `ISearchProvider` returning more than it should, and throws an
+exception (500) instead.
 
 ## Auth
 
@@ -227,14 +230,14 @@ results — it's treated as an `ISearchProvider` returning more than it should, 
 | `Auth:Password:MaxLength` | integer | `128` |
 
 This email/password pair is applied only when the `users` table is first created; it's never re-read
-on later startups, and it's never backfilled onto a database that already exists. The seeder doesn't
-enforce the password policy, so whatever you put here is accepted as-is — the shipped `admin` is only
-five characters, shorter than `MinLength`'s 8.
+on later startups, and it's never backfilled onto an existing database. The seeder doesn't enforce
+the password policy, so whatever you put here is accepted as-is. The shipped `admin` is only five
+characters, shorter than `MinLength`'s 8.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.
-These two keys carry their own startup validation, `MinLength >= 1 && MinLength <= MaxLength` —
-setting them backwards fails startup. Only `MinLength` is returned to the front end, through
+These two keys carry their own startup validation, `MinLength >= 1 && MinLength <= MaxLength`.
+Setting them backwards fails startup. Only `MinLength` is returned to the admin SPA, through
 `GET /api/config`.
 
 ## Rbac
@@ -244,7 +247,7 @@ setting them backwards fails startup. Only `MinLength` is returned to the front 
 | `Rbac:PublicReadCollections` | string array | `[]` |
 
 This key is applied only when the `roles` table is first created; changing it and restarting won't
-retroactively grant public read access on an existing database — either set it before the first
+retroactively grant public read access on an existing database. Either set it before the first
 startup, or grant the access afterward directly through the admin UI or the API.
 
 ## GraphQl
@@ -253,10 +256,10 @@ startup, or grant the access afterward directly through the admin UI or the API.
 |---|---|---|
 | `GraphQl:ExposeSchema` | bool (may be empty) | none (environment-dependent) |
 
-Left unset, it defaults to open in Development and closed in Production; it only governs whether the
-schema itself can be queried — introspection, and `GET /graphql?sdl` — and doesn't affect
-`POST /graphql` itself. The built-in Nitro browser IDE separately only recognizes Development, and
-isn't controlled by this key.
+Left unset, it defaults to open in Development and closed in Production; it governs only whether the
+schema can be queried (introspection and `GET /graphql?sdl`); `POST /graphql` itself is unaffected.
+The built-in Nitro browser IDE separately only recognizes Development, and isn't controlled by this
+key.
 
 ## RateLimiting
 
@@ -272,38 +275,38 @@ isn't controlled by this key.
 | `RateLimiting:Password:PermitLimit` | integer | `5` |
 | `RateLimiting:Password:WindowSeconds` | integer (seconds) | `60` |
 
-None of these nine keys is validated at startup; a wrong value only surfaces once a request comes in.
-When either rate-limit policy blocks a request it returns 429, with a message naming the policy and,
-where one applies, a `Retry-After` header; the `LoginAccount` 429 is returned by the login endpoint
-itself, with a fixed message.
+None of these nine keys is validated at startup; a wrong value only surfaces once a request comes
+in. When either of the two rate-limiter policies (`Login:*` and `Password:*`) blocks a request it
+returns 429, with a message naming the policy and, where one applies, a `Retry-After` header; the
+`LoginAccount` 429 is returned by the login endpoint itself, with a fixed message.
 
-`Login:*` is a fixed-window limit bucketed by client IP, protecting only `POST /api/auth/login`; it's
-off by default because back-office users often share the same outbound IP, and enabling it can easily
-lock out an entire office at once, even with `UseForwardedHeaders` configured correctly.
+`Login:*` is a fixed-window limit bucketed by client IP, protecting only `POST /api/auth/login`;
+it's off by default because admin users often share the same outbound IP, and enabling it can lock
+out an entire office, even with `UseForwardedHeaders` configured correctly.
 
 To enable it behind a reverse proxy, you have to add `UseForwardedHeaders` yourself and list
-`KnownProxies`/`KnownNetworks` — this project doesn't register it by default. This limiter's state
+`KnownProxies`/`KnownNetworks`. This project doesn't register it by default. This limiter's state
 lives in process memory and isn't shared across replicas; a cross-replica IP limit belongs in a
 gateway or WAF in front of the API.
 
 `LoginAccount:*` buckets by the email in the request and checks before password verification, so a
-blocked request never spends Argon2id compute; only failures accumulate, and a successful login clears
-that account's count. Whether the account doesn't exist, the password is wrong, or the account is
-disabled, all of it counts as one failure and all of it returns the same 429 — that uniformity is what
-prevents account enumeration.
+blocked request never spends Argon2id compute; only failures accumulate, and a successful login
+clears that account's count. Whether the account doesn't exist, the password is wrong, or the
+account is disabled, all of it counts as one failure and returns the same 429. That uniformity is
+what prevents account enumeration.
 
-This limiter's counts live in `IDistributedCache`, the same underlying store as session tickets: with
-`Redis:ConnectionString` configured, each account gets one counter shared across replicas; left empty,
-each replica counts on its own.
+This limiter's counts live in `IDistributedCache`, the same underlying store as session tickets:
+with `Redis:ConnectionString` configured, each account gets one counter shared across replicas; left
+empty, each replica counts on its own.
 
-The count isn't an atomic read-modify-write, so in an extreme case two simultaneous failures might be
-recorded as only one. The default is looser than the IP limit, with a long 900-second window — it's
-aimed at sustained password spraying against a single account.
+The count isn't an atomic read-modify-write, so in rare cases two simultaneous failures are recorded
+as one. The default is looser than the IP limit, with a long 900-second window. It's aimed at
+sustained password spraying against a single account.
 
 `Password:*` protects only `PUT /api/users/{id}/password`, bucketed by the caller's own user id,
-falling back to IP only when no user id is available — since this endpoint requires login to call,
-that fallback doesn't happen in practice. Because the bucket key is the caller, a super-admin resetting
-many other users' passwords in bulk spends their own quota, not the quota of the users being reset.
+falling back to IP only when no user id is available — since the endpoint requires login, that
+fallback doesn't happen in practice. Because the bucket key is the caller, a super-admin resetting
+many other users' passwords in bulk spends their own quota, not the reset users'.
 
 ## Branding
 
@@ -325,9 +328,9 @@ has been taken down).
 
 Left empty, it falls back to an in-memory distributed cache, and sessions disappear every time the
 process restarts — fine only for brief local testing; set this key whenever you run more than one
-replica, or need sessions to survive a restart. The shipped value is an empty string, and the value is
-`null` when the key is absent entirely; both land on the same in-memory branch. This key also backs
-the store shared by `RateLimiting:LoginAccount`.
+replica, or need sessions to survive a restart. The shipped value is an empty string, and an absent
+key yields `null`; both land on the same in-memory branch. This key also backs the store shared by
+`RateLimiting:LoginAccount`.
 
 ## Oidc
 
@@ -351,19 +354,19 @@ Oidc:Scopes = ["openid", "email", "profile"]
 ```
 
 When `Enabled=true`, `Authority`, `ClientId`, and `ClientSecret` must all be non-empty, or startup
-fails; with `Enabled=false` that rule always passes. But when `Enabled` is `false`, or `Authority` is
-empty, the OIDC authentication scheme simply isn't registered at all, and `/api/auth/login/oidc`
-returns 404 — that's not a configuration error.
+fails; with `Enabled=false` that rule always passes. But when `Enabled` is `false`, or `Authority`
+is empty, the OIDC authentication scheme isn't registered at all, and `/api/auth/login/oidc` returns
+404. That's not a configuration error.
 
 On the first login with an external identity, StruoCMS matches it to an existing local account by
 email; that matching only happens once `AllowedTenantId`, `RequireEmailVerified`, and
-`AllowedEmailDomains` all pass their checks — loosen them, and anyone with a matching email at any
+`AllowedEmailDomains` all pass their checks. Loosen them, and anyone with a matching email at any
 identity provider can take over a password account.
 
-`RequireEmailVerified` and `AllowedEmailDomains` default to permissive; `AllowedTenantId` doesn't — the
-shipped value is `REPLACE_TENANT_ID`, which matches no real tenant, so it blocks every external login
-until you replace it. When you enable OIDC in Production, set all three explicitly rather than relying
-on the defaults.
+`RequireEmailVerified` and `AllowedEmailDomains` default to permissive; `AllowedTenantId` doesn't.
+The shipped value is `REPLACE_TENANT_ID`, which matches no real tenant, so it blocks every external
+login until you replace it. When you enable OIDC in Production, set all three explicitly rather than
+relying on the defaults.
 
 ## Serilog
 
@@ -376,8 +379,9 @@ on the defaults.
 Two sinks ship by default: the console, and a daily-rolling `logs/struo-.log` (`shared: true`).
 
 This section isn't bound to a custom options class; Serilog's own configuration reader parses it
-directly. Both loggers are built once, at startup, so changing a level requires restarting the
-process; the first few lines logged before `WriteTo` is read go to the console only.
+directly. Serilog builds its two loggers once each, at startup, so changing a level requires
+restarting the process; the first few lines — logged before `WriteTo` is read — go to the console
+only.
 
 ## Testing
 
@@ -387,11 +391,10 @@ process; the first few lines logged before `WriteTo` is read go to the console o
 
 The running API never reads this section at all; only the test project's own `ConfigurationBuilder`
 does. It's also the one key in the entire configuration surface where the environment-variable
-override convention doesn't apply — only `STRUO_TEST_PG_CONNECTION` is honored (checked first), with
-this key itself as the fallback. Leaving it empty skips the whole database test suite; the connection
-string's database name must include the word `test`.
+override convention doesn't apply. Only `STRUO_TEST_PG_CONNECTION` is honored (checked first), with
+this key itself as the fallback. Leaving it empty skips the whole database test suite; the
+connection string's database name must include the word `test`.
 
 ## What's next
 
-With configuration in place, the next step is defining your own first content collection — that's the
-topic of the next chapter.
+With configuration in place, the next chapter defines your first content collection.
