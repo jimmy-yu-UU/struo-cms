@@ -169,9 +169,11 @@ This is the actual value, not the nested form used in `appsettings.json`:
 Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 ```
 
-An empty `AllowedFormats` list means no format passes the check. A transform only happens when the
-caller requests a width, height, or format, the file itself is an image, and `Enabled` is `true`;
-otherwise the original file is streamed as-is.
+Leaving `AllowedFormats` empty or deleting it restores the built-in `webp`/`jpeg`/`png`/`avif` at
+startup, so there is no way to configure "no format allowed"; the list is also only checked when the
+caller asks for an explicit `format`. To turn transforms off entirely, set `Enabled=false`. A transform
+only happens when the caller requests a width, height, or format, the file itself is an image, and
+`Enabled` is `true`; otherwise the original file is streamed as-is.
 
 When `CachePath` is a relative path, it's relative to the application's content root, not the
 process's current working directory. This matters for where the cache actually ends up when
@@ -185,8 +187,8 @@ something like systemd starts the process from a different directory.
 
 When `AllowedOrigins` is empty, `UseCors` isn't called at all, and no response carries a CORS
 header; leave it empty for any same-origin setup (the Vite dev proxy, or deploying the admin SPA and
-the API on the same domain). This key is read directly from `IConfiguration` and has no startup
-validation of its own.
+the API on the same domain). This key is read directly from `IConfiguration` and has no validation
+rule of its own.
 
 Configuring even one origin also switches the session cookie to `SameSite=None` plus
 `SecurePolicy=Always`, and opens the CORS policy to those origins with `AllowCredentials`, any
@@ -229,10 +231,11 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 
-This email/password pair is applied only when the `users` table is first created; it's never re-read
-on later startups, and it's never backfilled onto an existing database. The seeder doesn't enforce
-the password policy, so whatever you put here is accepted as-is. The shipped `admin` is only five
-characters, shorter than `MinLength`'s 8.
+The pair is applied only when the `users` table is first created and is never backfilled onto an
+existing database, but it is read again on every start — the Production default-password warning
+compares against it. These two keys have no options class; `Program.cs` reads them straight from
+configuration as strings. The seeder doesn't enforce the password policy, so whatever you put here
+is accepted as-is. The shipped `admin` is only five characters, shorter than `MinLength`'s 8.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.
@@ -256,7 +259,8 @@ startup, or grant the access afterward directly through the admin UI or the API.
 |---|---|---|
 | `GraphQl:ExposeSchema` | bool (may be empty) | none (environment-dependent) |
 
-Left unset, it defaults to open in Development and closed in Production; it governs only whether the
+When unset, it defaults to open only in Development; every other environment, Production included,
+defaults to closed. It governs only whether the
 schema can be queried (introspection and `GET /graphql?sdl`); `POST /graphql` itself is unaffected.
 The built-in Nitro browser IDE separately only recognizes Development, and isn't controlled by this
 key.
@@ -275,7 +279,7 @@ key.
 | `RateLimiting:Password:PermitLimit` | integer | `5` |
 | `RateLimiting:Password:WindowSeconds` | integer (seconds) | `60` |
 
-None of these nine keys is validated at startup; a wrong value only surfaces once a request comes
+None of the nine keys has a validation rule; a wrong value only surfaces once a request comes
 in. When either of the two rate-limiter policies (`Login:*` and `Password:*`) blocks a request it
 returns 429, with a message naming the policy and, where one applies, a `Retry-After` header; the
 `LoginAccount` 429 is returned by the login endpoint itself, with a fixed message.
@@ -354,9 +358,9 @@ Oidc:Scopes = ["openid", "email", "profile"]
 ```
 
 When `Enabled=true`, `Authority`, `ClientId`, and `ClientSecret` must all be non-empty, or startup
-fails; with `Enabled=false` that rule always passes. But when `Enabled` is `false`, or `Authority`
-is empty, the OIDC authentication scheme isn't registered at all, and `/api/auth/login/oidc` returns
-404. That's not a configuration error.
+fails; with `Enabled=false` that rule always passes. But `Enabled=false` alone leaves the OIDC
+authentication scheme unregistered, and `/api/auth/login/oidc` returns 404. That's not a
+configuration error.
 
 On the first login with an external identity, StruoCMS matches it to an existing local account by
 email; that matching only happens once `AllowedTenantId`, `RequireEmailVerified`, and
@@ -376,7 +380,7 @@ relying on the defaults.
 | `Serilog:MinimumLevel:Override` | map | `{"Microsoft.AspNetCore":"Warning"}` |
 | `Serilog:WriteTo` | array | see below |
 
-Two sinks ship by default: the console, and a daily-rolling `logs/struo-.log` (`shared: true`).
+Two sinks are configured by default: the console, and a daily-rolling `logs/struo-.log` (`shared: true`).
 
 This section isn't bound to a custom options class; Serilog's own configuration reader parses it
 directly. Serilog builds its two loggers once each, at startup, so changing a level requires
@@ -392,8 +396,9 @@ only.
 The running API never reads this section at all; only the test project's own `ConfigurationBuilder`
 does. It's also the one key in the entire configuration surface where the environment-variable
 override convention doesn't apply. Only `STRUO_TEST_PG_CONNECTION` is honored (checked first), with
-this key itself as the fallback. Leaving it empty skips the whole database test suite; the
-connection string's database name must include the word `test`.
+this key itself as the fallback. Leaving it empty skips the opt-in PostgreSQL integration tests; the
+SQLite database tests are unaffected and still run. The connection string's database name must
+include the word `test`.
 
 ## What's next
 

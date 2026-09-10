@@ -147,8 +147,10 @@ Development 生效，其他環境會被忽略並記一筆警告。對已經有�
 Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 ```
 
-`AllowedFormats` 留空清單代表沒有一種格式會通過檢查。轉換只在呼叫端要求寬、高或格式其中一項、
-該筆檔案本身是圖片，而且 `Enabled` 為 `true` 時才會發生，否則直接串流原始檔案。
+`AllowedFormats` 留空或整段刪掉，啟動時都會補回內建的 `webp`／`jpeg`／`png`／`avif`，所以設不出
+「一種格式都不允許」的狀態；而且這份清單只在呼叫端明確指定 `format` 時才檢查。要完全關掉轉換，
+用 `Enabled=false`。轉換只在呼叫端要求寬、高或格式其中一項、該筆檔案本身是圖片，而且 `Enabled`
+為 `true` 時才會發生，否則直接串流原始檔案。
 
 `CachePath` 是相對路徑時，是相對於應用程式的 content root，不是行程當下的工作目錄——用
 systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落在哪裡。
@@ -160,8 +162,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Struo:Cors:AllowedOrigins` | 字串陣列 | `[]` |
 
 `AllowedOrigins` 留空時，`UseCors` 根本不會被呼叫，任何回應都不會帶 CORS header；同源架構
-（Vite 開發代理、後台與 API 同網域部署）都該留空。這個鍵直接讀 `IConfiguration`，本身沒有啟動
-時驗證。
+（Vite 開發代理、後台與 API 同網域部署）都該留空。這個鍵直接讀 `IConfiguration`，本身沒有驗證
+規則。
 
 只要設定了任何一個來源，就會同時把 session cookie 改成 `SameSite=None`＋
 `SecurePolicy=Always`，並讓 CORS 政策對這些來源開放 `AllowCredentials`、任意 header 與任意方
@@ -201,9 +203,10 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 
-這組帳密只在 `users` 資料表第一次建立時套用，之後開機不會重讀，也不會補到已經存在的資料庫上。
-seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `admin` 只有五個字元，比 `MinLength` 的
-8 還短。
+這組帳密只在 `users` 資料表第一次建立時套用，不會補到已經存在的資料庫上；但每次啟動都會重新
+讀取——Production 那筆預設密碼警告就是拿它比對出來的。這兩個鍵沒有選項類別，是在 `Program.cs`
+裡直接從設定讀成字串。seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `admin` 只有五個
+字元，比 `MinLength` 的 8 還短。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有
@@ -225,7 +228,7 @@ seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `ad
 |---|---|---|
 | `GraphQl:ExposeSchema` | 布林（可留空） | 無（依環境判斷） |
 
-留空時開發環境預設開放、正式環境預設關閉；管的只是 schema 能不能被查詢（introspection 與
+留空時只有 Development 預設開放，其他環境（含 Production）一律預設關閉；管的只是 schema 能不能被查詢（introspection 與
 `GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器 IDE 另外只認開發環
 境，不受這個鍵控制。
 
@@ -243,8 +246,9 @@ seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `ad
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
-這九個鍵都沒有啟動時驗證，設錯的值要到請求進來才會出錯。兩個限流政策被擋下時回 429，訊息依
-政策命名，有 `Retry-After` 時一併帶出；`LoginAccount` 的 429 由登入端點自己回，訊息固定。
+這九個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*` 與 `Password:*` 這兩個限流政策
+被擋下時回 429，訊息依政策命名，有 `Retry-After` 時一併帶出；`LoginAccount` 的 429 由登入端點
+自己回，訊息固定。
 
 `Login:*` 是以用戶端 IP 分桶的固定視窗限制，只保護 `POST /api/auth/login`；預設關閉，因為後
 台使用者常共用同一個對外 IP，開啟後容易連坐擋下整個辦公室，即使 `UseForwardedHeaders` 設定正
@@ -310,8 +314,8 @@ Oidc:Scopes = ["openid", "email", "profile"]
 ```
 
 `Enabled=true` 時，`Authority`、`ClientId`、`ClientSecret` 都要非空，否則啟動失敗；
-`Enabled=false` 時這條規則永遠通過。但 `Enabled` 為 `false`，或 `Authority` 是空的，OIDC 這
-個認證 scheme 根本不會被註冊，`/api/auth/login/oidc` 會回 404，不是設定錯誤。
+`Enabled=false` 時這條規則永遠通過。但單是 `Enabled=false` 就會讓 OIDC 這個認證 scheme 完全
+不會被註冊，`/api/auth/login/oidc` 會回 404，不是設定錯誤。
 
 第一次用外部身分登入時，會用 email 相同去對應既有的本機帳號；`AllowedTenantId`、
 `RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，任何
@@ -342,7 +346,8 @@ OIDC，這三個鍵都該明確設定，不要依賴預設值。
 
 這個區段執行中的 API 完全不會讀，只有測試專案自己的 `ConfigurationBuilder` 會讀；也是整個設
 定面唯一一個環境變數覆寫規則不適用的鍵，只認 `STRUO_TEST_PG_CONNECTION`（優先），其次才是這
-個鍵本身。留空就跳過整組資料庫測試；連線字串指到的資料庫名稱要包含 `test` 字樣。
+個鍵本身。留空就跳過那組選用的 PostgreSQL 整合測試；SQLite 那組資料庫測試不受影響，照樣會跑。
+連線字串指到的資料庫名稱要包含 `test` 字樣。
 
 ## 接下來
 
