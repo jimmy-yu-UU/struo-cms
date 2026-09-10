@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 const CLI = join(dirname(fileURLToPath(import.meta.url)), 'check-table-width.mjs')
 
 function run(guideRoot) {
-  return spawnSync(process.execPath, [CLI, guideRoot], { encoding: 'utf8' })
+  return spawnSync(process.execPath, [CLI, guideRoot], { encoding: 'utf8', cwd: guideRoot })
 }
 
 function makeGuide(files) {
@@ -70,7 +70,21 @@ test('the legacy allowlist exempts the sixteen old chapter filenames in every lo
 })
 
 test('a missing guide root is an error, not a silent pass', () => {
-  const result = run(join(tmpdir(), 'struo-table-guard-does-not-exist'))
+  const missing = join(tmpdir(), 'struo-table-guard-does-not-exist')
+  const result = spawnSync(process.execPath, [CLI, missing], { encoding: 'utf8', cwd: tmpdir() })
   assert.equal(result.status, 1)
   assert.match(result.stderr, /not a directory/)
+})
+
+test('a root outside the working directory is rejected, not read', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'struo-table-guard-cwd-'))
+  const outside = mkdtempSync(join(tmpdir(), 'struo-table-guard-outside-'))
+  try {
+    const result = spawnSync(process.execPath, [CLI, outside], { encoding: 'utf8', cwd })
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /outside the working directory/)
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+    rmSync(outside, { recursive: true, force: true })
+  }
 })

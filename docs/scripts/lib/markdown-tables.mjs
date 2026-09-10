@@ -35,11 +35,40 @@ export function displayWidth(text) {
   return width
 }
 
+// Strip a markdown link down to its link text: `[text](target)` -> `text`.
+// Scanned by index rather than with a regex on purpose (Sonar S8786): an
+// unanchored `\[` followed by a greedy-ish `[^\]]*` class re-scans from every
+// `[` it meets without a closer, which is super-linear on a pathological cell
+// (many unclosed `[`). A single left-to-right pass has no such blowup.
+function stripLinks(text) {
+  let result = ''
+  let index = 0
+  while (index < text.length) {
+    const char = text[index]
+    if (char !== '[') {
+      result += char
+      index += 1
+      continue
+    }
+    const closeBracket = text.indexOf(']', index + 1)
+    const isLink = closeBracket !== -1 && text[closeBracket + 1] === '('
+    const closeParen = isLink ? text.indexOf(')', closeBracket + 2) : -1
+    if (closeParen === -1) {
+      // No closing `]( ... )` found: not a link, keep the bracket literal.
+      result += char
+      index += 1
+      continue
+    }
+    result += text.slice(index + 1, closeBracket)
+    index = closeParen + 1
+  }
+  return result
+}
+
 // Strip what the reader does not see. Order matters: links first so a code
 // span inside link text is still unwrapped by the backtick pass afterwards.
 export function cellText(rawCell) {
-  return rawCell
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  return stripLinks(rawCell)
     .replace(/`([^`]*)`/g, '$1')
     .replace(/\*\*|__/g, '')
     .trim()
@@ -68,11 +97,11 @@ const HAS_UNESCAPED_PIPE = /(?<!\\)\|/
 // all is still one cell — splitting on a separator that is not present
 // yields the whole (trimmed) row as its single element.
 function rowCells(line) {
-  let row = line.replace(/^\s+/, '')
+  let row = line.trimStart()
   if (row.startsWith('|')) {
     row = row.slice(1)
   }
-  row = row.replace(/\s+$/, '')
+  row = row.trimEnd()
   if (row.endsWith('|')) {
     row = row.slice(0, -1)
   }

@@ -6,13 +6,44 @@
 // check-rendered-chapters.mjs, so the same command that gates links and
 // rendered output also gates table width. It reads sources, not dist, so it
 // needs no build and can be run on its own while editing a chapter.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+//
+// The optional CLI argument (the tests use it to point at a temp guide root)
+// must resolve to a directory inside the current working directory — see
+// confinedDirectory below.
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LIMITS, checkTables } from './lib/markdown-tables.mjs'
 
 const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
-const guideRoot = process.argv[2] ?? DEFAULT_GUIDE
+
+// The root may come from the command line (the tests point it at a temp
+// directory), so it is canonicalised and confined to the working directory
+// before anything under it is read — the standard mitigation Sonar expects
+// for a CLI an agent might invoke with a crafted argument (S8707).
+function confinedDirectory(candidate) {
+  let resolved
+  try {
+    resolved = realpathSync(candidate)
+  } catch {
+    return null
+  }
+  if (!statSync(resolved).isDirectory()) {
+    return null
+  }
+  const base = realpathSync(process.cwd())
+  if (resolved !== base && !resolved.startsWith(base + sep)) {
+    process.stderr.write(`${candidate}: outside the working directory ${base}\n`)
+    process.exit(1)
+  }
+  return resolved
+}
+
+const guideRoot = confinedDirectory(process.argv[2] ?? DEFAULT_GUIDE)
+if (guideRoot === null) {
+  process.stderr.write(`${process.argv[2] ?? DEFAULT_GUIDE}: not a directory\n`)
+  process.exit(1)
+}
 
 // The manual is being rewritten in batches (2026-09-10 rewrite spec). The
 // sixteen chapters below predate the width rule and are replaced batch by
@@ -38,11 +69,6 @@ const LEGACY_CHAPTERS = new Set([
   '15-deployment-operations-testing.md',
   '16-sample-walkthrough.md',
 ])
-
-if (!existsSync(guideRoot) || !statSync(guideRoot).isDirectory()) {
-  process.stderr.write(`${guideRoot}: not a directory\n`)
-  process.exit(1)
-}
 
 // Every markdown file under guide/, at any depth, forward-slash relative
 // paths so messages read the same on every platform. Dot-prefixed path
