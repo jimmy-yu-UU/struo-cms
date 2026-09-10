@@ -17,6 +17,14 @@ test('cellText strips inline code, links and emphasis before measuring', () => {
   assert.equal(cellText('a \\| b'), 'a \\| b') // escaped pipe is content, left alone
 })
 
+test('cellText unwraps two links in the same cell', () => {
+  assert.equal(cellText('[a](x) and [b](y)'), 'a and b')
+})
+
+test('cellText leaves a lone, unclosed bracket alone', () => {
+  assert.equal(cellText('a [ b'), 'a [ b')
+})
+
 test('LIMITS carries the spec values', () => {
   assert.deepEqual(LIMITS, { maxColumns: 4, maxCellWidth: 60 })
 })
