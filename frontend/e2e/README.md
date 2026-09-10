@@ -44,7 +44,7 @@ Both suites need, at minimum:
 ## Running
 
 From `frontend/`, with the API and database already up (see
-[chapter 2](../../docs/guide/en/02-getting-started.md)'s quick start for the standard way to bring
+[chapter 2](../../docs/guide/en/03-getting-started.md)'s quick start for the standard way to bring
 those up):
 
 ```bash
