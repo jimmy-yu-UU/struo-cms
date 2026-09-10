@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vitepress dev",
     "test": "node --test \"scripts/**/*.test.mjs\"",
-    "build": "vitepress build && node scripts/check-rendered-chapters.mjs",
+    "build": "vitepress build && node scripts/check-rendered-chapters.mjs && node scripts/check-table-width.mjs",
     "preview": "vitepress preview"
   },
   "devDependencies": {
