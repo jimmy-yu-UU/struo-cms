@@ -28,9 +28,9 @@ downstream forks.
 
 The same checks CI runs on every push/PR: `dotnet build`, `dotnet test`, `pnpm test` and `pnpm build`
 (the latter two from `frontend/`), plus `pnpm build` from `docs/` — the documentation site's build is the
-manual's link gate, and it also checks that every chapter rendered with content, which `vitepress build`
-does not. Run whichever apply to your change; run all five before anything touching more than one of the
-three.
+manual's link gate; it also checks that every chapter rendered with content, which `vitepress build`
+does not, and that no table is wider than the content column. Run whichever apply to your change; run
+all five before anything touching more than one of the three.
 
 ## See also
 
