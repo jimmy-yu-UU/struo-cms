@@ -8,7 +8,8 @@ tables, APIs, and admin screens.
 The content model starts with you: a fresh install has zero content collections, and Article, Tag,
 and Category are all yours to declare. `samples/Struo.Sample.Blog` is an optional demo project that
 shows how to define your own collections with the tools the core provides; you can delete it once
-you've learned from it — the removal steps are in the sample chapter.
+you've learned from it; the removal steps are covered in a later chapter dedicated to the sample
+project.
 
 [![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
@@ -32,10 +33,10 @@ you've learned from it — the removal steps are in the sample chapter.
 
 ## Quick start
 
-Prerequisites: .NET SDK 10.0.x, Node.js 24.x, pnpm 10.x, Docker (with Compose).
+Prerequisites: .NET SDK 10.0.x, Node.js 24, pnpm 10.x, Docker (with Compose).
 
 The API and the admin SPA can also run as containers — the repo has a Dockerfile for each; the
-full steps are in the deployment chapter.
+full steps are covered in a later chapter dedicated to deployment.
 
 ```bash
 # 1. Start PostgreSQL and Redis
