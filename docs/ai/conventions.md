@@ -13,35 +13,39 @@ apply that audience's rules only.
 | Surface | Audience | Rules |
 |---|---|---|
 | `docs/guide/` (both locales), `README.md`, `docs/README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
-| `AGENTS.md`, `docs/ai/` | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
+| `AGENTS.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
 
-Both audiences share one rule: **write only what the reader needs in order to act.** A fact earns a
-paragraph if acting without it would go wrong, and earns zero lines if it only records how the
+Both audiences share two rules. First, **write only what the reader needs in order to act.** A fact
+earns a paragraph if acting without it would go wrong, and earns zero lines if it only records how the
 repository got here.
+
+Second, **load-bearing caveats stay, in every document.** A backend divergence, a security consequence,
+an honest "unverified", the reason for a non-obvious decision a future reader would otherwise "fix",
+and any limit that would make the reader do the wrong thing are not noise. The test is "would the
+reader act differently without this?", never "is this long?". Before deleting a fact that lives only in
+the text you are cutting, move it somewhere durable first.
 
 ### For the manual
 
-Ruled by the maintainer on 2026-09-10 after reviewing the manual. Enforced mechanically where noted;
-otherwise a reviewer reads the page as a first-time user and rejects what fails.
+Enforced mechanically where noted; otherwise a reviewer reads the page as a first-time user and
+rejects what fails.
 
 - **Voice.** Write the way a colleague explains the system. Short sentences. Use the technical term
   directly — headless, template, fork, junction, sidecar — with no gloss in the other language and
   no bracketed English after a Chinese term. Never introduce the product by what it is *not*; say
   what it is, what it includes, and what the reader does next.
-- **Content.** Describe current behaviour only. No history, no "this used to", no closed defects, no
+- **Content.** Describe current behavior only. No history, no "this used to", no closed defects, no
   explanation of internal branch order inside a hook. Cite a source file only when the reader must
   open it, at most one per sentence.
-- **Load-bearing caveats stay.** A backend divergence, a security consequence, an honest "unverified",
-  and any limit that would make the reader do the wrong thing are not noise. The test is "would the
-  reader act differently without this?", never "is this long?". Before deleting a fact that lives
-  only in the text you are cutting, move it somewhere durable first.
 - **Layout.** One idea per paragraph, normally four or five lines. Parallel items become a list.
   Each chapter opens with one sentence saying what problem it solves and closes by pointing at the
   next chapter.
 - **Tables.** At most four columns; each cell fits on one line and holds a value or a phrase, never a
   sentence of explanation. Anything larger becomes a list or a subsection. **Enforced:**
   `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
-  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table.
+  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. The
+  sixteen pre-rewrite chapters are allowlisted by filename inside that script until the rewrite
+  replaces them.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
   capture it from a real run. Never hand-edit one.
 - **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
@@ -54,8 +58,9 @@ otherwise a reviewer reads the page as a first-time user and rejects what fails.
   home, and linked from anywhere else it is relevant. Restating a rule elsewhere is allowed only when
   a reader of *that* document would otherwise act wrongly — and then restate the rule, not its
   rationale.
-- **Consequences, not preferences.** Every constraint says what breaks when it is violated. A note
-  that only records that someone once decided against something protects no code; cut it.
+- **Consequences, not preferences.** Every constraint says what breaks when it is violated, and a
+  rationale that names what breaks stays. A note that only records that someone once decided against
+  something protects no code; cut it.
 - **Cite constructs, not lines** (see "Citing code from docs and comments" below).
 - **Evidence goes to the code.** Measurement runs, ruled-out hypotheses and residual unknowns belong
   in the doc comment of the class they explain, with a one-line summary and pointer here.
@@ -67,14 +72,14 @@ otherwise a reviewer reads the page as a first-time user and rejects what fails.
 
 | Anti-pattern | Instead |
 |---|---|
-| Change narrative: "this used to be X, now Y" | State the current behaviour |
+| Change narrative: "this used to be X, now Y" | State the current behavior |
 | Investigation journal in a chapter | Doc comment of the class, plus a pointer |
 | Same rule in N places | One home, links elsewhere |
 | A summary that re-explains its own section | A checklist of steps |
 | A note justifying a feature *not* built | Cut it |
 
-The same applies to tests: a test asserting the **absence** of unimplemented behaviour protects
-nothing and constrains whoever later implements the feature. A test asserting a *negative* behaviour
+The same applies to tests: a test asserting the **absence** of unimplemented behavior protects
+nothing and constrains whoever later implements the feature. A test asserting a *negative* behavior
 of code that exists ("never reorders rows client-side") guards a real path and stays.
 
 ## Citing code from docs and comments
