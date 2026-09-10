@@ -12,10 +12,10 @@ apply that audience's rules only.
 
 | Surface | Audience | Rules |
 |---|---|---|
-| `docs/guide/` (both locales), `README.md`, `docs/README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
-| `AGENTS.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
+| `docs/guide/` (both locales), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
+| `AGENTS.md`, `CLAUDE.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
 
-Both audiences share two rules. First, **write only what the reader needs in order to act.** A fact
+Both audiences share three rules. First, **write only what the reader needs in order to act.** A fact
 earns a paragraph if acting without it would go wrong, and earns zero lines if it only records how the
 repository got here.
 
@@ -24,6 +24,10 @@ an honest "unverified", the reason for a non-obvious decision a future reader wo
 and any limit that would make the reader do the wrong thing are not noise. The test is "would the
 reader act differently without this?", never "is this long?". Before deleting a fact that lives only in
 the text you are cutting, move it somewhere durable first.
+
+Third, **cite constructs, not lines** — a class, method, branch or distinguishing property, never a
+line range; the rule and its one exception are in "Citing code from docs and comments" below, and
+`CodeCitationConventionTests` enforces it across the manual and the reference set alike.
 
 ### For the manual
 
@@ -39,13 +43,15 @@ rejects what fails.
   open it, at most one per sentence.
 - **Layout.** One idea per paragraph, normally four or five lines. Parallel items become a list.
   Each chapter opens with one sentence saying what problem it solves and closes by pointing at the
-  next chapter.
+  next chapter. A chapter stays under about 350 lines; split it when it grows past that.
 - **Tables.** At most four columns; each cell fits on one line and holds a value or a phrase, never a
   sentence of explanation. Anything larger becomes a list or a subsection. **Enforced:**
   `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
-  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. The
-  sixteen pre-rewrite chapters are allowlisted by filename inside that script until the rewrite
-  replaces them.
+  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. It
+  finds tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
+  indentation hides a table from it. The sixteen pre-rewrite chapters are allowlisted by filename
+  inside that script, and they and both READMEs predate these rules; the rewrite replaces them batch
+  by batch.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
   capture it from a real run. Never hand-edit one.
 - **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
@@ -61,14 +67,13 @@ rejects what fails.
 - **Consequences, not preferences.** Every constraint says what breaks when it is violated, and a
   rationale that names what breaks stays. A note that only records that someone once decided against
   something protects no code; cut it.
-- **Cite constructs, not lines** (see "Citing code from docs and comments" below).
 - **Evidence goes to the code.** Measurement runs, ruled-out hypotheses and residual unknowns belong
   in the doc comment of the class they explain, with a one-line summary and pointer here.
   `PgTestConnectionString` is the worked example.
 - **Structure of `AGENTS.md`** stays: repo map, hard constraints, invariants, task playbooks,
   verification, prohibitions.
 
-### Anti-patterns this repository has actually had
+### Anti-patterns this repository has actually had (both audiences)
 
 | Anti-pattern | Instead |
 |---|---|
@@ -518,9 +523,10 @@ Pinia-backed singleton that can open while another vendored overlay is already o
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
   sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs the five standing gates
   — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
-  `docs/` — but no E2E project) — both need a live API and database, not just a build. `ci.yml` also
-  runs a `docker` job (builds and smoke-tests the two container images — chapter 15's "Container
-  images" section) and two `sonar-*` jobs; none of the three is a standing gate.
+  `docs/`, plus `pnpm test` from `docs/` as a CI step — but no E2E project) — both need a live API and
+  database, not just a build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two
+  container images — chapter 15's "Container images" section) and two `sonar-*` jobs; none of the three
+  is a standing gate.
 
 See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
 the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`
