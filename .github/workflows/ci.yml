@@ -53,8 +53,9 @@ jobs:
   # checks them. check-rendered-chapters.mjs then asserts every chapter actually
   # rendered: vitepress exits 0 even when a page comes out with an empty body, so
   # the exit code alone is not a gate. check-table-width.mjs finally fails any
-  # table the content column cannot show without scrolling. `pnpm test` runs the
-  # unit tests of those two scripts. A few seconds of work in total.
+  # table the content column cannot show without scrolling. `pnpm test` runs
+  # the unit tests of check-table-width.mjs and its table-measuring library. A
+  # few seconds of work in total.
   docs:
     runs-on: ubuntu-latest
     defaults:
@@ -189,9 +190,10 @@ jobs:
         # site's build tooling under docs/ lands in this project - there is no
         # third Sonar project for it. Its issues are still worth seeing, but the
         # only coverage report here is C# (coverage.xml), so those JS/TS lines
-        # would otherwise count as new code at 0% and fail the gate. Their unit
-        # tests run with node:test in the docs job above and report no coverage
-        # file, so excluding them from coverage here is what keeps the gate honest.
+        # would otherwise count as new code at 0% and fail the gate. The ones
+        # that have unit tests run them with node:test in the docs job above,
+        # and no coverage file is produced, so excluding them from coverage
+        # here is what keeps the gate honest.
         run: >
           dotnet-sonarscanner begin
           /k:"stu640978_struo-cms_backend"
