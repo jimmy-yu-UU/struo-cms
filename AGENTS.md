@@ -198,9 +198,12 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 The **five standing gates** — the same ones CI runs on every push/PR — are `dotnet build`,
 `dotnet test`, `pnpm test` and `pnpm build` (the latter two from `frontend/`), and `pnpm build` from
-`docs/`, which resolves every cross-chapter link in the manual, fails on a dead one, and then checks that
-every chapter actually rendered — `vitepress build` alone exits 0 on a page whose body came out empty.
-Run whichever apply to your change; run all five before anything touching more than one of the three.
+`docs/`, which resolves every cross-chapter link in the manual, fails on a dead one, checks that every
+chapter actually rendered — `vitepress build` alone exits 0 on a page whose body came out empty — and
+fails any table wider than the site's content column (`docs/scripts/check-table-width.mjs`). CI's docs
+job also runs `pnpm test` from `docs/` first — the guard scripts' own unit tests — as a CI step, not a
+sixth gate. Run whichever apply to your change; run all five before anything touching more than one of
+the three.
 
 `dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
 not been mirrored into `schema/core-collections.json`, or an enum change into `schema/interfaces.json`;
@@ -285,8 +288,8 @@ five standing gates, and is not run by CI.
   **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
   consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
   regression. The test is "would a reader act differently without this?", never "is this long?".
-  `docs/ai/conventions.md`, "What documentation may contain", has the full rule and the five
-  anti-patterns.
+  `docs/ai/conventions.md`, "How documentation is written", has the full rule for both audiences —
+  the manual and this reference set are written to different standards — and the anti-patterns.
 
 ## Where to read more
 

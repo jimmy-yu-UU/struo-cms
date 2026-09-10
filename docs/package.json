@@ -5,7 +5,8 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build && node scripts/check-rendered-chapters.mjs",
+    "test": "node --test \"scripts/**/*.test.mjs\"",
+    "build": "vitepress build && node scripts/check-rendered-chapters.mjs && node scripts/check-table-width.mjs",
     "preview": "vitepress preview"
   },
   "devDependencies": {

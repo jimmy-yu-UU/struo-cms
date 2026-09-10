@@ -4,38 +4,88 @@ Conventions that apply across the backend and frontend. Where a convention is en
 the compiler, this document says so and names the mechanism; where it is a convention only, it says
 that plainly instead of implying enforcement that does not exist.
 
-## What documentation may contain
+## How documentation is written
 
-Every line of documentation costs every future reader — human and agent — attention they could have
-spent on the thing they came for. **Write only what the reader needs in order to act.** This is not a
-brevity contest; it is a rule about *audience*. A fact is worth a paragraph if acting without it would
-go wrong, and worth zero lines if it merely records how the repository arrived at its current state.
+This repository has two documentation audiences with different needs. Writing for the wrong one is
+the most common documentation defect here. Decide which you are writing for before you write, and
+apply that audience's rules only.
 
-Five failure modes, all of which this repository has actually had, and what to do instead:
-
-| Anti-pattern | Why it costs | Instead |
+| Surface | Audience | Rules |
 |---|---|---|
-| **Change narrative** — "this used to be X, here is the old transcript, now it is Y" | The reader must decode which half is current. The old half is never actionable. | State the current behavior. Keep one sentence of history **only** when a reader might still hold the old belief and act on it (e.g. "introspection off" ≠ "schema unreadable"). |
-| **Investigation journal** — measurement runs, ruled-out hypotheses, residual unknowns | This is engineering evidence, not guidance. It is real and worth keeping — just not here. | Put it in the doc comment of the class it explains, and leave a summary plus a pointer. `PgTestConnectionString` is the worked example. |
-| **Same content in N places** | N places to update, so N−1 go stale silently — and nothing in CI catches doc drift. | Pick one home, say plainly that it is the home, and link to it. Restating a rule in a second chapter is justified only when a reader of *that* chapter would otherwise act wrongly — and then restate the rule, not its rationale. |
-| **Restating a section in its own summary** | Pure duplication inside one file. | A closing checklist should be a list of steps to tick off, not a re-explanation of each one. |
-| **Preference note** — a comment justifying why an interaction or feature was *not* built | Nothing regresses if it's deleted. It isn't protecting code, it's recording that someone once decided against something — an obstacle for whoever builds it later, not guidance | Cut it. Keep a rationale only when removing the code it describes would break something non-obvious — there must be real code at risk, not just a past preference. |
+| `docs/guide/` (both locales), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
+| `AGENTS.md`, `CLAUDE.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
 
-The same applies to tests. A test asserting the **absence** of unimplemented behavior protects nothing —
-it passes trivially forever and turns a preference into a constraint on whoever later implements the
-feature. This is different from a test asserting a *negative* behavior of code that already exists (e.g.
-"never reorders rows client-side"): that guards a real code path whose silent removal would corrupt
-output, and stays for the same reason the comment describing it stays.
+Both audiences share three rules. First, **write only what the reader needs in order to act.** A fact
+earns a paragraph if acting without it would go wrong, and earns zero lines if it only records how the
+repository got here.
 
-**What this rule does not license.** Do not cut a caveat because it is inconvenient or long. Load-bearing
-content stays, including: an honest "this is unverified / the mechanism is unknown / this is a
-non-observation, not a proof"; a documented divergence between backends; a security consequence; the
-reason a non-obvious decision was made, where a future reader would otherwise "fix" it. Removing a
-hedge to make a claim read cleaner is a **correctness** regression, not a tidiness win. When trimming,
-the test is "would a reader act differently without this?" — not "is this long?".
+Second, **load-bearing caveats stay, in every document.** A backend divergence, a security consequence,
+an honest "unverified", the reason for a non-obvious decision a future reader would otherwise "fix",
+and any limit that would make the reader do the wrong thing are not noise. The test is "would the
+reader act differently without this?", never "is this long?". Before deleting a fact that lives only in
+the text you are cutting, move it somewhere durable first.
 
-**Before deleting, check where the fact lives.** If it lives only in the text you are cutting, move it
-somewhere durable first and fix any pointer that would be left dangling in either direction.
+Third, **cite constructs, not lines** — a class, method, branch or distinguishing property, never a
+line range; the rule and its one exception are in "Citing code from docs and comments" below, and
+`CodeCitationConventionTests` enforces it on the manual chapters and the reference set.
+
+### For the manual
+
+Enforced mechanically where noted; otherwise a reviewer reads the page as a first-time user and
+rejects what fails.
+
+- **Voice.** Write the way a colleague explains the system. Short sentences. Use the technical term
+  directly — headless, template, fork, junction, sidecar — with no gloss in the other language and
+  no bracketed English after a Chinese term. Never introduce the product by what it is *not*; say
+  what it is, what it includes, and what the reader does next.
+- **Content.** Describe current behavior only. No history, no "this used to", no closed defects, no
+  explanation of internal branch order inside a hook. Cite a source file only when the reader must
+  open it, at most one per sentence.
+- **Layout.** One idea per paragraph, normally four or five lines. Parallel items become a list.
+  Each chapter opens with one sentence saying what problem it solves and closes by pointing at the
+  next chapter. A chapter stays under about 350 lines; split it when it grows past that.
+- **Tables.** At most four columns; each cell fits on one line and holds a value or a phrase, never a
+  sentence of explanation. Anything larger becomes a list or a subsection. **Enforced:**
+  `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
+  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. It
+  finds tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
+  indentation hides a table from it. The sixteen pre-rewrite chapters are allowlisted by filename
+  inside that script, and they and both READMEs predate these rules; the rewrite replaces them batch
+  by batch.
+- **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
+  capture it from a real run. Never hand-edit one.
+- **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
+  chapter's section structure and content, written in natural English, not translated sentence by
+  sentence. Both locales use the same filename.
+
+### For the agent reference set
+
+- **Precision over voice.** Density is fine; ambiguity is not. Every rule is stated once, in one
+  home, and linked from anywhere else it is relevant. Restating a rule elsewhere is allowed only when
+  a reader of *that* document would otherwise act wrongly — and then restate the rule, not its
+  rationale.
+- **Consequences, not preferences.** Every constraint says what breaks when it is violated, and a
+  rationale that names what breaks stays. A note that only records that someone once decided against
+  something protects no code; cut it.
+- **Evidence goes to the code.** Measurement runs, ruled-out hypotheses and residual unknowns belong
+  in the doc comment of the class they explain, with a one-line summary and pointer here.
+  `PgTestConnectionString` is the worked example.
+- **Structure of `AGENTS.md`** stays: repo map, hard constraints, invariants, task playbooks,
+  verification, prohibitions.
+
+### Anti-patterns this repository has actually had (both audiences)
+
+| Anti-pattern | Instead |
+|---|---|
+| Change narrative: "this used to be X, now Y" | State the current behavior |
+| Investigation journal in a chapter | Doc comment of the class, plus a pointer |
+| Same rule in N places | One home, links elsewhere |
+| A summary that re-explains its own section | A checklist of steps |
+| A note justifying a feature *not* built | Cut it |
+
+The same applies to tests: a test asserting the **absence** of unimplemented behavior protects
+nothing and constrains whoever later implements the feature. A test asserting a *negative* behavior
+of code that exists ("never reorders rows client-side") guards a real path and stays.
 
 ## Citing code from docs and comments
 
@@ -473,9 +523,10 @@ Pinia-backed singleton that can open while another vendored overlay is already o
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
   sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs the five standing gates
   — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
-  `docs/` — but no E2E project) — both need a live API and database, not just a build. `ci.yml` also
-  runs a `docker` job (builds and smoke-tests the two container images — chapter 15's "Container
-  images" section) and two `sonar-*` jobs; none of the three is a standing gate.
+  `docs/`, plus `pnpm test` from `docs/` as a CI step — but no E2E project) — both need a live API and
+  database, not just a build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two
+  container images — chapter 15's "Container images" section) and two `sonar-*` jobs; none of the three
+  is a standing gate.
 
 See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
 the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`
