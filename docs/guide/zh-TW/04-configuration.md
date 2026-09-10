@@ -1,34 +1,50 @@
 # 4. 設定參考
 
-這一章列出每個 `appsettings` 區段的鍵、型別與預設值，以及用環境變數覆寫的方式。
+要調一個設定鍵，又不確定它叫什麼名字、預設值是什麼、設錯會不會擋下啟動時，答案都在這一章。
 
 ## 設定從哪裡來
 
 設定依序疊加，後面的來源覆寫前面：`src/Struo.Api/appsettings.json` →
-`appsettings.{Environment}.json` → 環境變數 → 命令列參數。`Query`、`Struo:Cors`、`GraphQl`三個
-區段沒有出現在出廠的 `appsettings.json` 裡；沒有這個區塊可以編輯，不代表這些鍵不存在，只代表要
-自己新增一段。
+`appsettings.{Environment}.json` → 環境變數 → 命令列參數。`Query`、`Struo:Cors`、`GraphQl` 三個
+區段沒有出現在出廠的 `appsettings.json` 裡。設定檔裡沒有這一段可以改，不代表這些鍵不存在，只是
+要自己補上一段。
 
 任何一個鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；唯一的例
 外是 `Testing:PostgresConnection`，見本章最後一節。
 
-以下每個區段的表格只列鍵、型別與預設值；驗證規則與失敗後果寫在表格下面的說明裡。多數選項透過
-`IOptions<T>` 綁定一次，但下面這幾個鍵直接讀 `IConfiguration`，不經過選項物件：
+以下每一節的表格列鍵、型別與預設值，表格下面只寫設錯會怎樣。改任何一個鍵都要重啟行程才生效。
 
-- `Struo:ContentAssemblies`（在 `builder.Build()` 之前）
-- `Struo:Cors:AllowedOrigins`
-- `Redis:ConnectionString`
-- `GraphQl:ExposeSchema`
-- `Auth:BootstrapAdmin:Email`／`Password`
-- `Rbac:PublicReadCollections`
+表格下面寫「沒有驗證規則」的鍵，指的是型別正確的值不會被檢查；型別對不上（例如
+`Database:DbType` 拼錯、數字欄位填了文字）仍會在啟動時綁定失敗。
 
-不論哪一種，改了鍵值都要重啟行程才生效。
+陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短出廠設定檔已經填滿的陣列，沒被覆寫
+的索引維持原值。內建預設值非空的兩個陣列型鍵——`Oidc:Scopes` 與
+`Struo:Files:ImageTransform:AllowedFormats`——就是這樣填出來的。陣列元素用索引：
+`Oidc__Scopes__0=openid`；要縮短陣列就改設定檔本身。
 
-`Oidc:Scopes` 跟 `Struo:Files:ImageTransform:AllowedFormats` 是僅有的兩個例外：它們在 C# 裡的
-屬性初始值是空陣列，實際的非空預設值是啟動時由 `PostConfigure` 補上的，不是屬性初始值本身，因
-為 `ConfigurationBinder` 對非空的集合預設值是附加而不是取代。這也解釋了疊加設定的一個陷阱：在
-更高優先層只覆寫陣列的前幾個元素，並不會縮短出廠設定檔已經填滿的陣列——`IConfiguration` 是逐
-索引合併，沒被覆寫的索引維持原值。
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `ASPNETCORE_ENVIRONMENT` | 環境變數 | `Production` |
+
+這個環境變數決定套用哪一個 `appsettings.{Environment}.json`，也決定這一章裡每一個「只在
+Development」的行為：
+
+- Scalar／OpenAPI
+- `GraphQl:ExposeSchema` 的預設值
+- Nitro 瀏覽器 IDE
+- `AutoSyncSchema`
+- schema guard
+- cookie 的 `SecurePolicy`
+- 預設密碼的警告
+
+以下四個是 `docker-compose.yml` 的 host 對外埠，不會傳進 API 的設定：
+
+- `STRUO_PG_PORT`
+- `STRUO_REDIS_PORT`
+- `STRUO_MINIO_PORT`
+- `STRUO_MINIO_CONSOLE_PORT`
+
+改了 `STRUO_MINIO_PORT`，`Struo:Files:S3:Endpoint` 要自己跟著改。
 
 ## Database
 
@@ -39,19 +55,26 @@
 | `Database:MigrationsPath` | 字串（可留空） | `""` |
 | `Database:AutoSyncSchema` | 布林 | `false` |
 
-```
+以下是實際值，不是 `appsettings.json` 的巢狀寫法：
+```text
 Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME
 ```
 
 `ConnectionString` 留空或省略會直接讓啟動失敗，不會等到查詢時才出錯。框架自帶的資料表永遠自動
-建立，不需要設定；`MigrationsPath` 只用來套用你自己準備的 migration 指令碼，留空就停用。它在每
-一種後端都會執行，沒有依後端做的防呆，指令碼寫錯後端會在套用時直接失敗；套件本身沒有互斥鎖，多
-個副本一起啟動時可能同時嘗試套用同一個檔案。
+建立，不需要設定。
 
-`AutoSyncSchema=true` 會依 entity 類別結構化同步既有資料表——新增、修改甚至刪除欄位；只在
+`MigrationsPath` 只用來套用你自己準備的 migration 指令碼，留空就停用；它在每一種後端都會執
+行，不會檢查指令碼是不是寫給這個後端，寫錯後端會在套用時直接失敗。migration runner 沒有互斥
+鎖，多個副本一起啟動時可能同時嘗試套用同一個檔案。
+
+啟動時的順序是：快照既有資料表 → 建立缺少的資料表 →（Development）結構同步 →（設了
+`MigrationsPath`）套用 SQL 指令碼 →（Development）schema guard → 植入資料；植入只針對這次啟
+動剛建立的資料表。CodeFirst 先建表、指令碼後跑，所以你自己的 migration 只該 `ALTER` 既有資料
+表。
+
+`AutoSyncSchema=true` 會依 entity 類別的結構同步既有資料表——新增、修改甚至刪除欄位；只在
 Development 生效，其他環境會被忽略並記一筆警告。對已經有資料的資料表，這個刪除欄位的行為可能
-直接讓資料消失，而且刪不刪還依後端而定：這個 checkout 的設定下，PostgreSQL 真的會刪除欄位，
-SQLite 不會。
+直接讓資料消失，而且刪不刪還依後端而定：PostgreSQL 會真的刪掉欄位，SQLite 不會。
 
 ## Struo:ContentAssemblies
 
@@ -59,10 +82,12 @@ SQLite 不會。
 |---|---|---|
 | `Struo:ContentAssemblies` | 字串陣列 | `[]` |
 
+清單裡的每個組件名稱都要能被 `Assembly.Load` 解析，通常代表 API 主機專案要直接參照它；解析不
+到就直接讓啟動失敗，不會被跳過。
+
 這個鍵在 `builder.Build()` 之前就直接從 `builder.Configuration` 讀出，不經過
 `IOptions<T>`；因此它讀得到啟動前裝好的所有一般設定來源，但要是你在 `CreateBuilder` 之後才註
-冊自訂設定提供者，它的內容就看不到，而且不會有任何錯誤訊息。清單裡的每個組件名稱都要能被
-`Assembly.Load` 解析，通常代表 API 主機專案要直接參照它；解析不到就讓啟動直接失敗，不會被跳過。
+冊自訂設定提供者，它的內容就看不到，而且不會有任何錯誤訊息。
 
 ## Struo:Files
 
@@ -75,12 +100,12 @@ SQLite 不會。
 
 `Backend` 是這個區段裡唯一在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
 要欄位（見下面 Local／S3）也一併驗證。`MaxUploadBytes`、`AllowedContentTypes`、
-`PresignedRedirect` 跟整個 `ImageTransform` 都沒有驗證規則，設成不合理的值一樣能啟動。
+`PresignedRedirect` 跟整個 `ImageTransform` 都沒有驗證規則：型別正確的值不會被檢查。
 
-`MaxUploadBytes` 同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
-`AllowedContentTypes` 留空代表不限制格式，出廠設定檔已經列了 18 種 MIME 類型。
-`PresignedRedirect` 設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false` 由
-API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
+- `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
+- `AllowedContentTypes`：留空代表不限制格式，出廠設定檔已經列了 18 種 MIME 類型。
+- `PresignedRedirect`：設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false`
+  由 API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 
 ### Local
 
@@ -103,8 +128,8 @@ API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 | `Struo:Files:S3:PresignTtlSeconds` | 整數（秒） | `300` |
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
-值，出廠值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 不影響啟
-動能不能通過。
+值，出廠值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
+會擋下啟動。
 
 ### ImageTransform
 
@@ -117,13 +142,13 @@ API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 | `Struo:Files:ImageTransform:DefaultQuality` | 整數 | `82` |
 | `Struo:Files:ImageTransform:CachePath` | 字串 | `"App_Data/image-cache"` |
 
-```
+以下是實際值，不是 `appsettings.json` 的巢狀寫法：
+```text
 Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 ```
 
-`AllowedFormats` 留空清單代表沒有一種格式會通過檢查；出廠值是啟動時由 `PostConfigure` 補上的
-四種格式，不是 C# 屬性初始值本身（見「設定從哪裡來」一節）。轉換只在呼叫端要求寬、高或格式其中
-一項、該筆檔案本身是圖片，而且 `Enabled` 為 `true` 時才會發生，否則直接串流原始檔案。
+`AllowedFormats` 留空清單代表沒有一種格式會通過檢查。轉換只在呼叫端要求寬、高或格式其中一項、
+該筆檔案本身是圖片，而且 `Enabled` 為 `true` 時才會發生，否則直接串流原始檔案。
 
 `CachePath` 是相對路徑時，是相對於應用程式的 content root，不是行程當下的工作目錄——用
 systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落在哪裡。
@@ -139,8 +164,9 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 時驗證。
 
 只要設定了任何一個來源，就會同時把 session cookie 改成 `SameSite=None`＋
-`SecurePolicy=Always`。瀏覽器只在 HTTPS 下才認 `SameSite=None`，所以一旦這個鍵非空，前後端都
-要走 HTTPS，否則驗證會悄悄失效。
+`SecurePolicy=Always`，並讓 CORS 政策對這些來源開放 `AllowCredentials`、任意 header 與任意方
+法。瀏覽器只在 HTTPS 下才認 `SameSite=None`，所以一旦這個鍵非空，前後端都要走 HTTPS，否則驗證
+會悄悄失效。
 
 ## Query
 
@@ -163,8 +189,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 外，訊息會點名是哪個上限，查詢在執行前就先被擋下來。
 
 `MaxRelationDepth` 算的是路徑裡的關聯跳轉次數，最後一個欄位本身跟 `_junction` 虛擬區段都不算
-在內。超過 `MaxSearchCandidates` 不是截斷結果，而是視為 `ISearchProvider` 違約，直接丟出例
-外（500）；搜尋候選 id 只支援 `Guid`、`long`、`int` 或 `short` 當主鍵的集合。
+在內。超過 `MaxSearchCandidates` 不是截斷結果，而是視為 `ISearchProvider` 回傳了不該回傳的
+量，直接丟出例外（500）。
 
 ## Auth
 
@@ -175,15 +201,14 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 
-`BootstrapAdmin` 這組帳密不是走 `IOptions<T>`，是在 `Program.cs` 裡直接讀成字串傳給
-seeder；只在 `users` 資料表第一次建立時套用，之後開機不會重讀，也不會回頭套用到已存在的資料
-庫上。出廠密碼只有 5 個字，比 `MinLength` 預設的 8 短，因為 seeder 直接雜湊設定值、跳過密碼原
-則檢查，用意是讓全新安裝一定能登入。
+這組帳密只在 `users` 資料表第一次建立時套用，之後開機不會重讀，也不會補到已經存在的資料庫上。
+seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `admin` 只有五個字元，比 `MinLength` 的
+8 還短。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
-`MinLength`／`MaxLength` 只是輸入合理性的界線，Argon2id 的雜湊成本不受密碼長度影響。這兩個鍵
-本身有 `MinLength >= 1 && MinLength <= MaxLength` 的啟動驗證，設反了會讓啟動失敗；只有
-`MinLength` 會透過 `GET /api/config` 回傳給前端。
+`MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有
+`MinLength >= 1 && MinLength <= MaxLength` 的啟動驗證，設反了會讓啟動失敗；只有 `MinLength`
+會透過 `GET /api/config` 回傳給前端。
 
 ## Rbac
 
@@ -200,12 +225,9 @@ seeder；只在 `users` 資料表第一次建立時套用，之後開機不會�
 |---|---|---|
 | `GraphQl:ExposeSchema` | 布林（可留空） | 無（依環境判斷） |
 
-這個鍵雖然綁定成 `GraphQlOptions`，但實際生效的地方是直接讀 `IConfiguration`，不是讀綁定後
-的選項物件——只 `PostConfigure` 那份選項物件不會改到實際行為。
-
-留空時開發環境預設開放、正式環境預設關閉，也可以明確覆寫而不用重新編譯；管的只是 schema 能不能
-被查詢（introspection 與 `GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro
-瀏覽器 IDE 另外只認開發環境，不受這個鍵控制。
+留空時開發環境預設開放、正式環境預設關閉；管的只是 schema 能不能被查詢（introspection 與
+`GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器 IDE 另外只認開發環
+境，不受這個鍵控制。
 
 ## RateLimiting
 
@@ -221,25 +243,30 @@ seeder；只在 `users` 資料表第一次建立時套用，之後開機不會�
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
+這三組沒有一個鍵在啟動時被驗證：把 `PermitLimit` 設成 `0` 一樣能開機，只是所有請求都會被擋下
+來。被擋下的請求一律回 429，訊息依各自的策略命名，有 `Retry-After` 時會一併帶出。
+
 `Login:*` 是以用戶端 IP 分桶的固定視窗限制，只保護 `POST /api/auth/login`；預設關閉，因為後
 台使用者常共用同一個對外 IP，開啟後容易連坐擋下整個辦公室，即使 `UseForwardedHeaders` 設定正
-確也一樣。要在反向代理後面啟用，得先自己加上 `UseForwardedHeaders` 並列出
+確也一樣。
+
+要在反向代理後面啟用，得先自己加上 `UseForwardedHeaders` 並列出
 `KnownProxies`／`KnownNetworks`——這個專案預設沒有註冊它。這層狀態留在行程記憶體，不會跨副本
 共用；跨副本的 IP 限制要放在前面的閘道或 WAF。
 
-`LoginAccount:*` 依請求裡的帳號（email）分桶，在驗證密碼之前就先檢查，被擋下的請求不會消耗
+`LoginAccount:*` 依請求帶的 email 分桶，在驗證密碼之前就先檢查，被擋下的請求不會消耗
 Argon2id 運算；只有失敗會累計，登入成功會清空該帳號的計數。不論帳號存不存在、密碼錯還是帳號被
 停用，都算一次失敗，而且一律回同一種 429，這是防止帳號列舉的關鍵。
 
-這層限流共用 `IDistributedCache`，跟 session ticket 是同一個底層：設定了
-`Redis:ConnectionString` 就是每個帳號一個跨副本共用的計數器，留空就退回行程內、各副本各自計
-數，而且 `IDistributedCache` 沒有原子的讀改寫，極端情況下兩個同時的失敗可能只被記成一次，這是
-刻意接受的取捨。`PermitLimit`／`WindowSeconds` 比 IP 限流寬鬆，是因為這層要擋的是長時間、針
-對單一帳號的密碼噴灑，不是短時間大流量。
+這層限流的計數存在 `IDistributedCache`，跟 session ticket 同一個底層：設了
+`Redis:ConnectionString` 就是每個帳號一個跨副本共用的計數器，留空則各副本各自計數。
 
-`Password:*` 只保護 `PUT /api/users/{id}/password`，以呼叫者自己的 user id 分桶，理論上才
-會退回用 IP。因為分桶鍵是操作者本人，super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到
-被重設的使用者。三組限流被擋下都回 429，訊息依各自的策略命名，有 `Retry-After` 時會一併帶出。
+計數不是原子的讀改寫，極端情況下兩個同時發生的失敗可能只被記成一次。預設值比 IP 限流寬鬆、視
+窗長（900 秒），擋的是長時間針對單一帳號的密碼噴灑。
+
+`Password:*` 只保護 `PUT /api/users/{id}/password`，以呼叫者自己的 user id 分桶，取不到
+user id 時才退回用 IP——這個端點要登入才能呼叫，實務上不會發生。因為分桶鍵是操作者本人，
+super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到被重設的使用者。
 
 ## Branding
 
@@ -248,10 +275,8 @@ Argon2id 運算；只有失敗會累計，登入成功會清空該帳號的計�
 | `Branding:Name` | 字串 | `"StruoCMS"` |
 | `Branding:LogoUrl` | 字串（可留空） | 無 |
 
-這兩個鍵只是部署時的預設值；執行期 `GET /api/config` 會優先用資料庫 `site_settings` 裡存的
-值，每個欄位各自 fallback，只有沒存值（或 logo 檔案已下架）時才退回這裡的設定。要換品牌名稱或
-Logo，直接在後台操作，不是改設定檔。這個端點是匿名的，回應快取 30 秒，但一儲存就會立刻清快
-取，不會延遲生效。
+品牌名稱與 Logo 平常在後台改，不是改設定檔。這兩個鍵只是資料庫 `site_settings` 還沒有值時的預
+設：`GET /api/config` 兩個欄位各自判斷，只有沒存值（或 logo 檔案已下架）時才退回這裡。
 
 ## Redis
 
@@ -260,8 +285,8 @@ Logo，直接在後台操作，不是改設定檔。這個端點是匿名的，�
 | `Redis:ConnectionString` | 字串（可留空） | `""` |
 
 留空時退回記憶體內的分散式快取，session 會在行程每次重啟後消失，只適合短暫的本機測試；有多個
-副本、或需要 session 撐過重啟時，一定要設定這個鍵。這個鍵同時也是
-`RateLimiting:LoginAccount` 共用的儲存底層。
+副本、或需要 session 撐過重啟時，一定要設定這個鍵。出廠值是空字串，鍵整個不見時是 `null`，兩
+者都會落到這個記憶體內分支。這個鍵同時也是 `RateLimiting:LoginAccount` 共用的儲存底層。
 
 ## Oidc
 
@@ -278,7 +303,8 @@ Logo，直接在後台操作，不是改設定檔。這個端點是匿名的，�
 | `Oidc:AllowedTenantId` | 字串 | `"REPLACE_TENANT_ID"` |
 | `Oidc:AllowedEmailDomains` | 字串陣列 | `[]` |
 
-```
+以下是實際值，不是 `appsettings.json` 的巢狀寫法：
+```text
 Oidc:Authority = https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0
 Oidc:Scopes = ["openid", "email", "profile"]
 ```
@@ -289,14 +315,11 @@ Oidc:Scopes = ["openid", "email", "profile"]
 
 第一次用外部身分登入時，會用 email 相同去對應既有的本機帳號；`AllowedTenantId`、
 `RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，任何
-身分提供者裡 email 對得上的人都能頂替一個密碼帳號。
+身分提供者裡 email 對得上的人都能接管一個密碼帳號。
 
 `RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的；`AllowedTenantId` 不是，出廠
 值是打不中任何 tenant 的 `REPLACE_TENANT_ID`，在替換之前會擋掉所有外部登入。正式環境啟用
 OIDC，這三個鍵都該明確設定，不要依賴預設值。
-
-`Oidc` 區段被綁定了兩次：一次给容器裡的 `OidcOptions`，一次直接從 `IConfiguration` 讀出來給
-handler 用的 `Scopes`；只 `PostConfigure` 容器那一份，不會改到實際送出的 scope。
 
 ## Serilog
 
@@ -306,15 +329,10 @@ handler 用的 `Scopes`；只 `PostConfigure` 容器那一份，不會改到實�
 | `Serilog:MinimumLevel:Override` | 對照表 | `{"Microsoft.AspNetCore":"Warning"}` |
 | `Serilog:WriteTo` | 陣列 | 見下文 |
 
-```
-Serilog:WriteTo:
-  - Console
-  - File (logs/struo-.log, rollingInterval: Day, shared: true)
-```
+預設兩個 sink：主控台，以及每日輪替的 `logs/struo-.log`（`shared: true`）。
 
-這個區段不綁定自訂的選項類別，直接交給 Serilog 自己的設定讀取器解析，形狀跟著 Serilog 的慣例
-走，不是固定 schema。bootstrap logger 跟完整 logger 都只在啟動時建立一次、只寫到主控台；改等
-級要重開行程才生效。
+這個區段不綁自訂選項類別，直接交給 Serilog 自己的設定讀取器解析。兩個 logger 都在啟動時建立
+一次，所以改等級要重開行程；`WriteTo` 讀進來之前的最初幾行，只會寫到主控台。
 
 ## Testing
 
