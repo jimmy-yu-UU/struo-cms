@@ -27,7 +27,7 @@ docker compose ps
 
 容器用的是開發專用帳密（`struo`／`struo`／`struo`），下一步的設定檔直接沿用。
 
-對外的埠預設是 PostgreSQL 5432、Redis 6379；如果本機已經有服務占用這兩個埠，複製
+對外的埠預設是 PostgreSQL 5432、Redis 6379；如果本機已經有服務佔用這兩個埠，複製
 `.env.example` 成 `.env`，用 `STRUO_PG_PORT`、`STRUO_REDIS_PORT` 覆寫即可。改了
 `STRUO_PG_PORT` 的話，下一步連線字串裡的 `Port=` 也要跟著改。
 

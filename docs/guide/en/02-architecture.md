@@ -106,8 +106,9 @@ A SqlSugar major-version upgrade, or a semantic change to an attribute like `[Su
 every entity class a fork has written. Before upgrading, check the `SqlSugarCore` version in
 `Directory.Packages.props` and read that version's changelog.
 
-The bare JSON column width and the translation sidecar's unique index, both tied to framework
-tables, are computed inside `SqlSugarClientFactory`. The soft-delete filter condition is registered
+The bare JSON column width, tied to framework tables, is computed inside `SqlSugarClientFactory`.
+The translation sidecar's unique index is applied (not computed) by that same factory. The
+soft-delete filter condition is registered
 by the same factory, as a query filter (`db.QueryFilter.AddTableFilter<ISoftDeletable>`); a fork
 does not need to recompute or re-register either.
 

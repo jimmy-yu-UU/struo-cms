@@ -66,7 +66,8 @@ A StruoCMS install with no collections added yet looks like this:
 - The admin sidebar has no content groups, only System. For a super-admin, System holds Language,
   Role, and User — nothing else, because the framework collections File, MediaFolder, Permission,
   and UserRole all declare `Hidden = true`. That is a display-layer flag, not a permission.
-- Dashboard always shows. Media Library and Settings appear only when your permissions allow.
+- Dashboard always shows. Media Library needs the `file.read` permission (or super-admin); Settings
+  shows only for a super-admin.
 
 This is the correct state, not a broken install. The core deliberately holds no content of its own;
 it waits for your collections to fill it in.

@@ -100,8 +100,9 @@ SqlSugar 大版本升級，或是 `[SugarIndex]` 這類屬性的語意變動，�
 entity 類別，核心無法幫忙吸收——升級前，先比對 `Directory.Packages.props` 裡 `SqlSugarCore`
 的版本，讀過那個版本的 changelog 再動手。
 
-框架資料表牽涉的 bare JSON 欄位寬度與翻譯 sidecar 的唯一索引，是 `SqlSugarClientFactory` 內
-部算出來的；soft delete 的過濾條件，也是同一個 factory 註冊的查詢過濾器
+框架資料表牽涉的 bare JSON 欄位寬度，是 `SqlSugarClientFactory` 內部算出來的；翻譯 sidecar
+的唯一索引則是由 `SqlSugarClientFactory` 套用（不是算出）；soft delete 的過濾條件，也是同一
+個 factory 註冊的查詢過濾器
 （`db.QueryFilter.AddTableFilter<ISoftDeletable>`），fork 不需要自己重算或重新註冊。
 
 所有資料庫存取都得經過 SqlSugar，只有四個刻意留下的例外會組字串 SQL：`db/migrations/` 的腳
