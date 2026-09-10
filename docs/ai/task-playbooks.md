@@ -10,8 +10,9 @@ commands `.github/workflows/ci.yml` runs on every push/PR. The `docs/` build res
 link in the manual and fails on a dead one, then checks that every chapter actually rendered — `vitepress
 build` alone exits 0 on a page whose body came out empty — and that no table is wider than the content
 column (`docs/scripts/check-table-width.mjs`); CI's docs job also runs `pnpm test` from `docs/` (the
-guard scripts' unit tests) as a CI step, not a sixth gate; it is relevant to a change only when that
-change touches `docs/guide/**` or the docs project itself, not automatically to every playbook below.
+guard scripts' unit tests) as a CI step, not a sixth gate. The docs build is relevant to a change only
+when that change touches `docs/guide/**` or the docs project itself, not automatically to every
+playbook below.
 **Live-database verification** is a separate, additional step for any change to
 DB behavior, performed against whichever backend the deployment is configured for: on PostgreSQL (the
 verified target) it is the strongly-recommended live-PG check described below; on `MySql`/`SqlServer`/
