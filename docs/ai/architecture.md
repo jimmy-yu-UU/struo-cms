@@ -54,7 +54,7 @@ referencing `samples/*`: `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`
 `Struo:ContentAssemblies` is empty. Only `tests/Struo.Tests` references the sample project — that is
 what makes `samples/Struo.Sample.Blog` truly optional and deletable.
 
-See `docs/guide/en/01-introduction-and-architecture.md` for the conceptual introduction to this layering.
+See `docs/guide/en/02-architecture.md` for the conceptual introduction to this layering.
 
 ### ORM coupling
 
