@@ -45,9 +45,9 @@ if (!existsSync(guideRoot) || !statSync(guideRoot).isDirectory()) {
 }
 
 // Every markdown file under guide/, at any depth, forward-slash relative
-// paths so messages read the same on every platform. Dot-prefixed
-// directories (the repo has empty .sonar dirs here) are skipped the same way
-// the sidebar and the rendered-chapters guard skip them.
+// paths so messages read the same on every platform. Dot-prefixed path
+// segments are skipped, the same way the sidebar and the rendered-chapters
+// guard skip them.
 const markdownFiles = readdirSync(guideRoot, { recursive: true, withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
   .map((entry) => relative(guideRoot, join(entry.parentPath, entry.name)).split(sep).join('/'))

@@ -3,12 +3,15 @@
 // unacceptable on 2026-09-10: a wide cell is as unreadable as a long paragraph.
 // Nothing in `vitepress build` measures this, so the guard lives here.
 //
-// The check is deliberately mechanical and source-side. It measures the text a
-// reader will see — inline code, link targets and emphasis markers stripped —
-// with CJK characters counted double, because at the manual's font size one
-// CJK glyph takes about the space of two Latin ones. There is no per-table
-// exemption on purpose: a table that cannot fit must be rewritten as a list or
-// a section, not waved through.
+// The check is deliberately mechanical and source-side. It finds tables by
+// their delimiter row, the way markdown-it (VitePress's renderer) does, so a
+// row missing its outer pipes or a table indented inside a list item is still
+// found — neither hides a table from markdown-it, so neither hides one here.
+// It measures the text a reader will see — inline code, link targets and
+// emphasis markers stripped — with CJK characters counted double, because at
+// the manual's font size one CJK glyph takes about the space of two Latin
+// ones. There is no per-table exemption on purpose: a table that cannot fit
+// must be rewritten as a list or a section, not waved through.
 
 // Spec thresholds (docs/_archive-local/superpowers/specs/2026-09-10-docs-rewrite-design.md §5).
 // One definition, shared by the CLI and its tests.
@@ -44,38 +47,64 @@ export function cellText(rawCell) {
 // least as long. Tables in code samples must never be measured — that false
 // positive is exactly what would get this guard deleted later.
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/
-const TABLE_ROW = /^ {0,3}\|.*\|\s*$/
-const DELIMITER_ROW = /^\s*\|(\s*:?-+:?\s*\|)+\s*$/
 
-// Split on pipes that are not escaped. The leading and trailing pipe are
-// dropped first so an empty edge cell is not invented.
-function splitCells(row) {
-  return row.trim().slice(1, -1).split(/(?<!\\)\|/)
+// A delimiter row, after stripping leading whitespace and one optional
+// leading/trailing pipe: one or more `-`-only cells (each optionally
+// colon-anchored for alignment), separated by `|`. This is the anchor for
+// table detection — the header is whatever non-blank, non-fence line sits
+// immediately above it, and the body is the consecutive lines that follow.
+const DELIMITER_ROW = /^:?-+:?$/
+
+// Strip leading whitespace, one leading `|` and one trailing `|` (after
+// trailing whitespace), then split on unescaped `|`. A row with no pipes at
+// all is still one cell — splitting on a separator that is not present
+// yields the whole (trimmed) row as its single element.
+function rowCells(line) {
+  let row = line.replace(/^\s+/, '')
+  if (row.startsWith('|')) {
+    row = row.slice(1)
+  }
+  row = row.replace(/\s+$/, '')
+  if (row.endsWith('|')) {
+    row = row.slice(0, -1)
+  }
+  return row.split(/(?<!\\)\|/)
+}
+
+function isDelimiterRow(line) {
+  const cells = rowCells(line)
+  return cells.length > 0 && cells.every((cell) => DELIMITER_ROW.test(cell.trim()))
+}
+
+function isBlank(line) {
+  return line.trim() === ''
 }
 
 export function checkTables(markdown, limits) {
   const lines = markdown.split(/\r?\n/)
   const violations = []
-  let fence = null
+  const fenceAt = new Array(lines.length).fill(false)
 
+  // Pre-compute which lines sit inside a fence, so header/delimiter/body
+  // scanning below never has to track fence state itself.
+  let fence = null
   lines.forEach((line, index) => {
     const opener = FENCE_LINE.exec(line)
     if (fence) {
+      fenceAt[index] = true
       if (opener && opener[1].startsWith(fence.char) && opener[1].length >= fence.length) {
         fence = null
       }
       return
     }
     if (opener) {
+      fenceAt[index] = true
       fence = { char: opener[1][0], length: opener[1].length }
-      return
     }
-    if (!TABLE_ROW.test(line) || DELIMITER_ROW.test(line)) {
-      return
-    }
+  })
 
-    const lineNumber = index + 1
-    const cells = splitCells(line)
+  function measureRow(line, lineNumber) {
+    const cells = rowCells(line)
     if (cells.length > limits.maxColumns) {
       violations.push({
         line: lineNumber,
@@ -94,7 +123,33 @@ export function checkTables(markdown, limits) {
         })
       }
     }
-  })
+  }
+
+  let index = 0
+  while (index < lines.length) {
+    const line = lines[index]
+    if (fenceAt[index] || isBlank(line) || !isDelimiterRow(line)) {
+      index += 1
+      continue
+    }
+
+    const headerIndex = index - 1
+    const headerLine = headerIndex >= 0 ? lines[headerIndex] : undefined
+    if (headerIndex < 0 || fenceAt[headerIndex] || isBlank(headerLine)) {
+      index += 1
+      continue
+    }
+
+    measureRow(headerLine, headerIndex + 1)
+
+    let bodyIndex = index + 1
+    while (bodyIndex < lines.length && !fenceAt[bodyIndex] && !isBlank(lines[bodyIndex])) {
+      measureRow(lines[bodyIndex], bodyIndex + 1)
+      bodyIndex += 1
+    }
+
+    index = bodyIndex
+  }
 
   return violations
 }

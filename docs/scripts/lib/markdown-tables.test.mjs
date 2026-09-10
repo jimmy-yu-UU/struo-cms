@@ -103,3 +103,44 @@ test('line numbers are 1-based and survive CRLF input', () => {
   const violations = checkTables(md, LIMITS)
   assert.equal(violations[0].line, 3)
 })
+
+test('a table without outer pipes is still measured', () => {
+  const md = ['a | b | c | d | e', '--- | --- | --- | --- | ---', '1 | 2 | 3 | 4 | 5'].join('\n')
+  assert.deepEqual(
+    checkTables(md, LIMITS).map((v) => [v.line, v.kind]),
+    [
+      [1, 'columns'],
+      [3, 'columns'],
+    ],
+  )
+})
+
+test('a table with only a leading pipe is still measured', () => {
+  const md = ['| a | b | c | d | e', '|---|---|---|---|---', '| 1 | 2 | 3 | 4 | 5'].join('\n')
+  assert.equal(checkTables(md, LIMITS).length, 2)
+})
+
+test('a table indented inside a list item is still measured', () => {
+  const md = ['- item', '', '    | a | b | c | d | e |', '    |---|---|---|---|---|', '    | 1 | 2 | 3 | 4 | 5 |'].join('\n')
+  assert.equal(checkTables(md, LIMITS).length, 2)
+})
+
+test('a prose line with pipes but no delimiter row is not a table', () => {
+  const md = ['| this | is | just | prose | with | pipes |', '', 'more prose'].join('\n')
+  assert.deepEqual(checkTables(md, LIMITS), [])
+})
+
+test('exactly maxColumns columns and exactly maxCellWidth width both pass', () => {
+  const md = ['| a | b | c | d |', '|---|---|---|---|', `| ${'x'.repeat(60)} | 2 | 3 | 4 |`].join('\n')
+  assert.deepEqual(checkTables(md, LIMITS), [])
+})
+
+test('an escaped pipe inside a cell does not split it', () => {
+  const md = ['| a | b |', '|---|---|', '| 1 \\| 2 \\| 3 \\| 4 | 5 |'].join('\n')
+  assert.deepEqual(checkTables(md, LIMITS), [])
+})
+
+test('the body ends at the first blank line', () => {
+  const md = ['| a | b |', '|---|---|', '| 1 | 2 |', '', '| p | q | r | s | t |'].join('\n')
+  assert.deepEqual(checkTables(md, LIMITS), [])
+})
