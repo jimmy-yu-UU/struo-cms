@@ -1,36 +1,42 @@
 # StruoCMS
 
-A reusable, headless CMS **template**: fork it, define your own content collections, ship your own
-product. It is not a finished CMS product and ships no business content models of its own.
+StruoCMS is a headless CMS template you fork directly, built on .NET 10 and SqlSugar, with
+PostgreSQL as the verified database and a Vue 3 single-page application as the admin UI. After you
+fork it, you declare content collections in your own project, and StruoCMS turns them into database
+tables, APIs, and admin screens.
+
+The content model starts with you: a fresh install has zero content collections, and Article, Tag,
+and Category are all yours to declare. `samples/Struo.Sample.Blog` is an optional demo project that
+shows how to define your own collections with the tools the core provides; you can delete it once
+you've learned from it; the removal steps are covered in a later chapter dedicated to the sample
+project.
 
 [![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
-## What you get
+## What it includes
 
-- A metadata-driven collections engine — declare a plain C# entity with attributes, and StruoCMS
-  derives its database table, REST endpoints, GraphQL schema, query-DSL surface and admin-UI form
-  from that one declaration.
-- Identity and role-based access control (RBAC): per-collection read/write/delete permissions,
-  Argon2id password hashing, cookie- and bearer-token authentication, optional OpenID Connect SSO.
-- Files and media, with a local-disk or S3-compatible storage backend and on-the-fly image
-  transforms.
-- Revisions and soft delete, both opt-in per collection.
-- Internationalization (per-locale content), site settings/branding, a query DSL, a REST API, a
-  GraphQL API, and the Vue 3 admin SPA that drives all of the above.
-
-## What you do not get
-
-No business content models. There is no "Article", "Product", or any other domain collection shipped
-in the core — a default install has zero content collections. `samples/Struo.Sample.Blog` is an
-optional, detachable demo (Article/Tag/Category) that shows *how* to define collections using the same
-primitives your own fork would use; it is not referenced by the API host by default and is meant to be
-deleted once you've used it to learn the patterns.
+- **Collection engine**: declare a C# entity with a few attributes, and StruoCMS derives the
+  database table schema, REST endpoints, GraphQL schema, query DSL, and the admin form screens from
+  that one declaration.
+- **REST API and GraphQL API**: both generated from the same collection metadata; every REST
+  response uses the same envelope.
+- **Authentication and role-based permissions**: cookie- and bearer-token authentication, Argon2id
+  password hashing, and OpenID Connect single sign-on, off by default; read, write, and delete are
+  granted per collection.
+- **Files and media**: a local-disk or S3-compatible storage backend, with on-the-fly image
+  transforms as files are downloaded.
+- **Revisions and soft delete**: both core features, both toggled per collection.
+- **Multilingual content, site settings, and branding**: a field can hold a separate translation per
+  language; one settings record covers the whole site, edited directly in the admin UI by a
+  super-admin.
+- **Admin SPA**: a Vue 3 single-page application that brings all of the above into one interface.
 
 ## Quick start
 
-Prerequisites: .NET SDK 10.0.x, Node.js 24.x, pnpm 10.x, Docker (with Compose). To run the API and
-admin SPA as container images instead, see chapter 15's
-[Container images](docs/guide/en/15-deployment-operations-testing.md#container-images) section.
+Prerequisites: .NET SDK 10.0.x, Node.js 24, pnpm 10.x, Docker (with Compose).
+
+The API and the admin SPA can also run as containers — the repo has a Dockerfile for each; the
+full steps are covered in a later chapter dedicated to deployment.
 
 ```bash
 # 1. Start PostgreSQL and Redis
@@ -50,62 +56,33 @@ pnpm dev
 # listens on http://localhost:5173, proxies /api to :5221
 ```
 
-Open `http://localhost:5173` and log in with the seeded bootstrap admin: `admin@admin.com` / `admin`
-(seeded only the first time the `users` table is created — not re-created or reset on later boots, even
-against an emptied table; override it via `Auth:BootstrapAdmin:Email`/`Auth:BootstrapAdmin:Password`
-before that first boot). A production start still using the default password logs a startup warning but
-does not refuse to start — change it before going to production. Full detail, including MinIO's optional
-`s3` Compose profile and port-override variables, is in
-[chapter 2](docs/guide/en/02-getting-started.md).
+Open `http://localhost:5173` and log in with the default account: `admin@admin.com` / `admin`. The
+account is seeded only when the `users` table is first created; to use a different one, set
+`Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password` before the first start.
+
+Starting in Production while the password is still the default logs a warning naming
+`Auth__BootstrapAdmin__Password` instead of blocking startup — change it before you go live. The
+full steps, including the PostgreSQL/Redis port overrides and health checks, are in
+[Chapter 3: Getting Started](docs/guide/en/03-getting-started.md).
 
 ## Architecture
 
-Four backend projects in a strict, one-directional dependency chain, plus a separate frontend
-workspace:
-
-```
-Struo.Domain  <──  Struo.Application  <──  Struo.Infrastructure  <──  Struo.Api
-   (nothing)         (→ Domain)           (→ Application, Domain)   (→ Application, Infrastructure)
-
-frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.Api over REST/GraphQL
-```
-
-- `Struo.Domain` — domain types; no project or package references at all.
-- `Struo.Application` — application-layer abstractions, options, query/security contracts.
-- `Struo.Infrastructure` — SqlSugar wiring, identity, files, health checks, DI extensions.
-- `Struo.Api` — the ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`.
-- `schema/` — the committed snapshots the schema contract gate checks both stacks against:
-  core-collection wire shape (`core-collections.json`) and every declared interface enum
-  (`interfaces.json`) — see `schema/README.md`.
-
-Framework code never references `samples/*` — only `tests/Struo.Tests` does, which is what makes
-`samples/Struo.Sample.Blog` truly optional and deletable.
+The backend has four projects (`Struo.Domain`, `Struo.Application`, `Struo.Infrastructure`,
+`Struo.Api`) with dependencies running in one direction only; alongside them sit the standalone
+`frontend/` workspace and the `schema/` contract snapshots.
+[Chapter 2: Architecture](docs/guide/en/02-architecture.md) has the full picture.
 
 ## Documentation
 
-The full manual lives under `docs/`, in English and 繁體中文 (zh-TW), chapter-for-chapter:
+The full manual lives under `docs/`, in English and 繁體中文, chapter-for-chapter; start at
+[Chapter 1: What StruoCMS Is](docs/guide/en/01-what-is-struocms.md). If you develop this project
+with an AI coding agent, read [`AGENTS.md`](AGENTS.md) first. The documentation site is its own
+project; install and run it with:
 
-| # | Chapter |
-|---|---|
-| 1 | [Introduction & Architecture](docs/guide/en/01-introduction-and-architecture.md) |
-| 2 | [Getting Started](docs/guide/en/02-getting-started.md) |
-| 3 | [Configuration Reference](docs/guide/en/03-configuration-reference.md) |
-| 4 | [Defining a Collection](docs/guide/en/04-defining-a-collection.md) |
-| 5 | [Field Types & Interfaces](docs/guide/en/05-field-types.md) |
-| 6 | [Internationalization](docs/guide/en/06-internationalization.md) |
-| 7 | [Relations](docs/guide/en/07-relations.md) |
-| 8 | [Query DSL](docs/guide/en/08-query-dsl.md) |
-| 9 | [REST API](docs/guide/en/09-rest-api.md) |
-| 10 | [GraphQL API](docs/guide/en/10-graphql-api.md) |
-| 11 | [Files, Media & Image Transforms](docs/guide/en/11-files-and-media.md) |
-| 12 | [Authentication, SSO & RBAC](docs/guide/en/12-auth-and-rbac.md) |
-| 13 | [Revisions & Soft Delete](docs/guide/en/13-revisions-and-soft-delete.md) |
-| 14 | [Admin SPA Customization](docs/guide/en/14-admin-spa-customization.md) |
-| 15 | [Deployment, Operations & Testing](docs/guide/en/15-deployment-operations-testing.md) |
-| 16 | [Sample Walkthrough](docs/guide/en/16-sample-walkthrough.md) |
-
-zh-TW readers, start from [`docs/README.md`](docs/README.md) for the translated index. AI coding
-agents working in this repository should read [`AGENTS.md`](AGENTS.md).
+```bash
+pnpm -C docs install
+pnpm -C docs dev
+```
 
 ## License
 
