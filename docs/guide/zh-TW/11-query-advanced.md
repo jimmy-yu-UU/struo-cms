@@ -14,11 +14,11 @@
 
 ```text
 $ GET /api/items/article?fields=id,status
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":7,"status":"published","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":4,"status":"draft","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":7,"status":"published","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
-只要求 `id` 跟 `status`，兩篇文章卻都還帶著 `version` 跟完整的 `translations`——這兩者本來就不歸
+只要求 `id` 跟 `status`，三篇文章卻都還帶著 `version` 跟完整的 `translations`——這兩者本來就不歸
 `fields=` 管。後面的例子沿用同一批測試資料，id 是資料本身的，讀者環境會不同。
 
 JSON 封裝形式是同一件事，鍵名是 `fields`，一個字串陣列，不是 `field` 也不是 `select`：
@@ -46,11 +46,10 @@ HTTP_STATUS:400
 章」，其實不是——這個篩選是在父層那一頁已經固定之後才套用的。[第 8 章：關聯](08-relations.md)已
 經說過整棵 `deep` 樹會在任何查詢真的執行之前驗證完，跟列數無關。
 
-巢狀關聯自己的 `filter` 跟 `sort`，走的是同一個 `QueryValidator`，對照的是目標集合自己的中繼資
-料；巢狀 `sort` 不能是帶點號的路徑，觸發的是另一個訊息——
-`Sort across relations is not supported for nested lists: '<field>'.`——跟[第 10 章](10-query-basics.md)
-頂層 `sort=` 碰到多對多路徑時的 `Sort across to-many relations is not supported: '<path>'.` 是
-兩回事，一個管巢狀清單自己的排序，一個管頂層排序。
+巢狀關聯自己的 `filter` 跟 `sort`，走的是同一個 `QueryValidator`，對照的是目標集合自己的中繼資料；巢
+狀 `sort` 不能是帶點號的路徑，觸發的是另一個訊息——`Sort across relations is not supported for nested
+lists: '<field>'.`——跟[第 10 章](10-query-basics.md)頂層 `sort=` 碰到多對多路徑時的 `Sort across
+to-many relations is not supported: '<path>'.` 是兩回事，一個管巢狀清單自己的排序，一個管頂層排序。
 
 junction 的 payload（`_junction` 鍵）[第 8 章：關聯](08-relations.md)已經介紹過，本章最後的完整
 範例會再看到一次。
@@ -257,13 +256,14 @@ facet 跟彙總的驗證錯誤都走 `BAD_USER_INPUT`／400，信封的完整形
 
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0&fields=id,status&deep=category,tags&facets=status&aggregate[count]=publishedAt
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","category":{"id":"01a08f92-3833-750e-bad3-6ee620f985c3","version":0,"name":"Guides","createdAt":"2026-09-11T08:25:19.670132","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.670271","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"},"tags":[{"id":"01a08f92-38f5-7f1b-a478-f8a1140f0b0b","version":0,"name":"howto","createdAt":"2026-09-11T08:25:19.861593","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.86169","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":null}},{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","version":0,"name":"release","createdAt":"2026-09-11T08:25:19.98309","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.98318","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2}]},"aggregate":{"count":{"publishedAt":2}}}}
+{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","category":{"id":"01a08f92-3833-750e-bad3-6ee620f985c3","version":0,"name":"Guides","createdAt":"2026-09-11T08:25:19.670132","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.670271","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"},"tags":[{"id":"01a08f92-38f5-7f1b-a478-f8a1140f0b0b","version":0,"name":"howto","createdAt":"2026-09-11T08:25:19.861593","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.86169","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":null}},{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","version":0,"name":"release","createdAt":"2026-09-11T08:25:19.98309","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.98318","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
 HTTP_STATUS:200
 ```
 
 `meta` 一次帶齊這個請求的所有摘要：`total` 是 2，篩選後的總列數，不是這一頁的列數；`limit`／
-`offset` 是夾完後生效的分頁值；`facets.status` 沒被 `filter[status]` 自己的條件影響，因為算這
-個 facet 之前那個條件先被剪掉了；`aggregate.count.publishedAt` 算的是完整、未剪枝的 `filter`。
+`offset` 是夾完後生效的分頁值；`facets.status` 照樣回報 `published: 2`、`draft: 1`，沒被
+`filter[status]` 自己的條件影響，因為算這個 facet 之前那個條件先被剪掉了；
+`aggregate.count.publishedAt` 算的是完整、未剪枝的 `filter`。
 
 `fields=id,status` 沒有擋掉 `category`、`tags` 這兩個展開出來的關聯，也沒有擋掉 `version` 跟
 `translations`——這四者都不歸 `fields=` 管；`tags` 底下每一筆多出來的 `_junction`，裝的是連結
