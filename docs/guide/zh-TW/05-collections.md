@@ -77,8 +77,8 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 | `Group` | `string?` | `null` | 側欄導覽分組 |
 | `DefaultDisplayField` | `string?` | `null` | 項目顯示標題 |
 | `AdminOnly` | `bool` | `false` | 一般 CRUD 寫入一律要求 super-admin |
-| `Hidden` | `bool` | `false` | 從側欄隱藏 |
-| `Revisions` | `bool` | `false` | 啟用修訂記錄 |
+| `Hidden` | `bool` | `false` | 只從後台側欄移除；REST、GraphQL、權限與 schema 不受影響 |
+| `Revisions` | `bool` | `false` | 啟用版本紀錄 |
 
 `DefaultDisplayField` 名稱要對得上某個欄位，比對時看 camelCase 之後的名字，對不上就在啟動時
 丟出 `MetadataException`。
@@ -86,7 +86,7 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 `AdminOnly = true` 只管一般 CRUD 的寫入，不論該集合的 RBAC 授予了什麼都要求 super-admin；讀取
 仍照一般 RBAC 走。
 
-軟刪除和修訂記錄是兩個各自獨立的開關：軟刪除讓集合實作 `ISoftDeletable`，修訂記錄在
+軟刪除和版本紀錄是兩個各自獨立的開關：軟刪除讓集合實作 `ISoftDeletable`，版本紀錄在
 `[CmsCollection]` 上設 `Revisions = true`。
 
 ## `[CmsField]` 選項
