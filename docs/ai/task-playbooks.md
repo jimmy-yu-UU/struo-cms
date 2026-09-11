@@ -36,9 +36,9 @@ standing gates or of CI.
 
 ## Playbook 1: Add a collection
 
-Background: `docs/guide/en/04-defining-a-collection.md` (full checklist and rationale),
-`docs/guide/en/06-internationalization.md` (translatable fields), `docs/guide/en/07-relations.md`
-(relations), `docs/guide/en/13-revisions-and-soft-delete.md` (soft delete / revisions),
+Background: `docs/guide/en/05-collections.md` (full checklist and rationale),
+`docs/guide/en/07-i18n.md` (translatable fields), `docs/guide/en/08-relations.md`
+(relations), `docs/guide/en/09-revisions-and-trash.md` (soft delete / revisions),
 `docs/guide/en/12-auth-and-rbac.md` (RBAC grants).
 
 Adding a collection is purely additive to a fork's own content project — it never touches
@@ -56,7 +56,7 @@ Adding a collection is purely additive to a fork's own content project — it ne
    `[CmsCollection("Your Label", Icon = "...", Group = "...", DefaultDisplayField = nameof(SomeField))]`.
 3. **Add `[CmsField]`** to every property the API/admin form should expose (`Interface =
    FieldInterface.Xxx`, plus `Required`/`Searchable`/`Sortable`/`Sort`/`ReadOnly`/`Hidden`/
-   `Translatable`/`MaxLength` as needed — see `docs/guide/en/05-field-types.md` for the full
+   `Translatable`/`MaxLength` as needed — see `docs/guide/en/06-field-types.md` for the full
    `FieldInterface` reference), and `[CmsOptions(...)]` on any `Select`/`Radio`/`MultiSelect`/
    `CheckboxGroup` field. `Hidden` is a read-side exclusion only (see `AGENTS.md`'s invariants) — pair
    it with `ReadOnly` if the field must also be unwritable.
@@ -102,7 +102,7 @@ Adding a collection is purely additive to a fork's own content project — it ne
 
 ## Playbook 2: Add a field type
 
-Background: `docs/guide/en/05-field-types.md` (the full `FieldInterface` reference and the three things
+Background: `docs/guide/en/06-field-types.md` (the full `FieldInterface` reference and the three things
 one enum value drives), `docs/guide/en/14-admin-spa-customization.md`, "Adding a custom field editor"
 (the frontend-only variant of this playbook).
 
@@ -126,7 +126,7 @@ picker instead of a plain text input) — frontend-only, no backend change:
    doesn't touch `docs/guide/**`, so the docs gate does not apply).
 
 **2b. Add a genuinely new `FieldInterface` value** — touches all three layers `docs/guide/en/
-05-field-types.md` describes:
+06-field-types.md` describes:
 
 1. Add the new member to `src/Struo.Domain/Metadata/Enums/FieldInterface.cs` (a fixed declaration
    order; add yours at the end unless you have a specific reason to group it near related interfaces —
@@ -178,7 +178,7 @@ picker instead of a plain text input) — frontend-only, no backend change:
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
 9. **Gate**: four of the five standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`)
    — this change spans both stacks. The docs gate does not apply unless this change also updated
-   `docs/guide/en/05-field-types.md`'s `FieldInterface` reference, in which case add `pnpm build` from
+   `docs/guide/en/06-field-types.md`'s `FieldInterface` reference, in which case add `pnpm build` from
    `docs/` too. **Verify against the backend you are configured for** if you touched
    `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends diverge, and
    a divergence like the `timestamp without time zone` shape a missing `[ColumnShape]` produces on
