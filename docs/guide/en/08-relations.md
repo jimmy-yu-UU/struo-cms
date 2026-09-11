@@ -1,7 +1,7 @@
 # 8. Relations
 
-How one collection refers to another, how the referenced data comes back on read, and what happens
-to it when the target is deleted, is what this chapter covers.
+This chapter covers how one collection refers to another, how the referenced data comes back on
+read, and what gets cleaned up when the target is deleted.
 
 ## Three kinds of relation
 
@@ -98,7 +98,7 @@ metadata is always the PascalCase CLR property name; no attribute member can ove
 
 ## `[CmsRelation]` options
 
-`[CmsRelation]` has no constructor — every setting is a named parameter. The first four decide
+Every `[CmsRelation]` setting is a named parameter; there is no constructor. The first four decide
 display and target picking:
 
 | Member | CLR type | Default | Effect |
@@ -151,11 +151,11 @@ fails; the requirement is writability, not a particular interface — `UserRole`
 '{owner}.{relation}') must declare its foreign keys '{fkA}' and '{fkB}' as writable [CmsField]s
 (e.g. Interface = FieldInterface.Uuid); otherwise items created through the API store empty keys.`
 
-Just like a collection-level `Hidden` ([Chapter 5: Defining Collections](05-collections.md)), it
-only removes the junction collection from the admin sidebar: it still appears fully in
-`/api/schema`, in the RBAC permission matrix, and in the generated GraphQL schema. `UserRole`
-additionally carries `AdminOnly = true`, which the sample's `ArticleTag` does not — so the two
-differ in who can write to them.
+A junction collection can carry `Hidden` too, and it behaves exactly like a collection-level
+`Hidden` ([Chapter 5: Defining Collections](05-collections.md)): it only removes the junction
+collection from the admin sidebar: it still appears fully in `/api/schema`, in the RBAC permission
+matrix, and in the generated GraphQL schema. `UserRole` additionally carries `AdminOnly = true`,
+which the sample's `ArticleTag` does not — so the two differ in who can write to them.
 
 The relation's own schema entry names the junction collection, its payload field names, and its
 sort field, which is how a caller discovers that it also needs a separate write grant on the
@@ -185,9 +185,9 @@ public sealed class ArticleTag
 ```
 
 Of these four fields, only `Note` counts as payload: the two foreign keys are the link itself, and
-`Sort` is `Article.Tags`' `SortField`. `ArticleTag` also carries `Hidden = true`. A payload field's
-`MaxLength` error is prefixed with the relation and the target: `Relation 'tags', target '<id>':
-Field 'note' exceeds maximum length 200.`
+`Sort` is the `SortField` for `Article.Tags`. `ArticleTag` also carries `Hidden = true`. A payload
+field's `MaxLength` error is prefixed with the relation and the target: `Relation 'tags', target
+'<id>': Field 'note' exceeds maximum length 200.`
 
 GraphQL additionally exposes `<rel>Links: [<Parent><Rel>Link!]`, reading the same payload, with
 each entry shaped `{ node, junction }`; the original `<rel>` field is untouched.
@@ -240,8 +240,8 @@ gets cascaded too, not skipped. Neither the framework nor the sample declares an
 
 There's only one parameter for expanding relations: `deep`. Expansion is batched per relation per
 page — one extra query per relation, not one per row — and deliberately avoids the ORM's own
-eager-include: a many-to-one costs one query, a one-to-many one, a many-to-many two (the junction
-rows, then the targets).
+eager-include: a many-to-one costs one query, a one-to-many also one, and a many-to-many two (the
+junction rows, then the targets).
 
 The query-string form is single-level and names relations only: `?deep=folder,tags`, comma
 separated. Per-relation field selection, a nested filter, a sort, `limit`/`offset`, and further
@@ -321,7 +321,7 @@ chapters.
 ## The relation picker and junction list editor in the admin
 
 `RelationInterface` has four values — `Dropdown`, `TagSelect`, `TreeSelect`, `RelatedList` — and
-the admin wires each one to a real input component:
+the admin SPA wires each one to its own input component:
 
 - `Dropdown`: a single-value dropdown, running a debounced search against the target collection.
 - `TreeSelect`: a single-value tree picker, with the tree built from a self-referencing many-to-one
@@ -345,7 +345,7 @@ The dropdown underneath only adds and removes members.
 Authorization has three tiers:
 
 - No read grant on the junction: the row still appears, but no payload field is shown at all —
-  the server already omits `_junction`, so there's nothing truthful to display.
+  the server already omits `_junction`, so there are no values to show.
 - Read but no write grant (or an `AdminOnly` junction and a caller who isn't a super-admin): payload
   fields render read-only, and saving sends only bare ids — only membership and, when the relation
   has a `SortField`, order get updated.
@@ -354,7 +354,7 @@ Authorization has three tiers:
 The parent form's own disabled state overrides all of the above.
 
 A server-side payload validation error lands in the form's top-level error message; required and
-maximum-length checks are pre-checked by the front end before submit. A numeric or boolean payload
+maximum-length checks are pre-checked by the frontend before submit. A numeric or boolean payload
 field left blank is saved as `null`, not an empty string, so such a junction field should either be
 declared nullable or marked `Required` — the form blocks an empty required field before it's sent.
 
@@ -363,6 +363,6 @@ API never sends it in `_junction` in the first place.
 
 ## What's next
 
-With relation read and write settled, the next step is how versions get kept and how something
+With relation reads and writes settled, the next step is how versions get kept and how something
 soft-deleted gets found again — the subject of
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md).
