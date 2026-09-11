@@ -18,15 +18,15 @@ $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1
 HTTP_STATUS:200
 ```
 
-Only one published article comes back first; `meta.total` is 2, the total row count that matches
-the filter, while `limit`/`offset` are the effective, clamped pagination values. Later examples in
-this chapter reuse the same test data — the ids are data-specific, and your own environment will
-differ.
+Only one row comes back, the published article that sorts first; `meta.total` is 2, the total row
+count that matches the filter, while `limit`/`offset` are the effective, clamped pagination values.
+Later examples in this chapter reuse the same test data — the ids are data-specific, and your own
+environment will differ.
 
-**JSON envelope.** `POST /api/items/{collection}/query` accepts the same model as a JSON body,
-with keys matching the query-string parameters one for one. It is the only way to write `_and`/
-`_or`, and the only way to give a `deep` relation its own `fields`/`filter`/`sort`/`limit`/
-`offset`, or to nest `deep` further. The query above, written as a JSON body, is the same request:
+**JSON envelope.** `POST /api/items/{collection}/query` accepts the same model as a JSON body, with
+keys matching the query-string parameters one for one. It is the only way to write `_and`/`_or`, and
+the only way to give a `deep` relation its own `fields`/`filter`/`sort`/`limit`/`offset`, or to nest
+`deep` further. The query above, written as a JSON body, is the same request:
 
 ```json
 {
@@ -42,8 +42,8 @@ the same semantics, only the argument spelling differs — the operator `_eq` be
 quantifier `_some` becomes `some`. The spelling differences are left to
 [the GraphQL chapter](14-graphql.md).
 
-**Both are reads.** Neither action needs to be signed in — both require only a read grant on the
-collection. `POST .../query` uses POST, but it still needs no write grant.
+**Both are reads.** Neither action requires a signed-in caller — both require only a read grant on
+the collection. `POST .../query` uses POST, but it still needs no write grant.
 
 A repeated query-string key is joined with commas before parsing:
 `filter[status][_eq]=a&filter[status][_eq]=b` becomes the single value `a,b`, not two separate
@@ -59,7 +59,7 @@ A query is made up of these groups of parameters:
   a translatable field is matched through the translation sidecar, using the locale this query
   actually resolves to.
 - **`sort`** — orders by one or more fields; **`limit`/`offset`** — pagination. See "Sorting"
-  and "Pagination and `meta`" below
+  and "Pagination and `meta`" below.
 - **`fields`** — keeps only the collection's own fields; left to
   [the advanced query chapter](11-query-advanced.md).
 - **`deep`** — expands relations, also left to
@@ -89,7 +89,7 @@ differently:
 | `_starts_with` | starts with a substring |
 | `_ends_with` | ends with a substring |
 
-**Matching is case-sensitive.** `_EQ` or `_startsWith` is rejected, with
+**Matching is case-sensitive.** `_EQ` or `_startsWith` is rejected with
 `Unknown operator '<token>'.`. Field names are the opposite — case-insensitive everywhere.
 
 **Accepted value shapes.** `_in`/`_nin` are a comma list in the query string and an array in JSON;
@@ -138,8 +138,8 @@ first branch, and all three are in the `Guides` category, satisfying the second 
 **Only one level of nesting.** A child of `_and`/`_or` that is itself another logical group is
 rejected: `Nested logical groups are not supported; use a single level of _and/_or over field
 conditions.`. This one-level limit is counted separately per scope: the inner filter of a
-`_some`/`_none` quantifier is a fresh starting point, and can have its own one level of `_and`/
-`_or` again.
+`_some`/`_none` quantifier is a fresh starting point, and can use one level of `_and`/`_or` of its
+own.
 
 **A cap on the number of conditions.** `Query:MaxFilterConditions` (default 50) counts every leaf
 comparison in the whole request — including every `_and`/`_or` branch and every quantifier's inner
@@ -148,18 +148,20 @@ filter — and rejects the request once that cap is exceeded: `Too many filter c
 more level of nested subquery; it doesn't need to be bounded the way fetching a set of ids does.
 
 **Other shape errors.** An empty `filter` object is an error (`Empty filter object.`), while
-omitting the `filter` key entirely is a valid no-op. A field's value must be an operator object —
-`{"status":"draft"}` is rejected as `Filter for field 'status' must be an object of operators.`,
-and `{"status":{}}` as `Filter for field 'status' has no operator.`. `_and`/`_or`'s value must be
-an array (`'_or' must be an array.`), and a query-string key that isn't split into a field segment
-and an operator segment is `Malformed filter key 'filter[status]'.`.
+omitting the `filter` key entirely is a valid no-op.
+
+A field's value must be an operator object — `{"status":"draft"}` is rejected as `Filter for field
+'status' must be an object of operators.`, and `{"status":{}}` as `Filter for field 'status' has no
+operator.`. `_and`/`_or`'s value must be an array (`'_or' must be an array.`), and a query-string
+key that isn't split into a field segment and an operator segment is `Malformed filter key
+'filter[status]'.`.
 
 ## Relation paths: matched per segment vs. `_some`/`_none` on the same row
 
-[Chapter 8: Relations](08-relations.md), in "Filtering on relations (overview)," already covers
-how a dotted path gets pushed down into a nested subquery. This section spells out the difference
-between "matched per segment" and "matched on the same row," and fills in `_junction`, the
-quantifier-scoped filter.
+[Chapter 8: Relations](08-relations.md), in "Filtering on relations (overview)," already covers how
+a dotted path gets pushed down into a nested subquery. This section spells out the difference
+between "matched per segment" and "matched on the same row," and fills in `_junction`, the filter on
+the link row itself.
 
 **Matched per segment.** With a dotted path, two conditions can each be satisfied by a different
 relation row. For example, `filter[tags.name][_eq]=howto&filter[tags._junction.note][_eq]=hero`
@@ -178,31 +180,31 @@ $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._j
 HTTP_STATUS:200
 ```
 
-Only "Getting started" is left: its `howto` tag's own note is `hero`. "Release notes" also has a
-`howto` tag, but the tag whose note is `hero` is a different one (`release`) — not the same tag
-link. `_some`/`_none` are just as valid on a many-to-one relation: `_some` is equivalent to the
-same inner filter written as a dotted path, and `_none` covers both "no target matches" and "the
-foreign key itself is null."
+Only "Getting started" is left: the note on its `howto` tag link is `hero`. "Release notes" also has
+a `howto` tag, but the tag whose note is `hero` is a different one (`release`) — not the same tag
+link. `_some`/`_none` are just as valid on a many-to-one relation: `_some` is equivalent to the same
+inner filter written as a dotted path, and `_none` covers both "no target matches" and "the foreign
+key itself is null."
 
 **Reserved words and syntax.** `_and`, `_or`, `_some`, `_none`, `_junction`, plus the same set
 spelled without underscores for GraphQL, can never be used as a field or relation name; the check
 is case-insensitive. A violation fails at startup — it never waits for a request to come in.
 
-In the JSON envelope, a quantifier is a key inside the field's object —
-`{"tags":{"_some":{...}}}` — whose value is a complete filter, rooted at the relation's target
-collection, applying the same grammar recursively: a dotted path, another level of `_some`/
-`_none`, `_junction.<field>`, and one level of `_and`/`_or` are all valid inside it. A field
-object can hold both `_some` and `_none` at once — they are independent conditions, ANDed
-together.
+In the JSON envelope, a quantifier is a key inside the field's object — `{"tags":{"_some":{...}}}` —
+whose value is a complete filter, rooted at the relation's target collection, applying the same
+grammar recursively. Inside it you can use a dotted path, another level of `_some`/`_none`,
+`_junction.<field>`, and one level of `_and`/`_or`. A field object can hold both `_some` and `_none`
+at once — they are independent conditions, ANDed together.
 
 In the query string, a quantifier is a segment inside the path —
 `filter[tags._some.name][_eq]=howto` — and conditions sharing the same (prefix, quantifier) are
-grouped and folded into one quantifier; the prefix match is case-insensitive. Each (prefix,
-quantifier) pair can appear only once per request; two independent same-row conditions need the
-JSON envelope, for example
+grouped and folded into one quantifier; the prefix match is case-insensitive.
+
+Each (prefix, quantifier) pair can appear only once per request; two independent same-row conditions
+need the JSON envelope, for example
 `{"filter":{"tags":{"_some":{"name":{"_eq":"howto"},"_junction.note":{"_contains":"hero"}}}}}`.
 
-A malformed quantifier has its own message for each shape:
+Each kind of malformed quantifier has its own message:
 
 - The value must be a non-empty object: `'tags._some' must be a non-empty filter object.`
 - A quantifier can't mix with scalar operators in the same field object: `'tags' mixes a relation
@@ -212,11 +214,12 @@ A malformed quantifier has its own message for each shape:
   follow a relation name.`
 
 **`_junction`.** `_junction.<field>` filters the link's own payload, not either endpoint's data. It
-can be used as a dotted path, or placed inside `_some`/`_none`. It must immediately follow a
-many-to-many relation that has a junction collection, and it can only be followed by one
-non-hidden payload field — no further segment. Using it on a many-to-one relation is rejected:
-`'category._junction.note': '_junction' is only valid after a many-to-many relation with a
-junction collection.`
+can be used as a dotted path, or placed inside `_some`/`_none`.
+
+It must immediately follow a many-to-many relation that has a junction collection, and it can only
+be followed by one non-hidden payload field — no further segment. Using it on a many-to-one relation
+is rejected: `'category._junction.note': '_junction' is only valid after a many-to-many relation
+with a junction collection.`
 
 `_junction` needs the caller to hold a read grant on the junction collection itself; this check
 happens before the field name is even parsed, so an unreadable junction can never be probed for
@@ -232,21 +235,23 @@ soft-delete filter, regardless of the outer request's `deleted=` — see
 ## How translatable fields get filtered
 
 Every operator above works on a translatable field too: the filter is rewritten into a subquery
-against the translation sidecar, matched at the locale this query actually resolves to. You don't
+against the translation sidecar, matched in the locale this query actually resolves to. You don't
 have to pass `locale=` — without one, the site's default locale is used.
 
-`GET /api/items/article?filter[title][_contains]=start`, with no `locale=`, matches against the
-site default (`en`) and returns the article whose title contains `start`, with `meta.total` 1.
+`GET /api/items/article?filter[title][_contains]=start`, with no `locale=`, matches against the site
+default (`en`) and returns the article whose title contains `start`, and `meta.total` is 1.
 Matching the Chinese title instead, with `locale=` explicitly set —
 `GET /api/items/article?filter[title][_contains]=%E9%96%8B%E5%A7%8B&locale=zh-TW` — returns the
 same article, but `translations` now holds only the `zh-TW` entry, and `meta.total` is still 1.
 
 **Validating `locale=`.** `locale=` first passes a character allowlist; a malformed code is
-rejected: `Locale '<code>' contains invalid characters. Codes must match [A-Za-z0-9_-]{1,35}.`.
-Past the character check, it must also be on the list of enabled languages, or it's `Unknown or
-disabled locale '<code>'.`. With no `locale=`, the locale this query actually uses is always
-resolved to the site default — even when the root collection itself has no translatable field,
-because a relation path along the way might reach one that does.
+rejected: `Locale '<code>' contains invalid characters. Codes must match [A-Za-z0-9_-]{1,35}.`. Past
+the character check, it must also be on the list of enabled languages, or it's `Unknown or disabled
+locale '<code>'.`.
+
+With no `locale=`, the locale this query actually uses is always resolved to the site default — even
+when the root collection itself has no translatable field, because a relation path along the way
+might reach one that does.
 
 ## Sorting
 
@@ -269,8 +274,9 @@ SQLite sorts `NULL` first on an ascending sort, PostgreSQL sorts it last.
 
 **Default order.** With no `sort=`, the order is `createdAt DESC, id ASC`; a collection with no
 `CreatedAt` falls back to plain `id ASC`. This is deliberate — PostgreSQL's heap order is unstable
-after an update, and without this default an edited row would jump position for no reason. The
-primary key is always appended as the last, ascending tiebreaker on every caller-supplied sort,
+after an update, and without this default an edited row would jump position for no reason.
+
+The primary key is always appended as the last, ascending tiebreaker on every caller-supplied sort,
 unless the caller already sorts by `id` itself — so paging never repeats or skips a row even when
 the sort field isn't unique.
 
@@ -311,10 +317,12 @@ always valid, even though it isn't in the field list.
 
 `Sortable` has no bearing on this allowlist: `[CmsField]`'s `Sortable` only decides whether the
 admin list screen's column header can be clicked to sort — a separate concern from the `sort=`
-allowlist here. Hidden fields are deliberately excluded from the allowlist: if a hidden,
-password-like field could still be filtered on, `meta.total` would turn into a
-character-by-character oracle for its content. A nonexistent field on the collection itself is
-rejected the same way, whether or not it looks like a typo:
+allowlist here.
+
+Hidden fields are deliberately excluded from the allowlist: if a hidden, password-like field could
+still be filtered on, `meta.total` would turn into a character-by-character oracle for its content.
+A nonexistent field on the collection itself is rejected the same way, whether or not it looks like
+a typo:
 
 ```text
 $ GET /api/items/article?filter[bogus][_eq]=x
@@ -339,11 +347,11 @@ non-hidden fields plus `id`. The depth budget is shared: the segments a `_some`/
 has already used are deducted from what's left for its inner path, but the error message always
 reports the configured cap itself, not what remains after the deduction.
 
-**Read grants don't propagate along the path.** Every collection a dotted path passes through
-needs its own read grant — without one, the whole request is refused (`FORBIDDEN`, or
-`UNAUTHORIZED` for an anonymous caller), rather than the condition being silently dropped.
-Dropping it would let the caller see data that doesn't match the filter, and even a zero-row
-result would let `meta.total` on an unreadable collection be probed.
+**Read grants don't propagate along the path.** Every collection a dotted path passes through needs
+its own read grant — without one, the whole request is refused (`FORBIDDEN`, or `UNAUTHORIZED` for
+an anonymous caller), rather than the condition being silently dropped. Dropping it would let the
+caller see data that doesn't match the filter, and even a zero-row result leaves `meta.total` on an
+unreadable collection open to probing.
 
 This authorization check runs before the leaf field is even parsed, so a field that genuinely
 exists on an unreadable collection and a made-up one get the same rejection.
