@@ -154,7 +154,7 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   Interfaces are prefixed `I` (`IItemRepository`, `IMetadataProvider`, ...).
 - **Database tables and columns**: lower-case, plural, snake_case (`languages`, `file_translations`,
   `media_folders`, `user_roles`) — every framework and sample entity follows this via `[SugarTable]`
-  (`docs/guide/en/04-defining-a-collection.md`). Columns follow SqlSugar's default lower-casing of the
+  (`docs/guide/en/05-collections.md`). Columns follow SqlSugar's default lower-casing of the
   CLR property name.
 - **Collection/field JSON names**: camelCase on the wire (`fileName`, `createdAt`) — the outbound
   `JsonSerializerOptions` are `JsonSerializerDefaults.Web` throughout (see `EnvelopeJsonOptionsHolder`,
@@ -452,7 +452,7 @@ none is ever surfaced client-side.
 Every deployment-tunable value is bound through the `IOptions<T>` pattern from `appsettings.json` /
 environment-variable overrides (`Section__Key`), never hardcoded in source — `DatabaseOptions`,
 `FileStorageOptions`, `OidcOptions`, `StruoQueryOptions`, `RateLimiting:Login`, `Serilog:*`, and so on
-(`docs/guide/en/03-configuration-reference.md` is the full reference). A relative filesystem path in
+(`docs/guide/en/04-configuration.md` is the full reference). A relative filesystem path in
 configuration must be resolved against the correct root explicitly —
 `Struo:Files:ImageTransform:CachePath` is resolved against `IHostEnvironment.ContentRootPath`
 (`FileStorageServiceCollectionExtensions.cs`), which is the pattern to copy; `Database:MigrationsPath`
