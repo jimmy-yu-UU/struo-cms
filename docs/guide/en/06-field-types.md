@@ -290,7 +290,7 @@ import type { FieldMeta } from '../../types/schema'
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
-// 原生 color input 使用「#rrggbb」格式；欄位仍為空值時回退到黑色。
+// The native color input uses the #rrggbb form; fall back to black while the field is still empty.
 function onPick(e: Event): void {
   emit('update:modelValue', (e.target as HTMLInputElement).value)
 }
