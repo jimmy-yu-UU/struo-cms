@@ -54,7 +54,8 @@ HTTP_STATUS:200
 - **`fields`**——只留下集合自己的欄位，留給[進階查詢的一章](11-query-advanced.md)。
 - **`deep`**——展開關聯，同樣留給[進階查詢的一章](11-query-advanced.md)；第 8 章已經先講過批次展開
   的機制，見[第 8 章：關聯](08-relations.md)。
-- **`facets`／`aggregate`**——在同一批過濾結果上算摘要統計，留給[進階查詢的一章](11-query-advanced.md)。
+- **`facets`／`aggregate`**——在同一批過濾結果上算摘要統計，
+  留給[進階查詢的一章](11-query-advanced.md)。
 
 ## 運算子
 
@@ -83,8 +84,8 @@ HTTP_STATUS:200
 清單；`_contains`／`_starts_with`／`_ends_with` 分別轉成 `LIKE '%v%'`、`LIKE 'v%'`、`LIKE '%v'`。
 
 **`_null`／`_nnull` 不看值。** 這兩個運算子只轉成單純的 `IS NULL`／`IS NOT NULL`，值本身完全不會被
-讀，所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，不會反過來變成「不是
-null」：
+讀，所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，
+不會反過來變成「不是 null」：
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
@@ -115,7 +116,7 @@ POST 到 `/api/items/article/query`；三篇文章都符合——草稿那一篇
 `Guides`，滿足第二個分支——`meta.total` 是 3。
 
 **只能巢狀一層。** `_and`／`_or` 底下的子項如果自己又是一個邏輯群組，會被拒絕：
-`Nested logical groups are not supported; use a single level of _and/_or over field conditions.`
+`Nested logical groups are not supported; use a single level of _and/_or over field conditions.`。
 這個一層的限制是分別計算的：`_some`／`_none` 的內層篩選是一個新的起點，本身還能再有自己的一層
 `_and`／`_or`。
 
@@ -195,6 +196,7 @@ OR 接起來。
 
 上面每一個運算子在可翻譯欄位上都能用：篩選會被改寫成一條對翻譯 sidecar 的子查詢，在這次查詢實際使
 用的 locale 下比對，不用特別帶 `locale=`——沒給的話用站台預設值。
+
 `GET /api/items/article?filter[title][_contains]=start` 不帶 `locale=` 時用站台預設（`en`）比對，
 回傳標題含 `start` 的那一篇，`meta.total` 為 1；換成中文標題並帶
 `GET /api/items/article?filter[title][_contains]=%E9%96%8B%E5%A7%8B&locale=zh-TW` 明白指定 locale，
