@@ -1,20 +1,19 @@
 # 9. Revisions and Soft Delete
 
-How every write leaves behind a snapshot you can look back at, and how deleting something becomes
-an act you can undo, is what this chapter covers.
+This chapter covers how every write leaves behind a snapshot you can look back at, and how
+deleting something becomes an act you can undo.
 
 ## Enabling revisions per collection
 
 Revisions turn on with `Revisions = true` on `[CmsCollection]`, independently of soft delete — a
-collection can have neither, either, or both; the option itself is covered in
-[Chapter 5: Defining Collections](05-collections.md). Every revision lives in one shared table,
-keyed by collection name, item id and version number. No framework collection turns it on; the
-sample's `Article` does, and it also implements `ISoftDeletable`, making it the only collection
-with both.
+collection can have neither, either, or both; see [Chapter 5: Defining
+Collections](05-collections.md). Every revision lives in one shared table, keyed by collection name,
+item id and version number. No framework collection turns it on; the sample's `Article` does, and it
+also implements `ISoftDeletable`, making it the only collection with both.
 
-Turning it on calls for nothing else: create, update, revert to a version, trash and restore all
-write a revision inside the same transaction as the write itself — the write path is the only
-entry point.
+Turning it on needs no further call: create, update, revert to a version, trash and restore from the
+trash all write a revision inside the same transaction as the write itself — the write path is the
+only entry point.
 
 ## What a snapshot holds, and when it's captured
 
@@ -40,7 +39,7 @@ objects, one per linked target, including any hidden payload field's value. When
 declares a sort field, order follows that field.
 
 A snapshot's shape deliberately matches an update request body, so a revert can go straight
-through the ordinary update path instead of needing a separate restore mechanism. A
+through the ordinary update path instead of needing a mechanism of its own. A
 bare-id-array snapshot reverts as a membership change only — a payload value already sitting on
 the junction row is left untouched.
 
@@ -71,8 +70,8 @@ not implement the audit interface — it has no updated-at or updated-by.
 
 The table carries a composite unique index over collection name, item id and version number, the
 last line of defense against a concurrent race for the same number; a Development startup check
-verifies it separately. CodeFirst creates that index only while the table itself does not yet
-exist — it is never retrofitted onto a table that already exists.
+verifies it separately. The table-creation process creates that index only while the table itself
+does not yet exist — it is never retrofitted onto a table that already exists.
 
 Revisions are kept forever: the list endpoint returns every revision for the item, unpaginated,
 with no retention period and no cleanup schedule. The only action that ever removes a revision is
@@ -123,7 +122,7 @@ GraphQL adds the matching three surfaces from the same flag, with no per-collect
 revisions list field, a single-revision field, and a revert mutation, sharing one `Revision` type
 whose fields match REST. On the GraphQL list field, `snapshot` is `null`.
 
-The admin's revision panel is a thin interface over those three REST endpoints, not GraphQL — a
+The admin SPA's revision panel is a thin interface over those three REST endpoints, not GraphQL — a
 list, a single-snapshot view, and a revert action mounted on the item form. It appears only for an
 already-saved item on a collection with revisions on, and the revert action appears only when the
 caller has write access to the collection. The panel's operation labels cover only create, update
@@ -185,7 +184,7 @@ resolution, many-to-many existence checks, and delete-restriction checks all exc
 by default.
 
 A read that genuinely needs to see deleted data clears this filter for that one query only, rather
-than switching it off at large — staying blind to trash by default is the safer direction to fail
+than switching it off wholesale — staying blind to trash by default is the safer direction to fail
 in. The filter is cleared individually in these cases:
 
 - A single-item read that explicitly asks for deleted data.
@@ -206,22 +205,21 @@ that was just trashed or just restored.
 A unique index runs into trouble against a row sitting in the trash, with no way around it today:
 the filter operates at the query level, not as a condition on the index, so a trashed row still
 occupies its unique value, and a new, live row wanting the same value is blocked until the old row
-is purged for good. Neither the framework nor the sample declares a unique index on a
-soft-deletable entity today, so this only bites a project that adds one — but it is worth
-remembering.
+is purged for good. Neither the framework nor the sample declares a unique index on a soft-deletable
+entity today, so this only bites a project that adds one — but it is worth remembering.
 
 The framework's only inputs for producing an index are the field list, whether it is unique, the
 unique group name, and `IndexName` — there is no concept of a conditional or filtered index at all,
-so a partial unique index that excludes deleted rows cannot be expressed through the framework's
-own table-creation process; it needs a database migration script of your own.
+so a partial unique index that excludes deleted rows cannot be expressed through the table-creation
+process; it needs a database migration script of your own.
 
 ## `DELETE`, `?purge`, and restore
 
-`DELETE /api/items/{collection}/{id}` trashes for a soft-deletable collection, and permanently
-deletes for any other collection; `?purge=true` forces the permanent path, called purge in this
-chapter, instead of the soft-delete update. A collection with no soft-delete tier is always
-permanently deleted whether or not this parameter is present, because it has no intermediate
-state to land in. `POST .../restore` clears those two fields for any soft-deletable collection.
+`DELETE /api/items/{collection}/{id}` moves the item to the trash on a soft-deletable collection,
+and permanently deletes it on any other; `?purge=true` forces the permanent path, called purge in
+this chapter, instead of the soft-delete update. A collection with no soft-delete tier is always
+permanently deleted whether or not this parameter is present, because it has no intermediate state
+to land in. `POST .../restore` clears those two fields for any soft-deletable collection.
 
 Purge does these steps in order, inside one transaction:
 
@@ -299,7 +297,7 @@ adds a "deleted-at is not null" condition. For a collection with no soft-delete 
 parameter has no effect. GraphQL spells the same three values in upper case as an enum argument,
 and applies the identical permission gate.
 
-Worth noting: relation filtering takes a different path. Whatever the outer request's `?deleted=`
+Relation filtering takes a different path. Whatever the outer request's `?deleted=`
 is, a relation's subquery always applies the target collection's own soft-delete filter as usual,
 and never clears it — so even while viewing the parent's trash, a trashed related row never
 satisfies a dotted-path or quantifier condition.
