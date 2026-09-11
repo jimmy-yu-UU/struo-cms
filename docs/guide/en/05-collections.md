@@ -10,10 +10,11 @@ backend, in any environment.
 
 A collection is a class carrying `[CmsCollection]` (in `Struo.Domain.Metadata.Attributes`), which a
 class can carry only once. The smallest class that compiles needs three things: a `[SugarTable]`, a
-property carrying `[SugarColumn(IsPrimaryKey = true)]`, and at least one `[CmsField]`. Inheriting
-`AuditableEntity` is the recommended shape, not a requirement — the framework's own `Language`
-implements `IAuditable` directly, with a `long` identity primary key. The sample's `ArticleTag` has
-no base class at all.
+property carrying `[SugarColumn(IsPrimaryKey = true)]`, and at least one `[CmsField]`.
+
+Inheriting `AuditableEntity` is the recommended shape, not a requirement — the framework's own
+`Language` implements `IAuditable` directly, with a `long` auto-increment primary key. The sample's
+`ArticleTag` has no base class at all.
 
 The `Announcement` class below lives in a content project called `Acme.Content` — the name is yours
 to choose (what the project needs to reference comes later in this chapter). The example adds a few
@@ -59,7 +60,7 @@ attribute and SqlSugar doesn't recognize it as the primary key. It also supplies
 `CreatedAt`/`CreatedBy`/`UpdatedAt`/`UpdatedBy` — none of the four needs a `[CmsField]`; the scanner
 turns them into system fields automatically.
 
-`AuditableEntity` also has a `Version` column for optimistic concurrency, which needs no
+`AuditableEntity` also has a `Version` for optimistic concurrency, which needs no
 `[CmsField]` either. The `version` key in an item response appears only for a collection that
 inherits `AuditableEntity` — a collection like `Language` or `ArticleTag` has none.
 
@@ -133,8 +134,8 @@ A field with `Hidden = true` never joins the search whitelist, even with `Search
 `Sortable` decides only whether the admin list header can be clicked to sort; the query DSL's
 `sort` ignores the flag — any known field can be sorted on.
 
-A field's external key is the camelCase form of the CLR property name; when it falls back to the
-PascalCase property name, no spaces or case changes are added.
+A field's external key is the camelCase form of the CLR property name. A label that falls back
+to the PascalCase property name gets no inserted spaces and no case changes.
 
 ### Name restrictions
 
@@ -157,7 +158,7 @@ group with `[CmsField(Group = "SameName")]`. The sample's `Article` declares two
 and `SEO`: its own fields use `Group = "Content"`, and the three SEO fields inherited from its
 translation sidecar use `Group = "SEO"`.
 
-Groups are returned to REST and GraphQL callers, but the shipped admin form doesn't section by
+Groups are returned to REST and GraphQL callers, but the default admin form doesn't section by
 group — it only buckets non-system fields into shared and translatable, each sorted by `Sort`, with
 the translatable bucket placed into per-language tabs.
 
@@ -209,7 +210,7 @@ full semantics and defaults of both keys are in
 Adding a collection, in order:
 
 1. Put the content library outside `src/Struo.*`.
-2. Carry `[SugarTable]` and `[CmsCollection]` on the entity, with a primary key carrying
+2. Put `[SugarTable]` and `[CmsCollection]` on the entity, with a primary key carrying
    `[SugarColumn(IsPrimaryKey = true)]`.
 3. Add `[CmsField]` to every property you want to expose, and `[CmsOptions]` on any interface that
    needs an option list.
