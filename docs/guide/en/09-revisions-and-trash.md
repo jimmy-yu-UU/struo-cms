@@ -6,10 +6,12 @@ deleting something becomes an act you can undo.
 ## Enabling revisions per collection
 
 Revisions turn on with `Revisions = true` on `[CmsCollection]`, independently of soft delete — a
-collection can have neither, either, or both; see [Chapter 5: Defining
-Collections](05-collections.md). Every revision lives in one shared table, keyed by collection name,
-item id and version number. No framework collection turns it on; the sample's `Article` does, and it
-also implements `ISoftDeletable`, making it the only collection with both.
+collection can have neither, either, or both; see
+[Chapter 5: Defining Collections](05-collections.md).
+
+Every revision lives in one shared table, keyed by collection name, item id and version number. No
+framework collection turns it on; the sample's `Article` does, and it also implements
+`ISoftDeletable`, making it the only collection with both.
 
 Turning it on needs no further call: create, update, revert to a version, trash and restore from the
 trash all write a revision inside the same transaction as the write itself — the write path is the

@@ -231,10 +231,9 @@ can't be deleted while any junction row still references it.
 sample's `Article.Category` and `Category.Parent` both declare `OnDelete.SetNull`.
 
 `Cascade` also cleans up each referencing row's own junctions, translations, and revision history,
-using a visited set to guard against a cyclic reference graph — a cycle doesn't recurse forever.
-Referencing rows are read with the soft-delete filter bypassed, so a referrer already in the trash
-gets cascaded too, not skipped. Neither the framework nor the sample declares any relation as
-`Cascade`.
+so a cycle can't send it into infinite recursion. Referencing rows are read with the soft-delete
+filter bypassed, so a referrer already in the trash gets cascaded too, not skipped. Neither the
+framework nor the sample declares any relation as `Cascade`.
 
 ## Reading related data with `deep`
 

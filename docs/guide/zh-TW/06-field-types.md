@@ -172,11 +172,12 @@
 效。系統欄位讀取時照常回傳，只是不出現在後台的表單與清單欄位裡。
 
 `Hidden`（`[CmsField(Hidden = true)]`）跟介面完全無關，任何介面都能設——例如範例的
-`Article.InternalNote` 就是一個 `Hidden` 的 `Text` 欄位。它會讓欄位從 `GET /api/schema`、
-GraphQL schema、項目回應、查詢語法的已知欄位允許清單與可搜尋白名單，以及對外回傳的修訂快照
-裡消失，連帶把它從集合的 `translation.fields` 清單裡也拿掉，原始快照列仍保留這個值。它不是
-一個 RBAC 邊界：更新的欄位覆蓋邏輯完全不檢查 `Hidden`，已經知道欄位名稱的呼叫端仍能正常寫
-入；要讓欄位真的不能寫，得跟 `ReadOnly` 搭配。
+`Article.InternalNote` 就是一個 `Hidden` 的 `Text` 欄位。
+
+它會讓欄位從 `GET /api/schema`、GraphQL schema、項目回應、查詢語法的已知欄位允許清單與可搜尋白名單，
+以及對外回傳的版本快照裡消失，連帶把它從集合的 `translation.fields` 清單裡也拿掉，原始快照列仍保留這
+個值。它不是一個 RBAC 邊界：更新的欄位覆蓋邏輯完全不檢查 `Hidden`，已經知道欄位名稱的呼叫端仍能正常
+寫入；要讓欄位真的不能寫，得跟 `ReadOnly` 搭配。
 
 ### 寫入時的整理
 
@@ -287,10 +288,10 @@ color: def({ component: ColorSwatchField, listColumn: asString }),
 聯集型別，以及 registry 的每一個地方，超出單純客製化編輯器的範圍。schema 合約測試雙向擋下
 不同步：後端加了新成員前端沒跟上、或是前端留了過期項目，都會讓測試失敗。
 
-這份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完一定要清掉，否則之後不
-相關的測試會悄悄改寫快照，而不是檢查它。數值、布林與 `Uuid` 這類非字串欄位留白時送 `null`
-（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid`）；文字類介面刻意送空字串，
-清空文字欄位才會真的清空。
+schema 契約測試比對用的那份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完一定要清
+掉，否則之後不相關的測試會悄悄改寫快照，而不是檢查它。數值、布林與 `Uuid` 這類非字串欄位留白時送
+`null`（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid`）；文字類介面刻意送空字串，清空
+文字欄位才會真的清空。
 
 ## 接下來
 
