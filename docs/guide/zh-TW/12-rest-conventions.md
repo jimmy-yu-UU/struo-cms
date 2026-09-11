@@ -56,9 +56,9 @@ HTTP_STATUS:201
 未攔到的例外會在伺服器端記錄下來，回給呼叫端的一律是固定的遮罩訊息 `An internal error occurred.`，
 絕不洩漏例外本身的內容；這件事，連同認證階段本身失敗的情況，也走同一套遮罩與同一種信封。
 
-[第 14 章：GraphQL API](14-graphql.md) 是唯一的例外：`/graphql` 的回應是原生的 GraphQL 形狀（
-`data`／`errors`），完全不套這個信封，除非是像少了 CSRF 標頭這種請求根本到不了 GraphQL 就先被
-擋下的情況——那種回應仍然是這裡的信封形狀。
+GraphQL 是唯一的例外，拼法見[第 14 章：GraphQL API](14-graphql.md)：`/graphql` 的回應是原生的
+GraphQL 形狀（`data`／`errors`），完全不套這個信封，除非是像少了 CSRF 標頭這種請求根本到不了
+GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀。
 
 ## 狀態碼
 
@@ -163,40 +163,37 @@ HTTP_STATUS:400
 `Bearer ` 開頭，就整個當成 bearer 身分處理；沒有這個標頭，才看 cookie。這個判斷只看標頭本身，完全
 不會退回去試 cookie。
 
-但這條規則只在沒有標明 `[Authorize]` 的端點上算數，也就是讀取、`/graphql`、`GET /api/files/{id}`
+但這條規則只在不要求登入的端點上算數，也就是讀取、`/graphql`、`GET /api/files/{id}`
 與 `/content`：呼叫端在這些端點上同時帶了兩種憑證，也只認 bearer 這一種，權杖失效或格式不對，就直
 接降級成匿名，而不是改用 cookie 身分。這是刻意的——寧可讓請求掉成匿名被擋下，也不要靜悄悄換一個身
 分通過。
 
-標明 `[Authorize]` 的寫入端點兩種都收，cookie 或 bearer 皆可，兩者都會被驗證再合併成呼叫端身分；
+要求登入的寫入端點兩種都收，cookie 或 bearer 皆可，兩者都會被驗證再合併成呼叫端身分；
 大部分讀取端點不強制要求任一種憑證，因為讀取只看這個集合的讀取授權。SSO 與密碼規則的完整細節留給
 認證那一章。
 
 替目前這個帳號申請一個權杖、用它讀一次、再撤銷它：
 
 ```text
-$ POST /api/users/<自己的 id>/access-token
-
-{"success":true,"data":{"token":"…"}}
+$ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
+{"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <上面的權杖>
-
-{"success":true,"data":[...],"meta":{"total":2,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1  Authorization: Bearer <token>
+{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/<自己的 id>/access-token
+$ DELETE /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <已撤銷的權杖>
-
+$ GET /api/items/article?limit=1  Authorization: Bearer <revoked token>
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
 
-`token` 的實際值與讀取回應裡 `data` 的內容都省略：權杖只在申請當下顯示一次，`data` 的形狀跟用
-cookie 讀取完全一樣。撤銷之後，同一個權杖立刻失效，不是等到下一次請求才生效。
+權杖只在申請當下顯示這一次，之後只存雜湊；用它讀取，`data` 的形狀跟用 cookie 讀取完全一樣。撤銷
+之後，同一個權杖立刻失效，不是等到下一次請求才生效。
 
 ## CSRF：`X-Struo-CSRF`
 
@@ -243,8 +240,8 @@ HTTP_STATUS:409
 
 呼叫端手上的 `version` 已經落後於目前這一列真正的值，寫入被拒；這句訊息就是用戶端規劃「重新讀一次
 再試」這條路的依據。body 完全不帶 `version` 也可以，這時就退回原本讀到的值，等於放棄這層保護，但
-仍然相容舊的呼叫端。還原一筆快照時，`version` 會先被拿掉才套用，避免因快照裡的舊版本號而白白衝突（
-見[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)）。`version` 本身也不能透過建立或更新
+仍然相容舊的呼叫端。還原一筆快照時，`version` 會先被拿掉才套用，避免因快照裡的舊版本號而白白
+衝突（見[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)）。`version` 本身也不能透過建立或更新
 的 body 直接指定——它只會被當成並行控制的比對值，從不被寫進那一欄。
 
 ## `POST`／`PUT` 的 body 能設定什麼
@@ -296,7 +293,7 @@ HTTP_STATUS:200
 ```
 
 `data` 的其餘欄位省略，跟本章其他更新回應一樣的形狀。第一個目標只被連結，第二個目標的 `note`
-被換成「editor pick」。
+被換成 `editor pick`。
 
 payload 欄位驗證失敗時，訊息會標明是哪個關聯、哪個目標，方便一次改好幾筆連結的表單定位問題：
 
