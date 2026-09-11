@@ -1,7 +1,7 @@
 # 9. Revisions and Soft Delete
 
-This chapter covers how every write leaves behind a snapshot you can look back at, and how
-deleting something becomes an act you can undo.
+Every write leaves behind a snapshot you can look back at, and deleting something becomes an act
+you can undo. This chapter covers both.
 
 ## Enabling revisions per collection
 
@@ -61,8 +61,8 @@ A capture failure rolls the whole trash or restore back, so there is no half-tra
 matching revision.
 
 An update that changes nothing still writes an update revision — the write path always issues the
-update and always bumps the version number; it never compares old and new values, which is worth
-remembering when sizing this table. The version number is the current maximum for that
+update and always bumps the version number; it never compares old and new values; keep this in
+mind when sizing this table. The version number is the current maximum for that
 collection-and-item pair plus one, starting at 1, recorded together with the current time and
 actor.
 
@@ -73,14 +73,16 @@ not implement the audit interface — it has no updated-at or updated-by.
 The table carries a composite unique index over collection name, item id and version number, the
 last line of defense against a concurrent race for the same number; a Development startup check
 verifies it separately. The table-creation process creates that index only while the table itself
-does not yet exist — it is never retrofitted onto a table that already exists.
+does not yet exist — it is not retrofitted onto a table that already exists, with the same
+exception as a translation sidecar's index: a Development environment with
+`Database:AutoSyncSchema` enabled tries to add it during its full sync.
 
 Revisions are kept forever: the list endpoint returns every revision for the item, unpaginated,
 with no retention period and no cleanup schedule. The only action that ever removes a revision is
 a permanent delete (`?purge`, called purge in this chapter). A frequently written, revisioned
 collection grows this shared table without bound.
 
-### Hiding fields in a snapshot
+### Redacting hidden fields from a snapshot
 
 Because a snapshot captures the whole item including hidden fields, the copy handed to an
 external caller must never leak one of them. An external read gets a redacted copy, with these
@@ -152,10 +154,10 @@ version number. Beyond that, a revert is an ordinary write: the same write grant
 rule, the same optimistic concurrency control, the same item response shape.
 
 Reverting a snapshot with junction payload applies those objects just like a direct payload
-write: it also needs the junction collection's own write grant, plus super-admin when the junction
-is `AdminOnly`. A role that can write the parent but not the junction gets a 403. A revert is also
-the one write path tolerating a many-to-many target trashed after the snapshot was captured,
-restoring the reference rather than rejecting it as every other write path does.
+write: it also needs the junction collection's own write grant, as
+[Chapter 8: Relations](08-relations.md) describes. A revert is also the one write path tolerating
+a many-to-many target trashed after the snapshot was captured, restoring the reference rather than
+rejecting it as every other write path does.
 
 A revert restores only what the snapshot captured at the time — its own fields, relation state,
 and every locale's full translation. System-managed fields and the item's soft-delete state are
@@ -208,7 +210,7 @@ A unique index runs into trouble against a row sitting in the trash, with no way
 the filter operates at the query level, not as a condition on the index, so a trashed row still
 occupies its unique value, and a new, live row wanting the same value is blocked until the old row
 is purged for good. Neither the framework nor the sample declares a unique index on a soft-deletable
-entity today, so this only bites a project that adds one — but it is worth remembering.
+entity today, so this only bites a project that adds one.
 
 The framework's only inputs for producing an index are the field list, whether it is unique, the
 unique group name, and `IndexName` — there is no concept of a conditional or filtered index at all,
@@ -218,10 +220,10 @@ process; it needs a database migration script of your own.
 ## `DELETE`, `?purge`, and restore
 
 `DELETE /api/items/{collection}/{id}` moves the item to the trash on a soft-deletable collection,
-and permanently deletes it on any other; `?purge=true` forces the permanent path, called purge in
-this chapter, instead of the soft-delete update. A collection with no soft-delete tier is always
-permanently deleted whether or not this parameter is present, because it has no intermediate state
-to land in. `POST .../restore` clears those two fields for any soft-deletable collection.
+and permanently deletes it on any other; `?purge=true` forces the permanent path instead of the
+soft-delete update. A collection with no soft-delete tier is always permanently deleted whether or
+not this parameter is present, because it has no intermediate state to land in.
+`POST .../restore` clears those two fields for any soft-deletable collection.
 
 Purge does these steps in order, inside one transaction:
 

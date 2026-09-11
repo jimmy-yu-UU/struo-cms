@@ -8,8 +8,8 @@
 
 介面依用途分成七組，每組一張表。關聯不是欄位介面，宣告在 `[CmsRelation]` 上，見
 [第 8 章：關聯](08-relations.md)。介面一定要自己寫，沒寫就是 `Text`（見
-[第 5 章：定義集合](05-collections.md)）。可翻譯的限制：`MultiSelect`、`CheckboxGroup`、
-`Tags` 與 `Repeater` 子欄位不能設為可翻譯，其他見[第 7 章：多語內容](07-i18n.md)。
+[第 5 章：定義集合](05-collections.md)）。哪些介面不能設為可翻譯，見
+[第 7 章：多語內容](07-i18n.md)。
 
 下面表格的「資料庫欄位」欄用幾種說法：
 
@@ -35,7 +35,7 @@
 | `Color` | `string` | `varchar(255)` | `TextField` |
 | `Phone` | `string` | `varchar(255)` | `TextField` |
 
-這五個介面的 `string` 屬性會由這個慣例自動加寬成長文字：`Textarea`、`RichText`、`Markdown`、
+這五個介面的 `string` 屬性會自動加寬成長文字：`Textarea`、`RichText`、`Markdown`、
 `Code`，以及後面的 `Json`；其他 `string` 介面都停在 `varchar(255)`。除了 `Required` 與
 `MaxLength` 之外沒有任何格式檢查，`Email`／`Url`／`Phone` 也不例外。`Markdown` 與 `Code`
 都是一般文字方塊，沒有預覽或語法標示。`Password` 的輸入不遮蔽，也不會出現在 GraphQL schema
@@ -190,8 +190,8 @@
 
 **寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在前
 面那五個之列的 `string` 屬性，保留 SqlSugar CodeFirst 的預設 `varchar(255)`；寫入超過 255
-字元的值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗
-。修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
+字元的值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗。
+修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
 `[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。
 
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
@@ -200,8 +200,8 @@
 對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介面
 （`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
 
-同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略
-，而且不會有任何警告。
+同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，
+而且不會有任何警告。
 
 **`JsonElement` 在 `JsonDocument` 釋放後不可用。** 用 `using var doc =
 JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.RootElement` 回傳到
@@ -221,8 +221,8 @@ PostgreSQL 原生的 `jsonb`），加寬邏輯會尊重它、不去動它——�
 ## 新增自訂欄位編輯器
 
 下面把 `Color` 介面預設的 `TextField` 換成一個原生 color input。每一個欄位編輯器元件都吃同
-樣的三個 prop、發同一個事件：`field`（已解析的欄位 metadata）、`modelValue`（表單目前的值
-）、可選的 `disabled`，變更時發回 `update:modelValue`：
+樣的三個 prop、發同一個事件：`field`（已解析的欄位 metadata）、`modelValue`（表單目前的值）、
+可選的 `disabled`，變更時發回 `update:modelValue`：
 
 ```ts
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
@@ -290,8 +290,8 @@ color: def({ component: ColorSwatchField, listColumn: asString }),
 
 schema 契約測試比對用的那份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完一定要清
 掉，否則之後不相關的測試會悄悄改寫快照，而不是檢查它。數值、布林與 `Uuid` 這類非字串欄位留白時送
-`null`（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid`）；文字類介面刻意送空字串，清空
-文字欄位才會真的清空。
+`null`（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid` 等）；文字類介面刻意送空字
+串，清空文字欄位才會真的清空。
 
 ## 接下來
 

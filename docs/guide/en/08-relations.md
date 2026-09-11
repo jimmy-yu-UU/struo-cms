@@ -105,7 +105,7 @@ display and target picking:
 |---|---|---|---|
 | `Interface` | `RelationInterface` | `Dropdown` | which admin picker is used |
 | `DisplayTemplate` | `string?` | `null` | `{Field}` template; falls back to id when unresolved |
-| `PickerQuery` | `string?` | `null` | saved to metadata; not read by the admin today |
+| `PickerQuery` | `string?` | `null` | saved to metadata; not read by the admin SPA |
 | `SortField` | `string?` | `null` | many-to-many only; the junction's sort column |
 
 The last four decide write and delete behavior:
@@ -253,10 +253,11 @@ every parent on the page — expanding a to-many relation with no limit is unbou
 
 Per-parent sorting and pagination happen in memory over the rows already fetched, which is
 exactly what keeps the batched fetch free of the N+1 problem: `null` sorts first, and a value
-that can't be compared is treated as equal to keep the order stable. With no nested sort, a
-one-to-many keeps fetch order and a many-to-many keeps junction order — when the relation
-declares no `SortField`, or the column isn't numeric, it degrades to insertion order rather than
-failing.
+that can't be compared is treated as equal to keep the order stable.
+
+With no nested sort, a one-to-many keeps fetch order and a many-to-many keeps junction order —
+when the relation declares no `SortField`, or the column isn't numeric, it degrades to insertion
+order rather than failing.
 
 The whole `deep` tree is validated before any query actually runs, independent of row count — an
 over-depth or unknown relation name fails even on an empty page: `Relation nesting too deep (depth
@@ -317,7 +318,7 @@ a separate filtering syntax of its own, and sorting across a relation only works
 is many-to-one. The full filter and sort syntax is left to the query DSL and advanced query
 chapters.
 
-## The relation picker and junction list editor in the admin
+## The relation picker and junction list editor in the admin SPA
 
 `RelationInterface` has four values — `Dropdown`, `TagSelect`, `TreeSelect`, `RelatedList` — and
 the admin SPA wires each one to its own input component:
@@ -357,7 +358,7 @@ maximum-length checks are pre-checked by the frontend before submit. A numeric o
 field left blank is saved as `null`, not an empty string, so such a junction field should either be
 declared nullable or marked `Required` — the form blocks an empty required field before it's sent.
 
-A hidden junction payload field never gets an editable version in the admin at all, because the
+A hidden junction payload field never gets an editable version in the admin SPA at all, because the
 API never sends it in `_junction` in the first place.
 
 ## What's next
