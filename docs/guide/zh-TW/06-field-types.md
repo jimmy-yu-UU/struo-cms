@@ -11,7 +11,7 @@
 [第 5 章：定義集合](05-collections.md)）。可翻譯的限制：`MultiSelect`、`CheckboxGroup`、
 `Tags` 與 `Repeater` 子欄位不能設為可翻譯，其他見[第 7 章：多語內容](07-i18n.md)。
 
-下面表格的「資料庫欄位」欄用四種說法：
+下面表格的「資料庫欄位」欄用幾種說法：
 
 - `varchar(255)`：SqlSugar CodeFirst 對 `string` 的預設寬度。
 - 長文字：套用 `ColumnShape.LongText` 之後的結果，各後端有自己的對應型別。
@@ -89,10 +89,10 @@
 | `KeyValue` | `Dictionary<string,string>` | JSON | `KeyValueField` |
 | `Repeater` | `List<TChild>` | JSON | `RepeaterField` |
 
-`Json` 是一個裝著原始 JSON 文字的 `string` 屬性，跟其他四個介面一樣被加寬成長文字，API 層讀
-取時重新解析、寫入時重新序列化。真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、
-`KeyValue`、`Files`、`Repeater` 這六個結構化介面，SqlSugar 直接對 `IsJson = true` 的欄位
-（反）序列化整個 CLR 集合；`KeyValue` 的鍵不能留白。
+`Json` 是一個裝著原始 JSON 文字的 `string` 屬性，API 層讀取時重新解析、寫入時重新序列化。
+真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`
+這六個結構化介面，SqlSugar 直接對 `IsJson = true` 的欄位（反）序列化整個 CLR 集合；
+`KeyValue` 的鍵不能留白。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
 是點名該欄位的啟動期 `MetadataException`。子欄位僅限純量介面：`Text`、`Textarea`、
@@ -114,7 +114,7 @@
 | `Files` | `List<Guid>` | JSON | `FilesField` |
 
 `File` 與 `Image` 共用同一個編輯器，`Image` 多了圖片預覽。`Files` 存的 id 在寫入時不會檢查
-是否存在，指向已被清除檔案的 id 一樣會被存下來，後台選擇器會退回顯示原始 id。
+是否存在——指向已被清除檔案的 id 一樣會被存下來，後台選擇器只能退回顯示原始 id。
 
 ### 顯示用與識別碼
 
@@ -163,12 +163,13 @@
 建立時先報 `Required`；更新時如果本文同時違反長度或結構驗證，先報的是那些錯誤。
 
 `ReadOnly` 欄位讀得到，更新時寫不進去：更新的欄位覆蓋邏輯會跳過每一個 `ReadOnly` 與
-`IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——`[CmsField(ReadOnly = true)] public
-int Views` 這種不可為 `null` 的值型別，建立時客戶端傳什麼就存什麼，之後才唯讀。後台的輸入框
-也會停用。四個稽核欄位由掃描器自動變成唯讀的系統欄位，介面依 CLR 型別挑——時間是
-`DateTime`，使用者是 `Text`。新增時四個都由框架蓋印，更新時只重蓋
-`UpdatedAt`／`UpdatedBy`，客戶端傳的值一律無效。系統欄位讀取時照常回傳，只是不出現在後台
-的表單與清單欄位裡。
+`IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——
+`[CmsField(ReadOnly = true)] public int Views` 這種不可為 `null` 的值型別，建立時客戶端傳
+什麼就存什麼，之後才唯讀。後台的輸入框也會停用。
+
+四個稽核欄位由掃描器自動變成唯讀的系統欄位，介面依 CLR 型別挑——時間是 `DateTime`，使用者是
+`Text`。新增時四個都由框架蓋印，更新時只重蓋 `UpdatedAt`／`UpdatedBy`，客戶端傳的值一律無
+效。系統欄位讀取時照常回傳，只是不出現在後台的表單與清單欄位裡。
 
 `Hidden`（`[CmsField(Hidden = true)]`）跟介面完全無關，任何介面都能設——例如範例的
 `Article.InternalNote` 就是一個 `Hidden` 的 `Text` 欄位。它會讓欄位從 `GET /api/schema`、
@@ -179,28 +180,27 @@ GraphQL schema、項目回應、查詢語法的已知欄位允許清單與可搜
 
 ### 寫入時的整理
 
-- 寫入本文裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名會拿到 200 但值沒存進去。
+- 寫入本文裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名照樣成功回應，只是值沒存進去。
 - `MultiSelect`／`CheckboxGroup` 去重、保留第一個；`Tags` 空白值拒絕、重複丟掉。
 - `Files` 丟掉 `Guid.Empty` 與重複；`Repeater` 丟掉整列空白的列，但錯誤訊息的列號仍以送進
   來的順序（含被丟掉的）從 1 起算。
 
 ## 常見陷阱
 
-**寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在
-`Textarea`、`RichText`、`Markdown`、`Code`、`Json` 這五個之列的 `string` 屬性，保留
-SqlSugar CodeFirst 的預設 `varchar(255)`；寫入超過 255 字元的值，在 PostgreSQL 上會以
-`22001 value too long for type character varying(255)` 失敗。修法是換成這五個介面之一，或
-是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
+**寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在前
+面那五個之列的 `string` 屬性，保留 SqlSugar CodeFirst 的預設 `varchar(255)`；寫入超過 255
+字元的值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗
+。修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
 `[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。
 
-**JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 一個屬性的 `[CmsField]` 介面是六個 JSON 欄
-位介面之一時，另外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名
-該屬性與違規的介面；落在 `InitTables` 集合（每個框架 entity 加每個 `[CmsCollection]` 型
-別）裡的型別因此在啟動時就失敗，集合外的 entity 則要等到第一次用到那張表才會失敗。修法是把
-`[ColumnShape]` 移除：JSON 對映本身就會加寬成長文字，也會設定 `IsJson`，單靠 shape 兩者都拿
-不到。`[ColumnShape]` 跟這五個介面併用不受影響，仍然合法；同一個屬性上同時有
-`[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，而且不會有任何警
-告。
+**JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
+外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名屬性與介面；`InitTables` 集
+合裡的型別在啟動時就失敗，集合外的則要等到第一次用到那張表才失敗。修法是移除 `[ColumnShape]`：JSON
+對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介面
+（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
+
+同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略
+，而且不會有任何警告。
 
 **`JsonElement` 在 `JsonDocument` 釋放後不可用。** 用 `using var doc =
 JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.RootElement` 回傳到
@@ -208,21 +208,20 @@ JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.Ro
 `JsonDocument` 還活著時才有效。改用 `JsonSerializer.Deserialize<JsonElement>(raw)`，不需要
 `using`，拿到的是一個可以安全持有的獨立值。
 
-**手動宣告的 `List<>` 屬性要自己標 `IsJson`。** 六個 JSON 欄位介面之外，手動宣告的 `List<>`
-仍要自己標 `IsJson`：`[CmsField]` 介面落在 `MultiSelect`／`CheckboxGroup`／`Tags`／
-`KeyValue`／`Files`／`Repeater` 這六個之外的 `List<>` 屬性，CodeFirst hook 不會替它自動套用
-JSON 對映，SqlSugar 也沒辦法直接映射一個 list，自己要寫 `[SugarColumn(IsJson = true)]`。一
-旦寫了這個，單獨 `IsJson` 的加寬邏輯會接手補上欄位型別；若這個屬性另外明寫了
-`ColumnDataType`（例如 PostgreSQL 原生的 `jsonb`），加寬邏輯會尊重它、不去動它，但這條路徑
-沒有任何測試涵蓋，不要假設它會像長文字預設值那樣在框架裡正確往返讀寫。反過來，介面本身就是
-六個 JSON 介面之一的屬性，hook 會無條件把它設成 `IsJson` 加長文字，不會讀你寫的
-`ColumnDataType`——在 `MultiSelect` 欄位上釘 `jsonb` 不會生效，也不會有警告。
+**手動宣告的 `List<>` 屬性要自己標 `IsJson`。** `[CmsField]` 介面落在 `MultiSelect`／
+`CheckboxGroup`／`Tags`／`KeyValue`／`Files`／`Repeater` 以外的 `List<>` 屬性，CodeFirst hook
+不會替它套用 JSON 對映——SqlSugar 無法直接映射 list，得自己寫 `[SugarColumn(IsJson = true)]`。
+寫了之後，單獨 `IsJson` 的加寬邏輯會接手補上欄位型別；若另外明寫 `ColumnDataType`（例如
+PostgreSQL 原生的 `jsonb`），加寬邏輯會尊重它、不去動它——但這條路徑沒有測試涵蓋，效果不保證。
+
+反過來，介面本身就是六個 JSON 介面之一的屬性，hook 會無條件把它設成 `IsJson` 加長文字，不
+會讀你寫的 `ColumnDataType`——在 `MultiSelect` 欄位上釘 `jsonb` 不會生效，也不會有警告。
 
 ## 新增自訂欄位編輯器
 
-下面把 `Color` 介面出廠的 `TextField` 換成一個原生 color input。每一個欄位編輯器元件都吃同
-樣的三個 prop、發同一個事件：`field`（已解析的欄位中介資料）、`modelValue`（表單目前的
-值）、可選的 `disabled`，變更時發回 `update:modelValue`：
+下面把 `Color` 介面預設的 `TextField` 換成一個原生 color input。每一個欄位編輯器元件都吃同
+樣的三個 prop、發同一個事件：`field`（已解析的欄位 metadata）、`modelValue`（表單目前的值
+）、可選的 `disabled`，變更時發回 `update:modelValue`：
 
 ```ts
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
@@ -279,19 +278,19 @@ color: def({ component: ColorSwatchField, listColumn: asString }),
 **3. 看結果**——重啟前端開發伺服器，打開任何有 `Color` 欄位的項目，輸入框旁邊會多一個色票。
 
 分派器 `FieldInput.vue` 另外轉發第四個綁定 `id`，用 fallthrough attribute 的方式傳下去，本
-身不是任何編輯器自己宣告的 prop；根元素就是原生控制項的編輯器會接住這個 `id`，跟呼叫端的
-`<label>` 對上，根元素是包裝用 `div` 的編輯器則是把 `id` 收在那個 `div` 上，跟裡面的控制項
-對不起來，需要自己處理標籤。
+身不是任何編輯器自己宣告的 prop。根元素是原生控制項的編輯器會接住這個 `id`，跟呼叫端的
+`<label>` 對上；根元素是包裝用 `div` 的編輯器則讓 `id` 落在那個 `div` 上，跟裡面的控制項對
+不起來，需要自己處理標籤。
 
 `frontend/src/lib/fieldTypes/types.ts` 的 `FieldInterface` 聯集是封閉的：新增一個真正全新的
 介面值，而不是像上面那樣替換既有介面的編輯器，還得同步後端的 `FieldInterface` enum、前端的
 聯集型別，以及 registry 的每一個地方，超出單純客製化編輯器的範圍。schema 合約測試雙向擋下
 不同步：後端加了新成員前端沒跟上、或是前端留了過期項目，都會讓測試失敗。
 
-這份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完要記得清掉這個環境變
-數，忘記清掉之後不相關的測試會悄悄改寫快照，而不是真的檢查它。數值、布林與 `Uuid` 這類非字
-串欄位留白時送 `null`（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid`）；文字
-類介面刻意送空字串，清空文字欄位才會真的清空。
+這份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完一定要清掉，否則之後不
+相關的測試會悄悄改寫快照，而不是檢查它。數值、布林與 `Uuid` 這類非字串欄位留白時送 `null`
+（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid`）；文字類介面刻意送空字串，
+清空文字欄位才會真的清空。
 
 ## 接下來
 
