@@ -154,7 +154,7 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   Interfaces are prefixed `I` (`IItemRepository`, `IMetadataProvider`, ...).
 - **Database tables and columns**: lower-case, plural, snake_case (`languages`, `file_translations`,
   `media_folders`, `user_roles`) — every framework and sample entity follows this via `[SugarTable]`
-  (`docs/guide/en/04-defining-a-collection.md`). Columns follow SqlSugar's default lower-casing of the
+  (`docs/guide/en/05-collections.md`). Columns follow SqlSugar's default lower-casing of the
   CLR property name.
 - **Collection/field JSON names**: camelCase on the wire (`fileName`, `createdAt`) — the outbound
   `JsonSerializerOptions` are `JsonSerializerDefaults.Web` throughout (see `EnvelopeJsonOptionsHolder`,
