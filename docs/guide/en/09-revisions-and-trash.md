@@ -72,10 +72,12 @@ not implement the audit interface — it has no updated-at or updated-by.
 
 The table carries a composite unique index over collection name, item id and version number, the
 last line of defense against a concurrent race for the same number; a Development startup check
-verifies it separately. The table-creation process creates that index only while the table itself
-does not yet exist — it is not retrofitted onto a table that already exists, with the same
-exception as a translation sidecar's index: a Development environment with
-`Database:AutoSyncSchema` enabled tries to add it during its full sync.
+verifies it separately.
+
+The table-creation process creates that index only while the table itself does not yet exist — it
+is not retrofitted onto a table that already exists, with the same exception as a translation
+sidecar's index: a Development environment with `Database:AutoSyncSchema` enabled tries to add it
+during its full sync.
 
 Revisions are kept forever: the list endpoint returns every revision for the item, unpaginated,
 with no retention period and no cleanup schedule. The only action that ever removes a revision is
