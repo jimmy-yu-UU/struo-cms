@@ -15,11 +15,11 @@
     "e2e:all": "playwright test"
   },
   "dependencies": {
-    "@internationalized/date": "^3.12.3",
-    "@lucide/vue": "^1.33.0",
+    "@internationalized/date": "^3.12.4",
+    "@lucide/vue": "^1.39.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
-    "@tanstack/vue-table": "^9.1.2",
+    "@tanstack/vue-table": "^9.2.4",
     "@tiptap/extension-image": "^3.30.6",
     "@tiptap/extension-link": "^3.30.6",
     "@tiptap/extension-subscript": "^3.30.6",
@@ -35,11 +35,11 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "pinia": "^4.0.3",
-    "reka-ui": "^2.10.3",
+    "reka-ui": "^2.10.4",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
-    "vue": "^3.5.41",
-    "vue-i18n": "^11.4.9",
+    "vue": "^3.5.42",
+    "vue-i18n": "^11.4.10",
     "vue-router": "^5.2.0",
     "vue-sonner": "^2.0.9"
   },
@@ -55,6 +55,6 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.11",
-    "vue-tsc": "^3.3.10"
+    "vue-tsc": "^3.3.11"
   }
 }
