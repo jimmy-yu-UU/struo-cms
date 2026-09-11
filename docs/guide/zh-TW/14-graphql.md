@@ -91,57 +91,20 @@ GraphQL 的 `null` 對應 REST 的 404，意圖一樣，形狀不同。清單欄
 下面這個查詢示範單筆欄位、多對一關聯（不帶引數）跟巢狀 to-many 清單自己的 `sort`／`limit` 引數；後
 面例子延用同一批測試資料，id 是資料本身的，讀者環境會不同：
 
-```text
-$ POST /graphql
-body:
-{"query": "query { article(id: \"01a08f92-3a18-7c5d-99a3-5b14cd1279ea\") { id status version translations { locale fields } category { name } tags(sort: [\"name\"], limit: 1) { name } } }"}
-{
-  "data": {
-    "article": {
-      "id": "01a08f92-3a18-7c5d-99a3-5b14cd1279ea",
-      "status": "published",
-      "version": 0,
-      "translations": [
-        {
-          "locale": "en",
-          "fields": {
-            "title": "Getting started",
-            "body": null,
-            "seoTitle": null,
-            "seoMetaDescription": null,
-            "seoOgImageId": null,
-            "seoOgImage": null
-          }
-        },
-        {
-          "locale": "zh-TW",
-          "fields": {
-            "title": "開始使用",
-            "body": null,
-            "seoTitle": null,
-            "seoMetaDescription": null,
-            "seoOgImageId": null,
-            "seoOgImage": null
-          }
-        }
-      ],
-      "category": {
-        "name": "Guides"
-      },
-      "tags": [
-        {
-          "name": "howto"
-        }
-      ]
-    }
-  }
-}
-HTTP_STATUS:200
+```graphql
+query { article(id: "01a08f92-3a18-7c5d-99a3-5b14cd1279ea") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
 ```
 
-`article` 只帶 `id` 就找回同一筆項目；`category` 是多對一，直接是一個物件、沒有任何引數；`tags` 是
-多對多，帶了自己的 `sort: ["name"], limit: 1`，只回一筆。`translations` 就是前面說的那份陣列。清單
-欄位一次帶齊 `sort`、`limit`、`facets`、`aggregate` 也一樣合法：
+實際回應：
+
+```json
+{"data":{"article":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","status":"published","version":7,"category":{"name":"Guides"},"tags":[{"name":"howto"}]}}}
+```
+
+`article` 只帶 `id` 就找回同一筆項目；`category` 是多對一，直接是一個物件、沒有任何引數；`tags` 是多
+對多，帶了自己的 `sort: ["name"], limit: 1`，只回一筆。`translations` 陣列的讀取形狀，本章開頭「
+Schema 從 metadata 產生」一節已經說明過。清單欄位一次帶齊 `sort`、`limit`、`facets`、`aggregate` 也
+一樣合法：
 
 ```graphql
 query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"], limit: 1, facets: ["status"], aggregate: { count: ["publishedAt"] }) { total facets { field values { value count } } aggregate } }
