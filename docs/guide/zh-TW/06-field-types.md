@@ -1,22 +1,23 @@
 # 6. 欄位型別與編輯介面
 
-每一個 `[CmsField]` 掛的 `FieldInterface` 值，同時決定三件事：資料庫欄位、透過 REST 與
-GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這一章把三者的對應關係整理成表，並說明
-圍繞它們的規則與陷阱。
+要替一個欄位挑介面，又不確定它會存成什麼欄位型別、後台會長成什麼樣子時，答案都在這一章。
+`[CmsField]` 的 `Interface` 值一次決定三件事：資料庫欄位、REST 與 GraphQL 公開的欄位資訊，
+以及後台用哪個編輯器。
 
 ## 介面總覽
 
-`FieldInterface`（`src/Struo.Domain/Metadata/Enums/FieldInterface.cs`）一共 33 個成員，前台的
-`frontend/src/lib/fieldTypes/types.ts` 手動鏡射了全部 33 個，沒有一邊是從另一邊生成的。掃描器不
-會依 CLR 型別推斷 `Interface`：一個 `int` 屬性掛 `[CmsField]` 卻沒寫 `Interface`，一樣是 `Text`
-欄位，連帶套用 255 字元的後台輸入上限。
+介面依用途分成七組，每組一張表。關聯不是欄位介面，宣告在 `[CmsRelation]` 上，見
+[第 8 章：關聯](08-relations.md)。介面一定要自己寫，沒寫就是 `Text`（見
+[第 5 章：定義集合](05-collections.md)）。可翻譯的限制：`MultiSelect`、`CheckboxGroup`、
+`Tags` 與 `Repeater` 子欄位不能設為可翻譯，其他見[第 7 章：多語內容](07-i18n.md)。
 
-下面表格的「資料庫欄位」欄，`varchar(255)` 是 SqlSugar CodeFirst 對 `string` 的預設值；「長文
-字」是套用 `ColumnShape.LongText` 之後的結果——PostgreSQL 與 SQLite 解析成 `text`，MySQL 是
-`longtext`，SQL Server 是 `nvarchar(max)`，Oracle 是 `clob`；「JSON」代表同時設定
-`IsJson = true` 與長文字，由 SqlSugar 直接（反）序列化整個 CLR 集合；「CLR 預設」代表數值、
-`bool`、`DateTime`、`Guid` 這類非 `string` 型別維持 SqlSugar 對該 CLR 型別本身的對應，掛勾本身
-從不去動它的長度。
+下面表格的「資料庫欄位」欄用四種說法：
+
+- `varchar(255)`：SqlSugar CodeFirst 對 `string` 的預設寬度。
+- 長文字：套用 `ColumnShape.LongText` 之後的結果，各後端有自己的對應型別。
+- JSON：長文字加上 `IsJson = true`，整個 CLR 集合由 SqlSugar 直接序列化與還原。
+- CLR 預設：數值、`bool`、`DateTime`、`Guid` 照 SqlSugar 原本的對應，長度不會被動到。
+- `ColumnShape` 只有兩個成員：`LongText` 與 `TimestampWithTimeZone`，沒有數值形狀。
 
 ### 文字
 
@@ -34,11 +35,11 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `Color` | `string` | `varchar(255)` | `TextField` |
 | `Phone` | `string` | `varchar(255)` | `TextField` |
 
-`RichText`、`Textarea`、`Markdown`、`Code` 跟稍後的 `Json`，合稱承載內容介面——只有這五個
-`string` 屬性會被加寬成長文字。其餘介面沒有格式檢查，`Email`／`Url`／`Phone` 也不例外，唯一的
-門檻是 `Required`。`Markdown` 與 `Code` 都是一般文字方塊，沒有預覽或語法標示。`Password` 的輸
-入不遮蔽，也不會出現在 GraphQL schema 裡。`Color` 同樣是純文字輸入，沒有色票選色器——本章最後
-「新增自訂欄位編輯器」就是把它換掉的範例。
+這五個介面的 `string` 屬性會由這個慣例自動加寬成長文字：`Textarea`、`RichText`、`Markdown`、
+`Code`，以及後面的 `Json`；其他 `string` 介面都停在 `varchar(255)`。除了 `Required` 與
+`MaxLength` 之外沒有任何格式檢查，`Email`／`Url`／`Phone` 也不例外。`Markdown` 與 `Code`
+都是一般文字方塊，沒有預覽或語法標示。`Password` 的輸入不遮蔽，也不會出現在 GraphQL schema
+裡。`Color` 同樣是純文字輸入，沒有色票選色器。
 
 ### 數字與布林
 
@@ -50,8 +51,8 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `Boolean` | `bool` | CLR 預設 | `BooleanField` |
 | `Checkbox` | `bool` | CLR 預設 | `BooleanField` |
 
-`Slider` 與 `Rating` 沿用 `Number` 的編輯器，後台沒有滑桿或星級元件；三者留白都送出 `null`。
-`Checkbox` 沿用 `Boolean` 的編輯器。
+`Slider` 與 `Rating` 沿用 `Number` 的編輯器，後台沒有滑桿或星級元件。`Checkbox` 沿用
+`Boolean` 的編輯器。
 
 ### 日期時間
 
@@ -61,10 +62,8 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `Time` | `DateTime`／`DateTime?` | CLR 預設 | `DateField` |
 | `DateTime` | `DateTime`／`DateTime?` | CLR 預設 | `DateField` |
 
-三者共用同一個編輯器，差別只在只顯示日期、只顯示時間、或兩者都顯示；留白都送出 `null`。CLR 預
-設是不含時區的欄位，要拿到有時區的欄位，屬性要另外掛
-`[ColumnShape(ColumnShape.TimestampWithTimeZone)]`——`MediaFolder` 的 `CreatedAt`／
-`UpdatedAt` 就是這樣做的。
+三者共用同一個編輯器，差別只在只顯示日期、只顯示時間、或兩者都顯示。要有時區的欄位，屬性另
+外掛 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`。
 
 ### 選擇
 
@@ -76,11 +75,11 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `CheckboxGroup` | `List<string>` | JSON | `CheckboxGroupField` |
 | `Tags` | `List<TagItem>` | JSON | `TagsField` |
 
-`Select`／`MultiSelect`／`Radio`／`CheckboxGroup` 要掛 `[CmsOptions]` 才有值可選；`Tags` 可以
-搭配 `[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 本身不在寫入時強制成員資
-格——`Select`／`Radio` 接受任意字串；真正檢查選項成員資格的只有 `MultiSelect`／
-`CheckboxGroup`，以及巢狀在 `Repeater` 裡的 `Select`／`Radio` 子欄位。`MultiSelect`／
-`CheckboxGroup`／`Tags` 都不能設為可翻譯，細節留到[第 7 章](07-i18n.md)。
+`Select`／`MultiSelect`／`Radio`／`CheckboxGroup` 要掛 `[CmsOptions]` 才有值可選；`Tags`
+可以搭配 `[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 的宣告方式見
+[第 5 章：定義集合](05-collections.md)。寫入時真正檢查值有沒有在選項清單裡的只有
+`MultiSelect`、`CheckboxGroup`，以及 `Repeater` 子欄位裡的 `Select`、`Radio`；`Select`、
+`Radio` 自己接受任意字串。
 
 ### 結構化 JSON
 
@@ -90,16 +89,21 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `KeyValue` | `Dictionary<string,string>` | JSON | `KeyValueField` |
 | `Repeater` | `List<TChild>` | JSON | `RepeaterField` |
 
-`Json` 是一個裝著原始 JSON 文字的 `string` 屬性，因為承載內容而被加寬成長文字，API 層讀取時重
-新解析、寫入時重新序列化；真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、
-`KeyValue`、`Files`、`Repeater` 這六個結構化介面，SqlSugar 直接對 `IsJson = true` 的欄位（反）
-序列化整個 CLR 集合。`KeyValue` 的鍵不能留白。`Repeater` 的 `TChild` 必須是類別而不是
-`string`，且至少要宣告一個 `[CmsField]`，兩者違反都是點名該欄位的啟動期
-`MetadataException`；子欄位僅限純量介面：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、
-`Email`、`Url`、`Color`、`Phone`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、
-`Date`、`Time`、`DateTime`、`Select`、`Radio` 共 19 種，且不能設為可翻譯；巢狀 `Repeater`、
-`RichText`、`File`／`Image`／`Files`、`Password`、`Hidden`、`Uuid`、`Divider`、`Json`、
-`KeyValue` 都不允許。
+`Json` 是一個裝著原始 JSON 文字的 `string` 屬性，跟其他四個介面一樣被加寬成長文字，API 層讀
+取時重新解析、寫入時重新序列化。真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、
+`KeyValue`、`Files`、`Repeater` 這六個結構化介面，SqlSugar 直接對 `IsJson = true` 的欄位
+（反）序列化整個 CLR 集合；`KeyValue` 的鍵不能留白。
+
+`Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
+是點名該欄位的啟動期 `MetadataException`。子欄位僅限純量介面：`Text`、`Textarea`、
+`Markdown`、`Code`、`Slug`、`Email`、`Url`、`Color`、`Phone`、`Number`、`Slider`、
+`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、`DateTime`、`Select`、`Radio`，且不能設為
+可翻譯。以下都不允許：
+
+- 巢狀 `Repeater`
+- `RichText`、`Json`、`KeyValue`
+- `File`、`Image`、`Files`
+- `Password`、`Hidden`、`Uuid`、`Divider`
 
 ### 媒體與檔案
 
@@ -109,9 +113,8 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `Image` | `Guid`／`Guid?` | CLR 預設 | `FileField` |
 | `Files` | `List<Guid>` | JSON | `FilesField` |
 
-`File` 與 `Image` 共用同一個編輯器，`Image` 多了圖片預覽；`File`／`Image` 留白送出 `null`。
-`Files` 存的 id 在寫入時不會檢查是否存在，指向已被清除檔案的 id 一樣會被存下來，後台選擇器會退
-回顯示原始 id。三者都沒有清單欄位格式化器：只靠這些欄位的集合，清單畫面不會顯示欄位內容。
+`File` 與 `Image` 共用同一個編輯器，`Image` 多了圖片預覽。`Files` 存的 id 在寫入時不會檢查
+是否存在，指向已被清除檔案的 id 一樣會被存下來，後台選擇器會退回顯示原始 id。
 
 ### 顯示用與識別碼
 
@@ -122,78 +125,82 @@ GraphQL 公開的中介資料，以及後台編輯器用哪個元件渲染；這
 | `Uuid` | `Guid`／`Guid?` | CLR 預設 | `ReadonlyField` |
 
 這裡的 `Hidden` 是介面本身，用來渲染一個唯讀的顯示元件，跟下一節的
-`[CmsField(Hidden = true)]` 是兩回事——後者能掛在任何介面上。`Divider` 忽略欄位值，通常另外掛
-`[SugarColumn(IsIgnore = true)]`，讓它完全不落地成欄位。`Uuid` 是唯讀顯示，junction 外鍵欄位
-命名錯誤時，錯誤訊息會建議改用它。
+`[CmsField(Hidden = true)]` 是兩回事——後者能掛在任何介面上。`Divider` 忽略欄位值，通常另外
+掛 `[SugarColumn(IsIgnore = true)]`，讓它完全不落地成欄位。`Uuid` 只是唯讀顯示一個 GUID。
 
-一個集合的清單畫面最多顯示六欄，只從非系統、非隱藏、且介面本身有清單欄位格式化器的欄位裡選，
-`DefaultDisplayField` 符合條件時排最前面，其餘照欄位在 API 回應裡的順序；33 個介面裡有十個沒
-有格式化器（`Password`、`Markdown`、`Code`、`RichText`、`Divider`、`File`、`Image`、
-`Files`、`Hidden`、`Uuid`），只用這些介面的集合，清單畫面就是空的。GraphQL schema 完全排除三
-個介面：`Hidden`、`Divider`、`Password`。
+### 清單欄位與 GraphQL 的排除
+
+一個集合的清單畫面最多顯示六欄，只從非系統、非隱藏、且介面本身有清單欄位格式化器的欄位裡
+選，`DefaultDisplayField` 符合條件時排最前面，其餘照欄位在 API 回應裡的順序。沒有格式化器、
+因此永遠不會出現在清單欄位裡的介面：`Password`、`Markdown`、`Code`、`RichText`、
+`Divider`、`File`、`Image`、`Files`、`Hidden`、`Uuid`。只用這些介面的集合，清單畫面就是空
+的；GraphQL schema 另外完全排除三個介面：`Hidden`、`Divider`、`Password`。
 
 ## `MaxLength` 的行為
 
-`[CmsField(MaxLength = n)]` 是 CMS 層自己的輸入長度上限，跟 `[SugarColumn(Length = n)]`、跟任
-何明寫的 `ColumnDataType` 都無關；掃描碰到負值的 `MaxLength`，或是掛在非 `string` 屬性上的
-`MaxLength`，兩者都會在啟動時丟出 `MetadataException`，訊息各自點名是哪一種違規。
+`MaxLength` 只管後台輸入，以 UTF-16 code unit 計，跟 `[SugarColumn(Length = n)]` 或明寫的
+`ColumnDataType` 都不相干。負值，或掛在非 `string` 屬性上，都會在啟動時丟出
+`MetadataException`。有效的 `MaxLength` 依序解出：
 
-有效的 `MaxLength` 依序解出：明寫且大於零時用明寫的值；否則屬性是 `string`、介面又落在十二個
-短字串介面之一時退回 255——`Text`、`Slug`、`Email`、`Url`、`Password`、`Color`、`Phone`、
-`Select`、`MultiSelect`、`Radio`、`CheckboxGroup`、`Tags`；兩者都不成立就是 `null`，代表不限
-長度。
+1. 明寫且大於零，用明寫的值。
+2. 否則屬性是 `string`，介面又落在十二個短字串介面之一時退回 255：`Text`、`Slug`、
+   `Email`、`Url`、`Password`、`Color`、`Phone`、`Select`、`MultiSelect`、`Radio`、
+   `CheckboxGroup`、`Tags`。
+3. 兩者都不成立，是 `null`，代表不限長度。
 
 後台把有效的 `MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上，所以就算從未寫過
-`[CmsField]`，255 的預設值一樣會在前端生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是因
-為 SqlSugar 對未加寬 `string` 的預設值也是 255。
+`MaxLength`，255 的預設值一樣會在前端生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是
+因為 SqlSugar 對未加寬 `string` 的預設值也是 255。
 
 ## 必填、唯讀、隱藏與系統欄位
 
-`Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求本文本身，細節
-見[第 5 章](05-collections.md)。`RichText` 的內容如果清理後在視覺上等於空白，會先被轉成
-`null` 再檢查 `Required`，所以看起來有內容的編輯器文件仍可能未通過必填檢查，`<img>`、`<hr>`
-都算有內容。`Required` 的錯誤優先順序在建立與更新之間不同——建立時先檢查 `Required`，再檢查
-長度與各結構化介面自己的驗證；更新時後兩者已經先跑過送進來的本文，違反兩者的本文回報的是長度
-或驗證錯誤，不是 `Required`。
+`Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求本文本身，細
+節見[第 5 章：定義集合](05-collections.md)。
 
-`ReadOnly`（`[CmsField(ReadOnly = true)]`）讀取時正常回傳值，更新時完全被保護——更新的欄位覆
-蓋邏輯會跳過每一個 `ReadOnly`／`IsSystem` 欄位，請求本文永遠動不了它。建立時的保護則看屬性能
-不能為 `null`：反序列化器綁定之後會把 `ReadOnly`／`IsSystem` 屬性設回 `null`，但只有可為
-`null` 的屬性能被這樣設回去——`[CmsField(ReadOnly = true)] public int Views` 這種不可為
-`null` 的值型別，建立時客戶端傳的值會原樣保留，之後才真正唯讀。後台的輸入框也會獨立停用：呼叫
-端自己要求停用，或欄位中介資料本身是唯讀，兩者任一成立就停用。
+`RichText` 的內容如果清理後在視覺上等於空白，會先被轉成 `null` 再檢查 `Required`，所以看起
+來有內容的編輯器文件仍可能未通過必填檢查，`<img>`、`<hr>` 都算有內容。
 
-四個稽核欄位不用寫 `[CmsField]`：掃描器自動加上，`IsSystem = true`、`ReadOnly = true`、
-`Sort = 1000`，介面依 CLR 型別挑——`CreatedAt`／`UpdatedAt` 是 `DateTime`，`CreatedBy`／
-`UpdatedBy` 是 `Text`。它們在建立時的保護是另一套機制：稽核的 AOP hook 在新增時無條件覆寫全
-部四個欄位；更新時只重新蓋印 `UpdatedAt`／`UpdatedBy`，`CreatedAt`／`CreatedBy` 靠一般的更新
-覆蓋邏輯保護。系統欄位讀取時照常回傳，只在後台的項目表單與清單欄位裡被排除，不像 `Hidden` 那
-樣從 API 消失。
+建立時先報 `Required`；更新時如果本文同時違反長度或結構驗證，先報的是那些錯誤。
+
+`ReadOnly` 欄位讀得到，更新時寫不進去：更新的欄位覆蓋邏輯會跳過每一個 `ReadOnly` 與
+`IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——`[CmsField(ReadOnly = true)] public
+int Views` 這種不可為 `null` 的值型別，建立時客戶端傳什麼就存什麼，之後才唯讀。後台的輸入框
+也會停用。四個稽核欄位由掃描器自動變成唯讀的系統欄位，介面依 CLR 型別挑——時間是
+`DateTime`，使用者是 `Text`。新增時四個都由框架蓋印，更新時只重蓋
+`UpdatedAt`／`UpdatedBy`，客戶端傳的值一律無效。系統欄位讀取時照常回傳，只是不出現在後台
+的表單與清單欄位裡。
 
 `Hidden`（`[CmsField(Hidden = true)]`）跟介面完全無關，任何介面都能設——例如範例的
 `Article.InternalNote` 就是一個 `Hidden` 的 `Text` 欄位。它會讓欄位從 `GET /api/schema`、
-GraphQL schema、項目回應、查詢 DSL 的已知／可搜尋／可排序白名單，以及對外回傳的修訂快照裡消
-失，連帶把它從集合的 `translation.fields` 清單裡也拿掉——原始快照列仍保留這個值，回復時照樣
-能救回來。它不是一個 RBAC 邊界：更新的欄位覆蓋邏輯完全不檢查 `Hidden`，已經知道欄位名稱的呼
-叫端仍能正常寫入；要讓欄位真的不能寫，得跟 `ReadOnly` 搭配。後台只透過 schema 與項目回應認識
-欄位，一個 `Hidden` 欄位不管宣告什麼介面，後台完全看不到它，也就沒有東西可以渲染。
+GraphQL schema、項目回應、查詢語法的已知欄位允許清單與可搜尋白名單，以及對外回傳的修訂快照
+裡消失，連帶把它從集合的 `translation.fields` 清單裡也拿掉，原始快照列仍保留這個值。它不是
+一個 RBAC 邊界：更新的欄位覆蓋邏輯完全不檢查 `Hidden`，已經知道欄位名稱的呼叫端仍能正常寫
+入；要讓欄位真的不能寫，得跟 `ReadOnly` 搭配。
+
+### 寫入時的整理
+
+- 寫入本文裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名會拿到 200 但值沒存進去。
+- `MultiSelect`／`CheckboxGroup` 去重、保留第一個；`Tags` 空白值拒絕、重複丟掉。
+- `Files` 丟掉 `Guid.Empty` 與重複；`Repeater` 丟掉整列空白的列，但錯誤訊息的列號仍以送進
+  來的順序（含被丟掉的）從 1 起算。
 
 ## 常見陷阱
 
-**未宣告型別的 `string` 保留 `varchar(255)`。** 一個沒有明寫欄位型別、介面又不屬於承載內容五
-種介面之一的 `string` 屬性，保留 SqlSugar CodeFirst 的預設 `varchar(255)`；寫入超過 255 字元
-的值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗。修
-法是換成承載內容介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
-`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 是跨後端中立的列舉，核心程式碼本身
-也不能在 `ColumnTypeMap.cs` 之外寫死廠商專屬型別字串。
+**寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在
+`Textarea`、`RichText`、`Markdown`、`Code`、`Json` 這五個之列的 `string` 屬性，保留
+SqlSugar CodeFirst 的預設 `varchar(255)`；寫入超過 255 字元的值，在 PostgreSQL 上會以
+`22001 value too long for type character varying(255)` 失敗。修法是換成這五個介面之一，或
+是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
+`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。
 
-**JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 一個屬性的 `[CmsField]` 介面是六個 JSON 欄位
-介面之一時，另外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名該屬
-性與違規的介面；落在 `InitTables` 集合裡的型別——每個框架 entity 加上每個 `[CmsCollection]`
-型別——這個例外在啟動時就會丟出，不用等到真的用到那張表。修法是把 `[ColumnShape]` 移除：JSON
-對映本身就會加寬成長文字，也會設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟承載
-內容介面併用不受影響，仍然合法。`[ColumnShape]` 也會不出聲地贏過同一屬性上明寫的
-`ColumnDataType`——它解析完 shape 就直接返回，不會再去讀那個屬性。
+**JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 一個屬性的 `[CmsField]` 介面是六個 JSON 欄
+位介面之一時，另外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名
+該屬性與違規的介面；落在 `InitTables` 集合（每個框架 entity 加每個 `[CmsCollection]` 型
+別）裡的型別因此在啟動時就失敗，集合外的 entity 則要等到第一次用到那張表才會失敗。修法是把
+`[ColumnShape]` 移除：JSON 對映本身就會加寬成長文字，也會設定 `IsJson`，單靠 shape 兩者都拿
+不到。`[ColumnShape]` 跟這五個介面併用不受影響，仍然合法；同一個屬性上同時有
+`[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，而且不會有任何警
+告。
 
 **`JsonElement` 在 `JsonDocument` 釋放後不可用。** 用 `using var doc =
 JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.RootElement` 回傳到
@@ -201,30 +208,26 @@ JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.Ro
 `JsonDocument` 還活著時才有效。改用 `JsonSerializer.Deserialize<JsonElement>(raw)`，不需要
 `using`，拿到的是一個可以安全持有的獨立值。
 
-**六個 JSON 欄位介面之外，手動宣告的 `List<>` 仍要自己標 `IsJson`。** `[CmsField]` 介面落在
-`MultiSelect`／`CheckboxGroup`／`Tags`／`KeyValue`／`Files`／`Repeater` 這六個之外的
-`List<>` 屬性，CodeFirst hook 不會替它自動套用 JSON 對映，SqlSugar 也沒辦法直接映射一個
-list，自己要寫 `[SugarColumn(IsJson = true)]`。一旦寫了這個，單獨 `IsJson` 的加寬邏輯會接手補
-上欄位型別，不需要再額外處理長度；若這個屬性另外明寫了 `ColumnDataType`（例如 PostgreSQL 原生
-的 `jsonb`），加寬邏輯會尊重它、不去動它——但這條路徑本模板沒有任何測試涵蓋，不要假設它會像
-長文字預設值那樣在框架裡正確往返讀寫。
+**手動宣告的 `List<>` 屬性要自己標 `IsJson`。** 六個 JSON 欄位介面之外，手動宣告的 `List<>`
+仍要自己標 `IsJson`：`[CmsField]` 介面落在 `MultiSelect`／`CheckboxGroup`／`Tags`／
+`KeyValue`／`Files`／`Repeater` 這六個之外的 `List<>` 屬性，CodeFirst hook 不會替它自動套用
+JSON 對映，SqlSugar 也沒辦法直接映射一個 list，自己要寫 `[SugarColumn(IsJson = true)]`。一
+旦寫了這個，單獨 `IsJson` 的加寬邏輯會接手補上欄位型別；若這個屬性另外明寫了
+`ColumnDataType`（例如 PostgreSQL 原生的 `jsonb`），加寬邏輯會尊重它、不去動它，但這條路徑
+沒有任何測試涵蓋，不要假設它會像長文字預設值那樣在框架裡正確往返讀寫。反過來，介面本身就是
+六個 JSON 介面之一的屬性，hook 會無條件把它設成 `IsJson` 加長文字，不會讀你寫的
+`ColumnDataType`——在 `MultiSelect` 欄位上釘 `jsonb` 不會生效，也不會有警告。
 
 ## 新增自訂欄位編輯器
 
-每一個欄位編輯器元件都吃同樣的三個 prop、發同一個事件：`field`（已解析的欄位中介資料）、
-`modelValue`（表單目前的值）、可選的 `disabled`，變更時發回 `update:modelValue`：
+下面把 `Color` 介面出廠的 `TextField` 換成一個原生 color input。每一個欄位編輯器元件都吃同
+樣的三個 prop、發同一個事件：`field`（已解析的欄位中介資料）、`modelValue`（表單目前的
+值）、可選的 `disabled`，變更時發回 `update:modelValue`：
 
 ```ts
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 ```
-
-分派器 `FieldInput.vue` 另外轉發第四個綁定 `id`，用 fallthrough attribute 的方式傳下去，本身
-不是任何編輯器自己宣告的 prop；根元素就是原生控制項的編輯器會接住這個 `id`，跟呼叫端的
-`<label>` 對上，根元素是包裝用 `div` 的編輯器則接不到，需要自己處理標籤。
-
-下面把 `Color` 介面出廠的 `TextField`（純文字輸入，沒有色票選色器）換成一個原生 color
-input。
 
 **1. 寫元件**——`frontend/src/components/fields/ColorSwatchField.vue`：
 
@@ -270,25 +273,27 @@ import ColorSwatchField from '../../components/fields/ColorSwatchField.vue'
 color: def({ component: ColorSwatchField, listColumn: asString }),
 ```
 
-那一行就是整個註冊過程：`FieldInput.vue` 解析 `getFieldType(field.interface).component`，替
-每個集合裡每一個 `Color` 介面欄位渲染它，不需要逐集合接線。registry 是模組層級的一個純物件字
-面值，型別是一個窮舉的 `Record`，沒有註冊 API 也沒有外掛掛鉤——換編輯器就是編輯這個檔案。
+`FieldInput.vue` 依 `field.interface` 到 registry 拿元件，所有集合裡的 `Color` 欄位都跟著
+換，不用逐集合接線。
+
+**3. 看結果**——重啟前端開發伺服器，打開任何有 `Color` 欄位的項目，輸入框旁邊會多一個色票。
+
+分派器 `FieldInput.vue` 另外轉發第四個綁定 `id`，用 fallthrough attribute 的方式傳下去，本
+身不是任何編輯器自己宣告的 prop；根元素就是原生控制項的編輯器會接住這個 `id`，跟呼叫端的
+`<label>` 對上，根元素是包裝用 `div` 的編輯器則是把 `id` 收在那個 `div` 上，跟裡面的控制項
+對不起來，需要自己處理標籤。
 
 `frontend/src/lib/fieldTypes/types.ts` 的 `FieldInterface` 聯集是封閉的：新增一個真正全新的
-介面值，而不是像上面那樣替換既有介面的編輯器，還得同步後端的 `FieldInterface` enum 與掃描器
-推理到它的每一個地方，超出單純客製化編輯器的範圍。一個沒有對到 registry 鍵的介面會退回唯讀渲
-染器；避免這種情況的是 schema 合約測試——它比對送出去的 enum 快照跟前端聯集、跟 registry
-鍵，雙向都檢查，後端加了新成員前端沒跟上、或是前端留了過期項目，`frontend/` 底下的
-`pnpm test` 都會失敗。這份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完要
-記得清掉這個環境變數，忘記清掉之後不相關的測試會悄悄改寫快照，而不是真的檢查它。
+介面值，而不是像上面那樣替換既有介面的編輯器，還得同步後端的 `FieldInterface` enum、前端的
+聯集型別，以及 registry 的每一個地方，超出單純客製化編輯器的範圍。schema 合約測試雙向擋下
+不同步：後端加了新成員前端沒跟上、或是前端留了過期項目，都會讓測試失敗。
 
-`richText` 是唯一延遲載入的編輯器，因為它是唯一會拉進編輯器函式庫的一個，有一個測試專門守著
-它維持唯一。六個介面留白時送 `null` 而不是空字串——`number`、`slider`、`rating`、
-`boolean`、`checkbox`、`uuid`——因為它們的後端屬性從來不是字串，送空字串會讓 JSON 綁定以
-400 失敗；文字類介面則刻意持續送 `''`，清空文字欄位才會真的清空。`file`／`image` 與
-`date`／`time`／`dateTime` 各自有對應的轉換規則。
+這份快照由一次帶 `UPDATE_SCHEMA_SNAPSHOT=1` 的後端測試重新產生，跑完要記得清掉這個環境變
+數，忘記清掉之後不相關的測試會悄悄改寫快照，而不是真的檢查它。數值、布林與 `Uuid` 這類非字
+串欄位留白時送 `null`（`number`、`slider`、`rating`、`boolean`、`checkbox`、`uuid`）；文字
+類介面刻意送空字串，清空文字欄位才會真的清空。
 
 ## 接下來
 
-欄位介面決定了值怎麼存、怎麼驗證、後台怎麼編輯；同一個值在不同語言下如何各自存放，是
-[第 7 章](07-i18n.md)的主題。
+介面挑好之後，下一步是讓一個欄位在每種語言各存一份——這是
+[第 7 章：多語內容](07-i18n.md)的主題。
