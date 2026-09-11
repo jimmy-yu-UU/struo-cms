@@ -125,8 +125,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
 4. **Gate**: `pnpm test && pnpm build` (the standing gates' frontend pair; this is frontend-only and
    doesn't touch `docs/guide/**`, so the docs gate does not apply).
 
-**2b. Add a genuinely new `FieldInterface` value** — touches all three layers `docs/guide/en/
-06-field-types.md` describes:
+**2b. Add a genuinely new `FieldInterface` value** — touches all three layers
+`docs/guide/en/06-field-types.md` describes:
 
 1. Add the new member to `src/Struo.Domain/Metadata/Enums/FieldInterface.cs` (a fixed declaration
    order; add yours at the end unless you have a specific reason to group it near related interfaces —

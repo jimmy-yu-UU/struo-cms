@@ -85,7 +85,7 @@ reverse, forcing a column to be non-nullable, needs an explicit `[SugarColumn(Is
 | `Group` | `string?` | `null` | sidebar navigation group |
 | `DefaultDisplayField` | `string?` | `null` | item display title |
 | `AdminOnly` | `bool` | `false` | generic CRUD writes always require super-admin |
-| `Hidden` | `bool` | `false` | hide from sidebar |
+| `Hidden` | `bool` | `false` | Sidebar only; REST, GraphQL, RBAC and schema unaffected |
 | `Revisions` | `bool` | `false` | enable revision history |
 
 `DefaultDisplayField` must name a real field — the match is against the camelCased field name — and

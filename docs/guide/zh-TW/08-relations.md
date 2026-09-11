@@ -79,8 +79,8 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 
 多對一的外鍵寫入時完全不檢查存在與否，只有多對多的目標 id 會檢查。這一層 schema 也沒有資料庫層級的外
 鍵限制：`OnDelete` 跟每一項參照檢查都在應用層做，自己的 ETL 或直接操作資料庫都繞得過，也可能留下懸空
-的子列。關聯在 metadata 上的標籤一律是 PascalCase 的 CLR 屬性名稱，沒有任何 attribute 成員可以覆寫它
-。
+的子列。關聯在 metadata 上的標籤一律是 PascalCase 的 CLR 屬性名稱，沒有任何 attribute 成員可以
+覆寫它。
 
 ## `[CmsRelation]` 選項
 
@@ -103,8 +103,8 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 | `MaxDepth` | `int` | `1` | 沒有效果 |
 
 `DisplayColumns` 與 `MaxDepth` 都不會被讀進 `RelationMetadata`，也到不了 `/api/schema`。沒有逐關聯覆
-寫深度上限的欄位，唯一生效的上限是全域的 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」一節
-。
+寫深度上限的欄位，唯一生效的上限是全域的 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」
+一節。
 
 ## junction entity 與 payload
 
@@ -177,23 +177,23 @@ collection 本身的寫入授權，加上 `AdminOnly` 時額外要求的超級�
 
 ## `OnDelete` 的每個值
 
-`OnDelete` 決定刪除目標時要連動什麼。丟進垃圾桶（軟刪除）與 purge（永久清除）是兩個不同的時機，下表
-的行為都以 purge 為準。`OnDelete` 只對多對一關聯生效，宣告在一對多或多對多上會被忽略。
+`OnDelete` 決定刪除目標時要連動什麼。丟進垃圾桶與清除（帶 `?purge` 的永久刪除）是兩個不同的時機，
+下表的行為都以清除為準。`OnDelete` 只對多對一關聯生效，宣告在一對多或多對多上會被忽略。
 
 | 值 | 行為 |
 |---|---|
 | `Restrict`（預設） | 仍有參照時拒絕刪除，回 `409 CONFLICT` |
-| `SetNull` | purge 前把每一列參照它的外鍵設成 `null` |
+| `SetNull` | 清除前把每一列參照它的外鍵設成 `null` |
 | `Cascade` | 遞迴清掉每一列參照它的資料 |
 
-`Restrict` 的訊息點名集合：`Cannot delete '{collection}/{id}': referenced by '{sourceCollection}'.`
-，同一道守衛在單純丟進垃圾桶時也會跑，purge 的每一層遞迴也會跑。這道檢查不鎖列，兩個交易之間仍可能競
-速出一列新的參照。
+`Restrict` 的訊息點名集合：`Cannot delete '{collection}/{id}': referenced by
+'{sourceCollection}'.`，同一道守衛在單純丟進垃圾桶時也會跑，清除的每一層遞迴也會跑。這道檢查不鎖
+列，兩個交易之間仍可能競速出一列新的參照。
 
 junction entity 自己宣告的多對一（例如指向第三個集合）也算一般的多對一：預設 `Restrict`，所以只要還
 有 junction 列參照那個目標，就刪不掉它。
 
-`SetNull` 只在 purge 時發生，單純丟進垃圾桶不會動到參照它的列；範例的 `Article.Category` 與
+`SetNull` 只在清除時發生，單純丟進垃圾桶不會動到參照它的列；範例的 `Article.Category` 與
 `Category.Parent` 都宣告 `OnDelete.SetNull`。
 
 `Cascade` 連帶清掉的還有那些列各自的 junction、翻譯與版本紀錄，循環參照不會讓它無限遞迴。參照它的
@@ -202,9 +202,9 @@ junction entity 自己宣告的多對一（例如指向第三個集合）也算�
 
 ## 用 `deep` 讀取關聯資料
 
-展開關聯的參數只有一個：`deep`。展開是逐關聯、逐頁批次做的——每個關聯一次額外查詢，不是逐列各查一次
-，也刻意不用 ORM 自己的 eager-include：多對一一次查詢，一對多一次，多對多兩次（junction 列一次、目標
-一次）。
+展開關聯的參數只有一個：`deep`。展開是逐關聯、逐頁批次做的——每個關聯一次額外查詢，不是逐列各查一次，
+也刻意不用 ORM 自己的 eager-include：多對一一次查詢，一對多一次，多對多兩次（junction 列一次、
+目標一次）。
 
 查詢字串形式是單層、只列關聯名稱：`?deep=folder,tags`，用逗號分隔；每個關聯的欄位挑選、巢狀篩選、排
 序、`limit`／`offset`，以及更深一層的巢狀，只存在於查詢端點的 JSON 封裝形式裡。對多對一關聯帶篩選、
@@ -238,9 +238,9 @@ $ GET /api/items/category/01a08c68-5681-7e60-ade2-3f277347cc19?deep=articles
 HTTP_STATUS:200
 ```
 
-當 `deep` 展開一個 junction 帶 payload 的多對多關聯，每一列展開出來的目標都會多一個 `_junction` 物件
-，裝著那一列非 `Hidden` 的 payload 值，鍵是欄位的 camelCase API 名稱；junction 不帶 payload 的關聯完
-全不會有這個鍵。
+當 `deep` 展開一個 junction 帶 payload 的多對多關聯，每一列展開出來的目標都會多一個 `_junction`
+物件，裝著那一列非 `Hidden` 的 payload 值，鍵是欄位的 camelCase API 名稱；junction 不帶 payload
+的關聯完全不會有這個鍵。
 
 呼叫端沒有 junction collection 的讀取授權時，`_junction` 是整個省略，不是送 `null`，跟 `deep` 對讀不
 到的關聯的作法一致。`_junction` 是一個固定的保留鍵，不是從 junction collection 自己的名稱推出來的，

@@ -145,7 +145,7 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 宣告了 `Content`、`SEO` 兩個群組：自己的欄位用 `Group = "Content"`，翻譯 sidecar 繼承的三個
 SEO 欄位用 `Group = "SEO"`。
 
-群組會回傳給 REST 與 GraphQL 呼叫端，但出廠的後台表單不照群組分區——它只把非系統欄位分成共
+群組會回傳給 REST 與 GraphQL 呼叫端，但預設的後台表單不照群組分區——它只把非系統欄位分成共
 用和可翻譯兩組，各自依 `Sort` 排序，可翻譯的那組放進各語言分頁裡。
 
 `CmsOptionsAttribute` 接受 `params string[]`，每一項是 `"value:label"` 或單純的 `"value"`
