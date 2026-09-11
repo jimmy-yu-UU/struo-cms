@@ -67,11 +67,11 @@ at the content-project level — every content entity (`using SqlSugar;`, e.g.
 `[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's
 `[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson` (hook-widened),
 `[ColumnShape]` — see
-`docs/guide/en/04-defining-a-collection.md`,
-`docs/guide/en/05-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them. The
+`docs/guide/en/05-collections.md`,
+`docs/guide/en/06-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them. The
 sidecar `(fk, locale)` unique is the exception, not SqlSugar semantics but a StruoCMS abstraction
 derived from `[CmsTranslations]` metadata — see the next paragraph.
-`docs/guide/en/13-revisions-and-soft-delete.md` is a different kind of SqlSugar coupling, not a DDL one:
+`docs/guide/en/09-revisions-and-trash.md` is a different kind of SqlSugar coupling, not a DDL one:
 revisions need no extra column and `ISoftDeletable` is a package-free marker interface, but the
 soft-delete floor itself is `db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`,
 registered against the SqlSugar client in `SqlSugarClientFactory.Create` (see that chapter's "The global
@@ -104,7 +104,7 @@ scanned assembly and builds one `CollectionMetadata` record per attributed class
 table, REST endpoints, GraphQL schema, and admin SPA form/list all derive from — there is no second
 place to declare a route, a GraphQL type, or an admin screen. The scan is eager, happens once, and is
 cached in a singleton — nothing about it re-runs per request. See
-`docs/guide/en/04-defining-a-collection.md`.
+`docs/guide/en/05-collections.md`.
 
 ## Extension points
 
@@ -614,7 +614,7 @@ enum." Two distinct extension motions:
 - **Add a genuinely new interface value** — requires the backend `FieldInterface` enum, `MetadataScanner`,
   and (if the value needs JSON/text column widening) `SqlSugarClientFactory`'s CodeFirst hook, in
   addition to `types.ts` and `registry.ts`. See `docs/ai/task-playbooks.md`, "Add a field type", and
-  `docs/guide/en/05-field-types.md` / `docs/guide/en/14-admin-spa-customization.md`.
+  `docs/guide/en/06-field-types.md` / `docs/guide/en/14-admin-spa-customization.md`.
 
 ## Backend request flow (REST)
 
