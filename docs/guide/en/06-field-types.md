@@ -1,13 +1,13 @@
 # 6. Field Types and Editors
 
-Choosing an interface for a field, without knowing what column it becomes or what the admin form
-will look like, is what this chapter answers. A `[CmsField]`'s `Interface` value decides three
-things at once: the database column, the field information REST and GraphQL expose, and which
-admin editor renders it.
+When you're choosing an interface for a field and don't know what column it becomes or what the
+admin form will look like, this chapter has the answer. A `[CmsField]`'s `Interface` value decides
+three things at once: the database column, the field information REST and GraphQL expose, and
+which admin editor renders it.
 
 ## Interface overview
 
-Interfaces group into seven sets by purpose, one table per set. A relation is not a field
+Interfaces fall into seven groups by purpose, one table each. A relation is not a field
 interface — it's declared on `[CmsRelation]`; see [Chapter 8: Relations](08-relations.md). An
 interface must be written explicitly: leaving it unset falls back to `Text` (see
 [Chapter 5: Defining Collections](05-collections.md)).
@@ -16,7 +16,7 @@ The translatable restriction: `MultiSelect`, `CheckboxGroup`, `Tags`, and `Repea
 can't be set translatable; everything else is in
 [Chapter 7: Multilingual Content](07-i18n.md).
 
-The tables below use a few shorthand terms in the "database column" column:
+The tables below use a few shorthand terms under Database column:
 
 - `varchar(255)`: SqlSugar CodeFirst's default width for `string`.
 - Long text: the result of applying `ColumnShape.LongText`; each backend maps it to its own type.
@@ -43,7 +43,7 @@ The tables below use a few shorthand terms in the "database column" column:
 | `Color` | `string` | `varchar(255)` | `TextField` |
 | `Phone` | `string` | `varchar(255)` | `TextField` |
 
-This convention automatically widens the `string` property to long text for five interfaces:
+Five interfaces get their `string` property widened to long text automatically:
 `Textarea`, `RichText`, `Markdown`, `Code`, and `Json` (covered later); every other `string`
 interface stops at `varchar(255)`. Nothing checks format beyond `Required` and `MaxLength` —
 `Email`, `Url`, and `Phone` are no exception.
@@ -74,8 +74,8 @@ admin. `Checkbox` reuses `Boolean`'s editor.
 | `DateTime` | `DateTime`/`DateTime?` | CLR default | `DateField` |
 
 All three share the same editor; the difference is only whether it shows the date, the time, or
-both. A field that needs a time zone carries `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
-separately on the property.
+both. A field that needs a time zone adds `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` to
+the property as well.
 
 ### Choice
 
@@ -104,7 +104,7 @@ On write, the only interfaces that actually check a value against the option lis
 | `Repeater` | `List<TChild>` | JSON | `RepeaterField` |
 
 `Json` is a `string` property holding raw JSON text; the API layer re-parses it on read and
-re-serializes it on write. The real JSON columns are the six structured interfaces —
+re-serializes it on write. The real JSON columns come from the six structured interfaces —
 `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, and `Repeater` — where SqlSugar
 (de)serializes the whole CLR collection directly against an `IsJson = true` column; a `KeyValue`
 key can't be blank.
@@ -136,8 +136,8 @@ the same, and the admin picker can only fall back to showing the raw id.
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Hidden` | any | follows the property type | `ReadonlyField` |
-| `Divider` | any | follows the property type, or none | `DividerField` |
+| `Hidden` | Any | Follows the property type | `ReadonlyField` |
+| `Divider` | Any | Follows the property type, or none | `DividerField` |
 | `Uuid` | `Guid`/`Guid?` | CLR default | `ReadonlyField` |
 
 The `Hidden` here is the interface itself, rendering a read-only display component — it's a
@@ -148,7 +148,7 @@ GUID read-only.
 
 ### List columns and GraphQL exclusions
 
-A collection's list view shows at most six columns, picked only from fields that are non-system,
+A collection's list view shows at most six columns, picked only from fields that are non-system and
 non-hidden, and whose interface has a list-column formatter; `DefaultDisplayField` sorts first when
 it qualifies, and the rest follow the field order in the API response.
 
@@ -191,7 +191,7 @@ A `ReadOnly` field can be read but not written on update — the update field-ov
 every `ReadOnly` and `IsSystem` field. Locking it on create as well requires the property to be
 nullable: a non-nullable value type such as `[CmsField(ReadOnly = true)] public int Views` stores
 whatever the client sends on create, and only becomes read-only afterward. The admin input is
-disabled either way.
+disabled as well.
 
 The scanner automatically turns the four audit fields into read-only system fields, picking their
 interface by CLR type — `DateTime` for the timestamps, `Text` for the users. The framework stamps
@@ -230,7 +230,7 @@ CodeFirst's default `varchar(255)`; writing a value over 255 characters fails on
 
 The fix is switching to one of those five interfaces, or writing
 `[ColumnShape(ColumnShape.LongText)]` explicitly — not `[SugarColumn(ColumnDataType = "text")]`
-directly: `ColumnShape` holds true on every backend.
+directly: `ColumnShape` works on every backend.
 
 **Adding `[ColumnShape]` on a JSON-interface field is rejected.** When a property's `[CmsField]`
 interface is one of the six JSON interfaces, also carrying `[ColumnShape]` throws an
