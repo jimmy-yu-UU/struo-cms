@@ -61,7 +61,7 @@ A capture failure rolls the whole trash or restore back, so there is no half-tra
 matching revision.
 
 An update that changes nothing still writes an update revision — the write path always issues the
-update and always bumps the version number; it never compares old and new values; keep this in
+update and always bumps the version number; it never compares old and new values. Keep this in
 mind when sizing this table. The version number is the current maximum for that
 collection-and-item pair plus one, starting at 1, recorded together with the current time and
 actor.
