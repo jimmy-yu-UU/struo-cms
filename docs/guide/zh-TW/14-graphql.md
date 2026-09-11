@@ -95,7 +95,47 @@ GraphQL 的 `null` 對應 REST 的 404，意圖一樣，形狀不同。清單欄
 $ POST /graphql
 body:
 {"query": "query { article(id: \"01a08f92-3a18-7c5d-99a3-5b14cd1279ea\") { id status version translations { locale fields } category { name } tags(sort: [\"name\"], limit: 1) { name } } }"}
-{"data":{"article":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","status":"published","version":0,"translations":[{"locale":"en","fields":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}},{"locale":"zh-TW","fields":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}],"category":{"name":"Guides"},"tags":[{"name":"howto"}]}}}
+{
+  "data": {
+    "article": {
+      "id": "01a08f92-3a18-7c5d-99a3-5b14cd1279ea",
+      "status": "published",
+      "version": 0,
+      "translations": [
+        {
+          "locale": "en",
+          "fields": {
+            "title": "Getting started",
+            "body": null,
+            "seoTitle": null,
+            "seoMetaDescription": null,
+            "seoOgImageId": null,
+            "seoOgImage": null
+          }
+        },
+        {
+          "locale": "zh-TW",
+          "fields": {
+            "title": "開始使用",
+            "body": null,
+            "seoTitle": null,
+            "seoMetaDescription": null,
+            "seoOgImageId": null,
+            "seoOgImage": null
+          }
+        }
+      ],
+      "category": {
+        "name": "Guides"
+      },
+      "tags": [
+        {
+          "name": "howto"
+        }
+      ]
+    }
+  }
+}
 HTTP_STATUS:200
 ```
 
@@ -108,7 +148,7 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 ```
 
 回應顯示 `total` 是 2、`facets.status` 回報 `published` 兩篇與 `draft` 一篇；facet 與彙總的算法跟
-第 11 章完全一樣，不受 `limit` 影響。
+[第 11 章](11-query-advanced.md)完全一樣。
 
 ## 篩選
 
@@ -130,7 +170,8 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 `MultiSelect`、`CheckboxGroup`、`Tags`、`Files`、`File`、`Image`、`Repeater` 這些欄位在 GraphQL
 完全沒有篩選欄位。
 
-多對一關聯在篩選輸入裡貢獻兩個欄位：自己的外鍵當 `IdFilter`，加上目標型別的巢狀篩選輸入；一對多或
+多對一關聯在篩選輸入裡貢獻兩個欄位：自己的外鍵當 `IdFilter`（產生出來的純量篩選輸入型別之一，id 型
+欄位專用），加上目標型別的巢狀篩選輸入；一對多或
 多對多關聯則只貢獻巢狀篩選輸入這一個。跨關聯的巢狀篩選攤平成 REST 用的同一條帶點號路徑，兩邊收斂到
 同一棵過濾樹。GraphQL 沒有自己的排序文法，`sort: [String!]` 收的是 REST `sort=` 同一套 `-field` 字
 串。
@@ -144,8 +185,8 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 多對多關聯如果 junction 帶了可揭露的 payload，父層篩選輸入上這個關聯的欄位型別會換成
 `<Parent><Rel>RelationFilterInput`，多一個 `junction: <Parent><Rel>JunctionFilterInput` 欄位，跟目
 標本身可篩的欄位、自己的 `and`／`or`／`some`／`none` 並列；沒有可篩欄位時，這整個 `junction` 欄位
-跟對應的輸入型別一起省略，攤平成 REST 的 `_junction.<欄位>`。下面這個查詢示範同一列量詞（`some` 配
-`junction`）跟 `tagsLinks` 的讀取形狀：
+跟對應的輸入型別一起省略。送出的 `junction` 篩選攤平成 REST 的 `_junction.<欄位>`。下面這個查詢示範
+同一列量詞（`some` 配 `junction`）跟 `tagsLinks` 的讀取形狀：
 
 ```text
 $ POST /graphql
@@ -302,8 +343,7 @@ HTTP_STATUS:200
 ```
 
 回應狀態是 `200`，不是 `401`；資料是 `null`，錯誤本身在 `errors` 陣列裡，`extensions.code` 是
-`UNAUTHORIZED`。呼叫端得看每一則錯誤自己的 `extensions.code`，不能看狀態列——這是這一節最容易被誤判
-的地方。
+`UNAUTHORIZED`。呼叫端得看每一則錯誤自己的 `extensions.code`，不能看狀態列。
 
 GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver 丟出的例外套進同一份對照表，蓋上一模
 一樣的穩定代碼字串，但傳輸層的狀態永遠留在 `200`。`SEARCH_UNAVAILABLE` 也一樣——REST 對應到 503，這
