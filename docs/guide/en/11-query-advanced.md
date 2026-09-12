@@ -21,8 +21,8 @@ HTTP_STATUS:200
 ```
 
 Even though only `id` and `status` were asked for, all three articles still carry `version` and the
-full `translations` — neither one is `fields=`'s to manage. Later examples in this section reuse
-the same test data; the ids are data-specific and your own environment will differ.
+full `translations` — `fields=` governs neither. The later examples in this chapter reuse the same
+test data; the ids come from that data, so yours will differ.
 
 The JSON envelope does the same thing; the key is `fields`, a string array — not `field`, not
 `select`: `{"fields":["id","status"]}`.
@@ -46,18 +46,22 @@ always projects every visible field of its own — `fields=` is silently ignored
 
 From the query grammar's point of view, `deep` is just another field on the model, processed after
 filtering, sorting, and pagination are all done — its subject is the page of parent rows already
-fetched, not the whole table. That means a nested `filter` under `deep` only filters out the
-expanded relation rows; it never shrinks the parent page itself: `{"deep":{"tags":{"filter":{...}}}}`
-reads like "only return articles with a matching tag," but it isn't — this filter is applied only
-after the parent page is already fixed. [Chapter 8: Relations](08-relations.md) already covers how
-the whole `deep` tree is validated before any query actually runs, independent of row count.
+fetched, not the whole table.
+
+That means a nested `filter` under `deep` only filters out the expanded relation rows; it never
+shrinks the parent page itself: `{"deep":{"tags":{"filter":{...}}}}` reads like "only return
+articles with a matching tag," but it isn't — this filter is applied only after the parent page is
+already fixed. [Chapter 8: Relations](08-relations.md) already covers how the whole `deep` tree is
+validated before any query actually runs, independent of row count.
 
 A nested relation's own `filter` and `sort` go through the same `QueryValidator`, checked against
-the target collection's own metadata; a nested `sort` can't be a dotted path — that trips a
-different message, `Sort across relations is not supported for nested lists: '<field>'.`, distinct
-from the top-level `sort=` message when [the query basics chapter](10-query-basics.md) hits a
-many-to-many path, `Sort across to-many relations is not supported: '<path>'.` — one governs
-sorting inside a nested list, the other governs top-level sorting.
+the target collection's own metadata.
+
+A nested `sort` can't be a dotted path; that trips its own message, `Sort across relations is not
+supported for nested lists: '<field>'.` It is not the message a top-level `sort=` gives on a to-many
+path — that one is `Sort across to-many relations is not supported: '<path>'.`, covered in [the
+query basics chapter](10-query-basics.md). One governs sorting inside a nested list, the other
+top-level sorting.
 
 The junction's payload (the `_junction` key) is already covered in
 [Chapter 8: Relations](08-relations.md); it shows up again in this chapter's complete example at
@@ -67,9 +71,10 @@ the end.
 sorting: `Query:MaxRelationDepth` (default 6); see
 [Chapter 4: Configuration Reference](04-configuration.md) for how to change it.
 
-The cap is inclusive at both ends: `category` plus five more `parent` hops is six relation hops
-total, which validates and runs normally; only the seventh hop is rejected, with `Relation nesting
-too deep (depth {n}); the maximum is {max}.`. Here is a request that hits the seventh hop:
+The cap counts every hop, the first and the last included: `category` plus five more `parent` hops
+is six relation hops, which validates and runs normally; only a seventh hop is rejected, with
+`Relation nesting too deep (depth {n}); the maximum is {max}.`. Here is a request that hits the
+seventh hop:
 
 ```text
 $ POST /api/items/article/query
@@ -91,9 +96,9 @@ is absent from `meta`, not present as `null`.
 
 In the query string it's a comma list; in the JSON envelope it's a string array. A duplicate path
 in the list is deduplicated down to its first occurrence — it's neither rejected nor counted twice.
-Duplicates are detected by an exact comparison (`StringComparer.Ordinal`), not the case-insensitive
-rule field names otherwise get, so `status` and `Status` are two different paths, each counted on
-its own.
+Duplicates are detected by an exact comparison (`StringComparer.Ordinal`), not by the
+case-insensitive matching field names normally get, so `status` and `Status` are two different paths
+and each is counted on its own.
 
 ### Four path forms
 
@@ -127,9 +132,9 @@ locale — without `locale=`, the site default is used, so a value is always ava
 
 ### Pruning: why a facet counts rows that were filtered out
 
-A facet computes a disjunctive count: it answers "if I picked a different candidate value on this
-path, how many rows would still match everything else in the request?" — not "how many rows in
-this result set already carry this value?".
+A facet answers "if I switched this path to each of its candidate values in turn, how many rows
+would still match everything else in the request?" — not "how many rows in this result set already
+carry this value?"
 
 To get that, every facet computation first drops the conditions in its own family:
 
@@ -161,14 +166,14 @@ matching what `filter` says — but `facets.status` still reports `published: 2`
 `status`'s own condition was dropped before that facet was computed, so the draft still sitting in
 the `Guides` category (`categoryId=<Guides>`) gets counted too.
 
-The way to verify it is the same: for an own-field facet, `{"value": v, "count": n}` must equal
+You can check any of this yourself: for an own-field facet, `{"value": v, "count": n}` must equal
 `meta.total` for the same request with that facet's own condition swapped for
 `filter[<field>][_eq]=v`.
 
 `count` counts distinct root rows, not raw rows on the relation table.
 
-A to-many form groups by target id and counts with `COUNT(DISTINCT ...)`: a root row linked to two
-targets that happen to share a value is never counted twice. Own fields and foreign keys don't need
+The forms that group by target id count with `COUNT(DISTINCT ...)`: a root row linked to two targets
+that happen to share a value is never counted twice. Own fields and foreign keys don't need
 `DISTINCT` — each root row only ever falls into one group anyway.
 
 The one-hop-relation-plus-leaf-field form is the exception. It runs an id/count query first, then a
@@ -181,9 +186,10 @@ cap, two values that only become equal after merging can still lose one of them 
 truncation.
 
 `deleted=` only governs the root row itself: whenever a facet reaches the other end of a relation,
-it always keeps the target collection's own soft-delete floor, regardless of the outer request's
-`deleted=`. The many-to-one foreign-key form is the one exception, because it counts the root row's
-own field — a target already sitting in the trash still has its id counted.
+it always keeps the target collection's own soft-delete floor — the narrowest setting that
+collection allows — regardless of the outer request's `deleted=`. The many-to-one foreign-key form
+is the one exception, because it counts the root row's own field — a target already sitting in the
+trash still has its id counted.
 
 If a fork swaps out `search=`'s candidate-id source (a search-provider topic covered in the
 extension points chapter), facets and aggregates still see the same candidate set with the
@@ -191,11 +197,12 @@ extension points chapter), facets and aggregates still see the same candidate se
 
 ### NULL bucket, ordering, and count caps
 
-Own fields and many-to-one foreign keys both get their own `NULL` bucket, because the grouping
-field in both cases is already part of the root row. The bare-relation-name form never gets a "no
+Own fields and many-to-one foreign keys both get their own `NULL` bucket, because the grouping field
+in both cases is already part of the root row. The bare-relation-name form never gets a "no
 relation" bucket — building one would need an anti-join, which the implementation doesn't have; the
-question "how many rows have no relation" is already answered by `_none`. The
-one-hop-relation-plus-leaf-field form's `null` carries a third, easiest-to-confuse meaning: the
+question "how many rows have no relation" is already answered by `_none`.
+
+The one-hop-relation-plus-leaf-field form's `null` carries a third, easiest-to-confuse meaning: the
 target id resolved fine, there's just no translation row for this locale — it doesn't mean "no
 target."
 
@@ -211,9 +218,9 @@ in the database, and where `NULL` lands on a tie is up to the database. The
 one-hop-relation-plus-leaf-field form re-sorts and re-truncates its merged groups in memory, and
 `null` always sorts last there, regardless of the database engine.
 
-`Query:MaxFacets` (default 10) limits how many facet paths one request can list; `Query:MaxAggregates`
-(default 10) limits the total op/field combinations an aggregate can request. Both are set in
-[Chapter 4: Configuration Reference](04-configuration.md).
+`Query:MaxFacets` (default 10) limits how many facet paths one request can list;
+`Query:MaxAggregates` (default 10) limits the total op/field combinations an aggregate can request.
+Both are set in [Chapter 4: Configuration Reference](04-configuration.md).
 
 ### Cost
 
@@ -267,8 +274,8 @@ among the three has no `publishedAt`, so it doesn't affect either result.
 
 ## Errors
 
-Every facet and aggregate validation error is `BAD_USER_INPUT`/400; the envelope's full shape is
-left to the next chapter. Below are each one's message and what triggers it.
+Every facet and aggregate validation error is `BAD_USER_INPUT`/400; the error envelope's full shape
+is left to the next chapter. Below is each message and what triggers it.
 
 - An own field that doesn't exist, or a single-segment path that doesn't resolve: `Unknown field
   'bogusField' on collection 'article'.`
@@ -286,12 +293,12 @@ left to the next chapter. Below are each one's message and what triggers it.
   or '_junction': '<path>'.`
 - Over a cap: `Too many facets (max 10).`, `Too many aggregate fields (max 10).`
 - The relation segment's target collection isn't readable: `Read not permitted on '<collection>'.`
-  — this check runs before the path form is even parsed, so which fields an unreadable relation has
-  is never inferred back.
+  — this check runs before the path form is parsed, so the error can't be used to infer which fields
+  an unreadable relation has.
 - A misspelled aggregate op name: `Unknown aggregate op 'bogus'.`
-- Type checks on the envelope shape: `'facets' must be an array of strings.`, `'aggregate' must be
-  an object.`, `'aggregate.<op>' must be an array of strings.`; the query string adds one more:
-  `Malformed aggregate key '<key>'.`
+- Type checks on the JSON envelope's shape: `'facets' must be an array of strings.`, `'aggregate'
+  must be an object.`, `'aggregate.<op>' must be an array of strings.`; the query string adds one
+  more: `Malformed aggregate key '<key>'.`
 
 ## A complete example
 
@@ -311,11 +318,12 @@ own condition, because that condition was dropped before this facet was computed
 `aggregate.count.publishedAt` counts against the complete, unpruned `filter`.
 
 `fields=id,status` didn't block the two expanded relations `category` and `tags`, and it didn't
-block `version` or `translations` either — none of these four are `fields=`'s to manage; the extra
-`_junction` on each entry under `tags` holds the link's own note, a shape already covered in
-[Chapter 8: Relations](08-relations.md). [The query basics chapter](10-query-basics.md)'s `filter`,
-`sort`, `limit`, `offset` and this chapter's `fields`, `deep`, `facets`, `aggregate` are parameters
-on the same query string, and can be carried together exactly as shown.
+block `version` or `translations` either — `fields=` governs none of these four.
+
+The extra `_junction` on each entry under `tags` holds the link's own note, a shape already covered
+in [Chapter 8: Relations](08-relations.md). [The query basics chapter](10-query-basics.md)'s
+`filter`, `sort`, `limit`, `offset` and this chapter's `fields`, `deep`, `facets`, `aggregate` are
+parameters on the same query string, and can be carried together exactly as shown.
 
 ## What's next
 
