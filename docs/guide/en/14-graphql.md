@@ -8,9 +8,10 @@ to it, and where it diverges from REST are this chapter's subject.
 GraphQL reads the same collection metadata cache REST does, built once at startup; it's a second,
 fully typed API over that metadata, and nothing in the schema is hand-written SDL. Startup logic
 generates, per collection, one object type, one list wrapper, one filter input, one create input,
-one update input, plus two root query fields and four root mutation fields. A junction collection
-is an ordinary collection in the schema, with its own type and mutations like any other: `Hidden`
-only affects the admin sidebar, and has no effect on schema generation.
+one update input, plus two root query fields and four root mutation fields.
+
+A junction collection is an ordinary collection in the schema, with its own type and mutations like
+any other: `Hidden` only affects the admin sidebar, and has no effect on schema generation.
 
 Naming is entirely mechanical, so a fork can predict every generated name from the rule: types are
 PascalCase, fields are camelCase, and a list field's name follows a simple English pluralization
@@ -59,10 +60,12 @@ one entry per locale — not REST's locale-keyed object; the write shape is left
 
 The single endpoint is `POST /graphql`, mounted in the same web application as everything REST
 serves. Schema exposure runs on two separate paths, both gated by the same `GraphQl:ExposeSchema`
-switch: built-in introspection (`__schema`, `__type`), and HotChocolate's own `GET /graphql?sdl` —
-a safe `GET` that returns the whole schema as plain SDL text, which the CSRF middleware ignores
-entirely. Left unset, the switch defaults to open only in Development; turning it on in Production
-is just an environment variable, `GraphQl__ExposeSchema=true`, with no rebuild needed.
+switch: built-in introspection (`__schema`, `__type`), and HotChocolate's own `GET /graphql?sdl` — a
+safe `GET` that returns the whole schema as plain SDL text, which the CSRF middleware ignores
+entirely.
+
+Left unset, the switch defaults to open only in Development; turning it on in Production is just an
+environment variable, `GraphQl__ExposeSchema=true`, with no rebuild needed.
 
 Schema exposure and query execution are two separate concerns: an anonymous `POST /graphql` query
 still returns data normally in Production. What the switch actually gates is tooling that depends
@@ -75,22 +78,24 @@ only ever appears in Development.
 | Introspection, `?sdl` | On (default) | Per `GraphQl:ExposeSchema` |
 | Nitro IDE | On | Always off |
 
-Authentication rules are shared with REST: a cookie-authenticated `/graphql` request still needs
-the `X-Struo-CSRF` header, because GraphQL over HTTP is always `POST` — the rule applies equally to
-a read-only query and to a mutation, see
-[the REST API conventions chapter](12-rest-conventions.md). A bearer token authenticates
-`/graphql` the same way, even though the route carries no `[Authorize]` of its own; a
-bearer-carrying caller is resolved to its own identity and needs no CSRF header either.
+Authentication rules are shared with REST: a cookie-authenticated `/graphql` request still needs the
+`X-Struo-CSRF` header, because GraphQL over HTTP is always `POST` — the rule applies equally to a
+read-only query and to a mutation, see [the REST API conventions chapter](12-rest-conventions.md).
+
+A bearer token authenticates `/graphql` the same way, even though the route carries no `[Authorize]`
+of its own; a bearer-carrying caller is resolved to its own identity and needs no CSRF header
+either.
 
 ## Querying: single items, lists, arguments
 
 A single-item field is `{collection}(id: ID!, locale: String)`; an id that's missing, or already
-soft-deleted, returns `null` rather than an error — GraphQL's `null` corresponds to REST's 404,
-same intent, different shape. A list field takes the plural name and nine arguments: `filter`,
-`sort: [String!]`, `limit: Int`, `offset: Int`, `search: String`, `locale: String`,
-`deleted: DeletedFilter`, `facets: [String!]`, `aggregate: AggregateInput` — there is no `fields`
-and no `deep`; projection and relation expansion are decided entirely by the client's own
-selection set.
+soft-deleted, returns `null` rather than an error — GraphQL's `null` corresponds to REST's 404, same
+intent, different shape.
+
+A list field takes the plural name and nine arguments: `filter`, `sort: [String!]`, `limit: Int`,
+`offset: Int`, `search: String`, `locale: String`, `deleted: DeletedFilter`, `facets: [String!]`,
+`aggregate: AggregateInput` — there is no `fields` and no `deep`; projection and relation expansion
+are decided entirely by the client's own selection set.
 
 `deleted` is the SDL enum `EXCLUDE`/`ONLY`/`WITH`, the same shared enum REST uses; `ONLY`/`WITH`
 go through the identical delete-permission gate.
@@ -98,6 +103,7 @@ go through the identical delete-permission gate.
 `facets` and `aggregate` exist only on root list fields, never on a nested to-many list. The
 response's `facets` is `[FacetResult!]!` — an empty array, not an omitted key, when not requested;
 `aggregate` is `Any`, `null` when not requested.
+
 `FacetResult { field: String!, values: [FacetValue!]! }` and
 `FacetValue { value: Any, count: Int! }` are two shared output types, and `AggregateInput` gives
 each of REST's aggregate operators its own `[String!]` field.
@@ -121,11 +127,11 @@ The actual response:
 {"data":{"article":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","status":"published","version":7,"category":{"name":"Guides"},"tags":[{"name":"howto"}]}}}
 ```
 
-`article` with only `id` returns that same item; `category` is many-to-one, straight to an
-object with no arguments at all; `tags` is many-to-many, carrying its own `sort: ["name"], limit:
-1`, so only one comes back. The read shape of the `translations` array is already covered in this
-chapter's opening section, "Schema generated from metadata." A list field taking `sort`, `limit`,
-`facets`, and `aggregate` all at once is equally legal:
+`article` with only `id` returns that same item; `category` is many-to-one, straight to an object
+with no arguments at all; `tags` is many-to-many, carrying its own `sort: ["name"], limit: 1`, so
+only one comes back. The read shape of the `translations` array is already covered in this chapter's
+opening section, "Schema generated from metadata." A list field taking `sort`, `limit`, `facets`,
+and `aggregate` all at once is equally legal:
 
 ```graphql
 query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"], limit: 1, facets: ["status"], aggregate: { count: ["publishedAt"] }) { total facets { field values { value count } } aggregate } }
@@ -151,35 +157,41 @@ same depth and condition caps, see [Querying: Filters, Sorting and Pagination](1
   one (see below).
 
 Beyond the spelling, two things are genuine behavior differences. The first is `isNull`: unlike
-REST's `_null`/`_nnull`, this argument's value is actually read. The second is which field
-interfaces can be filtered at all: REST places no restriction on which interface can be filtered,
-checking only whether the field name is on the allowlist, while GraphQL only lets scalar
-interfaces be filtered — `RichText`, `Markdown`, `Code`, `Json`, `KeyValue`, `MultiSelect`,
-`CheckboxGroup`, `Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no filter fields in
-GraphQL at all.
+REST's `_null`/`_nnull`, this argument's value is actually read.
+
+The second is which field interfaces can be filtered at all: REST places no restriction on which
+interface can be filtered, checking only whether the field name is on the allowlist, while GraphQL
+only lets scalar interfaces be filtered — `RichText`, `Markdown`, `Code`, `Json`, `KeyValue`,
+`MultiSelect`, `CheckboxGroup`, `Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no
+filter fields in GraphQL at all.
 
 A many-to-one relation contributes two fields to the filter input: its own foreign key as an
-`IdFilter` (one of the generated scalar filter input types, dedicated to id-typed fields), plus
-the target type's own nested filter input; a one-to-many or many-to-many relation contributes
-only the nested filter input. Cross-relation nested filtering flattens down to the same dotted
-path REST uses, and both converge on the same filter tree. GraphQL has no sort grammar of its
-own — `sort: [String!]` takes the same `-field` strings REST's `sort=` does.
+`IdFilter` (one of the generated scalar filter input types, dedicated to id-typed fields), plus the
+target type's own nested filter input; a one-to-many or many-to-many relation contributes only the
+nested filter input.
+
+Cross-relation nested filtering flattens down to the same dotted path REST uses, and both converge
+on the same filter tree. GraphQL has no sort grammar of its own — `sort: [String!]` takes the same
+`-field` strings REST's `sort=` does.
 
 `some`/`none` is a reserved word every filter input carries, and it's only meaningful inside a
 relation's own inner filter. Using it on the root, or on a nested list's own `filter` argument, is
 rejected (`'some' is only valid inside a relation filter.`), as is nesting one quantifier directly
-inside another — express that as one level of nested relation filter instead. An empty or
-non-object value is rejected too. A nested to-many list's own `filter` argument takes the plain
-target filter input, not the relation-specific one, and `some`/`none` used there is rejected the
-same way: each is its own independent root.
+inside another — express that as one level of nested relation filter instead. An empty or non-object
+value is rejected too.
+
+A nested to-many list's own `filter` argument takes the plain target filter input, not the
+relation-specific one, and `some`/`none` used there is rejected the same way: each is its own
+independent root.
 
 When a many-to-many relation's junction carries an exposable payload, the field's type on the
 parent's filter input switches to `<Parent><Rel>RelationFilterInput`, gaining an extra
-`junction: <Parent><Rel>JunctionFilterInput` field alongside the target's own filterable fields
-and its own `and`/`or`/`some`/`none`; when the junction has no filterable fields, that whole
-`junction` field and its input type are omitted together. A submitted `junction` filter flattens
-down to REST's `_junction.<field>`. The query below shows both a same-row quantifier (`some`
-paired with `junction`) and `tagsLinks`' own read shape:
+`junction: <Parent><Rel>JunctionFilterInput` field alongside the target's own filterable fields and
+its own `and`/`or`/`some`/`none`; when the junction has no filterable fields, that whole `junction`
+field and its input type are omitted together.
+
+A submitted `junction` filter flattens down to REST's `_junction.<field>`. The query below shows
+both a same-row quantifier (`some` paired with `junction`) and `tagsLinks`' own read shape:
 
 ```text
 $ POST /graphql
@@ -189,17 +201,18 @@ body:
 HTTP_STATUS:200
 ```
 
-`total` is 1, the same result as chapter 10's same quantifier query; `tagsLinks` returns
-both `node` (the target itself) and `junction` (the link's own payload).
+`total` is 1, the same quantifier query as chapter 10's; `tagsLinks` returns both `node` (the target
+itself) and `junction` (the link's own payload).
 
 ## Nested to-many list arguments
 
 A nested to-many relation field carries its own four arguments — `filter`, `sort: [String!]`,
 `limit: Int`, `offset: Int` — computed separately from the root list field's own set, resolved by
 walking the client's own selection tree into the same nested-expansion spec REST's `deep=` uses.
-A many-to-one relation goes the other way: it's always an argument-free object field, since at
-most one row is ever resolved; the `tags(sort: ["name"], limit: 1)` seen earlier is this argument
-set in actual use.
+
+A many-to-one relation goes the other way: it's always an argument-free object field, since at most
+one row is ever resolved; the `tags(sort: ["name"], limit: 1)` seen earlier is this argument set in
+actual use.
 
 Selecting the same relation twice at the same level — `tags` and `tagsLinks`, or a repeated alias
 — merges the nested expansion, but only the first occurrence's `filter`/`sort`/`limit`/`offset`
@@ -236,11 +249,13 @@ included. [The REST API conventions chapter](12-rest-conventions.md)'s rule — 
 the existing value, and an explicit `null` is still rejected — applies here identically.
 
 A many-to-many relation on the create and update inputs is a plain `[ID!]` array of target ids,
-sharing the same sync logic as REST. An `AdminOnly` write still requires a super-admin, and a
-delete blocked by a restrict-guarded relation still returns `CONFLICT`; `delete`/`restore` against
-an unknown id return `false`/`null` rather than an error — like a query, "id doesn't exist" is
-data, not a fault; deleting an item already in the trash again is also `false`.
-`delete<X>(purge:)` defaults to `false`, and the trash and purge rules match REST.
+sharing the same sync logic as REST.
+
+An `AdminOnly` write still requires a super-admin, and a delete blocked by a restrict-guarded
+relation still returns `CONFLICT`; `delete`/`restore` against an unknown id return `false`/`null`
+rather than an error — like a query, "id doesn't exist" is data, not a fault; deleting an item
+already in the trash again is also `false`. `delete<X>(purge:)` defaults to `false`, and the trash
+and purge rules match REST.
 
 GraphQL has no counterpart to the parsing quirks of `POST .../query`, `fields=`, or `?purge=`, and
 no file endpoint at all — a file upload can only go through REST.
@@ -249,10 +264,11 @@ no file endpoint at all — a file upload can only go through REST.
 
 As soon as a many-to-many relation's junction declares at least one exposable payload field, the
 schema additionally generates a more complete read/write field pair, alongside the plain-id
-`<rel>`/`[ID!]`; a relation with no exposable payload never gets this pair at all. On read,
-`<rel>Links: [<Parent><Rel>Link!]` sits next to `<rel>: [<Target>!]`, and the link type is
-`{ node: <Target>!, junction: <Parent><Rel>Junction }` — `junction` is `null` when the caller
-can't read the junction collection, which is also why this field isn't marked non-nullable.
+`<rel>`/`[ID!]`; a relation with no exposable payload never gets this pair at all.
+
+On read, `<rel>Links: [<Parent><Rel>Link!]` sits next to `<rel>: [<Target>!]`, and the link type is
+`{ node: <Target>!, junction: <Parent><Rel>Junction }` — `junction` is `null` when the caller can't
+read the junction collection, which is also why this field isn't marked non-nullable.
 
 On write, the create and update inputs gain an extra `<rel>Links: [<Parent><Rel>LinkInput!]`, and
 the link input is `{ id: ID!, …writable payload fields }`. Using the Blog sample's `Article.tags`
@@ -282,11 +298,12 @@ tagsLinks: [ArticleTagsLink!]
 ```
 
 A submitted `<rel>Links` converts to REST's mixed-array write shape; if one mutation sends both
-`<rel>` and `<rel>Links` at once, `<rel>Links` wins outright — even an explicit
-`<rel>Links: null` overrides a simultaneously sent `<rel>` array rather than leaving that array in
-place. Selecting `<rel>Links` triggers the same expansion selecting `<rel>` would, even without
-selecting the `node` sub-field; the whole extra field pair is omitted as soon as every payload
-field is hidden or unmappable. Below is the actual response after sending `tagsLinks`:
+`<rel>` and `<rel>Links` at once, `<rel>Links` wins outright — even an explicit `<rel>Links: null`
+overrides a simultaneously sent `<rel>` array rather than leaving that array in place.
+
+Selecting `<rel>Links` triggers the same expansion selecting `<rel>` would, even without selecting
+the `node` sub-field; the whole extra field pair is omitted as soon as every payload field is hidden
+or unmappable. Below is the actual response after sending `tagsLinks`:
 
 ```text
 $ POST /graphql
@@ -305,9 +322,11 @@ the link stays unchanged, and nothing from the `tags` array's content is ever ap
 A collection with a translation sidecar gets one more field on both create and update inputs,
 `translations: [<X>TranslationInput!]`, each entry shaped
 `{ locale: String!, fields: <X>TranslationFieldsInput! }` — mirroring the read side's array shape
-back onto the write side exactly. The resolver converts this array back into the locale-keyed
-object the write path already consumes, applying the same "only the keys actually sent" pruning
-before that conversion; when the same locale appears twice, the later entry wins.
+back onto the write side exactly.
+
+The resolver converts this array back into the locale-keyed object the write path already consumes,
+applying the same "only the keys actually sent" pruning before that conversion; when the same locale
+appears twice, the later entry wins.
 
 A translatable own field never appears on the create or update input directly — it's only
 reachable through this typed `translations` input; create still requires one translation for the
@@ -359,12 +378,13 @@ The response status is `200`, not `401`; `data` is `null`, and the error itself 
 `errors` array, with `extensions.code` at `UNAUTHORIZED`. A caller has to check each error's own
 `extensions.code`, never the status line.
 
-GraphQL's error filter is the counterpart of REST's exception handler: it folds whatever
-exception a resolver throws into the same lookup table, stamping on the identical stable code
-string, but the transport-layer status always stays at `200`. `SEARCH_UNAVAILABLE` works the same
-way — REST maps it to 503, and here it's still `200` paired with this code. An exception with no
-entry in the lookup table is masked to a fixed, generic message, still fully logged server-side; a
-search-provider failure is masked the same way.
+GraphQL's error filter is the counterpart of REST's exception handler: it folds whatever exception a
+resolver throws into the same lookup table, stamping on the identical stable code string, but the
+transport-layer status always stays at `200`. `SEARCH_UNAVAILABLE` works the same way — REST maps it
+to 503, and here it's still `200` paired with this code.
+
+An exception with no entry in the lookup table is masked to a fixed, generic message, still fully
+logged server-side; a search-provider failure is masked the same way.
 
 There's a second kind of failure on a different path entirely. A document that doesn't parse at
 all, names a field that doesn't exist, or violates the depth or cost rules fails before any
@@ -389,10 +409,12 @@ HTTP_STATUS:400
 The error message names the nonexistent field `bogusThing`, but carries no `extensions.code` —
 that's the dividing line for whether a GraphQL error should be read by status code or by
 `extensions.code`: a request-level structural error is `400` with no code, while an exception a
-resolver throws at execution time is `200` with a code. Every REST validation message listed in
-chapter 10 and [chapter 11](11-query-advanced.md) — an unknown field, an unknown relation,
-exceeding the depth cap, an unreadable relation — is stamped `BAD_USER_INPUT` on GraphQL too,
-since both protocols share the same validator, taking the first path: `200` paired with a code.
+resolver throws at execution time is `200` with a code.
+
+Every REST validation message listed in chapter 10 and [chapter 11](11-query-advanced.md) — an
+unknown field, an unknown relation, exceeding the depth cap, an unreadable relation — is stamped
+`BAD_USER_INPUT` on GraphQL too, since both protocols share the same validator, taking the first
+path: `200` paired with a code.
 
 ## Depth caps
 

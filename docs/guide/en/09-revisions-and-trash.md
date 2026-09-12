@@ -238,11 +238,12 @@ Purge does these steps in order, inside one transaction:
 7. Delete the row itself.
 
 The items endpoint only takes the permanent path when this parameter's value is exactly `true`,
-case-insensitively: for a soft-deletable collection, `?purge=1` or a bare `?purge` is treated as
-an ordinary trash with no error. The files endpoint binds `purge` as a boolean, accepting only
-`true`/`false` (case-insensitive); a spelling like `1` is rejected with a `VALIDATION` 400 — the
-two endpoints differ in how they reject, not in what counts as purge. Restore needs the
-collection's delete permission, not its write permission.
+case-insensitively: for a soft-deletable collection, `?purge=1` or a bare `?purge` is treated as an
+ordinary trash with no error. The files endpoint binds `purge` as a boolean, accepting only
+`true`/`false` (case-insensitive); a spelling like `1` is rejected with a `VALIDATION` 400 — the two
+endpoints differ in how they reject, not in what counts as purge.
+
+Restore needs the collection's delete permission, not its write permission.
 
 Trashing something twice never errors: trashing an already-trashed item again still counts as
 success, because the row does exist — only an unknown id is a 404. `DELETE` returns 204 on

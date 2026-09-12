@@ -241,8 +241,8 @@ case-insensitive, so `api/ping` hits it just the same.
 ## GraphQL, OpenAPI and health checks
 
 The framework mounts five more routes at startup that don't belong to any controller above. Two of
-the rows below are gated by configuration rather than by a permission, so the column carries two
-phrasings the legend doesn't define:
+the rows below are gated a different way than by a permission, so the column carries two phrasings
+the legend doesn't define:
 
 | Route | Permission/gate | Purpose |
 |---|---|---|
