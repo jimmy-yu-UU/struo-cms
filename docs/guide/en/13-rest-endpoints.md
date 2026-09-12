@@ -1,12 +1,12 @@
 # 13. REST API Endpoint Reference
 
-This chapter is one table per controller, listing every endpoint's method, path and required
-permission; the shared envelope, status codes, authentication and CSRF rules are left to
+This chapter gives one table per controller, listing every endpoint's method, path and required
+permission; the shared response envelope, status codes, authentication and CSRF rules are left to
 [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
 ## How to read this chapter
 
-Below, every table's Permission column only ever uses one of these phrasings:
+In every table below, the Permission column uses only these phrasings:
 
 - **Anonymous** — no identity check at all, and no collection-level grant check either.
 - **Signed in** — only requires passing authentication with a cookie or bearer token; no specific
@@ -20,13 +20,13 @@ Below, every table's Permission column only ever uses one of these phrasings:
 
 Before any of these checks run, the route's own type constraints reject a malformed request first:
 the item endpoint's `{id}` accepts any type, every other endpoint's id segment is constrained to a
-GUID, and a revision number is constrained to an integer; when the type doesn't match, the route
-simply never matches at all, and the response is a plain 404 with an empty body, not this chapter's
-error envelope. Collection names are case-insensitive.
+GUID, and a revision number is constrained to an integer. When the type doesn't match, the route
+never matches at all: the response is a plain 404 with an empty body, not this chapter's error
+envelope. Collection names are case-insensitive.
 
 Items and files read `purge` differently: the item endpoint only recognizes `?purge=true`
 (case-insensitive), and treats every other spelling as false; the file endpoint binds `purge` as a
-bound boolean, so a misspelling is a `VALIDATION` 400 outright.
+real boolean, so a misspelling is a `VALIDATION` 400 outright.
 
 ## Items `api/items/{collection}`
 
@@ -47,11 +47,11 @@ The complete semantics of filtering, sorting, projection and pagination are left
 | `GET api/items/{collection}/{id}/revisions/{n}` | Read | Read one revision snapshot |
 | `POST api/items/{collection}/{id}/revisions/{n}/revert` | Write | Revert to a given version |
 
-Requesting a non-default `deleted=` mode needs delete permission for a single-item read too, not
-just for a list; an unknown collection is always a 404. Writing to or deleting from the four
-built-in collections `permission`, `role`, `user` and `userRole`, or any junction a fork has marked
-`AdminOnly`, additionally requires the caller to be a super-admin — a delegated collection grant
-doesn't count.
+Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read
+grant — for a single-item read as much as for a list; an unknown collection is always a 404. Writing
+to or deleting from the four built-in collections `permission`, `role`, `user` and `userRole`, or
+any junction a fork has marked `AdminOnly`, additionally requires the caller to be a super-admin — a
+delegated collection grant doesn't count.
 
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
 `?purge=`, and a revision snapshot's field shape — are left to
@@ -81,7 +81,7 @@ itself.
 |---|---|---|
 | `POST api/files` | Write | Upload a file, returns `201` |
 | `GET api/files/{id}` | Anonymous | Read file metadata |
-| `GET api/files/{id}/content` | Anonymous | Read content, with optional transform params |
+| `GET api/files/{id}/content` | Anonymous | Read content, with optional transform parameters |
 | `DELETE api/files/{id}` | Delete | Delete, trashed by default |
 | `POST api/files/{id}/restore` | Delete | Restore from trash, returns `204` |
 
@@ -96,35 +96,36 @@ is rejected outright — a missing part named `file` produces `Missing 'file' pa
 
 `GET api/files/{id}/content` streams the raw bytes directly by default, and returns `302` instead
 when configured for presigned storage; adding the transform parameters `width`, `height`, `format`,
-`fit` and `quality` usually returns the transformed bytes, but a transform failure is caught and
-falls back to the original file rather than failing the whole request — the complete transform
-rules are left to the files chapter. Delete and restore both need a `file` delete grant, and both
-return `204` or `404`.
+`fit` and `quality` usually returns the transformed bytes, but a transform failure is caught, and
+the endpoint returns the original file rather than failing the whole request — the complete
+transform rules are left to the files chapter.
+
+Delete and restore both need a `file` delete grant, and both return `204` or `404`.
 
 ## Users `api/users`
 
 | Method and path | Permission | Purpose |
 |---|---|---|
 | `POST api/users` | Super-admin | Create a user, returns `201` |
-| `PUT api/users/{id}/password` | Super-admin or the user themself | Change password, self needs current password |
+| `PUT api/users/{id}/password` | Super-admin or the user themself | Change password; self-service proves the current one |
 | `POST api/users/{id}/access-token` | Super-admin | Issue an access token, shown only once |
 | `DELETE api/users/{id}/access-token` | Super-admin | Revoke the access token |
 | `GET api/users/{id}/effective-permissions` | Super-admin | Preview effective permissions, supports `?roles=` |
 
 Creating a user returns `201`, with `Location` pointing at `/api/items/user/{id}` — that's the
 actual read route for the user row; the body is `{ id, email, name }`. A blank email, a password
-that fails the password rules, or a duplicate email (`409 CONFLICT`) are all rejected.
+the password rules reject, or a duplicate email (`409 CONFLICT`) are all rejected.
 
 Changing password is the only rate-limited endpoint besides login, partitioned by the caller's own
-user id; success revokes that user's other sessions, and a revocation failure reports
-`SESSION_REVOCATION_FAILED` rather than swallowing it silently, because the password change itself
-already succeeded. An issued token is shown only this once; only its hash is stored afterward.
-Revoking returns `204` or `404`.
+user id; success revokes that user's other sessions, and a revocation failure comes back as
+`SESSION_REVOCATION_FAILED` rather than being swallowed silently, because the password change
+itself already succeeded. An issued token is shown only this once; only its hash is stored
+afterward. Revoking returns `204` or `404`.
 
-`effective-permissions`'s `?roles=` can carry a list of role ids, to preview a role combination
-that hasn't been saved yet; passing it with an empty string previews the public role's permission
-floor, which differs from omitting the parameter entirely; a malformed or nonexistent role id is
-always rejected, never silently dropped from the count.
+The `?roles=` parameter on `effective-permissions` can carry a list of role ids, to preview a role
+combination that hasn't been saved yet; passing it with an empty string previews the public role's
+permission floor, which differs from omitting the parameter entirely. A malformed or nonexistent
+role id is always rejected, never silently dropped from the count.
 
 Listing, updating and deleting users all go through the generic item API's `user` collection — the
 create response's `Location` points exactly there.
@@ -140,8 +141,9 @@ create response's `Location` points exactly there.
 a nonexistent role is a `404`. `PUT` overwrites the whole set rather than merging row by row — a row
 where all three flags are false is never stored at all, and the response only shows the rows that
 genuinely remain; the request is rejected if the body isn't a JSON array, names a collection twice,
-or names a collection that doesn't exist, and collection-name casing is normalized. A role is itself
-an ordinary collection, so `POST /api/items/role` creates a new one.
+or names a collection that doesn't exist, and collection-name casing is normalized.
+
+A role is itself an ordinary collection, so `POST /api/items/role` creates a new one.
 
 ## Languages `api/languages`
 
@@ -187,7 +189,7 @@ per-account throttling, on by default, checked before the password is actually v
 per-caller-IP throttling, off by default. Both share the same status code, error code and message —
 only `Retry-After` differs, because the two windows aren't the same length.
 
-Login, followed by a real read of `me`:
+An actual login, followed by a read of `me`:
 
 ```text
 $ POST /api/auth/login
@@ -222,10 +224,10 @@ left to the authentication chapter.
 |---|---|---|
 | `GET api/config` | Anonymous | Read public settings, cached for 30 seconds |
 
-This endpoint allows anonymous calls, returning
-`{ oidcEnabled, brandName, brandLogoUrl, passwordMinLength }`, cached server-side for 30 seconds. If
-a stored logo file is later unpublished or deleted, this still falls back to the logo recorded in
-settings, rather than letting the anonymous login page see a dead URL.
+This endpoint allows anonymous calls. It returns
+`{ oidcEnabled, brandName, brandLogoUrl, passwordMinLength }`, and the response is cached
+server-side for 30 seconds. If a stored logo file is later unpublished or deleted, this still falls
+back to the logo recorded in settings, rather than letting the anonymous login page see a dead URL.
 
 ## Ping `api/ping`
 
@@ -238,9 +240,9 @@ case-insensitive, so `api/ping` hits it just the same.
 
 ## GraphQL, OpenAPI and health checks
 
-The framework mounts five more routes at startup that don't belong to any controller above; the
-table's Permission/gate column below uses two different gate phrasings, not the ones in the legend
-above:
+The framework mounts five more routes at startup that don't belong to any controller above. Two of
+the rows below are gated by configuration rather than by a permission, so the column carries two
+phrasings the legend doesn't define:
 
 | Route | Permission/gate | Purpose |
 |---|---|---|
@@ -258,5 +260,5 @@ two non-Production-only routes, `/openapi/v1.json` and `/scalar`, are already co
 
 ## What's next
 
-With the endpoints all listed, the next chapter shifts angle: how the same query semantics get
-expressed in GraphQL — see [Chapter 14: GraphQL API](14-graphql.md).
+With the endpoints all listed, the next chapter changes the angle: how the same query semantics
+are expressed in GraphQL — see [Chapter 14: GraphQL API](14-graphql.md).
