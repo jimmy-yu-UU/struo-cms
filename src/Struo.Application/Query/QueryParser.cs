@@ -31,7 +31,7 @@ public static class QueryParser
 
     // Unlike SplitList above, this deliberately KEEPS a blank entry (e.g. "status,,tags" ->
     // ["status", "", "tags"]) so QueryValidator's per-entry "Facet path must not be empty." check can
-    // reject it with a 400 — matching the manuals (docs/guide/{en,zh-TW}/08-query-dsl.md) and DSL
+    // reject it with a 400 — matching the manuals (docs/guide/{en,zh-TW}/10-query-basics.md) and DSL
     // spec §6. SplitList itself stays RemoveEmptyEntries-tolerant for the aggregate field lists (e.g.
     // "aggregate[sum]=price,"), which is intentionally more forgiving and must not change here.
     private static string[] SplitFacetsList(string value) =>

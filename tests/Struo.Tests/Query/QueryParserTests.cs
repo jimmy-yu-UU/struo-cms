@@ -218,7 +218,7 @@ public class QueryParserTests
     // Finding C: unlike the aggregate field-list split (which stays RemoveEmptyEntries-tolerant, see
     // Query_string_aggregate_field_list_tolerates_a_trailing_comma below), the facets comma list must
     // KEEP a blank entry so QueryValidator's "Facet path must not be empty." rejects it with a 400 —
-    // matching the manuals (docs/guide/{en,zh-TW}/08-query-dsl.md) and DSL spec §6.
+    // matching the manuals (docs/guide/{en,zh-TW}/10-query-basics.md) and DSL spec §6.
     [Fact]
     public void Query_string_facets_keeps_a_blank_entry_in_the_comma_list()
     {
