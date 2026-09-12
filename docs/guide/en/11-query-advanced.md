@@ -172,9 +172,9 @@ You can check any of this yourself: for an own-field facet, `{"value": v, "count
 
 `count` counts distinct root rows, not raw rows on the relation table.
 
-The forms that group by target id count with `COUNT(DISTINCT ...)`: a root row linked to two targets
-that happen to share a value is never counted twice. Own fields and foreign keys don't need
-`DISTINCT` — each root row only ever falls into one group anyway.
+The to-many forms group by target id and count with `COUNT(DISTINCT ...)`: a root row linked to
+two targets that happen to share a value is never counted twice. Own fields and foreign keys don't
+need `DISTINCT` — each root row only ever falls into one group anyway.
 
 The one-hop-relation-plus-leaf-field form is the exception. It runs an id/count query first, then a
 separate leaf-value query, and merges groups sharing the same value in memory — a root row linked
@@ -186,10 +186,9 @@ cap, two values that only become equal after merging can still lose one of them 
 truncation.
 
 `deleted=` only governs the root row itself: whenever a facet reaches the other end of a relation,
-it always keeps the target collection's own soft-delete floor — the narrowest setting that
-collection allows — regardless of the outer request's `deleted=`. The many-to-one foreign-key form
-is the one exception, because it counts the root row's own field — a target already sitting in the
-trash still has its id counted.
+it always keeps the target collection's own soft-delete floor regardless of the outer request's
+`deleted=`. The many-to-one foreign-key form is the one exception, because it counts the root
+row's own field — a target already sitting in the trash still has its id counted.
 
 If a fork swaps out `search=`'s candidate-id source (a search-provider topic covered in the
 extension points chapter), facets and aggregates still see the same candidate set with the
@@ -274,8 +273,11 @@ among the three has no `publishedAt`, so it doesn't affect either result.
 
 ## Errors
 
-Every facet and aggregate validation error is `BAD_USER_INPUT`/400; the error envelope's full shape
-is left to the next chapter. Below is each message and what triggers it.
+Every facet and aggregate validation error is `BAD_USER_INPUT`/400, with one exception: a
+read-grant refusal, which — like the relation paths in
+[the query basics chapter](10-query-basics.md) — is `FORBIDDEN`, or `UNAUTHORIZED` for an
+anonymous caller. The error envelope's full shape is left to the next chapter. Below is each
+message and what triggers it.
 
 - An own field that doesn't exist, or a single-segment path that doesn't resolve: `Unknown field
   'bogusField' on collection 'article'.`
@@ -292,9 +294,10 @@ is left to the next chapter. Below is each message and what triggers it.
 - A segment in the path that's a quantifier or `_junction`: `Facet paths cannot contain quantifiers
   or '_junction': '<path>'.`
 - Over a cap: `Too many facets (max 10).`, `Too many aggregate fields (max 10).`
-- The relation segment's target collection isn't readable: `Read not permitted on '<collection>'.`
-  — this check runs before the path form is parsed, so the error can't be used to infer which fields
-  an unreadable relation has.
+- The relation segment's target collection isn't readable:
+  `Read not permitted on '<collection>'.` — this one is a `FORBIDDEN`, or an `UNAUTHORIZED` for an
+  anonymous caller, not a `BAD_USER_INPUT`; this check runs before the path form is parsed, so the
+  error can't be used to infer which fields an unreadable relation has.
 - A misspelled aggregate op name: `Unknown aggregate op 'bogus'.`
 - Type checks on the JSON envelope's shape: `'facets' must be an array of strings.`, `'aggregate'
   must be an object.`, `'aggregate.<op>' must be an array of strings.`; the query string adds one

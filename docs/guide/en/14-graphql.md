@@ -10,8 +10,9 @@ fully typed API over that metadata, and nothing in the schema is hand-written SD
 generates, per collection, one object type, one list wrapper, one filter input, one create input,
 one update input, plus two root query fields and four root mutation fields.
 
-A junction collection is an ordinary collection in the schema, with its own type and mutations like
-any other: `Hidden` only affects the admin sidebar, and has no effect on schema generation.
+A junction collection is an ordinary collection in the schema, with its own type and mutations
+like any other: a collection marked `Hidden` is only kept out of the admin sidebar, and that has
+no effect on schema generation.
 
 Naming is entirely mechanical, so a fork can predict every generated name from the rule: types are
 PascalCase, fields are camelCase, and a list field's name follows a simple English pluralization
@@ -138,13 +139,13 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 ```
 
 The response shows `total` at 2, and `facets.status` reporting two `published` and one `draft` —
-facet and aggregate math is identical to [chapter 11](11-query-advanced.md).
+facet and aggregate math is identical to [Chapter 11](11-query-advanced.md).
 
 ## Filtering
 
-Filtering is the same semantics as chapter 10 — the same validator, the same filter tree, the
-same depth and condition caps, see [Querying: Filters, Sorting and Pagination](10-query-basics.md)
-— this section only lists the spelling differences:
+Filtering is the same semantics as Chapter 10 — the same validator, the same filter tree, the same
+depth and condition caps, see [Querying: Filters, Sorting and Pagination](10-query-basics.md) —
+this section only lists the spelling differences:
 
 - Operator tokens: `_eq`→`eq`, `_neq`→`neq`, `_in`→`in`, `_nin`→`nin`, `_lt`→`lt`,
   `_lte`→`lte`, `_gt`→`gt`, `_gte`→`gte`, `_contains`→`contains`,
@@ -214,9 +215,9 @@ A many-to-one relation goes the other way: it's always an argument-free object f
 one row is ever resolved; the `tags(sort: ["name"], limit: 1)` seen earlier is this argument set in
 actual use.
 
-Selecting the same relation twice at the same level — `tags` and `tagsLinks`, or a repeated alias
-— merges the nested expansion, but only the first occurrence's `filter`/`sort`/`limit`/`offset`
-counts; it isn't resolved twice, independently.
+Selecting the same relation twice at the same level — `tags` and `tagsLinks`, or a repeated
+alias — merges the nested expansion, but only the first occurrence's
+`filter`/`sort`/`limit`/`offset` counts; it isn't resolved twice, independently.
 
 ## Mutations: create, update, delete
 
@@ -249,12 +250,13 @@ included. [The REST API conventions chapter](12-rest-conventions.md)'s rule — 
 the existing value, and an explicit `null` is still rejected — applies here identically.
 
 A many-to-many relation on the create and update inputs is a plain `[ID!]` array of target ids,
-sharing the same sync logic as REST.
+sharing the same sync logic as REST. An `AdminOnly` write still requires a super-admin, and a
+delete blocked by a restrict-guarded relation still returns `CONFLICT`.
 
-An `AdminOnly` write still requires a super-admin, and a delete blocked by a restrict-guarded
-relation still returns `CONFLICT`; `delete`/`restore` against an unknown id return `false`/`null`
-rather than an error — like a query, "id doesn't exist" is data, not a fault; deleting an item
-already in the trash again is also `false`. `delete<X>(purge:)` defaults to `false`, and the trash
+`delete`/`restore` against an unknown id return `false`/`null` rather than an error — like a
+query, "id doesn't exist" is data, not a fault. Deleting an item already in the trash again still
+returns `true`: delete is idempotent, and only an unknown id returns `false` — that repeat call
+bumps no `version` and records no revision. `delete<X>(purge:)` defaults to `false`, and the trash
 and purge rules match REST.
 
 GraphQL has no counterpart to the parsing quirks of `POST .../query`, `fields=`, or `?purge=`, and
@@ -411,10 +413,11 @@ that's the dividing line for whether a GraphQL error should be read by status co
 `extensions.code`: a request-level structural error is `400` with no code, while an exception a
 resolver throws at execution time is `200` with a code.
 
-Every REST validation message listed in chapter 10 and [chapter 11](11-query-advanced.md) — an
-unknown field, an unknown relation, exceeding the depth cap, an unreadable relation — is stamped
-`BAD_USER_INPUT` on GraphQL too, since both protocols share the same validator, taking the first
-path: `200` paired with a code.
+Every REST validation message listed in Chapter 10 and [Chapter 11](11-query-advanced.md) — an
+unknown field, an unknown relation, exceeding the depth cap — is stamped `BAD_USER_INPUT` on
+GraphQL too, since both protocols share the same validator, taking the first path: `200` paired
+with a code. An unreadable relation is the exception: like the error above it carries `FORBIDDEN`,
+or `UNAUTHORIZED` for an anonymous caller, still on that same `200`-with-a-code path.
 
 ## Depth caps
 

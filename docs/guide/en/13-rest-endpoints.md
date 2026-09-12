@@ -86,8 +86,9 @@ itself.
 | `POST api/files/{id}/restore` | Delete | Restore from trash, returns `204` |
 
 Neither read action checks any grant at all: a published file is readable by anyone, and an
-unpublished file returns `404` for a caller without a `file` write grant, not `403` — even a fork
-that revokes `file`'s public read grant still leaves a published file readable by everyone.
+unpublished file is readable only by a caller who is signed in and holds a `file` write grant;
+everyone else gets a `404`, not a `403` — even a fork that revokes `file`'s public read grant
+still leaves a published file readable by everyone.
 
 Upload returns `201`, with `Location` pointing at the file just created, and a body of
 `{ id, fileName, contentType, size, width, height, status, folderId }`; a malformed multipart shape
@@ -112,7 +113,7 @@ Delete and restore both need a `file` delete grant, and both return `204` or `40
 | `DELETE api/users/{id}/access-token` | Super-admin | Revoke the access token |
 | `GET api/users/{id}/effective-permissions` | Super-admin | Preview effective permissions, supports `?roles=` |
 
-Creating a user returns `201`, with `Location` pointing at `/api/items/user/{id}` — that's the
+Creating a user returns `201`, with `Location` pointing at `api/items/user/{id}` — that's the
 actual read route for the user row; the body is `{ id, email, name }`. A blank email, a password
 the password rules reject, or a duplicate email (`409 CONFLICT`) are all rejected.
 
@@ -143,7 +144,7 @@ where all three flags are false is never stored at all, and the response only sh
 genuinely remain; the request is rejected if the body isn't a JSON array, names a collection twice,
 or names a collection that doesn't exist, and collection-name casing is normalized.
 
-A role is itself an ordinary collection, so `POST /api/items/role` creates a new one.
+A role is itself an ordinary collection, so `POST api/items/role` creates a new one.
 
 ## Languages `api/languages`
 
@@ -161,9 +162,9 @@ Returns a `{ code, name, isDefault }` array.
 
 The body is `{ brandName, logoFileId? }`, and the response is `{ brandName, brandLogoUrl }`. A blank
 or over-100-character brand name, or a logo file that's missing or not yet published, is rejected.
-Saving immediately clears the settings cache, so the very next `GET /api/config` sees the new value
+Saving immediately clears the settings cache, so the very next `GET api/config` sees the new value
 without waiting out the 30-second TTL. This is the only `PUT` here, with no matching `GET` — to read
-it back, see `GET /api/config` in the Config section below.
+it back, see `GET api/config` in the Config section below.
 
 ## Schema `api/schema`
 
@@ -197,6 +198,11 @@ body:
 {"email":"admin@admin.com","password":"admin"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
+Date: Fri, 11 Sep 2026 08:25:49 GMT
+Server: Kestrel
+Cache-Control: no-cache,no-store
+Expires: Thu, 01 Jan 1970 00:00:00 GMT
+Pragma: no-cache
 Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
@@ -240,9 +246,9 @@ case-insensitive, so `api/ping` hits it just the same.
 
 ## GraphQL, OpenAPI and health checks
 
-The framework mounts five more routes at startup that don't belong to any controller above. Two of
-the rows below are gated a different way than by a permission, so the column carries two phrasings
-the legend doesn't define:
+The framework mounts a few more routes at startup that don't belong to any controller above. Two
+of the rows below are gated a different way than by a permission, so the column carries two
+phrasings the legend doesn't define:
 
 | Route | Permission/gate | Purpose |
 |---|---|---|
