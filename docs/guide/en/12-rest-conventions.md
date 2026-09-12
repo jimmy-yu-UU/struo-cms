@@ -19,7 +19,7 @@ On failure:
 ```
 
 `details` appears only when the error code is `VALIDATION`; every other code omits the key
-entirely. `meta` follows the same rule — it appears only on a paginated list result. A single-item
+entirely. `meta` is omitted the same way: it appears only on a paginated list result. A single-item
 read, a create, and an update all omit the key outright rather than sending `null`. When `meta` is
 present, it can also carry two more keys, `facets` and `aggregate`, each showing up only when the
 request actually asked for it; the two are independent of each other.
@@ -31,8 +31,8 @@ response, the shape is identical, and the caller never has to tell them apart.
 
 A controller response whose content is already shaped like the envelope passes through untouched.
 A paginated result is wrapped into a success envelope carrying `meta`. A `201` create is re-wrapped
-with an enveloped body while the `Location` header still goes out as-is. A `204` always passes
-through untouched too, with no body at all.
+so its body sits in the envelope, and the `Location` header still goes out unchanged. A `204`
+always passes through untouched too, with no body at all.
 
 Every other error response gets a default message keyed off its status code — `400` is
 `Bad request.`, `401` is `Authentication required.`, `403` is `Forbidden.`, `404` is
@@ -61,9 +61,9 @@ The ids in the example belong to this batch of test data; your own environment w
 Notice that `Location` points at the row just created, and that `id`, `version`, and `createdAt`
 are all assigned by the server — the caller sent none of them.
 
-An exception nothing else catches is logged server-side, and the caller always gets back the same
-masked message, `An internal error occurred.` — never the exception's own content. That masking,
-and the same envelope, also cover a failure during authentication itself.
+An exception no handler catches is logged server-side, and the caller always gets back the same
+masked message, `An internal error occurred.` — never the exception's own content. A failure in
+authentication itself goes through the same masking and the same envelope.
 
 GraphQL is the one exception — see [Chapter 14: GraphQL API](14-graphql.md) for its own spelling:
 a `/graphql` response is native GraphQL shape (`data`/`errors`), not this envelope at all, unless
@@ -75,7 +75,7 @@ which case it still comes back in this chapter's envelope.
 Most reads and writes return `200`, with the body carrying the result. `201` only appears on
 three endpoints — creating an item, creating a user, and uploading a file — all three carrying a
 relative `Location` pointing at the standard read route for the row just created. `204` shows up
-in six places — deleting an item, deleting a file, restoring a file, logging out, changing
+in six places — deleting an item, deleting a file, restoring a file, logging out, changing a
 password, and revoking an access token — always with no body.
 
 Restoring an item from the trash is the one exception: `POST /api/items/{collection}/{id}/restore`
@@ -96,19 +96,19 @@ means the same thing on both protocols:
 | `CONFLICT` | 409 | Delete blocked by a relation constraint, or a plain 409 |
 | `VERSION_CONFLICT` | 409 | An optimistic-concurrency `version` mismatch |
 | `BAD_USER_INPUT` | 400 | A malformed query parameter or write body |
-| `VALIDATION` | 400 | Model binding or data-annotation validation failed |
-| `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception; the message is always masked |
+| `VALIDATION` | 400 | Model-binding or data-annotation failure |
+| `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception, message masked |
 | `TOO_MANY_REQUESTS` | 429 | Rate limiting triggered by login or password change |
-| `PAYLOAD_TOO_LARGE` | 413 | An upload's actual byte size exceeds the configured cap |
-| `INVALID_CURRENT_PASSWORD` | 400 | The current password is wrong during self-service change |
-| `NO_LOCAL_PASSWORD` | 400 | The account was created by external OIDC, no local password |
-| `ACCOUNT_INACTIVE` | 401 | The password is correct but the account is deactivated |
-| `SESSION_REVOCATION_FAILED` | 500 | Session revocation failed after password change/user delete |
-| `SEARCH_UNAVAILABLE` | 503 | The registered search provider itself failed to respond |
+| `PAYLOAD_TOO_LARGE` | 413 | Upload bytes over the configured cap |
+| `INVALID_CURRENT_PASSWORD` | 400 | Wrong current password on self-service change |
+| `NO_LOCAL_PASSWORD` | 400 | External OIDC account, no local password |
+| `ACCOUNT_INACTIVE` | 401 | Correct password, deactivated account |
+| `SESSION_REVOCATION_FAILED` | 500 | Revocation failure after password change or user delete |
+| `SEARCH_UNAVAILABLE` | 503 | Registered search provider failed to respond |
 
-- `TOO_MANY_REQUESTS` is written directly from three places, bypassing the mapping table above:
-  login throttled per account, login throttled per caller IP address, and password-change
-  throttling.
+- `TOO_MANY_REQUESTS` is written directly at three sites rather than going through the error
+  mapping above: the per-account login throttle, the per-caller-IP login throttle, and the
+  password-change throttle.
 - `SESSION_REVOCATION_FAILED` means the password change or user deletion itself already
   succeeded — only the follow-up step of revoking that user's other sessions failed, so some
   sessions may still be alive. It has no status code of its own, so it falls to 500, but the code
@@ -148,8 +148,8 @@ body:
 HTTP_STATUS:400
 ```
 
-The missing required `email` field is caught before the action ever runs; `details` carries
-exactly one entry, naming `Email`.
+The required `email` field is missing, and that is caught before the action ever runs; `details`
+carries exactly one entry, naming `Email`.
 
 An error the application layer works out for itself is a different matter — it's always
 `BAD_USER_INPUT`, with no `details` key at all; the message itself carries the whole story:
@@ -184,13 +184,13 @@ outright too, with `Request body must be a JSON object.`.
 ## Authentication: cookie or bearer
 
 A caller can authenticate with the session cookie the login endpoint sets, or with a bearer token
-issued separately for some user, carried in `Authorization: Bearer <token>`. The rule for choosing
-is simple: whenever `Authorization` starts with `Bearer `, the request is a bearer identity; only
-when it's absent does the cookie count — the decision looks only at the header, never falling
-back to try the cookie afterward.
+issued separately for some user, carried in the `Authorization: Bearer <token>` header. The rule
+for choosing is simple: whenever `Authorization` starts with `Bearer `, the request is a bearer
+identity; only when it's absent does the cookie count — the decision looks only at the header,
+never falling back to try the cookie afterward.
 
-But this rule only holds on endpoints that don't require sign-in — reads, `/graphql`, and
-`GET /api/files/{id}` and `/content`. On these, a caller sending both credentials at once still
+But this rule only holds on endpoints that don't require sign-in — reads, `/graphql`,
+`GET /api/files/{id}`, and `/content`. On these, a caller sending both credentials at once still
 gets only the bearer one honored; an invalid or malformed token drops straight to anonymous rather
 than falling back to the cookie identity. This is deliberate — better to let the request fall to
 anonymous and be denied than to quietly swap in a different identity that happens to pass.
@@ -222,12 +222,12 @@ HTTP_STATUS:401
 
 The token is shown exactly once, at the moment it's issued — only its hash is stored afterward.
 Reading with it produces the exact same `data` shape as reading with a cookie. Once revoked, that
-same token stops working immediately, not on the next request that happens to notice.
+same token stops working immediately, not only from the next request onward.
 
 ## CSRF: `X-Struo-CSRF`
 
-When calling with the cookie-carrying kind of credential, every unsafe method — anything other
-than `GET`/`HEAD`/`OPTIONS`/`TRACE` — must carry an `X-Struo-CSRF` header. The server only checks
+When a call authenticates with the session cookie, every unsafe method — anything other than
+`GET`/`HEAD`/`OPTIONS`/`TRACE` — must carry an `X-Struo-CSRF` header. The server only checks
 whether the header is present; it never looks at the value itself, so any string at all counts.
 
 That's enough to defend against CSRF on its own, resting on the browser's own rules rather than the
@@ -236,10 +236,10 @@ unless the target site's CORS policy has already allowed that origin, and StruoC
 by default, recognizing only allowlisted origins. A fork that relaxes CORS to unknown origins
 weakens this defense along with it.
 
-This check only activates when the request is actually authenticating with the cookie: calling
-with a bearer identity, or a request that carries no session cookie at all — login itself, for
-example — is exempt from this rule either way, and the bearer exemption is checked first, so a
-request carrying both is still exempt.
+This check only activates when the request is actually authenticating with the cookie: a call made
+with a bearer identity is exempt, and so is a request that carries no session cookie at all —
+login itself, for example. The bearer exemption is checked first, so a request carrying both is
+still exempt.
 
 This check covers every unsafe-method path, not just `/api/*` — `POST /graphql` is an unsafe
 method too, so a GraphQL request authenticated with a cookie needs this header whether it's a
@@ -258,11 +258,11 @@ looks only at the method, not at whether this particular call actually writes an
 
 ## Optimistic concurrency: `version`
 
-Only a collection that derives from the auditable base carries a `version` integer on its rows —
-a collection that only implements the most basic auditing interface has no such column; see
-[Chapter 11](11-query-advanced.md) for the detail. A collection with `version` returns it on
-every read and list response, and an update body can send that value back for the server to
-compare against the row's current value, rejecting the whole write on a mismatch:
+Only a collection that derives from the auditable base carries a `version` integer on its rows — a
+collection that only implements the most basic auditing interface has no such column; see [Chapter
+11](11-query-advanced.md) for the detail. A collection with `version` returns it on every read and
+list response, and an update body can send that value back for the server to compare against the
+row's current value; the write lands only when the two match, and is rejected whole when they don't:
 
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
@@ -278,18 +278,18 @@ rejected; this message is exactly what a client's "reload and try again" path is
 giving up this layer of protection while staying compatible with an older caller that doesn't
 send it.
 
-Applying a revision snapshot strips `version` first, so a stale version number sitting in the
-snapshot never causes a needless conflict (see
+A revert strips `version` from the snapshot before applying it, so a stale version number sitting
+in that snapshot never causes a needless conflict (see
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md)). `version` itself can never be
 set directly through a create or update body either — it's only ever used as the concurrency
 comparison value, never written into that column.
 
-## What a POST/PUT body can set
+## What a `POST`/`PUT` body can set
 
 Create and update bind the body only against the collection's own declared writable fields and
 its many-to-one foreign keys; every other key is silently dropped, with no error reported — that
 covers `id`, `version`, and any system-managed field. Neither create nor update lets the caller
-choose its own `id`.
+pick the item's `id`.
 
 Read-only and system fields are also cleared back to empty after binding, so even a body that
 deliberately reuses one of those key names to smuggle in a value can't reach that field.
@@ -302,8 +302,8 @@ A `Json`-typed field takes its value directly from the body's raw JSON text and 
 shape. A non-translatable rich-text field is sanitized before validation ever runs; the length cap
 measures the sanitized HTML, and the sanitized HTML is what gets stored too.
 
-An update only overwrites keys that genuinely appear in the body — whether its own field or a
-many-to-one foreign key — and whether a key appears is checked case-insensitively. A partial `PUT`
+An update only overwrites keys that genuinely appear in the body — the collection's own fields and
+its many-to-one foreign keys alike — and that presence check is case-insensitive. A partial `PUT`
 therefore never accidentally clears a server-managed field the caller never sent. A few common body
 mistakes and the messages they actually produce:
 
@@ -331,8 +331,8 @@ all follow exactly the same general rules as any other collection here.
 
 A bare id or a payload-carrying object, the dedup rule for a mixed array, an object outranking a
 bare id, and the junction's own write grant are all covered in
-[Chapter 8: Relations](08-relations.md); this section only looks at how it appears written into
-one `PUT` body.
+[Chapter 8: Relations](08-relations.md); this section only looks at what a many-to-many value
+looks like written into a `PUT` body.
 
 Here is an actual write and response, with one bare id and one payload-carrying object in the
 `tags` array:
@@ -371,8 +371,8 @@ HTTP_STATUS:400
 
 The message doesn't distinguish which element is at fault — it only says this relation's ids have
 a problem. An object element sent to a relation that does declare payload, but with no `id` key,
-gets a different message instead: `Each object in '<relation>' must carry an 'id'.`, and this
-check runs before any payload value gets bound too.
+gets a different message instead: `Each object in '<relation>' must carry an 'id'.` That check,
+too, runs before any payload value is bound.
 
 Every target id must genuinely exist; one that doesn't produces
 `One or more ids in '<relation>' do not exist in '<target>'.`. A revert is the one exception — it
