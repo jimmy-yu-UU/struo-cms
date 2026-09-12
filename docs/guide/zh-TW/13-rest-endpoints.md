@@ -73,9 +73,9 @@ HTTP_STATUS:200
 | `DELETE api/files/{id}` | 刪 | 刪除，預設丟進垃圾桶 |
 | `POST api/files/{id}/restore` | 刪 | 從垃圾桶復原，回 204 |
 
-兩個讀取動作都不檢查任何授權：已發布的檔案任何人都讀得到，未發布的檔案則對沒有 `file` 寫入授權
-的呼叫端一律回 404，不是 403——即使一個 fork 收回 `file` 的公開讀取授權，已發布的檔案依然人人可
-讀。
+兩個讀取動作都不檢查任何授權：已發布的檔案任何人都讀得到，未發布的檔案則只有已登入且具備 `file`
+寫入授權的呼叫端才讀得到，其餘一律回 404，不是 403——即使一個 fork 收回 `file` 的公開讀取授權，已
+發布的檔案依然人人可讀。
 
 上傳回 201，`Location` 指向剛建立的檔案，body 是 `{ id, fileName, contentType, size, width,
 height, status, folderId }`；multipart 形狀本身不對會被直接擋下——缺一個叫 `file` 的分段回
@@ -97,7 +97,7 @@ height, status, folderId }`；multipart 形狀本身不對會被直接擋下—�
 | `DELETE api/users/{id}/access-token` | 超級管理員 | 撤銷存取權杖 |
 | `GET api/users/{id}/effective-permissions` | 超級管理員 | 預覽有效權限，支援 `?roles=` |
 
-建立使用者回 `201`，`Location` 指向 `/api/items/user/{id}`——那裡才是使用者列真正的讀取路由；
+建立使用者回 `201`，`Location` 指向 `api/items/user/{id}`——那裡才是使用者列真正的讀取路由；
 body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 email（`409 CONFLICT`）都會被擋
 下。
 
@@ -121,7 +121,7 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 `GET` 依集合名稱排序回傳 `{ collection, canRead, canWrite, canDelete }` 陣列，角色不存在就是
 404。`PUT` 是整組覆寫，不是逐筆合併——三個旗標都是 false 的那一列根本不會被存，回應也只會看到真
 的還留著的列；body 如果不是 JSON 陣列、有重複集合、或點名不存在的集合，都會被擋下，集合名稱的大
-小寫會被統一。角色本身是一般集合，`POST /api/items/role` 就能建立一筆新角色。
+小寫會被統一。角色本身是一般集合，`POST api/items/role` 就能建立一筆新角色。
 
 ## Languages `api/languages`
 
@@ -139,8 +139,8 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 
 body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`。空白或超過 100 字元
 的品牌名稱、找不到或還沒發布的 logo 檔案，都會被擋下。存檔會立刻清掉設定快取，下一次
-`GET /api/config` 不必等滿 30 秒的 TTL 就能看到新值。這裡只有這一個 `PUT`，沒有對應的 `GET`——要
-讀回來看 `GET /api/config`，見下面 Config 一節。
+`GET api/config` 不必等滿 30 秒的 TTL 就能看到新值。這裡只有這一個 `PUT`，沒有對應的 `GET`——要
+讀回來看 `GET api/config`，見下面 Config 一節。
 
 ## Schema `api/schema`
 
@@ -211,7 +211,7 @@ HTTP_STATUS:200
 
 ## GraphQL、OpenAPI 與健康檢查
 
-框架啟動時另外掛了五個路由，不屬於上面任何一個控制器；下表的「權限／閘道」欄改用兩種閘道說法，
+框架啟動時另外還有幾個路由，不屬於上面任何一個控制器；下表的「權限／閘道」欄改用兩種閘道說法，
 不是上面清單那幾種：
 
 | 路由 | 權限／閘道 | 用途 |

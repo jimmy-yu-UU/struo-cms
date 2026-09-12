@@ -102,9 +102,9 @@ query { article(id: "01a08f92-3a18-7c5d-99a3-5b14cd1279ea") { id status version 
 ```
 
 `article` 只帶 `id` 就找回同一筆項目；`category` 是多對一，直接是一個物件、沒有任何引數；`tags` 是多
-對多，帶了自己的 `sort: ["name"], limit: 1`，只回一筆。`translations` 陣列的讀取形狀，本章開頭「
-Schema 從 metadata 產生」一節已經說明過。清單欄位一次帶齊 `sort`、`limit`、`facets`、`aggregate` 也
-一樣合法：
+對多，帶了自己的 `sort: ["name"], limit: 1`，只回一筆。`translations` 陣列的讀取形狀，
+本章開頭「Schema 從 metadata 產生」一節已經說明過。清單欄位一次帶齊 `sort`、`limit`、`facets`、
+`aggregate` 也一樣合法：
 
 ```graphql
 query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"], limit: 1, facets: ["status"], aggregate: { count: ["publishedAt"] }) { total facets { field values { value count } } aggregate } }
