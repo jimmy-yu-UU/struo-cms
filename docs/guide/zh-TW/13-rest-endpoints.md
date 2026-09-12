@@ -173,6 +173,11 @@ body:
 {"email":"admin@admin.com","password":"admin"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
+Date: Fri, 11 Sep 2026 08:25:49 GMT
+Server: Kestrel
+Cache-Control: no-cache,no-store
+Expires: Thu, 01 Jan 1970 00:00:00 GMT
+Pragma: no-cache
 Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff

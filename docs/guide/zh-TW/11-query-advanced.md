@@ -227,8 +227,9 @@ HTTP_STATUS:200
 
 ## 錯誤
 
-facet 跟彙總的驗證錯誤都走 `BAD_USER_INPUT`／400，信封的完整形狀留給下一章；以下是各自的訊息跟
-觸發條件。
+facet 跟彙總的驗證錯誤走 `BAD_USER_INPUT`／400，只有讀取授權被擋下的那一項例外——它跟
+[第 10 章](10-query-basics.md)的關聯路徑一樣是 `FORBIDDEN`，匿名呼叫端則是 `UNAUTHORIZED`；信封的
+完整形狀留給下一章。以下是各自的訊息跟觸發條件。
 
 - 一個不存在的自有欄位，或一條解析不出來的單段路徑：`Unknown field 'bogusField' on collection
   'article'.`
@@ -242,8 +243,9 @@ facet 跟彙總的驗證錯誤都走 `BAD_USER_INPUT`／400，信封的完整形
 - 路徑裡有一段是量詞或 `_junction`：`Facet paths cannot contain quantifiers or '_junction':
   '<path>'.`
 - 超過上限：`Too many facets (max 10).`、`Too many aggregate fields (max 10).`
-- 關聯那一段的目標集合讀不到：`Read not permitted on '<collection>'.`——這個檢查先於路徑形態解
-  析，一個讀不到的關聯底下有哪些欄位不會被反推出來。
+- 關聯那一段的目標集合讀不到：`Read not permitted on '<collection>'.`——這一項是 `FORBIDDEN`，匿名
+  呼叫端則是 `UNAUTHORIZED`，不是 `BAD_USER_INPUT`；這個檢查先於路徑形態解析，一個讀不到的關聯底下
+  有哪些欄位不會被反推出來。
 - 彙總 op 名稱打錯：`Unknown aggregate op 'bogus'.`
 - 封裝形式的型別檢查：`'facets' must be an array of strings.`、`'aggregate' must be an
   object.`、`'aggregate.<op>' must be an array of strings.`；查詢字串上多一種

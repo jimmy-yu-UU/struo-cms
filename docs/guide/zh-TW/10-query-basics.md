@@ -98,6 +98,7 @@ HTTP_STATUS:200
 **型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——
 `Guid` 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`bool`、
 `DateTime`、`DateTimeOffset`、`decimal`、`double`、`float`，`string` 與未涵蓋的型別維持文字比較。
+
 值一律用不隨地區變動的格式送出，主機的預設文化特性也在啟動時固定成 invariant，兩邊才不會對同一個
 小數或日期讀出不同結果；運算子與欄位介面則互不相干，對一個 `Text` 欄位下 `_gt` 一樣會被接受，當成
 文字比較。
