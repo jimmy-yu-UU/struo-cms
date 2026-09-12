@@ -7,7 +7,8 @@
 GraphQL 跟 REST 讀的是同一份啟動時就快取好的集合 metadata，是第二套完整型別化的 API；schema 沒有任
 何一份手寫的 SDL。啟動邏輯逐集合產生一個物件型別、一個清單包裝、一個篩選輸入、一個建立輸入、一個更
 新輸入，外加兩個 root query 欄位與四個 root mutation 欄位。junction collection 在 schema 裡是一般
-的集合，跟其他集合一樣有自己的型別與 mutation：`Hidden` 只影響後台側邊欄，不影響 schema 產生。
+的集合，跟其他集合一樣有自己的型別與 mutation：集合層級的 `Hidden` 只影響後台側邊欄，不影響 schema
+產生。
 
 命名完全是機械式的，一個 fork 可以照規則預測每個產生出來的名稱：型別用 PascalCase，欄位用
 camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `y` 變 `ies`；`s`／`x`／`z`／`ch`／`sh` 結尾
@@ -198,10 +199,12 @@ HotChocolate 會把每個宣告出來的輸入欄位都補上 `null`，不管呼
 全一樣。
 
 多對多關聯在建立與更新輸入上是一個純 `[ID!]` 的目標 id 陣列，跟 REST 共用同一套同步邏輯。
-`AdminOnly` 的寫入一樣要求超級管理員，被限制式關聯擋下的刪除一樣回 `CONFLICT`；`delete`／`restore`
-對一個未知 id 回 `false`／`null`，不是拋錯——跟查詢一樣，「id 不存在」是資料，不是故障；已經在垃圾
-桶裡的項目再刪一次也是 `false`。`delete<X>(purge:)` 預設是 `false`，垃圾桶與清除的規則跟 REST 一
-致。
+`AdminOnly` 的寫入一樣要求超級管理員，被限制式關聯擋下的刪除一樣回 `CONFLICT`。
+
+`delete`／`restore` 對一個未知 id 回 `false`／`null`，不是拋錯——跟查詢一樣，「id 不存在」是資料，
+不是故障；已經在垃圾桶裡的項目再刪一次回的仍然是 `true`，刪除是等冪的，只有未知 id 才回 `false`，
+而那一次不會再動 `version`，也不會再記一筆版本紀錄。`delete<X>(purge:)` 預設是 `false`，垃圾桶與清
+除的規則跟 REST 一致。
 
 GraphQL 沒有 `POST .../query`、`fields=`、`?purge=` 這些解析怪癖的對應，也沒有檔案端點：檔案上傳只
 能走 REST。
@@ -334,9 +337,12 @@ HTTP_STATUS:400
 
 錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——這是判斷一則 GraphQL 錯誤該看狀
 態碼還是該看 `extensions.code` 的分界：request 層級的結構性錯誤是 `400` 沒有代碼，resolver 執行時
-丟出的例外是 `200` 配代碼。第 10 章與[第 11 章](11-query-advanced.md)列的每一句 REST 驗證訊息——未
-知欄位、未知關聯、超出深度、讀不到的關聯——因為兩個協定共用同一個驗證器，在 GraphQL 上一律標成
-`BAD_USER_INPUT`，走的是第一種、`200` 配代碼的路。
+丟出的例外是 `200` 配代碼。
+
+第 10 章與[第 11 章](11-query-advanced.md)列的 REST 驗證訊息——未知欄位、未知關聯、超出深度——因為兩
+個協定共用同一個驗證器，在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配代碼的路。讀
+不到的關聯是例外：它跟上面那則錯誤一樣是 `FORBIDDEN`，匿名呼叫端是 `UNAUTHORIZED`，但同樣走 `200`
+配代碼這條路。
 
 ## 深度上限
 
