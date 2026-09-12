@@ -93,7 +93,7 @@ means the same thing on both protocols:
 | `UNAUTHORIZED` | 401 | No or invalid credentials; a denial while unauthenticated |
 | `FORBIDDEN` | 403 | Authenticated but not permitted; a missing CSRF header |
 | `NOT_FOUND` | 404 | An unknown collection, a missing file, or another plain 404 |
-| `CONFLICT` | 409 | Delete blocked by a relation constraint, or a plain 409 |
+| `CONFLICT` | 409 | Relation-blocked delete, duplicate email, or a plain 409 |
 | `VERSION_CONFLICT` | 409 | An optimistic-concurrency `version` mismatch |
 | `BAD_USER_INPUT` | 400 | A malformed query parameter or write body |
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
@@ -236,10 +236,9 @@ unless the target site's CORS policy has already allowed that origin, and StruoC
 by default, recognizing only allowlisted origins. A fork that relaxes CORS to unknown origins
 weakens this defense along with it.
 
-This check only activates when the request is actually authenticating with the cookie: a call made
-with a bearer identity is exempt, and so is a request that carries no session cookie at all —
-login itself, for example. The bearer exemption is checked first, so a request carrying both is
-still exempt.
+This check only activates when the request carries the session cookie: a call carrying a bearer
+header is exempt, and so is a request that carries no session cookie at all — login itself, for
+example. The bearer exemption is checked first, so a request carrying both is still exempt.
 
 This check covers every unsafe-method path, not just `/api/*` — `POST /graphql` is an unsafe
 method too, so a GraphQL request authenticated with a cookie needs this header whether it's a
@@ -363,8 +362,8 @@ The message names both the relation and that target's id, so the frontend knows 
 to flag. A key inside the object that isn't declared as this relation's payload, along with the
 junction's own foreign keys and structural fields, is always ignored.
 
-An object element sent to a relation that has no declared payload, or an invalid shape in the array
-— a boolean, an array, `null`, a non-integer — always gets the same general-purpose message:
+An object element sent to a relation that has no declared payload, or an invalid shape in the
+array — a boolean, an array, `null`, a non-integer — always gets the same general-purpose message:
 
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}
