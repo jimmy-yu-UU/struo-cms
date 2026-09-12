@@ -188,8 +188,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
 
 ## Playbook 3: Add an endpoint
 
-Background: `docs/guide/en/09-rest-api.md` (envelope, error codes, CSRF, status conventions),
-`docs/guide/en/12-auth-and-rbac.md` (authentication schemes and permission checks).
+Background: `docs/guide/en/12-rest-conventions.md` (envelope, error codes, CSRF, status
+conventions), `docs/guide/en/12-auth-and-rbac.md` (authentication schemes and permission checks).
 
 1. **Add a controller** under `src/Struo.Api/Controllers/`, following the shipped pattern (e.g.
    `src/Struo.Api/Controllers/PingController.cs` for the minimal shape,
