@@ -202,7 +202,7 @@ body:
 HTTP_STATUS:200
 ```
 
-`total` is 1, the same quantifier query as chapter 10's; `tagsLinks` returns both `node` (the target
+`total` is 1, the same quantifier query as Chapter 10's; `tagsLinks` returns both `node` (the target
 itself) and `junction` (the link's own payload).
 
 ## Nested to-many list arguments
