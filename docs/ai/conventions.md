@@ -280,11 +280,12 @@ A many-to-many relation's write-side array element (REST body key, or GraphQL `<
 `MutationResolvers.FoldLinks` folds it into the REST shape) is one of two forms: a **bare id** (link
 this target, leave its junction row's payload untouched) or an **object** `{ id, ...payload }` (link
 this target and merge the named payload fields into its junction row).
-`docs/guide/en/12-rest-conventions.md`, "The many-to-many write shape", states the full precedence
-rule for when the same id appears more than
-once in one array (an object always outranks a bare id; between two objects the later one wins; order
-of first appearance is the sort order) and is the canonical source for that rule — this section only
-names where the code that enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
+`docs/guide/en/08-relations.md`, "Junction entities and payloads", states the full precedence rule
+for when the same id appears more than once in one array (an object always outranks a bare id;
+between two objects the later one wins; order of first appearance is the sort order) and is the
+canonical source for that rule; `docs/guide/en/12-rest-conventions.md`, "The many-to-many write
+shape", shows the same value written into a `PUT` body. This section only names where the code that
+enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
 
 ## File organization
 
