@@ -104,7 +104,7 @@ means the same thing on both protocols:
 | `NO_LOCAL_PASSWORD` | 400 | External OIDC account, no local password |
 | `ACCOUNT_INACTIVE` | 401 | Correct password, deactivated account |
 | `SESSION_REVOCATION_FAILED` | 500 | Revocation failure after password change or user delete |
-| `SEARCH_UNAVAILABLE` | 503 | Registered search provider failed to respond |
+| `SEARCH_UNAVAILABLE` | 503 | The registered search provider's own failure to respond |
 
 - `TOO_MANY_REQUESTS` is written directly at three sites rather than going through the error
   mapping above: the per-account login throttle, the per-caller-IP login throttle, and the
@@ -259,10 +259,12 @@ looks only at the method, not at whether this particular call actually writes an
 ## Optimistic concurrency: `version`
 
 Only a collection that derives from the auditable base carries a `version` integer on its rows — a
-collection that only implements the most basic auditing interface has no such column; see [Chapter
-11](11-query-advanced.md) for the detail. A collection with `version` returns it on every read and
-list response, and an update body can send that value back for the server to compare against the
-row's current value; the write lands only when the two match, and is rejected whole when they don't:
+collection that only implements the most basic auditing interface has no such column; see
+[Chapter 11](11-query-advanced.md) for the detail.
+
+A collection with `version` returns it on every read and list response, and an update body can send
+that value back for the server to compare against the row's current value; the write lands only when
+the two match, and is rejected whole when they don't:
 
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
