@@ -91,7 +91,7 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 
 ### 側欄圖示怎麼填
 
-`Icon` 的值要對得上前端固定對照表 `frontend/src/lib/icons.ts` 裡的 `ICON_MAP`；能用的名稱
+`Icon` 的值會拿去查前端固定對照表 `frontend/src/lib/icons.ts` 裡的 `ICON_MAP`；能用的名稱
 就是這張表目前有的鍵，例如 `article`、`tag`、`folder`、`megaphone`、`image`、`file`、
 `user`、`table`。
 
