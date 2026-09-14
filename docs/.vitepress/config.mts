@@ -2,6 +2,7 @@ import { readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
+import { firstLink } from '../scripts/lib/sidebar-groups.mjs'
 import { chapterSidebar } from './sidebar.mts'
 
 const GUIDE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
@@ -28,12 +29,15 @@ const LOCALE_METADATA: Record<string, { label: string; lang: string }> = {
 
 // The link is the sidebar's own first entry, not a hand-copied filename: a
 // renamed chapter 1 would otherwise break the locale switcher without
-// ignoreDeadLinks ever seeing it, since this is config, not content.
+// ignoreDeadLinks ever seeing it, since this is config, not content. Reading
+// it via firstLink (rather than sidebar[0].link) means it still works once
+// the sidebar's first top-level entry is the legacy group rather than a
+// chapter — it descends into that group's own first item instead.
 function localeConfig(key: string) {
   const sidebar = chapterSidebar(key)
   return {
     ...LOCALE_METADATA[key],
-    link: sidebar[0].link,
+    link: firstLink(sidebar),
     themeConfig: { sidebar },
   }
 }
