@@ -81,7 +81,7 @@ reverse, forcing a column to be non-nullable, needs an explicit `[SugarColumn(Is
 | Member | Type | Default | Effect |
 |---|---|---|---|
 | `Label` | `string` | constructor argument | sidebar and page title |
-| `Icon` | `string?` | `null` | sidebar icon |
+| `Icon` | `string?` | `null` | sidebar icon, names below |
 | `Group` | `string?` | `null` | sidebar navigation group |
 | `DefaultDisplayField` | `string?` | `null` | item display title |
 | `AdminOnly` | `bool` | `false` | generic CRUD writes always require super-admin |
@@ -97,6 +97,16 @@ whatever RBAC grants the collection has; reads still follow ordinary RBAC.
 Soft delete and revisions are two independent opt-ins: soft delete comes from the collection
 implementing `ISoftDeletable`, and revisions come from setting `Revisions = true` on
 `[CmsCollection]`.
+
+### Choosing a sidebar icon
+
+The `Icon` value must match a key in the frontend's fixed lookup table, `ICON_MAP` in
+`frontend/src/lib/icons.ts`. The names available today include `article`, `tag`, `folder`,
+`megaphone`, `image`, `file`, `user`, and `table`.
+
+A name the table doesn't have, or no name at all, falls back to a generic file icon — the sidebar
+never breaks over a typo. Adding an icon the table doesn't have means adding a key to `ICON_MAP` —
+a frontend change, part of admin SPA customization.
 
 ## `[CmsField]` options
 
@@ -179,11 +189,12 @@ field with no options declared; `Article.Regions` and `Article.Audiences` both h
 
 ## Where content projects live and how they are found
 
-Your content assembly must be listed in `Struo:ContentAssemblies`, and the API host project must
-carry a `ProjectReference` to it — both are needed, and a DLL merely sitting alongside the host
-doesn't get loaded. An entry that fails to resolve fails startup with a message naming that entry
-(see [Chapter 4: Configuration Reference](04-configuration.md)). Content libraries live outside
-`src/Struo.*`.
+The scan always covers the API host project itself and the framework's own assembly — content
+classes can live directly in the host project. A separate class library instead needs a
+`ProjectReference` from the host, plus its assembly name in `Struo:ContentAssemblies`; a DLL merely
+sitting alongside the host doesn't get loaded. Either way works; where the classes live is your
+choice. An entry that fails to resolve fails startup with a message naming it (see
+[Chapter 4: Configuration Reference](04-configuration.md)).
 
 A content project is an ordinary class library. At minimum it needs a reference to `Struo.Domain`
 (for the attributes and enums) and the `SqlSugarCore` package (so `[SugarTable]`/`[SugarColumn]`
@@ -209,7 +220,8 @@ full semantics and defaults of both keys are in
 
 Adding a collection, in order:
 
-1. Put the content library outside `src/Struo.*`.
+1. Decide where the content classes live: in the API host project itself, or in a class library the
+   host references.
 2. Put `[SugarTable]` and `[CmsCollection]` on the entity, with a primary key carrying
    `[SugarColumn(IsPrimaryKey = true)]`.
 3. Add `[CmsField]` to every property you want to expose, and `[CmsOptions]` on any interface that
@@ -217,7 +229,8 @@ Adding a collection, in order:
 4. Implement `ISoftDeletable`, or set `Revisions = true`, if you need them.
 5. Add `[CmsRelation]` and `[Navigate]` if you have relations (see
    [Chapter 8: Relations](08-relations.md)).
-6. Add the project reference, and add the assembly to `Struo:ContentAssemblies`.
+6. Add the project reference, and add the assembly to `Struo:ContentAssemblies` (only for a
+   separate class library).
 7. Restart the process so the scan picks up the new collection.
 8. Grant RBAC permissions, or only a super-admin can use it.
 
