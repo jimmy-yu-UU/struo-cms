@@ -49,9 +49,10 @@ rejects what fails.
   `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
   whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. It
   finds tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
-  indentation hides a table from it. The sixteen pre-rewrite chapters are allowlisted by filename
-  inside that script, and they and both READMEs predate these rules; the rewrite replaces them batch
-  by batch.
+  indentation hides a table from it. The sixteen pre-rewrite chapters are listed once, by filename,
+  in `docs/scripts/lib/legacy-chapters.mjs`, shared by the width guard (exemption) and the sidebar
+  (a collapsed "legacy" group); they and both READMEs predate these rules, and both usages go away
+  with the files in batch 5.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
   capture it from a real run. Never hand-edit one.
 - **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
