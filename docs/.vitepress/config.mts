@@ -30,9 +30,9 @@ const LOCALE_METADATA: Record<string, { label: string; lang: string }> = {
 // The link is the sidebar's own first entry, not a hand-copied filename: a
 // renamed chapter 1 would otherwise break the locale switcher without
 // ignoreDeadLinks ever seeing it, since this is config, not content. Reading
-// it via firstLink (rather than sidebar[0].link) means it still works once
-// the sidebar's first top-level entry is the legacy group rather than a
-// chapter — it descends into that group's own first item instead.
+// it via firstLink rather than sidebar[0].link keeps this correct whatever
+// shape chapterSidebar returns — a flat link or a group — so the two files
+// can change independently.
 function localeConfig(key: string) {
   const sidebar = chapterSidebar(key)
   return {
