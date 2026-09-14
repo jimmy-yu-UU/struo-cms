@@ -100,9 +100,9 @@ implementing `ISoftDeletable`, and revisions come from setting `Revisions = true
 
 ### Choosing a sidebar icon
 
-The `Icon` value must match a key in the frontend's fixed lookup table, `ICON_MAP` in
-`frontend/src/lib/icons.ts`. The names available today include `article`, `tag`, `folder`,
-`megaphone`, `image`, `file`, `user`, and `table`.
+The value is looked up in `ICON_MAP`, the fixed table in `frontend/src/lib/icons.ts`; the names
+available today include `article`, `tag`, `folder`, `megaphone`, `image`, `file`, `user`, and
+`table`.
 
 A name the table doesn't have, or no name at all, falls back to a generic file icon — the sidebar
 never breaks over a typo. Adding an icon the table doesn't have means adding a key to `ICON_MAP` —
@@ -192,9 +192,10 @@ field with no options declared; `Article.Regions` and `Article.Audiences` both h
 The scan always covers the API host project itself and the framework's own assembly — content
 classes can live directly in the host project. A separate class library instead needs a
 `ProjectReference` from the host, plus its assembly name in `Struo:ContentAssemblies`; a DLL merely
-sitting alongside the host doesn't get loaded. Either way works; where the classes live is your
-choice. An entry that fails to resolve fails startup with a message naming it (see
-[Chapter 4: Configuration Reference](04-configuration.md)).
+sitting alongside the host doesn't get loaded.
+
+Either way works; where the classes live is your choice. An entry that fails to resolve fails
+startup with a message naming it (see [Chapter 4: Configuration Reference](04-configuration.md)).
 
 A content project is an ordinary class library. At minimum it needs a reference to `Struo.Domain`
 (for the attributes and enums) and the `SqlSugarCore` package (so `[SugarTable]`/`[SugarColumn]`
