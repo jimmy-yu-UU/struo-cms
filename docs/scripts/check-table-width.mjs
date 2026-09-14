@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { LEGACY_CHAPTERS } from './lib/legacy-chapters.mjs'
 import { LIMITS, checkTables } from './lib/markdown-tables.mjs'
 
 const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
@@ -47,30 +48,12 @@ try {
   process.exit(1)
 }
 
-// The manual is being rewritten in batches (2026-09-10 rewrite spec). The
-// sixteen chapters below predate the width rule and are replaced batch by
-// batch; until batch 5 deletes them they would fail this check in every
-// locale. This is the ONLY exemption, it is by filename so it applies to both
-// locales at once, and it is removed together with the files. Do not add to it:
-// a new chapter that does not fit gets rewritten, not listed here.
-const LEGACY_CHAPTERS = new Set([
-  '01-introduction-and-architecture.md',
-  '02-getting-started.md',
-  '03-configuration-reference.md',
-  '04-defining-a-collection.md',
-  '05-field-types.md',
-  '06-internationalization.md',
-  '07-relations.md',
-  '08-query-dsl.md',
-  '09-rest-api.md',
-  '10-graphql-api.md',
-  '11-files-and-media.md',
-  '12-auth-and-rbac.md',
-  '13-revisions-and-soft-delete.md',
-  '14-admin-spa-customization.md',
-  '15-deployment-operations-testing.md',
-  '16-sample-walkthrough.md',
-])
+// The sixteen pre-rewrite chapters (docs/scripts/lib/legacy-chapters.mjs) are
+// exempted from this check until batch 5 deletes them; see that module for
+// why and for the other consumer (the sidebar's collapsed legacy group).
+// This is the ONLY exemption, it is by filename so it applies to both
+// locales at once. Do not add to it: a new chapter that does not fit gets
+// rewritten, not listed here.
 
 // Every markdown file under guide/, at any depth, forward-slash relative
 // paths so messages read the same on every platform. Dot-prefixed path
