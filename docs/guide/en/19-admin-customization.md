@@ -128,10 +128,10 @@ Adding a key nobody uses turns the admin SPA's test suite red.
 `frontend/src/components/ui/` is vendored, generated, read-only output — 33 component directories,
 `button`, `dialog`, `table`, `select`, and `sidebar` among them.
 
-Don't edit its files, and don't reach in with a deep selector: Vue's scope id lands only on a child
-component's **root** element, never on the nodes it renders internally, so a deep selector never
-reaches them; the one path that does is the token layer, because those internal nodes are already
-reading the same custom properties.
+Don't edit the files inside `ui/`, and don't reach in with a deep selector: Vue's scope id lands
+only on a child component's **root** element, never on the nodes it renders internally, so a deep
+selector never reaches them; the one path that does is the token layer, because those internal
+nodes are already reading the same custom properties.
 
 Recoloring always moves one layer outward, in this order: the token layer, for anything already
 exposed as a semantic custom property, which changes every place that uses it in one move; the
@@ -141,7 +141,7 @@ of your own, for whatever neither of the first two can express.
 Every vendored component that renders styling merges its own `class` prop into a shared class
 helper, so passing extra utility classes at the call site changes only that one usage, without
 touching `ui/`. A wrapper component's own scoped style is likewise unlayered, which makes it a
-reliable place to override (see the previous section for why).
+reliable place to override (see "Design tokens and the theme" for why).
 
 Avoid `!important`: it wins this one override, but leaves the next one — yours or a fork's —
 fighting the same battle from a worse position.
@@ -249,7 +249,7 @@ with top-level namespaces by screen (`nav`, `login`, `itemForm`, `settings`, and
 further `richtext` sub-namespace under `fields` holding the editor toolbar's and menus' own labels.
 
 The language in effect is decided before any store exists: `struo.uiLocale` from `localStorage`, or
-a hard-coded default when it's absent; a Pinia store takes over from there, its setter switches the
+a hard-coded default when it's absent. A Pinia store takes over from there. Its setter switches the
 i18n locale, updates `<html>`'s `lang` attribute, and persists the choice. `UiLanguageSwitcher`, in
 the app shell, is the only UI component that calls this setter; its own two options are translated
 strings too, so every catalog needs its own copy of the language list, itself included.
