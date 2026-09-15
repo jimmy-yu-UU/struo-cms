@@ -73,7 +73,7 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 | 成員 | 型別 | 預設 | 作用 |
 |---|---|---|---|
 | `Label` | `string` | 建構子參數 | 側欄與頁面標題 |
-| `Icon` | `string?` | `null` | 側欄圖示 |
+| `Icon` | `string?` | `null` | 側欄圖示，名稱見下 |
 | `Group` | `string?` | `null` | 側欄導覽分組 |
 | `DefaultDisplayField` | `string?` | `null` | 項目顯示標題 |
 | `AdminOnly` | `bool` | `false` | 一般 CRUD 寫入一律要求 super-admin |
@@ -88,6 +88,15 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 
 軟刪除和版本紀錄是兩個各自獨立的開關：軟刪除讓集合實作 `ISoftDeletable`，版本紀錄在
 `[CmsCollection]` 上設 `Revisions = true`。
+
+### 側欄圖示怎麼填
+
+`Icon` 的值會拿去查前端固定對照表 `frontend/src/lib/icons.ts` 裡的 `ICON_MAP`；能用的名稱
+就是這張表目前有的鍵，例如 `article`、`tag`、`folder`、`megaphone`、`image`、`file`、
+`user`、`table`。
+
+查不到的名稱、或整個沒填，畫面一律退回通用的檔案圖示，側欄不會因此壞掉。想用表裡沒有的圖
+示，得先在 `ICON_MAP` 加一個新的鍵——這是前端要改的地方，屬於管理後台 SPA 客製化的範圍。
 
 ## `[CmsField]` 選項
 
@@ -163,10 +172,11 @@ SEO 欄位用 `Group = "SEO"`。
 
 ## 內容專案放哪、怎麼被找到
 
-你的內容組件要列進 `Struo:ContentAssemblies`，而且 API 主機專案要有指到它的
-`ProjectReference`——兩者缺一不可，單純把 DLL 放在旁邊不會被載入。解析不到就啟動失敗，訊息
-會點名那個項目（見[第 4 章：設定參考](04-configuration.md)）。內容程式庫放在 `src/Struo.*`
-之外。
+掃描一律涵蓋 API 專案（`Struo.Api`）本身與框架自己的組件，不需要任何設定——內容類別可以直
+接寫在 API 專案裡。想放進一個獨立的類別庫也行，API 專案要有指到它的 `ProjectReference`，
+而且要把組件名稱列進 `Struo:ContentAssemblies`——兩者缺一不可，單純把 DLL 放在旁邊不會被載
+入。放 API 專案裡還是獨立類別庫，選哪一種是你的事。解析不到列出的組件就啟動失敗，訊息會點
+名那個項目（見[第 4 章：設定參考](04-configuration.md)）。
 
 內容專案是一個普通的類別庫，最低限度只需要參照 `Struo.Domain`（取得 attribute 與列舉）與
 `SqlSugarCore` 套件（讓 `[SugarTable]`／`[SugarColumn]` 能用）。掃描只在啟動時跑一次，加了新
@@ -188,13 +198,13 @@ CodeFirst 會建出集合自己的資料表、它的翻譯 sidecar 資料表，�
 
 新增一個集合，依序做這些事：
 
-1. 把內容程式庫放在 `src/Struo.*` 之外。
+1. 決定內容類別放哪：直接放進 API 專案，或放進 API 專案參照的類別庫。
 2. 在 entity 上掛 `[SugarTable]`、`[CmsCollection]`，並有一個掛了
    `[SugarColumn(IsPrimaryKey = true)]` 的主鍵。
 3. 幫每個要曝露的屬性加 `[CmsField]`，需要選項清單的介面加上 `[CmsOptions]`。
 4. 需要的話實作 `ISoftDeletable`，或設 `Revisions = true`。
 5. 有關聯的話加 `[CmsRelation]` 和 `[Navigate]`（見[第 8 章：關聯](08-relations.md)）。
-6. 加專案參照，並把項目加進 `Struo:ContentAssemblies`。
+6. 加專案參照，並把項目加進 `Struo:ContentAssemblies`（獨立類別庫才需要）。
 7. 重啟行程，讓掃描抓到新集合。
 8. 授予 RBAC 權限，不然只有 super-admin 能用它。
 
