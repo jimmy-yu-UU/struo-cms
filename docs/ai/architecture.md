@@ -506,8 +506,8 @@ share, so all three report against the same candidate set. `QueryValidator.Valid
 inbound `SearchCandidates` on the way in (defence in depth — no parser sets it today), so
 `SearchCandidateResolver` stays the field's only writer, which is what lets `FilterTranslator` trust
 its contents as already-parsed PK-typed values rather than arbitrary caller input. See
-`docs/guide/en/18-extension-points.md`'s "Search providers" for the full contract, composition rules, and a
-worked provider example.
+`docs/guide/en/18-extension-points.md`'s "The search provider" for the full contract, composition
+rules, and a worked provider example.
 
 ### Change notifications (`IItemChangeListener` / `IItemChangeNotifier`)
 
