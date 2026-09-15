@@ -198,7 +198,7 @@ unreadable collection a dotted filter/sort path traverses; `DeepExpansionCoordin
 (`src/Struo.Application/Query/Read/TranslationOverlay.cs`) gates translatable Image/File resolution on
 `CanRead` for the file collection. Consequence for an anonymous-read deployment: every collection a
 public filter or `deep=` path traverses needs its own `Rbac:PublicReadCollections` entry, not just the
-root collection — that key is consulted only at first boot (`docs/guide/en/12-auth-and-rbac.md`
+root collection — that key is consulted only at first boot (`docs/guide/en/17-roles-and-permissions.md`
 covers the caveat and the live-database workaround). Registered scoped, with `IItemUseCases` resolved
 from
 the same `ItemService` instance in `DataServiceCollectionExtensions.AddStruoData`
@@ -506,8 +506,8 @@ share, so all three report against the same candidate set. `QueryValidator.Valid
 inbound `SearchCandidates` on the way in (defence in depth — no parser sets it today), so
 `SearchCandidateResolver` stays the field's only writer, which is what lets `FilterTranslator` trust
 its contents as already-parsed PK-typed values rather than arbitrary caller input. See
-`docs/guide/en/08-query-dsl.md`'s "Search providers" for the full contract, composition rules, and a
-worked provider example.
+`docs/guide/en/18-extension-points.md`'s "The search provider" for the full contract, composition
+rules, and a worked provider example.
 
 ### Change notifications (`IItemChangeListener` / `IItemChangeNotifier`)
 
@@ -578,7 +578,7 @@ implementation is registered." Two implementations ship: `LocalFileStorage` and 
 factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, anything else —
 including the default — selects `LocalFileStorage`), registered singleton. Adding a third backend means
 implementing `IFileStorage` and extending that lambda's branch (or switch) to select it. See
-`docs/guide/en/11-files-and-media.md`.
+`docs/guide/en/15-files-and-media.md`.
 
 ### The GraphQL type module
 
@@ -617,7 +617,7 @@ enum." Two distinct extension motions:
 - **Add a genuinely new interface value** — requires the backend `FieldInterface` enum, `MetadataScanner`,
   and (if the value needs JSON/text column widening) `SqlSugarClientFactory`'s CodeFirst hook, in
   addition to `types.ts` and `registry.ts`. See `docs/ai/task-playbooks.md`, "Add a field type", and
-  `docs/guide/en/06-field-types.md` / `docs/guide/en/14-admin-spa-customization.md`.
+  `docs/guide/en/06-field-types.md`.
 
 ## Backend request flow (REST)
 

@@ -26,7 +26,7 @@ public sealed class OidcOptions
     // AllowedEmailDomains), and prefer RequireEmailVerified=true — otherwise a password account could be
     // taken over by any IdP identity presenting a matching email. Left open by decision to keep the
     // zero-config dev experience; production is expected to constrain it. See
-    // docs/guide/en/12-auth-and-rbac.md.
+    // docs/guide/en/16-authentication.md.
     public bool RequireEmailVerified { get; set; }
     public string? AllowedTenantId { get; set; }
     public string[] AllowedEmailDomains { get; set; } = [];

@@ -2,7 +2,7 @@
 
 The admin single-page app: Vue 3 + TipTap, authenticating against the StruoCMS API (`Struo.Api`). Built
 with Vite, Pinia, Vue Router, and Tailwind v4 + shadcn-vue. See [chapter 3](../docs/guide/en/03-getting-started.md)
-for the full quick-start (starting the API alongside this SPA) and [chapter 14](../docs/guide/en/14-admin-spa-customization.md)
+for the full quick-start (starting the API alongside this SPA) and [chapter 19](../docs/guide/en/19-admin-customization.md)
 for customizing the admin UI.
 
 ## Install
