@@ -3,7 +3,7 @@
 How a caller's `search=` gets answered, and what happens after a write, are each left by the core to
 an interface of its own: a fork plugs in its own implementation without touching the core's query or
 write path at all. This chapter covers what each of `ISearchProvider` and `IItemChangeListener`
-contracts for, when each is called, what happens on failure, and how to register one.
+promises, when each is called, what happens on failure, and how to register one.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
 [Chapter 10: Querying: Filters, Sorting and Pagination](10-query-basics.md); a write's revision
@@ -13,7 +13,7 @@ history and soft-delete semantics are in
 ## Where the two interfaces fit in the architecture
 
 `ISearchProvider` and `IItemChangeListener` are two of the interfaces the core hands out, listed
-in [Chapter 2: Architecture](02-architecture.md) under "what can be swapped, what can't" — sitting
+in [Chapter 2: Architecture](02-architecture.md) under "What can be swapped, what can't" — sitting
 at the same layer as `IFileStorage`.
 
 The core provides only a `NullSearchProvider` that never handles a search, and an

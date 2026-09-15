@@ -16,8 +16,7 @@ grants.
 | `permission` | `permissions` | One row per role-collection grant |
 
 On `user`, `password` and `accessToken` are both `Hidden` and `ReadOnly` at once, so the password
-and token hashes never appear in an ordinary query result and can't be written directly by a
-caller.
+and token hashes never appear in an ordinary query result and can't be written directly by a caller.
 
 A user's roles are a `TagSelect` many-to-many relation to `role` — on the admin form, that means
 ticking role names. The junction between user and role is a fourth table, `userRole` (table
@@ -83,10 +82,10 @@ Among the framework's built-in collections, the ones marked `AdminOnly` are `use
 `permission`, and `userRole`. What the attribute itself declares, and how to set it on a
 collection of your own, are in [Chapter 5: Defining Collections](05-collections.md).
 
-`AdminOnly` governs writes only: create, update, delete, restore, and revert on the
-generic CRUD path all require the caller to be a super-admin, whatever the collection's own grants
-say. Even a role granted `canWrite` is blocked here unless the caller is a super-admin. Reads are
-unaffected and follow the ordinary `canRead` check.
+`AdminOnly` governs writes only: create, update, delete, restore from the trash, and revert to a
+revision on the generic CRUD path all require the caller to be a super-admin, whatever the
+collection's own grants say. Even a role granted `canWrite` is blocked here unless the caller is a
+super-admin. Reads are unaffected and follow the ordinary `canRead` check.
 
 Every write point runs the ordinary collection permission check first, with the super-admin check
 right after it. Create, update, and revert check the write grant and fail with
@@ -240,9 +239,9 @@ because this is a hypothesis, not a real swap.
 ## Managing roles in the admin UI
 
 The admin UI never lets an administrator edit the `permission` or `userRole` collections directly.
-`Hidden` and `AdminOnly` are independent flags, and a collection can carry just one of
-them, but these two carry both, because they're purely internal RBAC data — letting the ordinary
-write grant reach them would be exactly the self-escalation `AdminOnly` exists to block.
+`Hidden` and `AdminOnly` are independent flags, and a collection can carry just one of them, but
+these two carry both, because they're purely internal RBAC data — letting the ordinary write grant
+reach them would be exactly the self-escalation `AdminOnly` exists to block.
 
 To change a role's grants, use the role permission matrix instead: tick `canRead`, `canWrite`,
 and `canDelete` per collection, and submit the whole set in one go. The effective-permissions

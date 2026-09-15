@@ -5,18 +5,19 @@ through an external identity provider. Whether a caller should use the cookie or
 and when the CSRF header is required, is covered in
 [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
-This chapter covers the mechanics behind each credential. What a caller can do once authenticated
-is in [Chapter 17: Roles and Permissions](17-roles-and-permissions.md).
+This chapter covers the mechanics behind each credential — how it's issued, where it lives, when
+it expires, and how it's revoked. What a caller can do once authenticated is in
+[Chapter 17: Roles and Permissions](17-roles-and-permissions.md).
 
 ## The first administrator
 
 The moment the `users` table is created and still empty, the first administrator account is
 created along with it: active, its name fixed at `Administrator`, its email and password taken
 from `Auth:BootstrapAdmin`. This happens exactly once — changing the setting and restarting
-afterward does nothing to an existing database.
+does nothing to an existing database.
 
-This default account is the one deliberate bypass of the password policy: its password from
-configuration is hashed and written directly, skipping the length check the next section covers,
+This default account is the one deliberate bypass of the password policy: its configured
+password is hashed and written directly, skipping the length check the next section covers,
 so the short default password in the settings file still works for that first login. The
 transcripts log in with that same default password. A production environment should change it
 immediately after the first login.
@@ -40,14 +41,15 @@ the same time — the caller can't infer from response speed whether that email 
 
 Login exposes only two kinds of failure to the caller: a password that verifies but an account
 that's deactivated returns `401` `ACCOUNT_INACTIVE`; every other case — a wrong password, an
-account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.`, the two
+account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.`,
 deliberately indistinguishable. Success returns `200` with `{ id }` and no other fields.
 
 `POST /api/users` creates a user, and only a super-admin can call it: success returns `201` with a
 body of `{ id, email, name }`, and `Location` points at `/api/items/user/{id}` — the generic item
 route, since there's no dedicated `GET /api/users/{id}`. An email already in use returns `409`
 `CONFLICT` `Email already in use.`. The password's minimum and maximum length, and the
-keys are in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.md).
+configuration keys, are in the `Auth` section of
+[Chapter 4: Configuration Reference](04-configuration.md).
 
 Changing a password goes through `PUT /api/users/{id}/password`: the caller is either a
 super-admin, or the account owner supplying `currentPassword` — the owner's own change always
@@ -60,7 +62,7 @@ policy returns `400` with a field-level message.
 When the owner calls for an account that only ever logged in through OIDC and never set a local
 password, the request is stopped before the current-password check even runs: `400`
 `NO_LOCAL_PASSWORD`. A super-admin can still set a local password on such an account. Across the
-whole identity surface, this is the only endpoint that lets a non-super-admin write at all.
+whole identity surface, this is the only endpoint that lets a non-super-admin write.
 
 This endpoint carries its own rate limit, partitioned by the user id of the caller making the
 change — not the target user's, and not the caller's IP: a super-admin resetting several users'
@@ -87,7 +89,7 @@ Expiry is the same 8-hour sliding window: the cookie itself, the cache entry, an
 covered below all share this one constant, and the three can't drift apart. The configuration key
 is in the `Redis` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
-Every cookie-authenticated request re-checks that the account still exists and is still active.
+Every cookie-authenticated request re-checks that the account still exists and is active.
 The moment either isn't true, the request is denied and the caller is logged out on the spot — the
 session behind that key is deleted from the cache too, not just this one request refused.
 
@@ -101,7 +103,7 @@ forwards to the cookie — which is why even reads, `/graphql`, and file reads, 
 declare any scheme, still recognize a bearer caller.
 
 On these scheme-less endpoints, a broken or revoked token always degrades to anonymous rather than
-falling back to try the cookie, even when the request carries both at once. A write endpoint that
+falling back to the cookie, even when the request carries both at once. A write endpoint that
 requires sign-in validates and merges both schemes instead — see
 [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
@@ -121,7 +123,7 @@ before switching accounts, rather than letting the same cookie jar answer for tw
 
 ## Logout and revocation
 
-Session state lives server-side, which is what lets revocation take effect immediately: logging
+Session state lives server-side, which is what makes revocation immediate: logging
 out consists entirely of signing the cookie scheme out, deleting that key's session from the
 cache, and clearing the browser-side cookie.
 
@@ -157,9 +159,9 @@ Overwriting means replacing that same hash column, and the old token stops worki
 Every request that authenticates with bearer updates its last-used timestamp, throttled to at most
 one write per token per minute, so a busy integration doesn't turn every call into a write. When
 the account itself is deactivated, authentication fails regardless of whether the token is
-otherwise still valid, and this flag is re-checked on every single request.
+otherwise still valid, and this flag is re-checked on every request.
 
-Bearer counts on every endpoint, including the read endpoints that declare no scheme at all — it
+Bearer counts on every endpoint, including the read endpoints that declare no scheme — it
 isn't only write actions that recognize it; a bearer caller's permissions are its own role's
 grants, not anonymous. A bearer call needs no CSRF header; the full selection rule and CSRF detail
 are in [Chapter 12: REST API Conventions](12-rest-conventions.md).
@@ -197,16 +199,16 @@ defense guard against it, and neither can substitute for the other.
 
 Per-account throttling (`RateLimiting:LoginAccount`) is on by default, partitioning by the account
 in the request body (keyed on a hash of the email, never the plain text), checked before the
-password is actually verified — a request it blocks costs no Argon2id computation at all. This
+password is verified — a request it blocks costs no Argon2id computation at all. This
 layer is a fixed window, not a sliding one: the window starts counting once, and further failures
 during it never push the end time back; once the window passes, the next failure starts a new one.
 
-A missing account, a wrong password and a deactivated account all count alike as one failure, and
+A missing account, a wrong password, and a deactivated account all count alike as one failure, and
 a blocked request always returns the same `429`, so the throttle itself can't be turned into a
 tool for guessing whether an account exists; a successful login clears that account's count.
 
 Per-caller-IP throttling (`RateLimiting:Login`) is the opposite: off by default, and it protects
-only the login endpoint itself — logout, `me`, and the OIDC challenge are all unaffected by it.
+only the login endpoint — logout, `me`, and the OIDC challenge are all unaffected by it.
 Why it's off by default, and when it's appropriate to turn on, is in the `RateLimiting` section of
 [Chapter 4: Configuration Reference](04-configuration.md).
 
@@ -232,8 +234,8 @@ HTTP_STATUS:429
 ```
 
 The `$TW` in the transcript is an email that's never been used. Only this one account is blocked:
-within the same run, a correct login for another account still goes through immediately,
-unaffected. The partition key is the account, not the caller's IP.
+within the same run, a correct login for another account still goes through immediately. The
+partition key is the account, not the caller's IP.
 
 ## OIDC external login
 

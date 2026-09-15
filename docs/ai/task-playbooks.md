@@ -102,9 +102,9 @@ Adding a collection is purely additive to a fork's own content project — it ne
 
 ## Playbook 2: Add a field type
 
-Background: `docs/guide/en/06-field-types.md` (the full `FieldInterface` reference and the three things
-one enum value drives), `docs/guide/en/06-field-types.md`, "Adding a custom field editor"
-(the frontend-only variant of this playbook).
+Background: `docs/guide/en/06-field-types.md` (the full `FieldInterface` reference, the three things
+one enum value drives, and its "Adding a custom field editor" section — the frontend-only variant
+of this playbook).
 
 There are two distinct versions of "add a field type." Pick the one that matches what's actually needed:
 
