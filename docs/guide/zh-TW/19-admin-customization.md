@@ -134,11 +134,11 @@ vendored 元件，都把自己的 `class` prop 併進共用的 class 輔助函�
 `group: 'block'` 或 `group: 'insert'` 的指令，工具列跟 slash 選單會一起拿到，不用逐一
 接線；泡泡選單只吃 `inline`，拿不到這兩群。
 
-slash 選單的清單是三段接起來的固定順序：標題層級（`richTextHeadings.ts` 的
+slash 選單的清單是四段接起來的固定順序：標題層級（`richTextHeadings.ts` 的
 `HEADING_LEVELS`，是 H2 到 H6）、登記表裡 `group: 'block'` 的項目、一筆手寫的表格項目，
 最後是 `group: 'insert'` 的項目。工具列的表格控制項插入使用者自己選的尺寸，跟登記表無
-關，形狀對不上單一指令；手寫的這一筆固定插入帶表頭列的 3×3 表格。slash 選單認的別名一
-律是小寫 ASCII，查詢字大寫開頭就不會命中。
+關，形狀對不上單一指令；手寫的這一筆固定插入帶表頭列的 3×3 表格。別名必須寫成小寫
+ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫就永遠不會命中。
 
 手寫項目多兩個地方要顧：`labelKey` 沒出現在 `EN_LABELS`，錯不在載入時，而是 slash 選單
 一開就丟例外——`EN_LABELS` 在模組載入時就從標題層級、登記表與表格項目組好，候選清單每敲
@@ -190,7 +190,7 @@ sanitizer 不會挪動表格內容，編輯器自己模仿表頭樣式的 CSS �
 - 圖片縮放行為與控點樣式：`RichTextInput.vue`
 - 排版樣式：`tokens.css`
 
-前七個都在 `frontend/src/components/fields/` 底下。
+除了 `tokens.css`，其餘檔案都在 `frontend/src/components/fields/` 底下。
 
 ## UI 語言
 
