@@ -31,7 +31,7 @@ fork 之後，你在自己的專案裡宣告內容集合，StruoCMS 把它們變
 
 內容模型從你這邊開始：剛裝好的 StruoCMS，集合數量是零，Article、Tag、Category 這些集合都由你
 自己宣告。fork 之後，把你的集合類別放進 `Struo:ContentAssemblies` 指定的組件，StruoCMS 會連同
-API 主機專案的組件一起掃描，自動變成資料表、REST 端點與 GraphQL schema。
+API 專案（`Struo.Api`）的組件一起掃描，自動變成資料表、REST 端點與 GraphQL schema。
 
 你也需要處理三件事：
 
@@ -42,7 +42,7 @@ API 主機專案的組件一起掃描，自動變成資料表、REST 端點與 G
 核心只負責框架本身這一層。
 
 `samples/Struo.Sample.Blog` 是一個可選的示範專案，用 Article、Category 這類集合示範怎麼用核心
-提供的工具定義自己的內容模型；API 主機完全不會參照到它，學完之後就可以刪掉。
+提供的工具定義自己的內容模型；API 專案完全不會參照到它，學完之後就可以刪掉。
 
 刪除它不只是刪資料夾：它同時寫進了 solution 檔和測試專案，直接刪除資料夾會讓 solution 層級的
 build 失敗；完整的移除步驟留到之後專門介紹範例專案的章節。

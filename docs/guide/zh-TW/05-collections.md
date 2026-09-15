@@ -172,11 +172,11 @@ SEO 欄位用 `Group = "SEO"`。
 
 ## 內容專案放哪、怎麼被找到
 
-掃描一律涵蓋 API 主機專案本身與框架自己的組件，不需要任何設定——內容類別可以直接寫在主機
-專案裡。想放進一個獨立的類別庫也行，主機專案要有指到它的 `ProjectReference`，而且要把組件
-名稱列進 `Struo:ContentAssemblies`——兩者缺一不可，單純把 DLL 放在旁邊不會被載入。放主機專
-案裡還是獨立類別庫，選哪一種是你的事。解析不到列出的組件就啟動失敗，訊息會點名那個項目
-（見[第 4 章：設定參考](04-configuration.md)）。
+掃描一律涵蓋 API 專案（`Struo.Api`）本身與框架自己的組件，不需要任何設定——內容類別可以直
+接寫在 API 專案裡。想放進一個獨立的類別庫也行，API 專案要有指到它的 `ProjectReference`，
+而且要把組件名稱列進 `Struo:ContentAssemblies`——兩者缺一不可，單純把 DLL 放在旁邊不會被載
+入。放 API 專案裡還是獨立類別庫，選哪一種是你的事。解析不到列出的組件就啟動失敗，訊息會點
+名那個項目（見[第 4 章：設定參考](04-configuration.md)）。
 
 內容專案是一個普通的類別庫，最低限度只需要參照 `Struo.Domain`（取得 attribute 與列舉）與
 `SqlSugarCore` 套件（讓 `[SugarTable]`／`[SugarColumn]` 能用）。掃描只在啟動時跑一次，加了新
@@ -198,7 +198,7 @@ CodeFirst 會建出集合自己的資料表、它的翻譯 sidecar 資料表，�
 
 新增一個集合，依序做這些事：
 
-1. 決定內容類別放哪：直接放進 API 主機專案，或放進主機參照的類別庫。
+1. 決定內容類別放哪：直接放進 API 專案，或放進 API 專案參照的類別庫。
 2. 在 entity 上掛 `[SugarTable]`、`[CmsCollection]`，並有一個掛了
    `[SugarColumn(IsPrimaryKey = true)]` 的主鍵。
 3. 幫每個要曝露的屬性加 `[CmsField]`，需要選項清單的介面加上 `[CmsOptions]`。
