@@ -220,9 +220,10 @@ translation-sidecar load/sync, and a set of purge referential-integrity primitiv
 primitives are declared with default bodies that `throw new NotSupportedException(...)` rather than a
 silent no-op — the interface's own comment explains why: a second implementation that forgot to
 override one of them would otherwise silently orphan referential rows on purge, exactly the defect
-class the defaults exist to prevent. Two more members, `FacetAsync` and `AggregateAsync` (the facet-
-bucket and aggregate-value computation behind `docs/guide/en/08-query-dsl.md`'s "Facets and
-aggregates"), follow the identical default-throw pattern for the identical reason — a fork with its own
+class the defaults exist to prevent. Two more members, `FacetAsync` and `AggregateAsync` (the
+facet-bucket and aggregate-value computation behind `docs/guide/en/11-query-advanced.md`'s "Facet
+counting" and "Aggregates" sections), follow the identical default-throw pattern for the identical
+reason — a fork with its own
 `IItemRepository` implementation that doesn't override them gets a clear `NotSupportedException` the
 moment a caller requests `facets=`/`aggregate[<op>]=`, not a silently empty or wrong result. Sole
 implementation: `SqlSugarItemRepository`
@@ -341,7 +342,7 @@ the SqlSugar-adjacency-defect workarounds) and `FilterTranslator.Subquery.cs` (t
 construction) together are the successor to the interface-backed cross-relation-filter resolver this
 codebase used to have, restructured around SQL pushdown rather than in-memory id resolution:
 `Translate(collection, filter, search, searchCandidates, searchableFields,
-queryLocale)` turns a validated `FilterNode` tree (chapter 8's grammar, including `_some`/`_none`
+queryLocale)` turns a validated `FilterNode` tree (chapter 10's grammar, including `_some`/`_none`
 relation quantifiers and `_junction`) into a `List<IConditionalModel>` for **one** queryable over
 `collection` — a dotted (cross-relation) condition, a relation quantifier, and a translatable-field
 condition (own-collection or reached across a hop) all become a nested `IN (SELECT …)` subquery
@@ -372,7 +373,8 @@ descriptors for its relation-name facet form) — see the next subsection.
 `src/Struo.Infrastructure/Query/FacetQueries.cs` + `FacetQueries.Leaf.cs` and
 `src/Struo.Infrastructure/Query/AggregateQueries.cs` back `IItemRepository.FacetAsync`/`AggregateAsync`
 — the value/count-bucket and sum/min/max/avg/count computation behind
-`docs/guide/en/08-query-dsl.md`'s "Facets and aggregates". Both are `internal`, constructed directly
+`docs/guide/en/11-query-advanced.md`'s "Facet counting" and "Aggregates" sections. Both are
+`internal`, constructed directly
 by `SqlSugarItemRepository` in a field initializer exactly like `FilterTranslator` above, not
 registered in DI. `FacetQueries` additionally needs the **concrete** `RelationshipGraph` (its `Graph`
 property casts `IRelationshipGraph` and throws `InvalidOperationException` otherwise) — a facet on a
@@ -402,9 +404,10 @@ typed `In(Expression, ISugarQueryable)` overload, which cannot rename the inner 
 so collides whenever two subqueries sit at the same level, as a to-many facet's own root-id subquery
 can with another subquery already at that level from the request's own filter.
 
-See `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md` for the query DSL these three
-query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelationExpander`) — plus the
-non-DI-registered `FilterTranslator`/`FacetQueries`/`AggregateQueries` above — jointly implement.
+See `docs/guide/en/10-query-basics.md` and `docs/guide/en/11-query-advanced.md` for the query DSL
+these three query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelationExpander`) — plus
+the non-DI-registered `FilterTranslator`/`FacetQueries`/`AggregateQueries` above — jointly
+implement.
 
 ### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`)
 
@@ -597,7 +600,7 @@ The comment above the singleton registration explains why it must be explicit: H
 `AddTypeModule<T>()` resolves `T` via `GetRequiredService<T>()` against application services, not
 schema-scoped activation. Because the schema is metadata-driven, a fork does not usually reimplement
 `ITypeModule` — a new `[CmsCollection]` automatically gets a GraphQL type the next time the process
-starts and rescans metadata. See `docs/guide/en/10-graphql-api.md`.
+starts and rescans metadata. See `docs/guide/en/14-graphql.md`.
 
 ### The frontend field-type registry
 
@@ -637,7 +640,7 @@ a transaction (`InTransactionAsync`), after which `IItemChangeNotifier` fans the
 out to every registered `IItemChangeListener` (see "Change notifications" above). Every response —
 success or error — passes through
 `EnvelopeResultFilter`/`StruoExceptionHandler` (`src/Struo.Api/Http/`) so the wire shape is uniform. See
-`docs/guide/en/08-query-dsl.md` and `docs/guide/en/09-rest-api.md`.
+`docs/guide/en/10-query-basics.md` and `docs/guide/en/12-rest-conventions.md`.
 
 ## Next steps
 

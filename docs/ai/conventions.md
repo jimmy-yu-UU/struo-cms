@@ -280,11 +280,13 @@ applied there.
 A many-to-many relation's write-side array element (REST body key, or GraphQL `<rel>Links` entry after
 `MutationResolvers.FoldLinks` folds it into the REST shape) is one of two forms: a **bare id** (link
 this target, leave its junction row's payload untouched) or an **object** `{ id, ...payload }` (link
-this target and merge the named payload fields into its junction row). `docs/guide/en/09-rest-api.md`,
-"Many-to-many write shape", states the full precedence rule for when the same id appears more than
-once in one array (an object always outranks a bare id; between two objects the later one wins; order
-of first appearance is the sort order) and is the canonical source for that rule — this section only
-names where the code that enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
+this target and merge the named payload fields into its junction row).
+`docs/guide/en/08-relations.md`, "Junction entities and payloads", states the full precedence rule
+for when the same id appears more than once in one array (an object always outranks a bare id;
+between two objects the later one wins; order of first appearance is the sort order) and is the
+canonical source for that rule; `docs/guide/en/12-rest-conventions.md`, "The many-to-many write
+shape", shows the same value written into a `PUT` body. This section only names where the code that
+enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
 
 ## File organization
 
@@ -329,7 +331,7 @@ drift apart. A new domain exception type that should surface a client-safe messa
 `DomainErrorMap.Map` (and, if it needs a REST status other than the fallback 500, in
 `DomainErrorMap.StatusFor`); anything left unmapped collapses to `INTERNAL_SERVER_ERROR` with a masked
 generic message — the real exception is logged server-side, never leaked to the response. See
-`docs/guide/en/09-rest-api.md`.
+`docs/guide/en/12-rest-conventions.md`.
 
 `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
 exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`
@@ -387,8 +389,10 @@ none is ever surfaced client-side.
   rendered value back with `CultureInfo.CurrentCulture` (keyed off `CSharpTypeName`), so the two sides
   must agree or a decimal/DateTime literal silently comes out wrong under a non-invariant culture; a
   headless JSON API has no culture-formatted output of its own to lose by running invariant — see
-  `docs/guide/en/07-relations.md` and `docs/guide/en/08-query-dsl.md`, "Validation: whitelisting,
-  unknown paths, and the depth cap". `facets=`/`aggregate[<op>]=` (chapter 8's "Facets and aggregates")
+  `docs/guide/en/10-query-basics.md`'s "Which fields can be filtered and sorted, and what happens
+  when it goes wrong" for whitelisting and unknown paths, and `docs/guide/en/11-query-advanced.md`'s
+  "Deep expansion `deep=`" for the depth cap. `facets=`/`aggregate[<op>]=` (chapter 11's "Facet
+  counting" and "Aggregates")
   are validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
   at most one relation hop, never a quantifier or `_junction` segment, its own/leaf field's interface
   must be in `FacetPathResolver.Facetable` (excludes long-form text, every multi-value interface,

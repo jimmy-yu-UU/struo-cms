@@ -180,8 +180,8 @@ Among framework collections only `File` implements it; the sample's `Article` an
 implement it too, and neither member carries a `[SugarColumn]` of its own — both rely on the
 framework's inference for nullable types.
 
-Neither member carries a `[CmsField]`, so soft-delete state is not part of field metadata at all
-— it never appears in the item projection, and it cannot be written through the generic item API.
+Neither member carries a `[CmsField]`, so soft-delete state is not part of field metadata at all —
+it never appears in the item projection, and it cannot be written through the generic item API.
 
 Underneath sits one globally registered query filter, condition "deleted-at is null", applied
 once for every database connection scope. It covers every query over a soft-deletable entity with
@@ -238,10 +238,12 @@ Purge does these steps in order, inside one transaction:
 7. Delete the row itself.
 
 The items endpoint only takes the permanent path when this parameter's value is exactly `true`,
-case-insensitively: for a soft-deletable collection, `?purge=1` or a bare `?purge` is treated as
-an ordinary trash with no error. The files endpoint uses ordinary parameter binding instead, where
-the same `1` does count — the two surfaces are not consistent here. Restore needs the
-collection's delete permission, not its write permission.
+case-insensitively: for a soft-deletable collection, `?purge=1` or a bare `?purge` is treated as an
+ordinary trash with no error. The files endpoint binds `purge` as a boolean, accepting only
+`true`/`false` (case-insensitive); a spelling like `1` is rejected with a `VALIDATION` 400 — the two
+endpoints differ in how they reject, not in what counts as purge.
+
+Restore needs the collection's delete permission, not its write permission.
 
 Trashing something twice never errors: trashing an already-trashed item again still counts as
 success, because the row does exist — only an unknown id is a 404. `DELETE` returns 204 on

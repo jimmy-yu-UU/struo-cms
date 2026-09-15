@@ -82,7 +82,7 @@ Development 生效，其他環境會被忽略並記一筆警告。對已經有�
 |---|---|---|
 | `Struo:ContentAssemblies` | 字串陣列 | `[]` |
 
-清單裡的每個組件名稱都要能被 `Assembly.Load` 解析，通常代表 API 主機專案要直接參照它；解析不
+清單裡的每個組件名稱都要能被 `Assembly.Load` 解析，通常代表 API 專案要直接參照它；解析不
 到就直接讓啟動失敗，不會被跳過。
 
 這個鍵在 `builder.Build()` 之前就直接從 `builder.Configuration` 讀出，不經過
