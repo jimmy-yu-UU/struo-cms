@@ -418,8 +418,8 @@ none is ever surfaced client-side.
   the count at `Query:MaxSearchCandidates`. Both a rejected PK type/unparsable id and an over-cap count
   throw `InvalidOperationException` (→ `INTERNAL_SERVER_ERROR`/500) rather than `QueryException` (→
   `BAD_USER_INPUT`/400) — the violation is the fork's provider misbehaving, not something the caller
-  sent, so it must not be reported as a client mistake. See `docs/guide/en/18-extension-points.md`'s "Search
-  providers".
+  sent, so it must not be reported as a client mistake. See
+  `docs/guide/en/18-extension-points.md`'s "The search provider".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
   not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a
