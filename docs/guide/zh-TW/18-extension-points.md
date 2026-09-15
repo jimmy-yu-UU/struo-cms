@@ -20,7 +20,7 @@
 ## 搜尋提供者 `ISearchProvider`
 
 `ISearchProvider` 是搜尋這一側的擴充點：fork 接上 Meilisearch、Elasticsearch、
-PostgreSQL 全文搜尋，或任何其他引擎，讓 `search=` 改由這個引擎回答。核心換到的是一組乾
+PostgreSQL 全文搜尋，或任何其他引擎，讓 `search=` 改由這個引擎回答。核心拿到的是一組乾
 淨的候選 id，不用知道背後接的是哪一種索引。
 
 ### 契約
@@ -89,19 +89,19 @@ PostgreSQL 全文搜尋，或任何其他引擎，讓 `search=` 改由這個引�
 [第 12 章：REST API 慣例](12-rest-conventions.md)），GraphQL 看到同一個代碼，但傳輸層
 的狀態留在 `200`（見[第 14 章：GraphQL API](14-graphql.md)）。
 
-這個例外的訊息可能帶著內部主機名稱，呼叫端因此只看得到固定的通用訊息（見
-[第 12 章：REST API 慣例](12-rest-conventions.md)），真正的原因只寫進伺服器端紀錄。想
-優雅降級的提供者，也可以自己接住例外、回 `NotHandled`，退回內建的 LIKE 掃描，兩條路都
-合法，這個介面不逼哪一種。
+這個例外的訊息可能帶著內部主機名稱，呼叫端因此只看得到固定的通用訊息，真正的原因只寫
+進伺服器端紀錄。想優雅降級的提供者，也可以自己接住例外、回 `NotHandled`，退回內建的
+LIKE 掃描，兩條路都合法，這個介面不逼哪一種。
 
 ### 註冊與生命週期
 
 核心自己的預設註冊用的是「沒人註冊過才註冊」，所以 fork 的註冊永遠贏，不管寫在
 `AddStruoData()` 之前還是之後：之前贏，是因為核心的預設接著就不會生效；之後贏，是因為
-後面註冊的才是最後被解析到的那個。`ISearchProvider` 跟下一節的 `IItemChangeListener`，
-註冊都寫在一個 API 專案（`Struo.Api`）會參照到的組件裡即可，不需要另外列進
-`Struo:ContentAssemblies`，那份清單只掃描 `[CmsCollection]` 型別，不是擴充點的登記
-表。
+後面註冊的才是最後被解析到的那個。
+
+`ISearchProvider` 跟下一節的 `IItemChangeListener`，註冊都寫在一個 API 專案
+（`Struo.Api`）會參照到的組件裡即可，不需要另外列進 `Struo:ContentAssemblies`，
+那份清單只掃描 `[CmsCollection]` 型別，不是擴充點的登記表。
 
 生命週期用 scoped 或 transient，不要用 singleton，除非提供者真的完全無狀態：一個
 singleton 若在建構式裡抓住某個 scoped 相依，不是啟動時就被範圍驗證擋下來，就是同一個
@@ -150,8 +150,8 @@ builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 `IItemChangeListener` 只有一個方法：
 `Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default)`。
 
-`ItemChange` 成員是 `Collection`、`Id`、`Kind`。`Kind` 的值與各自的發出時機見下一節的
-表。
+`ItemChange` 是一個 record，成員是 `Collection`、`Id`、`Kind`；`Kind` 的值與各自的
+發出時機，見〈涵蓋哪些寫入〉的表。
 
 ### 時機與失敗語意
 
@@ -222,12 +222,12 @@ scoped；若堅持用 singleton，建構式裡就不能抓一個 scoped 相依�
 
 監聽者一個都沒註冊時，建立、更新、丟進垃圾桶、復原都不會比單純的寫入多做事，派送器一看
 清單是空的就直接回傳。清除是唯一的例外：不管有沒有人在聽，清除本身都得先算出這次牽動到
-哪些現存的關聯列——每個 inbound 的 set-null 關聯多付一次型別化讀取，每個 inbound 的多
-對多 junction 多付兩次——這幾筆額外的查詢是清除自己要付的成本，不是為了監聽者才多跑
-的。
+哪些現存的關聯列——每個指向它、外鍵會被設成 `null` 的關聯多付一次型別化讀取，每個指向它
+的多對多 junction 多付兩次——這幾筆額外的查詢是清除自己要付的成本，不是為了監聽者才多
+跑的。
 
 這個介面只負責發出通知，不負責確認下游真的收到：核心不會重試失敗的這一次呼叫，下游系統
-會掛掉的 fork，健康檢查跟對帳要自己做。監聽者若自己又透過一般寫入路徑寫了別的東西——譬
+可能掛掉的 fork，得自己做健康檢查跟對帳。監聽者若自己又透過一般寫入路徑寫了別的東西——譬
 如另外寫一筆稽核紀錄——那筆寫入本身一樣會觸發新一輪通知，這裡沒有防止遞迴的機制，設計
 監聽者時得自己避開會形成循環的寫法，而不是假設派送器會擋下來。
 

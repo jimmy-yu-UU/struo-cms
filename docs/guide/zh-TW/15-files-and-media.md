@@ -125,7 +125,7 @@ allowed.`。
 會讓啟動直接失敗。兩種後端的鍵與驗證規則都在[第 4 章](04-configuration.md)；這裡只講行為上
 的差異。
 
-`local` 把檔案存成普通檔案，放在 `Struo:Files:Local:RootPath` 底下，每一次解析路徑都會檢查
+`local` 把檔案存成普通檔案，放在 `Struo:Files:Local:RootPath` 底下。每一次解析路徑都會檢查
 有沒有落在根目錄之內，想逃出根目錄的 key 直接丟例外，不會被拿去做任何 I/O。
 
 這個相對路徑是對著執行程序的工作目錄解析的，跟稍後會講到的圖片變體快取路徑不一樣——後者是
@@ -171,7 +171,7 @@ HTTP_STATUS:200
 門檻就形同虛設。草稿是一種編輯狀態，可以編輯檔案的呼叫端，才是應該看得到草稿的呼叫端。
 
 隨附的種子資料只給 `public` 讀取授權，但框架本身沒有禁止某個超級管理員反過來替 `public` 開
-寫入授權，這麼做會讓草稿對每一個呼叫端（包含匿名）可見。
+寫入授權，這麼做會讓每一個已登入的呼叫端都看得到草稿（匿名仍然是 404）。
 
 這道檢查失敗時，回應一律是單純的 `404`，不是 `403`，草稿是否存在不會被洩漏；一個已經丟進垃
 圾桶的檔案，兩個讀取動作也都是 `404`，因為查詢本來就套用著同一道軟刪除過濾。
@@ -280,8 +280,9 @@ LGPL-2.1 只要求重新標明授權聲明、不限制使用者改用另一個�
 的原始碼，自己的 MIT 授權不受影響。
 
 實際釘住的版本號記在 `Directory.Packages.props` 與 `THIRD-PARTY-NOTICES.md`，這裡不重複。
-`NetVips.Native` 系列套件還一併打包了 libvips 幾個選用相依套件（mozjpeg、libpng、libwebp、
-cairo、pango、librsvg 等），授權是 MIT、BSD 與 LGPLv3 的混合，各自記在自己套件的聲明檔裡。
+`NetVips.Native` 系列套件還一併打包了 libvips 幾個選用相依項目（mozjpeg、libpng、libwebp、
+cairo、pango、librsvg 等），授權是 MIT、BSD 與 LGPLv3 的混合，各自記在 `NetVips.Native.*`
+套件自己的聲明檔裡。
 
 ## 檔案的垃圾桶
 
