@@ -99,8 +99,8 @@ LIKE 掃描，兩條路都合法，這個介面不逼哪一種。
 `AddStruoData()` 之前還是之後：之前贏，是因為核心的預設接著就不會生效；之後贏，是因為
 後面註冊的才是最後被解析到的那個。
 
-`ISearchProvider` 跟下一節的 `IItemChangeListener`，註冊都寫在一個 API 專案
-（`Struo.Api`）會參照到的組件裡即可，不需要另外列進 `Struo:ContentAssemblies`，
+`ISearchProvider` 跟下一節的 `IItemChangeListener`，註冊都寫在
+一個 API 專案（`Struo.Api`）會參照到的組件裡即可，不需要另外列進 `Struo:ContentAssemblies`，
 那份清單只掃描 `[CmsCollection]` 型別，不是擴充點的登記表。
 
 生命週期用 scoped 或 transient，不要用 singleton，除非提供者真的完全無狀態：一個

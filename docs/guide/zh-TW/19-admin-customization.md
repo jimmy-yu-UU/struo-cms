@@ -49,11 +49,13 @@ metadata，改 metadata 就換得掉，不用碰 `frontend/src`。
 ## Design token 與主題
 
 `tokens.css` 與 `theme.css` 兩份樣式表合作，靠同一個根元素上的 `.app-dark` class 切換深
-淺色，沒有第二份要另外同步的東西。`tokens.css` 是 Tailwind 的進入點，也是 shadcn 的語意化
-token 層（`--background`、`--foreground`、`--primary`、`--radius`、側欄用的 token 等
-等），分別在 `:root` 宣告一次、在 `.app-dark` 再宣告一次深色版；一個 `@theme inline` 區塊
-把每個 token 對應到 Tailwind 的 utility class（`bg-background`、`text-primary` 之類），
-vendored 的 `ui/` 元件跟第一方元件吃的是同一份對應。
+淺色，沒有第二份要另外同步的東西。
+
+`tokens.css` 是 Tailwind 的進入點，也是 shadcn 的語意化 token 層（`--background`、
+`--foreground`、`--primary`、`--radius`、側欄用的 token 等等），分別在 `:root` 宣告一
+次、在 `.app-dark` 再宣告一次深色版；一個 `@theme inline` 區塊把每個 token 對應到
+Tailwind 的 utility class（`bg-background`、`text-primary` 之類），vendored 的 `ui/` 元
+件跟第一方元件吃的是同一份對應。
 
 `tokens.css` 也把 shadcn 原本認的 `.dark` 深色慣例，重新指向這個專案的 `.app-dark`，而不
 是改名遷就 shadcn；這個 class 名稱對 e2e 測試、還有 Vue 掛載前那段先畫一次的腳本，都是吃
@@ -73,10 +75,11 @@ class 的優先度多高，未包 layer 的宣告一律贏過包了 layer 的，
 
 要換主題色，改 `tokens.css` 的 `:root`／`.app-dark` 裡的語意化自訂屬性（vendored 元件跟
 utility class 都讀這一份契約）；牽動側欄、麵包屑這類第一方外殼時，`theme.css` 對應的屬性
-也要一起改。`Branding:Name` 跟 `Branding:LogoUrl` 只換得到品牌名稱跟 Logo，換不到色票：
-色票是原始碼裡的預設值，不是逐次部署可調的設定鍵。深色模式下卡片跟頁面背景會收斂成同一個
-值，所以卡片再往下沉一階的表面色，在 `tokens.css` 裡自己有一個 token，不是靠 `theme.css`
-算出來的。
+也要一起改。
+
+`Branding:Name` 跟 `Branding:LogoUrl` 只換得到品牌名稱跟 Logo，換不到色票：色票是原始碼
+裡的預設值，不是逐次部署可調的設定鍵。深色模式下卡片跟頁面背景會收斂成同一個值，所以卡片
+再往下沉一階的表面色，在 `tokens.css` 裡自己有一個 token，不是靠 `theme.css` 算出來的。
 
 ## 新增側欄圖示
 
@@ -110,10 +113,11 @@ utility class 都讀這一份契約）；牽動側欄、麵包屑這類第一方
 
 重新配色的地方永遠往外挪一層，依序是：token 層，適用任何已經曝露成語意化自訂屬性的東
 西，一次改動同時打到每個用到它的地方；使用點的 `class` prop，適用能寫成 utility class
-的東西；或是自己寫一個把它包起來的元件，適用前兩者都表達不了的東西。每個會渲染出樣式的
-vendored 元件，都把自己的 `class` prop 併進共用的 class 輔助函式，所以在使用的地方多傳
-一些 utility class，改的只是那一次使用，不會動到 `ui/`。包裝元件自己的 scoped style 同
-樣沒包在 layer 裡，所以是可靠的覆寫位置（理由見上一節）。
+的東西；或是自己寫一個把它包起來的元件，適用前兩者都表達不了的東西。
+
+每個會渲染出樣式的 vendored 元件，都把自己的 `class` prop 併進共用的 class 輔助函式，所
+以在使用的地方多傳一些 utility class，改的只是那一次使用，不會動到 `ui/`。包裝元件自己的
+scoped style 同樣沒包在 layer 裡，所以是可靠的覆寫位置（理由見〈Design token 與主題〉）。
 
 避免用 `!important`：它贏得了眼前這一次覆寫，卻把下一次——不管是自己還是 fork——留在同
 一個戰場上，處境更差。
@@ -144,8 +148,9 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 一開就丟例外——`EN_LABELS` 在模組載入時就從標題層級、登記表與表格項目組好，候選清單每敲
 一個字就重算一次；另外，它的英文標籤（`enLabel`）要用共用的解析器算，不能像顯示用的
 `label` 一樣直接寫 `t(key)`——那樣寫得出來，卻把英文名稱綁死在目前的介面語言，離開英文
-介面時，靠英文名稱比對就悄悄失效。`/` 什麼時候會開、鍵盤怎麼操作，是
-`richTextSlashExtension.ts` 的事。
+介面時，靠英文名稱比對就悄悄失效。
+
+`/` 什麼時候會開、鍵盤怎麼操作，是 `richTextSlashExtension.ts` 的事。
 
 連結對話框（`RichTextLinkDialog.vue`）是工具列跟泡泡選單的連結按鈕共用的同一個彈窗，不
 是瀏覽器原生的 prompt，兩邊都靠同一個共用的 `link` 指令觸發。使用者填的是網址跟一個「另
@@ -154,11 +159,13 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 [第 6 章：欄位型別與編輯介面](06-field-types.md)裡 `RichText` 的說明。
 
 圖片尺寸的調整是兩步：先點一下選取這張圖，再拖曳八個控點之一（四角加四邊中點），控點只
-在這張圖是目前選取時才出現。拖曳的行為（最小寬度、八個方向、比例鎖定）是上游圖片擴充功
-能自己的設定，這裡自己加的是控點什麼時候出現、長什麼樣，寫在 `RichTextInput.vue` 自己的
-scoped style 裡；控點是 10px 見方的拖曳熱區，比 WCAG 2.2 建議的 24×24 小，想放大熱區，
-改的也是這個區塊。拖曳一次會同時想寫寬跟高兩個維度，但欄位把 `height` 屬性覆寫成不序列
-化，最後存下來的 `<img>` 只有寬度，沒有高度，高度照寬度的比例反推。
+在這張圖是目前選取時才出現。
+
+拖曳的行為（最小寬度、八個方向、比例鎖定）是上游圖片擴充功能自己的設定，這裡自己加的是
+控點什麼時候出現、長什麼樣，寫在 `RichTextInput.vue` 自己的 scoped style 裡；控點是
+10px 見方的拖曳熱區，比 WCAG 2.2 建議的 24×24 小，想放大熱區，改的也是這個區塊。拖曳一
+次會同時想寫寬跟高兩個維度，但欄位把 `height` 屬性覆寫成不序列化，最後存下來的 `<img>`
+只有寬度，沒有高度，高度照寬度的比例反推。
 
 編輯區塊本身掛 `class="prose dark:prose-invert"`，直接吃排版外掛的預設樣式，用意是編輯
 時盡量貼近文章發布後的樣子；要換掉這層外觀，改的是 `tokens.css` 裡外掛註冊處的
@@ -168,17 +175,21 @@ scoped style 裡；控點是 10px 見方的拖曳熱區，比 WCAG 2.2 建議的
 表格的表頭是唯一交給伺服器補的落差：編輯器的 schema 沒有 `thead` 節點，sanitizer 事後處
 理時，只要一個表格第一列的每一格都是 `<th>`、又還沒有 `<thead>`，就把整個第一列包進
 `<thead>`；這一步涵蓋每一次 `RichText` 欄位的寫入，不只是經過編輯器的內容，也沒有回填，
-已經存好的內容要等下一次重新存檔才補上。這個判斷只認表格的第一列，但編輯器的表格右鍵選
-單能把任何一列標成表頭列——標在第一列以外的表頭列，存下來的 HTML 仍然待在 `<tbody>` 裡，
-sanitizer 不會挪動表格內容，編輯器自己模仿表頭樣式的 CSS 也只蓋第一列，那一列在編輯器裡
-看起來就是普通列，這是它發布後真正的樣子，不是編輯器畫錯。
+已經存好的內容要等下一次重新存檔才補上。
+
+這個判斷只認表格的第一列，但編輯器的表格右鍵選單能把任何一列標成表頭列——標在第一列以外
+的表頭列，存下來的 HTML 仍然待在 `<tbody>` 裡，sanitizer 不會挪動表格內容，編輯器自己模
+仿表頭樣式的 CSS 也只蓋第一列，那一列在編輯器裡看起來就是普通列，這是它發布後真正的樣
+子，不是編輯器畫錯。
 
 這裡有兩個地方看起來只是打開一個選項，實際上會把資料整段吃掉，因為 sanitizer 丟掉不在白
 名單裡的標籤時，是連整個子樹一起丟：表格擴充功能有一個「產生包裝用 `<div>`」的選項，打開
 它，儲存時每一個表格都會被整段砍掉，不是拆開保留內容；這個選項留著關掉，除非先把 `div`
-加進 sanitizer 的白名單。想在 slash 選單加 H1 也一樣，標籤白名單從 `h2` 起跳，因為頁面標
-題本身就是 H1，寫進去的 `<h1>` 連同文字整段被砍——真要加，得先動 sanitizer 的白名單，再
-放寬標題層級的型別，並且在兩份 locale 檔各補一個 label key。
+加進 sanitizer 的白名單。
+
+想在 slash 選單加 H1 也一樣，標籤白名單從 `h2` 起跳，因為頁面標題本身就是 H1，寫進去的
+`<h1>` 連同文字整段被砍——真要加，得先動 sanitizer 的白名單，再放寬標題層級的型別，並且
+在兩份 locale 檔各補一個 label key。
 
 想改什麼、開哪個檔：
 
@@ -255,8 +266,10 @@ sanitizer 不會挪動表格內容，編輯器自己模仿表頭樣式的 CSS �
 loopback，Vite 因此只綁 `[::1]`，不釘的話瀏覽器打 `http://localhost:5173` 反而連不上；
 `proxy` 把同源的 `/api` 轉發到 `:5221` 上的 API，這也是為什麼
 [第 3 章：快速開始](03-getting-started.md)的走法完全不用另外設定 CORS，瀏覽器眼裡只有
-Vite 這一個來源。想讓 dev SPA 接另一個 API 實例，改這裡的 `target` 就好，同源這個模式沒
-有另一個前端專屬的 base URL 設定。
+Vite 這一個來源。
+
+想讓 dev SPA 接另一個 API 實例，改這裡的 `target` 就好，同源這個模式沒有另一個前端專屬
+的 base URL 設定。
 
 真要讓 SPA 部署在跟 API 不同的來源，才需要在 `frontend/.env`（從追蹤中的
 `frontend/.env.example` 複製）設 `VITE_API_BASE_URL` 為 API 的完整來源。這個變數只在三
