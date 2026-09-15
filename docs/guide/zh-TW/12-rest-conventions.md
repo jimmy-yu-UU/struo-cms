@@ -100,7 +100,7 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 - `SEARCH_UNAVAILABLE` 的訊息固定是 `Search is temporarily unavailable.`，提供者自己回報的原因
   只會寫進伺服器端的紀錄。
 
-`PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般主機上不容易觸發，前者需要真的傳超過上限的位元
+`PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般環境下不容易觸發，前者需要真的傳超過上限的位元
 組，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERVER_ERROR` 只出現在真正未處理的錯誤上。
 
 ## 驗證錯誤的 `details`
