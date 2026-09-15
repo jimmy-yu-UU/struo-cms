@@ -108,10 +108,10 @@ reports the same code while keeping the transport-layer status at `200` (see
 [Chapter 14: GraphQL API](14-graphql.md)).
 
 This exception's own message may carry an internal hostname, so the caller only ever sees the
-fixed, generic message (see [Chapter 12: REST API Conventions](12-rest-conventions.md)); the real
-reason is written only to the server-side log. A provider that would rather degrade gracefully can
-catch the exception itself and return `NotHandled`, falling back to the built-in `LIKE` scan —
-both paths are legitimate, and the interface doesn't force either one.
+fixed, generic message; the real reason is written only to the server-side log. A provider that
+would rather degrade gracefully can catch the exception itself and return `NotHandled`, falling
+back to the built-in `LIKE` scan — both paths are legitimate, and the interface doesn't force
+either one.
 
 ### Registration and lifetime
 
@@ -174,7 +174,7 @@ a webhook, clear a cache — with the core's own write path never needing to kno
 `Task OnChangedAsync(IReadOnlyList<ItemChange> changes, CancellationToken ct = default)`.
 
 An `ItemChange`'s members are `Collection`, `Id`, and `Kind`. `Kind`'s values and when each one
-fires are in the table in the next section.
+fires are in the table under "Which writes are covered".
 
 ### Timing and failure semantics
 

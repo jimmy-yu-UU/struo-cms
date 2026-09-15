@@ -41,15 +41,14 @@ the same time — the caller can't infer from response speed whether that email 
 
 Login exposes only two kinds of failure to the caller: a password that verifies but an account
 that's deactivated returns `401` `ACCOUNT_INACTIVE`; every other case — a wrong password, an
-account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.`,
-deliberately indistinguishable. Success returns `200` with `{ id }` and no other fields.
+account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.` — the two
+are deliberately indistinguishable. Success returns `200` with `{ id }` and no other fields.
 
 `POST /api/users` creates a user, and only a super-admin can call it: success returns `201` with a
 body of `{ id, email, name }`, and `Location` points at `/api/items/user/{id}` — the generic item
 route, since there's no dedicated `GET /api/users/{id}`. An email already in use returns `409`
-`CONFLICT` `Email already in use.`. The password's minimum and maximum length, and the
-configuration keys, are in the `Auth` section of
-[Chapter 4: Configuration Reference](04-configuration.md).
+`CONFLICT` `Email already in use.`. The password's minimum and maximum length, and the configuration
+keys, are in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
 Changing a password goes through `PUT /api/users/{id}/password`: the caller is either a
 super-admin, or the account owner supplying `currentPassword` — the owner's own change always
@@ -63,6 +62,10 @@ When the owner calls for an account that only ever logged in through OIDC and ne
 password, the request is stopped before the current-password check even runs: `400`
 `NO_LOCAL_PASSWORD`. A super-admin can still set a local password on such an account. Across the
 whole identity surface, this is the only endpoint that lets a non-super-admin write.
+
+The admin SPA surfaces this endpoint in two places: an ordinary user changes their own password
+from the account menu in the app shell, and a super-admin sees a reset action on the user form —
+which most callers never reach, since an ordinary role isn't usually granted read on `user`.
 
 This endpoint carries its own rate limit, partitioned by the user id of the caller making the
 change — not the target user's, and not the caller's IP: a super-admin resetting several users'
@@ -243,6 +246,9 @@ When `Oidc:Enabled` is `false` (the default) or `Oidc:Authority` is left blank, 
 scheme is never registered, and `GET /api/auth/login/oidc` returns `404`. Which keys are required
 to enable it, and what happens when one is missing, is in the `Oidc` section of
 [Chapter 4: Configuration Reference](04-configuration.md).
+
+An anonymous `GET /api/config` exposes an `oidcEnabled` field, so the login page knows whether to
+offer the external-login button before the user types anything.
 
 External login is the authorization code flow with PKCE. The provider's own token is never
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the

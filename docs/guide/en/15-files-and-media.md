@@ -5,9 +5,9 @@ an image is transformed live at download time.
 
 ## The `file` collection and its translations
 
-`File` and `MediaFolder` are framework-provided collections, present in every StruoCMS install.
-The media library is therefore ready out of the box: both the configuration and the code come from
-the framework.
+`File` and `MediaFolder` are framework-provided collections. The media library is therefore
+present in every install with no extra setup: both the configuration and the code come from the
+framework.
 
 Writing a `File` goes through a dedicated pipeline — `FilesController` (routed at `api/files`),
 `FileService`, `IFileStorage` — rather than the `ItemService`/`ItemsController` path every other
@@ -210,16 +210,16 @@ should be able to see drafts.
 
 The accompanying seed data grants `public` only read access, but the framework itself doesn't stop
 a super-admin from granting `public` a write grant, which would make drafts visible to every
-caller, anonymous included.
+signed-in caller — an anonymous request is still a `404`.
 
 When this check fails, the response is always a plain `404`, never `403` — whether a draft exists
 is never leaked; a file already sitting in the trash also gets `404` from both read actions,
 because the query already applies the same soft-delete filter.
 
-A download with no transform is sent as an attachment: the response carries
-`Content-Disposition` with the original filename; a successfully transformed response carries no
-such header, only the transformed content type (a failed transform that falls back to the original
-bytes is covered below).
+A download with no transform is sent as an attachment: the response carries `Content-Disposition`
+with the original filename; a successfully transformed response carries no such header, only the
+transformed content type (a failed transform that falls back to the original bytes is covered
+below).
 
 When `Struo:Files:PresignedRedirect` is on and no transform was requested, the download becomes a
 `302` redirect to the storage backend's presigned URL; it's off by default, so the admin UI's
@@ -259,7 +259,7 @@ redirect, unaffected.
 | `width` | Integer | Clamped 1–`MaxWidth`; missing derives proportionally |
 | `height` | Integer | Clamped 1–`MaxHeight`; missing derives proportionally |
 | `format` | One of `AllowedFormats` | Other values `400`; missing gives WebP, not source format |
-| `fit` | Any string | Missing defaults `inside`; `cover` crops with both sides |
+| `fit` | Any string | Defaults `inside`; `cover` crops only with both |
 | `quality` | Integer | Clamped 1–100; missing uses `DefaultQuality` |
 
 `MaxWidth`, `MaxHeight`, `AllowedFormats` and `DefaultQuality` are all in
@@ -286,8 +286,8 @@ If the transform itself throws — a corrupted source, an unsupported encoding, 
 outright all count — the exception is logged at Warning level along with the file id, and the
 original bytes are sent instead, with the request still succeeding.
 
-Those original bytes go out the same way an ordinary download does, so they carry this
-row's own content type and attachment `Content-Disposition` — a failed transform's response is
+Those original bytes go out the same way an ordinary download does, so they carry this row's own
+content type and attachment `Content-Disposition` — a failed transform's response is
 distinguishable from a successful one just by its headers.
 
 ### Examples
@@ -350,8 +350,8 @@ unaffected.
 The actual pinned version numbers are recorded in `Directory.Packages.props` and
 `THIRD-PARTY-NOTICES.md`, not repeated here. The `NetVips.Native` package family also bundles
 several of libvips's optional dependencies (mozjpeg, libpng, libwebp, cairo, pango, librsvg, and
-others), under a mix of MIT, BSD and LGPLv3 licenses, each recorded in its own package's notice
-file.
+others), under a mix of MIT, BSD and LGPLv3 licenses, each recorded in the `NetVips.Native.*`
+package's own notice file.
 
 ## Trash for files
 
@@ -381,7 +381,8 @@ Purge re-queries the row with the soft-delete filter cleared, so the most common
 first, then purge (the default delete already trashes first) — works. Purge clears the brand-logo
 reference the same way trashing does.
 
-`purge` only accepts `true`, case-insensitively; a spelling like `?purge=1` doesn't work:
+Only `true` triggers the permanent delete, case-insensitively; a spelling like `?purge=1` doesn't
+work:
 
 ```text
 $ DELETE /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9?purge=1

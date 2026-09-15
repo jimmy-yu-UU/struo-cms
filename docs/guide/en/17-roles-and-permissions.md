@@ -32,10 +32,10 @@ per-collection grant at all — it's a short-circuit for the whole check chain.
 A single request can involve several roles at once, so the permission actually applied isn't a
 lookup against one role — it's recomputed on every request.
 
-`PermissionResolutionMiddleware` runs this resolution right after authentication. It first unions
-the caller's held roles with the `public` role's grants. `public`'s grants are always added in,
-whether the caller is anonymous, holds no role, or already holds several — not only as a floor
-that applies when the role set happens to be empty.
+`PermissionResolutionMiddleware` runs this resolution after authentication. It first unions the
+caller's held roles with the `public` role's grants. `public`'s grants are always added in, whether
+the caller is anonymous, holds no role, or already holds several — not only as a floor that applies
+when the role set happens to be empty.
 
 Skipping that union would let a signed-in user end up reading less than an anonymous visitor:
 if `public` opens read on some collection and none of the user's own roles repeat that grant,
@@ -116,10 +116,10 @@ attribute declares, and its effect on the admin form, are in
 [Chapter 6: Field Types and Editors](06-field-types.md); this section covers only what it means
 for permissions.
 
-A `Hidden` field disappears entirely from the query DSL's field allowlist, and from the
-searchable-field allowlist along with it — not just left unprojected, but rejected as unknown
-even as a filter or sort target. The core-computed list of searchable fields, itself only a hint
-handed to built-in search and to a search provider, excludes it too.
+A `Hidden` field disappears entirely from the query DSL's field allowlist — not just left
+unprojected, but rejected as unknown even as a filter or sort target. The core-computed list of
+searchable fields, itself only a hint handed to built-in search and to a search provider, excludes
+it too.
 
 Without this, a field that isn't returned but can still be filtered on — combined with
 pagination's `meta.total` — could still be guessed out one character at a time.
