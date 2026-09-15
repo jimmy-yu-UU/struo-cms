@@ -1,8 +1,8 @@
 # 17. Roles and Permissions
 
 Once a caller is authenticated, this chapter covers what it can do on a given collection, how the
-system computes that answer, and where to change it. How a caller proves who it is is covered in
-[Chapter 16: Authentication and SSO](16-authentication.md).
+system computes that answer, and where to change it.
+[Chapter 16: Authentication and SSO](16-authentication.md) covers how a caller proves who it is.
 
 ## The three tables
 
@@ -11,15 +11,16 @@ grants.
 
 | Collection | Table | Content |
 |---|---|---|
-| `user` | `users` | Email, password hash, active status, token hash, plus roles |
+| `user` | `users` | Email, password hash, active flag, access-token hash, roles |
 | `role` | `roles` | Role name, `isSuperAdmin` flag, description |
 | `permission` | `permissions` | One row per role-collection grant |
 
-On `user`, `password` and `accessToken` are both `Hidden` and `ReadOnly` at once. The password and
-token hashes neither show up in an ordinary query result nor can be written by a caller directly.
+On `user`, `password` and `accessToken` are both `Hidden` and `ReadOnly` at once, so the password
+and token hashes never appear in an ordinary query result and can't be written directly by a
+caller.
 
-A user's roles are a `TagSelect` many-to-many relation to `role` — on the admin form, this is just
-checking role names. The junction between user and role is a fourth table, `userRole` (table
+A user's roles are a `TagSelect` many-to-many relation to `role` — on the admin form, that means
+ticking role names. The junction between user and role is a fourth table, `userRole` (table
 `user_roles`), which no caller ever sees.
 
 A `permission` row names a role and a collection, and carries exactly three grant flags:
@@ -37,15 +38,15 @@ the caller's held roles with the `public` role's grants. `public`'s grants are a
 whether the caller is anonymous, holds no role, or already holds several — not only as a floor
 that applies when the role set happens to be empty.
 
-Skipping that union would let a signed-in user end up with less access than an anonymous visitor:
+Skipping that union would let a signed-in user end up reading less than an anonymous visitor:
 if `public` opens read on some collection and none of the user's own roles repeat that grant,
-signing in becomes a regression. This union query reads directly, bypassing the ordinary
+signing in becomes a regression. This union query reads the data directly, bypassing the ordinary
 projection and permission check, because the query that computes the permission threshold can't
 itself be blocked by that same threshold.
 
-The union is then handed to `PermissionResolver.Resolve` to fold down. On a given collection, if
-any held role has `canRead`, `canWrite`, or `canDelete`, the folded result is true — this is an OR,
-not an AND. Collection names are compared case-insensitively.
+The union is then handed to `PermissionResolver.Resolve` to fold down. On a given collection, each
+of `canRead`, `canWrite`, and `canDelete` folds to true if any held role sets it — this is an OR
+across roles, not an AND. Collection names are compared case-insensitively.
 
 A role carrying `isSuperAdmin` short-circuits straight to all three flags true for every
 collection, without consulting any grant row at all. A collection with no grant row is treated as
@@ -63,8 +64,7 @@ What each of the three flags actually guards lines up with the permission column
 
 - `canRead` guards every kind of read on the collection: listing, a single `GET`, listing and
   reading a single revision, GraphQL reads, and the facets and aggregates returned with a list.
-- `canWrite` guards create, update, and revision restore on the generic path, and also guards file
-  upload.
+- `canWrite` guards create, update, and revert on the generic path, and also guards file upload.
 - `canDelete` guards delete (trash or purge) and restore on the generic path, and also guards
   file delete and restore.
 
@@ -83,18 +83,18 @@ Among the framework's built-in collections, the ones marked `AdminOnly` are `use
 `permission`, and `userRole`. What the attribute itself declares, and how to set it on a
 collection of your own, are in [Chapter 5: Defining Collections](05-collections.md).
 
-`AdminOnly` governs writes only: create, update, delete, restore, and revision restore on the
+`AdminOnly` governs writes only: create, update, delete, restore, and revert on the
 generic CRUD path all require the caller to be a super-admin, whatever the collection's own grants
 say. Even a role granted `canWrite` is blocked here unless the caller is a super-admin. Reads are
 unaffected and follow the ordinary `canRead` check.
 
 Every write point runs the ordinary collection permission check first, with the super-admin check
-right after it. Create, update, and revision restore check the write grant and fail with
+right after it. Create, update, and revert check the write grant and fail with
 `Write not permitted.`; delete and restore check the delete grant and fail with
 `Delete not permitted.`.
 
 A caller with no grant at all on the collection sees one of those two ordinary messages. Only a
-caller that already holds the relevant grant, but isn't a super-admin, sees the dedicated
+caller that already holds the relevant grant, but isn't a super-admin, sees the dedicated message
 `Writes to '{collection}' require a super-admin.` — so that message appears only for someone who
 would otherwise be allowed to write.
 
@@ -133,7 +133,7 @@ that flag that actually protects them.
 To block a sensitive field on a collection of your own, set both flags together. `Hidden` alone
 still lets a caller who can guess the field name write to it, and the value really is written —
 only reading it back is blocked. Adding `ReadOnly` is what makes a submitted value get silently
-dropped by the system-field check instead, rather than rejected outright.
+dropped by the system-field and read-only-field check instead, rather than rejected outright.
 
 ## What a permission failure looks like
 
@@ -180,12 +180,11 @@ floor is unioned in the same way even over a hypothetical role set.
 
 The `roles=` query parameter decides whose roles are being previewed:
 
-- omitted entirely, and the preview uses this user's actually stored roles;
-- present but an empty string, and the preview uses an empty hypothetical role set;
-- one or more role ids, and the preview uses that hypothetical set;
-- an id that doesn't resolve to a real role, and the response is `400`
-  `Unknown role ids: …`; a value that isn't even a well-formed GUID gets a different message,
-  `400` `Malformed role id: {value}`.
+- omitted entirely: the preview uses the roles actually stored on this user;
+- present but empty: an empty hypothetical role set;
+- one or more role ids: that hypothetical set;
+- an id that doesn't resolve to a real role: `400` `Unknown role ids: …`; a value that isn't
+  even a well-formed GUID gets a different message, `400` `Malformed role id: {value}`.
 
 Whichever case applies, `public`'s grants are still unioned in — switching to a hypothetical role
 set never drops that floor. Telling "omitted" apart from "empty string" needs the raw query
@@ -194,7 +193,7 @@ not the same thing. A user id that doesn't exist at all returns `404` `User not 
 check runs before any role is resolved.
 
 A super-admin's result is fixed at `isSuperAdmin: true` plus an empty `permissions`, because every
-collection's grant is already implied true and there's nothing to list per collection.
+collection's grant is already implied true and there is no per-collection list to give.
 `GET /api/auth/me` returns the same shape for an actual super-admin session. For anyone else, both
 interfaces list only the collections with at least one true flag; a collection with no grant at
 all is simply absent from `permissions`.
@@ -241,11 +240,11 @@ because this is a hypothesis, not a real swap.
 ## Managing roles in the admin UI
 
 The admin UI never lets an administrator edit the `permission` or `userRole` collections directly.
-`Hidden` and `AdminOnly` are independent flags, and a collection normally carries at most one of
+`Hidden` and `AdminOnly` are independent flags, and a collection can carry just one of
 them, but these two carry both, because they're purely internal RBAC data — letting the ordinary
 write grant reach them would be exactly the self-escalation `AdminOnly` exists to block.
 
-To change a role's grants, use the role permission matrix instead: check `canRead`, `canWrite`,
+To change a role's grants, use the role permission matrix instead: tick `canRead`, `canWrite`,
 and `canDelete` per collection, and submit the whole set in one go. The effective-permissions
 preview panel on the user form updates live to show what the currently selected role set computes
 to.
