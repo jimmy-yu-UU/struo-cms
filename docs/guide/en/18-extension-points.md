@@ -1,9 +1,9 @@
 # 18. Extension Points: Search Providers and Change Listeners
 
-How a caller's `search=` gets answered, and what happens after a write, are each left to the core
-as one interface: a fork plugs in its own implementation without touching the core's query or
-write path at all. This chapter covers the contract behind `ISearchProvider` and
-`IItemChangeListener`, when each is called, what happens on failure, and how to register one.
+How a caller's `search=` gets answered, and what happens after a write, are each left by the core to
+an interface of its own: a fork plugs in its own implementation without touching the core's query or
+write path at all. This chapter covers what each of `ISearchProvider` and `IItemChangeListener`
+contracts for, when each is called, what happens on failure, and how to register one.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
 [Chapter 10: Querying: Filters, Sorting and Pagination](10-query-basics.md); a write's revision
@@ -12,14 +12,14 @@ history and soft-delete semantics are in
 
 ## Where the two interfaces fit in the architecture
 
-`ISearchProvider` and `IItemChangeListener` are two of the interfaces
-[Chapter 2: Architecture](02-architecture.md) lists under "what can be swapped and what can't",
-sitting at the same layer as `IFileStorage`.
+`ISearchProvider` and `IItemChangeListener` are two of the interfaces the core hands out, listed
+in [Chapter 2: Architecture](02-architecture.md) under "what can be swapped, what can't" — sitting
+at the same layer as `IFileStorage`.
 
 The core provides only a `NullSearchProvider` that never handles a search, and an
-`ItemChangeNotifier` that dispatches notifications but starts with no listener registered. A fork
-that wants either one just implements the interface and registers it — none of the core's own
-code needs to change.
+`ItemChangeNotifier` that dispatches notifications but has no listener registered by default. A
+fork that wants to take over either seam just implements the interface and registers it — none of
+the core's own code needs to change.
 
 ## The search provider: `ISearchProvider`
 
@@ -40,10 +40,9 @@ needs to know which kind of index sits behind it.
   same spelling.
 - `Term` — the raw value of `search=`, neither trimmed nor lower-cased.
 - `Locale` — the locale this particular query actually resolves to: an explicit `locale=` if one
-  was supplied, the site default otherwise, computed the same way even for a collection with no
-  translations.
+  was supplied, the site default otherwise, computed even for a collection with no translations.
 - `SearchableFields` — the list of `Searchable`, non-`Hidden` fields the core computes on its own.
-  It's only a hint; a provider is free to ignore it and index whatever fields it likes.
+  It's only a hint; a provider is free to ignore it and search whatever fields it indexes itself.
 
 The answer is one of exactly two states: `SearchOutcome.NotHandled`, or a result built with
 `SearchOutcome.Candidates(ids)`. Reading it back exposes `Handled` (a boolean) and `Ids` (a
@@ -116,15 +115,15 @@ both paths are legitimate, and the interface doesn't force either one.
 
 ### Registration and lifetime
 
-The core's own default registration is `TryAdd`-ed — registered only if nothing's registered
-yet — so a fork's registration always wins, whether it runs before or after `AddStruoData()`:
-before wins because the core's default then never takes effect; after wins because whatever
-registers last is what actually gets resolved.
+The core registers its own default with `TryAdd` — only if nothing is registered yet — so a
+fork's registration always wins, whether it runs before or after `AddStruoData()`: before wins
+because the core's default then never takes effect; after wins because whatever registers last is
+what actually gets resolved.
 
-Both `ISearchProvider` and `IItemChangeListener`, covered in the next section, only need to be
-registered in an assembly the API host project (`Struo.Api`) references — there's no need to
-also list it in `Struo:ContentAssemblies`, since that list only scans for `[CmsCollection]` types
-and isn't a registry for extension points.
+Both `ISearchProvider` and the next section's `IItemChangeListener` only need to be registered in
+an assembly the API host project (`Struo.Api`) references — no need to list that assembly in
+`Struo:ContentAssemblies`, since that list only scans for `[CmsCollection]` types and isn't a
+registry for extension points.
 
 Use a scoped or transient lifetime, never singleton, unless the provider is genuinely stateless: a
 singleton that captures a scoped dependency in its constructor either gets stopped at startup by
@@ -157,7 +156,7 @@ public sealed class MySearchProvider(IMyIndex index) : ISearchProvider
 The collection name and the index lookup are the two things a fork swaps out: every other
 collection just returns `NotHandled`, and `search=` keeps running the built-in `LIKE` scan for it.
 
-Registered after `AddStruoData()`:
+Register it after `AddStruoData()`:
 
 ```csharp
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
@@ -211,7 +210,7 @@ response.
 | Kind | When it fires |
 |---|---|
 | `Created` | An item is created |
-| `Updated` | An item is updated, or a revision restored (another update) |
+| `Updated` | An item is updated, or a revision reverted (another update) |
 | `Trashed` | Trashed, with at least one row actually affected |
 | `Restored` | Restored, with at least one row actually affected |
 | `Purged` | The purge target, plus every row reached by cascading delete |
@@ -238,7 +237,7 @@ primary key as a string, always lower-case for a `Guid`.
 
 An ordinary collection's write, whether through REST or GraphQL, ends up on the same core logic,
 so both protocols produce identical notifications; a file's own four write paths — upload, trash,
-restore, purge — each map onto one of `Created`, `Trashed`, `Restored`, `Purged` too, see
+restore, purge — each map onto one of `Created`, `Trashed`, `Restored`, `Purged` too; see
 [Chapter 15: Files, Media and Image Transforms](15-files-and-media.md).
 
 ### What isn't covered
@@ -253,19 +252,20 @@ A write made through any channel outside this API — a fork's own ETL, or a dir
 connection — likewise never passes through here.
 
 The identity collections `user`, `role`, `permission`, and `userRole`, when written through the
-generic item API instead (fitting for a super-admin), go through the same path as any other
+generic item API instead (which suits a super-admin), go through the same path as any other
 collection and are notified the same way — what differs is which API did the writing, not the
 collections themselves.
 
 ### Registration, cost, and recursion
 
-The dispatcher itself is always present and needs no registration; listeners aren't — a fork can
-register any number of them. They resolve as a collection, unlike the search provider's single
-seam, and registration order only decides the order they're called in, not which ones get called.
+The dispatcher itself is always present and needs no registration; a listener does need one — a
+fork can register any number of them. They resolve as a collection, unlike the search provider's
+single seam, and registration order only decides the order they're called in, not which ones get
+called.
 
-Register with scoped; if a fork insists on singleton, its constructor can't capture a scoped
-dependency, or it hits the same startup block, or the same one instance reused for the whole
-application lifetime.
+Register with scoped; a fork that insists on singleton must keep scoped dependencies out of the
+constructor, or it hits the same startup block — or ends up with one instance reused for the
+whole application lifetime.
 
 With no listener registered at all, create, update, trash, and restore do no more work than a
 bare write — the dispatcher sees an empty list and returns immediately.
@@ -275,7 +275,7 @@ existing related rows it touches first — one extra typed read per inbound set-
 per inbound many-to-many junction — and that extra cost belongs to the purge itself, not
 something run only for the listener's sake.
 
-This interface only sends the notification; it doesn't confirm a listener actually received it —
+This interface only sends the notification; it doesn't confirm the downstream actually took it —
 the core never retries a failed call, and a fork whose downstream can go down needs its own
 health checks and reconciliation.
 
@@ -321,5 +321,5 @@ builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 
 That covers search providers and change notifications. The next chapter,
 [Chapter 19: Admin Customization](19-admin-customization.md), comes back to the admin SPA, and
-covers which of its looks and behavior can be changed by configuration alone, and which really
-need touching `frontend/src`.
+covers which parts of its appearance and behavior can be changed by configuration alone, and
+which really need a change under `frontend/src`.
