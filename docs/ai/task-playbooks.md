@@ -39,7 +39,7 @@ standing gates or of CI.
 Background: `docs/guide/en/05-collections.md` (full checklist and rationale),
 `docs/guide/en/07-i18n.md` (translatable fields), `docs/guide/en/08-relations.md`
 (relations), `docs/guide/en/09-revisions-and-trash.md` (soft delete / revisions),
-`docs/guide/en/12-auth-and-rbac.md` (RBAC grants).
+`docs/guide/en/17-roles-and-permissions.md` (RBAC grants).
 
 Adding a collection is purely additive to a fork's own content project — it never touches
 `src/Struo.*`.
@@ -103,7 +103,7 @@ Adding a collection is purely additive to a fork's own content project — it ne
 ## Playbook 2: Add a field type
 
 Background: `docs/guide/en/06-field-types.md` (the full `FieldInterface` reference and the three things
-one enum value drives), `docs/guide/en/14-admin-spa-customization.md`, "Adding a custom field editor"
+one enum value drives), `docs/guide/en/06-field-types.md`, "Adding a custom field editor"
 (the frontend-only variant of this playbook).
 
 There are two distinct versions of "add a field type." Pick the one that matches what's actually needed:
@@ -189,7 +189,7 @@ picker instead of a plain text input) — frontend-only, no backend change:
 ## Playbook 3: Add an endpoint
 
 Background: `docs/guide/en/12-rest-conventions.md` (envelope, error codes, CSRF, status
-conventions), `docs/guide/en/12-auth-and-rbac.md` (authentication schemes and permission checks).
+conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `docs/guide/en/17-roles-and-permissions.md` (permission checks).
 
 1. **Add a controller** under `src/Struo.Api/Controllers/`, following the shipped pattern (e.g.
    `src/Struo.Api/Controllers/PingController.cs` for the minimal shape,
@@ -283,7 +283,7 @@ README.md`.
 
 ## Playbook 5: Change the admin SPA
 
-Background: `docs/guide/en/14-admin-spa-customization.md` (the full "when to customize vs. when
+Background: `docs/guide/en/19-admin-customization.md` (the full "when to customize vs. when
 metadata is enough" decision and the directory map).
 
 Before touching `frontend/src` at all: confirm the requirement is not already satisfiable by declaring
@@ -294,7 +294,7 @@ collection's fields, columns, or labels; everything comes from `GET /api/schema`
 2a), branding/theming beyond a name and logo, admin-UI language (i18n), or a workflow that doesn't fit
 the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 
-1. **Locate the right directory** using the map in chapter 14: `api/` (thin REST wrappers), `components/`
+1. **Locate the right directory** using the map in chapter 19: `api/` (thin REST wrappers), `components/`
    (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `media/`, `revisions/`, `rbac/`),
    `composables/`, `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including
    `fieldTypes/`), `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
@@ -304,7 +304,7 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    layer (page/surface/foreground and status/shadow/overlay/font custom properties, `html`/`body`
    resets, the theme-transition rule, `.app-breadcrumb`) first-party scoped CSS reads.
    **`frontend/src/components/ui/` is vendored, read-only output — never edit it and never `:deep()`
-   into it**; a re-theme changes a token layer or a wrapper component outside `ui/`. See chapter 14's
+   into it**; a re-theme changes a token layer or a wrapper component outside `ui/`. See chapter 19's
    "Restyling a vendored `ui/` component" for how to override a component's style without losing a
    specificity fight. Avoid `!important`.
 3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
@@ -325,7 +325,7 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 6. **Gate**: `pnpm test && pnpm build` (the standing gates' frontend pair; `pnpm build` runs
    `vue-tsc -b`, which is CI's only enforcement of the SPA's TypeScript types) — this playbook's own
    steps change `frontend/src`, not `docs/guide/**`, so the docs gate does not apply; if a change under
-   this playbook also edits a manual chapter (e.g. chapter 14 itself), add `pnpm build` from `docs/` too.
+   this playbook also edits a manual chapter (e.g. chapter 19 itself), add `pnpm build` from `docs/` too.
    Run `pnpm e2e` as a further check for any change touching a critical flow — it needs a live API and
    database and is not part of the standing gates or of CI.
 
