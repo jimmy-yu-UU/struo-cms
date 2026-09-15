@@ -162,8 +162,8 @@ scoped style 裡；控點是 10px 見方的拖曳熱區，比 WCAG 2.2 建議的
 
 編輯區塊本身掛 `class="prose dark:prose-invert"`，直接吃排版外掛的預設樣式，用意是編輯
 時盡量貼近文章發布後的樣子；要換掉這層外觀，改的是 `tokens.css` 裡外掛註冊處的
-`--tw-prose-*` 自訂屬性，而且要寫成沒包 layer 的一般規則，理由跟上一節「未包 layer 贏過
-包了 layer」是同一條。
+`--tw-prose-*` 自訂屬性，而且要寫成沒包 layer 的一般規則，理由跟〈Design token 與主題〉
+一節「未包 layer 贏過包了 layer」是同一條。
 
 表格的表頭是唯一交給伺服器補的落差：編輯器的 schema 沒有 `thead` 節點，sanitizer 事後處
 理時，只要一個表格第一列的每一格都是 `<th>`、又還沒有 `<thead>`，就把整個第一列包進
