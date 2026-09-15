@@ -117,9 +117,9 @@ attribute declares, and its effect on the admin form, are in
 for permissions.
 
 A `Hidden` field disappears entirely from the query DSL's field allowlist — not just left
-unprojected, but rejected as unknown even as a filter or sort target. The core-computed list of
-searchable fields, itself only a hint handed to built-in search and to a search provider, excludes
-it too.
+unprojected, but rejected as unknown even as a filter or sort target. The core-computed list
+of searchable fields excludes it too — built-in search uses that list, and a search provider
+receives it only as a hint.
 
 Without this, a field that isn't returned but can still be filtered on — combined with
 pagination's `meta.total` — could still be guessed out one character at a time.
