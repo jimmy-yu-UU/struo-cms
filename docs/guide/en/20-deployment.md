@@ -37,8 +37,8 @@ disappears while the account's password is still the default one.
 Account-layer throttling (`RateLimiting:LoginAccount`) is on by default and blocks brute-force
 attempts against a single account on its own; IP-layer throttling (`RateLimiting:Login`) is off by
 default, because it buckets by `Connection.RemoteIpAddress`: behind a reverse proxy, every client
-appears to come from the proxy's own address, and an office sharing one outbound NAT ends up in the same bucket
-even when the proxy is configured correctly.
+appears to come from the proxy's own address, and an office sharing one outbound NAT ends up in
+the same bucket even when the proxy is configured correctly.
 
 How each layer behaves is covered in the "Login rate limiting" section of
 [Chapter 16: Authentication and SSO](16-authentication.md).
@@ -96,8 +96,9 @@ The API project itself sends exactly one security response header,
 `X-Content-Type-Options: nosniff`, covering error responses, CORS preflights, and bare 404s alike.
 
 `Strict-Transport-Security`, `X-Frame-Options`/CSP's `frame-ancestors`, and `Referrer-Policy`
-aren't its responsibility — they're left to the reverse proxy. `frontend/nginx/default.conf.template`
-is a usable reference implementation, not a rule that nginx is mandatory.
+aren't its responsibility — they're left to the reverse proxy.
+`frontend/nginx/default.conf.template` is a usable reference implementation, not a rule that
+nginx is mandatory.
 
 ## What fails fast at startup
 
@@ -160,9 +161,9 @@ can reach, plus the root `Directory.Build.props`/`Directory.Packages.props`. The
 
 ### The API image
 
-The image listens on `8080` and runs as the non-root user `app`. `db/migrations` is already copied into the
-image at `/app/db/migrations`; `Database:MigrationsPath` is left empty by default in this image,
-and getting migration scripts running here means setting it to this absolute path.
+The image listens on `8080` and runs as the non-root user `app`. `db/migrations` is already copied
+into the image at `/app/db/migrations`; `Database:MigrationsPath` is left empty by default in this
+image, and getting migration scripts running here means setting it to this absolute path.
 
 `app` can write to two directories: `/app/App_Data` (uploaded content and the image-transform
 cache for the local files backend) and `/app/logs` (Serilog's File sink); only `/app/App_Data` is
@@ -217,14 +218,15 @@ protection as any other secret.
 
 ### The admin SPA image
 
-The image listens on `80`, serving Vite's production build through nginx. Unlike the API image, there's no
-`HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting `/`
-directly.
+The image listens on `80`, serving Vite's production build through nginx. Unlike the API image,
+there's no `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting
+`/` directly.
 
 The SPA's API address is baked into the image at build time: `vite build` in production mode
 reads `frontend/.env.production`, and this file is committed to the repository —
 `frontend/.dockerignore` deliberately doesn't exclude it, only the developer's own
-`.env`/`.env.local`/`.env.*.local`. Changing this value only takes effect after rebuilding the image.
+`.env`/`.env.local`/`.env.*.local`. Changing this value only takes effect after rebuilding the
+image.
 
 `API_UPSTREAM` (defaulting to `http://api:8080`) has to be written as `scheme://host:port`, with no
 path or trailing slash: `proxy_pass` takes an nginx variable rather than a literal value, which lets
