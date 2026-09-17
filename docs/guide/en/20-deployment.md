@@ -222,11 +222,11 @@ The image listens on `80`, serving Vite's production build through nginx. Unlike
 there's no `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting
 `/` directly.
 
-The SPA's API address is baked into the image at build time: `vite build` in production mode
-reads `frontend/.env.production`, and this file is committed to the repository —
-`frontend/.dockerignore` deliberately doesn't exclude it, only the developer's own
-`.env`/`.env.local`/`.env.*.local`. Changing this value only takes effect after rebuilding the
-image.
+The SPA's API address is baked into the image at build time: `vite build` in production mode reads
+`frontend/.env.production` if one is present, and `frontend/.dockerignore` deliberately doesn't
+exclude such a file from the build context — only the developer's own
+`.env`/`.env.local`/`.env.*.local`. The repository itself carries no `.env.production`, only the
+tracked `frontend/.env.example`. Changing this value only takes effect after rebuilding the image.
 
 `API_UPSTREAM` (defaulting to `http://api:8080`) has to be written as `scheme://host:port`, with no
 path or trailing slash: `proxy_pass` takes an nginx variable rather than a literal value, which lets
@@ -242,10 +242,11 @@ Regardless of how `HSTS_VALUE` is set, the three headers `X-Content-Type-Options
 the API's own `nosniff` is stripped from responses proxied to `/api/*`, so this header appears only
 once.
 
-Caching rules: `index.html` sends `Cache-Control: no-cache`; `/assets/` sends `public,
-max-age=31536000, immutable` (Vite's filenames carry a content hash). `client_max_body_size` is
-`32m`, higher than the backend's `Struo:Files:MaxUploadBytes` of 25 MiB, so an oversized upload
-gets the backend's own JSON error envelope instead of nginx's HTML error page.
+Caching rules: `index.html` sends `Cache-Control: no-cache`; `/assets/` sends
+`public, max-age=31536000, immutable` (Vite's filenames carry a content hash).
+`client_max_body_size` is `32m`, higher than the backend's `Struo:Files:MaxUploadBytes` of 25 MiB,
+so an oversized upload gets the backend's own JSON error envelope instead of nginx's HTML error
+page.
 
 `NGINX_RESOLVER` (defaulting to `127.0.0.11`, Docker's built-in DNS, with a 5-second timeout) only
 means anything on a user-defined Docker network; on the default bridge network, every `/api/*`
@@ -253,15 +254,14 @@ request gets a 502 after the resolution times out.
 
 For deploying the SPA on a different origin from the API, how to set `VITE_API_BASE_URL` and
 when the setting takes effect are in [Chapter 19: Admin Customization](19-admin-customization.md);
-building this image means putting the value in the committed `frontend/.env.production` — a
-developer's own `frontend/.env` never makes it into the image.
+building this image means putting the value in a `frontend/.env.production` you add and commit
+yourself — a developer's own `frontend/.env` never makes it into the image.
 
 ### What's left to do outside the image
 
 The image is only responsible for getting the application running. Terminating TLS, configuring
 `UseForwardedHeaders`, restart policy, horizontal scaling, secret injection, and wiring
-`/health/live` and `/health/ready` into the orchestrator's own probes are all yours to set up
-separately.
+`/health/live` and `/health/ready` into the orchestrator's own probes are all yours to set up.
 
 ### Verifying both images together
 

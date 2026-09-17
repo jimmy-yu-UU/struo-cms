@@ -48,7 +48,7 @@
 Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回；沒有先終結 TLS 就把流量送進
 來，登入回應看起來正常（帶著 `Set-Cookie`），但瀏覽器往後不會再帶著這個 cookie，呼叫端等於卡
 在「登入了卻又要登入」的迴圈。安全政策怎麼判斷、CORS 開了之後多出哪些規則，見
-[第 16 章：認證與 SSO](16-authentication.md)。
+[第 16 章](16-authentication.md)。
 
 ### Scalar／OpenAPI 在 Production 關閉
 
@@ -65,7 +65,7 @@ Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回
 
 換上真正的 tenant 之後，`Oidc:RequireEmailVerified`（預設不要求）
 與 `Oidc:AllowedEmailDomains`（預設空清單即不限制）都是預設放行的檢查，三個都該在正式環境釘
-死，否則只剩下 email 相等這一道關卡。檢查順序見[第 16 章：認證與 SSO](16-authentication.md)。
+死，否則只剩下 email 相等這一道關卡。檢查順序見[第 16 章](16-authentication.md)。
 
 ### 安全回應標頭：API 只送 nosniff
 
@@ -142,7 +142,7 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 ### 啟動這個映像至少要給什麼
 
 下面五個環境變數決定這個映像能不能啟動，以及啟動之後怎麼運作；其餘每一個設定鍵的完整語義見
-[第 4 章：設定參考](04-configuration.md)。
+[第 4 章](04-configuration.md)。
 
 - `Database__DbType`——選哪個後端（`PostgreSQL`、`Sqlite`、`MySql`、`SqlServer`、
   `Oracle`）。
@@ -176,10 +176,10 @@ DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token �
 監聽 `80`，用 nginx 提供 Vite 的 production build。跟 API 映像不同，這裡沒有 `HEALTHCHECK`：
 沒有下游依賴可以探測，要探測就直接打 `/`。
 
-SPA 的 API 位址是建置期就烤進映像裡的：`vite build` 在 production 模式下讀
-`frontend/.env.production`，而這份檔案是提交進儲存庫的，`frontend/.dockerignore` 也刻意不
-排除它，只排除開發者自己的 `.env`／`.env.local`／`.env.*.local`。改了這個值，要重新建置映
-像才會生效。
+SPA 的 API 位址是建置期就烤進映像裡的：`vite build` 在 production 模式下會讀
+`frontend/.env.production`（有這份檔案的話），`frontend/.dockerignore` 也刻意不把它排除在建置範圍
+之外，只排除開發者自己的 `.env`／`.env.local`／`.env.*.local`。儲存庫本身沒有附
+`.env.production`，只有追蹤中的 `frontend/.env.example`。改了這個值，要重新建置映像才會生效。
 
 `API_UPSTREAM`（預設 `http://api:8080`）要寫成 `scheme://host:port`，不能帶路徑或結尾斜
 線：`proxy_pass` 吃的是一個 nginx 變數，不是字面值，所以容器就算 API 還沒起來也能先啟動，代
@@ -201,7 +201,7 @@ network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*
 到 502。
 
 要讓 SPA 部署在跟 API 不同的來源，設定 `VITE_API_BASE_URL` 的方式與生效時機，見
-[第 19 章：後台客製化](19-admin-customization.md)；建這個映像時，值要放在已提交的
+[第 19 章：後台客製化](19-admin-customization.md)；建這個映像時，值要放在你自己新增並提交的
 `frontend/.env.production`，開發者自己的 `frontend/.env` 不會進到映像裡。
 
 ### 映像之外還要自己做的事

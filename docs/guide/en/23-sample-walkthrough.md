@@ -39,9 +39,11 @@ Opting the sample in needs two edits, and both are required. First, add a projec
 <ProjectReference Include="..\..\samples\Struo.Sample.Blog\Struo.Sample.Blog.csproj" />
 ```
 
-Second, in `src/Struo.Api/appsettings.Development.json.example` (outside Development, edit
-`appsettings.json` instead, or set `Struo__ContentAssemblies__0`), uncomment the
-`"ContentAssemblies"` line:
+Second, uncomment the `"ContentAssemblies"` line in your own
+`src/Struo.Api/appsettings.Development.json` — the gitignored copy of the tracked example that
+[Chapter 3: Getting Started](03-getting-started.md) has you make. The block to look for is the one
+the example carries (outside Development, put the array in `appsettings.json` instead, or set
+`Struo__ContentAssemblies__0`):
 
 ```json
   // Uncomment to enable the Blog sample (see docs/guide/en/23-sample-walkthrough.md).
@@ -90,11 +92,11 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 It implements `ISoftDeletable` and sets `Revisions` to `true`, so it carries both the trash and
 revisions at once — see [Chapter 9](09-revisions-and-trash.md).
 
-Its own fields cover most of the interface overview: `Select` (`Status`), `DateTime`
-(`PublishedAt`), `Image` (`HeroImageId`), `MultiSelect` (`Regions`), `CheckboxGroup` (`Audiences`),
-`Tags` (`Keywords`), `Json` (`Attributes`), `KeyValue` (`Meta`), `Files` (`Gallery`), `Repeater`
-(`Faqs`, whose child type is `FaqItem` below), and `InternalNote`, a `Text` field marked
-`Hidden`. What each interface does is in
+Its own fields cover most of the interfaces in Chapter 6's overview: `Select` (`Status`),
+`DateTime` (`PublishedAt`), `Image` (`HeroImageId`), `MultiSelect` (`Regions`), `CheckboxGroup`
+(`Audiences`), `Tags` (`Keywords`), `Json` (`Attributes`), `KeyValue` (`Meta`), `Files`
+(`Gallery`), `Repeater` (`Faqs`, whose child type is `FaqItem` below), and `InternalNote`, a `Text`
+field marked `Hidden`. What each interface does is in
 [Chapter 6: Field Types and Editors](06-field-types.md).
 
 `Status` is a `draft`/`published` `Select` that defaults to `draft` in code and is also the
@@ -140,7 +142,7 @@ The full mechanics of a junction collection are in [Chapter 8](08-relations.md).
 doesn't apply when payload is written through the `Article.Tags` relation array; the difference
 between the two write paths is in [Chapter 8](08-relations.md).
 
-If the sample is opened against an existing database whose `article_tags` table predates the
+If the sample is enabled against an existing database whose `article_tags` table predates the
 `note`/`sort` columns, they arrive only through Development's `Database:AutoSyncSchema=true` (see
 [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md)) or a fork-authored
 migration script — `db/migrations` holds only the fork's own scripts, never the sample collection's
@@ -205,9 +207,10 @@ The cleanup reaches wider than the `samples/Struo.Sample.Blog/` directory: the b
 uses the sample's collections as a fixture. Work through the list below in order.
 
 1. Revert both opt-in edits: remove the `ProjectReference` to `Struo.Sample.Blog.csproj` from
-   `Struo.Api.csproj`, and delete the commented-out `Struo:ContentAssemblies` block from
-   `appsettings.Development.json.example` — otherwise this example settings file keeps pointing at
-   a sample that no longer exists.
+   `Struo.Api.csproj`, and re-comment (or delete) the `"ContentAssemblies"` line in your
+   `appsettings.Development.json`. Then delete that line and the two comment lines above `"Struo"`
+   from the tracked `appsettings.Development.json.example` too — otherwise the tracked example keeps
+   pointing at a sample that no longer exists.
 
 2. Delete the whole `samples/Struo.Sample.Blog/` directory; remove the `<Folder Name="/samples/">`
    block from `StruoCMS.slnx`; remove the `ProjectReference` to it from
