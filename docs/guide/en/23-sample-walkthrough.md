@@ -7,8 +7,8 @@ demonstrates, how to opt it in, what to look at file by file, and how to remove 
 
 ## What the sample demonstrates
 
-`samples/Struo.Sample.Blog/` is a small blog example the template keeps in the repository
-alongside itself. It demonstrates a full collection, a translation sidecar, a many-to-many
+`samples/Struo.Sample.Blog/` is a small blog example that lives in the repository alongside the
+template itself. It demonstrates a full collection, a translation sidecar, a many-to-many
 junction that carries its own payload, a self-referencing tree collection, and a `Repeater` child
 type — one instance of each:
 
@@ -20,13 +20,13 @@ type — one instance of each:
 - `FaqItem`: a plain POCO used as `Repeater`'s child type.
 
 `Struo.Sample.Blog.csproj` is an ordinary class library. It references `Struo.Domain` (for the
-`[CmsCollection]`/`[CmsField]` attributes) and takes both available paths to SqlSugar at once: it
+`[CmsCollection]`/`[CmsField]` attributes) and takes both paths to SqlSugar at once: it
 references the `SqlSugarCore` package directly, and it also references `Struo.Infrastructure`
 (which brings SqlSugar in transitively too) — [Chapter 5](05-collections.md) covers the direct
 reference as the minimum a collection library needs.
 
 The only project that references it is the test project, `tests/Struo.Tests`, and it does so
-deeply — "Removing the sample completely" below lists every file that touches it.
+deeply — "Removing the sample completely" below lists every file that has to change.
 `src/Struo.Api/Struo.Api.csproj` carries no `ProjectReference` to it, and
 `Struo:ContentAssemblies` defaults to an empty array.
 
@@ -51,9 +51,9 @@ Second, in `src/Struo.Api/appsettings.Development.json.example` (outside Develop
 ```
 
 `Struo:ContentAssemblies` is read at service-registration time, so changing only the settings file
-has no effect on its own — restarting the process is what makes the edit take hold.
+has no effect on its own — the process has to be restarted before the edit takes effect.
 
-If this is only to take a look, reverting both edits afterward is enough; the sample's code stays
+If you only want to take a look, reverting both edits afterward is enough; the sample's code stays
 in place and affects nothing else. To remove it from a fork entirely, see "Removing the sample
 completely" below.
 
@@ -72,7 +72,7 @@ list below.
 
 ## File by file
 
-Six `.cs` files, starting with the lead.
+Six `.cs` files; the lead collection comes first.
 
 ### `Article.cs`
 
@@ -90,15 +90,15 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 It implements `ISoftDeletable` and sets `Revisions` to `true`, so it carries both the trash and
 revisions at once — see [Chapter 9](09-revisions-and-trash.md).
 
-Its own fields cover most of the interface catalog: `Select` (`Status`), `DateTime`
+Its own fields cover most of the interface overview: `Select` (`Status`), `DateTime`
 (`PublishedAt`), `Image` (`HeroImageId`), `MultiSelect` (`Regions`), `CheckboxGroup` (`Audiences`),
 `Tags` (`Keywords`), `Json` (`Attributes`), `KeyValue` (`Meta`), `Files` (`Gallery`), `Repeater`
-(`Faqs`, whose child type is `FaqItem` below), and a `Text` field marked `Hidden`,
-`InternalNote`. What each interface does is in
+(`Faqs`, whose child type is `FaqItem` below), and `InternalNote`, a `Text` field marked
+`Hidden`. What each interface does is in
 [Chapter 6: Field Types and Editors](06-field-types.md).
 
-`Status` is a `draft`/`published` `Select`, defaulting to `draft` in code and also the collection's
-`DefaultDisplayField`, but it doesn't declare `Required`. The fields that are actually required in
+`Status` is a `draft`/`published` `Select` that defaults to `draft` in code and is also the
+collection's `DefaultDisplayField`, but it doesn't declare `Required`. The fields that are actually required in
 the sample are `ArticleTranslation.Title`, `Tag.Name`, `Category.Name`, `FaqItem.Question`, and
 `ArticleTag`'s two foreign keys.
 
@@ -119,12 +119,11 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 `ArticleTranslation` is `Article`'s translation sidecar, pointed to by the
 `[CmsTranslations(typeof(ArticleTranslation))]` on `Article`; the `ArticleId`/`Locale` composite
 unique index needs no declaration of its own. Its required, searchable `Title` sits in the
-`Content` group, `Body` is `RichText`, and there's a `Hidden` `InternalSlug` besides. How a
+`Content` group, `Body` is `RichText`, and there's also a `Hidden` `InternalSlug`. How a
 translation sidecar works is in [Chapter 7: Multilingual Content](07-i18n.md).
 
 Inheriting `SeoTranslation` gets it `SeoTitle`/`SeoMetaDescription`/`SeoOgImageId` for free —
 these three fields sit under the `SEO` group `Article` declares.
-
 
 ### `Tag.cs` and `ArticleTag.cs`
 
@@ -141,16 +140,16 @@ The full mechanics of a junction collection are in [Chapter 8](08-relations.md).
 doesn't apply when payload is written through the `Article.Tags` relation array; the difference
 between the two write paths is in [Chapter 8](08-relations.md).
 
-If it's opened against an existing database whose `article_tags` table predates the `note`/`sort`
+If the sample is opened against an existing database whose `article_tags` table predates the `note`/`sort`
 columns, they arrive only through Development's `Database:AutoSyncSchema=true` (see
 [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md)) or a fork-authored
-migration — `db/migrations` holds only the fork's own scripts, never the sample collection's
+migration script — `db/migrations` holds only the fork's own scripts, never the sample collection's
 schema.
 
 `ArticleTag` carries no unique index blocking a duplicate `(ArticleId, TagId)` pair — writing to
 `articleTag` directly can produce a duplicate pairing; the next time the owning `Article` is saved
 it's cleaned up (the row with the smallest primary key stays, the rest are deleted, and a warning
-is logged) — see `ManyToManySync` in [Chapter 8](08-relations.md).
+is logged) — see [Chapter 8](08-relations.md).
 
 ### `Category.cs`
 
@@ -206,7 +205,7 @@ The cleanup reaches wider than the `samples/Struo.Sample.Blog/` directory: the b
 uses the sample's collections as a fixture. Work through the list below in order.
 
 1. Revert both opt-in edits: remove the `ProjectReference` to `Struo.Sample.Blog.csproj` from
-   `Struo.Api.csproj`, and remove the `Struo:ContentAssemblies` uncomment in
+   `Struo.Api.csproj`, and delete the commented-out `Struo:ContentAssemblies` block from
    `appsettings.Development.json.example` — otherwise this example settings file keeps pointing at
    a sample that no longer exists.
 
@@ -234,11 +233,11 @@ uses the sample's collections as a fixture. Work through the list below in order
    `Configured_content_assembly_is_scanned` and `Registers_entity_type_collector`, or point them at
    your own fork's assembly instead; the other two don't involve the sample and stay.
 
-7. Delete the test files that carry no `using` for the sample's namespace at all, but exercise
-   `article`/`category`/`tag` over REST or GraphQL — these depend entirely on step 3's module
-   initializer, so the compiler can't catch them; run `dotnet test` once, look for
-   `404`/`KeyNotFoundException` failures under `Api/`, `Query/`, `GraphQl/`, `Localization/`, and
-   `Identity/`, and handle each one.
+7. Delete the test files that carry no `using` for the sample's namespace but exercise
+   `article`/`category`/`tag` over REST or GraphQL — they depend entirely on step 3's module
+   initializer, so the compiler can't catch them. Run `dotnet test` once and look for
+   `404`/`KeyNotFoundException` failures under `Api/`, `Query/`, `GraphQl/`, `Localization/`,
+   and `Identity/`.
 
 8. Clean up the four stale comments still mentioning the sample: `ApiFactory.cs` and
    `CorsAndCookieTests.cs` reference the now-deleted `ContentAssemblyEnvBootstrap.cs`;
