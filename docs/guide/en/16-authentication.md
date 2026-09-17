@@ -120,7 +120,7 @@ overwritten.
 
 That renewal also re-attributes the index row: the user id recorded there becomes the new user's,
 not the previous one's. The next section covers how user-level revocation (a password change, an
-account deletion) relies on that same index, so a session renewed in place is now revoked by the
+account deletion) relies on that same index, so a session renewed in place is revoked by the
 new user's password change or deletion, never by the previous user's. Log out before switching
 accounts, rather than letting the same cookie jar answer for two accounts at once.
 
