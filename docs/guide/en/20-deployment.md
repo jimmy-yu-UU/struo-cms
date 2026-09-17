@@ -36,8 +36,8 @@ disappears while the account's password is still the default one.
 
 Account-layer throttling (`RateLimiting:LoginAccount`) is on by default and blocks brute-force
 attempts against a single account on its own; IP-layer throttling (`RateLimiting:Login`) is off by
-default, because it buckets by `Connection.RemoteIpAddress`: behind a reverse proxy, everyone looks
-like the proxy's own address, and an office sharing one outbound NAT ends up in the same bucket
+default, because it buckets by `Connection.RemoteIpAddress`: behind a reverse proxy, every client
+appears to come from the proxy's own address, and an office sharing one outbound NAT ends up in the same bucket
 even when the proxy is configured correctly.
 
 How each layer behaves is covered in the "Login rate limiting" section of
@@ -69,7 +69,7 @@ In a Production environment, the authentication cookie is only sent back on requ
 sending traffic in without terminating TLS first makes the login response look normal (it comes
 back with `Set-Cookie`), but the browser never attaches the cookie again afterward, and the caller
 ends up stuck in a "logged in, yet asked to log in again" loop. How the security policy decides
-this, and what extra rules apply once CORS is enabled, are in [Chapter 16].
+this, and what extra rules apply once CORS is enabled, are in [Chapter 16](16-authentication.md).
 
 ### Scalar/OpenAPI are off in Production
 
@@ -88,17 +88,16 @@ replaced with a real tenant, external login fails for everyone.
 Once a real tenant is in place, `Oidc:RequireEmailVerified` (not required by default) and
 `Oidc:AllowedEmailDomains` (an empty list by default, meaning unrestricted) are both checks that
 permit by default; all three should be pinned down in production, or the only remaining gate is
-email equality. The order these checks run in is covered in [Chapter 16].
+email equality. The order these checks run in is covered in [Chapter 16](16-authentication.md).
 
 ### Security response headers: the API only sends nosniff
 
-The API project itself sends exactly one security response header: `X-Content-Type-Options:
-nosniff`, covering error responses, CORS preflights, and bare 404s alike.
+The API project itself sends exactly one security response header,
+`X-Content-Type-Options: nosniff`, covering error responses, CORS preflights, and bare 404s alike.
 
 `Strict-Transport-Security`, `X-Frame-Options`/CSP's `frame-ancestors`, and `Referrer-Policy`
-aren't its responsibility — they're left to the reverse proxy.
-`frontend/nginx/default.conf.template` is a usable reference implementation, not a rule that nginx
-is mandatory.
+aren't its responsibility — they're left to the reverse proxy. `frontend/nginx/default.conf.template`
+is a usable reference implementation, not a rule that nginx is mandatory.
 
 ## What fails fast at startup
 
@@ -161,7 +160,7 @@ can reach, plus the root `Directory.Build.props`/`Directory.Packages.props`. The
 
 ### The API image
 
-Listens on `8080`, running as the non-root user `app`. `db/migrations` is already copied into the
+The image listens on `8080` and runs as the non-root user `app`. `db/migrations` is already copied into the
 image at `/app/db/migrations`; `Database:MigrationsPath` is left empty by default in this image,
 and getting migration scripts running here means setting it to this absolute path.
 
@@ -178,7 +177,7 @@ the database or cache is reachable.
 ### What it takes to start this image
 
 The five environment variables below decide whether this image can start, and how it behaves once
-it has; the full meaning of every other setting key is in [Chapter 4].
+it has; the full meaning of every other setting key is in [Chapter 4](04-configuration.md).
 
 - `Database__DbType` — which backend to use (`PostgreSQL`, `Sqlite`, `MySql`, `SqlServer`,
   `Oracle`).
@@ -218,14 +217,14 @@ protection as any other secret.
 
 ### The admin SPA image
 
-Listens on `80`, serving Vite's production build through nginx. Unlike the API image, there's no
+The image listens on `80`, serving Vite's production build through nginx. Unlike the API image, there's no
 `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting `/`
 directly.
 
 The SPA's API address is baked into the image at build time: `vite build` in production mode
 reads `frontend/.env.production`, and this file is committed to the repository —
 `frontend/.dockerignore` deliberately doesn't exclude it, only the developer's own
-`.env`/`.env.local`/`.env.*.local`. Changing this value takes rebuilding the image to take effect.
+`.env`/`.env.local`/`.env.*.local`. Changing this value only takes effect after rebuilding the image.
 
 `API_UPSTREAM` (defaulting to `http://api:8080`) has to be written as `scheme://host:port`, with no
 path or trailing slash: `proxy_pass` takes an nginx variable rather than a literal value, which lets
@@ -250,8 +249,8 @@ gets the backend's own JSON error envelope instead of nginx's HTML error page.
 means anything on a user-defined Docker network; on the default bridge network, every `/api/*`
 request gets a 502 after the resolution times out.
 
-How to set `VITE_API_BASE_URL`, and when the setting takes effect, for deploying the SPA on a
-different origin from the API is in [Chapter 19: Admin Customization](19-admin-customization.md);
+For deploying the SPA on a different origin from the API, how to set `VITE_API_BASE_URL` and
+when the setting takes effect are in [Chapter 19: Admin Customization](19-admin-customization.md);
 building this image means putting the value in the committed `frontend/.env.production` — a
 developer's own `frontend/.env` never makes it into the image.
 
@@ -259,7 +258,7 @@ developer's own `frontend/.env` never makes it into the image.
 
 The image is only responsible for getting the application running. Terminating TLS, configuring
 `UseForwardedHeaders`, restart policy, horizontal scaling, secret injection, and wiring
-`/health/live` and `/health/ready` into the orchestrator's own probes all have to be connected
+`/health/live` and `/health/ready` into the orchestrator's own probes are all yours to set up
 separately.
 
 ### Verifying both images together
@@ -282,8 +281,8 @@ the box only on Docker Desktop; on Linux, add `--add-host=host.docker.internal:h
 ## Health probes
 
 `/health/live` runs no checks at all (`Predicate = _ => false`); it only confirms the process is
-still accepting requests. A liveness probe should restart the container or pod when this doesn't
-respond.
+still accepting requests. A liveness probe should restart the container or pod when this route stops
+responding.
 
 `/health/ready` runs two checks tagged `ready`: `DbReadinessCheck` makes an actual round trip to
 the database, and `CacheReadinessCheck` writes to and reads back from the configured
@@ -323,8 +322,7 @@ that's genuinely missing turns into an error, rather than an endless reload.
 
 - **Database** — apart from uploaded files, PostgreSQL is the authoritative source for every
   other piece of data; back it up with ordinary PostgreSQL tools: `pg_dump`, `pg_basebackup`, or a
-  managed service's own snapshots and PITR. StruoCMS provides no separate backup mechanism of its
-  own.
+  managed service's own snapshots and PITR. StruoCMS provides no backup mechanism of its own.
 - **Uploaded files** — stored outside the database; where to back them up depends on
   `Struo:Files:Backend`: `local` mode means backing up the `Local:RootPath` directory, `s3` mode
   relies on the S3-compatible bucket's own versioning or replication; backing up only the database
