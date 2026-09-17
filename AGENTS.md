@@ -137,11 +137,11 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because
   SQLite or SqlSugar's SQLite dialect lacks the capability, but because this repo's
   `SqlSugarClientFactory` never sets `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`,
-  the flag that gates it (manual ch.21, "Where schema sync is dangerous", item 7 has the
-  two-sentence summary) — so this repo's SQLite-only CI suite cannot demonstrate the claim by
-  itself), while reviewed
-  `db/migrations/` scripts applied by `MigrationRunner` are the all-environments path. The runner works
-  on any backend; `Database:MigrationsPath` empty (the default) disables it.
+  the flag that gates it (manual ch.21, "Where schema sync is dangerous", item 7 covers what
+  flipping that flag actually does) — so this repo's SQLite-only CI suite cannot demonstrate the
+  claim by itself), while reviewed `db/migrations/` scripts applied by `MigrationRunner` are the
+  all-environments path. The runner works on any backend; `Database:MigrationsPath` empty (the
+  default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
   on REST: `Hidden` plays no part in either write-path allowlist. `ItemDeserializer.cs`'s create/update
@@ -294,5 +294,5 @@ five standing gates, and is not run by CI.
 
 ## Where to read more
 
-- `docs/guide/en/` — the sixteen-chapter manual (zh-TW parallel at `docs/guide/zh-TW/`).
+- `docs/guide/en/` — the twenty-three-chapter manual (zh-TW parallel at `docs/guide/zh-TW/`).
 - `docs/ai/architecture.md`, `docs/ai/conventions.md`, `docs/ai/task-playbooks.md` — this reference set.

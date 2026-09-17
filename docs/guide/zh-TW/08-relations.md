@@ -271,8 +271,8 @@ relation '{name}' on '{collection}' in path '{path}'.`
 
 - `Dropdown`：單值下拉選單，對目標集合做去抖動的搜尋。
 - `TreeSelect`：單值的樹狀選擇器，樹是從一個自我參照的多對一關聯建出來的。
-- `RelatedList`：唯讀、分頁、延遲載入的目標集合清單，依反向外鍵篩選；每一列點進去是該列自己的編輯頁
-  ，只有父列存過之後才會出現。
+- `RelatedList`：唯讀、分頁、延遲載入的目標集合清單，依反向外鍵篩選；每一列點進去是該列自己的
+  編輯頁，只有父列存過之後才會出現。
 - `TagSelect`：依 junction 是否帶可見 payload 或 `SortField` 分成兩種樣子，見下段。
 
 `TagSelect` 在關聯的 junction 沒有可見 payload、也沒有 `SortField` 時，是單純的多值標籤選擇器；只要

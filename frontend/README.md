@@ -19,7 +19,7 @@ pnpm dev
 
 Starts Vite on `http://localhost:5173`. By default the SPA talks to the API through Vite's dev proxy
 (`/api` → `http://localhost:5221`, configured in `vite.config.ts`), so the browser sees the API as
-same-origin and no CORS setup is required. Start the API separately on port 5221 (chapter 2).
+same-origin and no CORS setup is required. Start the API separately on port 5221 (chapter 3).
 
 ## Unit / component tests
 
@@ -47,8 +47,8 @@ pnpm e2e:all     # both
 ```
 
 Needs a running API and database; see `e2e/README.md` for prerequisites and setup, and
-[chapter 22](../docs/guide/en/22-testing.md) for what the test layers cover
-and what CI does and does not run.
+[chapter 22](../docs/guide/en/22-testing.md) for what the test layers cover and what CI does and
+does not run.
 
 ## Manually verifying sample-only flows (e.g. revision history)
 
@@ -57,7 +57,7 @@ Some admin flows only exist on collections with `Revisions = true` — currently
 To exercise such a flow against this SPA (revision history, revert, etc.), opt the sample into the
 running API first, following [chapter 23](../docs/guide/en/23-sample-walkthrough.md)'s
 "Opting the sample in".
-Rebuild and start the API on `:5221` as usual (chapter 2), then `pnpm dev` here — no separate frontend
+Rebuild and start the API on `:5221` as usual (chapter 3), then `pnpm dev` here — no separate frontend
 configuration is needed.
 
 **This is a temporary, uncommitted opt-in — revert it as soon as you're done**, before committing

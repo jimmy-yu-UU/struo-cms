@@ -22,10 +22,10 @@ a section bound with `ValidateOnStart`, and in most other sections only when the
 used.
 
 An array-valued key has to be replaced as a whole: at a higher-precedence layer, indices you don't
-override keep the default value, so filling in only the first few elements doesn't shorten the
-array.
+override keep the value from the layer below, so filling in only the first few elements doesn't
+shorten the array.
 
-The default file fully populates four arrays: `Oidc:Scopes`,
+The default `appsettings.json` fully populates four arrays: `Oidc:Scopes`,
 `Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:AllowedContentTypes`, and
 `Serilog:WriteTo`; the first two fall back to their built-in default even if you delete them
 entirely. Array elements use an index, e.g. `Oidc__Scopes__0=openid`; to shorten an array, edit the
@@ -123,8 +123,8 @@ typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
   about the length is still limited.
-- `AllowedContentTypes`: leaving it empty means no format is restricted; the default file already
-  lists 18 MIME types.
+- `AllowedContentTypes`: leaving it empty means no format is restricted; the default
+  `appsettings.json` already lists 18 MIME types.
 - `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL;
   the default `false` has the API stream the bytes itself, which suits setups where the browser
   can't reach storage directly.

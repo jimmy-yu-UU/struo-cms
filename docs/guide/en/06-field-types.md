@@ -170,9 +170,9 @@ this order:
 3. Neither applies — `null`, meaning no length limit.
 
 The admin SPA binds the effective `MaxLength` directly to the native input's `maxlength`
-attribute, so the 255 default takes effect in the admin SPA even when `MaxLength` was never
-written. This has nothing to do with the database column's width — both happen to land on 255
-only because SqlSugar's own default for an unwidened `string` is also 255.
+attribute, so the 255 default takes effect in the form even when `MaxLength` was never written.
+This has nothing to do with the database column's width — both happen to land on 255 only because
+SqlSugar's own default for an unwidened `string` is also 255.
 
 ## Required, read-only, hidden, and system fields
 
@@ -338,7 +338,7 @@ has to handle labeling itself.
 
 The `FieldInterface` union in `frontend/src/lib/fieldTypes/types.ts` is closed: adding a genuinely
 new interface value — rather than swapping an existing interface's editor as above — also means
-syncing the backend `FieldInterface` enum, the admin SPA union type, and every place in the
+syncing the backend `FieldInterface` enum, the admin SPA's union type, and every place in the
 registry, which is beyond plain editor customization.
 
 A schema contract test catches drift in both directions: the backend gaining a new member the

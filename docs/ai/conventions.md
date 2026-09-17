@@ -47,8 +47,8 @@ rejects what fails.
 - **Tables.** At most four columns; each cell fits on one line and holds a value or a phrase, never a
   sentence of explanation. Anything larger becomes a list or a subsection. **Enforced:**
   `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
-  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. It
-  finds tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
+  whose display width exceeds 60 (CJK counts 2). There is no exemption; rewrite the table. It finds
+  tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
   indentation hides a table from it.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
   capture it from a real run. Never hand-edit one.
@@ -526,12 +526,13 @@ Pinia-backed singleton that can open while another vendored overlay is already o
   — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
   `docs/`, plus `pnpm test` from `docs/` as a CI step — but no E2E project) — both need a live API and
   database, not just a build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two
-  container images — chapter 20's "The two container images" section) and two `sonar-*` jobs; none of the three
-  is a standing gate.
+  container images — chapter 20's "The two container images" section) and two `sonar-*` jobs; none
+  of the three is a standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
-layer both in its own "The schema contract" section and in its "What CI runs" section. `schema/README.md`
-remains the authoritative reference for the contract itself and its regeneration command.
+layer both in its own "The schema contract" section and in its "What CI deliberately does not run"
+section. `schema/README.md` remains the authoritative reference for the contract itself and its
+regeneration command.
 
 ## Commit message format
 
