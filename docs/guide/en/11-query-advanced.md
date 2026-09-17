@@ -190,9 +190,10 @@ it always keeps the target collection's own soft-delete floor regardless of the 
 `deleted=`. The many-to-one foreign-key form is the one exception, because it counts the root
 row's own field — a target already sitting in the trash still has its id counted.
 
-If a fork swaps out `search=`'s candidate-id source (a search-provider topic covered in the
-extension points chapter), facets and aggregates still see the same candidate set with the
-`deleted=` floor already applied — swapping the source can't leak a row sitting in the trash.
+If a fork swaps out `search=`'s candidate-id source (a search-provider topic covered in
+[Chapter 18: Extension Points: Search Providers and Change Listeners](18-extension-points.md)),
+facets and aggregates still see the same candidate set with the `deleted=` floor already applied —
+swapping the source can't leak a row sitting in the trash.
 
 ### NULL bucket, ordering, and count caps
 
