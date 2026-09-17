@@ -12,12 +12,15 @@ public interface IUserSessionStore
     /// <summary>Inserts a new index row for a freshly stored ticket.</summary>
     Task RecordAsync(Guid userId, string ticketKey, DateTime createdAtUtc, DateTime expiresAtUtc, CancellationToken ct = default);
 
-    /// <summary>Updates the expiry of the row for an existing ticket key. Returns whether a row
+    /// <summary>Updates the expiry of the row for an existing ticket key and re-attributes it to
+    /// <paramref name="userId"/> — the ticket's current owner — since a renewal can carry a different
+    /// principal than the one the row was originally recorded under (e.g. a login as user B that renews
+    /// the same ticket key a still-valid cookie for user A had been using). Returns whether a row
     /// actually matched — false means this ticket key has no index row (e.g. a session that predates
     /// this feature, or whose <see cref="RecordAsync"/> was skipped because the user id could not be
     /// read at the time). Callers that need every live session findable treat <c>false</c> as a signal
     /// to back-fill a row via <see cref="RecordAsync"/> instead.</summary>
-    Task<bool> RenewAsync(string ticketKey, DateTime expiresAtUtc, CancellationToken ct = default);
+    Task<bool> RenewAsync(string ticketKey, Guid userId, DateTime expiresAtUtc, CancellationToken ct = default);
 
     /// <summary>Deletes the row for one ticket key. A no-op when no row matches.</summary>
     Task RemoveByTicketKeyAsync(string ticketKey, CancellationToken ct = default);
