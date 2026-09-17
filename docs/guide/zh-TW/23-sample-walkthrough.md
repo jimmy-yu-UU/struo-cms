@@ -133,7 +133,7 @@ junction collection 這個機制的完整說明在[第 8 章：關聯](08-relati
 
 `ArticleTag` 沒有唯一索引擋 `(ArticleId, TagId)` 這一對重複，直接對 `articleTag` 寫入可以造
 出重複的配對；下一次儲存擁有它的 `Article` 會把它修好（留下 PK 最小的一筆，其餘刪除並記一筆
-警告），見[第 8 章：關聯](08-relations.md)的 `ManyToManySync`。
+警告），見[第 8 章：關聯](08-relations.md)。
 
 ### `Category.cs`
 
