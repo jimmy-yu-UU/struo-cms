@@ -197,8 +197,8 @@
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
 外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名屬性與介面；`InitTables` 集
 合裡的型別在啟動時就失敗，集合外的則要等到第一次用到那張表才失敗。修法是移除 `[ColumnShape]`：JSON
-對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介面
-（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
+對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介
+面（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
 
 同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，
 而且不會有任何警告。

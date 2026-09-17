@@ -53,7 +53,7 @@ The core also has two folders outside `src/Struo.*`, plus `db/migrations/README.
 keeps:
 
 - `frontend/`: the admin SPA.
-- `schema/`: the snapshots the schema gate uses to compare the frontend and backend contracts.
+- `schema/`: the snapshots the schema gate uses to compare the admin SPA and backend contracts.
 
 The only core-owned file under `db/migrations/` is a `README.md` documenting the mechanism:
 CodeFirst creates the framework tables itself on any environment, on any configured database, so the
