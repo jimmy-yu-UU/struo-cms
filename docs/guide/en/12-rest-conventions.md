@@ -358,7 +358,7 @@ editing several links at once can pin down exactly where the problem is:
 HTTP_STATUS:400
 ```
 
-The message names both the relation and that target's id, so the admin SPA knows exactly which row
+The message names both the relation and that target's id, so the caller knows exactly which row
 to flag. A key inside the object that isn't declared as this relation's payload, along with the
 junction's own foreign keys and structural fields, is always ignored.
 

@@ -15,9 +15,9 @@ e2e/
 # Vite's local, gitignored env files are excluded here -- .env is a developer's
 # own uncommitted file (Vite still loads it in production mode, so it would
 # otherwise reach the build), and .env.local/.env.*.local are its per-mode
-# equivalents. A committed frontend/.env.production (VITE_API_BASE_URL and
-# friends, see frontend/.env.example) is NOT excluded and still reaches the
-# image build.
+# equivalents. A frontend/.env.production you add and commit yourself
+# (VITE_API_BASE_URL and friends, see frontend/.env.example) is NOT excluded
+# and still reaches the image build.
 .env
 .env.local
 .env.*.local

@@ -86,7 +86,9 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 `Image`（`HeroImageId`）、`MultiSelect`（`Regions`）、`CheckboxGroup`（`Audiences`）、
 `Tags`（`Keywords`）、`Json`（`Attributes`）、`KeyValue`（`Meta`）、`Files`（`Gallery`）、
 `Repeater`（`Faqs`，子型別是下面的 `FaqItem`），還有一個 `Text` 搭 `Hidden` 的
-`InternalNote`。逐一介面的行為見[第 6 章：欄位型別與編輯介面](06-field-types.md)。
+`InternalNote`。
+
+逐一介面的行為見[第 6 章：欄位型別與編輯介面](06-field-types.md)。
 
 `Status` 是一個 `draft`／`published` 的 `Select`，程式碼預設 `draft`，也是集合的
 `DefaultDisplayField`，但它沒有宣告 `Required`。範例裡真正必填的欄位是
@@ -208,7 +210,7 @@ fixture，照下面的清單逐步走完。
    grep -rl "using Struo.Sample.Blog;" tests/Struo.Tests
    ```
 
-   這道指令會列出 36 個檔案；分布見[第 22 章：測試與 CI](22-testing.md)。
+   這道指令會列出 36 個檔案；分布見[第 22 章](22-testing.md)。
 
 5. 跑一次 `dotnet build` 確認編譯已經乾淨——`src/Struo.*` 底下沒有程式碼參照範例。
    `dotnet test` 這時還是紅的，接下來兩步處理它。
