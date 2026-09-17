@@ -118,11 +118,11 @@ The cookie the caller holds — whether the one already sitting in the browser o
 response sets again — now authenticates as the new user. The old session isn't revoked, only
 overwritten.
 
-This has one easy-to-miss consequence: renewal only pushes the expiry forward — the user id
-recorded in the index row doesn't change. The next section covers how user-level revocation (a
-password change, an account deletion) relies on that same index, so a session renewed in place is
-only revoked by the previous user's password change or deletion, never by the new user's. Log out
-before switching accounts, rather than letting the same cookie jar answer for two accounts at once.
+That renewal also re-attributes the index row: the user id recorded there becomes the new user's,
+not the previous one's. The next section covers how user-level revocation (a password change, an
+account deletion) relies on that same index, so a session renewed in place is now revoked by the
+new user's password change or deletion, never by the previous user's. Log out before switching
+accounts, rather than letting the same cookie jar answer for two accounts at once.
 
 ## Logout and revocation
 
