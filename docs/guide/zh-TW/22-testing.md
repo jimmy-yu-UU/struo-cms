@@ -83,8 +83,8 @@ proxy 目標上。
 格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。登入用的
 bootstrap 管理員要先種好；其餘前置條件與帳密怎麼覆寫，見 `frontend/e2e/README.md`。
 
-`sample` 專案要跑，先照[第 23 章：範例專案導覽](23-sample-walkthrough.md)的步驟把範例啟
-用。用 `--list` 跑 `sample` 這個專案會列出 8 個 spec 檔、15 個測試。
+`sample` 專案要跑，先照[第 23 章](23-sample-walkthrough.md)的步驟把範例啟用。用 `--list` 跑
+`sample` 這個專案會列出 8 個 spec 檔、15 個測試。
 
 在 API 與資料庫都已經跑著的前提下，本機一次跑完 `frontend/` 的單元測試、build 與 `core`
 這個 e2e 專案：

@@ -18,8 +18,8 @@
 
 `Struo.Sample.Blog.csproj` 是一個普通類別庫，參照 `Struo.Domain`（拿到 `[CmsCollection]`／
 `[CmsField]` 這些 attribute），並且兩條路都走：自己直接引用 `SqlSugarCore` 套件，也參照
-`Struo.Infrastructure`（SqlSugar 因此也會遞移帶進來）——[第 5 章：定義集合](05-collections.md)
-說的最低限度就是前者。
+`Struo.Infrastructure`（SqlSugar 因此也會遞移帶進來）——[第 5 章](05-collections.md)說的最低限度
+就是前者。
 
 參照它的只有測試專案 `tests/Struo.Tests`，而且用得很深，〈完全移除範例〉列出全部要動的
 檔案。`src/Struo.Api/Struo.Api.csproj` 沒有指到它的 `ProjectReference`，
@@ -33,9 +33,10 @@
 <ProjectReference Include="..\..\samples\Struo.Sample.Blog\Struo.Sample.Blog.csproj" />
 ```
 
-第二處，在 `src/Struo.Api/appsettings.Development.json.example`（非 Development 環境可以改設
-`appsettings.json` 或用 `Struo__ContentAssemblies__0`）取消 `"ContentAssemblies"` 那一行的
-註解：
+第二處，在你自己的 `src/Struo.Api/appsettings.Development.json` 裡把 `"ContentAssemblies"` 那一行
+的註解取消——這份檔案是[第 3 章：快速開始](03-getting-started.md)讓你從範例複製出來、不會提交的
+副本。要找的區塊就是範例檔裡的這一段（非 Development 環境把陣列放進 `appsettings.json`，或用
+`Struo__ContentAssemblies__0`）：
 
 ```json
   // Uncomment to enable the Blog sample (see docs/guide/en/23-sample-walkthrough.md).
@@ -79,9 +80,9 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 ```
 
 它實作 `ISoftDeletable` 並把 `Revisions` 設成 `true`，所以同時擁有垃圾桶與版本紀錄，見
-[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)。
+[第 9 章](09-revisions-and-trash.md)。
 
-自己的欄位涵蓋了大半個介面總覽：`Select`（`Status`）、`DateTime`（`PublishedAt`）、
+自己的欄位涵蓋了第 6 章介面總覽裡的大半介面：`Select`（`Status`）、`DateTime`（`PublishedAt`）、
 `Image`（`HeroImageId`）、`MultiSelect`（`Regions`）、`CheckboxGroup`（`Audiences`）、
 `Tags`（`Keywords`）、`Json`（`Attributes`）、`KeyValue`（`Meta`）、`Files`（`Gallery`）、
 `Repeater`（`Faqs`，子型別是下面的 `FaqItem`），還有一個 `Text` 搭 `Hidden` 的
@@ -120,11 +121,11 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 所以它是一個可讀寫的 junction collection：兩個外鍵之外還有兩欄，一個 `Note` 文字欄位（這條
 連結自己的 payload），和兼做 `Article.Tags` 排序欄的 `Sort`。
 
-junction collection 這個機制的完整說明在[第 8 章：關聯](08-relations.md)。
+junction collection 這個機制的完整說明在[第 8 章](08-relations.md)。
 
 `ArticleTag` 的兩個外鍵（`ArticleId`／`TagId`）宣告了 `Required = true`，但透過
 `Article.Tags` 這個關聯陣列寫入 payload 時這條規則不生效；兩條寫入路徑的差別見
-[第 8 章：關聯](08-relations.md)。
+[第 8 章](08-relations.md)。
 
 如果是對著一個 `article_tags` 已經建好、但還沒有 `note`／`sort` 兩欄的舊資料庫開啟，這兩欄要
 靠 Development 的 `Database:AutoSyncSchema=true`（見
@@ -133,7 +134,7 @@ junction collection 這個機制的完整說明在[第 8 章：關聯](08-relati
 
 `ArticleTag` 沒有唯一索引擋 `(ArticleId, TagId)` 這一對重複，直接對 `articleTag` 寫入可以造
 出重複的配對；下一次儲存擁有它的 `Article` 會把它修好（留下 PK 最小的一筆，其餘刪除並記一筆
-警告），見[第 8 章：關聯](08-relations.md)。
+警告），見[第 8 章](08-relations.md)。
 
 ### `Category.cs`
 
@@ -148,7 +149,7 @@ public sealed class Category : AuditableEntity, ISoftDeletable
 `TreeSelect` 的 `Parent` 關聯（`OnDelete = SetNull`），和反過來走同一個外鍵的
 `Children`（`RelatedList`）；另外還有一個 `Articles`，是反過來走 `Article.CategoryId`
 的 `RelatedList`。自己的欄位只有必填、可搜尋的 `Name`。三種關聯介面的行為見
-[第 8 章：關聯](08-relations.md)。
+[第 8 章](08-relations.md)。
 
 ### `FaqItem.cs`
 
@@ -189,8 +190,9 @@ bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，�
 fixture，照下面的清單逐步走完。
 
 1. 還原兩處開啟編輯：從 `Struo.Api.csproj` 移除指到 `Struo.Sample.Blog.csproj` 的
-   `ProjectReference`；把 `appsettings.Development.json.example` 裡的
-   `Struo:ContentAssemblies` 註解一併移除，否則這份範例設定檔會一直指向不存在的範例。
+   `ProjectReference`；把 `appsettings.Development.json` 裡的 `"ContentAssemblies"` 那一行改回註解
+   或刪掉。接著把追蹤中的 `appsettings.Development.json.example` 裡那一行、連同 `"Struo"` 上面兩行
+   指向它的註解一起移除，否則這份範例設定檔會一直指向不存在的範例。
 
 2. 刪掉整個 `samples/Struo.Sample.Blog/` 目錄；從 `StruoCMS.slnx` 移除
    `<Folder Name="/samples/">` 那個區塊；從 `tests/Struo.Tests/Struo.Tests.csproj` 移除指

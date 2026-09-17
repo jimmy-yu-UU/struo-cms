@@ -162,9 +162,9 @@ Missing either one throws an `InvalidOperationException` that says exactly what'
 the table and the kind of index.
 
 A missing index usually means the table was created before the index was added to the code — an
-index is only created at the moment its table is created. In Development, turning on schema sync
-and restarting will try to fill it in; on the same table in production, adding the index is a
-migration like any other.
+index is emitted when its table is created. The error message says how to fix it: add a reviewed
+migration that creates the index, or, in Development on a schema you don't mind losing, recreate
+the schema so table creation emits it again.
 
 It only recognizes PostgreSQL and SQLite; MySQL, SQL Server, and Oracle are skipped entirely, with
 nothing verified. It's a development-time fail-fast check for "this change is missing an index
