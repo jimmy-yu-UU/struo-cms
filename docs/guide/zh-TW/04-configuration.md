@@ -6,7 +6,7 @@
 
 設定依序疊加，後面的來源覆寫前面：`src/Struo.Api/appsettings.json` →
 `appsettings.{Environment}.json` → 環境變數 → 命令列參數。`Query`、`Struo:Cors`、`GraphQl` 三個
-區段沒有出現在出廠的 `appsettings.json` 裡。設定檔裡沒有這一段可以改，不代表這些鍵不存在，只是
+區段沒有出現在預設的 `appsettings.json` 裡。設定檔裡沒有這一段可以改，不代表這些鍵不存在，只是
 要自己補上一段。
 
 任何一個鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；唯一的例
@@ -16,8 +16,8 @@
 查；型別對不上（例如 `Database:DbType` 拼錯、數字欄位填了文字）在用 `ValidateOnStart` 綁定
 的區段會在啟動時失敗，其他區段大多要到第一次用到時才會出錯。
 
-陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短出廠設定檔已經填滿的陣列，沒被覆
-寫的索引維持原值。出廠設定檔填滿的四個陣列是 `Oidc:Scopes`、
+陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短預設設定檔已經填滿的陣列，沒被覆
+寫的索引維持原值。預設設定檔填滿的四個陣列是 `Oidc:Scopes`、
 `Struo:Files:ImageTransform:AllowedFormats`、`Struo:Files:AllowedContentTypes`、
 `Serilog:WriteTo`；前兩個即使整段刪掉，啟動時也會補回內建預設值。陣列元素用索引：
 `Oidc__Scopes__0=openid`；要縮短陣列就改設定檔本身。
@@ -103,7 +103,7 @@ Development 生效，其他環境會被忽略並記一筆警告。對已經有�
 `PresignedRedirect` 跟整個 `ImageTransform` 都沒有驗證規則：型別正確的值不會被檢查。
 
 - `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
-- `AllowedContentTypes`：留空代表不限制格式，出廠設定檔已經列了 18 種 MIME 類型。
+- `AllowedContentTypes`：留空代表不限制格式，預設設定檔已經列了 18 種 MIME 類型。
 - `PresignedRedirect`：設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false`
   由 API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 
@@ -128,7 +128,7 @@ Development 生效，其他環境會被忽略並記一筆警告。對已經有�
 | `Struo:Files:S3:PresignTtlSeconds` | 整數（秒） | `300` |
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
-值，出廠值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
+值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
 會擋下啟動。
 
 ### ImageTransform
@@ -205,7 +205,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 
 這組帳密只在 `users` 資料表第一次建立時套用，不會補到已經存在的資料庫上；但每次啟動都會重新
 讀取——Production 那筆預設密碼警告就是拿它比對出來的。這兩個鍵沒有選項類別，是在 `Program.cs`
-裡直接從設定讀成字串。seeder 不套用密碼原則，這裡填什麼都會被接受——出廠的 `admin` 只有五個
+裡直接從設定讀成字串。seeder 不套用密碼原則，這裡填什麼都會被接受——預設的 `admin` 只有五個
 字元，比 `MinLength` 的 8 還短。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
@@ -289,7 +289,7 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 | `Redis:ConnectionString` | 字串（可留空） | `""` |
 
 留空時退回記憶體內的分散式快取，session 會在行程每次重啟後消失，只適合短暫的本機測試；有多個
-副本、或需要 session 撐過重啟時，一定要設定這個鍵。出廠值是空字串，鍵整個不見時是 `null`，兩
+副本、或需要 session 撐過重啟時，一定要設定這個鍵。預設值是空字串，鍵整個不見時是 `null`，兩
 者都會落到這個記憶體內分支。這個鍵同時也是 `RateLimiting:LoginAccount` 共用的儲存底層。
 
 ## Oidc
@@ -321,7 +321,7 @@ Oidc:Scopes = ["openid", "email", "profile"]
 `RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，任何
 身分提供者裡 email 對得上的人都能接管一個密碼帳號。
 
-`RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的；`AllowedTenantId` 不是，出廠
+`RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的；`AllowedTenantId` 不是，預設
 值是打不中任何 tenant 的 `REPLACE_TENANT_ID`，在替換之前會擋掉所有外部登入。正式環境啟用
 OIDC，這三個鍵都該明確設定，不要依賴預設值。
 
