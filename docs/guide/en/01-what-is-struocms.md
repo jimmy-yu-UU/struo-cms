@@ -55,7 +55,7 @@ host never references it, and you can delete it once you've learned from it.
 
 Deleting it is not just deleting the folder: it is also wired into the solution file and a test
 project, so removing the folder alone breaks the solution-level build. The full removal steps are
-covered in a later chapter dedicated to the sample project.
+covered in [Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
 
 ## What a fresh install looks like
 

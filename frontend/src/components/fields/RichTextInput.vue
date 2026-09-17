@@ -226,8 +226,8 @@ const editor = useEditor({
     // are target: '_blank' and rel: 'noopener noreferrer nofollow' (its addAttributes() derives
     // each mark attribute's default straight from this option), so every link setLink doesn't
     // explicitly override would otherwise stamp both onto stored HTML. rel is backend-owned
-    // (chapter 5's RichText contract table) and target is now a dialog choice per link, not a
-    // blanket default.
+    // (GanssHtmlSanitizer's PostProcessNode handler derives it from target) and target is now a
+    // dialog choice per link, not a blanket default.
     Link.configure({
       openOnClick: false, protocols: ['http', 'https', 'mailto'], autolink: false,
       HTMLAttributes: { target: null, rel: null },

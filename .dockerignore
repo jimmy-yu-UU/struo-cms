@@ -16,6 +16,6 @@ TestResults/
 .idea/
 .env
 dist/
-# samples/ is deliberately NOT excluded here: the ch.16 sample opt-in adds a
+# samples/ is deliberately NOT excluded here: the ch.23 sample opt-in adds a
 # ProjectReference into samples/, so excluding it would break `docker build .`
 # for exactly the forks that opted into the sample.

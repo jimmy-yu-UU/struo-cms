@@ -21,7 +21,7 @@ export default defineConfig({
   projects: [
     // Framework-only: runs against the default template, no content collections required.
     { name: 'core', testDir: './e2e', testIgnore: '**/e2e/sample/**' },
-    // Requires the Blog sample to be opted in — see docs/guide/en/16-sample-walkthrough.md.
+    // Requires the Blog sample to be opted in — see docs/guide/en/23-sample-walkthrough.md.
     { name: 'sample', testDir: './e2e/sample' },
   ],
 })
