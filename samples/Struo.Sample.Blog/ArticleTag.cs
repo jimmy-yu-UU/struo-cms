@@ -22,7 +22,7 @@ namespace Struo.Sample.Blog;
 // entity should add the equivalent indexes to its own migrations.
 [SugarIndex("ix_article_tags_articleid", nameof(ArticleId), OrderByType.Asc)]
 [SugarIndex("ix_article_tags_tagid", nameof(TagId), OrderByType.Asc)]
-[CmsCollection("Article tag", Icon = "link", Group = "Content", Hidden = true)]
+[CmsCollection("Article tag", Icon = "tag", Group = "Content", Hidden = true)]
 public sealed class ArticleTag
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }

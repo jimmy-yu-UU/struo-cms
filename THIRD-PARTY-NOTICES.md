@@ -2,7 +2,7 @@
 
 StruoCMS is licensed under the **MIT License**. This file lists third-party components used by the
 on-the-fly image-transform feature (`GET /api/files/{id}/content?width=&height=&format=&fit=&quality=`,
-see `docs/guide/en/11-files-and-media.md`) and their license terms. Including these components does
+see `docs/guide/en/15-files-and-media.md`) and their license terms. Including these components does
 **not** change StruoCMS's own license — StruoCMS remains MIT.
 
 ## libvips
@@ -16,11 +16,12 @@ see `docs/guide/en/11-files-and-media.md`) and their license terms. Including th
 - **License**: **LGPL-2.1-or-later**. Full license text:
   <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>
 - **Upstream source**: <https://github.com/libvips/libvips>
-- **Version bundled**: **8.18.4**. Determined from the `versions.json` manifest shipped inside the
-  `NetVips.Native.win-x64` NuGet package (version 8.18.4, restored to
-  `%USERPROFILE%\.nuget\packages\netvips.native.win-x64\8.18.4\versions.json`), which records
-  `"vips": "8.18.4"` — i.e. the native-package version and the bundled libvips release coincide for
-  this build. `Directory.Packages.props` pins `NetVips.Native` to `8.18.4`.
+- **Version bundled**: as read from the `versions.json` manifest inside the `NetVips.Native.*`
+  package, currently **8.18.6** (restored to
+  `%USERPROFILE%\.nuget\packages\netvips.native.win-x64\8.18.6\versions.json`, which records
+  `"vips": "8.18.6"` — i.e. the native-package version and the bundled libvips release coincide for
+  this build). `Directory.Packages.props` pins `NetVips.Native` to `8.18.6`; when that pin changes,
+  re-read the manifest and update this entry to match.
 - **Linking**: libvips is used via **dynamic linking** through the NetVips managed wrapper (the
   native `libvips-42.dll` / `libvips.so` / `libvips.dylib` binaries are loaded at runtime by the
   NetVips P/Invoke layer, not compiled or statically linked into StruoCMS). StruoCMS itself is

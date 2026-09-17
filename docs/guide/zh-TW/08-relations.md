@@ -139,7 +139,7 @@ junction collection、它的 payload 欄位名稱與排序欄位，這是呼叫�
 範例的 `ArticleTag` 就是這樣一個 junction collection：
 
 ```csharp
-[CmsCollection("Article tag", Icon = "link", Group = "Content", Hidden = true)]
+[CmsCollection("Article tag", Icon = "tag", Group = "Content", Hidden = true)]
 public sealed class ArticleTag
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
