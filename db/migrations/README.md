@@ -6,8 +6,9 @@ Reviewed, forward-only `*.sql` scripts that evolve an **existing** database's sc
 data backfills, and similar changes to tables that are already there. **The template ships zero files
 here.** Whatever `NNN-*.sql` scripts eventually live in this directory belong to a specific fork, not to
 StruoCMS core: core creates its own tables via CodeFirst (§2 below) and never needs a bootstrap script
-of its own. See [chapter 15](../../docs/guide/en/15-deployment-operations-testing.md) of the guide for
-the full operational picture (startup behavior, configuration, backups, tests, CI).
+of its own. See [chapter 21](../../docs/guide/en/21-schema-and-upgrades.md) of the guide for schema
+management and startup order, and [chapter 20](../../docs/guide/en/20-deployment.md) for the
+full deployment picture, including configuration and backups.
 
 ## 2. Three layers, three responsibilities
 

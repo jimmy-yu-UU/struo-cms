@@ -7,7 +7,7 @@ Two suites, configured as separate Playwright projects (`playwright.config.ts`):
   checkout.
 - **`sample`** (`pnpm e2e:sample`) — specs under `e2e/sample/`: collections, items CRUD, relations,
   revisions and related flows. Requires the Blog sample opted into `Struo:ContentAssemblies` first —
-  see [chapter 16](../../docs/guide/en/16-sample-walkthrough.md).
+  see [chapter 23](../../docs/guide/en/23-sample-walkthrough.md).
 - **`pnpm e2e:all`** runs both projects.
 
 ## Prerequisites
@@ -29,7 +29,7 @@ Both suites need, at minimum:
 - The Vite dev server — Playwright starts this for you (`playwright.config.ts`'s `webServer` block,
   `reuseExistingServer: true`), so `pnpm dev` does not need to be running separately, though it's fine
   if it already is.
-- `pnpm e2e:sample` additionally needs the Blog sample opted in (chapter 16) and whatever seed data
+- `pnpm e2e:sample` additionally needs the Blog sample opted in (chapter 23) and whatever seed data
   each sample spec documents inline. **`relations.spec.ts` needs one pre-existing `category` row and
   one `tag` row** — the sample ships no seed data for either, and a freshly opted-in / freshly
   migrated database has none, so that spec alone fails otherwise (its own header comment has the
@@ -64,7 +64,7 @@ and should not be committed.
 
 ## Further reading
 
-[Chapter 15](../../docs/guide/en/15-deployment-operations-testing.md) covers all three test layers
-(backend, frontend unit, E2E) and what CI runs instead. [Chapter 16](../../docs/guide/en/16-sample-walkthrough.md)
+[Chapter 22](../../docs/guide/en/22-testing.md) covers all three test layers
+(backend, frontend unit, E2E) and what CI runs instead. [Chapter 23](../../docs/guide/en/23-sample-walkthrough.md)
 covers opting the Blog sample in and out, including the corresponding cleanup of this directory's
 `sample/` specs if the sample is removed from a fork.

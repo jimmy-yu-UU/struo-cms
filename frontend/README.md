@@ -47,7 +47,7 @@ pnpm e2e:all     # both
 ```
 
 Needs a running API and database; see `e2e/README.md` for prerequisites and setup, and
-[chapter 15](../docs/guide/en/15-deployment-operations-testing.md) for what the three test layers cover
+[chapter 22](../docs/guide/en/22-testing.md) for what the test layers cover
 and what CI does and does not run.
 
 ## Manually verifying sample-only flows (e.g. revision history)
@@ -55,7 +55,8 @@ and what CI does and does not run.
 Some admin flows only exist on collections with `Revisions = true` — currently only the sample's
 `Article` (`samples/Struo.Sample.Blog/Article.cs`), since none of the seven core collections opts in.
 To exercise such a flow against this SPA (revision history, revert, etc.), opt the sample into the
-running API first, following [chapter 16](../docs/guide/en/16-sample-walkthrough.md)'s "Opting it in".
+running API first, following [chapter 23](../docs/guide/en/23-sample-walkthrough.md)'s
+"Opting the sample in".
 Rebuild and start the API on `:5221` as usual (chapter 2), then `pnpm dev` here — no separate frontend
 configuration is needed.
 
@@ -63,7 +64,7 @@ configuration is needed.
 anything else. `dotnet test`'s `Host_project_has_no_project_reference_into_samples`
 (`tests/Struo.Tests/Template/TemplateInvariantsTests.cs`) fails while the reference is in place — that is
 expected, not a regression to chase — and passes again once it's reverted; confirm `git status` shows no
-tracked diff at all before moving on (not just to `Struo.Api.csproj`) — chapter 16's
+tracked diff at all before moving on (not just to `Struo.Api.csproj`) — chapter 23's
 `Struo:ContentAssemblies` edit belongs in the gitignored Development file precisely so it never shows up
 there. The host has no `ProjectReference` to the sample by default because it's an optional, detachable
 demo, not shipped capability — see the core/sample boundary in `AGENTS.md`.
