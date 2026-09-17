@@ -79,7 +79,7 @@ public class DistributedCacheTicketStoreTests
         private static InvalidOperationException Failure() => new("session index unreachable");
         public Task RecordAsync(Guid userId, string ticketKey, DateTime createdAtUtc, DateTime expiresAtUtc, CancellationToken ct = default) =>
             throw Failure();
-        public Task<bool> RenewAsync(string ticketKey, DateTime expiresAtUtc, CancellationToken ct = default) =>
+        public Task<bool> RenewAsync(string ticketKey, Guid userId, DateTime expiresAtUtc, CancellationToken ct = default) =>
             throw Failure();
         public Task RemoveByTicketKeyAsync(string ticketKey, CancellationToken ct = default) => throw Failure();
         public Task RemoveExpiredForUserAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => throw Failure();
