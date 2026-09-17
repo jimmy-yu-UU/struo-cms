@@ -348,7 +348,7 @@ relation quantifiers and `_junction`) into a `List<IConditionalModel>` for **one
 condition (own-collection or reached across a hop) all become a nested `IN (SELECT …)` subquery
 (`RelationPredicateFilter`/`ComparisonFilter` cases in `FilterTranslator.Subquery.cs`), never an
 intermediate id set. When `searchCandidates` (an `IReadOnlyList<object>?` of ids already parsed to the
-collection's primary-key CLR type — see "Search providers" above) is non-null, `CandidateConditional`
+collection's primary-key CLR type — see "Search providers" below) is non-null, `CandidateConditional`
 builds a typed `id IN (...)` condition from it and that **replaces** the `LIKE` search group outright
 (`search` itself is not consulted in that branch); an empty candidate list becomes `id IS NULL`
 instead of an empty `IN (...)`, portably matching nothing. Both render through the same typed
