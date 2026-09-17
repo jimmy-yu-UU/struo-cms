@@ -137,8 +137,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because
   SQLite or SqlSugar's SQLite dialect lacks the capability, but because this repo's
   `SqlSugarClientFactory` never sets `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`,
-  the flag that gates it (manual ch.15 row 7 has the detail, including what flipping that flag actually
-  does) — so this repo's SQLite-only CI suite cannot demonstrate the claim by itself), while reviewed
+  the flag that gates it (manual ch.21, "Where schema sync is dangerous", item 7 has the
+  two-sentence summary) — so this repo's SQLite-only CI suite cannot demonstrate the claim by
+  itself), while reviewed
   `db/migrations/` scripts applied by `MigrationRunner` are the all-environments path. The runner works
   on any backend; `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
