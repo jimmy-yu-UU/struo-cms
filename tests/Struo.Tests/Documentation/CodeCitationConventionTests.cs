@@ -86,8 +86,9 @@ namespace Struo.Tests.Documentation;
 /// this form specifically.
 /// </para>
 /// <para>
-/// As of this writing there are 8 upstream-citation OCCURRENCES across 8 distinct citation texts: 7 in
-/// <c>ColumnTypeMap.cs</c> and 1 in <see cref="Struo.Tests.Persistence.DatabaseInitializerTests"/>.
+/// As of this writing there are 8 upstream SqlSugar-citation OCCURRENCES across 8 distinct
+/// citation texts: 7 in <c>ColumnTypeMap.cs</c> and 1 in
+/// <see cref="Struo.Tests.Persistence.DatabaseInitializerTests"/>.
 /// Their basenames (<c>EntityMaintenance.cs</c>, <c>SqlServerDbMaintenance.cs</c>,
 /// <c>MySqlDbMaintenance.cs</c>, <c>SqliteCodeFirst.cs</c>) resolve nowhere in this repository
 /// (checked against the widened resolution roots below too) and so all 8 stay green.

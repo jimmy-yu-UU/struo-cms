@@ -1,13 +1,13 @@
 // Pure helper for reading a VitePress sidebar's first link. No I/O here —
-// the caller (docs/.vitepress/config.mts) owns building the sidebar; this
-// function only inspects the data it is handed. It stays generic over a
-// nested `items` group (rather than assuming a flat list) so a locale's
-// first link can still be found if a fork later reintroduces a collapsed
-// group of its own.
+// the caller (docs/.vitepress/config.mts) hands it the sidebar that
+// docs/.vitepress/sidebar.mts built; this function only inspects that data.
+// It stays generic over a nested `items` group (rather than assuming a flat
+// list) so a locale's first link can still be found if a fork later
+// reintroduces a collapsed group of its own.
 
 /**
  * @typedef {{ text: string, link: string }} SidebarLink
- * @typedef {{ text: string, collapsed: true, items: SidebarLink[] }} SidebarGroup
+ * @typedef {{ text: string, items: SidebarLink[], collapsed?: boolean }} SidebarGroup
  * @typedef {SidebarLink | SidebarGroup} SidebarItem
  */
 
