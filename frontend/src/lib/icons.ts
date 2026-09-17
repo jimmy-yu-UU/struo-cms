@@ -12,13 +12,13 @@ import {
 //   * PrimeIcons tokens ("pi pi-th-large" / "pi-th-large") — what this codebase's own
 //     templates say today.
 //   * Semantic names ("article", "folder") — what the backend's [CmsCollection(Icon = "...")]
-//     emits and what docs/guide/*/04-defining-a-collection.md documents.
+//     emits and what docs/guide/*/05-collections.md documents.
 // Keys are stored WITHOUT the "pi-" prefix so both dialects normalise to the same lookup.
 //
 // Every key here is required by one of three things: a literal `pi-*` token still present in
 // shipped (non-test) source under src/ (enforced by frontend/tests/iconCoverage.test.ts); a
 // semantic name a [CmsCollection(Icon = "...")] attribute actually emits (article/folder/tag from
-// samples/Struo.Sample.Blog, megaphone from docs/guide/*/04-defining-a-collection.md); or, for the
+// samples/Struo.Sample.Blog, megaphone from docs/guide/*/05-collections.md); or, for the
 // four `align-*` keys, a runtime class a dynamic template literal actually builds even though no
 // literal token for it exists in source (see the comment above those keys). There are no other
 // speculative entries.
