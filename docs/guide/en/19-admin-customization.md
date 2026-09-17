@@ -325,4 +325,5 @@ over HTTPS — see [Chapter 4](04-configuration.md).
 
 ## What's next
 
-That covers admin customization; the next step is deploying the whole system to production.
+That covers admin customization; the next step is deploying the whole system to production — see
+[Chapter 20: Deployment](20-deployment.md).

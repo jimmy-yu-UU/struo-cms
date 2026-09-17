@@ -397,9 +397,9 @@ only.
 The running API never reads this section at all; only the test project's own `ConfigurationBuilder`
 does. It's also the one key in the entire configuration surface where the environment-variable
 override convention doesn't apply. Only `STRUO_TEST_PG_CONNECTION` is honored (checked first), with
-this key itself as the fallback. Leaving it empty skips the opt-in PostgreSQL integration tests; the
-SQLite database tests are unaffected and still run. The connection string's database name must
-include the word `test`.
+this key itself as the fallback. Leaving it empty means the opt-in PostgreSQL integration tests
+never connect — each one passes outright rather than being skipped. The SQLite database tests are
+unaffected and still run. The connection string's database name must include the word `test`.
 
 ## What's next
 
