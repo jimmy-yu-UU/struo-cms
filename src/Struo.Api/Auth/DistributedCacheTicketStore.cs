@@ -97,16 +97,21 @@ public sealed class DistributedCacheTicketStore(
     {
         try
         {
+            // A ticket with no readable user id leaves the row untouched — same as StoreAsync, there is
+            // nobody to attribute it to.
+            if (ExtractUserId(ticket) is not { } userId) return;
             using var scope = scopeFactory.CreateScope();
             var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
             var expiresAt = DateTime.UtcNow + AuthSchemes.SessionLifetime;
-            if (await sessions.RenewAsync(key, expiresAt)) return;
+            // Re-attributes the row to this ticket's current user, so a renewal that carries a different
+            // principal than the row was last recorded under (e.g. logging in as B over a still-valid
+            // cookie for A) moves the row to B rather than leaving it attributed to A.
+            if (await sessions.RenewAsync(key, userId, expiresAt)) return;
 
             // No row matched: this ticket predates the index (or its StoreAsync couldn't attribute a
             // user id at the time it ran). Back-fill one now so the session becomes revocable going
             // forward — otherwise a sliding-expiration session with no index row can never be found by
             // IUserSessionRevocationService and would stay alive, self-renewing, indefinitely.
-            if (ExtractUserId(ticket) is not { } userId) return;
             await sessions.RecordAsync(userId, key, DateTime.UtcNow, expiresAt);
         }
         catch (Exception ex)

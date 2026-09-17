@@ -79,7 +79,7 @@ public class DistributedCacheTicketStoreTests
         private static InvalidOperationException Failure() => new("session index unreachable");
         public Task RecordAsync(Guid userId, string ticketKey, DateTime createdAtUtc, DateTime expiresAtUtc, CancellationToken ct = default) =>
             throw Failure();
-        public Task<bool> RenewAsync(string ticketKey, DateTime expiresAtUtc, CancellationToken ct = default) =>
+        public Task<bool> RenewAsync(string ticketKey, Guid userId, DateTime expiresAtUtc, CancellationToken ct = default) =>
             throw Failure();
         public Task RemoveByTicketKeyAsync(string ticketKey, CancellationToken ct = default) => throw Failure();
         public Task RemoveExpiredForUserAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => throw Failure();
@@ -144,6 +144,27 @@ public class DistributedCacheTicketStoreTests
         var after = await h.Client.Queryable<UserSession>().Where(s => s.TicketKey == key).FirstAsync();
         after.Should().NotBeNull();
         after!.ExpiresAt.Should().BeAfter(before!.ExpiresAt);
+    }
+
+    /// <summary>
+    /// Covers the seam that carried the stale-attribution defect: a request that still carries a valid
+    /// session cookie for user A performs a login as user B, and ASP.NET Core's
+    /// CookieAuthenticationHandler renews the SAME ticket key in place with B's principal. The index row
+    /// for that key must move to B.
+    /// </summary>
+    [Fact]
+    public async Task RenewAsync_re_attributes_the_index_row_to_the_renewing_tickets_user()
+    {
+        using var h = new Harness();
+        var store = h.NewStore();
+        var userA = Guid.CreateVersion7();
+        var userB = Guid.CreateVersion7();
+        var key = await store.StoreAsync(Ticket(userA));
+
+        await store.RenewAsync(key, Ticket(userB));
+
+        (await h.KeysFor(userB)).Should().Contain(key);
+        (await h.KeysFor(userA)).Should().BeEmpty();
     }
 
     /// <summary>

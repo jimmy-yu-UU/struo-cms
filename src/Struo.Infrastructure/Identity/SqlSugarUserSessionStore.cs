@@ -13,9 +13,9 @@ public sealed class SqlSugarUserSessionStore(ISqlSugarClient db) : IUserSessionS
             CreatedAt = createdAtUtc, ExpiresAt = expiresAtUtc,
         }).ExecuteCommandAsync(ct);
 
-    public async Task<bool> RenewAsync(string ticketKey, DateTime expiresAtUtc, CancellationToken ct = default) =>
+    public async Task<bool> RenewAsync(string ticketKey, Guid userId, DateTime expiresAtUtc, CancellationToken ct = default) =>
         await db.Updateable<UserSession>()
-            .SetColumns(s => new UserSession { ExpiresAt = expiresAtUtc })
+            .SetColumns(s => new UserSession { UserId = userId, ExpiresAt = expiresAtUtc })
             .Where(s => s.TicketKey == ticketKey)
             .ExecuteCommandAsync(ct) > 0;
 

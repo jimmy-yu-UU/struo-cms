@@ -71,7 +71,7 @@ public class SqlSugarUserSessionStoreTests
         await store.RecordAsync(userId, "key-1", now, now.AddHours(8));
 
         var renewedTo = now.AddHours(16);
-        var matched = await store.RenewAsync("key-1", renewedTo);
+        var matched = await store.RenewAsync("key-1", userId, renewedTo);
 
         matched.Should().BeTrue();
         var row = await client.Queryable<UserSession>().Where(s => s.TicketKey == "key-1").FirstAsync();
@@ -86,9 +86,34 @@ public class SqlSugarUserSessionStoreTests
         var client = NewDb(db);
         var store = new SqlSugarUserSessionStore(client);
 
-        var matched = await store.RenewAsync("no-such-key", DateTime.UtcNow.AddHours(8));
+        var matched = await store.RenewAsync("no-such-key", Guid.CreateVersion7(), DateTime.UtcNow.AddHours(8));
 
         matched.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Reproduces the stale-attribution defect: a request that still carries a valid session cookie for
+    /// user A performs a login as user B, and ASP.NET Core's CookieAuthenticationHandler renews the SAME
+    /// ticket key in place with B's principal (RenewAsync, not a new StoreAsync). The index row for that
+    /// key must move to B — otherwise B's password change never revokes it, and A's password change wrongly
+    /// revokes a session A no longer uses.
+    /// </summary>
+    [Fact]
+    public async Task RenewAsync_re_attributes_the_row_to_the_renewing_users_id()
+    {
+        using var db = new SqliteTestDatabase();
+        var client = NewDb(db);
+        var store = new SqlSugarUserSessionStore(client);
+        var userA = Guid.CreateVersion7();
+        var userB = Guid.CreateVersion7();
+        var now = DateTime.UtcNow;
+        await store.RecordAsync(userA, "key-1", now, now.AddHours(8));
+
+        var matched = await store.RenewAsync("key-1", userB, now.AddHours(16));
+
+        matched.Should().BeTrue();
+        (await store.ListTicketKeysForUserAsync(userB)).Should().Contain("key-1");
+        (await store.ListTicketKeysForUserAsync(userA)).Should().NotContain("key-1");
     }
 
     [Fact]
