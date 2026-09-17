@@ -96,8 +96,9 @@ Its own fields cover most of the interfaces in Chapter 6's overview: `Select` (`
 `DateTime` (`PublishedAt`), `Image` (`HeroImageId`), `MultiSelect` (`Regions`), `CheckboxGroup`
 (`Audiences`), `Tags` (`Keywords`), `Json` (`Attributes`), `KeyValue` (`Meta`), `Files`
 (`Gallery`), `Repeater` (`Faqs`, whose child type is `FaqItem` below), and `InternalNote`, a `Text`
-field marked `Hidden`. What each interface does is in
-[Chapter 6: Field Types and Editors](06-field-types.md).
+field marked `Hidden`.
+
+What each interface does is in [Chapter 6: Field Types and Editors](06-field-types.md).
 
 `Status` is a `draft`/`published` `Select` that defaults to `draft` in code and is also the
 collection's `DefaultDisplayField`, but it doesn't declare `Required`. The fields that are actually
