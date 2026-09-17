@@ -13,7 +13,7 @@ namespace Struo.Tests.Api;
 /// Pins that <c>X-Content-Type-Options: nosniff</c> is present on every kind of response this host
 /// produces — a plain success, an error envelope, and a raw file stream — because the header is
 /// registered first in the pipeline specifically so it survives every downstream short-circuit
-/// (CORS preflight, the exception handler, a bare 404). See <c>docs/guide/en/15-deployment-operations-testing.md</c>'s
+/// (CORS preflight, the exception handler, a bare 404). See <c>docs/guide/en/20-deployment.md</c>'s
 /// "Production checklist" for why this is the only header the application sends itself.
 /// </summary>
 [Collection("ApiIntegration")]

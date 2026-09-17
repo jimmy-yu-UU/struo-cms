@@ -38,7 +38,7 @@
 註解：
 
 ```json
-  // Uncomment to enable the Blog sample (see docs/guide/en/16-sample-walkthrough.md).
+  // Uncomment to enable the Blog sample (see docs/guide/en/23-sample-walkthrough.md).
   // The Struo.Sample.Blog project reference must be added to Struo.Api.csproj as well.
   "Struo": {
     // "ContentAssemblies": [ "Struo.Sample.Blog" ],
