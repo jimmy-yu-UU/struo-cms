@@ -220,6 +220,49 @@ actually blocks the write.
   error messages still number rows starting at 1 in the order they were sent, including the dropped
   ones.
 
+## What `RichText` stores
+
+Every `RichText` value written through the API — from the admin SPA's editor, a direct REST or
+GraphQL call, or a script of your own posting raw HTML — goes through one server-side sanitizer
+(`GanssHtmlSanitizer`). Tags, attributes, and URL schemes each have their own allowlist; anything
+outside it is dropped, and dropping a tag drops its whole subtree with it. What that means on the
+editor side is in [Chapter 19: Admin Customization](19-admin-customization.md).
+
+The tag allowlist is basic formatting plus `h2`-and-below headings, links, images, simple tables,
+`sub`/`sup`, and `span` — no `h1`, no `div`. An absolute URL must be `http`, `https`, or
+`mailto`; relative paths (the editor's uploaded images) stay, and a rejected URL costs the
+attribute, not the element.
+
+### Links: `target` and `rel`
+
+`rel` is never stored as written — the sanitizer always derives it from `target`:
+
+| What you send | What gets stored |
+|---|---|
+| `<a href="…" target="_blank">` | `<a href="…" target="_blank" rel="noopener">` |
+| Any other `target` value | `<a href="…">` |
+
+Only an exact, case-sensitive `_blank` counts; `_Blank`, `_self`, or a link whose `href` itself got
+dropped lose both attributes together. `target` is on the global attribute allowlist too, but only
+`<a>` does anything with it — every other element loses `target` unconditionally, even when the
+tag itself is allowlisted.
+
+### Images: `width` and `height`
+
+`width` survives only on `<img>`, and only when the whole value matches
+`\A[1-9][0-9]{0,4}\z` — a one-to-five-digit pixel count with no leading zero, no unit, no
+percentage, no whitespace; every other element loses it, allowlisted attribute or not.
+
+`height` isn't allowlisted at all, so it's never stored regardless of source: both dimensions
+together, in a renderer that only caps `max-width: 100%`, would squash the image. Render
+`RichText` images with `max-width: 100%` and nothing constraining height, and the stored width
+scales them with their aspect ratio intact.
+
+Both rules are policy that `GanssHtmlSanitizer` enforces in one place, not a hard limit —
+allowing `noreferrer`, a percentage width, or a stored height means changing that class, not the
+editor's link dialog or any other allowlist. The same sanitizer also normalizes a table's
+`<thead>` on the way out; that's covered in [Chapter 19](19-admin-customization.md).
+
 ## Common pitfalls
 
 **Writing long text fails on PostgreSQL with `22001 value too long`.** A `string` property with no
