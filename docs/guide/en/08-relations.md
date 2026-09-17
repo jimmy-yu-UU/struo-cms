@@ -164,7 +164,7 @@ junction collection.
 The sample's `ArticleTag` is exactly such a junction collection:
 
 ```csharp
-[CmsCollection("Article tag", Icon = "link", Group = "Content", Hidden = true)]
+[CmsCollection("Article tag", Icon = "tag", Group = "Content", Hidden = true)]
 public sealed class ArticleTag
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
