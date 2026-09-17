@@ -21,20 +21,18 @@ the only layer that can silently touch existing data — "Where schema sync is d
 walks through each way that happens.
 
 Migration scripts: apply `.sql` files you write and review yourself. They run against every
-backend, not just PostgreSQL, and default to off the same way — leaving the setting empty
-disables them. This is the only path an existing table should take in production.
+backend, not just PostgreSQL, and default to off the same way — leaving `Database:MigrationsPath`
+empty disables the runner. This is the only path an existing table should take in production.
 
 Add a property to an existing collection and, by default, nothing happens: the table already
 exists, so table creation leaves it alone, and schema sync is off, so the column doesn't grow on
-its own. In Development, to make it appear, turn on `Database:AutoSyncSchema` and restart (key
-and type in [Chapter 4: Configuration Reference](04-configuration.md)) — safe only against a
-database that doesn't hold data you actually care about yet.
+its own. In Development, to make it appear, turn on `Database:AutoSyncSchema` and restart — safe
+only against a database that doesn't hold data you actually care about yet.
 
 Production doesn't have that option: the same change needs an `ALTER` script you write yourself,
-placed in the directory `Database:MigrationsPath` points at, deployed with the new version, and
-applied by the migration runner at startup. Adding a whole new collection is a different case —
-that's a table that doesn't exist yet, so both layers create it on their own and no script is
-needed.
+placed in the migration directory above, deployed with the new version, and applied by the
+migration runner at startup. Adding a whole new collection is a different case — that's a table
+that doesn't exist yet, so both environments create it on their own and no script is needed.
 
 ## Startup order
 
@@ -49,12 +47,13 @@ At startup, six steps always run in the same order:
 6. Seed data.
 
 The order isn't arbitrary. Table creation runs first because migration scripts assume the table
-they alter already exists — there'd be nothing for `ALTER` to change; schema sync likewise needs
-a table to compare against before it can even compute a difference with the entity class. Schema
-guard and seeding run last because both depend on the table's final shape: the indexes schema
-guard checks for aren't guaranteed to exist until every step that might create or alter a table
-has finished, and seeding only fills the tables this startup created for the first time — running
-it any earlier would miss columns a migration or schema sync had just added.
+they alter already exists — there'd be nothing for `ALTER` to change; schema sync likewise needs a
+table to compare against before it can even compute a difference with the entity class.
+
+Schema guard and seeding run last because both depend on the table's final shape: the indexes
+schema guard checks for aren't guaranteed to exist until every step that might create or alter a
+table has finished, and seeding only fills the tables this startup created for the first time —
+running it any earlier would miss columns a migration or schema sync had just added.
 
 If the migration-scripts step fails partway through, the script that was being applied rolls back
 along with its tracking entry, right where it stopped — except on MySQL and Oracle, whose DDL
@@ -62,9 +61,9 @@ commits implicitly, so whatever already ran can't be undone. Files that had alre
 successfully are not undone and still count. Startup aborts entirely either way; it never carries
 on with a script left half-applied.
 
-Schema sync is the one branch that never fails startup: turned on outside Development, the whole
-step is skipped, leaving only a warning that names the current environment, and startup continues
-as normal.
+Only one kind of misconfiguration in the three layers doesn't fail startup: schema sync turned on
+outside Development. The whole step is skipped, leaving only a warning that names the current
+environment, and startup continues as normal.
 
 ## What always happens, and what never happens on its own
 
@@ -145,9 +144,9 @@ applying first, or run a separate one-off job, before the rest come online.
 
 Second, the directory itself has to exist: `db/migrations/` holds only a `README.md`, no `.sql`
 files, so a deployment process that just copies whatever's there won't necessarily carry this
-directory into your own build output — this project's API image copies it explicitly. Setting
-`Database:MigrationsPath` to a directory that doesn't exist fails startup outright; the message
-and exit code are in [Chapter 20: Deployment](20-deployment.md).
+directory into your own build output, though this project's API image does copy it explicitly.
+Setting `Database:MigrationsPath` to a directory that doesn't exist fails startup outright; the
+message and exit code are in [Chapter 20: Deployment](20-deployment.md).
 
 ## The development-time schema guard
 
@@ -164,11 +163,11 @@ the table and the kind of index.
 
 A missing index usually means the table was created before the index was added to the code — an
 index is only created at the moment its table is created. In Development, turning on schema sync
-and restarting fills it in; on the same table in production, adding the index is a migration like
-any other.
+and restarting will try to fill it in; on the same table in production, adding the index is a
+migration like any other.
 
 It only recognizes PostgreSQL and SQLite; MySQL, SQL Server, and Oracle are skipped entirely, with
-nothing verified. It's a development-time fast-failure check for "this change is missing an index
+nothing verified. It's a development-time fail-fast check for "this change is missing an index
 it should have" — not a production safety net, since production never runs it at all.
 
 ## The four raw-SQL exceptions in core
@@ -202,9 +201,9 @@ gives your fork no mechanism that alters your existing tables to match.
 
 Core's schema changes are written up in release notes; acting on them means writing your own
 `ALTER` script for whichever backend you actually run, going through the migration path described
-earlier. Place the script in the directory `Database:MigrationsPath` points at and deploy it with
-the new core version: startup creates tables first, then applies your script, in the same order
-covered in "Startup order" above.
+earlier. Place the script in the same migration directory and deploy it with the new core version:
+startup creates tables first, then applies your script, in the same order as "Startup order"
+above.
 
 Turning on schema sync and running it once against a copy of a production database lets you treat
 the diff it computes as a hint at roughly which columns this upgrade needs to touch — but only as
