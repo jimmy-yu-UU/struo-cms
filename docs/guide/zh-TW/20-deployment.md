@@ -154,7 +154,7 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 - `Struo__Files__Backend`——預設 `local`，寫進 `/app/App_Data`（落在宣告的 volume 裡）；要
   用 `s3`，還得配上對應的四個 `Struo__Files__S3__*` 鍵。
 
-`ASPNETCORE_ENVIRONMENT` 這個映像沒有設定，不設就是 ASP.NET Core 的框架預設值
+這個映像沒有設定 `ASPNETCORE_ENVIRONMENT`，不設就是 ASP.NET Core 的框架預設值
 `Production`。這決定了認證 cookie 的安全政策，見上面的正式環境檢查清單。
 
 ### DataProtection 金鑰
@@ -167,9 +167,9 @@ DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token �
 到跟核發時不同的副本，cookie 驗證或 antiforgery 會直接失敗。
 
 單一副本，把這個路徑掛成 volume 就夠了，金鑰能撐過容器重建；一個以上的副本，得自己配一個共
-享的金鑰存放區——共享檔案系統、Redis，或雲端供應商的金鑰圈服務。這個專案沒有替任何一種做好
-設定。不論掛在哪裡，這些金鑰都是明文存放的——這個專案沒有配置 XML 加密器，所以金鑰圈目錄裡
-是可以直接讀的金鑰材料，要比照其他密鑰保護。
+享的金鑰存放區——共享檔案系統、Redis，或雲端供應商的金鑰圈服務，這個專案沒有替任何一種做好
+設定。不論掛在哪裡，金鑰都是明文存放的：沒有配置 XML 加密器，金鑰圈目錄裡是可以直接讀的金
+鑰材料，要比照其他密鑰保護。
 
 ### 後台 SPA 映像
 
@@ -207,7 +207,7 @@ network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*
 ### 映像之外還要自己做的事
 
 映像只負責把應用程式跑起來。終結 TLS、設定 `UseForwardedHeaders`、重啟策略、水平擴展、密鑰
-注入，以及把 `/health/live` 與 `/health/ready` 接到編排系統的探針上，都要自己接。
+注入，以及把 `/health/live` 與 `/health/ready` 接到編排系統自己的探針上，都要自己接。
 
 ### 兩個映像一起驗證
 
