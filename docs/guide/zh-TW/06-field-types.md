@@ -149,18 +149,18 @@
 3. 兩者都不成立，是 `null`，代表不限長度。
 
 後台把有效的 `MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上，所以就算從未寫過
-`MaxLength`，255 的預設值一樣會在前端生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是
+`MaxLength`，255 的預設值一樣會在後台生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是
 因為 SqlSugar 對未加寬 `string` 的預設值也是 255。
 
 ## 必填、唯讀、隱藏與系統欄位
 
-`Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求本文本身，細
+`Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求 body 本身，細
 節見[第 5 章：定義集合](05-collections.md)。
 
 `RichText` 的內容如果清理後在視覺上等於空白，會先被轉成 `null` 再檢查 `Required`，所以看起
 來有內容的編輯器文件仍可能未通過必填檢查，`<img>`、`<hr>` 都算有內容。
 
-建立時先報 `Required`；更新時如果本文同時違反長度或結構驗證，先報的是那些錯誤。
+建立時先報 `Required`；更新時如果 body 同時違反長度或結構驗證，先報的是那些錯誤。
 
 `ReadOnly` 欄位讀得到，更新時寫不進去：更新的欄位覆蓋邏輯會跳過每一個 `ReadOnly` 與
 `IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——
@@ -181,7 +181,7 @@
 
 ### 寫入時的整理
 
-- 寫入本文裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名照樣成功回應，只是值沒存進去。
+- 寫入 body 裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名照樣成功回應，只是值沒存進去。
 - `MultiSelect`／`CheckboxGroup` 去重、保留第一個；`Tags` 空白值拒絕、重複丟掉。
 - `Files` 丟掉 `Guid.Empty` 與重複；`Repeater` 丟掉整列空白的列，但錯誤訊息的列號仍以送進
   來的順序（含被丟掉的）從 1 起算。
@@ -197,8 +197,8 @@
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
 外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名屬性與介面；`InitTables` 集
 合裡的型別在啟動時就失敗，集合外的則要等到第一次用到那張表才失敗。修法是移除 `[ColumnShape]`：JSON
-對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介面
-（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
+對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介
+面（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
 
 同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，
 而且不會有任何警告。

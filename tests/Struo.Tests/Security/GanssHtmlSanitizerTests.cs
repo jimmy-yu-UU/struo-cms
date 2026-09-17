@@ -81,10 +81,10 @@ public class GanssHtmlSanitizerTests
         bad.Should().NotContain("javascript").And.NotContain("data:");
     }
 
-    // rel is derived from target, not client-supplied (chapter 5's RichText contract table): a
-    // same-tab anchor -- the common case, and what a bare href with no target means -- carries no
-    // rel at all. Asserted on the exact string, not Contain, because a same-tab anchor must NOT
-    // pick up any rel value.
+    // rel is derived from target, not client-supplied (GanssHtmlSanitizer's PostProcessNode
+    // handler): a same-tab anchor -- the common case, and what a bare href with no target means --
+    // carries no rel at all. Asserted on the exact string, not Contain, because a same-tab anchor
+    // must NOT pick up any rel value.
     [Fact]
     public void Bare_anchor_with_no_target_carries_no_rel()
     {

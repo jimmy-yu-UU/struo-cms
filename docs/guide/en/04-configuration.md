@@ -8,7 +8,7 @@ getting it wrong will block startup, this chapter has the answer.
 Settings layer in order, and each later source overrides the ones before it:
 `src/Struo.Api/appsettings.json` → `appsettings.{Environment}.json` → environment variables →
 command-line arguments. Three sections — `Query`, `Struo:Cors`, and `GraphQl` — don't appear in the
-shipped `appsettings.json`. Not having a block to edit for these doesn't mean the keys don't exist;
+default `appsettings.json`. Not having a block to edit for these doesn't mean the keys don't exist;
 you just have to add the section yourself.
 
 Any key can be overridden with an environment variable by replacing `:` with `__` — for example,
@@ -22,10 +22,10 @@ a section bound with `ValidateOnStart`, and in most other sections only when the
 used.
 
 An array-valued key has to be replaced as a whole: at a higher-precedence layer, indices you don't
-override keep the shipped value, so filling in only the first few elements doesn't shorten the
-array.
+override keep the value from the layer below, so filling in only the first few elements doesn't
+shorten the array.
 
-The shipped file fully populates four arrays: `Oidc:Scopes`,
+The default `appsettings.json` fully populates four arrays: `Oidc:Scopes`,
 `Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:AllowedContentTypes`, and
 `Serilog:WriteTo`; the first two fall back to their built-in default even if you delete them
 entirely. Array elements use an index, e.g. `Oidc__Scopes__0=openid`; to shorten an array, edit the
@@ -123,8 +123,8 @@ typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
   about the length is still limited.
-- `AllowedContentTypes`: leaving it empty means no format is restricted; the shipped file already
-  lists 18 MIME types.
+- `AllowedContentTypes`: leaving it empty means no format is restricted; the default
+  `appsettings.json` already lists 18 MIME types.
 - `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL;
   the default `false` has the API stream the bytes itself, which suits setups where the browser
   can't reach storage directly.
@@ -150,7 +150,7 @@ When `Backend="local"`, `RootPath` is the only field validated at startup.
 | `Struo:Files:S3:PresignTtlSeconds` | integer (seconds) | `300` |
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
-startup; the shipped value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
+startup; the default value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
 `Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup.
 
 ### ImageTransform
@@ -235,7 +235,7 @@ The pair is applied only when the `users` table is first created and is never ba
 existing database, but it is read again on every start — the Production default-password warning
 compares against it. These two keys have no options class; `Program.cs` reads them straight from
 configuration as strings. The seeder doesn't enforce the password policy, so whatever you put here
-is accepted as-is. The shipped `admin` is only five characters, shorter than `MinLength`'s 8.
+is accepted as-is. The default `admin` is only five characters, shorter than `MinLength`'s 8.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.
@@ -332,7 +332,7 @@ has been taken down).
 
 Left empty, it falls back to an in-memory distributed cache, and sessions disappear every time the
 process restarts — fine only for brief local testing; set this key whenever you run more than one
-replica, or need sessions to survive a restart. The shipped value is an empty string, and an absent
+replica, or need sessions to survive a restart. The default value is an empty string, and an absent
 key yields `null`; both land on the same in-memory branch. This key also backs the store shared by
 `RateLimiting:LoginAccount`.
 
@@ -368,7 +368,7 @@ email; that matching only happens once `AllowedTenantId`, `RequireEmailVerified`
 identity provider can take over a password account.
 
 `RequireEmailVerified` and `AllowedEmailDomains` default to permissive; `AllowedTenantId` doesn't.
-The shipped value is `REPLACE_TENANT_ID`, which matches no real tenant, so it blocks every external
+The default value is `REPLACE_TENANT_ID`, which matches no real tenant, so it blocks every external
 login until you replace it. When you enable OIDC in Production, set all three explicitly rather than
 relying on the defaults.
 
@@ -397,9 +397,9 @@ only.
 The running API never reads this section at all; only the test project's own `ConfigurationBuilder`
 does. It's also the one key in the entire configuration surface where the environment-variable
 override convention doesn't apply. Only `STRUO_TEST_PG_CONNECTION` is honored (checked first), with
-this key itself as the fallback. Leaving it empty skips the opt-in PostgreSQL integration tests; the
-SQLite database tests are unaffected and still run. The connection string's database name must
-include the word `test`.
+this key itself as the fallback. Leaving it empty means the opt-in PostgreSQL integration tests
+never connect — each one passes outright rather than being skipped. The SQLite database tests are
+unaffected and still run. The connection string's database name must include the word `test`.
 
 ## What's next
 

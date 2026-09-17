@@ -230,7 +230,7 @@ try
     // the file-download endpoint's Content-Disposition: attachment and the image-transform path's
     // fixed raster content types, not a patch for an open hole. Strict-Transport-Security,
     // X-Frame-Options/CSP frame-ancestors, and Referrer-Policy are left to the reverse proxy — see
-    // Ch. 15 of the manual ("Production checklist").
+    // Ch. 20 of the manual ("Production checklist").
     app.Use(async (context, next) =>
     {
         context.Response.OnStarting(() =>
