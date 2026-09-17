@@ -9,17 +9,17 @@
 測試各自建立一個獨立的暫存檔資料庫（`SqliteTestDatabase`），測試結束就刪除，彼此不共用狀態。
 
 選用的 PostgreSQL 整合測試（`PostgresIntegrationTests`）只在能解析出一條連線字串時才會真的
-跑：先看環境變數 `STRUO_TEST_PG_CONNECTION`，沒有才退回設定裡的鍵，見
-[第 4 章：設定參考](04-configuration.md)的 `Testing` 一節——那也是整個設定面唯一一個不吃
-`Section__Key` 覆寫規則的鍵，由測試自己的 `ConfigurationBuilder` 直接讀取，不經過應用程式的
-選項繫結。
+跑：先看環境變數 `STRUO_TEST_PG_CONNECTION`，沒有才退回設定裡的鍵。鍵名，以及它是整個設定
+面唯一一個不吃 `Section__Key` 覆寫規則的鍵，見[第 4 章：設定參考](04-configuration.md)的
+`Testing` 一節；讀取由測試自己的 `ConfigurationBuilder` 做，不經過應用程式的選項繫結。
 
 解析不到連線字串時，這組測試每一個都直接判定通過，而不是標成略過——測試報告上的綠燈，不代
 表真的連過一次 PostgreSQL。
 
 這組測試只認資料庫名稱含 `test`（大小寫不分）的連線字串，名稱對不上就拒絕連上去，免得測試
 接到一個正在用的資料庫。`PgTestConnectionString.DisablePooling` 另外把 Npgsql 的連線池關
-掉，隔開測試主機底下看過的 socket 中斷；正式環境不受影響。
+掉，隔開測試主機底下看過的 socket 中斷；那是測試主機上量到的現象，不是正式環境也有這個風險
+的證據。
 
 ### 測試套件用範例當 fixture
 
@@ -80,11 +80,11 @@ proxy 目標上。
 
 設定裡 `workers: 1`，`use.baseURL` 是 `http://localhost:5173`；`core` 的 `testDir` 是
 `./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠 `testIgnore: '**/e2e/sample/**'` 把範例規
-格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。前置條件與登入
-用的帳密怎麼覆寫，見 `frontend/e2e/README.md`；登入用的 bootstrap 管理員要先種好。
+格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。登入用的
+bootstrap 管理員要先種好；其餘前置條件與帳密怎麼覆寫，見 `frontend/e2e/README.md`。
 
 `sample` 專案要跑，先照[第 23 章：範例專案導覽](23-sample-walkthrough.md)的步驟把範例啟
-用；用 `--list` 跑 `sample` 這個專案會列出 8 個 spec 檔、15 個測試。
+用。用 `--list` 跑 `sample` 這個專案會列出 8 個 spec 檔、15 個測試。
 
 在 API 與資料庫都已經跑著的前提下，本機一次跑完 `frontend/` 的單元測試、build 與 `core`
 這個 e2e 專案：
@@ -122,7 +122,7 @@ PowerShell 下設完這個環境變數要記得清掉：它會留在同一個終
 
 ## 手冊自己的關卡
 
-手冊自己的關卡是 `docs/` 底下的 `pnpm build`，分三段：先是 `vitepress build`，解析每一個章
+這道關卡是 `docs/` 底下的 `pnpm build`，分三段：先是 `vitepress build`，解析每一個章
 節連結；接著 `check-rendered-chapters.mjs`，確認每一章都真的渲染出內容，不是空頁；最後
 `check-table-width.mjs`，擋下超過四欄的表格，以及顯示寬度超過 60 的儲存格。三段有一段沒
 過，`pnpm build` 就算失敗。
@@ -164,7 +164,7 @@ Dependabot 的更新一樣能完整跑完。
 `SONAR_TOKEN`：Dependabot 送來的更新一律跳過，pull request 也只有在來源分支跟目標在同一個
 儲存庫時才跑。
 
-`sonar-backend` 先裝 `dotnet-sonarscanner`、`dotnet-coverage` 兩個 CLI 工具，先跑一次
+`sonar-backend` 先裝 `dotnet-sonarscanner`、`dotnet-coverage` 兩個 CLI 工具，跑一次
 `dotnet-sonarscanner begin`，接著正常建置，用 `dotnet-coverage collect` 包住 `dotnet test`
 產生 `coverage.xml`，最後 `dotnet-sonarscanner end` 送出分析結果。
 
@@ -182,7 +182,7 @@ Dependabot 的更新一樣能完整跑完。
 - `frontend/` 底下的 `pnpm build`
 - `docs/` 底下的 `pnpm build`
 
-改到哪一邊就跑那一邊；一次改動同時碰到後端、前端、手冊其中一個以上，五個就全跑一次再推。
+改到哪一邊就跑那一邊；一次改動同時碰到後端、前端、手冊裡不只一邊時，五個就全跑一次再推。
 `docs/` 的 `pnpm test`、`docker`、`sonar-backend`、`sonar-frontend` 也在 CI 裡跑，但都不算
 standing gate。
 
