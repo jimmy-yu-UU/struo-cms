@@ -138,8 +138,8 @@ array.`），查詢字串上沒分成欄位與運算子兩段的鍵是 `Malforme
 詢；這裡把「逐段成立」跟「同一列」的差別講清楚，也把 `_junction` 這個量詞式篩選補完。
 
 **逐段成立。** 一條帶點號的路徑，兩個條件可以各自被不同的關聯列滿足，比方說
-`filter[tags.name][_eq]=howto&filter[tags._junction.note][_eq]=hero` 回傳「Release notes」與
-「Getting started」兩篇——只要文章有任何一個標籤叫 `howto`、以及任何一個標籤的連結備註是 `hero` 就
+`filter[tags.name][_eq]=howto&filter[tags._junction.note][_eq]=hero` 回傳「Release notes」與「Gettin
+g started」兩篇——只要文章有任何一個標籤叫 `howto`、以及任何一個標籤的連結備註是 `hero` 就
 算數，不要求同一個標籤兩個條件都成立。
 
 **`_some`／`_none` 綁定同一列。** 量詞的內層篩選會整個轉成單一個子查詢，所以量詞底下的每個條件都要

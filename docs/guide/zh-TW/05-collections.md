@@ -157,8 +157,8 @@ SEO 欄位用 `Group = "SEO"`。
 群組會回傳給 REST 與 GraphQL 呼叫端，但預設的後台表單不照群組分區——它只把非系統欄位分成共
 用和可翻譯兩組，各自依 `Sort` 排序，可翻譯的那組放進各語言分頁裡。
 
-`CmsOptionsAttribute` 接受 `params string[]`，每一項是 `"value:label"` 或單純的 `"value"`
-（標籤退回用值本身）；切割只看**第一個**冒號。空白的選項值會讓掃描失敗。`[CmsOptions]` 只能
+`CmsOptionsAttribute` 接受 `params string[]`，每一項是 `"value:label"` 或單純的 `"value"`（標籤退回
+用值本身）；切割只看**第一個**冒號。空白的選項值會讓掃描失敗。`[CmsOptions]` 只能
 掛在下列五種介面上，掛在別的介面上一樣是啟動失敗：
 
 - `Select`

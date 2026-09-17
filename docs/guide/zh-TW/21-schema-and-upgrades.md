@@ -122,8 +122,8 @@ schema guard 跟植入資料排在最後，兩者都得看最終的資料表形�
 件事真的存在——
 
 - `revisions` 資料表上 `(collectionname, itemid, revisionnumber)` 的複合唯一索引。
-- 每一個有翻譯附屬表的集合，其附屬表上 `(fk, locale)` 的唯一索引（附屬表本身可以不存
-  在，但如果存在，索引就得存在）。
+- 每一個有翻譯 sidecar 的集合，其 sidecar 上 `(fk, locale)` 的唯一索引（sidecar 本身可以
+  不存在，但如果存在，索引就得存在）。
 
 缺了任何一個，就丟出一個講清楚缺什麼的 `InvalidOperationException`，訊息裡直接點名是
 哪一張表、哪一種索引不見了。

@@ -147,8 +147,8 @@ Development 生效，其他環境會被忽略並記一筆警告。對已經有�
 Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 ```
 
-`AllowedFormats` 留空或整段刪掉，啟動時都會補回內建的 `webp`／`jpeg`／`png`／`avif`，所以設不出
-「一種格式都不允許」的狀態；而且這份清單只在呼叫端明確指定 `format` 時才檢查。要完全關掉轉換，
+`AllowedFormats` 留空或整段刪掉，啟動時都會補回內建的 `webp`／`jpeg`／`png`／`avif`，所以設不出「一
+種格式都不允許」的狀態；而且這份清單只在呼叫端明確指定 `format` 時才檢查。要完全關掉轉換，
 用 `Enabled=false`。轉換只在呼叫端要求寬、高或格式其中一項、該筆檔案本身是圖片，而且 `Enabled`
 為 `true` 時才會發生，否則直接串流原始檔案。
 
@@ -161,8 +161,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 |---|---|---|
 | `Struo:Cors:AllowedOrigins` | 字串陣列 | `[]` |
 
-`AllowedOrigins` 留空時，`UseCors` 根本不會被呼叫，任何回應都不會帶 CORS header；同源架構
-（Vite 開發代理、後台與 API 同網域部署）都該留空。這個鍵直接讀 `IConfiguration`，本身沒有驗證
+`AllowedOrigins` 留空時，`UseCors` 根本不會被呼叫，任何回應都不會帶 CORS header；同源架構（Vite 開發
+代理、後台與 API 同網域部署）都該留空。這個鍵直接讀 `IConfiguration`，本身沒有驗證
 規則。
 
 只要設定了任何一個來源，就會同時把 session cookie 改成 `SameSite=None`＋
