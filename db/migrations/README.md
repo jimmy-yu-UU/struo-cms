@@ -8,7 +8,7 @@ here.** Whatever `NNN-*.sql` scripts eventually live in this directory belong to
 StruoCMS core: core creates its own tables via CodeFirst (§2 below) and never needs a bootstrap script
 of its own. See [chapter 21](../../docs/guide/en/21-schema-and-upgrades.md) of the guide for schema
 management and startup order, and [chapter 20](../../docs/guide/en/20-deployment.md) for the
-full deployment picture, including configuration and backups.
+full deployment picture, including the production checklist and backups.
 
 ## 2. Three layers, three responsibilities
 
@@ -57,9 +57,10 @@ computes a **structural diff** between the entity classes and the live table —
 shape, but it has no idea what you *intended*. A column rename and a "drop one column, add another" are
 indistinguishable to a diff. That ambiguity is why renames, type narrowing, new `NOT NULL`/`UNIQUE`
 constraints against populated tables, and column splits/merges are all real-data hazards, not edge
-cases. Chapter 15 of the guide carries the full hazard-by-hazard table (what `AutoSyncSchema` would
-actually do in each case, and the safe alternative); the short version is: if the table might already
-hold rows you care about, write a script here instead of relying on the diff.
+cases. Chapter 21's "Where schema sync is dangerous" carries the full hazard-by-hazard list (what
+`AutoSyncSchema` would actually do in each case, and the safe alternative); the short version is:
+if the table might already hold rows you care about, write a script here instead of relying on the
+diff.
 
 ## 4. File naming and rules
 
