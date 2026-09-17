@@ -186,6 +186,41 @@
 - `Files` 丟掉 `Guid.Empty` 與重複；`Repeater` 丟掉整列空白的列，但錯誤訊息的列號仍以送進
   來的順序（含被丟掉的）從 1 起算。
 
+## `RichText` 存下來的 HTML
+
+`RichText` 欄位的每一次寫入──不管是走後台編輯器、直接呼叫 REST／GraphQL，還是外部匯入工
+具送進來的 HTML──最後都只經過同一個伺服器端 sanitizer（`GanssHtmlSanitizer`）。標籤、屬
+性、URL scheme 各自有一份白名單，不在名單裡的一律丟掉；丟一個標籤是連同它整個子樹一起丟，
+不是只清掉標籤本身。編輯器這一側因此要顧的地方，見
+[第 19 章：後台客製化](19-admin-customization.md)。
+
+### 連結的 `target` 與 `rel`
+
+`rel` 從來不是照輸入原樣存下來的，一律由伺服器端依 `target` 推導出來：
+
+| 你存進去的 | 存下來的 |
+|---|---|
+| `<a href="…" target="_blank">` | `<a href="…" target="_blank" rel="noopener">` |
+| 其他任何寫法 | `<a href="…">` |
+
+只有精確、區分大小寫的 `_blank` 才算數；`_Blank`、`_self`，或 `href` 本身就被丟掉的連結，
+都拿不到 `target` 也拿不到 `rel`，兩個屬性一起消失。`target` 同時也在全域屬性白名單裡，但
+只有 `<a>` 用得到它，非連結元素上的 `target` 一律被清掉，就算那個標籤本身在白名單裡也一
+樣。
+
+### 圖片的 `width` 與 `height`
+
+`width` 只在 `<img>` 上留得住，而且整個值要符合 `\A[1-9][0-9]{0,4}\z` 這個規則──一
+個 1 到 5 位數、沒有前導零的純像素整數，沒有單位、沒有百分比、沒有空白。其他元素上的
+`width` 一律被清掉，就算是白名單裡的屬性也一樣。`height` 完全沒有進白名單，不管來源是什麼
+都不會被存下來；渲染 `RichText` 圖片時只設 `max-width: 100%`、不去限制高度，圖片才不會因
+為只剩寬度而被拉伸變形。
+
+兩條規則都是 `GanssHtmlSanitizer` 一個地方定的政策，不是不能改的限制──想改成允許
+`noreferrer`、允許百分比寬度，或是連高度一起存，動的是這個 sanitizer 本身，不是編輯器的連
+結對話框，也不是別處的白名單。表格 `<thead>` 的整理是同一顆 sanitizer 做的另一件事，見
+[第 19 章](19-admin-customization.md)。
+
 ## 常見陷阱
 
 **寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在前
