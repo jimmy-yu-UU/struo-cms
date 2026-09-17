@@ -98,9 +98,9 @@ Its own fields cover most of the interface overview: `Select` (`Status`), `DateT
 [Chapter 6: Field Types and Editors](06-field-types.md).
 
 `Status` is a `draft`/`published` `Select` that defaults to `draft` in code and is also the
-collection's `DefaultDisplayField`, but it doesn't declare `Required`. The fields that are actually required in
-the sample are `ArticleTranslation.Title`, `Tag.Name`, `Category.Name`, `FaqItem.Question`, and
-`ArticleTag`'s two foreign keys.
+collection's `DefaultDisplayField`, but it doesn't declare `Required`. The fields that are actually
+required in the sample are `ArticleTranslation.Title`, `Tag.Name`, `Category.Name`,
+`FaqItem.Question`, and `ArticleTag`'s two foreign keys.
 
 Two relations: `Category` (a many-to-one `Dropdown`, `OnDelete = SetNull`) and `Tags` (a
 many-to-many `TagSelect` through the `ArticleTag` junction, sorted with
@@ -140,8 +140,8 @@ The full mechanics of a junction collection are in [Chapter 8](08-relations.md).
 doesn't apply when payload is written through the `Article.Tags` relation array; the difference
 between the two write paths is in [Chapter 8](08-relations.md).
 
-If the sample is opened against an existing database whose `article_tags` table predates the `note`/`sort`
-columns, they arrive only through Development's `Database:AutoSyncSchema=true` (see
+If the sample is opened against an existing database whose `article_tags` table predates the
+`note`/`sort` columns, they arrive only through Development's `Database:AutoSyncSchema=true` (see
 [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md)) or a fork-authored
 migration script — `db/migrations` holds only the fork's own scripts, never the sample collection's
 schema.
