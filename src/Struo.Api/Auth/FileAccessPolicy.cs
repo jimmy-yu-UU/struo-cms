@@ -29,7 +29,7 @@ public sealed class FileAccessPolicy(
     /// and authenticated callers alike and therefore gates nothing. A draft is an editorial state, so
     /// the caller who may edit files is the caller who may see them. The shipped seed
     /// (<see cref="RbacSeeder.SeedAsync"/>) grants <c>public</c> read only — granting it write as well
-    /// would widen this gate to every caller.
+    /// would widen this gate to every signed-in caller (an anonymous request still gets a 404).
     /// <para>Both identity kinds are already resolved by the time this runs: the default
     /// <see cref="AuthSchemes.Adaptive"/> policy scheme authenticates cookie AND bearer callers on
     /// every endpoint, including FilesController's Get/Download which carry no <c>[Authorize]</c>, and
