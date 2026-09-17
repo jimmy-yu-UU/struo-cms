@@ -63,7 +63,7 @@
 
 ## 逐檔導覽
 
-五個檔案，從主角開始看。
+六個 `.cs` 檔，從主角開始看。
 
 ### `Article.cs`
 
@@ -117,8 +117,8 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
 `Tag`（`[SugarTable("tags")]`）是範例裡最簡單的集合：一個必填、可搜尋的 `Name`。
 `Article.Tags` 透過 `[Navigate(typeof(ArticleTag), ...)]` 走的 junction
 `ArticleTag`（`[SugarTable("article_tags")]`）自己也掛了 `[CmsCollection(..., Hidden = true)]`，
-所以它是一個可讀寫的 junction collection：兩個外鍵之外還有兩欄，一個 `Note` 文字欄位
-——這條連結自己的 payload——和兼做 `Article.Tags` 排序欄的 `Sort`。
+所以它是一個可讀寫的 junction collection：兩個外鍵之外還有兩欄，一個 `Note` 文字欄位（這條
+連結自己的 payload），和兼做 `Article.Tags` 排序欄的 `Sort`。
 
 junction collection 這個機制的完整說明在[第 8 章：關聯](08-relations.md)。
 
@@ -128,8 +128,8 @@ junction collection 這個機制的完整說明在[第 8 章：關聯](08-relati
 
 如果是對著一個 `article_tags` 已經建好、但還沒有 `note`／`sort` 兩欄的舊資料庫開啟，這兩欄要
 靠 Development 的 `Database:AutoSyncSchema=true`（見
-[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)），或是 fork 自己寫的 migration
-才會補上——`db/migrations` 只收核心的腳本，從來不含範例集合的結構。
+[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)），或是自己寫一支 migration 才會
+補上——`db/migrations` 收的是 fork 自己寫的腳本，從來不含範例集合的結構。
 
 `ArticleTag` 沒有唯一索引擋 `(ArticleId, TagId)` 這一對重複，直接對 `articleTag` 寫入可以造
 出重複的配對；下一次儲存擁有它的 `Article` 會把它修好（留下 PK 最小的一筆，其餘刪除並記一筆
@@ -215,10 +215,9 @@ fixture，照下面的清單逐步走完。
    把 `"Struo.Sample.Blog"` 設成要掃描的組件，刪掉 `Configured_content_assembly_is_scanned`
    與 `Registers_entity_type_collector`，或改指向自己 fork 的組件；另外兩個不涉及範例，留著。
 
-7. 刪掉沒有 `using` 範例命名空間、卻經 REST／GraphQL 操作 `article`／`category`／`tag` 的測
-   試檔——全靠第 3 步的 module initializer，編譯期抓不到，要跑一次 `dotnet test`，看哪些回
-   `404`／`KeyNotFoundException`，分布在 `Api/`、`Query/`、`GraphQl/`、`Localization/`、
-   `Identity/` 底下逐一處理。
+7. 刪掉沒有 `using` 範例命名空間、卻經 REST／GraphQL 操作 `article`／`category`／`tag` 的測試檔：
+   全靠第 3 步的 module initializer，編譯期抓不到，跑一次 `dotnet test` 看哪些回 `404`／
+   `KeyNotFoundException`，分布在 `Api/`、`Query/`、`GraphQl/`、`Localization/`、`Identity/`。
 
 8. 順手清掉四處提到範例的過期註解：`ApiFactory.cs` 與 `CorsAndCookieTests.cs` 引用已經刪
    掉的 `ContentAssemblyEnvBootstrap.cs`，`FakeMetadataFixtures.cs` 與
