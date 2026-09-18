@@ -88,7 +88,7 @@ public sealed class ShippedConfigurationBindingTests
     /// here the way the file spells it, never via a SectionName constant, which is what makes the
     /// comparison able to catch a constant that has drifted out of sync with the file. Clone() detaches the
     /// element so it stays readable after the JsonDocument is disposed — see chapter 6's pitfall
-    /// about a JsonElement outliving its document.
+    /// (<c>docs/guide/en/06-field-types.md</c>) about a JsonElement outliving its document.
     /// </summary>
     private static JsonElement ShippedSection(params string[] path)
     {

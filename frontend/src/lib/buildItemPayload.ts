@@ -15,7 +15,8 @@ export type BuildItemPayloadOptions = {
   canWriteJunction?: (rel: RelationMeta) => boolean
 }
 
-// Mixed-array write shape (chapter 12): an object element `{id, ...payload}` merges the named payload
+// Mixed-array write shape (chapter 12, `docs/guide/en/12-rest-conventions.md`): an object element
+// `{id, ...payload}` merges the named payload
 // fields into the junction row and needs the junction collection's write grant; a bare id only
 // manages membership/order. Bare ids are therefore the fallback whenever payload cannot or need not
 // be sent — no grant, no visible payload fields (a sortField-only relation has no payload and the
