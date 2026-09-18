@@ -359,10 +359,10 @@ async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLab
 }
 
 // Article.Tags' junction (ArticleTag, chapter 8, `docs/guide/en/08-relations.md`) is a
-// [CmsCollection] with a Note payload field and
-// the relation's SortField, so ItemFormView renders JunctionLinksEditor for it: one row per linked
-// tag (label badge + inline Note input + move arrows) instead of RelationPicker's chips. Live gate for
-// the payload round-trip: Note typed in a row and a reorder both survive Save and a fresh reload.
+// [CmsCollection] with a Note payload field and the relation's SortField, so ItemFormView renders
+// JunctionLinksEditor for it: one row per linked tag (label badge + inline Note input + move
+// arrows) instead of RelationPicker's chips. Live gate for the payload round-trip: Note typed in
+// a row and a reorder both survive Save and a fresh reload.
 test('junction links editor: tag Note and order survive save + reload', async ({ page }) => {
   await login(page)
   const csrf = { headers: { 'X-Struo-CSRF': '1' } }

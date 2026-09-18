@@ -25,9 +25,8 @@ downstream forks.
 
 ## The five standing gates
 
-Run whichever of the five apply to your change, and all five before anything touching more than one of
-`src/`, `frontend/`, and `docs/` — see `AGENTS.md`, "Verification", for the gate list, the CI split,
-and the SQLite/PostgreSQL reasoning.
+Run whichever of the five apply to your change; `AGENTS.md`, "Verification", lists them and says when
+all five are required, along with the CI split and the SQLite/PostgreSQL reasoning.
 
 ## See also
 

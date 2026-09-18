@@ -25,8 +25,8 @@ namespace Struo.Infrastructure.Persistence;
 /// 之後，而這個儲存庫的 <c>SqlSugarClientFactory</c> 從未設定過 <c>MoreSettings</c>。因此本節開頭的破壞性
 /// 主張只在 PostgreSQL 上證得出來，這個儲存庫只跑 SQLite 的 CI 套件永遠無法自行證明它——但這是「目前設定
 /// 下」的性質，不是 SQLite 這個引擎的固有性質，一個打開該旗標的 fork 在 SQLite 上也會看到 DROP
-/// （僅限普通欄位；SQLite 原生拒絕刪除的欄位會讓該次 ALTER 拋例外、啟動中斷，見手冊第 21 章
-/// （<c>docs/guide/zh-TW/21-schema-and-upgrades.md</c>）「結構同步的危險情境」第 7 項）。因此
+/// （僅限普通欄位；SQLite 原生拒絕刪除的欄位會讓該次 ALTER 拋例外、啟動中斷，見手冊第 21 章，
+/// <c>docs/guide/zh-TW/21-schema-and-upgrades.md</c>，「結構同步的危險情境」第 7 項）。因此
 /// <see cref="CreateMissingTables"/> 的安全性不建立在旗標上，
 /// 而建立在物理事實上——只把「表尚不存在」的 entity 型別交給 <c>InitTables</c>，此時它只可能
 /// CREATE；這一點與 <c>InitTables</c> 在既有表上究竟會不會刪欄位無關。

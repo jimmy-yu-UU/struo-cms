@@ -615,10 +615,10 @@ describe('CollectionListView', () => {
   })
 
   // Searchable is what the backend's `search=` honours, and chapter 5
-  // (`docs/guide/en/05-collections.md`) tells collection authors it
-  // governs the collection's free-text search — but selectListColumns caps at 6 columns and only
-  // admits list-displayable interfaces, so a searchable RichText body became unreachable from the
-  // list once FilterBuilder replaced the old free-text ListToolbar. It is offered here instead.
+  // (`docs/guide/en/05-collections.md`) tells collection authors it governs the collection's
+  // free-text search — but selectListColumns caps at 6 columns and only admits
+  // list-displayable interfaces, so a searchable RichText body became unreachable from the list
+  // once FilterBuilder replaced the old free-text ListToolbar. It is offered here instead.
   it('offers searchable fields that did not make the display-column cut to FilterBuilder', async () => {
     const article = {
       name: 'article',
