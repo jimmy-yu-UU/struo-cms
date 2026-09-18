@@ -65,8 +65,8 @@ internal sealed partial class FacetQueries(
             case FacetPathKind.ForeignKey:
                 // A many-to-one FK facets the ROOT's own column (categoryId, say) — it is not a
                 // relation traversal, so a trashed target's id is not dropped here: see
-                // "The four facet path forms" (chapter 11) for the documented split between this
-                // form and the Relation form below.
+                // "Four path forms" in docs/guide/en/11-query-advanced.md (chapter 11) for the
+                // documented split between this form and the Relation form below.
                 return IdStrings(await GroupBuckets(rootQ, root.EntityType, root.Properties[facet.OwnField!].Name, root.IdProperty, false, request.MaxValues, ct));
             case FacetPathKind.Relation:
             {

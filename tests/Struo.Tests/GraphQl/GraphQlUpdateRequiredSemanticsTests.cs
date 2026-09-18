@@ -12,7 +12,8 @@ namespace Struo.Tests.GraphQl;
 /// GraphQL parity for the update-path Required semantics change (2026-09-08): <c>updateRole</c>
 /// goes through the same <see cref="Struo.Application.Query.ItemService.UpdateAsync"/> as REST, so
 /// omitting <c>name</c> (Required=true) from an <c>updateRole</c> input must now succeed and keep
-/// the role's stored name, exactly like the REST partial-update rule in chapter 12 of the manual.
+/// the role's stored name, exactly like the REST partial-update rule in
+/// <c>docs/guide/en/12-rest-conventions.md</c>'s "What a `POST`/`PUT` body can set" section.
 /// Drives through the real host pipeline (ApiFactory), not
 /// <see cref="GraphQlMutationExecutionTests"/>'s fake data
 /// source, so it actually exercises <c>ItemDeserializer</c>/<c>FieldValueRules</c>.
