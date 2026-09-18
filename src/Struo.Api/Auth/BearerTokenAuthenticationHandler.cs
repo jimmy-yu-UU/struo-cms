@@ -40,11 +40,11 @@ public sealed class BearerTokenAuthenticationHandler(
 
     // [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)] challenges/forbids
     // BOTH schemes in listed order (Cookies, then Bearer). Cookie's handler (AuthWiring's
-    // OnRedirectToLogin/OnRedirectToAccessDenied) now writes an error-envelope body, which starts
-    // the response — the base AuthenticationHandler<TOptions> default for this handler (no override
-    // previously existed) then blindly re-sets Response.StatusCode, which throws once the response
-    // has already started. Guard with HasStarted so this handler's default is a no-op whenever the
-    // cookie scheme already answered; the status code it would have set is already in place.
+    // OnRedirectToLogin/OnRedirectToAccessDenied) writes an error-envelope body, which starts
+    // the response — the base AuthenticationHandler<TOptions> default then blindly re-sets
+    // Response.StatusCode, which throws once the response has already started. Guard with
+    // HasStarted so this handler's default is a no-op whenever the cookie scheme already
+    // answered; the status code it would have set is already in place.
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         if (!Context.Response.HasStarted) Context.Response.StatusCode = StatusCodes.Status401Unauthorized;

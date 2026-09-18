@@ -15,8 +15,8 @@ namespace Struo.Infrastructure.Query;
 // receiver, e.g. it touches no instance state) the delegate matches the closed method's signature
 // with no extra leading parameter. Every dispatched method is expected to be async (or to return a
 // Task directly), so any exception it throws surfaces on the awaited Task exactly as it would from
-// a direct call — there is no TargetInvocationException wrapping to preserve, because no
-// MethodInfo.Invoke is ever used to call the closed method.
+// a direct call — there is no TargetInvocationException wrapping to preserve, because the
+// closed method is never called via MethodInfo.Invoke.
 internal sealed class GenericDispatcher<TDelegate> where TDelegate : Delegate
 {
     private readonly MethodInfo definition;

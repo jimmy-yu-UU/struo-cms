@@ -59,7 +59,7 @@ public class FileSoftDeleteEndpointTests(ApiFactory factory)
         (await client.DeleteAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await client.DeleteAsync($"/api/files/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        // Gone for good: restore no longer finds a row to restore.
+        // Gone for good: restore finds nothing to restore.
         (await client.PostAsync($"/api/files/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await client.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

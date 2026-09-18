@@ -31,10 +31,10 @@ public class RelationSchemaTests(ApiFactory factory)
         body.Should().Contain("\"kind\":\"manyToMany\"");
         body.Should().Contain("\"targetCollection\":\"tag\"");
 
-        // This test used to also assert the whole body excluded "gallery", guarding against the old
-        // ArticleFile *relation* of that name reappearing. A later change intentionally reintroduces
-        // "gallery" as a scalar Files *field* (not a relation), so a whole-body substring check is no
-        // longer valid; assert against the parsed relations array specifically instead.
+        // "gallery" is intentionally present in the body as a scalar Files *field* (not a
+        // relation) — a whole-body substring check for its absence would conflict with that, so
+        // assert against the parsed relations array specifically, guarding against the old
+        // ArticleFile *relation* of that name reappearing.
         using var doc = JsonDocument.Parse(body);
         var relationNames = doc.RootElement.GetProperty("data").GetProperty("relations")
             .EnumerateArray()

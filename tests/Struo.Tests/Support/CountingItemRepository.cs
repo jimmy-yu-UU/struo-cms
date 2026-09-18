@@ -7,7 +7,7 @@ namespace Struo.Tests.Support;
 /// <summary>
 /// Forwards to a real <see cref="IItemRepository"/> and counts the batched follow-up queries
 /// the deep expander issues (<see cref="QueryWhereInAsync"/> + <see cref="QueryEntityWhereInAsync"/>).
-/// Used to assert the N+1 batching invariant.
+/// For asserting the N+1 batching invariant.
 /// </summary>
 public sealed class CountingItemRepository(IItemRepository inner) : IItemRepository
 {

@@ -22,7 +22,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// A PUT is a merge (<see cref="ItemService.UpdateCoreAsync"/> only overlays fields the client
-/// actually sent), so since 2026-09-08 a Required field a PUT body omits keeps its stored value
+/// actually sent), so a Required field a PUT body omits keeps its stored value
 /// instead of 400ing. The Required check itself is unchanged: it still runs, just against the
 /// merged entity rather than the freshly-parsed body, so an explicit null/blank still 400s. The
 /// create path is untouched throughout — a Required field must still be sent on create.

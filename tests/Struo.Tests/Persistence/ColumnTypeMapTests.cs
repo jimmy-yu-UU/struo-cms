@@ -16,8 +16,8 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// Covers <see cref="ColumnTypeMap"/>, the single place in <c>src/</c> a vendor column-type literal
-/// may appear, and the <see cref="ColumnShapeAttribute"/> markers that replaced the hardcoded
-/// PostgreSQL-only literals previously on MediaFolder/SiteSettings/Revision. See
+/// may appear, and the <see cref="ColumnShapeAttribute"/> markers on MediaFolder/SiteSettings/Revision
+/// that keep vendor-specific PostgreSQL-only literals out of those entities entirely. See
 /// <c>SqlSugarClientFactory</c>'s EntityService hook, which translates the marker into a
 /// per-dialect literal via this map.
 /// </summary>
@@ -158,9 +158,9 @@ public class ColumnTypeMapTests
     /// <summary>
     /// A property carrying an explicit [ColumnShape] on a nullable type must get BOTH the shaped
     /// type AND nullability inference — the hook must not early-return out of the shape branch
-    /// before nullability has been decided. Pins the fix for the precedence bug where the shape
-    /// branch's early `return` used to bypass the nullable-value-type/NRT-string checks entirely,
-    /// silently mapping a nullable shaped property to a NOT NULL column.
+    /// before nullability has been decided. Pins the precedence: an early return out of the shape
+    /// branch before nullability is decided would silently map a nullable shaped property to a NOT
+    /// NULL column.
     /// </summary>
     [Fact]
     public void ColumnShape_on_a_nullable_property_gets_the_shaped_type_and_stays_nullable()

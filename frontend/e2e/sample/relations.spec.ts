@@ -123,7 +123,7 @@ async function pickFirstFromPicker(
     // Reopen only when THIS trigger reports itself closed (its own data-state, set from the same
     // open/close boolean the click handler toggles) — not by probing the list's presence, which
     // the barrier above already guarantees is gone, and which (were it probed here) would only
-    // ever describe THIS field's list now that the overlay below is id-scoped rather than page-wide.
+    // ever describe THIS field's list, because the overlay below is id-scoped rather than page-wide.
     if ((await trigger.getAttribute('data-state')) !== 'open') await trigger.click()
     // Read aria-controls AFTER the open-check/click, every attempt, never before: reka's
     // ComboboxContent.js only generates the id the first time its content actually mounts
@@ -333,7 +333,7 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
   await expect(guard).toBeVisible()
 
   // Accept -> navigation proceeds, the keyed view remounts, and init() reloads the ARTICLE (Title
-  // populated) — proving the form no longer reuses stale category data. This is ItemFormView's
+  // populated) — proving the form does not reuse stale category data. This is ItemFormView's
   // guardLeave() confirm via ConfirmHost, whose accept button defaults to common.confirm ("Confirm").
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
@@ -358,10 +358,11 @@ async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLab
   await page.keyboard.press('Escape')
 }
 
-// Article.Tags' junction (ArticleTag, chapter 8) is a [CmsCollection] with a Note payload field and
-// the relation's SortField, so ItemFormView renders JunctionLinksEditor for it: one row per linked
-// tag (label badge + inline Note input + move arrows) instead of RelationPicker's chips. Live gate for
-// the payload round-trip: Note typed in a row and a reorder both survive Save and a fresh reload.
+// Article.Tags' junction (ArticleTag, chapter 8, `docs/guide/en/08-relations.md`) is a
+// [CmsCollection] with a Note payload field and the relation's SortField, so ItemFormView renders
+// JunctionLinksEditor for it: one row per linked tag (label badge + inline Note input + move
+// arrows) instead of RelationPicker's chips. Live gate for the payload round-trip: Note typed in
+// a row and a reorder both survive Save and a fresh reload.
 test('junction links editor: tag Note and order survive save + reload', async ({ page }) => {
   await login(page)
   const csrf = { headers: { 'X-Struo-CSRF': '1' } }

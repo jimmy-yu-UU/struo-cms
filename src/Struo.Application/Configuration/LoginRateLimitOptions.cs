@@ -22,8 +22,9 @@ public sealed class LoginRateLimitOptions
     /// stopping a distributed attacker, without even requiring a misconfigured reverse proxy to do
     /// so. Enabling it is the right call only for a single-instance, directly-reachable deployment
     /// with no edge/WAF in front of it whose users do not share an egress IP (a personal or
-    /// single-tenant install, or a development host) — see chapter 16 of the manual for the
-    /// behaviour, and chapter 4's RateLimiting section for the reverse-proxy precondition it needs
+    /// single-tenant install, or a development host) — see chapter 16 of the manual
+    /// (<c>docs/guide/en/16-authentication.md</c>) for the behaviour, and chapter 4's RateLimiting
+    /// section (<c>docs/guide/en/04-configuration.md</c>) for the reverse-proxy precondition it needs
     /// if enabled behind one.
     /// <see cref="LoginAccountRateLimitOptions"/> is the layer that stays on by default, since a
     /// per-account counter cannot suffer this collapse: every account gets its own bucket regardless

@@ -7,8 +7,8 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-// EnvelopeResultFilter used to rebuild every ObjectResult - CreatedResult included - as a plain
-// ObjectResult, so the Location header CreatedResult writes during its own execution never happened.
+// EnvelopeResultFilter must not rebuild a CreatedResult as a plain ObjectResult — doing so would
+// silently drop the Location header CreatedResult writes during its own execution.
 [Collection("ApiIntegration")]
 public class CreatedLocationHeaderTests(ApiFactory factory)
 {

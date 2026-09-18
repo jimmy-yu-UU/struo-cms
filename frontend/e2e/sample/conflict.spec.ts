@@ -11,7 +11,7 @@ import { type Page } from '@playwright/test'
 //                         the server's latest), so saving again overwrites the server copy.
 // Version monotonicity is asserted via the authenticated API at the end.
 //
-// COLLECTION CHOICE: this spec drives `article` — the collection used to exercise the
+// COLLECTION CHOICE: this spec drives `article` — the collection that exercises the
 // optimistic-concurrency recovery above. The article edit form carries a required translatable
 // Title plus an optional DateTime "Published At" that is LEFT BLANK on purpose: this doubles as
 // live proof that an empty DateTime serialises to null (not ""). If that regressed, an empty

@@ -245,7 +245,7 @@ Query parameter 'deleted' must be exclude|only|with.
 `POST .../query?deleted=only`；`all`、`true`、`trash` 都不在這三個拼法之內。
 
 要求 `exclude` 以外的值，需要的是這個集合的刪除授權，不只是讀取授權，這道檢查是刻意比一
-般查詢更嚴格的：一列資料曾經被刪除這件事本身，就可能是只有讀取權限的呼叫端不該知道的資
+般查詢更嚴格的：一列資料被刪除過這件事本身，就可能是只有讀取權限的呼叫端不該知道的資
 訊。訊息是：
 
 ```text

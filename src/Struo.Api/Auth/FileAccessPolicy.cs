@@ -6,10 +6,10 @@ using Struo.Infrastructure.Identity;
 
 namespace Struo.Api.Auth;
 
-/// <summary>Default <see cref="IFileAccessPolicy"/>: a thin wrapper over the same RBAC primitives
-/// FilesController used to depend on directly. Scoped lifetime (matches <see cref="IPermissionService"/>
-/// and <see cref="ICurrentPermissions"/>, both of which are themselves scoped, i.e. one resolution per
-/// request).</summary>
+/// <summary>Default <see cref="IFileAccessPolicy"/>: a thin wrapper over the RBAC primitives
+/// FilesController consumes through this abstraction rather than directly. Scoped lifetime
+/// (matches <see cref="IPermissionService"/> and <see cref="ICurrentPermissions"/>, both of which
+/// are themselves scoped, i.e. one resolution per request).</summary>
 public sealed class FileAccessPolicy(
     IPermissionService permissions,
     ICurrentUserAccessor currentUser) : IFileAccessPolicy

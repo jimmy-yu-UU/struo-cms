@@ -30,8 +30,8 @@ describe('locale packs', () => {
     expect(en.revisions.open).toBe('History')
   })
 
-  // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local
-  // mirror: every component test that asserts an accessible name built from these separators
+  // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local mirror: narrative-guard:allow: cites the specific ruling this test pins against, not a changelog date
+  // every component test that asserts an accessible name built from these separators
   // reads them back off this same object, so a mutation here propagates to "expected" and
   // "actual" together and would stay green. nameListSeparator is the sentence comma '，' — it
   // joins a field label to a state description ("地區，已選 1 項"), two unlike phrases, not a

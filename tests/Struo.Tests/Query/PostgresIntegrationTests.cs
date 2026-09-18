@@ -602,8 +602,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     }
 
     // Task 8, live PG: a two-hop self-relation dotted filter (category.parent.name) with a
-    // deliberately wide sibling set at the walk-back hop — the scenario the retired resolved-id-set
-    // cap used to bound as a materialized, cardinality-checked id set — is answered as a correlated
+    // deliberately wide sibling set at the walk-back hop is answered as a correlated
     // SQL subquery (IN (SELECT …)) on real Postgres, and querying with those conditionals returns
     // exactly the matching children.
     [Fact]
@@ -789,7 +788,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
 
     // 未過濾的 InitTables 在真 Postgres 上對既有表做什麼。SQLite 不驗證宣告型別、其 dialect 的
     // 結構同步能力也與 PG 不同，所以「InitTables 會 DROP COLUMN」這個架構前提只有在這裡才證得出來。
-    // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 PostgreSQL 上，Doomed 欄位被 DROP 掉了——
+    // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 PostgreSQL 上，Doomed 欄位被 DROP 掉了—— narrative-guard:allow: measurement pinned to the SqlSugarCore version it was taken against
     // 與 SQLite 的量測結果（DatabaseInitializerTests）相反。
     [Fact]
     public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()

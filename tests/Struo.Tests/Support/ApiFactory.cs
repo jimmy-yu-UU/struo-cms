@@ -213,7 +213,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     /// <summary>
     /// Seeds a fresh user with NO role and a password, logs them in, and returns the client + id.
-    /// Used to verify the RBAC "public floor" (role-less authenticated user gets public permissions).
+    /// For verifying the RBAC "public floor" (role-less authenticated user gets public permissions).
     /// </summary>
     public async Task<(HttpClient client, Guid userId)> CreateRolelessClientAsync()
     {

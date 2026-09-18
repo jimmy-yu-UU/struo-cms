@@ -211,7 +211,7 @@ uses the sample's collections as a fixture. Work through the list below in order
    `Struo.Api.csproj`, and re-comment (or delete) the `"ContentAssemblies"` line in your
    `appsettings.Development.json`. Then delete that line and the two comment lines above `"Struo"`
    from the tracked `appsettings.Development.json.example` too — otherwise the tracked example keeps
-   pointing at a sample that no longer exists.
+   pointing at a sample that doesn't exist.
 
 2. Delete the whole `samples/Struo.Sample.Blog/` directory; remove the `<Folder Name="/samples/">`
    block from `StruoCMS.slnx`; remove the `ProjectReference` to it from

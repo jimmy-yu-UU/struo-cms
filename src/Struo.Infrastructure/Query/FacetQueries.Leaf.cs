@@ -33,7 +33,7 @@ internal sealed partial class FacetQueries
 
     // A many-to-many/many-to-one relation facet's id bucket comes from the junction row or the
     // root's own FK column — both survive a target row's soft-delete — so a trashed target would
-    // otherwise still contribute an id bucket. Drop any bucket whose target id is no longer live.
+    // otherwise still contribute an id bucket. Drop any bucket whose target row is soft-deleted.
     private async Task<List<FacetBucket>> DropSoftDeletedTargets(List<FacetBucket> idBuckets, EntityDescriptor target, CancellationToken ct)
     {
         if (idBuckets.Count == 0) return idBuckets;
