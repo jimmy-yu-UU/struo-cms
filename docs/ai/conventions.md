@@ -286,14 +286,15 @@ wants its own vendor literal to win on a shaped property must remove `[ColumnSha
 `ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
 (`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
 
-**A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
-`InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
-co-occurs with a `JsonColumnInterfaces` member
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — resolving the combination
-instead of refusing it would silently drop `IsJson` (both branches compute the same `DataType`,
-`LongText`, so only `IsJson` would be lost), leaving the column at CodeFirst's unset length,
-`varchar(1)` on PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]` from
-such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
+**A JSON-column `[CmsField]` on the same property is refused, not resolved, whichever `[ColumnShape]`
+value it carries**: the hook throws an `InvalidOperationException` naming the property and the
+offending interface when `[ColumnShape]` co-occurs with a `JsonColumnInterfaces` member
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — for `ColumnShape.LongText`,
+the only shape that co-occurs with a `JsonColumnInterfaces` member in this repository, resolving
+the combination instead of refusing it would silently drop `IsJson` (both branches compute the same
+`DataType`, `LongText`, so only `IsJson` would be lost), leaving the column at CodeFirst's unset
+length, `varchar(1)` on PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]`
+from such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
 (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal. See
 `ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for the
 full derivation and the pinning tests.

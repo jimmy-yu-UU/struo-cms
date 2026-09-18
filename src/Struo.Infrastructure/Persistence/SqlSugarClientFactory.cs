@@ -174,15 +174,14 @@ public static class SqlSugarClientFactory
         var shape = property.GetCustomAttribute<ColumnShapeAttribute>()?.Shape;
         if (shape is null) return false;
 
-        // Refused, not silently resolved. The JSON-column branch below sets BOTH
-        // IsJson and a widened DataType; this early return would keep only the
-        // DataType. The DataType the two branches compute for a JSON-column
-        // interface is identical (both LongText), so the combination's only effect
-        // is losing IsJson — and without IsJson SqlSugar never serializes the
-        // List<>/Dictionary<> and CodeFirst leaves the length unset, which is
-        // varchar(1) on PostgreSQL: every write of a real value fails with 22001.
-        // There is nothing a caller could want here, so this is a declaration error,
-        // not a precedence question.
+        // Refused, not silently resolved — for any [ColumnShape] value. The JSON-column branch below
+        // sets BOTH IsJson and a widened DataType; this early return would keep only the DataType.
+        // For ColumnShape.LongText — the only shape that co-occurs with a JsonColumnInterfaces member
+        // in this repository — the DataType the two branches compute is identical (both LongText), so
+        // the combination's only effect is losing IsJson — and without IsJson SqlSugar never
+        // serializes the List<>/Dictionary<> and CodeFirst leaves the length unset, which is
+        // varchar(1) on PostgreSQL: every write of a real value fails with 22001. There is nothing a
+        // caller could want here, so this is a declaration error, not a precedence question.
         //
         // Deliberately narrowed to JsonColumnInterfaces. A shape combined with a
         // content-bearing interface (RichText/Textarea/Markdown/Code/Json) is legal:
