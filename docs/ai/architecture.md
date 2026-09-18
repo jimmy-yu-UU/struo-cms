@@ -150,9 +150,10 @@ Implementation: `EntityTypeCollector` (`src/Struo.Infrastructure/Metadata/Entity
 Registered as a singleton via the container:
 `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
 (`MetadataServiceCollectionExtensions.cs`). Consumed by `DatabaseInitializer.CreateMissingTables`
-(`Program.cs`), which runs in every environment and on every backend — the "CodeFirst creates;
-migrations evolve" invariant in `AGENTS.md`'s "Invariants" section has the full rule, and
-`docs/guide/en/21-schema-and-upgrades.md`, "Three layers, three responsibilities", the concepts.
+(`Program.cs`), which runs in every environment and on every backend — the
+"CodeFirst creates; migrations evolve" invariant in `AGENTS.md`'s "Invariants" section has the full
+rule, and `docs/guide/en/21-schema-and-upgrades.md`, "Three layers, three responsibilities", the
+concepts.
 
 ### `IRelationshipGraph`
 
@@ -240,10 +241,11 @@ targets are inserted, and rows for targets that remain keep their own primary ke
 in-place rather than dropped and reinserted — a junction row's id is therefore stable across a write
 that keeps its target linked. A `JunctionLink` (`src/Struo.Application/Query/Write/JunctionLink.cs`)
 pairs a target id with an optional payload dictionary (CLR property names → values); a `null` payload
-(`JunctionLink.Bare`) is membership-only and leaves an existing row's payload untouched. If more than
-one existing row targets the same id (a duplicate left over from data written before this diff-and-patch
-strategy existed), the lowest-primary-key row is kept and the rest are deleted, with one warning logged
-naming the table and the count removed.
+(`JunctionLink.Bare`) is membership-only and leaves an existing row's payload untouched. An incoming
+duplicate target id is a caller bug and fails loud (`BuildIncomingLinks` throws rather than silently
+deduplicating); a duplicate among the *existing* rows for the same target — a legacy row already on
+file, not one this write introduced — is handled instead: the lowest-primary-key row is kept and the
+rest are deleted, with one warning logged naming the table and the count removed.
 
 **Obligation for a fork implementing `IItemRepository` itself**: `SyncManyToManyAsync` receives an
 `IReadOnlyList<JunctionLink>`, and a second implementation must apply each link's `Payload`
@@ -329,7 +331,7 @@ caller that already resolved the collection's `EntityDescriptor` reuse it — re
 tree (the grammar in
 `docs/guide/en/10-query-basics.md`'s "Relation paths: matched per segment vs. `_some`/`_none` on the same row",
 including `_some`/`_none` relation quantifiers and `_junction`) and
-returns a `List<IConditionalModel>` for **one** queryable — a dotted (cross-relation) condition, a
+returns a `List<IConditionalModel>` — a dotted (cross-relation) condition, a
 relation quantifier, and a translatable-field condition (own-collection or reached across a hop) all
 become a nested `IN (SELECT …)` subquery (`RelationPredicateFilter`/`ComparisonFilter` cases in
 `FilterTranslator.Subquery.cs`), never an intermediate id set. When `searchCandidates` (an
@@ -443,12 +445,11 @@ moment a deactivated account's cookie is next presented.
 
 `tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary the identity
 seams above exist to create: no file under `src/Struo.Api/Controllers/` may mention `ISqlSugarClient`.
-Before these seams,
-`UsersController`/`RolesController`/`AuthController.Me` injected the SqlSugar client and wrote
-`Insertable`/`Updateable`/`Deleteable`/`Ado.BeginTranAsync` inline against `Struo.Infrastructure.Identity`
-entity types — which quietly falsified `IItemRepository`'s billing as "the seam a fork implements to
-point at a different storage engine", and put those writes outside the repository's audit/version
-behavior. Note the guard bans raw ORM access only: three controllers still depend on the concrete
+The seams keep identity writes off a raw `ISqlSugarClient` call in a controller — each identity store
+owns its own audit/version stamping instead (see `IUserAccountStore` above, whose mutators stamp
+`UpdatedAt`/`UpdatedBy`/`Version` themselves because that path sits outside both `AuditAop` and
+`SqlSugarItemRepository`'s version bump). Note the guard bans raw ORM access only: three controllers still
+depend on the concrete
 `Struo.Infrastructure.Files.FileService` (aliased, so its `File` type doesn't collide with
 `System.IO.File`), which is a service rather than an ORM handle.
 
@@ -485,8 +486,9 @@ trust-boundary rule — the PK-type restriction and the `InvalidOperationExcepti
 facts specific to this seam: the cap against `StruoQueryOptions.MaxSearchCandidates` is checked on the
 **raw** returned count, before deduplication, so a provider cannot sneak an over-cap response past it
 with duplicate ids, and `SEARCH_UNAVAILABLE` is reserved for `SearchUnavailableException`, never this
-path — `StruoExceptionHandler.Map` logs the latter server-side at `Error` like every other
-`INTERNAL_SERVER_ERROR` case. The resolved ids are written onto `QueryModel.SearchCandidates`
+path — this `InvalidOperationException` case is unmapped, so `StruoExceptionHandler.Map` logs it
+server-side at `Error` like every other `INTERNAL_SERVER_ERROR` case (`SearchUnavailableException`
+itself is logged separately, at `Warning`). The resolved ids are written onto `QueryModel.SearchCandidates`
 (`src/Struo.Domain/Query/QueryModel.cs`), which the page query, every facet, and the aggregate all
 share, so all three report against the same candidate set. `QueryValidator.Validate` clears any
 inbound `SearchCandidates` on the way in (defence in depth — no parser sets it today), so
