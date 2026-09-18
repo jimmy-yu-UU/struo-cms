@@ -4,12 +4,16 @@
 // which lines are inside a fence — check-rendered-chapters.mjs so a bare
 // `{{ }}` inside a code sample is never mistaken for prose, and
 // markdown-tables.mjs so a table shown as a code sample is never measured —
-// so the rule lives here once. Two copies of the same rule is exactly how a
+// so the rule lives here once. Two copies of the same rule are exactly how a
 // divergence between them turns into a false positive or false negative that
 // gets a guard deleted; one copy can't diverge from itself.
 //
 // Splitting the input into lines (on `\r?\n`) stays the caller's job: both
 // callers already have their own reasons to hold onto that array.
+//
+// fencedLines(lines) returns a boolean per input line: true for a fence
+// opener, every line inside it, and its closer. An unclosed fence marks
+// every remaining line true — the same thing a renderer does.
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/
 
 export function fencedLines(lines) {
