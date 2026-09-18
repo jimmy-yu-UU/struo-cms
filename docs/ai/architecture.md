@@ -58,42 +58,40 @@ See `docs/guide/en/02-architecture.md` for the conceptual introduction to this l
 
 ### ORM coupling
 
-"Database-replaceable" in this template means the SqlSugar *provider*, not the ORM. `Database:DbType`
-maps 1:1 onto `SqlSugar.DbType` in `DbTypeMapper.Map`
+"Database-replaceable" in this template means the SqlSugar *provider*, not the ORM.
+`Database:DbType` maps 1:1 onto `SqlSugar.DbType` in `DbTypeMapper.Map`
 (`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`) across five backends; only PostgreSQL is
-verified (`AGENTS.md`'s "Hard constraints" has the full backend list and verification status). The ORM
-itself is not swappable
-at the content-project level — every content entity (`using SqlSugar;`, e.g.
-`samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
+verified (`AGENTS.md`'s "Hard constraints" has the full backend list and verification status). The
+ORM itself is not swappable at the content-project level — every content entity (`using SqlSugar;`,
+e.g. `samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
 `[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's
 `[CmsCollection]`/`[CmsField]`, and CodeFirst's DDL rules (`IsPrimaryKey`, `IsJson` (hook-widened),
-`[ColumnShape]` — see
-`docs/guide/en/05-collections.md`,
-`docs/guide/en/06-field-types.md`) are SqlSugar semantics, not a StruoCMS abstraction over them. The
-sidecar `(fk, locale)` unique is the exception, not SqlSugar semantics but a StruoCMS abstraction
-derived from `[CmsTranslations]` metadata — see the next paragraph.
-`docs/guide/en/09-revisions-and-trash.md` is a different kind of SqlSugar coupling, not a DDL one:
-revisions need no extra column and `ISoftDeletable` is a package-free marker interface, but the
-soft-delete floor itself is `db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`,
-registered against the SqlSugar client in `SqlSugarClientFactory.Create` (see that chapter's
+`[ColumnShape]` — see `docs/guide/en/05-collections.md`, `docs/guide/en/06-field-types.md`) are
+SqlSugar semantics, not a StruoCMS abstraction over them. The sidecar `(fk, locale)` unique is the
+exception, not SqlSugar semantics but a StruoCMS abstraction derived from `[CmsTranslations]`
+metadata — see the next paragraph. `docs/guide/en/09-revisions-and-trash.md` is a different kind of
+SqlSugar coupling, not a DDL one: revisions need no extra column and `ISoftDeletable` is a
+package-free marker interface, but the soft-delete floor itself is
+`db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null)`, registered against the
+SqlSugar client in `SqlSugarClientFactory.Create` (see that chapter's
 "Soft delete: `ISoftDeletable`" section) — a SqlSugar API dependency, just not a DDL attribute one.
 `IItemRepository` (`src/Struo.Application/Query/IItemRepository.cs`, sole implementation
-`SqlSugarItemRepository`) is an internal seam inside core, not an ORM-abstraction layer forks are meant
-to reimplement to swap ORMs — an entity's SqlSugar attributes stay bound to SqlSugar regardless of what
-implements that interface. Consequence: a SqlSugar major-version upgrade, or a semantic change to an
-attribute like `[SugarIndex]`, lands directly on every fork's entity classes; core does not absorb it.
-Two decisions are the exception: bare-`IsJson` column widening and the translation sidecar's `(fk,
-locale)` unique are both derived inside `SqlSugarClientFactory`'s `EntityService` hook rather than
-declared per entity, so core absorbs a change to either one on a fork's behalf. That absorption leans on
-SqlSugar-internal surface — the hook sets
-`EntityColumnInfo.UIndexGroupNameList`, not a documented public API. A SqlSugar upgrade that renames the
-property is a compile error, caught immediately; the risk is a *reshape* that leaves the property
-itself in place but changes what CodeFirst does with it, which would silently stop deriving the unique
-with no build-time signal. `TranslationSidecarIndexPolicyTests` (`tests/Struo.Tests/Persistence/`)
-exercises the hook end-to-end against a real `InitTables` run and asserts the resulting index, so that
-kind of reshape fails the test suite instead of failing silently. When bumping core, diff
-`Directory.Packages.props`'s `SqlSugarCore` version line
-against the fork's previous checkout and read that release's changelog before merging.
+`SqlSugarItemRepository`) is an internal seam inside core, not an ORM-abstraction layer forks are
+meant to reimplement to swap ORMs — an entity's SqlSugar attributes stay bound to SqlSugar
+regardless of what implements that interface. Consequence: a SqlSugar major-version upgrade, or a
+semantic change to an attribute like `[SugarIndex]`, lands directly on every fork's entity classes;
+core does not absorb it. Two decisions are the exception: bare-`IsJson` column widening and the
+translation sidecar's `(fk, locale)` unique are both derived inside `SqlSugarClientFactory`'s
+`EntityService` hook rather than declared per entity, so core absorbs a change to either one on a
+fork's behalf. That absorption leans on SqlSugar-internal surface — the hook sets
+`EntityColumnInfo.UIndexGroupNameList`, not a documented public API. A SqlSugar upgrade that renames
+the property is a compile error, caught immediately; the risk is a *reshape* that leaves the
+property itself in place but changes what CodeFirst does with it, which would silently stop deriving
+the unique with no build-time signal. `TranslationSidecarIndexPolicyTests`
+(`tests/Struo.Tests/Persistence/`) exercises the hook end-to-end against a real `InitTables` run and
+asserts the resulting index, so that kind of reshape fails the test suite instead of failing
+silently. When bumping core, diff `Directory.Packages.props`'s `SqlSugarCore` version line against
+the fork's previous checkout and read that release's changelog before merging.
 
 ## Metadata: the single source every other layer derives from
 
@@ -143,12 +141,11 @@ type, field→property map, id property name, eagerly-built property-accessor ca
 `src/Struo.Application/Metadata/IEntityTypeCollector.cs`: `CollectForInitTables()` returns every CLR
 entity type that needs a database table — scanned collections, their translation sidecars, and M2M
 junction types — unioned and de-duplicated against `FrameworkEntityTypes.All`
-(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the eleven framework entity types: Language,
-File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision, SiteSettings,
-UserSession).
-Implementation: `EntityTypeCollector` (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`).
-Registered as a singleton via the container:
-`services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
+(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the eleven framework entity types:
+Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision,
+SiteSettings, UserSession). Implementation: `EntityTypeCollector`
+(`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`). Registered as a singleton via the
+container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
 (`MetadataServiceCollectionExtensions.cs`). Consumed by `DatabaseInitializer.CreateMissingTables`
 (`Program.cs`), which runs in every environment and on every backend — the
 "CodeFirst creates; migrations evolve" invariant in `AGENTS.md`'s "Invariants" section has the full
@@ -196,9 +193,8 @@ write. Read enforcement is not confined to `ItemService` itself: a query that re
 collection is checked hop by hop, with the failure mode differing by path — `docs/ai/conventions.md`'s
 "Input validation at boundaries" names the three mechanisms (`QueryValidator.DenyUnreadableHops`,
 `DeepExpansionCoordinator.PruneUnreadable`, `TranslationOverlay`) and the
-`Rbac:PublicReadCollections` consequence for an anonymous-read deployment. That key is consulted only
-at first boot (`docs/guide/en/17-roles-and-permissions.md` covers the caveat and the live-database
-workaround). Registered scoped, with `IItemUseCases` resolved from
+`Rbac:PublicReadCollections` consequence for an anonymous-read deployment. Registered scoped, with
+`IItemUseCases` resolved from
 the same `ItemService` instance in `DataServiceCollectionExtensions.AddStruoData`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`):
 ```csharp
@@ -213,26 +209,26 @@ same underlying repository/expander/resolver primitives.
 
 `src/Struo.Application/Query/IItemRepository.cs`: the SqlSugar-facing data-access seam — query/get/
 create/update/delete, soft-delete/restore, transaction scoping, batched `WHERE...IN` reads
-(`QueryWhereInFilteredAsync` takes a `string? queryLocale` before its trailing `CancellationToken`, so a
-translatable leaf inside its `extraFilter` resolves at that locale), M2M sync, translation-sidecar
-load/sync, facet/aggregate computation, and a set of purge referential-integrity primitives
-(`SetForeignKeyNullAsync`, `DeleteByPropertyAsync`, `QueryWhereInWithDeletedAsync`). Those three purge
-primitives are declared with default bodies that `throw new NotSupportedException(...)` rather than a
-silent no-op — the interface's own comment explains why: a second implementation that forgot to
-override one of them would otherwise silently orphan referential rows on purge, exactly the defect
-class the defaults exist to prevent. `FacetAsync` and `AggregateAsync` (the facet-bucket and
-aggregate-value computation behind `docs/guide/en/11-query-advanced.md`'s "Facet counting" and
-"Aggregates `aggregate[<op>]`" sections) follow the identical default-throw pattern for the identical
-reason — a fork with its own
+(`QueryWhereInFilteredAsync` takes a `string? queryLocale` before its trailing `CancellationToken`,
+so a translatable leaf inside its `extraFilter` resolves at that locale), M2M sync,
+translation-sidecar load/sync, facet/aggregate computation, and a set of purge referential-integrity
+primitives (`SetForeignKeyNullAsync`, `DeleteByPropertyAsync`, `QueryWhereInWithDeletedAsync`).
+Those three purge primitives are declared with default bodies that
+`throw new NotSupportedException(...)` rather than a silent no-op — the interface's own comment
+explains why: a second implementation that forgot to override one of them would otherwise silently
+orphan referential rows on purge, exactly the defect class the defaults exist to prevent.
+`FacetAsync` and `AggregateAsync` (the facet-bucket and aggregate-value computation behind
+`docs/guide/en/11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`" sections)
+follow the identical default-throw pattern for the identical reason — a fork with its own
 `IItemRepository` implementation that doesn't override them gets a clear `NotSupportedException` the
 moment a caller requests `facets=`/`aggregate[<op>]=`, not a silently empty or wrong result. Sole
 implementation: `SqlSugarItemRepository`
 (`src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs`). Registered scoped:
 `services.AddScoped<IItemRepository, SqlSugarItemRepository>()`
-(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`). This is the seam
-a fork would implement to point at a different storage engine, not a different ORM — see *ORM coupling*
-above; the content entities' SqlSugar attributes stay regardless. Any replacement must implement the
-three purge primitives explicitly or purge will throw for every collection.
+(`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`). This is the
+seam a fork would implement to point at a different storage engine, not a different ORM — see *ORM
+coupling* above; the content entities' SqlSugar attributes stay regardless. Any replacement must
+implement the three purge primitives explicitly or purge will throw for every collection.
 
 **M2M sync strategy — diff-and-patch, not delete-and-recreate.** `SyncManyToManyAsync` (implemented by
 `ManyToManySync`, below) diffs the incoming `IReadOnlyList<JunctionLink>` against the junction rows
@@ -325,50 +321,51 @@ references SqlSugar internals. Implementation: `RelationExpander`
 `src/Struo.Infrastructure/Query/FilterTranslator.cs` (own-collection leaves, logical composition,
 the SqlSugar-adjacency-defect workarounds) and `FilterTranslator.Subquery.cs` (the actual subquery
 construction) together turn a validated `FilterNode` tree into SqlSugar conditionals for one
-queryable over `collection`: `Translate(collection, filter, search, searchCandidates,
-searchableFields, queryLocale, rootDescriptor?)` — the trailing descriptor is optional and lets a
-caller that already resolved the collection's `EntityDescriptor` reuse it — reads the `FilterNode`
-tree (the grammar in
-`docs/guide/en/10-query-basics.md`'s "Relation paths: matched per segment vs. `_some`/`_none` on the same row",
-including `_some`/`_none` relation quantifiers and `_junction`) and
-returns a `List<IConditionalModel>` — a dotted (cross-relation) condition, a
-relation quantifier, and a translatable-field condition (own-collection or reached across a hop) all
-become a nested `IN (SELECT …)` subquery (`RelationPredicateFilter`/`ComparisonFilter` cases in
-`FilterTranslator.Subquery.cs`), never an intermediate id set. When `searchCandidates` (an
-`IReadOnlyList<object>?` of ids already parsed to the collection's primary-key CLR type — see "Search
-providers" below) is non-null, `CandidateConditional`
-builds a typed `id IN (...)` condition from it and that **replaces** the `LIKE` search group outright
-(`search` itself is not consulted in that branch); an empty candidate list becomes `id IS NULL`
-instead of an empty `IN (...)`, portably matching nothing. Both render through the same typed
-`ConditionalModelTranslator.ToSingleModel` path the query DSL's own comparison operators use, which
-SqlSugar renders as SQL **literals**, not parameters — which is exactly why the ids must already be
-parsed to the PK type before reaching this translator; `SearchCandidateResolver` is what guarantees
-that. It is `internal`, not registered in DI at all — `SqlSugarItemRepository`
-constructs it directly with `new FilterTranslator(db, graph, metadata, registry, options)` (four
-times: its own `filters` field, plus one separate instance each for `WhereInQueries`, `FacetQueries`,
-and `AggregateQueries` — see the field-initializer note above) exactly the
-way it constructs its other Query-folder collaborators. It also needs the graph parameter to actually
-be the **concrete** `RelationshipGraph`, not just an `IRelationshipGraph` — relation-subquery
-construction reads junction/reverse-FK descriptor information off the concrete type that an
-interface-level caller does not expose, so it casts and throws `InvalidOperationException` if handed
-anything else (never actually reachable in this codebase's own DI wiring, where `IRelationshipGraph`
-and `RelationshipGraph` are always bound to the same singleton instance — see `IRelationshipGraph`
+queryable over `collection`:
+`Translate(collection, filter, search, searchCandidates, searchableFields, queryLocale, rootDescriptor?)`
+— the trailing descriptor is optional and lets a caller that already resolved the collection's
+`EntityDescriptor` reuse it — reads the `FilterNode` tree (the grammar in
+`docs/guide/en/10-query-basics.md`'s
+"Relation paths: matched per segment vs. `_some`/`_none` on the same row", including `_some`/`_none`
+relation quantifiers and `_junction`) and returns a `List<IConditionalModel>` — a dotted
+(cross-relation) condition, a relation quantifier, and a translatable-field condition
+(own-collection or reached across a hop) all become a nested `IN (SELECT …)` subquery
+(`RelationPredicateFilter`/`ComparisonFilter` cases in `FilterTranslator.Subquery.cs`), never an
+intermediate id set. When `searchCandidates` (an `IReadOnlyList<object>?` of ids already parsed to
+the collection's primary-key CLR type — see "Search providers" below) is non-null,
+`CandidateConditional` builds a typed `id IN (...)` condition from it and that **replaces** the
+`LIKE` search group outright (`search` itself is not consulted in that branch); an empty candidate
+list becomes `id IS NULL` instead of an empty `IN (...)`, portably matching nothing. Both render
+through the same typed `ConditionalModelTranslator.ToSingleModel` path the query DSL's own
+comparison operators use, which SqlSugar renders as SQL **literals**, not parameters — which is
+exactly why the ids must already be parsed to the PK type before reaching this translator;
+`SearchCandidateResolver` is what guarantees that. It is `internal`, not registered in DI at all —
+`SqlSugarItemRepository` constructs it directly with
+`new FilterTranslator(db, graph, metadata, registry, options)` (four times: its own `filters` field,
+plus one separate instance each for `WhereInQueries`, `FacetQueries`, and `AggregateQueries` — see
+the field-initializer note above) exactly the way it constructs its other Query-folder
+collaborators. It also needs the graph parameter to actually be the **concrete**
+`RelationshipGraph`, not just an `IRelationshipGraph` — relation-subquery construction reads
+junction/reverse-FK descriptor information off the concrete type that an interface-level caller does
+not expose, so it casts and throws `InvalidOperationException` if handed anything else (never
+actually reachable in this codebase's own DI wiring, where `IRelationshipGraph` and
+`RelationshipGraph` are always bound to the same singleton instance — see `IRelationshipGraph`
 above). `FacetQueries` needs the same concrete cast, for the same reason (junction/reverse-FK
 descriptors for its relation-name facet form) — see the next subsection.
 
 ### `FacetQueries` / `AggregateQueries` (not a DI seam)
 
 `src/Struo.Infrastructure/Query/FacetQueries.cs` + `FacetQueries.Leaf.cs` and
-`src/Struo.Infrastructure/Query/AggregateQueries.cs` back `IItemRepository.FacetAsync`/`AggregateAsync`
-— the value/count-bucket and sum/min/max/avg/count computation behind
-`docs/guide/en/11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`" sections.
-Both are `internal`, constructed directly
-by `SqlSugarItemRepository` in a field initializer exactly like `FilterTranslator` above, not
-registered in DI. `FacetQueries` additionally needs the **concrete** `RelationshipGraph` (its `Graph`
-property casts `IRelationshipGraph` and throws `InvalidOperationException` otherwise) — a facet on a
-relation name needs the same junction/reverse-FK descriptor information `FilterTranslator`'s subquery
-construction does, to know whether to group by the junction's target FK (M2M) or the child's own
-reverse FK (O2M).
+`src/Struo.Infrastructure/Query/AggregateQueries.cs` back
+`IItemRepository.FacetAsync`/`AggregateAsync` — the value/count-bucket and sum/min/max/avg/count
+computation behind `docs/guide/en/11-query-advanced.md`'s "Facet counting" and
+"Aggregates `aggregate[<op>]`" sections. Both are `internal`, constructed directly by
+`SqlSugarItemRepository` in a field initializer exactly like `FilterTranslator` above, not
+registered in DI. `FacetQueries` additionally needs the **concrete** `RelationshipGraph` (its
+`Graph` property casts `IRelationshipGraph` and throws `InvalidOperationException` otherwise) — a
+facet on a relation name needs the same junction/reverse-FK descriptor information
+`FilterTranslator`'s subquery construction does, to know whether to group by the junction's target
+FK (M2M) or the child's own reverse FK (O2M).
 
 Both hold to the same typed-API-only constraint the rest of the query layer does — no
 `Select<T>(string)`/`GroupBy(string)`/`OrderBy(string)` or other string-accepting SqlSugar overload,
@@ -411,9 +408,10 @@ identity god-interface, split by *consumer* rather than by table:
   by-id lookup lives here rather than on `IUserAccountStore`.
 - **`IUserAccountStore`** → `SqlSugarUserAccountStore`. User-account administration: create, exists,
   profile projection, and the three credential mutations (set password, issue/revoke access token).
-  Every mutator stamps `UpdatedAt`/`UpdatedBy` and increments `Version` itself, because these are
+  Those three stamp `UpdatedAt`/`UpdatedBy` and increment `Version` themselves, because they are
   column-scoped `SetColumns` updates and therefore outside both `AuditAop` (which hooks only
-  `InsertByObject`/`UpdateByObject`) and `SqlSugarItemRepository`'s version bump.
+  `InsertByObject`/`UpdateByObject`) and `SqlSugarItemRepository`'s version bump; `CreateAsync` is an
+  ordinary `Insertable`, which `AuditAop` does stamp.
 - **`IPermissionGrantStore`** → `SqlSugarPermissionGrantStore`. The RBAC *write* side — the admin
   permission matrix's read and atomic full-replace of a role's grants.
 - **`IRolePermissionStore`** → `SqlSugarRolePermissionStore`. The RBAC *read* side, resolving a
@@ -423,34 +421,33 @@ identity god-interface, split by *consumer* rather than by table:
 - **`IExternalUserStore`** → `SqlSugarExternalUserStore`. OIDC just-in-time provisioning by email.
 
 Session revocation is a separate pair of seams, registered alongside the five above in the same
-`AddStruoInfrastructure` (`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`):
-`IUserSessionStore` → `SqlSugarUserSessionStore` and `IUserSessionRevocationService` →
-`UserSessionRevocationService` (both `src/Struo.Infrastructure/Identity/`). `IUserSessionStore` backs
-onto the `user_sessions` table (`UserSession.cs`, one row per live cookie ticket, indexed by
-`UserId`) — the index the ticket cache itself has no way to scan, needed to find "every live session
-for user X". `IUserSessionRevocationService.RevokeAllForUserAsync` clears a user's cache entries and
+`AddStruoInfrastructure`
+(`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`): `IUserSessionStore`
+→ `SqlSugarUserSessionStore` and `IUserSessionRevocationService` → `UserSessionRevocationService`
+(both `src/Struo.Infrastructure/Identity/`). `IUserSessionStore` backs onto the `user_sessions`
+table (`UserSession.cs`, one row per live cookie ticket, indexed by `UserId`) — the index the ticket
+cache itself has no way to scan, needed to find "every live session for user X".
+`IUserSessionRevocationService.RevokeAllForUserAsync` clears a user's cache entries and
 `user_sessions` rows together, and is invoked on two triggers: password change and
 `ItemService.RevokeSessionsIfUserAsync` on **both** DELETE branches (soft-delete and purge) of a
-`user` row — placed in `ItemService` rather than a controller so the GraphQL `deleteUser` mutation is
-covered too. Logout is a narrower, single-ticket operation: `AuthController.Logout` calls
-`HttpContext.SignOutAsync`, whose cookie middleware invokes `DistributedCacheTicketStore.RemoveAsync`
-to remove just the signed-out cookie's cache entry and index row, without touching
-`IUserSessionRevocationService`. A revocation failure after a committed
-delete/password-change throws
-`SessionRevocationFailedException` rather than masking it as a normal success. Between triggers, a
-still-live cookie is caught reactively: `AuthWiring`'s `OnValidatePrincipal` re-checks
-`IUserCredentialStore`'s `IsActive` on every cookie request (mirroring what
-`BearerTokenAuthenticationHandler` already does for bearer requests) and signs the session out the
-moment a deactivated account's cookie is next presented.
+`user` row — placed in `ItemService` rather than a controller so the GraphQL `deleteUser` mutation
+is covered too. Logout is a narrower, single-ticket operation: `AuthController.Logout` calls
+`HttpContext.SignOutAsync`, whose cookie middleware invokes
+`DistributedCacheTicketStore.RemoveAsync` to remove just the signed-out cookie's cache entry and
+index row, without touching `IUserSessionRevocationService`. A revocation failure after a committed
+delete/password-change throws `SessionRevocationFailedException` rather than masking it as a normal
+success. Between triggers, a still-live cookie is caught reactively: `AuthWiring`'s
+`OnValidatePrincipal` re-checks `IUserCredentialStore`'s `IsActive` on every cookie request
+(mirroring what `BearerTokenAuthenticationHandler` already does for bearer requests) and signs the
+session out the moment a deactivated account's cookie is next presented.
 
 `tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary the identity
-seams above exist to create: no file under `src/Struo.Api/Controllers/` may mention `ISqlSugarClient`.
-The seams keep identity writes off a raw `ISqlSugarClient` call in a controller — an identity store
-owns whatever audit/version stamping its own writes need, not a controller (see `IUserAccountStore`
-above, whose mutators stamp `UpdatedAt`/`UpdatedBy`/`Version` themselves because that path sits outside
-both `AuditAop` and `SqlSugarItemRepository`'s version bump). Note the guard bans raw ORM access only:
-three controllers still
-depend on the concrete
+seams above exist to create: no file under `src/Struo.Api/Controllers/` may mention
+`ISqlSugarClient`. The seams keep identity writes off a raw `ISqlSugarClient` call in a controller —
+an identity store owns whatever audit/version stamping its own writes need, not a controller (see
+`IUserAccountStore` above, whose credential mutations stamp `UpdatedAt`/`UpdatedBy`/`Version`
+themselves because that path sits outside both `AuditAop` and `SqlSugarItemRepository`'s version
+bump). Note the guard bans raw ORM access only: three controllers still depend on the concrete
 `Struo.Infrastructure.Files.FileService` (aliased, so its `File` type doesn't collide with
 `System.IO.File`), which is a service rather than an ORM handle.
 
@@ -618,25 +615,25 @@ when an interface used by a core collection is missing from that union or from t
 ## Backend request flow (REST)
 
 `ItemsController` (`src/Struo.Api/Controllers/ItemsController.cs`) is the one controller that serves
-every collection generically — it depends on `IItemUseCases`, never on `ItemService` directly. A read
-(`GetAsync`/`QueryAsync`) resolves the query through `QueryValidator` (whitelist/depth-cap validation,
-`src/Struo.Application/Query/QueryValidator.cs`) — for `QueryAsync` only, immediately after validation,
-`SearchCandidateResolver` asks the registered `ISearchProvider` once, and a `Candidates` outcome is
-threaded onto `QueryModel.SearchCandidates` before the query proceeds (see "Search providers" above) —
-`IItemRepository` (the actual SqlSugar query — a
-cross-relation filter is pushed down into a subquery by `FilterTranslator` inside this step, not
-rewritten beforehand), and `IRelationExpander` (deep-relation batching) before `ItemProjector` (`src/Struo.Application/Query/Projection/ItemProjector.cs`) turns the
-result into the camelCase dictionary the envelope serializes. A write (`CreateAsync`/`UpdateAsync`)
-goes through `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`), which
-sanitizes RichText fields before required-field validation (`AGENTS.md`'s "Invariants" has the full
-rule, including the per-locale path), and the `FieldValidatorRegistry`-driven per-`FieldInterface`
-validators
-(`src/Struo.Application/Query/Write/FieldValidatorRegistry.cs`) before `IItemRepository` commits inside
-a transaction (`InTransactionAsync`), after which `IItemChangeNotifier` fans the write's `ItemChange`(s)
-out to every registered `IItemChangeListener` (see "Change notifications" above). Every response —
-success or error — passes through
-`EnvelopeResultFilter`/`StruoExceptionHandler` (`src/Struo.Api/Http/`) so the wire shape is uniform. See
-`docs/guide/en/10-query-basics.md` and `docs/guide/en/12-rest-conventions.md`.
+every collection generically — it depends on `IItemUseCases`, never on `ItemService` directly. A
+read (`GetAsync`/`QueryAsync`) resolves the query through `QueryValidator` (whitelist/depth-cap
+validation, `src/Struo.Application/Query/QueryValidator.cs`) — for `QueryAsync` only, immediately
+after validation, `SearchCandidateResolver` asks the registered `ISearchProvider` once, and a
+`Candidates` outcome is threaded onto `QueryModel.SearchCandidates` before the query proceeds (see
+"Search providers" above) — `IItemRepository` (the actual SqlSugar query — a cross-relation filter
+is pushed down into a subquery by `FilterTranslator` inside this step, not rewritten beforehand),
+and `IRelationExpander` (deep-relation batching) before `ItemProjector`
+(`src/Struo.Application/Query/Projection/ItemProjector.cs`) turns the result into the camelCase
+dictionary the envelope serializes. A write (`CreateAsync`/`UpdateAsync`) goes through
+`ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`), which sanitizes
+non-translatable RichText fields before required-field validation (`AGENTS.md`'s "Invariants" has
+the full rule, including the per-locale path), and the `FieldValidatorRegistry`-driven
+per-`FieldInterface` validators (`src/Struo.Application/Query/Write/FieldValidatorRegistry.cs`)
+before `IItemRepository` commits inside a transaction (`InTransactionAsync`), after which
+`IItemChangeNotifier` fans the write's `ItemChange`(s) out to every registered `IItemChangeListener`
+(see "Change notifications" above). Every response — success or error — passes through
+`EnvelopeResultFilter`/`StruoExceptionHandler` (`src/Struo.Api/Http/`) so the wire shape is uniform.
+See `docs/guide/en/10-query-basics.md` and `docs/guide/en/12-rest-conventions.md`.
 
 ## Next steps
 

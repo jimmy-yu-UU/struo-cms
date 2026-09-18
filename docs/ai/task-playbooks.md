@@ -12,9 +12,9 @@ change only when that change touches `docs/guide/**` or the docs project itself,
 every playbook below.
 
 **Live-database verification** is a separate, additional step for any change to DB behavior —
-`AGENTS.md`, "Verification", has how to configure it per backend and what it covers. SQLite passing is
-not evidence of PostgreSQL correctness — this codebase has documented, specific SQLite/PostgreSQL
-divergences in column semantics and filter binding; `AGENTS.md`, "Verification", lists them.
+`AGENTS.md`, "Verification", has the per-backend rule, the documented SQLite/PostgreSQL divergences,
+and how to configure the PostgreSQL test connection. SQLite passing is not evidence of correctness on
+another backend.
 
 ## Playbook 1: Add a collection
 
@@ -59,12 +59,12 @@ Adding a collection is purely additive to a fork's own content project — it ne
    into the shipped `appsettings.json` itself (e.g. it is replacing the template's "ships with zero
    collections" posture permanently), update or remove that test deliberately as part of the same
    change — don't leave it contradicting the new configuration.
-7. **Restart the API.** CodeFirst creates the table automatically from the entity class — in **every**
-   environment, not just Development. Because the table doesn't exist yet, this step is inherently
-   non-destructive: it only ever creates, never alters or drops anything on an existing table (that's a
-   separate, opt-in mechanism, `Database:AutoSyncSchema`, Development-only — see `AGENTS.md`'s
-   "Invariants") — confirm the admin SPA's sidebar shows the new collection under its configured
-   `Group`.
+7. **Restart the API.** `DatabaseInitializer.CreateMissingTables` creates the table automatically from
+   the entity class — in **every** environment and on **every** backend, not just Development. Because
+   the table doesn't exist yet, this step is inherently non-destructive: it only ever creates, never
+   alters or drops anything on an existing table (that's a separate, opt-in mechanism,
+   `Database:AutoSyncSchema`, Development-only — see `AGENTS.md`'s "Invariants") — confirm the admin
+   SPA's sidebar shows the new collection under its configured `Group`.
 8. **Grant RBAC** read/write/delete permissions for the collection to whichever roles need them — a
    brand-new collection has zero grants, so only a super-admin can use it until you add some.
 9. **Nothing further is needed for the table itself before deploying** — CodeFirst creates it in
@@ -213,10 +213,11 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
    `[Authorize]` attribute in play. Decide deliberately, per new endpoint, whether it needs the same
    treatment or a plain `[Authorize]` (cookie scheme only).
 3. **CSRF**: cookie-authenticated mutations need the caller to send the `X-Struo-CSRF` header
-   (presence-only check, enforced by `CsrfProtectionMiddleware`, `src/Struo.Api/Auth/
-   CsrfProtectionMiddleware.cs`) — this applies automatically to any action reached over the cookie
-   scheme; bearer-authenticated requests are exempt (CSRF is a cookie-specific attack). Add no code for
-   this — it is pipeline middleware — but document the header requirement for the endpoint's callers.
+   (presence-only check, enforced by `CsrfProtectionMiddleware`,
+   `src/Struo.Api/Auth/CsrfProtectionMiddleware.cs`) — this applies automatically to any action
+   reached over the cookie scheme; bearer-authenticated requests are exempt (CSRF is a
+   cookie-specific attack). Add no code for this — it is pipeline middleware — but document the
+   header requirement for the endpoint's callers.
 4. **Error mapping**: if the endpoint throws a new domain exception type that should surface a specific
    client-safe message/status, add it to `DomainErrorMap.Map` (and `StatusFor` if it needs a REST status
    other than the 500 fallback) in `src/Struo.Api/Http/DomainErrorMap.cs` — this is shared verbatim with
@@ -229,8 +230,7 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
 
 ## Playbook 4: Add a migration
 
-Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `db/migrations/
-README.md`.
+Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `db/migrations/README.md`.
 
 1. Determine the next number: the current highest `NNN-*.sql` filename in `db/migrations/` **+ 1**,
    zero-padded. The template ships **zero** scripts, so a fresh fork's first migration is `001-...`,
@@ -246,24 +246,25 @@ README.md`.
    most once, and `IF NOT EXISTS` is not supported on SQL Server. Forward-only — no automatic
    down-migration; a rollback is a new compensating script, not an edit to this one. See
    `db/migrations/README.md` §5 for the full prefer/avoid tables.
-4. Use a time-zone-aware type (not bare `timestamp`) for any new column or table storing an instant,
-   and store UTC. This is a convention rather than something you can read off an existing script: the
-   template ships no migration files at all. If the column is also modeled as an entity property, mark
-   it `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
-   (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) rather than a PostgreSQL-only `timestamptz`
-   literal, so CodeFirst resolves the matching type per backend and a freshly created table agrees with
-   what this migration adds to an existing one. Hand-writing the DDL directly instead (a column no
-   entity property backs)?
-   `ColumnTypeMap.cs` (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) centralizes the
-   per-backend literal to copy in — see `db/migrations/README.md` §5 for the full mapping. Either way,
-   check the target table's actual current column type (the entity declaration in `src/`, or the live
-   schema) rather than assuming one. Do not retroactively convert an existing bare-`timestamp` column
-   while you're at it unless that specific column is the subject of this migration (re-anchoring
-   already-stored values against a session time zone is a silent data shift).
+4. Use a time-zone-aware type (not bare `timestamp`) for any new column or table storing an
+   instant, and store UTC. This is a convention rather than something you can read off an
+   existing script: the template ships no migration files at all. If the column is also modeled
+   as an entity property, mark it `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
+   (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) rather than a PostgreSQL-only
+   `timestamptz` literal, so CodeFirst resolves the matching type per backend and a freshly
+   created table agrees with what this migration adds to an existing one. Hand-writing the DDL
+   directly instead (a column no entity property backs)? `ColumnTypeMap.cs`
+   (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) centralizes the per-backend literal
+   to copy in — see `db/migrations/README.md` §5 for the full mapping. Either way, check the
+   target table's actual current column type (the entity declaration in `src/`, or the live
+   schema) rather than assuming one. Do not retroactively convert an existing bare-`timestamp`
+   column while you're at it unless that specific column is the subject of this migration
+   (re-anchoring already-stored values against a session time zone is a silent data shift).
 5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
    tracks applied migrations by filename only, in the CodeFirst-created `schema_migrations` table, with
-   no checksum, so an edited file with an already-applied filename is silently never re-run — a known
-   limit `db/migrations/README.md` §6 covers in full. Ship a new file instead.
+   no checksum, so an edited file with an already-applied filename is silently never re-run — the rule
+   and the by-filename-only tracking it follows from are `db/migrations/README.md` §4. Ship a new file
+   instead.
 6. **Make sure the runner is actually enabled where the script has to run.** `Database:MigrationsPath`
    ships empty, and empty means the runner is skipped entirely (`src/Struo.Api/appsettings.json`) — a
    migration in `db/migrations/` does nothing until the key points at that directory in the environment
@@ -293,12 +294,12 @@ collection's fields, columns, or labels; everything comes from `GET /api/schema`
 2a), branding/theming beyond a name and logo, admin-UI language (i18n), or a workflow that doesn't fit
 the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 
-1. **Locate the right directory** using
-   `docs/guide/en/19-admin-customization.md`'s "The `frontend/src` map": `api/` (thin REST wrappers),
-   `assets/` (`tokens.css` and `theme.css` — the whole look), `components/` (`ItemForm.vue` at the top
-   level, everything else a subdirectory by purpose, including the vendored `ui/`), `composables/`,
-   `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including `fieldTypes/`),
-   `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
+1. **Locate the right directory** using `docs/guide/en/19-admin-customization.md`'s
+   "The `frontend/src` map": `api/` (thin REST wrappers), `assets/` (`tokens.css` and `theme.css`
+   — the whole look), `components/` (`ItemForm.vue` at the top level, everything else a
+   subdirectory by purpose, including the vendored `ui/`), `composables/`, `i18n/` + `locales/`,
+   `layouts/`, `lib/` (framework-free helpers, including `fieldTypes/`), `router/`, `stores/`
+   (Pinia), `theme/`, `types/`, `views/` (one component per route).
 2. **Theming**: edit `frontend/src/assets/tokens.css` for the shadcn semantic custom properties
    (`--background`/`--primary`/`--radius`/…, on the `.app-dark` toggle class) that every vendored `ui/`
    component and Tailwind utility reads, and `frontend/src/assets/theme.css` for the unlayered global

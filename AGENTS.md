@@ -126,7 +126,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 - **Query DSL paths are whitelist-validated** against scanned metadata before any SQL is built
   (`QueryValidator`) — an unknown filter/sort/relation path is rejected, never passed through.
   `QueryValidator` also enforces RBAC on every collection a relation path traverses, not just the root
-  — see `docs/ai/conventions.md`'s "Query DSL"/"RBAC" bullets.
+  — see `docs/ai/conventions.md`'s "Input validation at boundaries".
 - **RichText is sanitized server-side** before required-field validation, via `RichTextCleaner`
   (`src/Struo.Application/Query/Write/RichTextCleaner.cs`), which wraps `IHtmlSanitizer` plus
   blank-document coercion. Non-translatable RichText fields are sanitized in `ItemDeserializer.cs`;
@@ -139,21 +139,21 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   metadata cache or the query pipeline is shared, longer-lived state, and an in-place mutation there
   would be visible to every subsequent caller.
 - **CodeFirst creates; migrations evolve.** Tables that do not yet exist are created by
-  `DatabaseInitializer.CreateMissingTables` in **every environment and on every backend**, so an empty
-  database bootstraps itself and `DataSeeder` seeds what was just created. **Existing** tables are never
-  touched automatically: full CodeFirst structural sync is opt-in via `Database:AutoSyncSchema` and
-  honoured in Development only (SqlSugar's default `InitTables` modifies *and* **drops** columns —
-  measured on real PostgreSQL by
-  `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`; on SQLite the
-  same unfiltered call leaves the removed column in place
+  `DatabaseInitializer.CreateMissingTables` in **every environment and on every backend**, so an
+  empty database bootstraps itself and `DataSeeder` seeds what was just created. **Existing**
+  tables are never touched automatically: full CodeFirst structural sync is opt-in via
+  `Database:AutoSyncSchema` and honoured in Development only (SqlSugar's default `InitTables`
+  modifies *and* **drops** columns — measured on real PostgreSQL by
+  `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`; on SQLite
+  the same unfiltered call leaves the removed column in place
   (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because
   SQLite or SqlSugar's SQLite dialect lacks the capability, but because this repo's
-  `SqlSugarClientFactory` never sets `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`,
-  the flag that gates it (`docs/guide/en/21-schema-and-upgrades.md`, "Where schema sync is
-  dangerous", item 7, covers what flipping that flag actually does) — so this repo's SQLite-only
-  CI suite cannot demonstrate the claim by itself), while reviewed `db/migrations/` scripts
-  applied by `MigrationRunner` are the
-  all-environments path. The runner works on any backend; `Database:MigrationsPath` empty (the
+  `SqlSugarClientFactory` never sets
+  `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`, the flag that gates it
+  (`docs/guide/en/21-schema-and-upgrades.md`, "Where schema sync is dangerous", item 7, covers
+  what flipping that flag actually does) — so this repo's SQLite-only CI suite cannot demonstrate
+  the claim by itself), while reviewed `db/migrations/` scripts applied by `MigrationRunner` are
+  the all-environments path. The runner works on any backend; `Database:MigrationsPath` empty (the
   default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
@@ -181,20 +181,21 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    every environment and on every backend; a migration is only for altering a table that already
    exists (Playbook 4). Gate: `dotnet build && dotnet test`.
 2. **Add a field type** — swapping an editor for an existing `FieldInterface` is frontend-only
-   (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches the
-   backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped member
-   fails GraphQL schema build, which surfaces as a misleading `ObjectDisposedException` on
-   `IServiceProvider` during host startup rather than a clear error — see `docs/ai/task-playbooks.md`
-   Playbook 2b), possibly `SqlSugarClientFactory`'s column-widening hook, and — both required —
-   `frontend/src/lib/fieldTypes/types.ts`'s type union/`ALL_FIELD_INTERFACES` and its `registry.ts`
-   component. Then regenerate `schema/interfaces.json` — required for *every* new member, whether or not
-   a collection uses it yet — and `schema/core-collections.json` too if the value is used by a core
-   collection (`schema/README.md`; one command does both). A new `RelationInterface` member likewise
-   needs an entry in `frontend/src/lib/relationInputKind.ts`, or the relation renders read-only at
+   (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches
+   the backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped
+   member fails GraphQL schema build, which surfaces as a misleading `ObjectDisposedException` on
+   `IServiceProvider` during host startup rather than a clear error — see
+   `docs/ai/task-playbooks.md` Playbook 2b), possibly `SqlSugarClientFactory`'s column-widening
+   hook, and — both required — `frontend/src/lib/fieldTypes/types.ts`'s type
+   union/`ALL_FIELD_INTERFACES` and its `registry.ts` component. Then regenerate
+   `schema/interfaces.json` — required for *every* new member, whether or not a collection uses
+   it yet — and `schema/core-collections.json` too if the value is used by a core collection
+   (`schema/README.md`; one command does both). A new `RelationInterface` member likewise needs
+   an entry in `frontend/src/lib/relationInputKind.ts`, or the relation renders read-only at
    runtime — `pnpm test`'s schema-contract test (`frontend/tests/schemaContract.test.ts`) is what
    catches the missing entry first. Gate: four of the five standing gates — see
-   `docs/ai/task-playbooks.md` Playbook 2b for
-   when the fifth applies; live-PostgreSQL check if you touched column mapping.
+   `docs/ai/task-playbooks.md` Playbook 2b for when the fifth applies; live-PostgreSQL check if
+   you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
@@ -249,21 +250,20 @@ backend, and the SQLite suite is a development convenience, not the portability 
   transferable evidence — the divergences below are type/column-semantics issues, exactly the class
   the ORM does *not* abstract away.
 
-The portability rule that governs application code is "all DB access through SqlSugar, zero vendor
-SQL" (see Invariants). That rule keeps *query and command* code portable. It does not make
-*type mapping, column semantics, or DDL* portable, and this codebase has concrete counterexamples —
-which is why the verification above is per-backend rather than per-codebase. This codebase has
-documented, specific divergences: a `DateTime` property with no `[ColumnShape(TimestampWithTimeZone)]`
-maps to `timestamp without time zone` on PostgreSQL — the reason `UserSession.CreatedAt`/`ExpiresAt`
-carry that shape explicitly — while SQLite has no real column types to show the difference; and a
-SqlSugar `ConditionalType.Equal` filter that binds a text value against a `uuid`/`bigint` column throws
-`42883` on PostgreSQL ("operator does not exist") but passes silently on SQLite, whose loose typing
-accepts the comparison without complaint. Configure
-`Testing:PostgresConnection` to a disposable database
-whose name contains `test` — the test resolves it from the `STRUO_TEST_PG_CONNECTION` environment
-variable first, falling back to the `Testing:PostgresConnection` key in
-`src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
-directly against a real PostgreSQL instance.
+The portability rule that governs application code is
+"all DB access through SqlSugar, zero vendor SQL" (see Invariants). That rule keeps *query and
+command* code portable. It does not make *type mapping, column semantics, or DDL* portable, and this
+codebase has concrete counterexamples — which is why the verification above is per-backend rather
+than per-codebase. This codebase has documented, specific divergences: a `DateTime` property with no
+`[ColumnShape(TimestampWithTimeZone)]` maps to `timestamp without time zone` on PostgreSQL — the
+reason `UserSession.CreatedAt`/`ExpiresAt` carry that shape explicitly — while SQLite has no real
+column types to show the difference; and a SqlSugar `ConditionalType.Equal` filter that binds a text
+value against a `uuid`/`bigint` column throws `42883` on PostgreSQL ("operator does not exist") but
+passes silently on SQLite, whose loose typing accepts the comparison without complaint. Configure
+`Testing:PostgresConnection` to a disposable database whose name contains `test` — the test resolves
+it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
+`Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`
+if the env var is unset — or verify directly against a real PostgreSQL instance.
 
 **`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a

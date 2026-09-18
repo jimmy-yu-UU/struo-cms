@@ -109,16 +109,17 @@ at all — a dotted `Construct.Member` name immediately followed by a hyphenated
 to check, so it is **always** a violation: there is no existence check for it to pass, and therefore
 no per-citation upstream exception. Write upstream citations in the extension-anchored form, never
 this one. A genuine false positive on ordinary prose (the test's own example is a version range like
-"Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on that
-same physical line — the guard checks line by line, so a marker on an adjacent line does not help —
-and it is not a general-purpose suppression. A bare trailing number
-with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably distinguishable from
-a port or a time and is not covered; a reviewer still has to catch those by hand.
+"Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on
+that same physical line — the guard checks line by line, so a marker on an adjacent line does not
+help — and it is not a general-purpose suppression. A bare trailing number
+with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably distinguishable
+from a port or a time and is not covered; a reviewer still has to catch those by hand.
 
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
-records — is excluded from the scan entirely (`CodeCitationConventionTests`'s
-`ExcludedRelativePrefix`), so a line citation written in a spec is neither caught nor resolvable by
-this test; a green run says nothing about that directory's own citations.
+records — is excluded from the walk entirely (`CodeCitationConventionTests`'s
+`ExcludedRelativePrefix`), which cuts two ways: a line citation written in a spec is never scanned, and
+a citation elsewhere that points at a file under that directory never resolves, so it is never reported
+either. A green run says nothing about that directory's own citations.
 
 ## Mustache syntax in the manual
 
@@ -211,16 +212,16 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
 When a property needs a DDL column type other than SqlSugar's default C#-type mapping, prefer
 `[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) over a literal
 `[SugarColumn(ColumnDataType = "...")]`: the shape is a dialect-neutral enum member (`LongText`,
-`TimestampWithTimeZone`) that `ColumnTypeMap.For` (`src/Struo.Infrastructure/Persistence/
-ColumnTypeMap.cs`) resolves to the correct per-backend literal inside `SqlSugarClientFactory`'s
-`EntityService` hook, so the same property is *designed* to work unchanged on PostgreSQL, MySQL, SQL
-Server, Oracle, and SQLite — but only the PostgreSQL and SQLite literals are exercised by a live
-instance; the MySQL/SQL Server/Oracle literals are chosen to be syntactically valid and are not
-claimed to be verified against a live instance of those three (`ColumnTypeMap.cs`'s own class doc has
-the full evidence trail, including a source-read-only conclusion about a parenthesised-literal edge
-case on SQL Server/MySQL). A fork that only ever runs one backend is free to write
-`[SugarColumn(ColumnDataType = "...")]` directly instead — that convention is respected too, just at
-lower precedence.
+`TimestampWithTimeZone`) that `ColumnTypeMap.For`
+(`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) resolves to the correct per-backend
+literal inside `SqlSugarClientFactory`'s `EntityService` hook, so the same property is *designed* to
+work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the PostgreSQL and
+SQLite literals are exercised by a live instance; the MySQL/SQL Server/Oracle literals are chosen to
+be syntactically valid and are not claimed to be verified against a live instance of those three
+(`ColumnTypeMap.cs`'s own class doc has the full evidence trail, including a source-read-only
+conclusion about a parenthesised-literal edge case on SQL Server/MySQL). A fork that only ever runs
+one backend is free to write `[SugarColumn(ColumnDataType = "...")]` directly instead — that
+convention is respected too, just at lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted
@@ -233,19 +234,19 @@ wants its own vendor literal to win on a shaped property must remove `[ColumnSha
 **A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
 `InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
 co-occurs with a `JsonColumnInterfaces` member
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — resolving the combination instead
-of refusing it would silently drop `IsJson` (both branches compute the same `DataType`, `LongText`, so
-only `IsJson` would be lost), leaving the column at CodeFirst's unset length, `varchar(1)` on
-PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]` from such a property; the
-JSON mapping already applies `LongText`. A **content-bearing** interface
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — resolving the combination
+instead of refusing it would silently drop `IsJson` (both branches compute the same `DataType`,
+`LongText`, so only `IsJson` would be lost), leaving the column at CodeFirst's unset length,
+`varchar(1)` on PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]` from
+such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
 (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal. See
-`ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for the full
-derivation and the pinning tests.
+`ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for the
+full derivation and the pinning tests.
 
 Core itself must never write a vendor type literal outside those two places — `ColumnTypeMap.cs`, and
 `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a SQLite
-identity primary key) — the only spots in `src/` a string like `"timestamptz"` or `"longtext"` may
-appear. An empty MySQL/SQL Server/Oracle database fails `InitTables` outright on a type name that only
+identity primary key) — the only spots in `src/` that assign one to a column. An empty MySQL/SQL
+Server/Oracle database fails `InitTables` outright on a type name that only
 exists on PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go
 through `[ColumnShape]` instead.
 
@@ -280,28 +281,28 @@ exactly one place: `MetadataScanner.ResolveJunctionPayloadFields`
 (`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`), which excludes the two FKs and the sort
 column and keeps only the fields that survive the `!IsSystem && !ReadOnly` filter, writing the
 surviving names into `RelationMetadata.JunctionPayloadFields`. `RelationshipGraph.JunctionPayloadOf`
-(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) never re-derives that list; it only resolves
-those already-chosen names into CLR properties (plus each field's `Hidden` flag) as
+(`src/Struo.Infrastructure/Metadata/RelationshipGraph.cs`) never re-derives that list; it only
+resolves those already-chosen names into CLR properties (plus each field's `Hidden` flag) as
 `M2MDescriptor.JunctionPayload`. Every downstream consumer — the REST mixed-array write binder
 (`ItemWriteSideSync.SyncM2MAsync`), the diff-and-patch sync (`ManyToManySync`), the `_junction` read
 projection (`RelationExpander`), revision snapshots
 (`RevisionSnapshotBuilder`/`RevisionSnapshotRedactor`), and the GraphQL `<rel>Links` surface
-(`CollectionSchemaBuilder`) — reads `M2MDescriptor.JunctionPayload` through `JunctionPayloadOf` rather
-than re-deriving which fields count as payload; a field only reaches any of those surfaces if
-`MetadataScanner.ResolveJunctionPayloadFields` already excluded it from "structural" (the two FKs, and
-the sort column when the relation declares one) and it survived the `!IsSystem && !ReadOnly` filter
-applied there.
+(`CollectionSchemaBuilder`) — reads `M2MDescriptor.JunctionPayload` through `JunctionPayloadOf`
+rather than re-deriving which fields count as payload; a field only reaches any of those surfaces if
+`MetadataScanner.ResolveJunctionPayloadFields` already excluded it from "structural" (the two FKs,
+and the sort column when the relation declares one) and it survived the `!IsSystem && !ReadOnly`
+filter applied there.
 
-A many-to-many relation's write-side array element (REST body key, or GraphQL `<rel>Links` entry after
-`MutationResolvers.FoldLinks` folds it into the REST shape) is one of two forms: a **bare id** (link
-this target, leave its junction row's payload untouched) or an **object** `{ id, ...payload }` (link
-this target and merge the named payload fields into its junction row).
+A many-to-many relation's write-side array element (REST body key, or GraphQL `<rel>Links` entry
+after `MutationResolvers.FoldLinks` folds it into the REST shape) is one of two forms: a **bare id**
+(link this target, leave its junction row's payload untouched) or an **object** `{ id, ...payload }`
+(link this target and merge the named payload fields into its junction row).
 `docs/guide/en/08-relations.md`, "Junction entities and payloads", states the full precedence rule
 for when the same id appears more than once in one array (an object always outranks a bare id;
 between two objects the later one wins; order of first appearance is the sort order) and is the
-canonical source for that rule; `docs/guide/en/12-rest-conventions.md`, "The many-to-many write
-shape", shows the same value written into a `PUT` body. This section only names where the code that
-enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
+canonical source for that rule; `docs/guide/en/12-rest-conventions.md`,
+"The many-to-many write shape", shows the same value written into a `PUT` body. This section only
+names where the code that enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
 
 ## File organization
 
@@ -336,19 +337,18 @@ Every REST response — success or error — is wrapped in one of two shapes by 
 - Error: `{ "success": false, "error": { "code", "message", "details"?: [{ "field", "message" }] } }` —
   `details` is present only for the `VALIDATION` code.
 
-`Envelope.Success`/`Envelope.Error` (`src/Struo.Api/Http/Envelope.cs`) are the only helpers that should
-construct these shapes; a controller action that needs a bare error response uses
-`ApiResults.Fail(status, code, message)` (`src/Struo.Api/Http/ApiResults.cs`) rather than hand-building
-an `ObjectResult`, so `EnvelopeResultFilter`'s idempotency check (already-an-envelope → left untouched)
-keeps working. Domain exceptions are mapped to the stable `ErrorCodes` set
-(`src/Struo.Api/Http/ErrorCodes.cs`) by `DomainErrorMap`
-(`src/Struo.Api/Http/DomainErrorMap.cs`) — the single source of the exception→code mapping, shared
-verbatim by REST's `StruoExceptionHandler` and GraphQL's `StruoErrorFilter` so the two protocols cannot
-drift apart. A new domain exception type that should surface a client-safe message needs a new arm in
-`DomainErrorMap.Map` (and, if it needs a REST status other than the fallback 500, in
-`DomainErrorMap.StatusFor`); anything left unmapped collapses to `INTERNAL_SERVER_ERROR` with a masked
-generic message — the real exception is logged server-side, never leaked to the response. See
-`docs/guide/en/12-rest-conventions.md`.
+`Envelope.Success`/`Envelope.Error` (`src/Struo.Api/Http/Envelope.cs`) are the only helpers that
+should construct these shapes; a controller action that needs a bare error response uses
+`ApiResults.Fail(status, code, message)` (`src/Struo.Api/Http/ApiResults.cs`) rather than
+hand-building an `ObjectResult`, so `EnvelopeResultFilter`'s idempotency check (already-an-envelope
+→ left untouched) keeps working. Domain exceptions are mapped to the stable `ErrorCodes` set
+(`src/Struo.Api/Http/ErrorCodes.cs`) by `DomainErrorMap` (`src/Struo.Api/Http/DomainErrorMap.cs`) —
+the single source of the exception→code mapping, shared verbatim by REST's `StruoExceptionHandler`
+and GraphQL's `StruoErrorFilter` so the two protocols cannot drift apart. A new domain exception
+type that should surface a client-safe message needs a new arm in `DomainErrorMap.Map` (and, if it
+needs a REST status other than the fallback 500, in `DomainErrorMap.StatusFor`); anything left
+unmapped collapses to `INTERNAL_SERVER_ERROR` with a masked generic message — the real exception is
+logged server-side, never leaked to the response. See `docs/guide/en/12-rest-conventions.md`.
 
 `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
 exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`
@@ -368,76 +368,79 @@ none is ever surfaced client-side.
 
 ## Input validation at boundaries
 
-- **Query DSL** (filter/sort/search/fields/deep/facets/aggregate paths): validated and whitelisted by
-  `QueryValidator` (`src/Struo.Application/Query/QueryValidator.cs`) against the scanned `CollectionMetadata` before any
-  SQL is built — an unknown field or relation path is rejected with `QueryException` /
-  `BAD_USER_INPUT`, never passed through to the ORM. `QueryValidator` also enforces RBAC, not just
-  metadata shape: `DenyUnreadableHops` walks a dotted filter/sort path hop by hop and throws
-  `PermissionDeniedException` on the first collection the caller cannot read (a `_junction` segment's
-  read grant is checked against the junction collection at the same point). The relation-quantifier
-  tokens `_some`/`_none`/`_junction` (`some`/`none`/`junction` in GraphQL) are reserved exactly like
-  `_and`/`_or` — `FilterReservedTokens.All`
+- **Query DSL** (filter/sort/search/fields/deep/facets/aggregate paths): validated and whitelisted
+  by `QueryValidator` (`src/Struo.Application/Query/QueryValidator.cs`) against the scanned
+  `CollectionMetadata` before any SQL is built — an unknown field or relation path is rejected
+  with `QueryException` / `BAD_USER_INPUT`, never passed through to the ORM. `QueryValidator` also
+  enforces RBAC, not just metadata shape: `DenyUnreadableHops` walks a dotted filter/sort path hop
+  by hop and throws `PermissionDeniedException` on the first collection the caller cannot read (a
+  `_junction` segment's read grant is checked against the junction collection at the same point).
+  The relation-quantifier tokens `_some`/`_none`/`_junction` (`some`/`none`/`junction` in GraphQL)
+  are reserved exactly like `_and`/`_or` — `FilterReservedTokens.All`
   (`src/Struo.Application/Query/FilterReservedTokens.cs`) is the single source of that set, and a
-  field or relation named one of them fails fast at startup. Every relation filter — a dotted path, a
-  `_some`/`_none` quantifier, or a translatable-field condition reached at any hop — is pushed down
-  into a nested SQL subquery by `FilterTranslator`
-  (`src/Struo.Infrastructure/Query/FilterTranslator.cs`, `FilterTranslator.Subquery.cs`) rather than
-  resolved to an in-memory id set first; that subquery never clears the target collection's
-  soft-delete filter, regardless of the outer request's own `?deleted=`. This translator hand-assembles
-  exactly four SQL string forms and nothing else, every other fragment of SQL text coming from
-  SqlSugar's own `ToSql()`, never a hand-built dialect-specific string — see `AGENTS.md`, "Invariants",
-  for the full enumeration (its third raw-SQL exception). Sort is the other place SqlSugar's typed
-  surface runs out: the string passed to the one `queryable.OrderBy(string)` call
-  (`SqlSugarItemRepository.RunQueryAsync`) is assembled by `OrderByExpressionBuilder`
-  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) — `AGENTS.md`'s fourth raw-SQL
-  exception. Every filter value `ConditionalModelTranslator` renders into a `ConditionalModel`
-  (`ToFieldValue`) is formatted with `CultureInfo.InvariantCulture`, and `Program.cs` sets the host
-  process's own default culture to invariant at startup — needed because SqlSugar re-parses that same
-  rendered value back with `CultureInfo.CurrentCulture` (keyed off `CSharpTypeName`), so the two sides
-  must agree or a decimal/DateTime literal silently comes out wrong under a non-invariant culture; a
-  headless JSON API has no culture-formatted output of its own to lose by running invariant — see
-  `docs/guide/en/10-query-basics.md`'s "Which fields can be filtered and sorted, and what happens
-  when it goes wrong" for whitelisting and unknown paths, and `docs/guide/en/11-query-advanced.md`'s
-  "Deep expansion `deep=`" for the depth cap. `facets=`/`aggregate[<op>]=`
-  (`docs/guide/en/11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`") are
-  validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
-  at most one relation hop, never a quantifier or `_junction` segment, its own/leaf field's interface
-  must be in `FacetPathResolver.Facetable` (excludes long-form text, every multi-value interface,
-  structured payloads, and `Hidden`), and a relation hop's target collection needs its own read grant,
-  checked before the path's shape is resolved — same permission-first ordering `DenyUnreadableHops`
-  uses for a dotted filter path. `FacetFilterPruner.Prune`
-  (`src/Struo.Application/Query/FacetFilterPruner.cs`) then removes every filter condition on a
-  facet's own field/relation family (the FK column, any `<relation>.`-dotted path, and a
-  `_some`/`_none` predicate against that relation all count as one family) before that facet is
-  counted — a pure function over the already-validated `FilterNode` tree, never touching `search` or
-  the separately-validated `aggregate` spec. `ValidateAggregate` checks an op against a fixed
-  interface-compatibility table (`count` on any own field; `sum`/`avg` only `Number`/`Slider`/`Rating`;
-  `min`/`max` those plus `Date`/`DateTime`) before any aggregate SQL runs. `FacetQueries`
-  (`src/Struo.Infrastructure/Query/FacetQueries.cs`, `FacetQueries.Leaf.cs`) and `AggregateQueries`
-  (`src/Struo.Infrastructure/Query/AggregateQueries.cs`) hold to the same typed-API-only rule as
-  `FilterTranslator` above — `GroupBy`/`OrderBy`/`Select` are always given a runtime-built
-  `Expression<Func<T, …>>` lambda, never a string, and the one subquery each needs (a to-many facet's
-  filtered-root-ids side query) goes through the same `SubQueryConditional.Wrap` this section's raw-SQL
-  exception already covers, not a new one. A registered `ISearchProvider`'s returned candidate ids are a
-  **trust boundary distinct from user input**: `SearchCandidateResolver`
-  (`src/Struo.Application/Search/SearchCandidateResolver.cs`) parses each one to the collection's
-  primary-key CLR type (only `Guid` or an integer type is accepted — anything else is refused) and caps
-  the count at `Query:MaxSearchCandidates`. Both a rejected PK type/unparsable id and an over-cap count
-  throw `InvalidOperationException` (→ `INTERNAL_SERVER_ERROR`/500) rather than `QueryException` (→
-  `BAD_USER_INPUT`/400) — the violation is the fork's provider misbehaving, not something the caller
-  sent, so it must not be reported as a client mistake. See
-  `docs/guide/en/18-extension-points.md`'s "The search provider: `ISearchProvider`".
-- **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
-  the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
-  not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a
-  wrapper around `IHtmlSanitizer`, `src/Struo.Application/Query/Write/RichTextCleaner.cs`) before
-  required-field checks run; translatable `RichText` values go through the same `RichTextCleaner`
-  separately, per locale, in `ItemWriteSideSync.SyncTranslationsAsync`
+  field or relation named one of them fails fast at startup. Every relation filter — a dotted
+  path, a `_some`/`_none` quantifier, or a translatable-field condition reached at any hop — is
+  pushed down into a nested SQL subquery by `FilterTranslator`
+  (`src/Struo.Infrastructure/Query/FilterTranslator.cs`, `FilterTranslator.Subquery.cs`) rather
+  than resolved to an in-memory id set first; that subquery never clears the target collection's
+  soft-delete filter, regardless of the outer request's own `?deleted=`. This translator
+  hand-assembles exactly four SQL string forms and nothing else, every other fragment of SQL text
+  coming from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string — see
+  `AGENTS.md`, "Invariants", for the full enumeration (its third raw-SQL exception). Sort is the
+  other place SqlSugar's typed surface runs out: the string passed to the one
+  `queryable.OrderBy(string)` call (`SqlSugarItemRepository.RunQueryAsync`) is assembled by
+  `OrderByExpressionBuilder` (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) —
+  `AGENTS.md`'s fourth raw-SQL exception. Every filter value `ConditionalModelTranslator` renders
+  into a `ConditionalModel` (`ToFieldValue`) is formatted with `CultureInfo.InvariantCulture`, and
+  `Program.cs` sets the host process's own default culture to invariant at startup — needed
+  because SqlSugar re-parses that same rendered value back with `CultureInfo.CurrentCulture`
+  (keyed off `CSharpTypeName`), so the two sides must agree or a decimal/DateTime literal silently
+  comes out wrong under a non-invariant culture; a headless JSON API has no culture-formatted
+  output of its own to lose by running invariant — see `docs/guide/en/10-query-basics.md`'s
+  "Which fields can be filtered and sorted, and what happens when it goes wrong" for whitelisting
+  and unknown paths, and `docs/guide/en/11-query-advanced.md`'s "Deep expansion `deep=`" for the
+  depth cap. `facets=`/`aggregate[<op>]=` (`docs/guide/en/11-query-advanced.md`'s "Facet counting"
+  and "Aggregates `aggregate[<op>]`") are validated the same way, by the same `QueryValidator`,
+  with their own whitelist: a facet path is at most one relation hop, never a quantifier or
+  `_junction` segment, its own/leaf field's interface must be in `FacetPathResolver.Facetable`
+  (excludes long-form text, every multi-value interface, structured payloads, and `Hidden`), and a
+  relation hop's target collection needs its own read grant, checked before the path's shape is
+  resolved — same permission-first ordering `DenyUnreadableHops` uses for a dotted filter path.
+  `FacetFilterPruner.Prune` (`src/Struo.Application/Query/FacetFilterPruner.cs`) then removes
+  every filter condition on a facet's own field/relation family (the FK column, any
+  `<relation>.`-dotted path, and a `_some`/`_none` predicate against that relation all count as
+  one family) before that facet is counted — a pure function over the already-validated
+  `FilterNode` tree, never touching `search` or the separately-validated `aggregate` spec.
+  `ValidateAggregate` checks an op against a fixed interface-compatibility table (`count` on any
+  own field; `sum`/`avg` only `Number`/`Slider`/`Rating`; `min`/`max` those plus
+  `Date`/`DateTime`) before any aggregate SQL runs. `FacetQueries`
+  (`src/Struo.Infrastructure/Query/FacetQueries.cs`, `FacetQueries.Leaf.cs`) and
+  `AggregateQueries` (`src/Struo.Infrastructure/Query/AggregateQueries.cs`) hold to the same
+  typed-API-only rule as `FilterTranslator` above — `GroupBy`/`OrderBy`/`Select` are always given
+  a runtime-built `Expression<Func<T, …>>` lambda, never a string, and the one subquery each needs
+  (a to-many facet's filtered-root-ids side query) goes through the same
+  `SubQueryConditional.Wrap` this section's raw-SQL exception already covers, not a new one. A
+  registered `ISearchProvider`'s returned candidate ids are a **trust boundary distinct from user
+  input**: `SearchCandidateResolver` (`src/Struo.Application/Search/SearchCandidateResolver.cs`)
+  parses each one to the collection's primary-key CLR type (only `Guid` or an integer type is
+  accepted — anything else is refused) and caps the count at `Query:MaxSearchCandidates`. Both a
+  rejected PK type/unparsable id and an over-cap count throw `InvalidOperationException` (→
+  `INTERNAL_SERVER_ERROR`/500) rather than `QueryException` (→ `BAD_USER_INPUT`/400) — the
+  violation is the fork's provider misbehaving, not something the caller sent, so it must not be
+  reported as a client mistake. See `docs/guide/en/18-extension-points.md`'s
+  "The search provider: `ISearchProvider`".
+- **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`)
+  parses the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are
+  stripped, not silently trusted) and sanitizes non-translatable `RichText` values via
+  `RichTextCleaner` (a wrapper around `IHtmlSanitizer`,
+  `src/Struo.Application/Query/Write/RichTextCleaner.cs`) before required-field checks run;
+  translatable `RichText` values go through the same `RichTextCleaner` separately, per locale, in
+  `ItemWriteSideSync.SyncTranslationsAsync`
   (`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`). `FieldValidatorRegistry`'s
-  per-`FieldInterface` validators
-  (`src/Struo.Application/Query/Write/Validators/`) enforce structural constraints for `MultiSelect`/
-  `CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater` fields, in that fixed phase order.
-  `Required` is enforced for non-translatable fields at this layer.
+  per-`FieldInterface` validators (`src/Struo.Application/Query/Write/Validators/`) enforce
+  structural constraints for `MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`
+  fields, in that fixed phase order. `Required` is enforced for non-translatable fields at this
+  layer.
 - **Configuration**: bound with the `IOptions` pattern and validated with `ValidateOnStart` —
   `Database`, `Struo:Files`, `Oidc`, and `Query` options all fail fast at startup (before the app
   accepts a single request) rather than surfacing as a confusing first-request failure
@@ -498,7 +501,7 @@ Pinia-backed singleton that can open while another vendored overlay is already o
 `z-50` a fixed-position element's stacking falls to DOM order rather than intent, so its
 `AlertDialogContent` is raised to `z-[60]`. A new floating layer must stay under that ceiling: anything
 at `z-[60]` or above can cover the confirm dialog, and since `ConfirmHost` is the singleton that gates
-destructive actions, the user is left with a blocked action and no visible way to confirm or cancel it.
+destructive actions, the user is left with a blocked action and no working way to confirm or cancel it.
 `z-[60]` is reserved for this one singleton, not a scale to build on.
 
 ## Tests per layer
@@ -533,12 +536,13 @@ destructive actions, the user is left with a blocked action and no visible way t
   `node` environment rather than `jsdom` (a `// @vitest-environment node` pragma, needed to read the
   snapshot file from disk without Vite's dev-server URL rewriting getting in the way).
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
-  framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
-  with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
-  sample opted in first. Neither is run by CI — see `AGENTS.md`, "Verification", for the five standing
-  gates CI does run — and both need a live API and database, not just a build. `ci.yml` also runs a
-  `docker` job (builds and smoke-tests the two container images — chapter 20's "The two container
-  images" section) and two `sonar-*` jobs; none of the three is a standing gate.
+  framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped
+  template with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and
+  needs the Blog sample opted in first. Neither is run by CI — see `AGENTS.md`, "Verification",
+  for the five standing gates CI does run — and both need a live API and database, not just a
+  build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two container images —
+  chapter 20's "The two container images" section) and two `sonar-*` jobs; none of the three is a
+  standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"
