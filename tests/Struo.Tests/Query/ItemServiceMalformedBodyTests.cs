@@ -98,7 +98,8 @@ internal sealed class MalformedBodyHarness : IDisposable
 /// <summary>
 /// Non-object top-level request bodies (array / scalar) must 400 (<see cref="QueryException"/>),
 /// not 500, on both Create and Update, including for the "language" collection, whose code-format
-/// guard runs only after this non-object check, never touching a malformed body. Real SQLite-backed <see cref="ItemService"/>, no stubs.
+/// guard runs only after this non-object check, never touching a malformed body. Real
+/// SQLite-backed <see cref="ItemService"/>, no stubs.
 /// </summary>
 public sealed class ItemServiceMalformedBodyTests
 {

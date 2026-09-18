@@ -155,10 +155,11 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
         // File rows are owned by the upload pipeline: StorageKey/Size/ContentType/dimensions are all
-        // derived from the blob, and FileName is ReadOnly so the generic write path cannot even set it
-        // (setting it null there would violate the NOT NULL column and throw an unhandled 500). Reject explicitly here rather than at
-        // the controller, so REST and the GraphQL createFile mutation are both covered. Reads, updates
-        // (the admin media UI edits per-locale Title/Alt this way) and deletes are unaffected.
+        // derived from the blob, and FileName is ReadOnly so the generic write path cannot even set
+        // it (setting it null there would violate the NOT NULL column and throw an unhandled 500).
+        // Reject explicitly here rather than at the controller, so REST and the GraphQL createFile
+        // mutation are both covered. Reads, updates (the admin media UI edits per-locale Title/Alt
+        // this way) and deletes are unaffected.
         if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
             throw new QueryException(
                 "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");

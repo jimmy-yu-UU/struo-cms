@@ -48,14 +48,14 @@ public enum ColumnShape
 /// <c>DatabaseInitializer.CreateMissingTables</c> asks <c>EntityMaintenance</c> for each type's table
 /// name to compute the missing set, and building that <c>EntityInfo</c> runs this hook over every
 /// property. Only an entity <i>outside</i> that set — a fork's own non-collection entity
-/// used directly through <c>ISqlSugarClient</c> — fails on first use instead of at startup: without
-/// this early <c>return</c>, the hook's later JSON branch would set both <c>column.IsJson = true</c>
-/// and a widened <c>DataType</c>, but the property would keep the <c>DataType</c> and lose
-/// <c>IsJson</c>. Both branches resolve a JSON-column interface to <see cref="ColumnShape.LongText"/>,
-/// so with the shape declared as that same value — the only sensible choice here — losing
-/// <c>IsJson</c> would be the combination's only effect, and without it SqlSugar never serializes the
-/// collection and CodeFirst leaves the length unset — <c>varchar(1)</c> on PostgreSQL, where every
-/// write of a real value fails with 22001.
+/// used directly through <c>ISqlSugarClient</c> — fails on first use instead. Were the
+/// combination allowed, <c>[ColumnShape]</c>'s early <c>return</c> would outrank the hook's later
+/// JSON branch: the property would keep the <c>DataType</c> and lose <c>IsJson</c>. Both branches
+/// resolve a JSON-column interface to <see cref="ColumnShape.LongText"/>, so with the shape declared
+/// as that same value — the only sensible choice here — losing <c>IsJson</c> would be the
+/// combination's only effect, and without it SqlSugar never serializes the collection and CodeFirst
+/// leaves the length unset — <c>varchar(1)</c> on PostgreSQL, where every write of a real value
+/// fails with 22001.
 /// Pinned by <c>ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused</c>.
 /// </para>
 /// <para>
