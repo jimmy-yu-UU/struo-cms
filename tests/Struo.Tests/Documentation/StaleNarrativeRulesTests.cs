@@ -110,6 +110,9 @@ public sealed class StaleNarrativeRulesTests
     [InlineData("unprecedentedly stable behaviour.", false)]
     [InlineData("nowthat is not a phrase.", false)]
     [InlineData("now that the field is required.", true)]
+    [InlineData("can't be used to infer", false)]
+    [InlineData("the key used to sign", true)]
+    [InlineData("It used to be red", true)]
     public void Banned_words_are_word_bounded_and_case_insensitive(string text, bool expectMatch)
     {
         var lines = new[] { new StaleNarrativeRules.ScannableLine(1, text, null) };
