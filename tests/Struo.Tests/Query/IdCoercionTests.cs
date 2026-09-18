@@ -38,10 +38,10 @@ public class IdCoercionTests
     public void Coerce_null_returns_null() =>
         IdCoercion.Coerce(null, typeof(Guid)).Should().BeNull();
 
-    // Regression: a translatable sidecar's nullable Guid FK (e.g. a per-locale OG image)
-    // sent as an empty string used to throw FormatException via Guid.Parse("") in the
-    // translation-sync path -> HTTP 500 on POST /api/items/{collection} (found on live
-    // Postgres). A blank string for a Guid target must coerce to null, not throw.
+    // Regression guard: a translatable sidecar's nullable Guid FK (e.g. a per-locale OG image)
+    // sent as an empty string must coerce to null, not throw FormatException via Guid.Parse("")
+    // in the translation-sync path (which would surface as an HTTP 500 on POST
+    // /api/items/{collection} — found on live Postgres).
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

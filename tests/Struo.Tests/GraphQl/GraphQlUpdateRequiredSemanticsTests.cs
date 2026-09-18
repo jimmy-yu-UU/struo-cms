@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// GraphQL parity for the update-path Required semantics change (2026-09-08): <c>updateRole</c>
+/// GraphQL parity for the update-path Required semantics change: <c>updateRole</c>
 /// goes through the same <see cref="Struo.Application.Query.ItemService.UpdateAsync"/> as REST, so
 /// omitting <c>name</c> (Required=true) from an <c>updateRole</c> input must now succeed and keep
 /// the role's stored name, exactly like the REST partial-update rule in

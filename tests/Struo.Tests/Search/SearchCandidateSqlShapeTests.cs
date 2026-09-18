@@ -66,7 +66,7 @@ public sealed partial class SearchCandidateSqlShapeTests : IDisposable
         _sql.Should().NotContain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
         // A single-element candidate set is still translated through the `_in` (QueryOperator.In) leaf,
         // but SqlSugar itself collapses a one-value ConditionalType.In down to `=` rather than
-        // `IN (...)` (measured 2026-09-07 — the brief's IN-literal probe used two ids and did not
+        // `IN (...)` (measured 2026-09-07 — the brief's IN-literal probe used two ids and did not narrative-guard:allow: evidence date; decision file deferred
         // cover this case); either rendering is a typed, unparameterized literal comparing `Id`
         // against exactly `_beta`, so both are accepted here.
         _sql.Should().OnlyContain(s => Regex.IsMatch(

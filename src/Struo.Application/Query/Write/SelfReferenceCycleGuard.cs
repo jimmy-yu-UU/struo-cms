@@ -9,7 +9,7 @@ namespace Struo.Application.Query;
 /// <summary>
 /// Rejects a self-referencing ManyToOne update that would create a parent cycle (A→B→…→A).
 /// Metadata-driven via RelationMetadata.SelfReferencing, so every tree collection (mediafolder,
-/// sample Category) is covered — previously only the SPA's excludeId pruning guarded this, which
+/// sample Category) is covered — the SPA's excludeId pruning guards this only in the UI, which
 /// a direct API caller bypasses. Create is exempt: a fresh server-generated id cannot appear in
 /// any existing ancestor chain. Walks the incoming parent's ancestor chain; a dangling parent id
 /// ends the walk (FK existence is not this guard's concern — accepted app-only stance). MaxDepth is

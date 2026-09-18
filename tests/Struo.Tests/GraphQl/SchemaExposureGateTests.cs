@@ -33,9 +33,9 @@ namespace Struo.Tests.GraphQl;
 /// <para>
 /// NOTE on structure: the default-Production assertions are deliberately ONE test sharing ONE derived
 /// host. Standing up several <c>WebApplicationFactory</c> hosts against this collection's single shared
-/// SQLite database makes some of them fail requests with a 500, which is a test-harness artifact rather
-/// than product behavior — and it previously produced a false green here, since a 500 also satisfies
-/// "not 200". Every status below is therefore asserted exactly.
+/// SQLite database makes some of them fail requests with a 500, which is a test-harness artifact
+/// rather than product behavior — asserting only "not 200" would let that 500 pass silently. Every
+/// status below is therefore asserted exactly.
 /// </para>
 /// </summary>
 [Collection("ApiIntegration")]
@@ -76,7 +76,7 @@ public class SchemaExposureGateTests(ApiFactory factory)
         sdlBody.Should().NotContain("type Query", "the full SDL must not reach an anonymous caller");
 
         // 2. Introspection stays refused (pre-existing gate, pinned here so the two disclosure routes
-        //    can no longer drift apart silently — that drift is what produced this finding).
+        //    cannot drift apart silently — that drift is what produced this finding).
         var introspection = await client.PostAsJsonAsync("/graphql", new { query = IntrospectionQuery });
         var introspectionBody = await introspection.Content.ReadAsStringAsync();
         introspection.StatusCode.Should().Be(HttpStatusCode.BadRequest, introspectionBody);

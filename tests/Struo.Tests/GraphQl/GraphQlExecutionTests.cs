@@ -341,8 +341,8 @@ public class GraphQlExecutionTests
     /// Selecting a relation sub-field OF a relation (<c>category { name parent { name } }</c>,
     /// depth 2) must build a NESTED <see cref="DeepSpec"/> — <c>category</c>'s own
     /// <see cref="DeepRelationSpec.Deep"/> must itself contain a <c>parent</c> entry — not a flat
-    /// depth-1 tree (previously, <c>SelectionRelations</c> only ever looked at the element type's
-    /// direct children, so <c>parent</c> was silently dropped and would have resolved to null).
+    /// depth-1 tree (if <c>SelectionRelations</c> only looked at the element type's
+    /// direct children, <c>parent</c> would be silently dropped and would resolve to null).
     /// The fake data source mirrors ItemService's deep-expansion shape by pre-nesting "parent" inside
     /// "category" on the row; the schema's relation field is a plain pass-through pure resolver (see
     /// CollectionSchemaBuilder), so it surfaces whatever shape the data source returns at every level.

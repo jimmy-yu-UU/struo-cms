@@ -7,7 +7,7 @@ using Xunit;
 namespace Struo.Tests.Files;
 
 // FileAccessPolicy is the extracted RBAC decision-owner for the "file" collection, absorbing
-// the permission-related dependencies FilesController used to hold directly. CanReadUnpublished is a
+// the permission-related dependencies instead of FilesController holding them directly. CanReadUnpublished is a
 // plain synchronous predicate over the already-resolved per-request identity/permission snapshot — the
 // AuthSchemes.Adaptive policy scheme (see BearerReadAuthenticationTests) is what guarantees a bearer
 // caller's identity and grants are resolved before this runs, so no scheme probing happens here.

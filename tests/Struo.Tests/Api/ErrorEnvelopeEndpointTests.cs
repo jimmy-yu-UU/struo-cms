@@ -76,9 +76,9 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
         message.Should().NotContain("Exception");
     }
 
-    // CsrfProtectionMiddleware used to write a bespoke `{ error: { message } }` body on
-    // rejection instead of the standard envelope every other error path uses (see
-    // AuthWiring's OnRedirectToAccessDenied for the pattern this must match).
+    // CsrfProtectionMiddleware's rejection body must match the standard envelope shape every
+    // other error path uses (see AuthWiring's OnRedirectToAccessDenied for the pattern this
+    // must match), not a bespoke `{ error: { message } }` shape.
     [Fact]
     public async Task Csrf_rejected_write_is_forbidden_envelope()
     {

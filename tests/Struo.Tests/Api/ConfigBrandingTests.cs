@@ -100,7 +100,7 @@ public class ConfigBrandingTests(ApiFactory factory)
 
     /// <summary>The logo file referenced by site_settings was deleted after being saved
     /// (the classic TOCTOU) — ConfigController must fall back to the appsettings default instead
-    /// of emitting a URL for a file that no longer exists.</summary>
+    /// of emitting a URL for a deleted file.</summary>
     [Fact]
     public async Task Config_falls_back_to_appsettings_logo_when_referenced_file_is_missing()
     {

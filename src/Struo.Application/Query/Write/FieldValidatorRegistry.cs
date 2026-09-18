@@ -25,7 +25,7 @@ public sealed class FieldValidatorRegistry
     private static readonly RepeaterFieldValidator Repeater = new();
 
     /// <summary>
-    /// Each phase pairs the set of <see cref="FieldInterface"/>s it handles (used to filter
+    /// Each phase pairs the set of <see cref="FieldInterface"/>s it handles (for filtering
     /// <c>meta.Fields</c> for a single declaration-order pass) with the validator to dispatch each
     /// matching field to.
     /// </summary>

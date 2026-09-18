@@ -8,9 +8,9 @@ public sealed class GraphQlOptions
     /// <summary>
     /// Whether this instance may disclose its GraphQL schema. Governs BOTH routes that can read it:
     /// introspection queries (<c>__schema</c>/<c>__type</c>) and HotChocolate's built-in
-    /// <c>GET /graphql?sdl</c>. They are one concern and were previously gated inconsistently — only
-    /// introspection was closed outside Development, so <c>?sdl</c> served the complete SDL to an
-    /// anonymous caller in Production while a reader of the code would reasonably conclude otherwise.
+    /// <c>GET /graphql?sdl</c>. They are one concern: gating only introspection while leaving
+    /// <c>?sdl</c> open would still serve the complete SDL to an anonymous caller in Production, even
+    /// though a reader might reasonably assume introspection-off is enough.
     /// <para>
     /// <c>null</c> (the default) means "Development only", which preserves the shipped behavior. Set it
     /// explicitly to override per environment without a rebuild — <c>GraphQl__ExposeSchema=true</c> is

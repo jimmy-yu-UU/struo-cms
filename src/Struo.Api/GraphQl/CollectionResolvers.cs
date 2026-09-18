@@ -247,7 +247,7 @@ internal static class CollectionResolvers
     }
 
     // HotChocolate's InputParser is stateless/reusable (mirrors how the runtime itself owns one
-    // per schema); used to turn a selection's raw argument literal into a runtime value below.
+    // per schema); this static instance turns a selection's raw argument literal into a runtime value below.
     private static readonly InputParser InputParser = new();
 
     /// <summary>

@@ -103,9 +103,9 @@ public class GanssHtmlSanitizerTests
     }
 
     // Any target value other than "_blank" is not a supported opt-in and is stripped along with its
-    // rel -- exactly the case Adds_rel_noopener_to_anchors used to gloss over by only checking
-    // Contain("rel=")/Contain("noopener"), which is why nobody noticed the old handler dropped
-    // TipTap's "nofollow" silently. This asserts the exact surviving attribute set instead.
+    // rel -- checking only Contain("rel=")/Contain("noopener") (as Adds_rel_noopener_to_anchors does)
+    // would miss that, letting a handler silently drop TipTap's "nofollow" go unnoticed. This asserts
+    // the exact surviving attribute set instead.
     [Fact]
     public void Non_blank_target_is_stripped_along_with_its_rel()
     {

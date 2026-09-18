@@ -19,8 +19,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// Pins that ItemService invalidates the language cache on trash, purge AND restore of a `language`
-/// row, not just create/update (<see cref="ItemService.InvalidateLanguagesIfNeeded"/> used to be
-/// wired into only those two paths). The gate keys off the collection NAME ("language"), so this
+/// row, not just create/update. The gate keys off the collection NAME ("language"), so this
 /// fixture entity implements <see cref="ISoftDeletable"/> itself purely to make the trash/restore
 /// branches reachable here — the real, production `Language` row does not implement it (languages
 /// are never soft-deleted in this template; every delete purges), which is also covered below.

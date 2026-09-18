@@ -8,8 +8,9 @@ using Xunit;
 namespace Struo.Tests.Files;
 
 // The shipped default upload content-type whitelist (appsettings.json
-// Struo:Files:AllowedContentTypes) must reject an unexpected type. Previously the default was empty
-// (allow-all). A whitelisted type still uploads.
+// Struo:Files:AllowedContentTypes) must reject an unexpected type. An empty list allows every
+// content type through (see FileService.UploadAsync's Length > 0 guard); the shipped default is
+// deliberately non-empty. A whitelisted type still uploads.
 [Collection("ApiIntegration")]
 public class FileUploadWhitelistTests(ApiFactory factory)
 {

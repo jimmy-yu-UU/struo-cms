@@ -96,7 +96,7 @@ public class SqlSugarUserSessionStoreTests
     /// user A performs a login as user B, and ASP.NET Core's CookieAuthenticationHandler renews the SAME
     /// ticket key in place with B's principal (RenewAsync, not a new StoreAsync). The index row for that
     /// key must move to B — otherwise B's password change never revokes it, and A's password change wrongly
-    /// revokes a session A no longer uses.
+    /// revokes a session that now belongs to B.
     /// </summary>
     [Fact]
     public async Task RenewAsync_re_attributes_the_row_to_the_renewing_users_id()

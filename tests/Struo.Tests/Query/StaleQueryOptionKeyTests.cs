@@ -12,8 +12,8 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// StruoQueryOptions is bound with ValidateOnStart + [Range] attributes. It used to bind a
-// resolved-id-set cap key, retired now that cross-relation filters and translatable search are
+// StruoQueryOptions is bound with ValidateOnStart + [Range] attributes. It has no
+// resolved-id-set cap key: cross-relation filters and translatable search are
 // answered by SQL pushdown rather than a materialized, cap-checked id set. A fork or an old
 // deployment's appsettings/env may still carry that stale key around; the default configuration
 // binder ignores config keys with no matching property, so it must not block startup or options

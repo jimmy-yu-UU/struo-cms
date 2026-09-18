@@ -18,9 +18,8 @@ namespace Struo.Tests.GraphQl;
 /// returns, for both argument-passing shapes HotChocolate supports: an inline literal, and a
 /// <c>$variable</c> — the latter is the shape that risks landing as an uncoerced/null
 /// <c>ArgumentValue.Value</c> on the compiled child selection (see the BuildDeep comment for why).
-/// Historically these arguments were declared in the schema but never read by the resolver, making
-/// them schema-only decoration with no effect on the returned rows; these tests guard against that
-/// regression.
+/// These tests guard against filter/limit regressing into schema-only decoration — arguments
+/// declared in the schema but never read by the resolver, with no effect on the returned rows.
 /// </summary>
 [Collection("ApiIntegration")]
 public class NestedListArgsExecutionTests(ApiFactory factory)

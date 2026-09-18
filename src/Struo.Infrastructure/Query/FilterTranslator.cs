@@ -42,7 +42,7 @@ internal sealed partial class FilterTranslator(
     // A registered ISearchProvider answered this request: its candidate root ids replace the LIKE
     // group outright (the search term is not consulted). Rendered through the same typed `_in` path
     // the query DSL uses (CSharpTypeName from the PK CLR type), which SqlSugar emits as LITERALS with
-    // no parameters — measured 2026-09-07 on both engines up to 5000 ids — so the values MUST already
+    // no parameters — measured 2026-09-07 on both engines up to 5000 ids — so the values MUST already narrative-guard:allow: evidence date; decision file deferred
     // be parsed to the PK type (SearchCandidateResolver guarantees this). An empty set becomes
     // `id IS NULL`: always false on a non-null PK, portable, and deterministic under our control
     // (SqlSugar's own rendering of an empty IN, `IN (null)`, happens to work too but is undocumented).

@@ -11,13 +11,13 @@ namespace Struo.Tests.Template;
 /// revisions (<c>IRevisionStore</c>), settings, and authentication (<c>IUserCredentialStore</c>,
 /// <c>IRolePermissionStore</c>, <c>IExternalUserStore</c>) already follow.
 /// <para>
-/// The identity endpoints used to be the sole exception: <c>UsersController</c>,
-/// <c>RolesController</c> and <c>AuthController.Me</c> injected <c>ISqlSugarClient</c> and wrote
+/// Bypassing this seam has two concrete costs, not just tidiness: <c>IItemRepository</c> is
+/// documented as the seam a fork reimplements to point at a different storage engine, which a
+/// controller injecting <c>ISqlSugarClient</c> directly and writing
 /// <c>Insertable</c>/<c>Updateable</c>/<c>Deleteable</c>/<c>Ado.BeginTranAsync</c> calls inline
-/// against <c>Struo.Infrastructure.Identity</c> entity types. Two concrete costs, not just tidiness:
-/// <c>IItemRepository</c> is documented as the seam a fork reimplements to point at a different
-/// storage engine, which those controllers silently made untrue; and being off the repository path
-/// meant they also missed its audit-stamping and version-bump behavior — the defect
+/// (as <c>UsersController</c>, <c>RolesController</c> and <c>AuthController.Me</c> once did against
+/// <c>Struo.Infrastructure.Identity</c> entity types) would silently make untrue; and being off the
+/// repository path also misses its audit-stamping and version-bump behavior — the defect
 /// <c>UserCredentialWriteAuditTests</c> pins.
 /// </para>
 /// A repo-shape check (it reads the controller sources on disk), so it lives beside

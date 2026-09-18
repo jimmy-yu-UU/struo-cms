@@ -82,8 +82,8 @@ public static class SqlSugarClientFactory
     }
 
     // The EntityService hook SqlSugar invokes once per reflected property during CodeFirst/InitTables.
-    // Runs each column convention in the same order the inline lambda used to, so behaviour is
-    // unchanged; only the structure (one method per convention) is new.
+    // Conventions run in sequence and several early-return, short-circuiting whatever is below
+    // them for that property — the order here is deliberate, not incidental.
     private static void ApplyColumnConventions(PropertyInfo property, EntityColumnInfo column, DbType dbType, TranslationSidecarIndexPolicy policy)
     {
         ApplySqliteIdentityColumnRewrite(column, dbType);
