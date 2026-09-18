@@ -237,8 +237,8 @@ targets present only in the incoming list are inserted, and rows for targets pre
 their own primary key and are updated in-place rather than dropped and reinserted — a junction row's
 id is therefore stable across a write that keeps its target linked. A `JunctionLink`
 (`src/Struo.Application/Query/Write/JunctionLink.cs`) pairs a target id with an optional payload
-dictionary (CLR property names → values); a `null` payload
-(`JunctionLink.Bare`) is membership-only and leaves an existing row's payload untouched. An incoming
+dictionary (CLR property names → values); a `null` payload (`JunctionLink.Bare`) is membership-only
+and leaves an existing row's payload untouched. An incoming
 duplicate target id is a caller bug and fails loud (`BuildIncomingLinks` throws rather than silently
 deduplicating); a duplicate among the *existing* rows for the same target — a legacy row already on
 file, not one this write introduced — is handled instead: the lowest-primary-key row is kept and the

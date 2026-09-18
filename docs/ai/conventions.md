@@ -39,9 +39,10 @@ rejects what fails.
   directly — headless, template, fork, junction, sidecar — with no gloss in the other language and
   no bracketed English after a Chinese term. Never introduce the product by what it is *not*; say
   what it is, what it includes, and what the reader does next.
-- **Content.** Describe current behavior only. No history, no "this used to", no closed defects, no <!-- narrative-guard:allow: the rule quotes the phrase it bans -->
-  explanation of internal branch order inside a hook. Cite a source file only when the reader must
-  open it, at most one per sentence.
+- **Content.** Describe current behavior only. No history, no
+  "this used to" <!-- narrative-guard:allow: the rule quotes the phrase it bans -->, no closed
+  defects, no explanation of internal branch order inside a hook. Cite a source file only when the
+  reader must open it, at most one per sentence.
 - **Layout.** One idea per paragraph, normally four or five lines. Parallel items become a list.
   Each chapter opens with one sentence saying what problem it solves and closes by pointing at the
   next chapter. A chapter stays under about 350 lines; split it when it grows past that.
@@ -68,9 +69,9 @@ rejects what fails.
 - **Consequences, not preferences.** Every constraint says what breaks when it is violated, and a
   rationale that names what breaks stays. A note that only records that someone once decided against
   something protects no code; cut it.
-- **Evidence goes to the code.** Measurement runs, ruled-out hypotheses and residual unknowns belong
-  in the doc comment of the class they explain, with a one-line summary and pointer here.
-  `PgTestConnectionString` is the worked example.
+- **Evidence goes to `docs/ai/decisions/`.** Measurement runs, ruled-out hypotheses and residual
+  unknowns go in a decision file there, not in the class doc comment; the class doc comment keeps only
+  the conclusions and the path to that file. Full rule: "Only the current state" below.
 - **Structure of `AGENTS.md`** stays: repo map, hard constraints, invariants, task playbooks,
   verification, prohibitions.
 
@@ -83,8 +84,9 @@ never a before/after, a change date, or an issue reference. History lives in `gi
 follows `` is/are/be/been/being/was/were/get/gets/got ``), `` `previously` ``, `` `formerly` ``,
 `` `historically` ``, `` `anymore` ``, `` `no longer` ``, `` `now that` `` — matched case-insensitively,
 word-bounded. Bare dates shaped `` `20xx-xx-xx` ``. A PR or issue reference shaped `` `PR #n` ``,
-`` `pull/n` ``, or `` `#nn` `` (a `#` directly before two or more digits) — reword these three, they
-can never carry an allow marker. Chinese, matched as a substring: `` `以前` ``, `` `曾經` ``,
+`` `pull/n` ``, or `` `#nn` `` (a `` `#` `` that follows a non-word character, and not `` `&` ``, and
+sits directly before two or more digits) — reword these three, they can never carry an allow marker.
+Chinese, matched as a substring: `` `以前` ``, `` `曾經` ``,
 `` `過去是` ``, `` `過去曾` ``, `` `原本是` ``, `` `原本會` ``, `` `原本叫` ``, `` `已修` ``,
 `` `現在不再` ``, `` `不再需要` ``.
 
@@ -118,17 +120,19 @@ same check. A sentence that describes a different file names a construct in that
 method, a test name, or a configuration key — so the next person to change that file can find the
 sentence that describes it.
 
-**What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any unmarked hit — banned
-word, bare date, or PR/issue reference — in a comment or in prose across `AGENTS.md`, `CLAUDE.md`,
-`docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and `frontend/e2e/**`. It also
-fails on a decision file missing one of its six headings or on an orphan decision file nothing
-references by path.
+**What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any banned word or bare date
+without a marker, and on any PR/issue reference, in a comment or in prose across `AGENTS.md`,
+`CLAUDE.md`, `docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and
+`frontend/e2e/**`. The guard reads comment bodies and markdown prose only — string literals, fenced
+code blocks, and inline code spans are not scanned, so a date in test data or in a code sample needs
+no marker. It also fails on a decision file missing one of its six headings or on an orphan decision
+file nothing references by path.
 
 ### Anti-patterns this repository has actually had (both audiences)
 
 | Anti-pattern | Instead |
 |---|---|
-| Change narrative: "this used to be X, now Y" | State the current behavior; see "Only the current state" below <!-- narrative-guard:allow: the rule quotes the phrase it bans --> |
+| Change narrative: "this used to be X, now Y" | State the current behavior; see "Only the current state" above <!-- narrative-guard:allow: the rule quotes the phrase it bans --> |
 | Investigation journal in a chapter | Doc comment of the class, plus a pointer |
 | Same rule in N places | One home, links elsewhere |
 | A summary that re-explains its own section | A checklist of steps |

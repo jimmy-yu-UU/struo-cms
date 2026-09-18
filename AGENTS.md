@@ -307,12 +307,13 @@ five standing gates, and is not run by CI.
   constraints), the second by `Shipped_appsettings_declares_no_content_assemblies`.
 - Never commit `src/Struo.Api/appsettings.Development.json` — it is gitignored and holds local secrets.
 - **Never add documentation the reader does not need in order to act.** `docs/ai/conventions.md`,
-  "Only the current state", is the home for the anti-patterns this rule bans. This cuts *both* ways: do
+  "Only the current state" names the section that bans change narratives, misplaced evidence, and
+  oversized comments. This cuts *both* ways: do
   **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
   consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
   regression. The test is "would a reader act differently without this?", never "is this long?".
   `docs/ai/conventions.md`, "How documentation is written", has the full rule for both audiences —
-  the manual and this reference set are written to different standards.
+  the manual and this reference set are written to different standards — and the anti-patterns.
 
 ## Where to read more
 
