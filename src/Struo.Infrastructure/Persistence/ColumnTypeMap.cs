@@ -4,7 +4,10 @@ namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
 /// Resolves a dialect-neutral <see cref="ColumnShape"/> to the concrete column type literal for a
-/// backend. This is the single place a vendor type name may appear in <c>src/</c>.
+/// backend. This is where vendor type names are mapped; the only other site in <c>src/</c> that
+/// writes one directly is <see cref="SqlSugarClientFactory"/>'s SQLite identity-column rewrite
+/// (<c>ApplySqliteIdentityColumnRewrite</c>), which sets a SQLite identity primary key's
+/// <c>DataType</c> to <c>"INTEGER"</c>.
 ///
 /// <para>
 /// PostgreSQL is this repository's verified runtime target; SQLite is used for the test suite only
