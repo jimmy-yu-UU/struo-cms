@@ -279,9 +279,8 @@ worth knowing before you touch it:
 - **The mechanism is still unknown, and production was never observed to hit it — but that is a
   non-observation, not a proof of safety.** Don't upgrade it to one.
 
-`PgTestConnectionString`'s class doc is the full write-up: the exception chain, what the diagnosis ruled
-out, the 2026-08-05 measurements bounding production exposure, the second-pool amplifier, and the one
-residual unknown.
+`PgTestConnectionString`'s class doc points to `docs/ai/decisions/pg-test-connection-pooling.md` for the
+full write-up.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
