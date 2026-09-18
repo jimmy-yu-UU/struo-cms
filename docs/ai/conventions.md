@@ -110,8 +110,7 @@ class doc, pointing at `docs/ai/decisions/pg-test-connection-pooling.md`, is the
 **A comment says what the code cannot.** It answers one of: why this approach, what constrains it,
 what breaks if the constraint is violated, or what is unverified. A comment that only restates what
 the code already says gets deleted, not kept. A comment longer than eight lines that is not the four
-evidence items above is a review defect, not a guard failure — a reviewer's checklist carries that
-item.
+evidence items above is a review defect, not a guard failure — review catches it.
 
 **Write from the construct, not from memory.** Before writing a factual sentence about a piece of
 code, open the construct it describes; after writing it, `grep` the sentence back against that
@@ -123,11 +122,16 @@ sentence that describes it.
 **What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any banned word or bare date
 without a marker, and on any PR/issue reference, in a comment or in prose across `AGENTS.md`,
 `CLAUDE.md`, `docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and
-`frontend/e2e/**`. The guard reads comment bodies and markdown prose only. Code outside comments —
-including string literals — is never scanned; in markdown, fenced code blocks and inline code spans
-are skipped. A date in test data or in a code sample therefore needs no marker; a date inside a
-comment does. It also fails on a decision file missing one of its six headings or on an orphan
-decision file nothing references by path.
+`frontend/e2e/**`. The guard reads comment bodies and markdown prose only. A quote-parity heuristic
+locates each comment start (`//`, `/*`, `<!--`), and code outside comments — including string
+literals — is skipped by that heuristic; a date in test data normally needs no marker. In markdown,
+fenced code blocks and inline code spans are skipped, so a date inside one of those needs no marker
+either; a date inside comment or prose text does. It also fails on a decision file missing one of its
+six headings or on an orphan decision file nothing references by path.
+
+**The guard is not exhaustive.** It flags only the banned words and bare dates listed above. A
+sentence that describes the past through other phrasing — `once X replaced Y`, `the old …`,
+`without the fix`, `must now …` — passes the guard and is the reviewer's to catch.
 
 ### Anti-patterns this repository has actually had (both audiences)
 

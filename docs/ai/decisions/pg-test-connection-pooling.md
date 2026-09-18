@@ -71,7 +71,7 @@ isolating the second pool, not the extra connection and not the swallowed error,
 Measured 2026-08-05: with the second-pool amplifier set aside, the single-pool bare xUnit host still
 failed close to 10% of runs.
 
-Evidence note: the source states the bare host's failure rate two ways — close to 9% where it introduces
+Evidence note: the measurements record the bare host's failure rate two ways — close to 9% where it introduces
 the second-pool amplifier (the 4-of-46 positive-control run above) and close to 10% where it confirms the
 amplifier is isolated from production — without giving a run count for the second figure or reconciling
 the two.

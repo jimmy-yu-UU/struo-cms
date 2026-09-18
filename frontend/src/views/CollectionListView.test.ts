@@ -562,8 +562,9 @@ describe('CollectionListView', () => {
     vm.loadItems() // A: token bumped, canRead true -> loading = true, awaits pA
     await flushPromises()
     expect(vm.loading).toBe(true)
-    // Load B bumps the token then bails (canRead is now false). Without the fix,
-    // B returns without clearing loading, and A (now stale) skips its finally -> spinner stuck.
+    // Load B bumps the token then bails at the early return (canRead false). Because B is the
+    // current load, the early return itself clears loading before returning; A's finally then
+    // finds a stale token and skips clearing loading again, so the spinner ends up off.
     auth.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
     vm.loadItems() // B: bails at the early return
     await flushPromises()
@@ -614,11 +615,11 @@ describe('CollectionListView', () => {
     expect(vm.isSelectField('title')).toBe(false)
   })
 
-  // Searchable is what the backend's `search=` honours, and chapter 5
-  // (`docs/guide/en/05-collections.md`) tells collection authors it governs the collection's
-  // free-text search — but selectListColumns caps at 6 columns and only admits
-  // list-displayable interfaces, so a searchable RichText body became unreachable from the list
-  // once FilterBuilder replaced the old free-text ListToolbar. It is offered here instead.
+  // FilterBuilder is CollectionListView's free-text search entry point, and chapter 5
+  // (`docs/guide/en/05-collections.md`) tells collection authors Searchable governs a field's
+  // participation in that search — but selectListColumns caps the list at 6 display-eligible
+  // columns and only admits list-displayable interfaces, so a searchable RichText body has no
+  // column of its own on the list. FilterBuilder's second field group is where it is offered.
   it('offers searchable fields that did not make the display-column cut to FilterBuilder', async () => {
     const article = {
       name: 'article',

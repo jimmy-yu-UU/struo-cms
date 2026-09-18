@@ -83,9 +83,10 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         // (an anchor with no href, whether because none was given or because its href was itself
         // rejected -- href is stripped attribute-by-attribute, not by discarding the whole element --
         // is not a link and gets no link attributes). Anything else, including an absent target, is
-        // treated as same-tab and gets neither attribute. This narrows the previous absolute strip
-        // rather than replacing it: the reverse-tabnabbing gap the old strip closed was a
-        // target="_blank" without a rel to go with it, and that gap cannot reopen here because
+        // treated as same-tab and gets neither attribute. An absolute strip of target/rel from every
+        // anchor would also close the reverse-tabnabbing gap -- a target="_blank" with no
+        // accompanying rel -- but it would lose the "_blank" opt-in outright; this handler keeps the
+        // opt-in while making rel="noopener" mandatory alongside it, so that gap cannot occur:
         // rel="noopener" is set on exactly the links that keep target="_blank" -- never on any other.
         //
         // Every other allowlisted tag survives without a handler at all, so a target left on one of

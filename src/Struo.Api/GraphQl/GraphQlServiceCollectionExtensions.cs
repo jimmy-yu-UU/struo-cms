@@ -112,8 +112,9 @@ public static class GraphQlServiceCollectionExtensions
                 // HotChocolate's built-in GET /graphql?sdl route serves the COMPLETE schema as SDL
                 // text. DisableIntrospection does NOT cover it (that gates __schema/__type selections
                 // inside a query document) and MapGraphQL carries no environment gate of its own, so
-                // before this Production served the whole schema to an anonymous caller. Gated on the
-                // same flag as introspection so the two disclosure routes stay in step.
+                // gating only introspection while leaving this route open would still serve the whole
+                // schema to an anonymous caller in Production. Gated on the same flag as introspection
+                // so the two disclosure routes stay in step.
                 options.EnableSchemaRequests = exposeSchema;
             });
     }
