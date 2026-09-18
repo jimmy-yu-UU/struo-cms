@@ -53,24 +53,31 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 - **Dependency direction** (structural, visible in each project's `.csproj`): `Struo.Domain` → nothing;
   `Struo.Application` → `Struo.Domain`; `Struo.Infrastructure` → `Struo.Application` + `Struo.Domain`;
-  `Struo.Api` → `Struo.Application` + `Struo.Infrastructure`. Framework code never references
-  `samples/*` — this one edge **is** test-enforced:
+  `Struo.Api` → `Struo.Application` + `Struo.Infrastructure`. Never weaken this with a reversed or
+  skip-layer project reference: reversing an edge creates a circular project reference and fails the
+  build outright, while a skip-layer reference (e.g. `Struo.Api` referencing `Struo.Domain` directly)
+  compiles cleanly, so nothing but this rule and code review catches it. Framework code never
+  references `samples/*` — this one edge **is** test-enforced:
   `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
   `Host_project_has_no_project_reference_into_samples` fails if `Struo.Api.csproj` ever gains a
   `ProjectReference` into `samples/`.
 - `Struo.Domain` stays free of external packages — `Struo.Domain.csproj` declares zero
   `PackageReference`/`ProjectReference` entries; this is a convention checked by reading the file, not
-  by an automated test.
+  by an automated test. A package reference here puts an external type in the one assembly every other
+  layer compiles against, and nothing fails until a fork tries to swap that package out.
 - **Target framework**: .NET 10 (`net10.0`, `Directory.Build.props`). **Database support**: SqlSugar
   is configured for five backends (`Database:DbType`: `PostgreSQL`/`MySql`/`SqlServer`/`Sqlite`/
   `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
   only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental. Schema
   creation (CodeFirst) is designed and mapped to run on all five backends, via a dialect-neutral
-  `[ColumnShape]`/`ColumnTypeMap` layer that confines vendor type literals to a single mapping file — but
-  that mapping itself is unverified against a live MySQL/SqlServer/Oracle instance, and so is the query
-  layer: some ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior
-  specifically. The per-backend type decisions behind that layer, and the evidence for each, are recorded
-  in `ColumnTypeMap`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`).
+  `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type literals in `ColumnTypeMap.cs` —
+  with one gated exception, `SqlSugarClientFactory`'s SQLite identity-column rewrite
+  (`ApplySqliteIdentityColumnRewrite`), which hardcodes `INTEGER` for a SQLite identity primary
+  key — but that mapping itself is unverified against a live MySQL/SqlServer/Oracle instance, and
+  so is the query layer: some ORDER-BY and literal-coercion code paths are written against
+  PostgreSQL/SQLite behavior specifically. The per-backend type decisions behind that layer, and
+  what is and is not verified about each, are recorded in `ColumnTypeMap`'s class doc
+  (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`).
 
 ## Invariants
 
@@ -82,8 +89,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   violation. The second is `SchemaGuard`'s read-only PostgreSQL/SQLite catalog queries
   (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) — needed because SqlSugar's ORM surface cannot
   answer "is there a UNIQUE index covering these columns"; it returns early for MySQL/SqlServer/Oracle
-  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so the shipped
-  production path stays vendor-SQL-free.
+  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so no vendor-specific
+  SQL ships on the production path (the third and fourth exceptions below assemble portable SQL text,
+  not dialect-specific text).
   The third is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
@@ -94,7 +102,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`), the sole source of the string passed
   to the one `queryable.OrderBy(string)` call, in `SqlSugarItemRepository.RunQueryAsync`: it assembles
   three per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated
-  subquery with one JOIN per hop (`RelationOrderExpr`), and a translatable-field sort as a correlated
+  subquery with one JOIN per extra hop (`RelationOrderExpr`), and a translatable-field sort as a correlated
   subquery against the translation sidecar with the query locale embedded as an escaped string literal
   (`TranslatableOrderExpr`; the locale is either a request locale already validated by
   `ItemService.ValidateLocale`, or — when no `?locale=` was given — the configured default code
@@ -123,9 +131,13 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`src/Struo.Application/Query/Write/RichTextCleaner.cs`), which wraps `IHtmlSanitizer` plus
   blank-document coercion. Non-translatable RichText fields are sanitized in `ItemDeserializer.cs`;
   translatable ones are sanitized separately, per locale, in `ItemWriteSideSync.SyncTranslationsAsync`
-  (`ItemWriteSideSync.cs`).
+  (`ItemWriteSideSync.cs`). Skipping this means stored HTML reaches every read path — REST, GraphQL,
+  and the admin SPA's renderer — unsanitized: `IHtmlSanitizer`/`RichTextCleaner` is this repository's
+  only server-side XSS control for RichText fields.
 - **Immutable update patterns**: domain/query model types are `record`s with `init` properties, updated
-  via non-destructive `with` expressions, not mutated in place.
+  via non-destructive `with` expressions, not mutated in place — anything that flows through the
+  metadata cache or the query pipeline is shared, longer-lived state, and an in-place mutation there
+  would be visible to every subsequent caller.
 - **CodeFirst creates; migrations evolve.** Tables that do not yet exist are created by
   `DatabaseInitializer.CreateMissingTables` in **every environment and on every backend**, so an empty
   database bootstraps itself and `DataSeeder` seeds what was just created. **Existing** tables are never
@@ -137,9 +149,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because
   SQLite or SqlSugar's SQLite dialect lacks the capability, but because this repo's
   `SqlSugarClientFactory` never sets `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`,
-  the flag that gates it (manual ch.21, "Where schema sync is dangerous", item 7 covers what
-  flipping that flag actually does) — so this repo's SQLite-only CI suite cannot demonstrate the
-  claim by itself), while reviewed `db/migrations/` scripts applied by `MigrationRunner` are the
+  the flag that gates it (`docs/guide/en/21-schema-and-upgrades.md`, "Where schema sync is
+  dangerous", item 7, covers what flipping that flag actually does) — so this repo's SQLite-only
+  CI suite cannot demonstrate the claim by itself), while reviewed `db/migrations/` scripts
+  applied by `MigrationRunner` are the
   all-environments path. The runner works on any backend; `Database:MigrationsPath` empty (the
   default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
@@ -157,12 +170,16 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Task playbooks (condensed — see `docs/ai/task-playbooks.md` for the full form)
 
-1. **Add a collection** — new entity class (outside `src/Struo.*`) inheriting `AuditableEntity`, with
-   `[CmsCollection]`/`[CmsField]`; wire its assembly into `Struo:ContentAssemblies` + a
-   `ProjectReference` from `Struo.Api`; grant RBAC. No migration needed to introduce the table —
-   `DatabaseInitializer.CreateMissingTables` creates it automatically on next startup, in every
-   environment and on every backend; a migration is only for altering a table that already exists
-   (Playbook 4). Gate: `dotnet build && dotnet test`.
+1. **Add a collection** — new entity class (outside `src/Struo.*`) inheriting `AuditableEntity`,
+   with `[CmsCollection]`/`[CmsField]`; wire its assembly into `Struo:ContentAssemblies` via
+   `appsettings.Development.json`, an environment-variable override, or the fork's own
+   configuration — not the shipped `appsettings.json`, which stays `[]`
+   (`TemplateInvariantsTests.Shipped_appsettings_declares_no_content_assemblies` asserts it;
+   changing that file on purpose means updating or removing that test as part of the same change)
+   — plus a `ProjectReference` from `Struo.Api`; grant RBAC. No migration needed to introduce the
+   table — `DatabaseInitializer.CreateMissingTables` creates it automatically on next startup, in
+   every environment and on every backend; a migration is only for altering a table that already
+   exists (Playbook 4). Gate: `dotnet build && dotnet test`.
 2. **Add a field type** — swapping an editor for an existing `FieldInterface` is frontend-only
    (`frontend/src/lib/fieldTypes/registry.ts`). A genuinely new `FieldInterface` value touches the
    backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped member
@@ -173,8 +190,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    component. Then regenerate `schema/interfaces.json` — required for *every* new member, whether or not
    a collection uses it yet — and `schema/core-collections.json` too if the value is used by a core
    collection (`schema/README.md`; one command does both). A new `RelationInterface` member likewise
-   needs an entry in `frontend/src/lib/relationInputKind.ts`, or the relation silently renders
-   read-only. Gate: four of the five standing gates — see `docs/ai/task-playbooks.md` Playbook 2b for
+   needs an entry in `frontend/src/lib/relationInputKind.ts`, or the relation renders read-only at
+   runtime — `pnpm test`'s schema-contract test (`frontend/tests/schemaContract.test.ts`) is what
+   catches the missing entry first. Gate: four of the five standing gates — see
+   `docs/ai/task-playbooks.md` Playbook 2b for
    when the fifth applies; live-PostgreSQL check if you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
@@ -272,16 +291,22 @@ five standing gates, and is not run by CI.
 
 - Never hand-author a package version. Install via the package manager itself (`dotnet add package`,
   `pnpm add <pkg>`) and let it write the version; NuGet versions are centralized in
-  `Directory.Packages.props`. Exception: `frontend/pnpm-workspace.yaml` and `docs/pnpm-workspace.yaml`
-  hand-write bounded transitive-dependency `overrides:` ranges for advisories a package hasn't picked up
-  yet — that is the one place versions are legitimately hand-authored; see
-  `frontend/pnpm-workspace.yaml` for why every entry there carries an upper bound.
+  `Directory.Packages.props`. A hand-written NuGet version that doesn't exist on nuget.org fails
+  `dotnet restore`; a hand-written `package.json` version that `pnpm` didn't resolve itself won't match
+  `pnpm-lock.yaml`, and CI's `pnpm install --frozen-lockfile` refuses to proceed. Exception:
+  `frontend/pnpm-workspace.yaml` and `docs/pnpm-workspace.yaml` hand-write bounded
+  transitive-dependency `overrides:` ranges for advisories a package hasn't picked up yet — that is the
+  one place versions are legitimately hand-authored; see `frontend/pnpm-workspace.yaml` for why every
+  entry there carries an upper bound.
 - Never add a business collection to `src/Struo.*` — new content belongs in a fork's own project (or,
-  for learning/demo purposes only, the existing sample).
+  for learning/demo purposes only, the existing sample). Nothing mechanically stops this; the cost
+  lands on every fork that pulls an upstream update, since it inherits business content mixed into what
+  is supposed to be reusable core.
 - Never reintroduce a sample reference into `Struo.Api` (no `ProjectReference` from
-  `Struo.Api.csproj` into `samples/`, no default `Struo:ContentAssemblies` entry for it).
+  `Struo.Api.csproj` into `samples/`, no default `Struo:ContentAssemblies` entry for it) — the first is
+  caught by `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples` (Hard
+  constraints), the second by `Shipped_appsettings_declares_no_content_assemblies`.
 - Never commit `src/Struo.Api/appsettings.Development.json` — it is gitignored and holds local secrets.
-- Never weaken the dependency rule (no reversed or skip-layer project references).
 - **Never add documentation the reader does not need in order to act.** No change narratives ("this used
   to be X"), no investigation journals (they belong in the doc comment of the class they explain), no
   restating a rule that already has a home elsewhere — link to it instead, and no preference notes (a
