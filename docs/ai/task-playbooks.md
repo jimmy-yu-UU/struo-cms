@@ -6,33 +6,15 @@ each is the linked manual chapter — read it before making the change if anythi
 
 Gate vocabulary used below: the **five standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
 (from `frontend/`), `pnpm build` (from `frontend/`), and `pnpm build` (from `docs/`) — the same five
-commands `.github/workflows/ci.yml` runs on every push/PR. The `docs/` build resolves every cross-chapter
-link in the manual and fails on a dead one, then checks that every chapter actually rendered — `vitepress
-build` alone exits 0 on a page whose body came out empty — and that no table is wider than the content
-column (`docs/scripts/check-table-width.mjs`); CI's docs job also runs `pnpm test` from `docs/` (the
-guard scripts' unit tests) as a CI step, not a sixth gate. The docs build is relevant to a change only
-when that change touches `docs/guide/**` or the docs project itself, not automatically to every
-playbook below.
-**Live-database verification** is a separate, additional step for any change to
-DB behavior, performed against whichever backend the deployment is configured for: on PostgreSQL (the
-verified target) it is the strongly-recommended live-PG check described below; on `MySql`/`SqlServer`/
-`Oracle` that backend needs its own equivalent check, since a green PostgreSQL run does not transfer.
-It is a robustness practice rather than a CI gate — CI runs the SQLite suite only, so that no single
-engine is privileged over DB replaceability. For the PostgreSQL
-form — set `Testing:PostgresConnection` to a disposable database whose name contains
-`test`. It resolves in this order: the `STRUO_TEST_PG_CONNECTION` environment variable first, else the
-`Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`;
-either route works. Or run the application against a real PostgreSQL instance directly. SQLite passing
-is not evidence of PostgreSQL
-correctness: this codebase has documented, specific SQLite/PostgreSQL divergences — a `DateTime`
-property without `[ColumnShape(TimestampWithTimeZone)]` becomes `timestamp without time zone` on
-PostgreSQL (the reason `UserSession`'s timestamps carry that shape) while SQLite has no real column
-types to expose the gap, and a `ConditionalType.Equal` filter binding a text value against a
-`uuid`/`bigint` column throws `42883` on PostgreSQL but "works" on SQLite, whose loose typing accepts
-the comparison without complaint. **E2E** (`pnpm e2e` for the `core` Playwright project,
-`pnpm e2e:sample` for the sample) is a further, separate check for changes that touch user-facing flows
-end-to-end; it needs a live API and database reachable at the dev proxy target and is not part of the
-standing gates or of CI.
+commands `.github/workflows/ci.yml` runs on every push/PR. The `docs/` build is the manual's gate in
+three parts; `AGENTS.md`, "Verification", has what each part checks. The docs build is relevant to a
+change only when that change touches `docs/guide/**` or the docs project itself, not automatically to
+every playbook below.
+
+**Live-database verification** is a separate, additional step for any change to DB behavior —
+`AGENTS.md`, "Verification", has how to configure it per backend and what it covers. SQLite passing is
+not evidence of PostgreSQL correctness — this codebase has documented, specific SQLite/PostgreSQL
+divergences in column semantics and filter binding; `AGENTS.md`, "Verification", lists them.
 
 ## Playbook 1: Add a collection
 
@@ -56,10 +38,10 @@ Adding a collection is purely additive to a fork's own content project — it ne
    `[CmsCollection("Your Label", Icon = "...", Group = "...", DefaultDisplayField = nameof(SomeField))]`.
 3. **Add `[CmsField]`** to every property the API/admin form should expose (`Interface =
    FieldInterface.Xxx`, plus `Required`/`Searchable`/`Sortable`/`Sort`/`ReadOnly`/`Hidden`/
-   `Translatable`/`MaxLength` as needed — see `docs/guide/en/06-field-types.md` for the full
-   `FieldInterface` reference), and `[CmsOptions(...)]` on any `Select`/`Radio`/`MultiSelect`/
-   `CheckboxGroup` field. `Hidden` is a read-side exclusion only (see `AGENTS.md`'s invariants) — pair
-   it with `ReadOnly` if the field must also be unwritable.
+   `Translatable`/`MaxLength` as needed — see `docs/guide/en/06-field-types.md`, "Interface overview",
+   for the full `FieldInterface` reference), and `[CmsOptions(...)]` on any `Select`/`Radio`/
+   `MultiSelect`/`CheckboxGroup`/`Tags` field. `Hidden` is a read-side exclusion only (see `AGENTS.md`'s
+   "Invariants") — pair it with `ReadOnly` if the field must also be unwritable.
 4. **Opt into soft delete and/or revisions** if needed: implement `ISoftDeletable` on the class, and/or
    set `Revisions = true` on `[CmsCollection]`.
 5. **Add relations** with `[CmsRelation]` + SqlSugar's `[Navigate]` if the collection references
@@ -72,16 +54,17 @@ Adding a collection is purely additive to a fork's own content project — it ne
    `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
    `Shipped_appsettings_declares_no_content_assemblies` test asserts has an empty
    `Struo:ContentAssemblies`; editing it to wire in permanent content fails that test immediately, and
-   is a collision with the invariant `AGENTS.md`'s "Hard constraints" documents as enforced. If a fork
-   deliberately wants its content assembly wired into the shipped `appsettings.json` itself (e.g. it
-   is replacing the template's "ships with zero collections" posture permanently), update or remove
-   that test deliberately as part of the same change — don't leave it contradicting the new
-   configuration.
+   contradicts the shipped posture `AGENTS.md`'s "Core vs. sample boundary" records
+   (`Struo:ContentAssemblies` ships as `[]`). If a fork deliberately wants its content assembly wired
+   into the shipped `appsettings.json` itself (e.g. it is replacing the template's "ships with zero
+   collections" posture permanently), update or remove that test deliberately as part of the same
+   change — don't leave it contradicting the new configuration.
 7. **Restart the API.** CodeFirst creates the table automatically from the entity class — in **every**
    environment, not just Development. Because the table doesn't exist yet, this step is inherently
    non-destructive: it only ever creates, never alters or drops anything on an existing table (that's a
-   separate, opt-in mechanism, `Database:AutoSyncSchema`, Development-only — see Playbook 4) — confirm
-   the admin SPA's sidebar shows the new collection under its configured `Group`.
+   separate, opt-in mechanism, `Database:AutoSyncSchema`, Development-only — see `AGENTS.md`'s
+   "Invariants") — confirm the admin SPA's sidebar shows the new collection under its configured
+   `Group`.
 8. **Grant RBAC** read/write/delete permissions for the collection to whichever roles need them — a
    brand-new collection has zero grants, so only a super-admin can use it until you add some.
 9. **Nothing further is needed for the table itself before deploying** — CodeFirst creates it in
@@ -147,10 +130,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
    JSON column, add it to `SqlSugarClientFactory`'s `JsonColumnInterfaces` set
    (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) so SqlSugar (de)serializes it and
    the column gets `IsJson = true` + a widened `text`-shaped type together. The `EntityService` hook
-   also widens a *bare* `[SugarColumn(IsJson = true)]` outside this set on its own, so you no longer
-   need to hand-add a `ColumnDataType` for that case; an explicit `ColumnDataType` on the property still
-   wins over the hook's default. If instead it's a plain long string that needs widening,
-   add it to `ContentBearingInterfaces` in the same file.
+   widens a *bare* `[SugarColumn(IsJson = true)]` outside this set on its own, so that case needs no
+   hand-added `ColumnDataType`; an explicit `ColumnDataType` on the property still wins over the hook's
+   default. If instead it's a plain long string that needs widening, add it to `ContentBearingInterfaces`
+   in the same file.
 5. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
    `KeyValue`/`Files`/`Repeater` already have), add an `IFieldValidator` implementation under
    `src/Struo.Application/Query/Write/Validators/` and register it in `FieldValidatorRegistry.Phases`
@@ -178,13 +161,19 @@ picker instead of a plain text input) — frontend-only, no backend change:
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
 9. **Gate**: four of the five standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`)
    — this change spans both stacks. The docs gate does not apply unless this change also updated
-   `docs/guide/en/06-field-types.md`'s `FieldInterface` reference, in which case add `pnpm build` from
-   `docs/` too. **Verify against the backend you are configured for** if you touched
-   `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends diverge, and
-   a divergence like the `timestamp without time zone` shape a missing `[ColumnShape]` produces on
-   PostgreSQL does not reproduce on SQLite at all. On
-   PostgreSQL that means the live-PG check (strongly recommended here); on another backend, its own
-   equivalent.
+   `docs/guide/en/06-field-types.md`'s "Interface overview" `FieldInterface` reference, in which case
+   add `pnpm build` from `docs/` too. **Verify against the backend you are configured for** if you
+   touched `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends
+   diverge: a missing `[ColumnShape]` yields `timestamp without time zone` on PostgreSQL, and a
+   text-bound `ConditionalType.Equal` against a `uuid`/`bigint` column throws `42883` there; neither
+   reproduces on SQLite at all. On PostgreSQL that means the live-PG check (strongly recommended here);
+   on another backend, its own equivalent.
+
+**2c. Add a new `RelationInterface` value** — the same shape as 2b on a smaller surface: add the
+member to `src/Struo.Domain/Metadata/Enums/RelationInterface.cs`, give it an entry in
+`frontend/src/lib/relationInputKind.ts`'s map (absent members fall through to `'readonly'`, so the
+relation renders read-only with no error), regenerate `schema/interfaces.json` with the same command as
+step 7 above, and run `dotnet build && dotnet test` plus `pnpm test && pnpm build`.
 
 ## Playbook 3: Add an endpoint
 
@@ -200,9 +189,12 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
    public sealed class YourController(/* constructor-injected dependencies */) : ControllerBase
    {
        [HttpGet]
-       public async Task<IActionResult> Get(CancellationToken ct) => Ok(/* plain object or DTO */);
+       public IActionResult Get() => Ok(/* plain object or DTO */);
    }
    ```
+   Make the action `async Task<IActionResult>` and take a `CancellationToken` only once the body
+   actually awaits something — this repository builds with `TreatWarningsAsErrors`
+   (`Directory.Build.props`), so an `async` method with no `await` is CS1998 and fails `dotnet build`.
    Return values via plain `Ok(...)`/`NotFound()`/`StatusCode(...)` for the common path —
    `EnvelopeResultFilter` wraps them into the standard envelope automatically. Only reach for
    `Struo.Api.Http.ApiResults.Fail(status, code, message)` when you need a specific error `code` the
@@ -241,9 +233,12 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `d
 README.md`.
 
 1. Determine the next number: the current highest `NNN-*.sql` filename in `db/migrations/` **+ 1**,
-   zero-padded. The template ships **zero** scripts, so a fresh fork's first migration is `001-...`.
+   zero-padded. The template ships **zero** scripts, so a fresh fork's first migration is `001-...`,
+   and anything already there belongs to that fork.
 2. Create `db/migrations/NNN-short-kebab-description.sql` with a header comment (date, author, one-line
-   intent). One logical change per file.
+   intent). One logical change per file. Scripts here are ALTER-only by convention: creating a table is
+   CodeFirst's job (`DatabaseInitializer.CreateMissingTables`, every environment, every backend —
+   Playbook 1).
 3. Write plain, portable SQL: standard types (`varchar(n)`, `integer`, `bigint`, `boolean`, `timestamp`,
    `numeric(p,s)`), no PostgreSQL-specific syntax (`jsonb`/`uuid`/`timestamptz`/`serial`, `DO $$ … $$`,
    `::` casts, `RETURNING`). **Idempotency is not required, and `IF NOT EXISTS` should be avoided** —
@@ -252,27 +247,31 @@ README.md`.
    down-migration; a rollback is a new compensating script, not an edit to this one. See
    `db/migrations/README.md` §5 for the full prefer/avoid tables.
 4. Use a time-zone-aware type (not bare `timestamp`) for any new column or table storing an instant,
-   and store UTC — this is the convention, not a claim about any single file: there is no baseline file
-   to check anymore. If the column is also modeled as an entity property, mark it
-   `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
+   and store UTC. This is a convention rather than something you can read off an existing script: the
+   template ships no migration files at all. If the column is also modeled as an entity property, mark
+   it `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
    (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) rather than a PostgreSQL-only `timestamptz`
    literal, so CodeFirst resolves the matching type per backend and a freshly created table agrees with
    what this migration adds to an existing one. Hand-writing the DDL directly instead (a column no
    entity property backs)?
-   `ColumnTypeMap.cs` centralizes the per-backend literal to copy in — see `db/migrations/README.md` §5
-   for the full mapping. Either way, check the target table's actual current column type (the entity
-   declaration in `src/`, or the live schema) rather than assuming one. Do not retroactively convert an
-   existing bare-`timestamp` column while you're at it unless that specific column is the subject of
-   this migration (re-anchoring already-stored values against a session time zone is a silent data
-   shift).
+   `ColumnTypeMap.cs` (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) centralizes the
+   per-backend literal to copy in — see `db/migrations/README.md` §5 for the full mapping. Either way,
+   check the target table's actual current column type (the entity declaration in `src/`, or the live
+   schema) rather than assuming one. Do not retroactively convert an existing bare-`timestamp` column
+   while you're at it unless that specific column is the subject of this migration (re-anchoring
+   already-stored values against a session time zone is a silent data shift).
 5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
    tracks applied migrations by filename only, in the CodeFirst-created `schema_migrations` table, with
-   no checksum, so an edited file with an already-applied filename is silently never re-run. Ship a new
-   file instead.
-6. **Tests to add**: this is SQL, not C# — there is no unit test for a migration script itself. Verify
+   no checksum, so an edited file with an already-applied filename is silently never re-run — a known
+   limit `db/migrations/README.md` §6 covers in full. Ship a new file instead.
+6. **Make sure the runner is actually enabled where the script has to run.** `Database:MigrationsPath`
+   ships empty, and empty means the runner is skipped entirely (`src/Struo.Api/appsettings.json`) — a
+   migration in `db/migrations/` does nothing until the key points at that directory in the environment
+   you are deploying to, not just in the one you verified against.
+7. **Tests to add**: this is SQL, not C# — there is no unit test for a migration script itself. Verify
    it directly (see the live-database step below). If the migration backs a new collection, that
    collection's own tests (Playbook 1) are the regression coverage.
-7. **Gate**: `dotnet build && dotnet test` first — `MigrationRunner` now runs on every backend,
+8. **Gate**: `dotnet build && dotnet test` first — `MigrationRunner` runs on any configured backend,
    including the SQLite test suite, so this exercises the runner itself (though not your specific SQL,
    which SQLite may accept or reject differently than your actual target backend). **The migration
    itself can only be verified by applying it**: point `Database:MigrationsPath` at `db/migrations/` (an
@@ -283,8 +282,8 @@ README.md`.
 
 ## Playbook 5: Change the admin SPA
 
-Background: `docs/guide/en/19-admin-customization.md` (the full "when to customize vs. when
-metadata is enough" decision and the directory map).
+Background: `docs/guide/en/19-admin-customization.md`, "Ask whether metadata is enough" and
+"The `frontend/src` map".
 
 Before touching `frontend/src` at all: confirm the requirement is not already satisfiable by declaring
 metadata (Playbooks 1/2). Adding a `[CmsCollection]`/`[CmsField]` alone produces a full sidebar entry,
@@ -294,10 +293,12 @@ collection's fields, columns, or labels; everything comes from `GET /api/schema`
 2a), branding/theming beyond a name and logo, admin-UI language (i18n), or a workflow that doesn't fit
 the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 
-1. **Locate the right directory** using the map in chapter 19: `api/` (thin REST wrappers), `components/`
-   (`ItemForm.vue`, `fields/`, `common/`, `shell/`, `media/`, `revisions/`, `rbac/`),
-   `composables/`, `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including
-   `fieldTypes/`), `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
+1. **Locate the right directory** using
+   `docs/guide/en/19-admin-customization.md`'s "The `frontend/src` map": `api/` (thin REST wrappers),
+   `assets/` (`tokens.css` and `theme.css` — the whole look), `components/` (`ItemForm.vue` at the top
+   level, everything else a subdirectory by purpose, including the vendored `ui/`), `composables/`,
+   `i18n/` + `locales/`, `layouts/`, `lib/` (framework-free helpers, including `fieldTypes/`),
+   `router/`, `stores/` (Pinia), `theme/`, `types/`, `views/` (one component per route).
 2. **Theming**: edit `frontend/src/assets/tokens.css` for the shadcn semantic custom properties
    (`--background`/`--primary`/`--radius`/…, on the `.app-dark` toggle class) that every vendored `ui/`
    component and Tailwind utility reads, and `frontend/src/assets/theme.css` for the unlayered global
@@ -319,15 +320,18 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    (Vitest). If the change affects a user-facing flow end-to-end, add or update a Playwright spec under
    `frontend/e2e/` (`core` project — never `e2e/sample/**` unless the change is specific to the Blog
    sample). A new field-type component also needs its own `frontend/src/lib/fieldTypes/registry.ts`
-   entry (see Playbook 2a) — `frontend/tests/schemaContract.test.ts` enforces that every interface a
-   core collection actually uses has one, so a component with no registry entry fails that test rather
-   than silently rendering read-only.
+   entry (see Playbook 2a) — `frontend/tests/schemaContract.test.ts` checks the backend's declared
+   interface enums directly, so *every* declared `FieldInterface` needs a registry entry whether or not
+   a collection uses it yet, and one without an entry fails that test rather than silently rendering
+   read-only.
 6. **Gate**: `pnpm test && pnpm build` (the standing gates' frontend pair; `pnpm build` runs
    `vue-tsc -b`, which is CI's only enforcement of the SPA's TypeScript types) — this playbook's own
    steps change `frontend/src`, not `docs/guide/**`, so the docs gate does not apply; if a change under
-   this playbook also edits a manual chapter (e.g. chapter 19 itself), add `pnpm build` from `docs/` too.
-   Run `pnpm e2e` as a further check for any change touching a critical flow — it needs a live API and
-   database and is not part of the standing gates or of CI.
+   this playbook also edits a manual chapter (e.g. `docs/guide/en/19-admin-customization.md` itself),
+   add `pnpm build` from `docs/` too. Run `pnpm e2e` (the `core` Playwright project) as a further check
+   for any change touching a critical flow; `pnpm e2e:sample` runs the sample specs and needs the Blog
+   sample opted in first. E2E needs a live API and database reachable at the dev proxy target and is
+   not part of the standing gates or of CI.
 
 ## Next steps
 
