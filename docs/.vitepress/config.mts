@@ -9,7 +9,9 @@ const GUIDE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
 
 // Mirrors the guard's own locale derivation
 // (docs/scripts/check-rendered-chapters.mjs): a locale is a directory under
-// guide/, dot-prefixed ones excluded (the repo has empty .sonar dirs there).
+// guide/, dot-prefixed ones excluded (tooling on a developer's machine can
+// drop dot-prefixed working directories under guide/, and a dot-prefixed
+// directory is never a locale).
 // A fork that deletes docs/guide/zh-TW/ then loses that locale here instead of
 // crashing config load with a bare `ENOENT: … scandir …/guide/zh-TW`.
 const AVAILABLE_LOCALES = new Set(
