@@ -445,10 +445,11 @@ moment a deactivated account's cookie is next presented.
 
 `tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary the identity
 seams above exist to create: no file under `src/Struo.Api/Controllers/` may mention `ISqlSugarClient`.
-The seams keep identity writes off a raw `ISqlSugarClient` call in a controller — each identity store
-owns its own audit/version stamping instead (see `IUserAccountStore` above, whose mutators stamp
-`UpdatedAt`/`UpdatedBy`/`Version` themselves because that path sits outside both `AuditAop` and
-`SqlSugarItemRepository`'s version bump). Note the guard bans raw ORM access only: three controllers still
+The seams keep identity writes off a raw `ISqlSugarClient` call in a controller — an identity store
+owns whatever audit/version stamping its own writes need, not a controller (see `IUserAccountStore`
+above, whose mutators stamp `UpdatedAt`/`UpdatedBy`/`Version` themselves because that path sits outside
+both `AuditAop` and `SqlSugarItemRepository`'s version bump). Note the guard bans raw ORM access only:
+three controllers still
 depend on the concrete
 `Struo.Infrastructure.Files.FileService` (aliased, so its `File` type doesn't collide with
 `System.IO.File`), which is a service rather than an ORM handle.
