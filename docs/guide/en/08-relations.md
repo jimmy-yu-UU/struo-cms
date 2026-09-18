@@ -32,7 +32,7 @@ public Guid? FolderId { get; set; }
 public MediaFolder? Folder { get; set; }
 ```
 
-`MediaFolder.Parent` declares the identical pattern, used to model a folder tree.
+`MediaFolder.Parent` declares the identical pattern to model a folder tree.
 
 A many-to-one relation must resolve a foreign key, and its target collection must actually exist,
 or startup fails: `M2O relation '{collection}.{relation}' has no foreign key.`, `Relation

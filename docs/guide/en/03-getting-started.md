@@ -141,6 +141,6 @@ your own authentication layer in front.
 
 ## What's next
 
-Now that it's running, the next step is defining your own first content collection — a later
+With the server running, the next step is defining your own first content collection — a later
 chapter is dedicated to that. The full configuration reference is in
 [Chapter 4: Configuration Reference](04-configuration.md).

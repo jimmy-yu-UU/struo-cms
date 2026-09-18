@@ -263,7 +263,7 @@ claims it reads:
 - `name`, with the same longer-type fallback;
 - `iss`, `tid`, `email_verified`.
 
-A validated external identity is never used to log in directly: it's first resolved, matched or
+A validated external identity never logs a user in directly: it's first resolved, matched or
 created on the spot into a local user, then exchanged for a local cookie identity carrying only
 that user's id — what lands in session state is the exact same mechanism a password login uses.
 Resolution checks the following in order, and failing any one of them fails the login outright:

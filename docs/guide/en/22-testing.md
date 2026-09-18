@@ -105,7 +105,7 @@ The config sets `workers: 1`, and `use.baseURL` is `http://localhost:5173`; `cor
 `testIgnore: '**/e2e/sample/**'` to keep the sample specs out; `sample`'s `testDir` points
 straight at `./e2e/sample` and has nothing left to exclude.
 
-The bootstrap administrator used to log in has to be seeded first; the rest of the prerequisites
+The bootstrap administrator account used for login has to be seeded first; the rest of the prerequisites
 and how to override the login credentials are in `frontend/e2e/README.md`.
 
 For the `sample` project to run, opt the sample in first following the steps in
