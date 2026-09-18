@@ -9,7 +9,9 @@ const GUIDE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
 
 // Mirrors the guard's own locale derivation
 // (docs/scripts/check-rendered-chapters.mjs): a locale is a directory under
-// guide/, dot-prefixed ones excluded (the repo has empty .sonar dirs there).
+// guide/, dot-prefixed ones excluded (tooling on a developer's machine can
+// drop dot-prefixed working directories under guide/, and a dot-prefixed
+// directory is never a locale).
 // A fork that deletes docs/guide/zh-TW/ then loses that locale here instead of
 // crashing config load with a bare `ENOENT: … scandir …/guide/zh-TW`.
 const AVAILABLE_LOCALES = new Set(
@@ -58,8 +60,9 @@ export default defineConfig({
   // links are bare sibling filenames, and this setting is what checks them —
   // a renamed or deleted chapter fails the build with a dead-link error.
   // It does not catch every broken page: an unprotected `{{ }}` in rendered
-  // text is a separate failure mode (see the two v-pre wraps in chapter 7)
-  // that this setting has no bearing on.
+  // text is a separate failure mode that this setting has no bearing on;
+  // see docs/ai/conventions.md's "Mustache syntax in the manual" section and
+  // docs/scripts/check-rendered-chapters.mjs, which guards against it.
   ignoreDeadLinks: false,
 
   locales: Object.fromEntries(
