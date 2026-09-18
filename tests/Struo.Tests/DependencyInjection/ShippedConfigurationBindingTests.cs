@@ -87,7 +87,7 @@ public sealed class ShippedConfigurationBindingTests
     /// Reads one object out of the shipped file by LITERAL path — <paramref name="path"/> is spelled
     /// here the way the file spells it, never via a SectionName constant, which is what makes the
     /// comparison able to catch a constant that no longer matches the file. Clone() detaches the
-    /// element so it stays readable after the JsonDocument is disposed — see chapter 05's pitfall
+    /// element so it stays readable after the JsonDocument is disposed — see chapter 6's pitfall
     /// about a JsonElement outliving its document.
     /// </summary>
     private static JsonElement ShippedSection(params string[] path)

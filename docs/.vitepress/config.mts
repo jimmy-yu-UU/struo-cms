@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
-import { firstLink } from '../scripts/lib/sidebar-groups.mjs'
+import { firstLink } from '../scripts/lib/sidebar-links.mjs'
 import { chapterSidebar } from './sidebar.mts'
 
 const GUIDE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')

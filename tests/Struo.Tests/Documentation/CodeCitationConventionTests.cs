@@ -86,14 +86,12 @@ namespace Struo.Tests.Documentation;
 /// this form specifically.
 /// </para>
 /// <para>
-/// As of this writing there are 14 upstream-citation OCCURRENCES across 11 distinct citation texts: 7 in
-/// <c>ColumnTypeMap.cs</c>, 1 in <see cref="Struo.Tests.Persistence.DatabaseInitializerTests"/>, and 3
-/// distinct citations that each appear once in chapter 15 of BOTH manual languages (3 texts × 2
-/// languages = 6 occurrences, not "one shared line" — each language has its own copy of that
-/// paragraph). Their basenames (<c>EntityMaintenance.cs</c>, <c>SqlServerDbMaintenance.cs</c>,
-/// <c>MySqlDbMaintenance.cs</c>, <c>SqliteCodeFirst.cs</c>, <c>Methods.cs</c>,
-/// <c>SqliteDbMaintenance.cs</c>) resolve nowhere in this repository (checked against the widened
-/// resolution roots below too) and so all 14 stay green.
+/// As of this writing there are 8 upstream SqlSugar-citation OCCURRENCES across 8 distinct
+/// citation texts: 7 in <c>ColumnTypeMap.cs</c> and 1 in
+/// <see cref="Struo.Tests.Persistence.DatabaseInitializerTests"/>.
+/// Their basenames (<c>EntityMaintenance.cs</c>, <c>SqlServerDbMaintenance.cs</c>,
+/// <c>MySqlDbMaintenance.cs</c>, <c>SqliteCodeFirst.cs</c>) resolve nowhere in this repository
+/// (checked against the widened resolution roots below too) and so all 8 stay green.
 /// </para>
 /// <para>
 /// <b>Scan roots</b>: <c>AGENTS.md</c>, <c>CLAUDE.md</c>, <c>docs/ai/**</c>, <c>docs/guide/**</c>,

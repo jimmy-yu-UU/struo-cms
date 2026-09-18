@@ -614,7 +614,7 @@ describe('CollectionListView', () => {
     expect(vm.isSelectField('title')).toBe(false)
   })
 
-  // Searchable is what the backend's `search=` honours, and chapter 4 tells collection authors it
+  // Searchable is what the backend's `search=` honours, and chapter 5 tells collection authors it
   // governs the collection's free-text search — but selectListColumns caps at 6 columns and only
   // admits list-displayable interfaces, so a searchable RichText body became unreachable from the
   // list once FilterBuilder replaced the old free-text ListToolbar. It is offered here instead.

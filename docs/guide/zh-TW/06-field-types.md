@@ -149,18 +149,18 @@
 3. 兩者都不成立，是 `null`，代表不限長度。
 
 後台把有效的 `MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上，所以就算從未寫過
-`MaxLength`，255 的預設值一樣會在前端生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是
+`MaxLength`，255 的預設值一樣會在後台生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是
 因為 SqlSugar 對未加寬 `string` 的預設值也是 255。
 
 ## 必填、唯讀、隱藏與系統欄位
 
-`Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求本文本身，細
+`Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求 body 本身，細
 節見[第 5 章：定義集合](05-collections.md)。
 
 `RichText` 的內容如果清理後在視覺上等於空白，會先被轉成 `null` 再檢查 `Required`，所以看起
 來有內容的編輯器文件仍可能未通過必填檢查，`<img>`、`<hr>` 都算有內容。
 
-建立時先報 `Required`；更新時如果本文同時違反長度或結構驗證，先報的是那些錯誤。
+建立時先報 `Required`；更新時如果 body 同時違反長度或結構驗證，先報的是那些錯誤。
 
 `ReadOnly` 欄位讀得到，更新時寫不進去：更新的欄位覆蓋邏輯會跳過每一個 `ReadOnly` 與
 `IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——
@@ -181,10 +181,51 @@
 
 ### 寫入時的整理
 
-- 寫入本文裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名照樣成功回應，只是值沒存進去。
+- 寫入 body 裡不認識的鍵會被直接丟掉、不會報錯，打錯欄位名照樣成功回應，只是值沒存進去。
 - `MultiSelect`／`CheckboxGroup` 去重、保留第一個；`Tags` 空白值拒絕、重複丟掉。
 - `Files` 丟掉 `Guid.Empty` 與重複；`Repeater` 丟掉整列空白的列，但錯誤訊息的列號仍以送進
   來的順序（含被丟掉的）從 1 起算。
+
+## `RichText` 存下來的 HTML
+
+`RichText` 欄位每一次經過 API 的寫入——不管是走後台編輯器、直接呼叫 REST／GraphQL，還是自己
+寫的腳本送進來的 HTML——最後都只經過同一個伺服器端 sanitizer（`GanssHtmlSanitizer`）。標籤、
+屬性、URL scheme 各自有一份白名單，不在名單裡的一律丟掉；丟一個標籤是連同它整個子樹一起丟，
+不是只清掉標籤本身。編輯器這一側因此要顧的地方，見
+[第 19 章：後台客製化](19-admin-customization.md)。
+
+標籤白名單是基本格式加上 `h2` 起跳的標題、連結、圖片、簡單表格、`sub`／`sup` 與 `span`，沒
+有 `h1` 也沒有 `div`；絕對網址只收 `http`、`https`、`mailto`，相對路徑（編輯器上傳的圖片）
+照常留著，網址被擋下來時掉的是那個屬性，不是整個元素。
+
+### 連結的 `target` 與 `rel`
+
+`rel` 從來不是照輸入原樣存下來的，一律由伺服器端依 `target` 推導出來：
+
+| 你送進去的 | 存下來的 |
+|---|---|
+| `<a href="…" target="_blank">` | `<a href="…" target="_blank" rel="noopener">` |
+| 其他任何 `target` 寫法 | `<a href="…">` |
+
+只有精確、區分大小寫的 `_blank` 才算數；`_Blank`、`_self`，或 `href` 本身就被丟掉的連結，
+都拿不到 `target` 也拿不到 `rel`，兩個屬性一起消失。`target` 同時也在全域屬性白名單裡，但
+只有 `<a>` 用得到它，非連結元素上的 `target` 一律被清掉，就算那個標籤本身在白名單裡也一
+樣。
+
+### 圖片的 `width` 與 `height`
+
+`width` 只在 `<img>` 上留得住，而且整個值要符合 `\A[1-9][0-9]{0,4}\z` 這個規則——一
+個 1 到 5 位數、沒有前導零的純像素整數，沒有單位、沒有百分比、沒有空白。其他元素上的
+`width` 一律被清掉，就算是白名單裡的屬性也一樣。
+
+`height` 完全沒有進白名單，不管來源是什麼都不會被存下來：寬高兩個維度一起送進只設
+`max-width: 100%` 的版面，圖片反而會被壓扁。渲染 `RichText` 圖片時只設 `max-width: 100%`、
+不去限制高度，單靠存下來的寬度就能等比例縮放。
+
+兩條規則都是 `GanssHtmlSanitizer` 一個地方定的政策，不是不能改的限制——想改成允許
+`noreferrer`、允許百分比寬度，或是連高度一起存，動的是這個 sanitizer 本身，不是編輯器的連
+結對話框，也不是別處的白名單。表格 `<thead>` 的整理是同一個 sanitizer 做的另一件事，見
+[第 19 章](19-admin-customization.md)。
 
 ## 常見陷阱
 
@@ -197,8 +238,8 @@
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
 外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名屬性與介面；`InitTables` 集
 合裡的型別在啟動時就失敗，集合外的則要等到第一次用到那張表才失敗。修法是移除 `[ColumnShape]`：JSON
-對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介面
-（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
+對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介
+面（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
 
 同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，
 而且不會有任何警告。

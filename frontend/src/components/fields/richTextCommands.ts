@@ -134,16 +134,17 @@ export const TOOLBAR_BEFORE_COLOR: ReadonlyArray<RichTextCommand> = [
         // caret inside one, rather than a zero-length fragment at that caret -- so this call is the
         // edit-an-existing-link path whenever a link mark already sits there, not only the
         // brand-new-link path.
-        // rel is never passed here -- the backend derives and owns it (chapter 5's RichText contract
-        // table). What the omission falls back to differs between those two cases, though: for a
-        // brand-new mark, @tiptap/core's setMark has no prior mark.attrs to merge in, so it falls
-        // back to the Link extension's own attribute default, which RichTextInput.vue's
-        // HTMLAttributes: { rel: null } makes exactly `null`. For an edited mark, setMark instead
-        // does `type.create({ ...mark.attrs, ...attributes })` -- and rel IS in mark.attrs for
-        // round-tripped content, because extension-link's own `rel` attribute declares no parseHTML,
-        // so TipTap injects one that just reads the DOM attribute; a stored rel="noopener" therefore
-        // survives into the mark and is emitted again, no fallback involved. Benign either way:
-        // GanssHtmlSanitizer.cs overwrites rel unconditionally on every write.
+        // rel is never passed here -- the backend owns it: GanssHtmlSanitizer's PostProcessNode
+        // handler derives rel from target. What the omission falls back to differs between those
+        // two paths, though: for a brand-new mark, @tiptap/core's setMark has no prior mark.attrs
+        // to merge in, so it falls back to the Link extension's own attribute default, which
+        // RichTextInput.vue's HTMLAttributes: { rel: null } makes exactly `null`. For an edited
+        // mark, setMark instead does `type.create({ ...mark.attrs, ...attributes })` -- and rel IS
+        // in mark.attrs for round-tripped content, because extension-link's own `rel` attribute
+        // declares no parseHTML, so TipTap injects one that just reads the DOM attribute; a stored
+        // rel="noopener" therefore survives into the mark and is emitted again, no fallback
+        // involved. Benign either way: GanssHtmlSanitizer.cs overwrites rel unconditionally on
+        // every write.
         editor.chain().focus().extendMarkRange('link')
           .setLink({ href: result.href, target: result.newTab ? '_blank' : null }).run()
       })
