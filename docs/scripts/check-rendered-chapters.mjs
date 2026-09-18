@@ -17,6 +17,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fencedLines } from './lib/fences.mjs'
 
 const DOCS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = join(DOCS_ROOT, '.vitepress', 'dist')
@@ -43,36 +44,18 @@ const MUSTACHE_LOCATION =
 // nothing, renders a heading, and is invisible to the rendered-output checks
 // below. Runs on the sources directly, so it needs no build.
 //
-// Fences (``` or ~~~, 3 or more characters, indented up to 3 spaces) are
-// tracked rather than assumed: a closer must reuse the same character and be
-// at least as long as its opener, per CommonMark. The manual's many
-// {{ }}-containing code samples live inside fences; a scan that mistook one
-// for prose would fail on those samples, which is exactly the false positive
-// that would get this check deleted later.
-const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/
-
+// Fence detection (see lib/fences.mjs) keeps the manual's many
+// {{ }}-containing code samples out of this scan — a fenced line is never
+// prose, opener and closer included.
 function findBareMustaches(file) {
   const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+  const fenced = fencedLines(lines)
   const lineNumbers = []
-  let fence = null // { char, length } of the currently open fence, or null
-
   lines.forEach((line, index) => {
-    const opener = FENCE_LINE.exec(line)
-    if (fence) {
-      if (opener && opener[1].startsWith(fence.char) && opener[1].length >= fence.length) {
-        fence = null
-      }
-      return // inside a fence, including its closing line: never prose
-    }
-    if (opener) {
-      fence = { char: opener[1][0], length: opener[1].length }
-      return // the opening fence line itself is not prose either
-    }
-    if (line.includes('{{') && !line.includes('v-pre')) {
+    if (!fenced[index] && line.includes('{{') && !line.includes('v-pre')) {
       lineNumbers.push(index + 1)
     }
   })
-
   return lineNumbers
 }
 

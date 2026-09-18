@@ -15,6 +15,7 @@
 // takes about the space of two Latin ones. There is no per-table exemption on
 // purpose: a table that cannot fit must be rewritten as a list or a section,
 // not waved through.
+import { fencedLines } from './fences.mjs'
 
 // Spec thresholds (docs/_archive-local/superpowers/specs/2026-09-10-docs-rewrite-design.md §5).
 // One definition, shared by the CLI and its tests.
@@ -74,12 +75,6 @@ export function cellText(rawCell) {
     .trim()
 }
 
-// Same fence rule as check-rendered-chapters.mjs: 3+ backticks or tildes,
-// indented up to 3 spaces; the closer reuses the opener's character and is at
-// least as long. Tables in fenced code samples must never be measured — that
-// false positive is exactly what would get this guard deleted later.
-const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/
-
 // A delimiter row, after stripping leading whitespace and one optional
 // leading/trailing pipe: one or more `-`-only cells (each optionally
 // colon-anchored for alignment), separated by `|`. This is the anchor for
@@ -120,25 +115,9 @@ function isBlank(line) {
 export function checkTables(markdown, limits) {
   const lines = markdown.split(/\r?\n/)
   const violations = []
-  const fenceAt = new Array(lines.length).fill(false)
-
-  // Pre-compute which lines sit inside a fence, so header/delimiter/body
-  // scanning below never has to track fence state itself.
-  let fence = null
-  lines.forEach((line, index) => {
-    const opener = FENCE_LINE.exec(line)
-    if (fence) {
-      fenceAt[index] = true
-      if (opener && opener[1].startsWith(fence.char) && opener[1].length >= fence.length) {
-        fence = null
-      }
-      return
-    }
-    if (opener) {
-      fenceAt[index] = true
-      fence = { char: opener[1][0], length: opener[1].length }
-    }
-  })
+  // Which lines sit inside a fence, so header/delimiter/body scanning below
+  // never has to track fence state itself.
+  const fenceAt = fencedLines(lines)
 
   function measureRow(line, lineNumber) {
     const cells = rowCells(line)
