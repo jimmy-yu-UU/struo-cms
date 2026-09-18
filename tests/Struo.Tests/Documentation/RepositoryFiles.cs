@@ -53,7 +53,8 @@ internal static class RepositoryFiles
                 continue;
 
             var relativeSubDir = Path.GetRelativePath(repoRoot, subDir.FullName).Replace('\\', '/');
-            if (relativeSubDir.StartsWith(ExcludedRelativePrefix, StringComparison.Ordinal))
+            if (relativeSubDir == ExcludedRelativePrefix ||
+                relativeSubDir.StartsWith(ExcludedRelativePrefix + "/", StringComparison.Ordinal))
                 continue;
 
             Walk(subDir, repoRoot, includeRelativePath, results);

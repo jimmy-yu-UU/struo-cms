@@ -3,13 +3,13 @@ using System.Text.RegularExpressions;
 namespace Struo.Tests.Documentation;
 
 /// <summary>
-/// Pure functions behind the repo-wide narrative guard: pull the comment/prose text out of a source
-/// line (by language) and check it for change-narrative wording, a bare date, a PR/issue reference,
-/// or an allow marker with no reason. Word-boundary matching on <c>//</c> is a heuristic (an odd count
-/// of unescaped quote characters before it means the slashes sit inside a string literal), not a real
-/// tokenizer, so a pathological line can still fool it.
+/// Pure functions behind the repo-wide narrative guard: check a source line's already-extracted
+/// comment/prose text (see the extraction partial part) for change-narrative wording, a bare date, a
+/// PR/issue reference, or an allow marker with no reason, and check a decision file's raw lines for its
+/// required heading structure. An allow marker's reason clears rules 1 and 2 on that line only; rule 3
+/// can never be marked.
 /// </summary>
-internal static class StaleNarrativeRules
+internal static partial class StaleNarrativeRules
 {
     public enum SourceKind { CSharp, TypeScript, Vue, Markdown }
 
@@ -31,24 +31,16 @@ internal static class StaleNarrativeRules
     private static readonly Regex PrReference = new(
         @"PR #\d+|pull/\d+|(?<![\w&])#\d{2,}\b", RegexOptions.Compiled);
 
-    private static readonly Regex FenceLine = new(@"^ {0,3}(`{3,}|~{3,})", RegexOptions.Compiled);
-
     private static readonly Regex HeadingLevel2 = new(@"^##\s+(.*)$", RegexOptions.Compiled);
 
-    private static readonly Regex InlineCodeSpan = new(@"(`+)[^`]*?\1", RegexOptions.Compiled);
+    private static readonly Regex AtxClosingHashes = new(@"\s+#+$", RegexOptions.Compiled);
 
-    public static SourceKind KindOf(string relativePath) =>
-        Path.GetExtension(relativePath).ToLowerInvariant() switch
-        {
-            ".vue" => SourceKind.Vue,
-            ".ts" => SourceKind.TypeScript,
-            ".cs" => SourceKind.CSharp,
-            ".md" => SourceKind.Markdown,
-            var other => throw new ArgumentException($"Unsupported extension '{other}' for '{relativePath}'.", nameof(relativePath)),
-        };
-
-    public static IReadOnlyList<ScannableLine> ExtractScannable(SourceKind kind, IReadOnlyList<string> lines) =>
-        kind == SourceKind.Markdown ? ExtractMarkdown(lines) : ExtractCode(kind, lines);
+    /// <summary>
+    /// A captured level-2 heading's text, with a trailing ATX closing sequence (e.g. the <c>##</c> in
+    /// <c>## Evidence ##</c>) removed — otherwise that heading's <see cref="ScannableLine.Section"/>
+    /// would never equal the plain section name a caller checks for.
+    /// </summary>
+    private static string NormalizeHeadingText(string raw) => AtxClosingHashes.Replace(raw.Trim(), "").Trim();
 
     public static IReadOnlyList<Violation> Check(
         string relativePath, IReadOnlyList<ScannableLine> lines, bool isDecisionFile)
@@ -134,12 +126,18 @@ internal static class StaleNarrativeRules
         return null;
     }
 
+    // A fenced code sample can contain a line that only looks like "## Decision"; skip fenced lines so
+    // a sample never satisfies the structure check.
     private static int? FindHeadingLine(IReadOnlyList<string> lines, string name)
     {
+        var fenced = ComputeFencedLines(lines);
         for (var i = 0; i < lines.Count; i++)
         {
+            if (fenced[i])
+                continue;
+
             var match = HeadingLevel2.Match(lines[i].TrimEnd());
-            if (match.Success && string.Equals(match.Groups[1].Value.Trim(), name, StringComparison.Ordinal))
+            if (match.Success && string.Equals(NormalizeHeadingText(match.Groups[1].Value), name, StringComparison.Ordinal))
                 return i + 1;
         }
         return null;
@@ -176,165 +174,5 @@ internal static class StaleNarrativeRules
             raw = raw[..^2].Trim();
 
         return (true, raw);
-    }
-
-    private static List<ScannableLine> ExtractMarkdown(IReadOnlyList<string> lines)
-    {
-        var fenced = ComputeFencedLines(lines);
-        var result = new List<ScannableLine>();
-        string? currentSection = null;
-
-        for (var i = 0; i < lines.Count; i++)
-        {
-            if (fenced[i])
-                continue;
-
-            var line = lines[i];
-            var headingMatch = HeadingLevel2.Match(line);
-            if (headingMatch.Success)
-                currentSection = headingMatch.Groups[1].Value.Trim();
-
-            var text = InlineCodeSpan.Replace(line, "").Trim();
-            result.Add(new ScannableLine(i + 1, text, currentSection));
-        }
-
-        return result;
-    }
-
-    private static bool[] ComputeFencedLines(IReadOnlyList<string> lines)
-    {
-        var fenced = new bool[lines.Count];
-        (char Char, int Length)? fence = null;
-
-        for (var i = 0; i < lines.Count; i++)
-        {
-            var opener = FenceLine.Match(lines[i]);
-            if (fence is not null)
-            {
-                fenced[i] = true;
-                if (opener.Success)
-                {
-                    var token = opener.Groups[1].Value;
-                    if (token[0] == fence.Value.Char && token.Length >= fence.Value.Length)
-                        fence = null;
-                }
-                continue;
-            }
-
-            if (opener.Success)
-            {
-                fenced[i] = true;
-                var token = opener.Groups[1].Value;
-                fence = (token[0], token.Length);
-            }
-        }
-
-        return fenced;
-    }
-
-    private static List<ScannableLine> ExtractCode(SourceKind kind, IReadOnlyList<string> lines)
-    {
-        var result = new List<ScannableLine>(lines.Count);
-        var inBlock = false;
-        var inHtml = false;
-
-        for (var i = 0; i < lines.Count; i++)
-            result.Add(ExtractCodeLine(i + 1, lines[i], kind, ref inBlock, ref inHtml));
-
-        return result;
-    }
-
-    private static ScannableLine ExtractCodeLine(int lineNumber, string line, SourceKind kind, ref bool inBlock, ref bool inHtml)
-    {
-        if (inHtml)
-        {
-            var close = line.IndexOf("-->", StringComparison.Ordinal);
-            if (close < 0)
-                return new ScannableLine(lineNumber, line.Trim(), null);
-            inHtml = false;
-            return new ScannableLine(lineNumber, line[..close].Trim(), null);
-        }
-
-        if (inBlock)
-        {
-            var close = line.IndexOf("*/", StringComparison.Ordinal);
-            if (close < 0)
-                return new ScannableLine(lineNumber, line.Trim(), null);
-            inBlock = false;
-            return new ScannableLine(lineNumber, line[..close].Trim(), null);
-        }
-
-        var htmlStart = kind == SourceKind.Vue ? line.IndexOf("<!--", StringComparison.Ordinal) : -1;
-        var blockStart = line.IndexOf("/*", StringComparison.Ordinal);
-        var lineStart = FindLineCommentStart(line);
-
-        var (start, marker) = EarliestMarker(htmlStart, blockStart, lineStart);
-        if (start < 0)
-            return new ScannableLine(lineNumber, "", null);
-
-        if (marker == 0)
-        {
-            var close = line.IndexOf("-->", start + 4, StringComparison.Ordinal);
-            if (close >= 0)
-                return new ScannableLine(lineNumber, line[(start + 4)..close].Trim(), null);
-            inHtml = true;
-            return new ScannableLine(lineNumber, line[(start + 4)..].Trim(), null);
-        }
-
-        if (marker == 1)
-        {
-            var close = line.IndexOf("*/", start + 2, StringComparison.Ordinal);
-            if (close >= 0)
-                return new ScannableLine(lineNumber, line[(start + 2)..close].Trim(), null);
-            inBlock = true;
-            return new ScannableLine(lineNumber, line[(start + 2)..].Trim(), null);
-        }
-
-        return new ScannableLine(lineNumber, line[(start + 2)..].Trim(), null);
-    }
-
-    private static (int Start, int Marker) EarliestMarker(int htmlStart, int blockStart, int lineStart)
-    {
-        var start = -1;
-        var marker = 0; // 0 = html, 1 = block, 2 = line
-        if (htmlStart >= 0) { start = htmlStart; marker = 0; }
-        if (blockStart >= 0 && (start < 0 || blockStart < start)) { start = blockStart; marker = 1; }
-        if (lineStart >= 0 && (start < 0 || lineStart < start)) { start = lineStart; marker = 2; }
-        return (start, marker);
-    }
-
-    private static int FindLineCommentStart(string line)
-    {
-        var searchFrom = 0;
-        while (true)
-        {
-            var idx = line.IndexOf("//", searchFrom, StringComparison.Ordinal);
-            if (idx < 0)
-                return -1;
-            if (CountUnescapedQuotes(line, idx) % 2 == 0)
-                return idx;
-            searchFrom = idx + 2;
-        }
-    }
-
-    private static int CountUnescapedQuotes(string line, int endExclusive)
-    {
-        var count = 0;
-        for (var i = 0; i < endExclusive; i++)
-        {
-            if (line[i] != '"' && line[i] != '\'')
-                continue;
-
-            var backslashes = 0;
-            var j = i - 1;
-            while (j >= 0 && line[j] == '\\')
-            {
-                backslashes++;
-                j--;
-            }
-            if (backslashes % 2 == 0)
-                count++;
-        }
-        return count;
     }
 }

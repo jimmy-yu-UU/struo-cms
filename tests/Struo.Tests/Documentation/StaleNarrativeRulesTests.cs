@@ -22,9 +22,33 @@ public sealed class StaleNarrativeRulesTests
         scanned[0].Text.Should().BeEmpty();
         scanned[1].Text.Should().Be("used to be X");
         scanned[2].Text.Should().Contain("previously");
+        scanned[2].Text.Should().NotStartWith("/");
         scanned[3].Text.Should().Be("first");
         scanned[4].Text.Should().Be("second");
         scanned[5].Text.Should().Be("third");
+
+        // A block-comment opener inside a string literal is not a real comment start.
+        var stringLiteralBlockComment = StaleNarrativeRules.ExtractScannable(
+            StaleNarrativeRules.SourceKind.CSharp, ["var s = \"/* used to */\";"]);
+        stringLiteralBlockComment[0].Text.Should().BeEmpty();
+
+        // The same string literal followed by a real line comment must not be mistaken for an
+        // unterminated block comment that would swallow every following line.
+        var blockOpenerInStringThenRealComment = StaleNarrativeRules.ExtractScannable(
+            StaleNarrativeRules.SourceKind.CSharp,
+            ["const s = \"/*\"; // real comment", "var x = 1;"]);
+        blockOpenerInStringThenRealComment[0].Text.Should().Be("real comment");
+        blockOpenerInStringThenRealComment[1].Text.Should().BeEmpty();
+
+        // A "//" inside a URL string literal, followed by a real trailing comment.
+        var urlThenRealComment = StaleNarrativeRules.ExtractScannable(
+            StaleNarrativeRules.SourceKind.CSharp, ["const url = \"http://x\"; // real comment"]);
+        urlThenRealComment[0].Text.Should().Be("real comment");
+
+        // A "//" that only ever appears inside a string literal is not a comment at all.
+        var lineCommentInsideStringLiteral = StaleNarrativeRules.ExtractScannable(
+            StaleNarrativeRules.SourceKind.CSharp, ["var s = \"a // used to\";"]);
+        lineCommentInsideStringLiteral[0].Text.Should().BeEmpty();
     }
 
     [Fact]
@@ -35,6 +59,7 @@ public sealed class StaleNarrativeRulesTests
             "const s = 'no longer';",
             "// previously handled here",
             "/* formerly a fallback */",
+            "const url = \"http://x\"; // real comment",
         ];
         string[] vueLines = ["<!-- previously used here -->"];
 
@@ -43,6 +68,7 @@ public sealed class StaleNarrativeRulesTests
 
         ts[0].Text.Should().BeEmpty();
         ts[1].Text.Should().Be("previously handled here");
+        ts[3].Text.Should().Be("real comment");
         ts[2].Text.Should().Be("formerly a fallback");
         vue[0].Text.Should().Be("previously used here");
     }
@@ -72,6 +98,11 @@ public sealed class StaleNarrativeRulesTests
         afterFence.Section.Should().Be("Evidence");
         var withSpan = scanned.Single(l => l.LineNumber == 9);
         withSpan.Text.Should().NotContain("no longer");
+
+        // An ATX closing sequence on the heading itself must not become part of the section name.
+        var closedHeading = StaleNarrativeRules.ExtractScannable(
+            StaleNarrativeRules.SourceKind.Markdown, ["## Evidence ##", "measured 2026-08-05"]);
+        closedHeading[1].Section.Should().Be("Evidence");
     }
 
     [Theory]
@@ -201,5 +232,24 @@ public sealed class StaleNarrativeRulesTests
         violations.Should().ContainSingle(v => v.Rule == 5 && v.Detail == "missing heading '## Unknowns'");
 
         StaleNarrativeRules.CheckDecisionStructure("a.md", correctOrder).Should().BeEmpty();
+
+        // A fenced code sample that merely shows "## Decision" must not satisfy the real heading.
+        string[] decisionOnlyInFence =
+        [
+            "# A decision title",
+            "```",
+            "## Decision",
+            "```",
+            "## Why",
+            "text",
+            "## Evidence",
+            "text",
+            "## Unknowns",
+            "text",
+            "## Referenced from",
+            "text",
+        ];
+        StaleNarrativeRules.CheckDecisionStructure("a.md", decisionOnlyInFence)
+            .Should().ContainSingle(v => v.Rule == 5 && v.Detail == "missing heading '## Decision'");
     }
 }
