@@ -39,7 +39,7 @@ rejects what fails.
   directly — headless, template, fork, junction, sidecar — with no gloss in the other language and
   no bracketed English after a Chinese term. Never introduce the product by what it is *not*; say
   what it is, what it includes, and what the reader does next.
-- **Content.** Describe current behavior only. No history, no "this used to", no closed defects, no
+- **Content.** Describe current behavior only. No history, no "this used to", no closed defects, no <!-- narrative-guard:allow: the rule quotes the phrase it bans -->
   explanation of internal branch order inside a hook. Cite a source file only when the reader must
   open it, at most one per sentence.
 - **Layout.** One idea per paragraph, normally four or five lines. Parallel items become a list.
@@ -78,7 +78,7 @@ rejects what fails.
 
 | Anti-pattern | Instead |
 |---|---|
-| Change narrative: "this used to be X, now Y" | State the current behavior |
+| Change narrative: "this used to be X, now Y" | State the current behavior; see "Only the current state" below <!-- narrative-guard:allow: the rule quotes the phrase it bans --> |
 | Investigation journal in a chapter | Doc comment of the class, plus a pointer |
 | Same rule in N places | One home, links elsewhere |
 | A summary that re-explains its own section | A checklist of steps |
