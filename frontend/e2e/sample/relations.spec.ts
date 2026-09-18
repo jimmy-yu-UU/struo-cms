@@ -358,7 +358,7 @@ async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLab
   await page.keyboard.press('Escape')
 }
 
-// Article.Tags' junction (ArticleTag, chapter 16) is a [CmsCollection] with a Note payload field and
+// Article.Tags' junction (ArticleTag, chapter 8) is a [CmsCollection] with a Note payload field and
 // the relation's SortField, so ItemFormView renders JunctionLinksEditor for it: one row per linked
 // tag (label badge + inline Note input + move arrows) instead of RelationPicker's chips. Live gate for
 // the payload round-trip: Note typed in a row and a reorder both survive Save and a fresh reload.

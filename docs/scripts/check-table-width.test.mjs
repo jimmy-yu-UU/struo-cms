@@ -52,23 +52,6 @@ test('exits 1 and names locale, file, line and cause for each violation', () => 
   }
 })
 
-test('the legacy allowlist exempts the sixteen old chapter filenames in every locale', () => {
-  const wide = '# Old\n\n| a | b | c | d | e |\n|---|---|---|---|---|\n'
-  const root = makeGuide({
-    'en/09-rest-api.md': wide,
-    'zh-TW/09-rest-api.md': wide,
-    'en/02-new.md': '# New\n\n| a | b |\n|---|---|\n',
-    'zh-TW/02-new.md': '# 新\n\n| a | b |\n|---|---|\n',
-  })
-  try {
-    const result = run(root)
-    assert.equal(result.status, 0, result.stderr)
-    assert.match(result.stdout, /2 legacy chapter files skipped/)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
 test('a missing guide root is an error, not a silent pass', () => {
   const missing = join(tmpdir(), 'struo-table-guard-does-not-exist')
   const result = spawnSync(process.execPath, [CLI, missing], { encoding: 'utf8', cwd: tmpdir() })
