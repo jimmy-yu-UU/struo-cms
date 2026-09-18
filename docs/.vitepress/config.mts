@@ -60,8 +60,9 @@ export default defineConfig({
   // links are bare sibling filenames, and this setting is what checks them —
   // a renamed or deleted chapter fails the build with a dead-link error.
   // It does not catch every broken page: an unprotected `{{ }}` in rendered
-  // text is a separate failure mode (see the two v-pre wraps in chapter 7)
-  // that this setting has no bearing on.
+  // text is a separate failure mode that this setting has no bearing on;
+  // see docs/ai/conventions.md's "Mustache syntax in the manual" section and
+  // docs/scripts/check-rendered-chapters.mjs, which guards against it.
   ignoreDeadLinks: false,
 
   locales: Object.fromEntries(
