@@ -3,8 +3,10 @@ import type { FieldMeta } from '../../types/schema'
 
 // Mirrors backend Struo.Domain.Metadata.Enums.FieldInterface (camelCase).
 // Adding a backend interface requires adding it here AND giving it a component in registry.ts.
-// Enforced, not honour-system: frontend/tests/schemaContract.test.ts fails when any interface used
-// by a core collection is missing from this list or from the registry (see schema/README.md).
+// Enforced, not honour-system: frontend/tests/schemaContract.test.ts checks this two ways — one
+// describe block fails when an interface used by a core collection is missing from this list or
+// from the registry; a second, unconditional block fails when any backend-declared interface is
+// missing, whether or not a core collection uses it (see schema/README.md).
 export type FieldInterface =
   | 'text' | 'textarea' | 'richText' | 'markdown' | 'code'
   | 'slug' | 'email' | 'url' | 'password' | 'color' | 'phone'
