@@ -27,7 +27,8 @@ the text you are cutting, move it somewhere durable first.
 
 Third, **cite constructs, not lines** — a class, method, branch or distinguishing property, never a
 line range; the rule and its one exception are in "Citing code from docs and comments" below, and
-`CodeCitationConventionTests` enforces it on the manual chapters and the reference set.
+`CodeCitationConventionTests` enforces it on the manual chapters, the reference set, and the code's own
+comments (`src/**/*.cs`, `tests/**/*.cs`, `frontend/src/**`).
 
 ### For the manual
 
@@ -49,7 +50,9 @@ rejects what fails.
   `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
   whose display width exceeds 60 (CJK counts 2). There is no exemption; rewrite the table. It finds
   tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
-  indentation hides a table from it.
+  indentation hides a table from it. A table inside a fenced code block is not measured — it is a
+  sample, not a rendered table — and every markdown file under `docs/guide/`, not only the chapters,
+  is checked.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
   capture it from a real run. Never hand-edit one.
 - **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
@@ -103,10 +106,18 @@ itself) — a bare filename matches by basename anywhere under those roots, a di
 (as most upstream citations here are written) must match a real path suffix, and there is
 deliberately no upstream-filename allowlist, which would go stale. A citation with no file extension
 at all — a dotted `Construct.Member` name immediately followed by a hyphenated range — names no file
-to check, so it is **always** a violation with no escape hatch; write upstream citations in the
-extension-anchored form, never this one. A bare trailing number with no filename (`` `:145` ``) or a
-prose reference ("line 74") is not reliably distinguishable from a port or a time and is not covered;
-a reviewer still has to catch those by hand.
+to check, so it is **always** a violation: there is no existence check for it to pass, and therefore
+no per-citation upstream exception. Write upstream citations in the extension-anchored form, never
+this one. A genuine false positive on ordinary prose (the test's own example is a version range like
+"Supported Node.js: 20-22") can only be cleared with the `citation-guard:allow` line marker, which
+skips both regexes for that line and is not a general-purpose suppression. A bare trailing number
+with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably distinguishable from
+a port or a time and is not covered; a reviewer still has to catch those by hand.
+
+Every file under `docs/_archive-local/` — including this repository's own specs and audit
+records — is excluded from the scan entirely (`CodeCitationConventionTests`'s
+`ExcludedRelativePrefix`), so a line citation written in a spec is neither caught nor resolvable by
+this test; a green run says nothing about that directory's own citations.
 
 ## Mustache syntax in the manual
 
@@ -129,8 +140,12 @@ parsed as an expression, and neither outcome is a build failure:
 - **`{{ something }}` — a bare identifier — empties only that sentence.** It interpolates to the empty
   string, nothing throws, and `vitepress build` is green — the rendered-output check above sees a heading
   and passes. `pnpm build` still catches it: `check-rendered-chapters.mjs` also scans every chapter
-  *source* for a bare `{{` outside a fenced code block and unwrapped by `<span v-pre>`, which needs no
-  build to run and catches this form specifically.
+  *source* for a bare `{{` outside a fenced code block and unwrapped by `<span v-pre>` — a source-side
+  scan that needs no rendered output of its own and is the only one of the two checks in that script that
+  catches this form (any `v-pre` anywhere on the line exempts every `{{` on that line, not just the one
+  it wraps). The script still needs `.vitepress/dist` for its other half (the rendered-heading check
+  above), so run it through `pnpm build`, not standalone; `check-table-width.mjs` is the one guard script
+  that can be run on its own while editing a chapter.
 
 Wrap the span:
 
@@ -138,7 +153,10 @@ Wrap the span:
 <span v-pre>`<span class="readonly-relation">{{ relation.label }}</span>`</span>
 ```
 
-Fenced code blocks need nothing — VitePress applies `v-pre` to them already.
+Fenced code blocks need nothing — VitePress applies `v-pre` to them already — with one exception: a
+fence whose language ends in `-vue` (` ```js-vue `) is the opt-in VitePress uses to *enable*
+interpolation, so it gets no `v-pre`, and the source-side guard above skips fenced lines regardless. The
+manual uses no `-vue` fence today.
 
 A related constraint from the same config (`docs/.vitepress/config.mts`'s `srcDir: 'guide'` plus
 `ignoreDeadLinks: false`): a chapter may only markdown-link to another chapter, since anything outside
@@ -161,8 +179,10 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   (`db/migrations/README.md`) — the numeric prefix is the apply order via ordinal filename sort, so it
   must be monotonic and gap-free; the next number is always the current highest **+ 1**.
 - **Frontend field interfaces**: camelCase string literals (`richText`, `multiSelect`, `checkboxGroup`)
-  mirroring the backend `FieldInterface` enum member names — `frontend/src/lib/fieldTypes/types.ts`'s
-  own comment states this must be kept in sync by hand; nothing generates one from the other.
+  mirroring the backend `FieldInterface` enum member names. Nothing generates one from the other — a new
+  backend member must be added to `frontend/src/lib/fieldTypes/types.ts` **and** given a component in
+  `registry.ts` by hand — but the sync is enforced, not honour-system: the schema contract
+  ("Tests per layer" below) fails on a member the frontend has no mirror for.
 - **Test class/file names**: one test class per source concept, named `<Subject>Tests.cs`
   (`ItemsEndpointTests.cs`, `MetadataScannerTests.cs`, `TemplateInvariantsTests.cs`) or
   `<subject>.test.ts` for frontend unit tests, co-located next to the source file it covers
@@ -212,33 +232,30 @@ wants its own vendor literal to win on a shaped property must remove `[ColumnSha
 **A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
 `InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
 co-occurs with a `JsonColumnInterfaces` member
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`). The shape branch's early return
-outranks the later JSON branch, which sets both `IsJson = true` and a widened `DataType`; both
-branches resolve a JSON-column interface to `LongText`, so with the shape declared `LongText` — the
-only sensible choice here — the combination's only effect was silently dropping `IsJson`, and without
-it SqlSugar never serializes the collection and the column takes CodeFirst's unset length —
-`varchar(1)` on PostgreSQL, which rejects every real value with 22001. Remove `[ColumnShape]` from
-such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
-(`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal — both paths compute
-`LongText`, so nothing is lost. Pinned by
-`ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused` and
-`..._combined_with_a_content_bearing_CmsField_is_still_allowed`.
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — omitting `[ColumnShape]` there
+instead would silently drop `IsJson`, leaving the column at CodeFirst's unset length, `varchar(1)` on
+PostgreSQL, where every real value fails with 22001; remove `[ColumnShape]` from such a property, since
+the JSON mapping already applies `LongText`. A **content-bearing** interface
+(`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal. See
+`ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for why both
+branches resolve to `LongText` and for the pinning tests.
 
-Core itself must never write a vendor type literal outside `ColumnTypeMap.cs` — that file is the one
-place in `src/` a string like `"timestamptz"` or `"longtext"` may appear. An empty MySQL/SQL Server/
-Oracle database fails `InitTables` outright on a type name that only exists on PostgreSQL, so any
-`[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go through `[ColumnShape]`
-instead.
+Core itself must never write a vendor type literal outside `ColumnTypeMap.cs` — that file, together
+with `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a
+SQLite identity primary key), are the only two places in `src/` a string like `"timestamptz"` or
+`"longtext"` may appear. An empty MySQL/SQL Server/Oracle database fails `InitTables` outright on a
+type name that only exists on PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a
+framework entity must go through `[ColumnShape]` instead.
 
 ## Translation sidecar unique index
 
 A translation sidecar's `(fk, locale)` UNIQUE index — the constraint that keeps at most one translation
-row per parent per locale — is **derived, not declared**. Nothing on `FileTranslation` or
-`Struo.Sample.Blog.ArticleTranslation` names the pair; the same `EntityService` hook that widens `IsJson`
-columns reads each sidecar's `[CmsTranslations(typeof(T))]` metadata via `TranslationSidecarIndexPolicy`
-(`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`) and stamps the resolved group
-name onto the foreign-key and locale columns' `EntityColumnInfo.UIndexGroupNameList` before `InitTables` reads
-it, so CodeFirst emits the composite `UNIQUE` on table creation with no attribute on the entity at all.
+row per parent per locale — is **derived, not declared**: nothing on `FileTranslation` or
+`Struo.Sample.Blog.ArticleTranslation` names the pair. `TranslationSidecarIndexPolicy`
+(`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`) resolves the group name from
+each collection's already-scanned `Translation` metadata, and `SqlSugarClientFactory`'s
+`ApplySidecarUniqueGroup` comment has the stamping mechanism, so CodeFirst ends up emitting the
+composite `UNIQUE` on table creation with no attribute on the entity at all.
 
 `SqlSugarClientFactory.Create` takes the policy as an optional third parameter defaulting to
 `TranslationSidecarIndexPolicy.None` (no sidecars, no uniques). `AddStruoInfrastructure`
@@ -288,23 +305,25 @@ enforces it lives (`ItemWriteSideSync.SyncM2MAsync`).
 
 Both `Struo.Application` and `Struo.Infrastructure` are organized **by feature area**, not by technical
 role, though the two projects don't carry identical folder sets — each only has the folders its own
-concerns need. `Struo.Application`: `Abstractions/`, `Configuration/`, `Files/`, `Localization/`,
-`Metadata/`, `Query/` (with `Query/Read/` and `Query/Write/` sub-folders for the read/write split, plus
-`Query/Write/Validators/`), `Revisions/`, `Security/`, `Settings/`. `Struo.Infrastructure`:
-`DependencyInjection/`, `Files/`, `Health/`, `Identity/`, `Localization/`, `Metadata/`, `Persistence/`,
-`Query/`, `Revisions/`, `Security/`, `Settings/` — it additionally owns `Identity/` (the concrete user/
-role/permission entities and SqlSugar wiring), `DependencyInjection/` (the general-purpose `AddStruoXxx`
-extension methods — `AddStruoData`, `AddStruoFiles`, `AddStruoMetadata` (two overloads),
-`AddStruoInfrastructure`; the four host-specific ones — `AddStruoAuth`, `AddStruoCors`, `AddStruoOidc`,
-`AddStruoGraphQl` — live in `src/Struo.Api` instead), `Health/`, and `Persistence/` (SqlSugar
-client/migration plumbing), none of which `Struo.Application` has any need for. `Struo.Api` mirrors this: `Controllers/`, `GraphQl/`,
+concerns need. `Struo.Application`: `Abstractions/`, `Changes/`, `Configuration/`, `Files/`,
+`Localization/`, `Metadata/`, `Query/` (with `Query/Read/`, `Query/Write/` and `Query/Projection/`
+sub-folders, plus `Query/Write/Validators/`), `Revisions/`, `Search/`, `Security/`, `Settings/`.
+`Struo.Infrastructure`: `Changes/`, `DependencyInjection/`, `Files/`, `Health/`, `Identity/`,
+`Localization/`, `Metadata/`, `Persistence/`, `Query/`, `Revisions/`, `Security/`, `Settings/` — it
+additionally owns `Identity/` (the concrete user/role/permission entities and SqlSugar wiring),
+`DependencyInjection/` (the general-purpose `AddStruoXxx` extension methods — `AddStruoData`,
+`AddStruoFiles`, `AddStruoMetadata` (two overloads), `AddStruoInfrastructure`; the four host-specific
+ones — `AddStruoAuth`, `AddStruoCors`, `AddStruoOidc`, `AddStruoGraphQl` — live in `src/Struo.Api`
+instead), `Health/`, and `Persistence/` (SqlSugar client/migration plumbing), none of which
+`Struo.Application` has any need for. `Struo.Api` mirrors this: `Controllers/`, `GraphQl/`,
 `Http/`, `Auth/`. `tests/Struo.Tests` mirrors the same feature folders (`Metadata/`, `Query/`, `Api/`,
 `Files/`, `Identity/`, ...) so a change to one feature's production code has an obvious, adjacent home
 for its test. New code should follow the same pattern: add to (or create) a feature-named folder rather
-than a generic `Services/`/`Helpers/`/`Utils/` bucket, and keep files small and single-purpose — the
-codebase's existing files split by responsibility rather than by layer role (e.g. `ItemDeserializer`,
-`ItemProjector`, `QueryValidator`, `FieldValidatorRegistry` are separate files even though they all
-serve `ItemService`).
+than a generic `Services/`/`Helpers/`/`Utils/` bucket, and keep files small and single-purpose — a
+generic bucket has no matching folder in `tests/Struo.Tests`, so its tests end up scattered and a later
+reader cannot tell from the tree which feature a change touches (the codebase's existing files split by
+responsibility rather than by layer role — e.g. `ItemDeserializer`, `ItemProjector`, `QueryValidator`,
+`FieldValidatorRegistry` are separate files even though they all serve `ItemService`).
 
 ## Error handling and the response envelope
 
@@ -363,23 +382,13 @@ none is ever surfaced client-side.
   (`src/Struo.Infrastructure/Query/FilterTranslator.cs`, `FilterTranslator.Subquery.cs`) rather than
   resolved to an in-memory id set first; that subquery never clears the target collection's
   soft-delete filter, regardless of the outer request's own `?deleted=`. This translator hand-assembles
-  exactly four SQL string forms and nothing else — `<col> IN (<sql>)`, `<col> NOT IN (<sql>)`,
-  `(<col> IS NULL OR <col> NOT IN (<sql>))` (`SubQueryConditional.cs`), and the OR-merge of two or more
-  of those, `(<sql1> OR <sql2> OR …)` (`OrOfSubqueriesConditional.cs`) — every other fragment of SQL
-  text comes from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string. Sort is the
-  other place SqlSugar's typed surface runs out: `OrderByExpressionBuilder`
-  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) is the sole source of the string
-  passed to the one `queryable.OrderBy(string)` call, in `SqlSugarItemRepository.RunQueryAsync`, and it
-  assembles three per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as
-  a correlated subquery with one JOIN per hop (`RelationOrderExpr`), and a translatable-field sort as
-  a correlated subquery against the translation sidecar with the query locale embedded as an escaped
-  string literal (`TranslatableOrderExpr`; the locale is either a request locale already validated by
-  `ItemService.ValidateLocale`, or the configured default code whose format is guarded on write by
-  `ValidateLanguageCodeIfNeeded` — the quote-doubling on the literal at this sink remains either way)
-  — plus the no-client-sort default clause (`<created> DESC, <id> ASC`, or `<id> ASC` alone) and the
-  `, <id> ASC` tiebreak/comma-join that wrap every sort. Every column name across all of it comes from
-  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`. This is the fourth of `AGENTS.md`'s four
-  raw-SQL exceptions. Every filter value `ConditionalModelTranslator` renders into a `ConditionalModel`
+  exactly four SQL string forms and nothing else, every other fragment of SQL text coming from
+  SqlSugar's own `ToSql()`, never a hand-built dialect-specific string — see `AGENTS.md`, "Invariants",
+  for the full enumeration (its third raw-SQL exception). Sort is the other place SqlSugar's typed
+  surface runs out: the string passed to the one `queryable.OrderBy(string)` call
+  (`SqlSugarItemRepository.RunQueryAsync`) is assembled by `OrderByExpressionBuilder`
+  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) — `AGENTS.md`'s fourth raw-SQL
+  exception. Every filter value `ConditionalModelTranslator` renders into a `ConditionalModel`
   (`ToFieldValue`) is formatted with `CultureInfo.InvariantCulture`, and `Program.cs` sets the host
   process's own default culture to invariant at startup — needed because SqlSugar re-parses that same
   rendered value back with `CultureInfo.CurrentCulture` (keyed off `CSharpTypeName`), so the two sides
@@ -387,8 +396,8 @@ none is ever surfaced client-side.
   headless JSON API has no culture-formatted output of its own to lose by running invariant — see
   `docs/guide/en/10-query-basics.md`'s "Which fields can be filtered and sorted, and what happens
   when it goes wrong" for whitelisting and unknown paths, and `docs/guide/en/11-query-advanced.md`'s
-  "Deep expansion `deep=`" for the depth cap. `facets=`/`aggregate[<op>]=` (chapter 11's "Facet
-  counting" and "Aggregates")
+  "Deep expansion `deep=`" for the depth cap. `facets=`/`aggregate[<op>]=` (`docs/guide/en/
+  11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`")
   are validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
   at most one relation hop, never a quantifier or `_junction` segment, its own/leaf field's interface
   must be in `FacetPathResolver.Facetable` (excludes long-form text, every multi-value interface,
@@ -415,7 +424,7 @@ none is ever surfaced client-side.
   throw `InvalidOperationException` (→ `INTERNAL_SERVER_ERROR`/500) rather than `QueryException` (→
   `BAD_USER_INPUT`/400) — the violation is the fork's provider misbehaving, not something the caller
   sent, so it must not be reported as a client mistake. See
-  `docs/guide/en/18-extension-points.md`'s "The search provider".
+  `docs/guide/en/18-extension-points.md`'s "The search provider: `ISearchProvider`".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`) parses
   the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are stripped,
   not silently trusted) and sanitizes non-translatable `RichText` values via `RichTextCleaner` (a
@@ -446,7 +455,10 @@ none is ever surfaced client-side.
   (`src/Struo.Application/Query/Read/TranslationOverlay.cs`) gates translatable Image/File resolution
   on `CanRead` for the file collection. An anonymous-read deployment needs a
   `Rbac:PublicReadCollections` entry for every collection a public filter or `deep=` traverses, not
-  just the root. See `docs/guide/en/17-roles-and-permissions.md`.
+  just the root — that key is consulted only at first boot: `DataSeeder.SeedAsync`
+  (`src/Struo.Infrastructure/Persistence/DataSeeder.cs`) only invokes `RbacSeeder.SeedAsync` (which
+  reads it) when the `roles` table was just created this run. See
+  `docs/guide/en/17-roles-and-permissions.md`, "Public read".
 
 ## Configuration over hardcoding
 
@@ -468,11 +480,12 @@ by contrast is passed straight to `Directory.Exists` with no content-root resolu
 Domain and query model types are C# `record`s with `init`-only properties
 (`src/Struo.Domain/Metadata/Models/CollectionMetadata.cs` and siblings; `QueryModel`,
 `src/Struo.Domain/Query/`). Updating a value produces a new instance via `with` rather than mutating in
-place — for example `QueryValidator.cs`'s `return q with { Limit = limit, Offset = offset };`. New code
-in `Struo.Domain`/`Struo.Application` should follow the same pattern: prefer `record`/`sealed record`
-with `init` properties and non-destructive `with` updates over mutable classes with setters, especially
-for anything that flows through the metadata cache or the query pipeline (both are shared, longer-lived
-state where an accidental in-place mutation would be visible to every subsequent caller).
+place — for example `QueryValidator.cs`'s `return q with { Limit = limit, Offset = offset, Facets =
+facets, SearchCandidates = null };`. New code in `Struo.Domain`/`Struo.Application` should follow the
+same pattern: prefer `record`/`sealed record` with `init` properties and non-destructive `with` updates
+over mutable classes with setters, especially for anything that flows through the metadata cache or the
+query pipeline (both are shared, longer-lived state where an accidental in-place mutation would be
+visible to every subsequent caller).
 
 ## Overlay stacking (frontend)
 
@@ -481,7 +494,9 @@ Select, Dialog, Sheet, dropdown, tooltip, combobox, alert-dialog, ...), and noth
 `ConfirmHost` (`frontend/src/components/shell/ConfirmHost.vue`) is the one exception: it is a
 Pinia-backed singleton that can open while another vendored overlay is already on screen, and at equal
 `z-50` a fixed-position element's stacking falls to DOM order rather than intent, so its
-`AlertDialogContent` is raised to `z-[60]`. A new floating layer must stay under that ceiling —
+`AlertDialogContent` is raised to `z-[60]`. A new floating layer must stay under that ceiling: anything
+at `z-[60]` or above can cover the confirm dialog, and since `ConfirmHost` is the singleton that gates
+destructive actions, the user is left with a blocked action and no visible way to confirm or cancel it.
 `z-[60]` is reserved for this one singleton, not a scale to build on.
 
 ## Tests per layer
@@ -489,11 +504,9 @@ Pinia-backed singleton that can open while another vendored overlay is already o
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests build a fresh SQLite
   temp-file database per test (`Support/SqliteTestDatabase.cs`, deleted on dispose). An opt-in
   live-PostgreSQL suite (`PostgresIntegrationTests`) exists specifically to catch "SQLite-green ≠
-  Postgres-correct" bugs; it activates only when `Testing:PostgresConnection` is configured — resolved
-  from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
-  `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if
-  the env var is unset — and is otherwise a no-op pass; it also refuses to run against any database
-  whose name doesn't contain `test`. Integration-style tests for the HTTP
+  Postgres-correct" bugs; it is otherwise a no-op pass when `Testing:PostgresConnection` isn't
+  configured, and refuses to run against any database whose name doesn't contain `test` — see
+  `AGENTS.md`, "Verification", for the connection-resolution order. Integration-style tests for the HTTP
   surface live under `tests/Struo.Tests/Api/` using a `WebApplicationFactory`-based fixture
   (`Support/ApiFactory.cs`). `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` is the one suite
   that guards template-shape invariants (no `samples/*` reference from `Struo.Api`, empty shipped
@@ -508,26 +521,22 @@ Pinia-backed singleton that can open while another vendored overlay is already o
   mirrors the backend DTOs and enums by hand, and drift between them is silent to every other gate — an
   unknown `FieldInterface` falls back to a read-only renderer instead of erroring, a field whose
   interface has no list-column formatter just disappears from the list view, and an unmapped
-  `RelationInterface` falls back to `'readonly'`. The enum snapshot is what makes the interface half
-  unconditional: a new member is caught when it is declared, not only once some core collection uses it.
-  Unlike E2E, this layer **is** run by CI:
+  `RelationInterface` falls back to `'readonly'`. See `AGENTS.md`, "Verification", for why the enum half
+  is checked unconditionally and for the regeneration command. Unlike E2E, this layer **is** run by CI:
   nothing about it is live or external — the backend half exercises `GET /api/schema` through the same
   in-process `WebApplicationFactory`/SQLite fixture other API tests use, not a running server or a real
-  database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands. See
-  `schema/README.md` for the full contract and the regeneration command. `schemaContract.test.ts`
-  deliberately departs from the co-location convention the Frontend unit bullet above states: it lives
-  in `frontend/tests/`, not next to a source file, and runs under Vitest's `node` environment rather
-  than `jsdom` (a `// @vitest-environment node` pragma, needed to read the snapshot file from disk
-  without Vite's dev-server URL rewriting getting in the way).
+  database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands.
+  `schemaContract.test.ts` deliberately departs from the co-location convention the Frontend unit bullet
+  above states: it lives in `frontend/tests/`, not next to a source file, and runs under Vitest's
+  `node` environment rather than `jsdom` (a `// @vitest-environment node` pragma, needed to read the
+  snapshot file from disk without Vite's dev-server URL rewriting getting in the way).
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped template
   with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and needs the Blog
-  sample opted in first. Neither is run by CI (`.github/workflows/ci.yml` runs the five standing gates
-  — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
-  `docs/`, plus `pnpm test` from `docs/` as a CI step — but no E2E project) — both need a live API and
-  database, not just a build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two
-  container images — chapter 20's "The two container images" section) and two `sonar-*` jobs; none
-  of the three is a standing gate.
+  sample opted in first. Neither is run by CI — see `AGENTS.md`, "Verification", for the five standing
+  gates CI does run — and both need a live API and database, not just a build. `ci.yml` also runs a
+  `docker` job (builds and smoke-tests the two container images — chapter 20's "The two container
+  images" section) and two `sonar-*` jobs; none of the three is a standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"
@@ -538,7 +547,9 @@ regeneration command.
 
 Conventional commits, observed consistently in this repository's own history: `<type>(<scope>):
 <description>`, scope optional. Types actually used: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`,
-`ci`, `style`, `perf`, `build`, `revert`. No attribution trailer is used in this repository's commits.
+`ci`, `style`, `perf`, `build`, `revert`. No commit message or pull-request body carries an attribution
+trailer or a session link: the maintainer has asked for both without one, and a commit or PR that
+carries one is sent back for amendment.
 
 ## Next steps
 
