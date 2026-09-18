@@ -237,7 +237,7 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
 
 ## Playbook 4: Add a migration
 
-Background: `docs/guide/en/15-deployment-operations-testing.md`, "Schema management"; `db/migrations/
+Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `db/migrations/
 README.md`.
 
 1. Determine the next number: the current highest `NNN-*.sql` filename in `db/migrations/` **+ 1**,

@@ -354,7 +354,7 @@ Authorization has three tiers:
 The parent form's own disabled state overrides all of the above.
 
 A server-side payload validation error lands in the form's top-level error message; required and
-maximum-length checks are pre-checked by the frontend before submit. A numeric or boolean payload
+maximum-length checks are pre-checked by the admin SPA before submit. A numeric or boolean payload
 field left blank is saved as `null`, not an empty string, so such a junction field should either be
 declared nullable or marked `Required` — the form blocks an empty required field before it's sent.
 

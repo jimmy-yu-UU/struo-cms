@@ -187,7 +187,7 @@ The link dialog (`RichTextLinkDialog.vue`) is one popup shared by the toolbar an
 buttons — not a native browser prompt — both triggered by the same `link` command. The user fills in
 a URL and an "open in a new tab" checkbox; when the selection is already inside a link, a remove
 button appears too. The dialog decides only `target`; the sanitizer derives `rel` from `target`
-server-side, covered under `RichText` in [Chapter 6](06-field-types.md).
+server-side, and the rule is in [Chapter 6](06-field-types.md).
 
 Resizing an image is two steps: click once to select it, then drag one of eight handles (the four
 corners plus the four edge midpoints), which appear only while this image is selected. The drag
@@ -325,4 +325,5 @@ over HTTPS — see [Chapter 4](04-configuration.md).
 
 ## What's next
 
-That covers admin customization; the next step is deploying the whole system to production.
+That covers admin customization; the next step is deploying the whole system to production — see
+[Chapter 20: Deployment](20-deployment.md).
