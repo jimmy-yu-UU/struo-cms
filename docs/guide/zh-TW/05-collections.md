@@ -96,7 +96,7 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
 `user`、`table`。
 
 查不到的名稱、或整個沒填，畫面一律退回通用的檔案圖示，側欄不會因此壞掉。想用表裡沒有的圖
-示，得先在 `ICON_MAP` 加一個新的鍵——這是前端要改的地方，屬於管理後台 SPA 客製化的範圍。
+示，得先在 `ICON_MAP` 加一個新的鍵——這是後台要改的地方，屬於管理後台 SPA 客製化的範圍。
 
 ## `[CmsField]` 選項
 
@@ -124,7 +124,7 @@ CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；�
   個稽核欄位固定排在 `Sort = 1000`，宣告了更大 `Sort` 值的欄位才會排在它們後面。
 - `MaxLength` 是 CMS 層的輸入長度上限，跟資料庫欄位寬度無關。
 
-`Required` 在更新時驗證的是合併後的 entity，不是請求本文：省略某個欄位會沿用資料庫既有值並
+`Required` 在更新時驗證的是合併後的 entity，不是請求 body：省略某個欄位會沿用資料庫既有值並
 通過檢查，明確傳入 `null` 或空白字串（含只有空格）才會失敗；建立時則一定要帶這個欄位。對一個
 不可為 null 的 `Guid` 欄位，`Guid.Empty` 也算缺漏，而且這種欄位本來就傳不了 `null`。
 
@@ -157,8 +157,8 @@ SEO 欄位用 `Group = "SEO"`。
 群組會回傳給 REST 與 GraphQL 呼叫端，但預設的後台表單不照群組分區——它只把非系統欄位分成共
 用和可翻譯兩組，各自依 `Sort` 排序，可翻譯的那組放進各語言分頁裡。
 
-`CmsOptionsAttribute` 接受 `params string[]`，每一項是 `"value:label"` 或單純的 `"value"`
-（標籤退回用值本身）；切割只看**第一個**冒號。空白的選項值會讓掃描失敗。`[CmsOptions]` 只能
+`CmsOptionsAttribute` 接受 `params string[]`，每一項是 `"value:label"` 或單純的 `"value"`（標籤退回
+用值本身）；切割只看**第一個**冒號。空白的選項值會讓掃描失敗。`[CmsOptions]` 只能
 掛在下列五種介面上，掛在別的介面上一樣是啟動失敗：
 
 - `Select`

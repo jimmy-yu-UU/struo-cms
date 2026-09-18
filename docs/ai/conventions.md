@@ -47,12 +47,9 @@ rejects what fails.
 - **Tables.** At most four columns; each cell fits on one line and holds a value or a phrase, never a
   sentence of explanation. Anything larger becomes a list or a subsection. **Enforced:**
   `docs/scripts/check-table-width.mjs` fails `pnpm -C docs build` on more than 4 columns or any cell
-  whose display width exceeds 60 (CJK counts 2). There is no exemption marker; rewrite the table. It
-  finds tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
-  indentation hides a table from it. The sixteen pre-rewrite chapters are listed once, by filename,
-  in `docs/scripts/lib/legacy-chapters.mjs`, shared by the width guard (exemption) and the sidebar
-  (a collapsed "legacy" group); they and both READMEs predate these rules, and both usages go away
-  with the files in batch 5.
+  whose display width exceeds 60 (CJK counts 2). There is no exemption; rewrite the table. It finds
+  tables by their delimiter row, as the renderer does, so neither missing outer pipes nor list
+  indentation hides a table from it.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
   capture it from a real run. Never hand-edit one.
 - **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
@@ -141,8 +138,7 @@ Wrap the span:
 <span v-pre>`<span class="readonly-relation">{{ relation.label }}</span>`</span>
 ```
 
-Fenced code blocks need nothing — VitePress applies `v-pre` to them already. `docs/guide/en/07-relations.md`
-and its zh-TW mirror are the existing examples.
+Fenced code blocks need nothing — VitePress applies `v-pre` to them already.
 
 A related constraint from the same config (`docs/.vitepress/config.mts`'s `srcDir: 'guide'` plus
 `ignoreDeadLinks: false`): a chapter may only markdown-link to another chapter, since anything outside
@@ -464,7 +460,7 @@ configuration must be resolved against the correct root explicitly —
 by contrast is passed straight to `Directory.Exists` with no content-root resolution of its own, so it
 **must** be given as an absolute path in Production
 (`src/Struo.Infrastructure/Persistence/MigrationRunner.cs`) — see
-`docs/guide/en/15-deployment-operations-testing.md`. New tunables should follow the
+`docs/guide/en/20-deployment.md`, "Production checklist". New tunables should follow the
 `ImageTransform:CachePath` pattern (explicit content-root resolution), not the `MigrationsPath` one.
 
 ## Immutability
@@ -530,12 +526,13 @@ Pinia-backed singleton that can open while another vendored overlay is already o
   — `dotnet build` + `dotnet test`, `pnpm test` + `pnpm build` from `frontend/`, and `pnpm build` from
   `docs/`, plus `pnpm test` from `docs/` as a CI step — but no E2E project) — both need a live API and
   database, not just a build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two
-  container images — chapter 15's "Container images" section) and two `sonar-*` jobs; none of the three
-  is a standing gate.
+  container images — chapter 20's "The two container images" section) and two `sonar-*` jobs; none
+  of the three is a standing gate.
 
-See `docs/guide/en/15-deployment-operations-testing.md` for all four layers in more depth — it covers
-the Contract layer both as its own test layer and in its "What CI runs" section. `schema/README.md`
-remains the authoritative reference for the contract itself and its regeneration command.
+See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
+layer both in its own "The schema contract" section and in its "What CI deliberately does not run"
+section. `schema/README.md` remains the authoritative reference for the contract itself and its
+regeneration command.
 
 ## Commit message format
 
