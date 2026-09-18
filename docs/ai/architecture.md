@@ -603,8 +603,8 @@ the dispatcher every generated item form renders, looks a field's component up v
 to know it is being rendered inside a generated form. `types.ts`'s own comment states the
 `FieldInterface` union mirrors backend `Struo.Domain.Metadata.Enums.FieldInterface` in camelCase, and
 that the mirroring is enforced rather than honour-system: `frontend/tests/schemaContract.test.ts` fails
-when an interface used by a core collection is missing from that union or from the registry (see
-`schema/README.md`). Two distinct extension motions:
+when any interface the backend declares — not just one a core collection uses — is missing from
+that union or from the registry (see `schema/README.md`). Two distinct extension motions:
 - **Swap the editor for an existing interface** (e.g. give `Color` a real swatch picker) — edit only
   `registry.ts`'s entry for that interface; no backend change needed.
 - **Add a genuinely new interface value** — requires the backend `FieldInterface` enum, `MetadataScanner`,

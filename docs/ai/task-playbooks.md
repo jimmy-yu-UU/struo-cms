@@ -306,9 +306,9 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    layer (page/surface/foreground and status/shadow/overlay/font custom properties, `html`/`body`
    resets, the theme-transition rule, `.app-breadcrumb`) first-party scoped CSS reads.
    **`frontend/src/components/ui/` is vendored, read-only output — never edit it and never `:deep()`
-   into it**; a re-theme changes a token layer or a wrapper component outside `ui/`. See chapter 19's
-   "Restyling a vendored `ui/` component" for how to override a component's style without losing a
-   specificity fight. Avoid `!important`.
+   into it**; a re-theme changes a token layer or a wrapper component outside `ui/`. See
+   `docs/guide/en/19-admin-customization.md`'s "Restyling a vendored `ui/` component" section for
+   how to override a component's style without losing a specificity fight. Avoid `!important`.
 3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
    under the right namespace (`common`, `nav`, `dashboard`, `collectionList`, `itemForm`, `media`,
    `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only

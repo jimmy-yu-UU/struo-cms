@@ -541,8 +541,8 @@ destructive actions, the user is left with a blocked action and no working way t
   needs the Blog sample opted in first. Neither is run by CI — see `AGENTS.md`, "Verification",
   for the five standing gates CI does run — and both need a live API and database, not just a
   build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two container images —
-  chapter 20's "The two container images" section) and two `sonar-*` jobs; none of the three is a
-  standing gate.
+  `docs/guide/en/20-deployment.md`'s "The two container images" section) and two `sonar-*` jobs;
+  none of the three is a standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"
