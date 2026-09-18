@@ -123,10 +123,11 @@ sentence that describes it.
 **What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any banned word or bare date
 without a marker, and on any PR/issue reference, in a comment or in prose across `AGENTS.md`,
 `CLAUDE.md`, `docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and
-`frontend/e2e/**`. The guard reads comment bodies and markdown prose only — string literals, fenced
-code blocks, and inline code spans are not scanned, so a date in test data or in a code sample needs
-no marker. It also fails on a decision file missing one of its six headings or on an orphan decision
-file nothing references by path.
+`frontend/e2e/**`. The guard reads comment bodies and markdown prose only. Code outside comments —
+including string literals — is never scanned; in markdown, fenced code blocks and inline code spans
+are skipped. A date in test data or in a code sample therefore needs no marker; a date inside a
+comment does. It also fails on a decision file missing one of its six headings or on an orphan
+decision file nothing references by path.
 
 ### Anti-patterns this repository has actually had (both audiences)
 
