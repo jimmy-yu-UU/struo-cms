@@ -109,8 +109,9 @@ at all — a dotted `Construct.Member` name immediately followed by a hyphenated
 to check, so it is **always** a violation: there is no existence check for it to pass, and therefore
 no per-citation upstream exception. Write upstream citations in the extension-anchored form, never
 this one. A genuine false positive on ordinary prose (the test's own example is a version range like
-"Supported Node.js: 20-22") can only be cleared with the `citation-guard:allow` line marker, which
-skips both regexes for that line and is not a general-purpose suppression. A bare trailing number
+"Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on that
+same physical line — the guard checks line by line, so a marker on an adjacent line does not help —
+and it is not a general-purpose suppression. A bare trailing number
 with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably distinguishable from
 a port or a time and is not covered; a reviewer still has to catch those by hand.
 
@@ -232,20 +233,21 @@ wants its own vendor literal to win on a shaped property must remove `[ColumnSha
 **A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
 `InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
 co-occurs with a `JsonColumnInterfaces` member
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — omitting `[ColumnShape]` there
-instead would silently drop `IsJson`, leaving the column at CodeFirst's unset length, `varchar(1)` on
-PostgreSQL, where every real value fails with 22001; remove `[ColumnShape]` from such a property, since
-the JSON mapping already applies `LongText`. A **content-bearing** interface
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — resolving the combination instead
+of refusing it would silently drop `IsJson` (both branches compute the same `DataType`, `LongText`, so
+only `IsJson` would be lost), leaving the column at CodeFirst's unset length, `varchar(1)` on
+PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]` from such a property; the
+JSON mapping already applies `LongText`. A **content-bearing** interface
 (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal. See
-`ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for why both
-branches resolve to `LongText` and for the pinning tests.
+`ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for the full
+derivation and the pinning tests.
 
-Core itself must never write a vendor type literal outside `ColumnTypeMap.cs` — that file, together
-with `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a
-SQLite identity primary key), are the only two places in `src/` a string like `"timestamptz"` or
-`"longtext"` may appear. An empty MySQL/SQL Server/Oracle database fails `InitTables` outright on a
-type name that only exists on PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a
-framework entity must go through `[ColumnShape]` instead.
+Core itself must never write a vendor type literal outside those two places — `ColumnTypeMap.cs`, and
+`SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a SQLite
+identity primary key) — the only spots in `src/` a string like `"timestamptz"` or `"longtext"` may
+appear. An empty MySQL/SQL Server/Oracle database fails `InitTables` outright on a type name that only
+exists on PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go
+through `[ColumnShape]` instead.
 
 ## Translation sidecar unique index
 
@@ -396,9 +398,9 @@ none is ever surfaced client-side.
   headless JSON API has no culture-formatted output of its own to lose by running invariant — see
   `docs/guide/en/10-query-basics.md`'s "Which fields can be filtered and sorted, and what happens
   when it goes wrong" for whitelisting and unknown paths, and `docs/guide/en/11-query-advanced.md`'s
-  "Deep expansion `deep=`" for the depth cap. `facets=`/`aggregate[<op>]=` (`docs/guide/en/
-  11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`")
-  are validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
+  "Deep expansion `deep=`" for the depth cap. `facets=`/`aggregate[<op>]=`
+  (`docs/guide/en/11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`") are
+  validated the same way, by the same `QueryValidator`, with their own whitelist: a facet path is
   at most one relation hop, never a quantifier or `_junction` segment, its own/leaf field's interface
   must be in `FacetPathResolver.Facetable` (excludes long-form text, every multi-value interface,
   structured payloads, and `Hidden`), and a relation hop's target collection needs its own read grant,
