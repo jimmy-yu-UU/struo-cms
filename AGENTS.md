@@ -306,15 +306,13 @@ five standing gates, and is not run by CI.
   caught by `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples` (Hard
   constraints), the second by `Shipped_appsettings_declares_no_content_assemblies`.
 - Never commit `src/Struo.Api/appsettings.Development.json` — it is gitignored and holds local secrets.
-- **Never add documentation the reader does not need in order to act.** No change narratives ("this used
-  to be X"), no investigation journals (they belong in the doc comment of the class they explain), no
-  restating a rule that already has a home elsewhere — link to it instead, and no preference notes (a
-  comment or test that only justifies something never built protects no code). This cuts *both* ways: do
+- **Never add documentation the reader does not need in order to act.** `docs/ai/conventions.md`,
+  "Only the current state", is the home for the anti-patterns this rule bans. This cuts *both* ways: do
   **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
   consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
   regression. The test is "would a reader act differently without this?", never "is this long?".
   `docs/ai/conventions.md`, "How documentation is written", has the full rule for both audiences —
-  the manual and this reference set are written to different standards — and the anti-patterns.
+  the manual and this reference set are written to different standards.
 
 ## Where to read more
 

@@ -74,6 +74,56 @@ rejects what fails.
 - **Structure of `AGENTS.md`** stays: repo map, hard constraints, invariants, task playbooks,
   verification, prohibitions.
 
+### Only the current state
+
+This rule is shared by both audiences and by code comments: every sentence describes HEAD's behavior,
+never a before/after, a change date, or an issue reference. History lives in `git log`, not in prose.
+
+**Banned wording.** English: `` `used to` `` (except the passive `` `be used to` ``, the form that
+follows `` is/are/be/been/being/was/were/get/gets/got ``), `` `previously` ``, `` `formerly` ``,
+`` `historically` ``, `` `anymore` ``, `` `no longer` ``, `` `now that` `` — matched case-insensitively,
+word-bounded. Bare dates shaped `` `20xx-xx-xx` ``. A PR or issue reference shaped `` `PR #n` ``,
+`` `pull/n` ``, or `` `#nn` `` (a `#` directly before two or more digits) — reword these three, they
+can never carry an allow marker. Chinese, matched as a substring: `` `以前` ``, `` `曾經` ``,
+`` `過去是` ``, `` `過去曾` ``, `` `原本是` ``, `` `原本會` ``, `` `原本叫` ``, `` `已修` ``,
+`` `現在不再` ``, `` `不再需要` ``.
+
+**The allow marker.** A banned word or bare date that names a legitimate current-state fact — the
+mechanics of a diff algorithm, an anti-pattern table quoting the phrase it bans, a decision file's
+dated evidence — takes an allow marker on the same line, with a reason that says why the line is not
+history. In a code comment, append ` narrative-guard:allow: <reason>` to the comment. In markdown,
+append `<!-- narrative-guard:allow: <reason> -->`. An empty reason is itself a violation.
+
+**Evidence lives with the decision, not the class.** A measurement, a ruled-out hypothesis, or a
+residual unknown behind a current decision goes in `docs/ai/decisions/<kebab-slug>.md`, one decision
+per file, with six headings in this order: `# <title>`, `## Decision`, `## Why`, `## Evidence`,
+`## Unknowns`, `## Referenced from`. `## Evidence` is the only place a bare date needs no marker;
+every other date, in that file or any other, needs one. Every decision file must be pointed to by
+path from a class doc comment, `AGENTS.md`, or a `docs/ai/*.md` file — an orphan decision file is a
+guard failure on its own. A class doc comment that leans on a decision file keeps to four things,
+eight lines total: what was measured, what was ruled out, what is still unknown, and what breaks if
+the decision is reversed, closing with the path to the decision file. `PgTestConnectionString`'s
+class doc, pointing at `docs/ai/decisions/pg-test-connection-pooling.md`, is the worked example.
+
+**A comment says what the code cannot.** It answers one of: why this approach, what constrains it,
+what breaks if the constraint is violated, or what is unverified. A comment that only restates what
+the code already says gets deleted, not kept. A comment longer than eight lines that is not the four
+evidence items above is a review defect, not a guard failure — a reviewer's checklist carries that
+item.
+
+**Write from the construct, not from memory.** Before writing a factual sentence about a piece of
+code, open the construct it describes; after writing it, `grep` the sentence back against that
+construct. A reviewer's suggested replacement wording is unverified text until it has gone through the
+same check. A sentence that describes a different file names a construct in that file — a class, a
+method, a test name, or a configuration key — so the next person to change that file can find the
+sentence that describes it.
+
+**What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any unmarked hit — banned
+word, bare date, or PR/issue reference — in a comment or in prose across `AGENTS.md`, `CLAUDE.md`,
+`docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and `frontend/e2e/**`. It also
+fails on a decision file missing one of its six headings or on an orphan decision file nothing
+references by path.
+
 ### Anti-patterns this repository has actually had (both audiences)
 
 | Anti-pattern | Instead |

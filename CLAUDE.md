@@ -23,6 +23,8 @@ downstream forks.
   connection.)
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.
 - **When unsure about an architectural decision, stop and ask** rather than guessing.
+- **Comments and docs state the current behavior only.** `StaleNarrativeConventionTests` fails
+  `dotnet test` otherwise; the rule text is `docs/ai/conventions.md`, "Only the current state".
 
 ## The five standing gates
 
