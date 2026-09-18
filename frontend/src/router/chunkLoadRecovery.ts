@@ -2,7 +2,7 @@ import type { Router } from 'vue-router'
 
 // Routed views and the richText field are lazy chunks (`() => import()` / `defineAsyncComponent`).
 // After a redeploy, a tab still holding the old index.html asks for a hashed chunk filename that
-// no longer exists on the server. Two independent Vite failure paths can fire for that:
+// no longer exists on the server. Two independent Vite failure paths can fire for that: narrative-guard:allow: describes the stale-chunk 404 scenario, not code history
 //   - A router-driven navigation: vue-router's dynamic `import()` rejects and reaches
 //     `router.onError`. Vite's own preload helper also dispatches `vite:preloadError` for the
 //     same failure and then RETHROWS unless `preventDefault()` is called, so both handlers see

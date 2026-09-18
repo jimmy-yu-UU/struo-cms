@@ -169,7 +169,7 @@ function onViewToggle(value: unknown): void {
 // These two reload `files.value` exactly like search/page/mode already
 // do, so a stale selection surviving one of them is not just staleness -- it is a SILENT SUCCESS
 // hazard: the toolbar would keep reading "N selected" after a filter change hides all of them,
-// and Move to… would then move items the user can no longer see with no error at all.
+// and Move to… would then move items the user can't see with no error at all.
 function onType(value: MediaType): void { clearSelection(); type.value = value; reload() }
 function onSort(value: MediaSort): void { clearSelection(); sort.value = value; reload() }
 function onPageChange(nextPage: number): void {
@@ -186,19 +186,19 @@ function onPageSizeChange(nextSize: number): void {
   perPage.value = nextSize
   load()
 }
-// Trash rows are soft-deleted files: the old bespoke trash table had no click-to-open path at
-// all, and opening MediaDetailDialog on a deleted row would let a user press Save or Delete on
-// it, which is nonsensical for something already in the trash. Now that trash mode renders
-// through the same MediaGrid/MediaFileList as the active list -- whose whole tile/row IS
-// clickable and both bind @open unconditionally -- that protection has to live here instead of
-// there being no handler wired up. Do not "simplify" this guard away: it looks redundant next to
-// an unconditional @open, but removing it re-opens (literally) the trash-item hazard.
+// Trash rows are soft-deleted files. Opening MediaDetailDialog on a deleted row would let a
+// user press Save or Delete on it, which is nonsensical for something already in the trash.
+// Trash mode renders through the same MediaGrid/MediaFileList as the active list -- whose whole
+// tile/row IS clickable and both bind @open unconditionally -- so this guard has to live here
+// instead of relying on there being no handler wired up. Do not "simplify" this guard away: it
+// looks redundant next to an unconditional @open, but removing it re-opens (literally) the
+// trash-item hazard.
 function openDetail(id: string): void {
   if (mode.value === 'trash') return
   selected.value = files.value.find((f) => f.id === id) ?? null
 }
 // Preserve the user's page position on delete instead of always resetting to page 0.
-// Refresh at the current page first; only if the new total no longer covers that page (e.g.
+// Refresh at the current page first; only if the new total does not cover that page (e.g.
 // the deleted item was the last one on the last page) do we clamp down to the new last valid
 // page and reload -- never below page 0.
 async function loadClampingToLastValidPage(): Promise<void> {
@@ -342,7 +342,7 @@ async function onDropOn(targetFolderId: string | null, payload: MovePayload): Pr
 // unrelated in-progress selection there would be a surprising side effect of an unconnected move.
 // onMoveSubmit is specifically the move-DIALOG path -- both the toolbar's batch move and a
 // single-item context-menu move funnel through it -- and after either one, the current
-// `selection`'s ids may no longer be in the listing once the dialog's move settles and reloads.
+// `selection`'s ids may have left the listing once the dialog's move settles and reloads.
 function onMoveSubmit(targetFolderId: string | null): void {
   clearSelection()
   void onDropOn(targetFolderId, movePayload.value)
@@ -365,7 +365,7 @@ async function onRemoveFile(id: string): Promise<void> {
     selection.value = removeFromSelection(selection.value, 'file', id)
     // The detail dialog may be open on the very file just deleted (e.g. deleted from the grid
     // while its own dialog is still up in another interaction) -- close it so Save/Delete can't
-    // be pressed on a file that no longer exists.
+    // be pressed on a file that has been deleted.
     if (selected.value?.id === id) selected.value = null
     await loadClampingToLastValidPage()
   } catch (e) {

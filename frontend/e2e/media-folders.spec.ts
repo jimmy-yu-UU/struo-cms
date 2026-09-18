@@ -226,9 +226,10 @@ test('media folders: create, upload with title autofill, a folder-untouched save
   await expect(mdField(page, 'Title').locator('input')).toHaveValue(fileBase)
 
   // 3. Edit Alt text and Save -- a save that never touches folder assignment (the dialog has no
-  // way to touch it any more) is exactly the scenario that used to silently unfile the item. The
-  // tile-still-visible check is a cheap UI-level sanity check only; the real proof is the server
-  // GET below, which cannot race the grid's own post-save reload the way a DOM assertion can.
+  // way to touch it any more) is exactly the scenario that silently unfiles the item if this
+  // guard regresses. The tile-still-visible check is a cheap UI-level sanity check only; the real
+  // proof is the server GET below, which cannot race the grid's own post-save reload the way a
+  // DOM assertion can.
   const alt = `Alt ${STAMP}`
   await mdField(page, 'Alt text').locator('input').fill(alt)
   await saveDetail(page)
@@ -267,8 +268,8 @@ test('media folders: create, upload with title autofill, a folder-untouched save
   await expect(folderCard(page, folderName)).toBeVisible()
 
   // 6. Empty the folder, then delete succeeds and the card disappears. The file is currently
-  // filed under the folder (step 5 put it back), so the ROOT view (Uncategorized-only) no longer
-  // shows it -- enter the folder to reach it, move it back to root, then hop back up to root where
+  // filed under the folder (step 5 put it back), so the ROOT view (Uncategorized-only) does not
+  // show it -- enter the folder to reach it, move it back to root, then hop back up to root where
   // the folder's own card renders (a folder never shows its own card while browsing inside it).
   await enterFolder(page, folderName)
   await moveFileTo(page, fileName, 'Root')

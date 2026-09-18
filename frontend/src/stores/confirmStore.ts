@@ -36,7 +36,7 @@ export const useConfirmStore = defineStore('confirm', {
     // current.
     accept(id?: number): void { this.settle(true, id) },
     reject(id?: number): void { this.settle(false, id) },
-    // Ignores a call whose id no longer matches the pending request, so a programmatic caller
+    // Ignores a call whose id no longer matches the pending request, so a programmatic caller narrative-guard:allow: describes the stale-id guard clause itself, not history
     // that captured an id before a supersede can't resolve the *new* request that replaced it.
     settle(accepted: boolean, id?: number): void {
       if (id !== undefined && id !== this.requestId) return

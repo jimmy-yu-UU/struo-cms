@@ -562,7 +562,7 @@ describe('CollectionListView', () => {
     vm.loadItems() // A: token bumped, canRead true -> loading = true, awaits pA
     await flushPromises()
     expect(vm.loading).toBe(true)
-    // Load B bumps the token then bails (no longer readable). Without the fix,
+    // Load B bumps the token then bails (canRead is now false). Without the fix,
     // B returns without clearing loading, and A (now stale) skips its finally -> spinner stuck.
     auth.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
     vm.loadItems() // B: bails at the early return

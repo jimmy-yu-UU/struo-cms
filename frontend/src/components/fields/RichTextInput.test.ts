@@ -562,10 +562,10 @@ describe('RichTextInput', () => {
     expect(w.get('[data-cmd="bold"]').attributes('data-active')).toBe('true')
   })
 
-  // bold and alignCenter now render through the same RichTextCommandButton, from the same
+  // bold and alignCenter render through the same RichTextCommandButton, from the same
   // TOOLBAR_BEFORE_HEADINGS v-for (see richTextCommands.ts and RichTextInput.vue's template), so
-  // this pair no longer contrasts a hand-written control against a templated one -- that contrast
-  // no longer exists. What it still contrasts is the two commands' own isActive checks: bold's is
+  // this pair does not contrast a hand-written control against a templated one. What it contrasts
+  // is the two commands' own isActive checks: bold's is
   // editor.isActive('bold'), a mark check, while alignCenter's is
   // editor.isActive({ textAlign: 'center' }), a node-attribute check -- two different TipTap
   // active-state APIs feeding the same data-active binding, so a regression that broke one path
@@ -1775,7 +1775,7 @@ describe('RichTextInput', () => {
     expect(editor.getHTML()).toContain('<blockquote>')
     // Both halves are required, and a wrapping command is what makes the second one bite: running
     // the item before the delete shifts every position after the wrapper's opening tokens, so the
-    // range no longer covers the text it was measured against and part of "/quote" survives inside
+    // range stops covering the text it was measured against and part of "/quote" survives inside
     // the new block. Asserted on the text rather than the markup, which carries the query's own
     // letters inside its tags either way.
     expect(editor.getText().trim()).toBe('')

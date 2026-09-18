@@ -641,7 +641,7 @@ defineExpose({ editor, insertImage })
    the same as the ProseMirror table markup above. */
 .rich-text__content :deep([data-resize-handle]) {
   /* One source for the box and for the half-size straddle offsets below: change the size alone and
-     the offsets would no longer land the handles on the edge. */
+     the offsets stop landing the handles on the edge. */
   --resize-handle-size: 0.625rem;
   --resize-handle-offset: calc(var(--resize-handle-size) / -2);
 
