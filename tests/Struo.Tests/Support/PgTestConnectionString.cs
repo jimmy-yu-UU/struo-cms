@@ -8,10 +8,10 @@ namespace Struo.Tests.Support;
 /// the process-wide pool.
 ///
 /// Measured: the abort this guards against tracks the xUnit/VSTest test host, not product code — the
-/// Production probe against real PostgreSQL with pooling on saw 0 aborts. Ruled out: a cold start, a
-/// server-side cause, and a branch-specific cause. Unknown: which actor aborts the socket; it is
-/// inferred from the Windows error code, not proven. If undone: the abort returns, and the suite's red
-/// test is not a stable, reproducible failure.
+/// Production probe against real PostgreSQL with pooling on saw 0 aborts.
+/// Ruled out: a cold start, a server-side cause, and a branch-specific cause.
+/// Unknown: which actor aborts the socket; it is inferred from the Windows error code, not proven.
+/// If undone: the abort returns, and the suite's red test is not a stable, reproducible failure.
 ///
 /// The escape hatch is below: set <c>Pooling=true</c> yourself in the connection string.
 ///
