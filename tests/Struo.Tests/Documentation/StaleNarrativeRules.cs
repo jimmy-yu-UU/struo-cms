@@ -24,7 +24,7 @@ internal static partial class StaleNarrativeRules
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly string[] ChineseBanned =
-        ["以前", "曾經", "過去", "原本", "已修", "現在不再", "不再需要"];
+        ["以前", "曾經", "過去是", "過去曾", "原本是", "原本會", "原本叫", "已修", "現在不再", "不再需要"];
 
     private static readonly Regex BareDate = new(@"\b20\d{2}-\d{2}-\d{2}\b", RegexOptions.Compiled);
 

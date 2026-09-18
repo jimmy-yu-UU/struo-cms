@@ -120,15 +120,17 @@ public sealed class StaleNarrativeRulesTests
     }
 
     [Theory]
-    [InlineData("以前 this worked differently.")]
-    [InlineData("現在不再 supported.")]
-    public void Chinese_terms_are_substring_matches(string text)
+    [InlineData("以前 this worked differently.", true)]
+    [InlineData("現在不再 supported.", true)]
+    [InlineData("保留原本的值", false)]
+    [InlineData("原本是必填", true)]
+    public void Chinese_terms_are_substring_matches(string text, bool expectMatch)
     {
         var lines = new[] { new StaleNarrativeRules.ScannableLine(1, text, null) };
 
         var violations = StaleNarrativeRules.Check("doc.md", lines, isDecisionFile: false);
 
-        violations.Should().ContainSingle(v => v.Rule == 1);
+        violations.Any(v => v.Rule == 1).Should().Be(expectMatch);
     }
 
     [Fact]
