@@ -13,7 +13,6 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LEGACY_CHAPTERS } from './lib/legacy-chapters.mjs'
 import { LIMITS, checkTables } from './lib/markdown-tables.mjs'
 
 const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', 'guide')
@@ -48,13 +47,6 @@ try {
   process.exit(1)
 }
 
-// The sixteen pre-rewrite chapters (docs/scripts/lib/legacy-chapters.mjs) are
-// exempted from this check until batch 5 deletes them; see that module for
-// why and for the other consumer (the sidebar's collapsed legacy group).
-// This is the ONLY exemption, it is by filename so it applies to both
-// locales at once. Do not add to it: a new chapter that does not fit gets
-// rewritten, not listed here.
-
 // Every markdown file under guide/, at any depth, forward-slash relative
 // paths so messages read the same on every platform. Dot-prefixed path
 // segments are skipped, the same way the sidebar and the rendered-chapters
@@ -67,14 +59,8 @@ const markdownFiles = readdirSync(guideRoot, { recursive: true, withFileTypes: t
 
 const failures = []
 let checked = 0
-let skipped = 0
 
 for (const path of markdownFiles) {
-  const fileName = path.split('/').at(-1)
-  if (LEGACY_CHAPTERS.has(fileName)) {
-    skipped += 1
-    continue
-  }
   checked += 1
   const markdown = readFileSync(join(guideRoot, path), 'utf8')
   for (const violation of checkTables(markdown, LIMITS)) {
@@ -92,8 +78,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-process.stdout.write(
-  `checked ${checked} markdown files for table width` +
-    (skipped > 0 ? `, ${skipped} legacy chapter files skipped` : '') +
-    '\n',
-)
+process.stdout.write(`checked ${checked} markdown files for table width\n`)

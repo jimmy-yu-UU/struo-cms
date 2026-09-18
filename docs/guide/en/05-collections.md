@@ -106,7 +106,7 @@ available today include `article`, `tag`, `folder`, `megaphone`, `image`, `file`
 
 A name the table doesn't have, or no name at all, falls back to a generic file icon — the sidebar
 never breaks over a typo. Adding an icon the table doesn't have means adding a key to `ICON_MAP` —
-a frontend change, part of admin SPA customization.
+a change in the admin SPA, covered by admin SPA customization.
 
 ## `[CmsField]` options
 

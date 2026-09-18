@@ -149,7 +149,7 @@ Registered as a singleton via the container:
 `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
 (`MetadataServiceCollectionExtensions.cs`). Consumed by `DatabaseInitializer.CreateMissingTables`
 (`Program.cs`), which runs in every environment, on every backend — table creation is no longer gated to
-Development (see `docs/guide/en/15-deployment-operations-testing.md`, "Schema management").
+Development (see `docs/guide/en/21-schema-and-upgrades.md`, "Three layers, three responsibilities").
 
 ### `IRelationshipGraph`
 
