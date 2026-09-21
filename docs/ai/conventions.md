@@ -92,10 +92,9 @@ follows `` is/are/be/been/being/was/were/get/gets/got ``), `` `previously` ``, `
 `` `the old binding` ``, `` `the old match` `` (one modifier may sit between `` `the old` `` and the
 noun, e.g. `` `the old raw-transaction code` ``) — matched case-insensitively, word-bounded. Bare
 dates shaped `` `20xx-xx-xx` ``. A PR or issue reference shaped `` `PR #n` ``, `` `pull/n` ``, or
-`` `#nn` `` (a
-`` `#` `` that follows a non-word character, and not `` `&` ``, and sits directly before two or more
-digits) — reword these three, they can never carry an allow marker. Chinese, matched as a substring:
-`` `以前` ``, `` `曾經` ``, `` `過去是` ``, `` `過去曾` ``, `` `原本是` ``,
+`` `#nn` `` (a `` `#` `` that follows a non-word character, and not `` `&` ``, and sits directly
+before two or more digits) — reword these three, they can never carry an allow marker. Chinese,
+matched as a substring: `` `以前` ``, `` `曾經` ``, `` `過去是` ``, `` `過去曾` ``, `` `原本是` ``,
 `` `原本會` ``, `` `原本叫` ``, `` `已修` ``, `` `現在不再` ``, `` `不再需要` ``.
 
 **The allow marker.** A banned word or bare date that names a legitimate current-state fact — the
