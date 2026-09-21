@@ -36,7 +36,7 @@ const model: FormModel = { shared: { status: 'draft' }, translations: { en: { ti
 // mount/unmount behaviour do so by actually triggering reka's activation event, not merely by
 // mounting the real component.
 const stubs = {
-  FieldInput: { props: ['field', 'modelValue', 'disabled', 'id'], template: '<div class="field-input" :id="id" :data-name="field.name" />' },
+  FieldInput: { name: 'FieldInputStub', props: ['field', 'modelValue', 'disabled', 'id'], template: '<div class="field-input" :id="id" :data-name="field.name" />' },
 }
 
 describe('ItemForm', () => {
@@ -209,5 +209,16 @@ describe('ItemForm', () => {
       expect(forAttr).toBeTruthy()
       expect(forAttr).toBe(control.attributes('id'))
     })
+  })
+
+  it('edits the shared value on the parent-owned model object in place', async () => {
+    const own: FormModel = { shared: { status: 'draft' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {} }
+    const w = mountForm({ meta, model: own, locales, errors: {} })
+    // A CSS-selector find() returns a DOMWrapper, which has no `.vm`; findAllComponents by the
+    // stub's registered name is the one that resolves to its VueWrapper.
+    const status = w.findAllComponents({ name: 'FieldInputStub' }).find((c) => c.props('field').name === 'status')!
+    await status.vm.$emit('update:modelValue', 'published')
+    expect(own.shared.status).toBe('published')
+    expect(w.emitted('update:model')).toBeUndefined()
   })
 })
