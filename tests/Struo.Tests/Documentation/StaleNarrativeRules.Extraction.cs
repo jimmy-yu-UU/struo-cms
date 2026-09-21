@@ -10,9 +10,11 @@ namespace Struo.Tests.Documentation;
 /// </summary>
 internal static partial class StaleNarrativeRules
 {
-    private static readonly Regex FenceLine = new(@"^ {0,3}(`{3,}|~{3,})", RegexOptions.Compiled);
+    [GeneratedRegex(@"^ {0,3}(`{3,}|~{3,})")]
+    private static partial Regex FenceLine();
 
-    private static readonly Regex InlineCodeSpan = new(@"(`+)[^`]*?\1", RegexOptions.Compiled);
+    [GeneratedRegex(@"(`+)[^`]*?\1")]
+    private static partial Regex InlineCodeSpan();
 
     public static SourceKind KindOf(string relativePath) =>
         Path.GetExtension(relativePath).ToLowerInvariant() switch
@@ -39,11 +41,11 @@ internal static partial class StaleNarrativeRules
                 continue;
 
             var line = lines[i];
-            var headingMatch = HeadingLevel2.Match(line);
+            var headingMatch = HeadingLevel2().Match(line);
             if (headingMatch.Success)
                 currentSection = NormalizeHeadingText(headingMatch.Groups[1].Value);
 
-            var text = InlineCodeSpan.Replace(line, "").Trim();
+            var text = InlineCodeSpan().Replace(line, "").Trim();
             result.Add(new ScannableLine(i + 1, text, currentSection));
         }
 
@@ -57,7 +59,7 @@ internal static partial class StaleNarrativeRules
 
         for (var i = 0; i < lines.Count; i++)
         {
-            var opener = FenceLine.Match(lines[i]);
+            var opener = FenceLine().Match(lines[i]);
             if (fence is not null)
             {
                 fenced[i] = true;

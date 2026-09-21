@@ -19,28 +19,32 @@ internal static partial class StaleNarrativeRules
 
     public const string AllowMarker = "narrative-guard:allow:";
 
-    private static readonly Regex EnglishBanned = new(
+    [GeneratedRegex(
         @"\b(?:(?<!\b(?:is|are|be|been|being|was|were|get|gets|got)\s)used to|previously|formerly|historically|anymore|no longer|now that)\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase)]
+    private static partial Regex EnglishBanned();
 
     private static readonly string[] ChineseBanned =
         ["以前", "曾經", "過去是", "過去曾", "原本是", "原本會", "原本叫", "已修", "現在不再", "不再需要"];
 
-    private static readonly Regex BareDate = new(@"\b20\d{2}-\d{2}-\d{2}\b", RegexOptions.Compiled);
+    [GeneratedRegex(@"\b20\d{2}-\d{2}-\d{2}\b")]
+    private static partial Regex BareDate();
 
-    private static readonly Regex PrReference = new(
-        @"PR #\d+|pull/\d+|(?<![\w&])#\d{2,}\b", RegexOptions.Compiled);
+    [GeneratedRegex(@"PR #\d+|pull/\d+|(?<![\w&])#\d{2,}\b")]
+    private static partial Regex PrReference();
 
-    private static readonly Regex HeadingLevel2 = new(@"^##\s+(.*)$", RegexOptions.Compiled);
+    [GeneratedRegex(@"^##\s+(.*)$")]
+    private static partial Regex HeadingLevel2();
 
-    private static readonly Regex AtxClosingHashes = new(@"\s+#+$", RegexOptions.Compiled);
+    [GeneratedRegex(@"\s+#+$")]
+    private static partial Regex AtxClosingHashes();
 
     /// <summary>
     /// A captured level-2 heading's text, with a trailing ATX closing sequence (e.g. the <c>##</c> in
     /// <c>## Evidence ##</c>) removed — otherwise that heading's <see cref="ScannableLine.Section"/>
     /// would never equal the plain section name a caller checks for.
     /// </summary>
-    private static string NormalizeHeadingText(string raw) => AtxClosingHashes.Replace(raw.Trim(), "").Trim();
+    private static string NormalizeHeadingText(string raw) => AtxClosingHashes().Replace(raw.Trim(), "").Trim();
 
     public static IReadOnlyList<Violation> Check(
         string relativePath, IReadOnlyList<ScannableLine> lines, bool isDecisionFile)
@@ -59,7 +63,7 @@ internal static partial class StaleNarrativeRules
             if (banned is not null && !hasReason)
                 violations.Add(new Violation(relativePath, line.LineNumber, 1, banned.Value.Match, "change narrative"));
 
-            var dateMatch = BareDate.Match(text);
+            var dateMatch = BareDate().Match(text);
             if (dateMatch.Success)
             {
                 var inDecisionEvidence = isDecisionFile && line.Section == "Evidence";
@@ -70,7 +74,7 @@ internal static partial class StaleNarrativeRules
                 }
             }
 
-            foreach (Match prMatch in PrReference.Matches(text))
+            foreach (Match prMatch in PrReference().Matches(text))
             {
                 violations.Add(new Violation(relativePath, line.LineNumber, 3, prMatch.Value,
                     "PR/issue reference — reword, cannot be marked"));
@@ -136,7 +140,7 @@ internal static partial class StaleNarrativeRules
             if (fenced[i])
                 continue;
 
-            var match = HeadingLevel2.Match(lines[i].TrimEnd());
+            var match = HeadingLevel2().Match(lines[i].TrimEnd());
             if (match.Success && string.Equals(NormalizeHeadingText(match.Groups[1].Value), name, StringComparison.Ordinal))
                 return i + 1;
         }
@@ -147,7 +151,7 @@ internal static partial class StaleNarrativeRules
     {
         (string Match, int Index)? best = null;
 
-        var englishMatch = EnglishBanned.Match(text);
+        var englishMatch = EnglishBanned().Match(text);
         if (englishMatch.Success)
             best = (englishMatch.Value, englishMatch.Index);
 
