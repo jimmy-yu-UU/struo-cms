@@ -54,20 +54,20 @@ every CI job).
 
 The SQLite test re-asserts its result on every CI job, against whatever `SqlSugarCore` version
 `Directory.Packages.props` currently pins (5.1.4.220 on this branch). The PostgreSQL test re-asserts
-its result only when a live connection is configured — it returns early otherwise
-(`PostgresIntegrationTests.cs:795`, `if (!PgConfigured) return;`) — but re-asserts at the same current
-pin whenever it does run.
+its result only when a live connection is configured —
+`Unfiltered_InitTables_drops_a_removed_column_on_postgres` checks the `PgConfigured` guard and
+returns early otherwise — but re-asserts at the same current pin whenever it does run.
 
-Measured 2026-09-21 (SqlSugarCore 5.1.4.220): the PostgreSQL suite was run live against the
-disposable test database at this branch's base — 25/25 passed, and
-`Unfiltered_InitTables_drops_a_removed_column_on_postgres` passed in 773 ms, so the DROP result
-reproduces at the current pin, not only at the 2026-08-03 measurement's 5.1.4.215.
+Measured 2026-09-21 (SqlSugarCore 5.1.4.220): the PostgreSQL suite was run live against a
+disposable test database at the `Directory.Packages.props`-pinned SqlSugarCore version — 25/25
+passed, and `Unfiltered_InitTables_drops_a_removed_column_on_postgres` passed in 773 ms, so the DROP
+result reproduces at the current pin, not only at the 2026-08-03 measurement's 5.1.4.215.
 
 Upstream source (tag 5.1.4.197): `SqliteCodeFirst.ExistLogic` in
 `Src/Asp.NetCore2/SqlSugar/Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs:10,50-58` implements DROP
 COLUMN behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`.
 
-`grep -rn "MoreSettings" src/ tests/` returns no hits in `src/` or `tests/`. Reading
+`grep -rn --include=*.cs "MoreSettings" src/ tests/` returns no hits in `src/` or `tests/`. Reading
 `SqlSugarClientFactory.Create` directly: the `ConnectionConfig` properties it sets are
 `ConnectionString`, `DbType`, `IsAutoCloseConnection`, and `ConfigureExternalServices` only —
 `MoreSettings` is not among them.
@@ -76,8 +76,9 @@ COLUMN behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`.
 
 What SQLite does with `SqliteCodeFirstEnableDropColumn` turned on is not measured in this
 repository — no test here exercises the flag (the `MoreSettings` grep above finds no site that sets
-it). `docs/guide/en/21-schema-and-upgrades.md`, "Where schema sync is dangerous", item 7, is the
-only description of that behaviour in the repository.
+it). The bilingual manual describes that behaviour — `docs/guide/en/21-schema-and-upgrades.md`,
+"Where schema sync is dangerous", item 7, and `docs/guide/zh-TW/21-schema-and-upgrades.md`,
+"結構同步的危險情境", item 7 — but nothing in `src/` or `tests/` measures it.
 
 ## Referenced from
 
