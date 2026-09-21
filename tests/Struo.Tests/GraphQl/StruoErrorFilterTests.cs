@@ -47,8 +47,8 @@ public class StruoErrorFilterTests
     public void CollectionNotFound_maps_to_NOT_FOUND()
         => _filter.OnError(Wrap(new CollectionNotFoundException("x"))).Code.Should().Be("NOT_FOUND");
 
-    // Drift fix: with no HttpContext (unauthenticated), PermissionDenied is UNAUTHORIZED,
-    // matching REST semantics — not the old unconditional FORBIDDEN.
+    // With no HttpContext (unauthenticated), PermissionDenied maps to UNAUTHORIZED, matching REST
+    // semantics via the shared DomainErrorMap.
     [Fact]
     public void PermissionDenied_when_unauthenticated_maps_to_UNAUTHORIZED()
     {

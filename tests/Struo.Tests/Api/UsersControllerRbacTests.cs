@@ -27,9 +27,9 @@ public class UsersControllerRbacTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
-    // Renamed + re-pinned in A8a: this path is 400 INVALID_CURRENT_PASSWORD, not 401. The old
-    // assertion pinned a status that made the SPA log the user out on a typo; see
-    // PasswordChangeSemanticsTests for the code-level assertions.
+    // A wrong currentPassword on self password change is 400 INVALID_CURRENT_PASSWORD, not 401 (401
+    // would log the user out of the SPA on a mere typo); see PasswordChangeSemanticsTests for the
+    // code-level assertions.
     [Fact]
     public async Task Self_password_change_with_wrong_currentPassword_is_400()
     {

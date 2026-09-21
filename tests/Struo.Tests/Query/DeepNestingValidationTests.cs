@@ -65,8 +65,8 @@ public class DeepNestingValidationTests(ApiFactory factory)
     [Fact]
     public async Task Many_sibling_relations_at_depth_one_are_allowed()
     {
-        // The old cap rejected > MaxRelationDepth *relations* regardless of nesting.
-        // article has category + tags (2 siblings) at depth 1 — must be OK now.
+        // Sibling relations at the same nesting depth do not count toward MaxRelationDepth: article
+        // has category + tags (2 siblings) at depth 1, which must return 200.
         var c = await _factory.CreateAuthenticatedClientAsync();
         await c.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "SiblingSeed" } } });

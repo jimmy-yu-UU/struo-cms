@@ -33,8 +33,8 @@ public class RelationSchemaTests(ApiFactory factory)
 
         // "gallery" is intentionally present in the body as a scalar Files *field* (not a
         // relation) — a whole-body substring check for its absence would conflict with that, so
-        // assert against the parsed relations array specifically, guarding against the old
-        // ArticleFile *relation* of that name reappearing.
+        // assert against the parsed relations array specifically: no relation named "gallery"
+        // exists in this schema.
         using var doc = JsonDocument.Parse(body);
         var relationNames = doc.RootElement.GetProperty("data").GetProperty("relations")
             .EnumerateArray()

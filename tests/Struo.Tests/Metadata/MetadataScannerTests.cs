@@ -395,7 +395,7 @@ public class MetadataScannerTests
         d.Properties.GetValueOrDefault("status").Should().BeSameAs(d.Properties["Status"]);
         d.Properties.GetValueOrDefault("STATUS").Should().BeSameAs(d.Properties["Status"]);
 
-        // Missing property resolves to null (preserves the old `GetProperty(...)?.` null semantics).
+        // A missing property resolves to null.
         d.Properties.GetValueOrDefault("noSuchProperty").Should().BeNull();
     }
 
