@@ -86,9 +86,8 @@ public sealed class SqlSugarItemRepository(
         where T : class, new()
     {
         // True offset/limit windowing: offset is an absolute row count and need NOT be a multiple of
-        // limit. The old code turned offset into a 1-based page index by integer division, which
-        // silently returned the wrong window for any non-page-aligned offset (e.g. offset=25,limit=20
-        // skipped 20 instead of 25). Count + Skip/Take gives the exact window.
+        // limit (e.g. offset=25, limit=20 skips exactly 25 rows). Count + Skip/Take gives the exact
+        // window.
         var total = await DeletedScope.Root<T>(db, conditionals, deleted).CountAsync(ct);
         var queryable = DeletedScope.Root<T>(db, conditionals, deleted);
         if (!string.IsNullOrWhiteSpace(orderBy)) queryable = queryable.OrderBy(orderBy);

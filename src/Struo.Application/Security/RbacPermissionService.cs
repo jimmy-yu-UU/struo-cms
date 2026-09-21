@@ -3,8 +3,8 @@ namespace Struo.Application.Security;
 /// <summary>
 /// Real RBAC policy: reads the per-request <see cref="ICurrentPermissions"/> snapshot. Keeps the
 /// synchronous, ambient <see cref="IPermissionService"/> signature so <c>ItemService</c> is unchanged.
-/// This is the only <see cref="IPermissionService"/> in the shippable graph (the old allow-all stub now
-/// lives in the test project). Field-level control is out of scope.
+/// This is the only <see cref="IPermissionService"/> implementation shipped; the test project has its
+/// own allow-all stub for test setup. Field-level control is out of scope.
 /// </summary>
 public sealed class RbacPermissionService(ICurrentPermissions current) : IPermissionService
 {

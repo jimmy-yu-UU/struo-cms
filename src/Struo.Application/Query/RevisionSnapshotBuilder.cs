@@ -64,7 +64,8 @@ public sealed class RevisionSnapshotBuilder(
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
-            // Properties is OrdinalIgnoreCase-keyed, matching the old IgnoreCase GetProperty binding.
+            // Properties is OrdinalIgnoreCase-keyed, so rel.ForeignKey (an exact CLR name) resolves
+            // the same PropertyInfo a case-insensitive GetProperty binding would.
             snap[rel.ForeignKey] = d.Properties.GetValueOrDefault(rel.ForeignKey)?.GetValue(entity);
         }
 
