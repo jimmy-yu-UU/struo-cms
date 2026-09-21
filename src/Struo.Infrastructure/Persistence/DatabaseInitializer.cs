@@ -19,7 +19,7 @@ namespace Struo.Infrastructure.Persistence;
 /// <c>PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres</c> 顯示
 /// 同一情境在真 PostgreSQL 上會 DROP 該欄位。已排除：這不是 SQLite 引擎或 SqlSugar SQLite dialect
 /// 的限制，而是 <c>SqlSugarClientFactory</c> 從未開啟 <c>SqliteCodeFirstEnableDropColumn</c> 旗標所致。
-/// 未知：無，目前沒有任何未測的主張。若失去此保護：既有表上未過濾的 <c>InitTables</c> 在 PostgreSQL
+/// 未知：旗標打開後 SQLite 的行為未在本儲存庫量測。若失去此保護：既有表上未過濾的 <c>InitTables</c> 在 PostgreSQL
 /// 上會 DROP 移除的欄位。<see cref="CreateMissingTables"/> 的安全性建立在「表尚不存在」的過濾上，
 /// 不是這個旗標上。完整說明：<c>docs/ai/decisions/codefirst-creates-missing-tables-only.md</c>。
 /// </para>

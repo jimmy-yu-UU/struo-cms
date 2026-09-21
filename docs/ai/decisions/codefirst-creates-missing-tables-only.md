@@ -52,26 +52,32 @@ Measured 2026-08-03 (SqlSugarCore 5.1.4.215): on SQLite, the same probe pair kee
 column (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`, runs on
 every CI job).
 
-Both tests re-assert their result on every run against whatever `SqlSugarCore` version
-`Directory.Packages.props` currently pins (5.1.4.220 on this branch), not only against the version
-the 2026-08-03 measurement used.
+The SQLite test re-asserts its result on every CI job, against whatever `SqlSugarCore` version
+`Directory.Packages.props` currently pins (5.1.4.220 on this branch). The PostgreSQL test re-asserts
+its result only when a live connection is configured — it returns early otherwise
+(`PostgresIntegrationTests.cs:795`, `if (!PgConfigured) return;`) — but re-asserts at the same current
+pin whenever it does run.
+
+Measured 2026-09-21 (SqlSugarCore 5.1.4.220): the PostgreSQL suite was run live against the
+disposable test database at this branch's base — 25/25 passed, and
+`Unfiltered_InitTables_drops_a_removed_column_on_postgres` passed in 773 ms, so the DROP result
+reproduces at the current pin, not only at the 2026-08-03 measurement's 5.1.4.215.
 
 Upstream source (tag 5.1.4.197): `SqliteCodeFirst.ExistLogic` in
 `Src/Asp.NetCore2/SqlSugar/Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs:10,50-58` implements DROP
 COLUMN behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`.
 
-`grep -rn "MoreSettings" src/ tests/`: `SqlSugarClientFactory.Create` builds its `ConnectionConfig`
-with `ConnectionString`, `DbType`, `IsAutoCloseConnection`, and `ConfigureExternalServices` only —
-`MoreSettings` is never assigned anywhere in `src/` or `tests/`.
+`grep -rn "MoreSettings" src/ tests/` returns no hits in `src/` or `tests/`. Reading
+`SqlSugarClientFactory.Create` directly: the `ConnectionConfig` properties it sets are
+`ConnectionString`, `DbType`, `IsAutoCloseConnection`, and `ConfigureExternalServices` only —
+`MoreSettings` is not among them.
 
 ## Unknowns
 
-The current comments state no unmeasured fact and no open question. Every claim in `## Why` and
-`## Evidence` is either one of the two measurements themselves or a code fact confirmed by reading
-`SqlSugarClientFactory.Create`, `DatabaseInitializer`, or `Program.cs` directly. The nearest thing to
-a repository-configuration property rather than an engine property — that SQLite keeps the column
-only because `SqlSugarClientFactory` never sets the drop-column flag — is recorded as a measured
-fact in `## Why`, not as an unknown.
+What SQLite does with `SqliteCodeFirstEnableDropColumn` turned on is not measured in this
+repository — no test here exercises the flag (the `MoreSettings` grep above finds no site that sets
+it). `docs/guide/en/21-schema-and-upgrades.md`, "Where schema sync is dangerous", item 7, is the
+only description of that behaviour in the repository.
 
 ## Referenced from
 
