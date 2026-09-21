@@ -786,10 +786,9 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         _db.Deleteable<Struo.Infrastructure.Identity.User>().Where(u => u.Id == id).ExecuteCommand();
     }
 
-    // 未過濾的 InitTables 在真 Postgres 上對既有表做什麼。SQLite 不驗證宣告型別、其 dialect 的
-    // 結構同步能力也與 PG 不同，所以「InitTables 會 DROP COLUMN」這個架構前提只有在這裡才證得出來。
-    // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 PostgreSQL 上，Doomed 欄位被 DROP 掉了—— narrative-guard:allow: measurement pinned to the SqlSugarCore version it was taken against
-    // 與 SQLite 的量測結果（DatabaseInitializerTests）相反。
+    // 這條測試證明：在真 PostgreSQL 上，未過濾的 InitTables 會 DROP 被移除的欄位；SQLite 不驗證宣告
+    // 型別、其 dialect 的結構同步能力也與 PG 不同，所以這個主張在這個儲存庫裡只有在這裡才證得出來。
+    // 完整說明：docs/ai/decisions/codefirst-creates-missing-tables-only.md。
     [Fact]
     public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()
     {

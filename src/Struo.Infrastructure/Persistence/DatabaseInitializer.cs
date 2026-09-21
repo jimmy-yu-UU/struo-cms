@@ -14,22 +14,14 @@ namespace Struo.Infrastructure.Persistence;
 /// </para>
 ///
 /// <para>
-/// <b>SqlSugar 的 <c>InitTables</c> 預設模式對既有表是破壞性的</b>：它會新增欄位、**修改**欄位型別，
-/// 並在 entity 移除屬性時 **DROP COLUMN**（官方文件：「正式数据一定要禁删除列操作」）。這一點由
-/// <c>DatabaseInitializerTests</c>（SQLite 上的實測行為）與
-/// <c>PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres</c>
-/// （真引擎上的破壞性證明）釘住，不再只是文件敘述——但兩者的結論相反：在真 PostgreSQL 上，移除的欄位
-/// 確實被 DROP；在 SQLite 上，同一個探針卻被保留下來。SQLite 端的存活是這個儲存庫目前設定造成的，不是
-/// SQLite 引擎或 SqlSugar 的 SQLite dialect 本身做不到——SqlSugar 的 <c>SqliteCodeFirst.ExistLogic</c>
-/// 確實實作了 DROP COLUMN，只是把關在 <c>ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn</c>
-/// 之後，而這個儲存庫的 <c>SqlSugarClientFactory</c> 從未設定過 <c>MoreSettings</c>。因此本節開頭的破壞性
-/// 主張只在 PostgreSQL 上證得出來，這個儲存庫只跑 SQLite 的 CI 套件永遠無法自行證明它——但這是「目前設定
-/// 下」的性質，不是 SQLite 這個引擎的固有性質，一個打開該旗標的 fork 在 SQLite 上也會看到 DROP
-/// （僅限普通欄位；SQLite 原生拒絕刪除的欄位會讓該次 ALTER 拋例外、啟動中斷，見手冊第 21 章，
-/// <c>docs/guide/zh-TW/21-schema-and-upgrades.md</c>，「結構同步的危險情境」第 7 項）。因此
-/// <see cref="CreateMissingTables"/> 的安全性不建立在旗標上，
-/// 而建立在物理事實上——只把「表尚不存在」的 entity 型別交給 <c>InitTables</c>，此時它只可能
-/// CREATE；這一點與 <c>InitTables</c> 在既有表上究竟會不會刪欄位無關。
+/// 已測：<c>DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite</c> 顯示
+/// SQLite 上未過濾的 <c>InitTables</c> 保留被移除的欄位；
+/// <c>PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres</c> 顯示
+/// 同一情境在真 PostgreSQL 上會 DROP 該欄位。已排除：這不是 SQLite 引擎或 SqlSugar SQLite dialect
+/// 的限制，而是 <c>SqlSugarClientFactory</c> 從未開啟 <c>SqliteCodeFirstEnableDropColumn</c> 旗標所致。
+/// 未知：無，目前沒有任何未測的主張。若失去此保護：既有表上未過濾的 <c>InitTables</c> 在 PostgreSQL
+/// 上會 DROP 移除的欄位。<see cref="CreateMissingTables"/> 的安全性建立在「表尚不存在」的過濾上，
+/// 不是這個旗標上。完整說明：<c>docs/ai/decisions/codefirst-creates-missing-tables-only.md</c>。
 /// </para>
 /// </summary>
 public static class DatabaseInitializer
