@@ -20,7 +20,7 @@ internal static partial class StaleNarrativeRules
     public const string AllowMarker = "narrative-guard:allow:";
 
     [GeneratedRegex(
-        @"\b(?:(?<!\b(?:is|are|be|been|being|was|were|get|gets|got)\s)used to|previously|formerly|historically|anymore|no longer|now that)\b",
+        @"\b(?:(?<!\b(?:is|are|be|been|being|was|were|get|gets|got)\s)used to|previously|formerly|historically|anymore|no longer|now that|previous (?:implementation|version|mapping)|before this (?:fix|change|feature|task))\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex EnglishBanned();
 

@@ -82,13 +82,15 @@ never a before/after, a change date, or an issue reference. History lives in `gi
 
 **Banned wording.** English: `` `used to` `` (except the passive `` `be used to` ``, the form that
 follows `` is/are/be/been/being/was/were/get/gets/got ``), `` `previously` ``, `` `formerly` ``,
-`` `historically` ``, `` `anymore` ``, `` `no longer` ``, `` `now that` `` — matched case-insensitively,
-word-bounded. Bare dates shaped `` `20xx-xx-xx` ``. A PR or issue reference shaped `` `PR #n` ``,
-`` `pull/n` ``, or `` `#nn` `` (a `` `#` `` that follows a non-word character, and not `` `&` ``, and
-sits directly before two or more digits) — reword these three, they can never carry an allow marker.
-Chinese, matched as a substring: `` `以前` ``, `` `曾經` ``,
-`` `過去是` ``, `` `過去曾` ``, `` `原本是` ``, `` `原本會` ``, `` `原本叫` ``, `` `已修` ``,
-`` `現在不再` ``, `` `不再需要` ``.
+`` `historically` ``, `` `anymore` ``, `` `no longer` ``, `` `now that` ``,
+`` `previous implementation` ``, `` `previous version` ``, `` `previous mapping` ``,
+`` `before this fix` ``, `` `before this change` ``, `` `before this feature` ``,
+`` `before this task` `` — matched case-insensitively, word-bounded. Bare dates shaped
+`` `20xx-xx-xx` ``. A PR or issue reference shaped `` `PR #n` ``, `` `pull/n` ``, or `` `#nn` `` (a
+`` `#` `` that follows a non-word character, and not `` `&` ``, and sits directly before two or more
+digits) — reword these three, they can never carry an allow marker. Chinese, matched as a substring:
+`` `以前` ``, `` `曾經` ``, `` `過去是` ``, `` `過去曾` ``, `` `原本是` ``,
+`` `原本會` ``, `` `原本叫` ``, `` `已修` ``, `` `現在不再` ``, `` `不再需要` ``.
 
 **The allow marker.** A banned word or bare date that names a legitimate current-state fact — the
 mechanics of a diff algorithm, an anti-pattern table quoting the phrase it bans, a decision file's
