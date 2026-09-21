@@ -398,7 +398,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
       <ItemForm
         :meta="meta"
         :item-id="id"
-        v-model:model="model"
+        :model="model"
         :locales="langStore.languages"
         :errors="errors"
         :server-error="serverError"
