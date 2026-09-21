@@ -13,13 +13,15 @@ import type { FormModel } from '../types/itemForm'
 
 const props = defineProps<{
   meta: CollectionMeta
-  model: FormModel
   locales: LanguageInfo[]
   errors: Record<string, string>
   serverError?: string
   disabled?: boolean
   itemId?: string
 }>()
+// The form edits the parent's draft object in place; declaring it as a model makes that
+// two-way contract explicit to consumers.
+const model = defineModel<FormModel>('model', { required: true })
 const emit = defineEmits<{ (e: 'submit'): void }>()
 const { t } = useI18n()
 
@@ -29,7 +31,7 @@ const activeLocale = ref(props.locales[0]?.code ?? '')
 // Dots only carry information when there is more than one locale AND translatable fields exist.
 const showDots = computed(() => fields.value.translatable.length > 0 && props.locales.length > 1)
 function localeFilled(code: string): boolean {
-  return hasLocaleContent(fields.value.translatable, props.model.translations[code] ?? {})
+  return hasLocaleContent(fields.value.translatable, model.value.translations[code] ?? {})
 }
 // The dot is the only signal of per-locale completeness; give it an accessible label
 // instead of aria-hiding it outright so screen reader users get the same information.
