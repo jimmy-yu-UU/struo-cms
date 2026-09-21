@@ -186,12 +186,11 @@ describe('shouldShowBubbleMenu', () => {
     }))).toBe(false)
   })
 
-  // The zero-character boundary this walk fixes over the previous (textblock-keyed) version: a
-  // selection that includes a code block's own inline content plus reaches only to the very start
-  // of the following paragraph -- zero characters of the paragraph. Real nodesBetween calls back
-  // for the paragraph itself (not itself inline) but never for any inline content inside it, since
-  // none of that content overlaps the range. Confirmed against a real editor and a real selection
-  // in RichTextBubbleMenu.test.ts.
+  // The zero-character boundary case: a selection that includes a code block's own inline content
+  // plus reaches only to the very start of the following paragraph -- zero characters of the
+  // paragraph. Real nodesBetween calls back for the paragraph itself (not itself inline) but never
+  // for any inline content inside it, since none of that content overlaps the range. Confirmed
+  // against a real editor and a real selection in RichTextBubbleMenu.test.ts.
   it('stays hidden at a selection boundary that touches a following block but none of its own inline content', () => {
     expect(shouldShowBubbleMenu(args({
       state: {

@@ -93,8 +93,9 @@ public class GanssHtmlSanitizerTests
     }
 
     // target="_blank" is the one value allowed through, and it is paired with exactly rel="noopener"
-    // -- not noreferrer, not nofollow, not both. That pairing is what makes narrowing the old
-    // absolute strip safe: noopener is set on exactly the links that keep target="_blank".
+    // -- not noreferrer, not nofollow, not both -- so rel="noopener" is set on exactly the anchors
+    // that keep target="_blank" and on no other. Asserted on the exact string, not Contain, because
+    // an extra or substituted rel token would still pass a substring check.
     [Fact]
     public void Blank_target_survives_with_exactly_rel_noopener()
     {

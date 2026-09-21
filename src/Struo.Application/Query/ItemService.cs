@@ -357,9 +357,8 @@ public sealed class ItemService(
             // window to purge-parity. Under PG READ COMMITTED a plain SELECT takes no row lock, so a
             // referencing row committed by another txn between the check and the commit is still possible
             // — full closure would need FK/locking (accepted app-only stance), so this narrows rather than
-            // eliminates the race. Note this now runs even when the row turns out to already be trashed
-            // (affected = 0 below) — harmless (a pure read-only guard), and simpler/more consistent than
-            // the previous pre-read short-circuit that skipped it entirely for a repeat DELETE.
+            // eliminates the race. This check runs even when the row is already trashed (affected = 0
+            // below) — harmless, since it is a pure read-only guard and repeating it mutates nothing.
             var actor = currentUser.GetCurrentUserId();
 
             // Trash bumps the item's Version (repository, AuditableEntity only) AND — for a

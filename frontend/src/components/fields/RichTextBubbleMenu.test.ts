@@ -271,11 +271,11 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The predicate excludes a selected image by testing "the selected range carries no text",
-  // but its own tests fabricate textBetween -- nothing before this proved that a real selected
-  // image actually presents that way. This settles it against a real editor and a real image node:
-  // first the raw claim (textBetween is actually empty over a NodeSelection's own range), then the
-  // composed behaviour (the mounted menu stays out of the DOM).
+  // The predicate excludes a selected image by testing "the selected range carries no text", but
+  // richTextSelection.test.ts's own tests fabricate textBetween and cannot verify that a real
+  // selected image actually presents that way. This test settles it against a real editor and a
+  // real image node: first the raw claim (textBetween is actually empty over a NodeSelection's own
+  // range), then the composed behaviour (the mounted menu stays out of the DOM).
   it('never shows for a selected image, and a real image NodeSelection really does carry no text', async () => {
     const { w, container } = mountHarness('<p>before</p><img src="x.png" alt="a" /><p>after</p>')
     await flushPromises()
@@ -296,8 +296,8 @@ describe('RichTextBubbleMenu', () => {
   })
 
   // shouldShowBubbleMenu excludes a selection whose range touches only mark-disallowing textblocks
-  // by walking state.doc.nodesBetween, but its own tests (richTextSelection.test.ts) fabricate that
-  // shape -- nothing before this proved a real code block actually presents that way. This settles it
+  // by walking state.doc.nodesBetween, but richTextSelection.test.ts's own tests fabricate that
+  // shape and cannot verify a real code block actually presents that way. This test settles it
   // against a real editor and a real code block: first the raw claims (a real codeBlock node's spec
   // really does declare `marks: ''`, and toggling bold really is unavailable with the selection
   // inside one), then the composed behaviour (the mounted menu stays out of the DOM).
@@ -315,12 +315,12 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The previous, $from.parent-keyed version of this rule was only narrowed, not closed: Mod-a's
-  // real command is editor.commands.selectAll(), which produces an AllSelection whose $from resolves
-  // at the doc itself (spec.marks undefined there), so it showed every button, inert, for a
-  // select-all inside a code-block-only field. Settles the fixed rule against a real editor, a real
-  // select-all and a real code block: the selection really is non-empty, and every command this menu
-  // offers really is unavailable, yet the old rule would have shown the menu regardless.
+  // Mod-a's real command is editor.commands.selectAll(), which produces an AllSelection whose
+  // $from resolves at the doc itself, where spec.marks is undefined -- so a rule keyed only on
+  // $from.parent cannot tell a code-block-only selection from any other, and shouldShowBubbleMenu
+  // instead walks the whole range (state.doc.nodesBetween) to decide. Settles that walk against a
+  // real editor, a real select-all and a real code block: the selection really is non-empty, and
+  // every command this menu offers really is unavailable.
   it('never shows for a real select-all whose entire document is a single code block', async () => {
     const { w, container } = mountHarness('<pre><code>const x = 1</code></pre>')
     await flushPromises()
