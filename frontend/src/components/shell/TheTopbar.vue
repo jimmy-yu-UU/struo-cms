@@ -18,8 +18,8 @@ const { t } = useI18n()
        between this header and the viewport sets overflow). -->
   <header class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
     <!-- SidebarTrigger doesn't set inheritAttrs: false and its root is <Button>, so this
-         restores the localized accessible name the old hamburger carried — the vendored
-         component only ships a hardcoded English "Toggle Sidebar" sr-only span. -->
+         sets a localized accessible name — the vendored component only ships a hardcoded
+         English "Toggle Sidebar" sr-only span. -->
     <SidebarTrigger :aria-label="t('shell.openMenu')" />
     <div class="flex-1" />
     <UiLanguageSwitcher />

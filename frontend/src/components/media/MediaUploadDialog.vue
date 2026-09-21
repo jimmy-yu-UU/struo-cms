@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
       Its own width class is an UNPREFIXED max-w-lg (unlike DialogContent's sm:max-w-lg), so this
       override supplies no modifier either — a bare max-w-* only loses to another bare max-w-*.
-      max-[960px]:max-w-[95vw] reproduces the old `:breakpoints="{ '960px': '95vw' }"`.
+      max-[960px]:max-w-[95vw] caps the dialog at 95vw below a 960px viewport.
     -->
     <DialogScrollContent class="max-w-[min(78vw,1100px)] max-[960px]:max-w-[95vw]">
       <DialogHeader>

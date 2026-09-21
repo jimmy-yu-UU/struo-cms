@@ -186,7 +186,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
       box with no scroll container at all. Its own width class is a BARE max-w-lg (DialogContent's
       is sm:max-w-lg), so this override supplies no modifier either -- tailwind-merge keys on
       (modifier set, class group), and a bare max-w-* only loses to another bare max-w-*.
-      max-[960px]:max-w-[95vw] reproduces the old :breakpoints="{ '960px': '95vw' }".
+      max-[960px]:max-w-[95vw] caps the dialog at 95vw below a 960px viewport.
     -->
     <DialogScrollContent class="max-w-[min(78vw,1100px)] max-[960px]:max-w-[95vw]">
       <DialogHeader>

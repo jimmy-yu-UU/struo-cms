@@ -14,8 +14,8 @@ describe('resolveIcon', () => {
     expect(resolveIcon('pi-pencil')).toBe(Pencil)
   })
 
-  // Backend [CmsCollection(Icon = "...")] carries a semantic name, not a CSS class.
-  // The old SidebarNavItem treated it as a class, so these rendered nothing at all.
+  // Backend [CmsCollection(Icon = "...")] carries a semantic name, not a CSS class; resolveIcon
+  // must map these semantic names to an icon component.
   it('resolves the semantic names the backend emits', () => {
     expect(resolveIcon('article')).toBeDefined()
     expect(resolveIcon('folder')).toBe(Folder)

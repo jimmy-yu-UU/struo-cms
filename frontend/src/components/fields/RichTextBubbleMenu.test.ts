@@ -334,11 +334,9 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The case the maintainer was willing to accept as over-hidden by the old rule: a selection
-  // starting inside a code block and ending in a following paragraph. $from.parent-keyed logic hid
-  // this (the selection "starts" in a mark-disallowing block), even though bold genuinely applies to
-  // the paragraph tail -- confirmed here directly via editor.can().toggleBold(). Walking the whole
-  // range instead of just where it starts is what makes this show correctly.
+  // A selection starting inside a code block and ending in a following paragraph: bold genuinely
+  // applies to the paragraph tail -- confirmed here directly via editor.can().toggleBold(). Walking
+  // the whole range instead of just where it starts is what makes this show correctly.
   it('shows for a real selection spanning a code block into a following paragraph, where bold really does apply', async () => {
     const { w, container } = mountHarness('<pre><code>const x = 1</code></pre><p>after</p>')
     await flushPromises()
@@ -352,14 +350,12 @@ describe('RichTextBubbleMenu', () => {
     teardown(w, container)
   })
 
-  // The zero-character boundary the textblock-keyed rule (this branch's own prior commit) missed: a
-  // selection that includes all of a code block's own text but reaches only to the very start of the
-  // following paragraph -- zero characters of the paragraph. Reachable in a real editor by
-  // Shift+Down out of a code block, or by dragging one position past the block boundary. Settles the
-  // inline-walk rule against a real editor: the raw claim first (this exact range's own text is the
-  // code block's content and nothing from the paragraph, and every command this menu offers is
-  // unavailable), then the composed behaviour (the menu, whose six buttons would otherwise all be
-  // dead, stays out of the DOM).
+  // A selection that includes all of a code block's own text but reaches only to the very start of
+  // the following paragraph -- zero characters of the paragraph -- must not show the menu: this
+  // exact range's own text is the code block's content and nothing from the paragraph, and every
+  // command this menu offers is unavailable, so the menu, whose six buttons would otherwise all be
+  // dead, stays out of the DOM. Reachable in a real editor by Shift+Down out of a code block, or by
+  // dragging one position past the block boundary.
   it('never shows for a selection that ends at the zero-character start of the following paragraph', async () => {
     const { w, container } = mountHarness('<pre><code>abc</code></pre><p>after</p>')
     await flushPromises()
