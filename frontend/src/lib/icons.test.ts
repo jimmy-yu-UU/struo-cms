@@ -14,8 +14,7 @@ describe('resolveIcon', () => {
     expect(resolveIcon('pi-pencil')).toBe(Pencil)
   })
 
-  // Backend [CmsCollection(Icon = "...")] carries a semantic name, not a CSS class; resolveIcon
-  // must map these semantic names to an icon component.
+  // Backend [CmsCollection(Icon = "...")] carries a semantic name, not a CSS class.
   it('resolves the semantic names the backend emits', () => {
     expect(resolveIcon('article')).toBeDefined()
     expect(resolveIcon('folder')).toBe(Folder)

@@ -391,11 +391,10 @@ public class MetadataScannerTests
         var d = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)])["article"];
 
         // Case-insensitive keying: a camelCase or lower-cased spelling resolves to the same accessor
-        // as the exact CLR name (mirrors the IgnoreCase binding the hot paths relied on).
+        // as the exact CLR name.
         d.Properties.GetValueOrDefault("status").Should().BeSameAs(d.Properties["Status"]);
         d.Properties.GetValueOrDefault("STATUS").Should().BeSameAs(d.Properties["Status"]);
 
-        // A missing property resolves to null.
         d.Properties.GetValueOrDefault("noSuchProperty").Should().BeNull();
     }
 

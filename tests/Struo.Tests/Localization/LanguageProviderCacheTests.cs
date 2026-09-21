@@ -34,8 +34,6 @@ public class LanguageProviderCacheTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    // Pins the type of the per-scope cache field: it must be a Lazy<IReadOnlyList<LanguageInfo>>,
-    // which makes the load atomic.
     [Fact]
     public void Cache_is_backed_by_a_lazy_so_the_load_is_atomic()
     {
@@ -47,9 +45,8 @@ public class LanguageProviderCacheTests : IDisposable
             "the per-scope cache must be a Lazy<IReadOnlyList<LanguageInfo>> so concurrent callers cannot double-load");
     }
 
-    // Regression guard for the observable thread-safety improvement: every concurrent caller sees the
-    // SAME cached list instance. (Under `??=` a lost race can hand different instances to callers; the
-    // race is provider-dependent so this is a guard, with the type assertion above as the RED anchor.)
+    // Every concurrent caller sees the SAME cached list instance: Lazy<T> with
+    // ExecutionAndPublication publishes exactly one result to every racing caller.
     [Fact]
     public async Task Concurrent_Enabled_returns_a_single_shared_instance()
     {

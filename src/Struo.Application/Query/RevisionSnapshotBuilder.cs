@@ -64,8 +64,9 @@ public sealed class RevisionSnapshotBuilder(
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
-            // Properties is OrdinalIgnoreCase-keyed, so rel.ForeignKey (an exact CLR name) resolves
-            // the same PropertyInfo a case-insensitive GetProperty binding would.
+            // rel.ForeignKey is camelCase (e.g. "categoryId"); Properties is OrdinalIgnoreCase-keyed,
+            // so that spelling resolves the same PropertyInfo as the CLR property's PascalCase name
+            // (e.g. CategoryId).
             snap[rel.ForeignKey] = d.Properties.GetValueOrDefault(rel.ForeignKey)?.GetValue(entity);
         }
 

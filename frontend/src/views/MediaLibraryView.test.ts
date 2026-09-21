@@ -446,7 +446,7 @@ describe('MediaLibraryView', () => {
   it('renders the pager for a single page of results', async () => {
     // The pager shows whenever total > 0 because DataTablePagination also carries the range text
     // and rows-per-page selector, both useful even when everything fits on one page. total (5) is
-    // well under the media library's pageSize (24), pinning that a single full page still renders it.
+    // well under the media library's pageSize (24), pinning that a single partial page still renders it.
     makeListMock([{ data: rows, total: 5 }])
     const w = mountView()
     await flushPromises()
@@ -947,10 +947,10 @@ describe('MediaLibraryView', () => {
     }))
   })
 
-  // Blocker 1 (final review): search mode drops the folder filter (a listed file can live in any
-  // folder), so a move initiated from a search result (context menu "Move to…" or the move
-  // dialog, both reachable while searching) into the folder currentFolderId happens to point at
-  // is NOT a no-op the way it would be while browsing normally -- it must still issue the write.
+  // Search mode drops the folder filter (a listed file can live in any folder), so a move
+  // initiated from a search result (context menu "Move to…" or the move dialog, both reachable
+  // while searching) into the folder currentFolderId happens to point at is NOT a no-op the way it
+  // would be while browsing normally -- it must still issue the write.
   it('moves into currentFolderId while a search is active, instead of silently no-opping', async () => {
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
