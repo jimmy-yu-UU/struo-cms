@@ -148,9 +148,9 @@ public class DistributedCacheLoginAttemptThrottleTests
     [Fact]
     public async Task RetryAfterSeconds_decreases_as_the_window_elapses()
     {
-        // A fake, hand-advanced clock removes the real-clock timing concerns the previous version of
-        // this test worked around (CI jitter crossing the window boundary) — the window can go back
-        // to a natural small size since the advance is exact, not a Task.Delay guess.
+        // A fake, hand-advanced clock removes real-clock timing concerns (CI jitter crossing the
+        // window boundary), so the window can stay a natural small size: the advance below is exact,
+        // not a Task.Delay guess.
         var clock = new FakeTimeProvider();
         var cache = MemoryCache();
         var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3, clock: clock);

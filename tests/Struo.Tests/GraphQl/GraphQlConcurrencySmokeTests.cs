@@ -12,16 +12,18 @@ namespace Struo.Tests.GraphQl;
 /// Regression guard: GraphQlServiceCollectionExtensions pins both root scopes to
 /// DependencyInjectionScope.Request, so a single query selecting multiple root fields
 /// (articles/categories/tags) can have HotChocolate execute those sibling resolvers in parallel
-/// against the SAME request-scoped ISqlSugarClient. Before this fix, the factory returned a
-/// bare `new SqlSugarClient(config)`, which is not thread-safe — concurrent ADO operations on the
-/// shared connection intermittently threw ("connection already open") or otherwise failed.
+/// against the SAME request-scoped ISqlSugarClient. SqlSugarClientFactory.Create returns a
+/// SqlSugarScope, SqlSugar's thread-safe wrapper, rather than a bare `new SqlSugarClient(config)`:
+/// a bare client is not thread-safe, so concurrent ADO operations on the shared connection would
+/// intermittently throw ("connection already open") or otherwise fail.
 ///
 /// This test fires a batch of concurrent multi-root requests and asserts every one comes back
 /// 200 with no "errors" array. Per the task plan this is kept as a regression smoke rather than
 /// the RED evidence: SQLite (file-per-test, IsAutoCloseConnection) does not reliably reproduce the
 /// interleaved-connection race the way a real concurrent Postgres connection pool does, so this
-/// test may not reliably FAIL pre-fix on this provider — the live Postgres gate is the authoritative
-/// RED/GREEN evidence. Kept here as a permanent regression guard for the fixed factory.
+/// test may not reliably FAIL on this provider if the factory regresses — the live Postgres gate is
+/// the authoritative RED/GREEN evidence. Kept here as a permanent regression guard for
+/// SqlSugarClientFactory.Create's thread-safe return type.
 /// </summary>
 [Collection("ApiIntegration")]
 public class GraphQlConcurrencySmokeTests(ApiFactory factory)

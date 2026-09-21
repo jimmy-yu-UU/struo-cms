@@ -206,11 +206,12 @@ public class DistributedCacheTicketStoreTests
     }
 
     /// <summary>
-    /// A cookie session that existed before this feature shipped (or whose StoreAsync could not
-    /// attribute a user id at the time) has no user_sessions row. Without a back-fill, such a session
-    /// would sit in the cache indefinitely (8h sliding expiration, self-renewing forever) yet never be
-    /// findable by IUserSessionRevocationService — the exact "can't be revoked" hole this feature
-    /// exists to close. RenewAsync must back-fill a row the first time it observes such a ticket.
+    /// A cookie session with no user_sessions row — because it was seeded into the cache directly,
+    /// bypassing StoreAsync's indexing (as the test below does), or because StoreAsync could not
+    /// attribute a user id to it at the time — sits in the cache indefinitely without a back-fill (8h
+    /// sliding expiration, self-renewing forever) yet is never findable by IUserSessionRevocationService.
+    /// RenewAsync back-fills a row the first time it observes such a ticket, so the session becomes
+    /// revocable going forward.
     /// </summary>
     [Fact]
     public async Task RenewAsync_backfills_an_index_row_for_a_session_that_predates_the_index()

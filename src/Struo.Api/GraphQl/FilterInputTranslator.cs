@@ -150,8 +150,8 @@ public static class FilterInputTranslator
     // Translates the dict directly under a relation key (e.g. `tags: { ... }`): "some"/"none"
     // become RelationPredicateFilters rooted at `relation`; "junction" becomes dotted
     // "_junction.<f>" leaves prefixed with "<relation>."; every other key is a plain (possibly
-    // further-nested-relation) field, collected and translated together at the end exactly like
-    // before this feature existed, then prefixed the same way.
+    // further-nested-relation) field, collected into `rest` and translated together through the
+    // same TranslateCore call a root-level filter dict uses, then prefixed the same way.
     private static List<FilterNode> TranslateRelation(
         string relation, IReadOnlyDictionary<string, object?> nested, string target,
         Func<string, string, string?>? relationTarget)

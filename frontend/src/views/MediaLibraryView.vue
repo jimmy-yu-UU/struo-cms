@@ -355,9 +355,8 @@ function onRequestMove(payload: MovePayload): void {
   moveDialogOpen.value = true
 }
 
-// Single-file delete from the context menu. Files had no per-item delete path outside
-// MediaDetailDialog before this task -- mirrors that dialog's own onDelete (soft-delete confirm,
-// then filesApi.remove, matching MediaDetailDialog.vue) rather than duplicating its logic.
+// Single-file delete from the context menu. Mirrors MediaDetailDialog's own onDelete (soft-delete
+// confirm, then filesApi.remove) rather than duplicating its logic.
 async function onRemoveFile(id: string): Promise<void> {
   if (!(await confirm.require(deleteConfirm(t, 'soft')))) return
   try {

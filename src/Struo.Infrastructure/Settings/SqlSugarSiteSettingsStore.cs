@@ -14,29 +14,27 @@ public sealed class SqlSugarSiteSettingsStore(ISqlSugarClient db) : ISiteSetting
     }
 
     /// <summary>
-    /// The previous implementation did a check-then-branch (<c>AnyAsync</c> then
-    /// Insertable-or-Updateable) with no atomicity between the check and the act — two concurrent
-    /// first-saves could both observe "no row" and both attempt an insert, and the loser crashed with
-    /// an unmapped Postgres 23505 (unique_violation) → an opaque 500.
-    ///
-    /// This is now an UPDATE-first, INSERT-on-miss, retry-on-conflict upsert: (1) try the UPDATE — if a
-    /// row already exists this is the entire operation, and a single UPDATE statement is atomic on its
-    /// own, no wrapping transaction needed; (2) if zero rows were affected, no row existed as of that
-    /// UPDATE, so attempt the INSERT; (3) if a concurrent request won the same race and inserted first,
-    /// our INSERT fails with 23505 — caught and retried as an UPDATE (the row now exists). The INSERT
-    /// attempt runs inside its own transaction specifically so a caught 23505 can be cleanly rolled back
-    /// before the fallback UPDATE runs: Postgres marks a transaction "aborted" after any statement
-    /// error, and further statements in that same transaction would fail with "current transaction is
-    /// aborted" — rolling back first avoids that trap. <see cref="SiteSettings"/> has no version/rowver
-    /// column, so a genuine concurrent *update* (not the first-insert race) stays last-writer-wins, same
-    /// as before this fix — only the first-save 500 is closed.
+    /// Upserts the singleton settings row as UPDATE-first, INSERT-on-miss, retry-on-conflict: (1) try
+    /// the UPDATE — if a row already exists this is the entire operation, and a single UPDATE statement
+    /// is atomic on its own, no wrapping transaction needed; (2) if zero rows were affected, no row
+    /// exists yet, so attempt the INSERT; (3) if a concurrent request won the same race and inserted
+    /// first, this INSERT fails with 23505 — caught and retried as an UPDATE (the row now exists). The
+    /// INSERT attempt runs inside its own transaction specifically so a caught 23505 can be cleanly
+    /// rolled back before the fallback UPDATE runs: Postgres marks a transaction "aborted" after any
+    /// statement error, and further statements in that same transaction fail with "current transaction
+    /// is aborted" — rolling back first avoids that trap. <see cref="SiteSettings"/> has no
+    /// version/rowver column, so a genuine concurrent *update* (not the first-insert race) is
+    /// last-writer-wins.
     ///
     /// Considered and rejected: SqlSugar's <c>Storageable</c> upsert helper. Per SqlSugar's own docs
     /// (functional/simplified Storageable usage), it works by querying which primary keys already exist,
     /// splitting the batch into insert/update lists in memory, then executing
     /// <c>Db.Insertable(...).ExecuteCommand()</c> / <c>Db.Updateable(...).ExecuteCommand()</c> against
-    /// those lists — i.e. the exact same check-then-branch shape as the code being replaced here, not a
-    /// single atomic `INSERT ... ON CONFLICT DO UPDATE`. It would not have closed this race.
+    /// those lists — a check-then-branch with no atomicity between the check and the act, so two
+    /// concurrent first-saves could both observe no row and both attempt an insert, with the loser
+    /// hitting an unmapped Postgres 23505 (unique_violation). Not a single atomic
+    /// `INSERT ... ON CONFLICT DO UPDATE`, so it does not close the first-save race the sequence above
+    /// handles.
     /// </summary>
     public async Task UpsertAsync(string brandName, Guid? logoFileId, Guid? updatedBy, CancellationToken ct = default)
     {
