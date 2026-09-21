@@ -19,8 +19,8 @@ const props = defineProps<{
   disabled?: boolean
   itemId?: string
 }>()
-// The form edits the parent's draft object in place; this declares that two-way contract
-// explicitly rather than leaving it implicit in an unmodeled prop mutation.
+// The form edits the parent's draft object in place; declaring it as a model makes that
+// two-way contract explicit to consumers.
 const model = defineModel<FormModel>('model', { required: true })
 const emit = defineEmits<{ (e: 'submit'): void }>()
 const { t } = useI18n()
