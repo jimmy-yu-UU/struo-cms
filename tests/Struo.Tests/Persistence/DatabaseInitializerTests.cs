@@ -163,19 +163,9 @@ public class DatabaseInitializerTests
     [Fact]
     public void Unfiltered_InitTables_does_not_drop_columns_on_Sqlite()
     {
-        // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 SQLite 上，欄位沒有被刪掉。 narrative-guard:allow: measurement pinned to the SqlSugarCore version it was taken against
-        // 因此「InitTables 會 DROP COLUMN」這個架構前提無法用 SQLite 測套件證明；PostgreSQL 端的量測
-        // 已經完成：同一組探針型別在真 PostgreSQL 上跑出相反的結果——Doomed 欄位
-        // 被 DROP 掉了，見 Struo.Tests.Query.PostgresIntegrationTests
-        // .Unfiltered_InitTables_drops_a_removed_column_on_postgres（opt-in，僅在設定 PG 連線時執行）。
-        // 已知成因，不是「SQLite 做不到」：SqlSugar 的 SqliteCodeFirst.ExistLogic（上游 tag 5.1.4.197，
-        // Src/Asp.NetCore2/SqlSugar/Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs:10,50-58）確實實作了
-        // DROP COLUMN，但把關在 ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn 之後；
-        // SqlSugarClientFactory 從未設定過 MoreSettings（`grep -rn "MoreSettings" src/ tests/` 除了說明
-        // 文件裡的散文引用（本行也是其中之一）外沒有命中），所以這個判斷永遠是 false。這是設定造成的，
-        // 不是 SQLite 引擎或 SqlSugar 的
-        // SQLite dialect 本身的極限——這條測試的作用是把「在這個儲存庫目前的設定下，SQLite 上到底會不會」
-        // 從未知釘成事實：若哪天有人打開那個旗標，這裡會紅，我們就知道 CI 套件的證明力改變了。
+        // 這條測試釘住：在這個儲存庫目前的設定下，SQLite 上未過濾的 InitTables 會保留被移除的欄位。
+        // 值得釘住的原因：若哪天有人打開 SqliteCodeFirstEnableDropColumn 旗標，這裡會變紅，我們就
+        // 知道 CI 套件的證明力改變了。完整說明：docs/ai/decisions/codefirst-creates-missing-tables-only.md。
         var (db, client) = NewClient();
         using (db)
         {

@@ -113,6 +113,16 @@ public sealed class StaleNarrativeRulesTests
     [InlineData("can't be used to infer", false)]
     [InlineData("the key used to sign", true)]
     [InlineData("It used to be red", true)]
+    [InlineData("The previous implementation did a check-then-branch.", true)]
+    [InlineData("A previous version of this test worked around it.", true)]
+    [InlineData("The previous mapping had these swapped.", true)]
+    [InlineData("Before this fix, the factory returned a bare client.", true)]
+    [InlineData("same as before this change.", true)]
+    [InlineData("exactly like before this feature existed.", true)]
+    [InlineData("no delete path before this task.", true)]
+    [InlineData("every other entry joins the previous entry inside the group.", false)]
+    [InlineData("must be registered before this line runs.", false)]
+    [InlineData("a page computed against the previous ordering.", false)]
     public void Banned_words_are_word_bounded_and_case_insensitive(string text, bool expectMatch)
     {
         var lines = new[] { new StaleNarrativeRules.ScannableLine(1, text, null) };

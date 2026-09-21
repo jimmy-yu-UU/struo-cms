@@ -57,8 +57,8 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
     // It rests on onExit running synchronously inside the exit dispatch. Upstream's plugin view is
     // an async function, but its "stopped" branch has no await ahead of it, so the transaction that
     // records the dismissal and the onExit that labels it are one synchronous turn. If upstream ever
-    // puts an await before that branch the label lands a turn late and a blur dismissal is treated
-    // as an Escape one -- which is the behaviour before this existed, not a corrupt state.
+    // puts an await before that branch, the label lands a turn late and a blur dismissal gets
+    // labelled as an Escape one -- a degraded label, not a corrupt state.
     let exitIsFromBlur = false
     let lastExitWasBlur = false
 

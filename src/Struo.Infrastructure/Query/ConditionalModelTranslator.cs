@@ -191,8 +191,7 @@ public static class ConditionalModelTranslator
         // SqlSugar's LikeLeft/LikeRight naming is the OPPOSITE of what the enum names suggest
         // (verified empirically against SqlSugarCore 5.1.4.215 on SQLite): LikeLeft renders
         // `value%` (wildcard trails, i.e. starts-with) and LikeRight renders `%value` (wildcard
-        // leads, i.e. ends-with). The previous mapping had these swapped, so `_starts_with` was
-        // silently matching suffixes and `_ends_with` was silently matching prefixes.
+        // leads, i.e. ends-with) — hence StartsWith below maps to LikeLeft, EndsWith to LikeRight.
         QueryOperator.StartsWith => ConditionalType.LikeLeft,   // LikeLeft  = value%
         QueryOperator.EndsWith   => ConditionalType.LikeRight,  // LikeRight = %value
         QueryOperator.In         => ConditionalType.In,

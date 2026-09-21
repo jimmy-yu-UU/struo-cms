@@ -166,11 +166,9 @@ describe('RepeaterField', () => {
     expect(w.get('.repeater-add').attributes('disabled')).toBe('')
   })
 
-  // Native <button> defaults to type="submit". RepeaterField is dispatched inside ItemForm.vue's
-  // <form @submit.prevent>, whose only other submit control lives outside <ItemForm> entirely —
-  // so before this component carried any button at all, the form had no submit control, and an
-  // untyped button here would make every row click a real, accidental form submission (and, for a
-  // Revisions-enabled collection, a real revision) instead of a local array edit.
+  // Native <button> defaults to type="submit". RepeaterField is rendered inside ItemForm.vue's
+  // <form @submit.prevent>, so an untyped button here would submit the form on click (and, for a
+  // Revisions-enabled collection, record a real revision) instead of performing a local array edit.
   it('gives every row control and the add button an explicit type="button"', () => {
     const w = mount(RepeaterField, { props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }] }, ...opts })
     for (const hook of ['.repeater-up', '.repeater-down', '.repeater-remove']) {

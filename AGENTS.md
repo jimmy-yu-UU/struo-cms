@@ -146,15 +146,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   modifies *and* **drops** columns — measured on real PostgreSQL by
   `PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`; on SQLite
   the same unfiltered call leaves the removed column in place
-  (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — not because
-  SQLite or SqlSugar's SQLite dialect lacks the capability, but because this repo's
-  `SqlSugarClientFactory` never sets
-  `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`, the flag that gates it
-  (`docs/guide/en/21-schema-and-upgrades.md`, "Where schema sync is dangerous", item 7, covers
-  what flipping that flag actually does) — so this repo's SQLite-only CI suite cannot demonstrate
-  the claim by itself), while reviewed `db/migrations/` scripts applied by `MigrationRunner` are
-  the all-environments path. The runner works on any backend; `Database:MigrationsPath` empty (the
-  default) disables it.
+  (`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`) — see
+  `docs/ai/decisions/codefirst-creates-missing-tables-only.md` for the cause and the evidence),
+  while reviewed `db/migrations/` scripts applied by `MigrationRunner` are the all-environments
+  path. The runner works on any backend; `Database:MigrationsPath` empty (the default) disables it.
 - **Hidden fields are never projected on read** — `[CmsField(Hidden = true)]` is excluded from schema,
   GraphQL, item projections, and query filtering/search/sort. This is a **read-side exclusion only**
   on REST: `Hidden` plays no part in either write-path allowlist. `ItemDeserializer.cs`'s create/update
