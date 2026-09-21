@@ -123,6 +123,22 @@ public sealed class StaleNarrativeRulesTests
     [InlineData("every other entry joins the previous entry inside the group.", false)]
     [InlineData("must be registered before this line runs.", false)]
     [InlineData("a page computed against the previous ordering.", false)]
+    [InlineData("The old code turned offset into a page index.", true)]
+    [InlineData("the old raw-transaction code opened its own transaction", true)]
+    [InlineData("where the old $from-keyed rule wrongly hid it", true)]
+    [InlineData("the shape the old guard treated as a no-op", true)]
+    [InlineData("(the old allow-all stub now lives in the test project)", true)]
+    [InlineData("The old cap rejected sibling relations.", true)]
+    [InlineData("not the old message match", true)]
+    [InlineData("the old implementation bound them as a class", true)]
+    [InlineData("Invalidate swaps in a fresh Lazy, not the old value", false)]
+    [InlineData("still echoing the OLD version 0", false)]
+    [InlineData("an offset computed against the OLD page size is meaningless", false)]
+    [InlineData("blocked until the old row is purged", false)]
+    [InlineData("the old session isn't revoked", false)]
+    [InlineData("a tab still holding the old index.html", false)]
+    [InlineData("it unmounts the old one and mounts a fresh one", false)]
+    [InlineData("the old and the new array", false)]
     public void Banned_words_are_word_bounded_and_case_insensitive(string text, bool expectMatch)
     {
         var lines = new[] { new StaleNarrativeRules.ScannableLine(1, text, null) };
