@@ -129,9 +129,10 @@ fenced code blocks and inline code spans are skipped, so a date inside one of th
 either; a date inside comment or prose text does. It also fails on a decision file missing one of its
 six headings or on an orphan decision file nothing references by path.
 
-**The guard is not exhaustive.** It flags only the banned words and bare dates listed above. A
-sentence that describes the past through other phrasing — `once X replaced Y`, `the old …`,
-`without the fix`, `must now …` — passes the guard and is the reviewer's to catch.
+**The guard is not exhaustive.** It checks the banned words and bare dates listed above, PR
+and issue references, and a decision file's structure and references; anything else phrased
+as history — `once X replaced Y`, `the old …`, `without the fix`, `must now …` — passes
+the guard and is the reviewer's to catch.
 
 ### Anti-patterns this repository has actually had (both audiences)
 

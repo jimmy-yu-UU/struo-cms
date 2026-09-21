@@ -615,11 +615,11 @@ describe('CollectionListView', () => {
     expect(vm.isSelectField('title')).toBe(false)
   })
 
-  // FilterBuilder is CollectionListView's free-text search entry point, and chapter 5
-  // (`docs/guide/en/05-collections.md`) tells collection authors Searchable governs a field's
-  // participation in that search — but selectListColumns caps the list at 6 display-eligible
-  // columns and only admits list-displayable interfaces, so a searchable RichText body has no
-  // column of its own on the list. FilterBuilder's second field group is where it is offered.
+  // Searchable adds a field to the backend's `search=` whitelist, per chapter 5
+  // (`docs/guide/en/05-collections.md`); FilterBuilder's own filters are a separate mechanism.
+  // selectListColumns caps the list at 6 display-eligible columns, so a searchable RichText body
+  // has no list column of its own — FilterBuilder's second field group is where the list
+  // offers it.
   it('offers searchable fields that did not make the display-column cut to FilterBuilder', async () => {
     const article = {
       name: 'article',
