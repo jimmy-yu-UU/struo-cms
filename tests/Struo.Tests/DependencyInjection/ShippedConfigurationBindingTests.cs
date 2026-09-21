@@ -26,7 +26,7 @@ namespace Struo.Tests.DependencyInjection;
 /// production. So this scenario goes undetected: production binds a literal <c>"Database"</c>,
 /// someone later renames the constant's value to <c>"Db"</c> and updates the shipped file to match —
 /// both existing tests stay green, because each one is internally consistent, while a real boot binds
-/// a section the file no longer has and every <c>Database:*</c> value silently reverts to its C#
+/// a section the file doesn't have and every <c>Database:*</c> value silently reverts to its C#
 /// default.
 /// </para>
 /// <para>
@@ -86,9 +86,9 @@ public sealed class ShippedConfigurationBindingTests
     /// <summary>
     /// Reads one object out of the shipped file by LITERAL path — <paramref name="path"/> is spelled
     /// here the way the file spells it, never via a SectionName constant, which is what makes the
-    /// comparison able to catch a constant that no longer matches the file. Clone() detaches the
+    /// comparison able to catch a constant that has drifted out of sync with the file. Clone() detaches the
     /// element so it stays readable after the JsonDocument is disposed — see chapter 6's pitfall
-    /// about a JsonElement outliving its document.
+    /// (<c>docs/guide/en/06-field-types.md</c>) about a JsonElement outliving its document.
     /// </summary>
     private static JsonElement ShippedSection(params string[] path)
     {
@@ -243,7 +243,7 @@ public sealed class ShippedConfigurationBindingTests
     /// <c>Configuration["Auth:BootstrapAdmin:Email"]</c> and <c>[":Password"]</c> straight into
     /// <c>DataSeeder.SeedAsync</c>, so there is no binder to compare a bound object against. What makes it
     /// worth pinning anyway is the failure mode on the consuming side: <c>AdminUserSeeder.SeedAsync</c>
-    /// returns early when either value is null or blank, so a shipped file whose keys no longer sit at
+    /// returns early when either value is null or blank, so a shipped file whose keys have moved from
     /// those literal paths seeds NO admin at all on a fresh install — nobody can log in, and nothing logs
     /// an error.
     /// <para>

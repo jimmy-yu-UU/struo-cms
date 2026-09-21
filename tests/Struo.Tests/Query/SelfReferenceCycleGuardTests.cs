@@ -189,7 +189,7 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
         trashed.Should().BeTrue();
 
         // A ← B(trashed) ← C. Repointing A's parent at C creates A→C→B→A: the walk must pass THROUGH
-        // the trashed B to detect it, not stop there as if B no longer existed.
+        // the trashed B to detect it, not stop there as if B did not exist.
         var ex = await Assert.ThrowsAsync<QueryException>(
             () => _svc.UpdateAsync("category", aId.ToString(), BodyOf(new { name = "A", parentId = cId })));
         ex.Message.Should().Contain("cycle");

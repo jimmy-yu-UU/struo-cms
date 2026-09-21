@@ -114,7 +114,7 @@ onMounted(() => {
 })
 
 // No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
-// matrix's `dirty` (via the exposed computed below). Two guards registered independently used to
+// matrix's `dirty` (via the exposed computed below). Two guards registered independently would
 // fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
 defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel })
 </script>

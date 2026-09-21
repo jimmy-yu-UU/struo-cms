@@ -196,14 +196,11 @@ public sealed class ItemWriteSideSync(
     // outranks a bare id (whichever came first or last), and between two objects the later one
     // wins. Order of first appearance is the sort order.
     //
-    // Each id must be coerced safely. `e.GetInt64()` throws FormatException on a non-integer
-    // number (e.g. 1.5). A JSON `null` element was already handled pre-fix — `e.GetString()`
-    // returns null (not a throw) for Null, which coerced to "" and was rejected by the "do not
-    // exist" existence check below (already a 400); only bool/array elements (and, on a relation
-    // without payload, object elements) previously fell into the "else" branch and threw
-    // InvalidOperationException from `e.GetString()`. That IOE and the FormatException above were
-    // both unhandled (-> 500); this switch newly rejects them as a QueryException (-> 400) client
-    // error instead, matching every other malformed-input rejection on this path.
+    // ParseLinkElement below coerces each element: a Number becomes a bare integer id, a String a
+    // bare string id, and — on a relation with payload — an Object carrying an `id` plus payload
+    // fields becomes a JunctionLink with the bound payload. Any other shape (bool, array, a
+    // non-integer number, or an Object where the relation has no payload) is rejected as a
+    // QueryException (-> 400) rather than reaching the repository.
     private List<JunctionLink> ParseLinks(
         JsonElement idsElem, M2MDescriptor desc, CollectionMetadata? junctionMeta, HashSet<string>? payloadNames)
     {

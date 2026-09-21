@@ -104,8 +104,8 @@ try
     builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
         .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
     builder.Services.AddScoped<SchemaService>();
-    // /api/config is anonymous and previously hit the DB on every request; cached with a
-    // short TTL (ConfigController) and evicted immediately on a branding save (SettingsController).
+    // /api/config is anonymous. Responses are cached with a short TTL (ConfigController) and
+    // evicted immediately on a branding save (SettingsController).
     builder.Services.AddMemoryCache();
     builder.Services.AddHealthChecks()
         .AddCheck<DbReadinessCheck>("database", tags: ["ready"])

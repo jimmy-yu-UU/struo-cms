@@ -6,7 +6,7 @@ export function setDragPayload(ev: DragEvent, payload: MovePayload): void {
   if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move'
 }
 
-/** True when the drag carries a media payload — used to accept or ignore dragover. */
+/** True when the drag carries a media payload; callers check this to accept or ignore dragover. */
 export function isMediaDrag(ev: DragEvent): boolean {
   return Array.from(ev.dataTransfer?.types ?? []).includes(DRAG_MIME)
 }

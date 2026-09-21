@@ -640,8 +640,8 @@ defineExpose({ editor, insertImage })
    ResizableNodeView builds its DOM at runtime, so it carries no scope id and needs `:deep(...)`
    the same as the ProseMirror table markup above. */
 .rich-text__content :deep([data-resize-handle]) {
-  /* One source for the box and for the half-size straddle offsets below: change the size alone and
-     the offsets would no longer land the handles on the edge. */
+  /* One source for the box and for the half-size straddle offsets below, so the handles stay
+     centred on the edge at any size. */
   --resize-handle-size: 0.625rem;
   --resize-handle-offset: calc(var(--resize-handle-size) / -2);
 

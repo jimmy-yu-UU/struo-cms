@@ -228,7 +228,7 @@ fixture，照下面的清單逐步走完。
    `GraphQlExecutionTests.cs` 的註解還指著範例的路徑與型別。
 
 9. 前端這邊：刪掉 `frontend/e2e/sample/`（8 個 spec 檔）；`frontend/playwright.config.ts` 移
-   除 `"sample"` 專案與 `core` 不再需要的 `testIgnore: '**/e2e/sample/**'`；`frontend/package.json`
+   除 `"sample"` 專案與 `core` 用不到的 `testIgnore: '**/e2e/sample/**'`；`frontend/package.json`
    移除 `"e2e:sample"`、`"e2e:all"`，只留 `"e2e"`；修剪 `frontend/e2e/README.md` 談範例的段落。
 
 10. 清掉任何跑過範例的資料庫裡留下的五張表——CodeFirst 建的表不會跟著程式碼一起消失：

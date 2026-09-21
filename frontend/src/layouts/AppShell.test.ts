@@ -87,7 +87,7 @@ describe('AppShell (real subtree smoke test)', () => {
 
     expect(wrapper.find('.rv-real').exists()).toBe(true)
     // Real TheSidebar renders the vendored Sidebar; real TheTopbar renders SidebarTrigger.
-    // Both inject useSidebar() — if AppShell no longer supplied SidebarProvider this mount
+    // Both inject useSidebar() — if AppShell stopped supplying SidebarProvider this mount
     // would have thrown during setup instead of getting here.
     expect(wrapper.text()).toContain('routed content')
   })

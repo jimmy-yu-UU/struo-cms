@@ -109,8 +109,9 @@ function historyButton(page: Page) {
   return page.getByRole('button', { name: 'History' })
 }
 // A revision list row: RevisionHistoryDrawer renders `<button class="rev-item">` per revision with a
-// `#{n}` badge span — scope by that exact text so #1 never matches #10+ (not a concern here with only
-// a couple of revisions, but keeps the selector honest).
+// `#{n}` badge span — scope by that exact text so a one-digit revision's badge never matches a
+// two-digit one starting with the same digit (not a concern here with only a couple of revisions,
+// but keeps the selector honest).
 function revisionRow(page: Page, n: number) {
   return page.locator('.rev-item', { has: page.getByText(`#${n}`, { exact: true }) })
 }

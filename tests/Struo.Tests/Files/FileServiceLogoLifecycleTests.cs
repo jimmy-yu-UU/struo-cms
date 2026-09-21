@@ -19,10 +19,10 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 namespace Struo.Tests.Files;
 
 // SettingsController only validates the logo file is "published" at SAVE
-// time; nothing previously cleared site_settings.logofileid when that same file was later
-// deleted, leaving a dangling reference that ConfigController would keep resolving into a dead
-// /api/files/{id}/content URL. FileService.DeleteAsync must null the column, inside the same
-// transaction as the file row delete, whenever the deleted file is the current logo.
+// time; nothing else clears site_settings.logofileid when that same file is later
+// deleted, which would otherwise leave a dangling reference that ConfigController would keep
+// resolving into a dead /api/files/{id}/content URL. FileService.DeleteAsync must null the column,
+// inside the same transaction as the file row delete, whenever the deleted file is the current logo.
 public class FileServiceLogoLifecycleTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage

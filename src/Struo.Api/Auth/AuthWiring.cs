@@ -13,11 +13,11 @@ namespace Struo.Api.Auth;
 public static class AuthWiring
 {
     // [Authorize]-attribute-level challenges run inside the cookie handler, before MVC
-    // gets a chance to run — so EnvelopeResultFilter never sees these responses and they used to
-    // go out with an empty body, unlike in-action PermissionDeniedException 401/403s (mapped by
-    // DomainErrorMap) which DO carry an envelope. OnRedirectToLogin/OnRedirectToAccessDenied below
-    // write the same envelope shape directly, using the shared camelCase options (see
-    // EnvelopeJsonOptionsHolder) rather than relying on DI to already agree.
+    // gets a chance to run — so EnvelopeResultFilter never sees these responses; without explicit
+    // handling they would go out with an empty body, unlike in-action PermissionDeniedException
+    // 401/403s (mapped by DomainErrorMap) which DO carry an envelope. OnRedirectToLogin/
+    // OnRedirectToAccessDenied below write the same envelope shape directly, using the shared
+    // camelCase options (see EnvelopeJsonOptionsHolder) rather than relying on DI to already agree.
     public static IServiceCollection AddStruoAuth(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
         services.AddHttpContextAccessor();

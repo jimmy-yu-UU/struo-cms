@@ -15,11 +15,12 @@ export type BuildItemPayloadOptions = {
   canWriteJunction?: (rel: RelationMeta) => boolean
 }
 
-// Mixed-array write shape (chapter 12): an object element `{id, ...payload}` merges the named payload
-// fields into the junction row and needs the junction collection's write grant; a bare id only
-// manages membership/order. Bare ids are therefore the fallback whenever payload cannot or need not
-// be sent — no grant, no visible payload fields (a sortField-only relation has no payload and the
-// server rejects object elements on it), or a caller that passed no options.
+// Mixed-array write shape (chapter 12, `docs/guide/en/12-rest-conventions.md`): an object element
+// `{id, ...payload}` merges the named payload fields into the junction row and needs the junction
+// collection's write grant; a bare id only manages membership/order. Bare ids are therefore the
+// fallback whenever payload cannot or need not be sent — no grant, no visible payload fields (a
+// sortField-only relation has no payload and the server rejects object elements on it), or a
+// caller that passed no options.
 function serializeLinks(rel: RelationMeta, links: RelationLink[], options: BuildItemPayloadOptions): unknown[] {
   const resolve = options.resolveCollection
   const fields = resolve ? visiblePayloadFields(rel, resolve) : []

@@ -245,7 +245,7 @@ public class QueryValidatorTests
         act.Should().Throw<QueryException>().WithMessage("*field selection*");
     }
 
-    // Self-referencing relation graph (category.parent -> category) used to exercise
+    // Self-referencing relation graph (category.parent -> category), for exercising
     // recursive breadcrumb depth boundaries against opts.MaxRelationDepth.
     private sealed class SelfRefGraph : IRelationshipGraph
     {

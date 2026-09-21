@@ -361,10 +361,10 @@ describe('MediaLibraryView', () => {
     expect(w.findComponent({ name: 'MediaDetailDialog' }).props('file')).toEqual(rows[0])
   })
 
-  // The old bespoke trash table had no click-to-open path at all -- a soft-deleted file must stay
-  // unopenable so a user can't press Save/Delete on it in MediaDetailDialog. Now that trash mode
-  // renders through the same MediaGrid whose whole tile IS clickable in active mode, that
-  // protection has to be asserted explicitly instead of relying on there being no click handler.
+  // A soft-deleted file must stay unopenable so a user can't press Save/Delete on it in
+  // MediaDetailDialog. Trash mode renders through the same MediaGrid whose whole tile IS
+  // clickable in active mode, so that protection has to be asserted explicitly instead of
+  // relying on there being no click handler.
   it('does not open the detail dialog when a tile is activated in trash mode', async () => {
     seedUser({ delete: true })
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
@@ -1380,10 +1380,10 @@ describe('MediaLibraryView', () => {
   })
 
   // Batch selection wiring and the clear-on-listing-change requirement. A selection that
-  // survives a listing change would let a later batch move act on items the user can no longer
-  // see -- and canMoveFolder (mediaMove.ts) returns true for a source id absent from its folders
+  // survives a listing change would let a later batch move act on items the user can't see --
+  // and canMoveFolder (mediaMove.ts) returns true for a source id absent from its folders
   // list, so a stale selection assembled before a reload could pass the cycle guard on a folder
-  // that no longer exists in the loaded set. Clearing on every listing change keeps that
+  // that has since disappeared from the loaded set. Clearing on every listing change keeps that
   // unreachable.
   describe('batch selection', () => {
     it('wires MediaGrid\'s toggleSelect emit into the shared selection', async () => {
@@ -1536,7 +1536,7 @@ describe('MediaLibraryView', () => {
     // Blocker 2 (final review): MediaUploadDialog's `done` handler resets `page` to 0 via
     // reload() exactly like search/page/mode/type/sort already do, yet it was the one
     // listing-changing path with no clearSelection() call. Select on page >= 2, upload, and
-    // "Move to..." would silently act on items no longer on screen.
+    // "Move to..." would silently act on items not on the current page.
     it('clears the selection when the upload dialog finishes', async () => {
       makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
       const w = mountView()
@@ -1567,7 +1567,7 @@ describe('MediaLibraryView', () => {
     // onType/onSort also reload `files.value` just like search/page/mode
     // do -- a selection surviving one of those is a SILENT SUCCESS hazard, not just staleness:
     // "3 selected" would still show after switching the type filter to something that hides all
-    // three, and Move to… would then move items the user can no longer see without any error at
+    // three, and Move to… would then move items the user can't see without any error at
     // all. Both must clear the same way the other four listing-change triggers already do.
     it('clears the selection when the type filter changes', async () => {
       const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
@@ -1598,8 +1598,8 @@ describe('MediaLibraryView', () => {
 
     // onMoveSubmit is the move-DIALOG path (both the toolbar's batch
     // move and a single-item context-menu move funnel through it) as distinct from onDropOn's
-    // raw drag-and-drop path. After a submitted move, the selection's ids may no longer be in
-    // the current listing (they were just moved elsewhere) -- clear here specifically, not inside
+    // raw drag-and-drop path. After a submitted move, the selection's ids may already be missing
+    // from the current listing (they were just moved elsewhere) -- clear here specifically, not inside
     // onDropOn's own finally (which also serves plain drags/context-menu moves where clearing an
     // unrelated selection would be wrong).
     it('clears the selection when the move dialog is submitted', async () => {

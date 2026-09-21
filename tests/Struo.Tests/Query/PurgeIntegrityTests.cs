@@ -258,7 +258,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         Repository.QueryEntityWhereInAsync(typeof(CascadeNodeTranslation), "CascadeNodeId", [nodeId]);
 
     /// <summary>Simulates a capture-time-safe / delete-time-failing revision store: capture/list/get
-    /// delegate normally, but <c>DeleteForItemAsync</c> always throws — used to prove a failure late
+    /// delegate normally, but <c>DeleteForItemAsync</c> always throws — proving a failure late
     /// in the purge pipeline rolls back everything the SAME transaction already deleted earlier
     /// (junction rows, translation rows).</summary>
     private sealed class ThrowingOnDeleteRevisionStore(IRevisionStore inner) : IRevisionStore
@@ -277,7 +277,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 
 /// <summary>
 /// Purging an item must not orphan its junction/translation/revision rows, and
-/// must honour OnDelete.SetNull/Cascade (previously silently no-op — only Restrict was implemented),
+/// must honour OnDelete.SetNull/Cascade,
 /// all inside one rollback-safe transaction. Real SQLite-backed <see cref="ItemService"/>, no stubs.
 /// </summary>
 public sealed class PurgeIntegrityTests

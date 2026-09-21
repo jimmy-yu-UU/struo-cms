@@ -163,7 +163,7 @@ public class DatabaseInitializerTests
     [Fact]
     public void Unfiltered_InitTables_does_not_drop_columns_on_Sqlite()
     {
-        // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 SQLite 上，欄位沒有被刪掉。
+        // 實測（2026-08-03，SqlSugarCore 5.1.4.215）：在 SQLite 上，欄位沒有被刪掉。 narrative-guard:allow: measurement pinned to the SqlSugarCore version it was taken against
         // 因此「InitTables 會 DROP COLUMN」這個架構前提無法用 SQLite 測套件證明；PostgreSQL 端的量測
         // 已經完成：同一組探針型別在真 PostgreSQL 上跑出相反的結果——Doomed 欄位
         // 被 DROP 掉了，見 Struo.Tests.Query.PostgresIntegrationTests

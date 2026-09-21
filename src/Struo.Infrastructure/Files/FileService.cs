@@ -49,8 +49,8 @@ public sealed class FileService(
             throw new QueryException($"Content type '{contentType}' is not allowed.");
 
         // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
-        // small uploads (<= 64KB) stay in memory exactly as before, but anything larger spills to a
-        // temp file, so N concurrent large uploads no longer amplify memory by up to MaxUploadBytes
+        // small uploads (<= 64KB) stay in memory, but anything larger spills to a temp file,
+        // bounding memory so N concurrent large uploads cannot amplify it by up to MaxUploadBytes
         // each. Access below mixes sequential forward reads (which pull more from `content` on demand)
         // and backward seeks to already-read offsets; the header sniff + image probe seek freely, then
         // the stream is fully drained once (line ~55) before the save read so Length is the true total.

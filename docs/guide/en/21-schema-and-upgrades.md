@@ -38,7 +38,7 @@ that doesn't exist yet, so both environments create it on their own and no scrip
 
 At startup, six steps always run in the same order:
 
-1. Take a snapshot of the existing tables — used to recognize which tables this startup creates
+1. Take a snapshot of the existing tables — needed to recognize which tables this startup creates
    for the first time.
 2. Table creation — CodeFirst, always runs.
 3. Schema sync — only in Development, and only when it's turned on.
@@ -94,7 +94,7 @@ Every scenario below is what that blindness to intent looks like in practice.
    gone for good. Write a `RENAME COLUMN` migration first, and only change the entity class
    afterward.
 2. **Removing a property** — a straight `DROP COLUMN`, and the data goes with it; once you've
-   confirmed the column is truly no longer needed, drop it in production with an explicit
+   confirmed the column truly serves no further purpose, drop it in production with an explicit
    migration.
 3. **Narrowing a column's type** — depending on the backend, this either fails outright or
    silently truncates data; the correct approach is three steps — add the new column, backfill

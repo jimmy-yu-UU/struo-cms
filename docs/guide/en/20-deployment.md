@@ -197,7 +197,7 @@ the production checklist above.
 
 ### DataProtection keys
 
-The DataProtection key ring (used to sign and encrypt the authentication cookie and antiforgery
+The DataProtection key ring (it signs and encrypts the authentication cookie and antiforgery
 tokens) is written inside the container at `/home/app/.aspnet/DataProtection-Keys`; this image
 neither declares it as a volume nor mounts it.
 
@@ -315,7 +315,7 @@ of headers; the difference is that it only responds this way once both checks su
 ## Redeploying with tabs still open
 
 After the admin SPA redeploys, a tab still open from before is running an `index.html` that still
-requests chunk filenames the new version no longer serves;
+requests chunk filenames missing from the new version;
 `frontend/src/router/chunkLoadRecovery.ts` recovers from this chunk-404 by reloading the page,
 guarding against an infinite loop with a `sessionStorage` flag that's used only once. A chunk
 that's genuinely missing turns into an error, rather than an endless reload.

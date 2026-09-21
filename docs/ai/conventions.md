@@ -39,9 +39,10 @@ rejects what fails.
   directly — headless, template, fork, junction, sidecar — with no gloss in the other language and
   no bracketed English after a Chinese term. Never introduce the product by what it is *not*; say
   what it is, what it includes, and what the reader does next.
-- **Content.** Describe current behavior only. No history, no "this used to", no closed defects, no
-  explanation of internal branch order inside a hook. Cite a source file only when the reader must
-  open it, at most one per sentence.
+- **Content.** Describe current behavior only. No history, no
+  "this used to" <!-- narrative-guard:allow: the rule quotes the phrase it bans -->, no closed
+  defects, no explanation of internal branch order inside a hook. Cite a source file only when the
+  reader must open it, at most one per sentence.
 - **Layout.** One idea per paragraph, normally four or five lines. Parallel items become a list.
   Each chapter opens with one sentence saying what problem it solves and closes by pointing at the
   next chapter. A chapter stays under about 350 lines; split it when it grows past that.
@@ -68,17 +69,76 @@ rejects what fails.
 - **Consequences, not preferences.** Every constraint says what breaks when it is violated, and a
   rationale that names what breaks stays. A note that only records that someone once decided against
   something protects no code; cut it.
-- **Evidence goes to the code.** Measurement runs, ruled-out hypotheses and residual unknowns belong
-  in the doc comment of the class they explain, with a one-line summary and pointer here.
-  `PgTestConnectionString` is the worked example.
+- **Evidence goes to `docs/ai/decisions/`.** Measurement runs, ruled-out hypotheses and residual
+  unknowns go in a decision file there, not in the class doc comment; the class doc comment keeps only
+  the conclusions and the path to that file. Full rule: "Only the current state" below.
 - **Structure of `AGENTS.md`** stays: repo map, hard constraints, invariants, task playbooks,
   verification, prohibitions.
+
+### Only the current state
+
+This rule is shared by both audiences and by code comments: every sentence describes HEAD's behavior,
+never a before/after, a change date, or an issue reference. History lives in `git log`, not in prose.
+
+**Banned wording.** English: `` `used to` `` (except the passive `` `be used to` ``, the form that
+follows `` is/are/be/been/being/was/were/get/gets/got ``), `` `previously` ``, `` `formerly` ``,
+`` `historically` ``, `` `anymore` ``, `` `no longer` ``, `` `now that` `` — matched case-insensitively,
+word-bounded. Bare dates shaped `` `20xx-xx-xx` ``. A PR or issue reference shaped `` `PR #n` ``,
+`` `pull/n` ``, or `` `#nn` `` (a `` `#` `` that follows a non-word character, and not `` `&` ``, and
+sits directly before two or more digits) — reword these three, they can never carry an allow marker.
+Chinese, matched as a substring: `` `以前` ``, `` `曾經` ``,
+`` `過去是` ``, `` `過去曾` ``, `` `原本是` ``, `` `原本會` ``, `` `原本叫` ``, `` `已修` ``,
+`` `現在不再` ``, `` `不再需要` ``.
+
+**The allow marker.** A banned word or bare date that names a legitimate current-state fact — the
+mechanics of a diff algorithm, an anti-pattern table quoting the phrase it bans, a decision file's
+dated evidence — takes an allow marker on the same line, with a reason that says why the line is not
+history. In a code comment, append ` narrative-guard:allow: <reason>` to the comment. In markdown,
+append `<!-- narrative-guard:allow: <reason> -->`. An empty reason is itself a violation.
+
+**Evidence lives with the decision, not the class.** A measurement, a ruled-out hypothesis, or a
+residual unknown behind a current decision goes in `docs/ai/decisions/<kebab-slug>.md`, one decision
+per file, with six headings in this order: `# <title>`, `## Decision`, `## Why`, `## Evidence`,
+`## Unknowns`, `## Referenced from`. `## Evidence` is the only place a bare date needs no marker;
+every other date, in that file or any other, needs one. Every decision file must be pointed to by
+path from a class doc comment, `AGENTS.md`, or a `docs/ai/*.md` file — an orphan decision file is a
+guard failure on its own. A class doc comment that leans on a decision file keeps to four things,
+eight lines total: what was measured, what was ruled out, what is still unknown, and what breaks if
+the decision is reversed, closing with the path to the decision file. `PgTestConnectionString`'s
+class doc, pointing at `docs/ai/decisions/pg-test-connection-pooling.md`, is the worked example.
+
+**A comment says what the code cannot.** It answers one of: why this approach, what constrains it,
+what breaks if the constraint is violated, or what is unverified. A comment that only restates what
+the code already says gets deleted, not kept. A comment longer than eight lines that is not the four
+evidence items above is a review defect, not a guard failure — review catches it.
+
+**Write from the construct, not from memory.** Before writing a factual sentence about a piece of
+code, open the construct it describes; after writing it, `grep` the sentence back against that
+construct. A reviewer's suggested replacement wording is unverified text until it has gone through the
+same check. A sentence that describes a different file names a construct in that file — a class, a
+method, a test name, or a configuration key — so the next person to change that file can find the
+sentence that describes it.
+
+**What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any banned word or bare date
+without a marker, and on any PR/issue reference, in a comment or in prose across `AGENTS.md`,
+`CLAUDE.md`, `docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and
+`frontend/e2e/**`. The guard reads comment bodies and markdown prose only. A quote-parity heuristic
+locates each comment start (`//`, `/*`, `<!--`), and code outside comments — including string
+literals — is skipped by that heuristic; a date in test data normally needs no marker. In markdown,
+fenced code blocks and inline code spans are skipped, so a date inside one of those needs no marker
+either; a date inside comment or prose text does. It also fails on a decision file missing one of its
+six headings or on an orphan decision file nothing references by path.
+
+**The guard is not exhaustive.** It checks the banned words and bare dates listed above, PR
+and issue references, and a decision file's structure and references; anything else phrased
+as history — `once X replaced Y`, `the old …`, `without the fix`, `must now …` — passes
+the guard and is the reviewer's to catch.
 
 ### Anti-patterns this repository has actually had (both audiences)
 
 | Anti-pattern | Instead |
 |---|---|
-| Change narrative: "this used to be X, now Y" | State the current behavior |
+| Change narrative: "this used to be X, now Y" | State the current behavior; see "Only the current state" above <!-- narrative-guard:allow: the rule quotes the phrase it bans --> |
 | Investigation journal in a chapter | Doc comment of the class, plus a pointer |
 | Same rule in N places | One home, links elsewhere |
 | A summary that re-explains its own section | A checklist of steps |
@@ -231,14 +291,15 @@ wants its own vendor literal to win on a shaped property must remove `[ColumnSha
 `ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
 (`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
 
-**A JSON-column `[CmsField]` on the same property is refused, not resolved**: the hook throws an
-`InvalidOperationException` naming the property and the offending interface when `[ColumnShape]`
-co-occurs with a `JsonColumnInterfaces` member
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — resolving the combination
-instead of refusing it would silently drop `IsJson` (both branches compute the same `DataType`,
-`LongText`, so only `IsJson` would be lost), leaving the column at CodeFirst's unset length,
-`varchar(1)` on PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]` from
-such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
+**A JSON-column `[CmsField]` on the same property is refused, not resolved, whichever `[ColumnShape]`
+value it carries**: the hook throws an `InvalidOperationException` naming the property and the
+offending interface when `[ColumnShape]` co-occurs with a `JsonColumnInterfaces` member
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — for `ColumnShape.LongText`,
+the only shape that co-occurs with a `JsonColumnInterfaces` member in this repository, resolving
+the combination instead of refusing it would silently drop `IsJson` (both branches compute the same
+`DataType`, `LongText`, so only `IsJson` would be lost), leaving the column at CodeFirst's unset
+length, `varchar(1)` on PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]`
+from such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
 (`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal. See
 `ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for the
 full derivation and the pinning tests.

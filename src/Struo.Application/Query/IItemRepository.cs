@@ -31,7 +31,7 @@ public interface IItemRepository
 
     /// <summary>
     /// Runs <paramref name="body"/> inside a single database transaction: everything it writes
-    /// commits together or rolls back together. Used to make an aggregate write (parent row + M2M
+    /// commits together or rolls back together, making an aggregate write (parent row + M2M
     /// junctions + translation sidecars) atomic. Nesting-safe — if a transaction is already open on
     /// the (scoped) connection, <paramref name="body"/> joins it instead of opening a new one.
     /// </summary>

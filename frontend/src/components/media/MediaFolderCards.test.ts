@@ -77,8 +77,9 @@ describe('MediaFolderCards', () => {
 
   // Regression guard for the a11y finding: keydown bubbles from the inner rename/delete buttons
   // up to the card (unlike click, whose handlers use .stop), so plain @keydown.enter on the card
-  // used to race folder navigation against the rename dialog / delete confirm opening. `.self`
-  // restricts the card's handler to events whose target IS the card, not a descendant.
+  // would race folder navigation against the rename dialog / delete confirm opening without
+  // `.self`, which restricts the card's handler to events whose target IS the card, not a
+  // descendant.
   it('does NOT emit open when Enter is pressed on an inner rename/delete button', async () => {
     const w = mountCards(true)
     const firstCard = w.findAll('.folder-card')[0]

@@ -279,9 +279,8 @@ worth knowing before you touch it:
 - **The mechanism is still unknown, and production was never observed to hit it — but that is a
   non-observation, not a proof of safety.** Don't upgrade it to one.
 
-`PgTestConnectionString`'s class doc is the full write-up: the exception chain, what the diagnosis ruled
-out, the 2026-08-05 measurements bounding production exposure, the second-pool amplifier, and the one
-residual unknown.
+`PgTestConnectionString`'s class doc points to `docs/ai/decisions/pg-test-connection-pooling.md` for the
+full write-up.
 
 **E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
 further check for changes to user-facing flows — it needs a live API and database, is not one of the
@@ -307,15 +306,14 @@ five standing gates, and is not run by CI.
   caught by `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples` (Hard
   constraints), the second by `Shipped_appsettings_declares_no_content_assemblies`.
 - Never commit `src/Struo.Api/appsettings.Development.json` — it is gitignored and holds local secrets.
-- **Never add documentation the reader does not need in order to act.** No change narratives ("this used
-  to be X"), no investigation journals (they belong in the doc comment of the class they explain), no
-  restating a rule that already has a home elsewhere — link to it instead, and no preference notes (a
-  comment or test that only justifies something never built protects no code). This cuts *both* ways: do
-  **not** delete a load-bearing caveat (an unverified claim, a backend divergence, a security
-  consequence, an honest "the mechanism is unknown") to make prose read cleaner — that is a correctness
-  regression. The test is "would a reader act differently without this?", never "is this long?".
-  `docs/ai/conventions.md`, "How documentation is written", has the full rule for both audiences —
-  the manual and this reference set are written to different standards — and the anti-patterns.
+- **Never add documentation the reader does not need in order to act.** `docs/ai/conventions.md`,
+  "Only the current state" names the section that bans change narratives, misplaced evidence, and
+  oversized comments. This cuts *both* ways: do **not** delete a load-bearing caveat (an
+  unverified claim, a backend divergence, a security consequence, an honest "the mechanism is
+  unknown") to make prose read cleaner — that is a correctness regression. The test is "would a
+  reader act differently without this?", never "is this long?". `docs/ai/conventions.md`, "How
+  documentation is written", has the full rule for both audiences — the manual and this
+  reference set are written to different standards — and the anti-patterns.
 
 ## Where to read more
 

@@ -9,10 +9,10 @@ namespace Struo.Tests.Documentation;
 /// <summary>
 /// Regression lock for the citation convention in <c>docs/ai/conventions.md</c> ("Citing code from
 /// docs and comments"): a citation into this repository's own code must name a construct, not a line
-/// range, because line ranges rot silently the first time someone inserts above them. Tasks 3-7 of the
-/// 2026-08-04 batch removed ~100 such citations; without this guard the next insertion quietly brings
-/// them back, which has happened twice in this repository (in one instance a doc-comment
-/// insertion broke two chapter-12 line citations).
+/// range, because line ranges rot silently the first time someone inserts above them. Without this
+/// guard, an insertion quietly brings a stale line-range citation back — this has already happened
+/// twice in this repository (in one instance a doc-comment insertion broke two chapter-12 line
+/// citations).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -287,7 +287,7 @@ public sealed class CodeCitationConventionTests
     /// <summary>
     /// One traversal from the repo root serves both needs: a file under a scan root is queued for
     /// regex scanning; a file under a resolution root contributes its basename AND full relative path
-    /// to the index used to decide whether an extension-anchored citation names an own-repo file or an
+    /// to the index that decides whether an extension-anchored citation names an own-repo file or an
     /// upstream one. The two root sets overlap (<c>src/**/*.cs</c> and <c>tests/**/*.cs</c> are both
     /// scanned AND resolved against) but neither is a subset of the other (<c>schema/</c>, <c>db/</c>,
     /// <c>docs/</c> and <c>samples/</c> resolve but are not scanned; <c>docs/ai/**</c> and

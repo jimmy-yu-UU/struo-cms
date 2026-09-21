@@ -9,10 +9,10 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 // Read endpoints (ItemsController's List/Query/Get/Revisions and /graphql) carry no [Authorize], so
-// UseAuthentication used to run only the DEFAULT scheme. With Cookies as the default, an
-// Authorization: Bearer header was never inspected on those endpoints and the per-request permission
-// snapshot fell back to the public floor. A forwarding policy scheme makes the default adaptive, so a
-// bearer caller is authenticated everywhere and gets its OWN grants.
+// UseAuthentication runs only the DEFAULT scheme unless made adaptive. With Cookies as the default,
+// an Authorization: Bearer header would never be inspected on those endpoints and the per-request
+// permission snapshot would fall back to the public floor. A forwarding policy scheme makes the
+// default adaptive, so a bearer caller is authenticated everywhere and gets its OWN grants.
 [Collection("ApiIntegration")]
 public class BearerReadAuthenticationTests(ApiFactory factory)
 {

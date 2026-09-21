@@ -106,8 +106,8 @@ describe('MediaDetailDialog', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
     await flushPromises()
-    // This dialog no longer edits folder assignment, so it has no reason to request the `deep:
-    // ['folder']` expansion any more -- a regression that brings that param back would be a sign
+    // This dialog does not edit folder assignment, so it has no reason to request the `deep:
+    // ['folder']` expansion -- a regression that brings that param back would be a sign
     // dead folder-reading code crept back in alongside it.
     expect(itemsApi.get).toHaveBeenCalledWith('file', 'f1')
     const vm = w.vm as unknown as { model: { translations: Record<string, Record<string, unknown>>; version?: number } }
@@ -410,8 +410,8 @@ describe('MediaDetailDialog', () => {
     expect(w.findAll('.pi-external-link').length).toBe(0)
   })
 
-  // Folder assignment moved to the media library's drag-and-drop / "Move to…" context menu / batch
-  // move -- this dialog no longer renders a folder picker or reads/writes folderId at all.
+  // Folder assignment lives in the media library's drag-and-drop / "Move to…" context menu / batch
+  // move -- this dialog renders no folder picker and never reads or writes folderId.
   it('renders no folder picker of any kind', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
@@ -463,7 +463,7 @@ describe('MediaDetailDialog', () => {
   // "preserves a filed file's folder on save") in the form that now fits: even if the GET response
   // happens to carry a `folder` object (e.g. some other change reintroduces `deep` without
   // reintroducing this dialog's own folder-editing UI), `relations: {}` must still neutralise it --
-  // the dialog no longer has a UI path to express a folder choice, so it must never derive one.
+  // the dialog has no UI path to express a folder choice, so it must never derive one.
   it('sends no folderId even when the GET response happens to include folder data (data-loss regression guard)', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, folder: { id: 'b', name: 'Child B' } } as never)
     const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)

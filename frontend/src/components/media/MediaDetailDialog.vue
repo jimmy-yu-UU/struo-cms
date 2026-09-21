@@ -88,13 +88,13 @@ async function load(): Promise<void> {
   try {
     await Promise.all([schema.load(), langStore.load()])
     activeLocale.value = langStore.defaultCode
-    // This dialog no longer edits folder assignment (that moved to the media library's
+    // This dialog does not edit folder assignment (that lives in the media library's
     // drag-and-drop / "Move to…" context menu / batch move), so there is no need for `deep:
     // ['folder']` here -- the items API only projects that relation FK under `deep` expansion, and
-    // nothing in this component reads item.folder or item.folderId any more.
+    // nothing in this component reads item.folder or item.folderId.
     const item = await itemsApi.get('file', props.file.id)
     raw.value = item
-    // relations: {} is deliberate, not an oversight: this dialog no longer edits any relation, but
+    // relations: {} is deliberate, not an oversight: this dialog does not edit any relation, but
     // `file`'s schema still declares the `folder` (manyToOne/treeSelect) relation, and
     // parseItemToForm populates `relations` by iterating meta.relations dynamically -- it would set
     // `relations.folder = null` from this non-deep response regardless (item.folder is simply

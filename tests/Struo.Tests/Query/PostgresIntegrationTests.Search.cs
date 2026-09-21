@@ -7,7 +7,7 @@ namespace Struo.Tests.Query;
 
 public sealed partial class PostgresIntegrationTests
 {
-    // U5: the candidate-id branch renders `id IN ('uuid', …)` as LITERALS (probe 2026-09-07), so these
+    // U5: the candidate-id branch renders `id IN ('uuid', …)` as LITERALS, so these
     // three pin the uuid-column binding, the always-false empty form and the 1000-id statement on a
     // real PostgreSQL — SQLite's loose typing would accept anything here.
     private (Guid A, Guid B, Guid C) SeedThreeCategories()

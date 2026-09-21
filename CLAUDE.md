@@ -10,28 +10,23 @@ downstream forks.
 
 - **Failing test first.** Write the test before the implementation; a passing test suite is the
   acceptance gate, not a formality.
-- **Package versions are never hand-authored.** Install via the package manager itself
-  (`dotnet add package` for NuGet, `pnpm add <pkg>` for the frontend) and let it write the version
-  string. NuGet versions are centralized in `Directory.Packages.props`.
+- **Package versions are never hand-authored**, except the bounded transitive-dependency `overrides:`
+  ranges in `frontend/pnpm-workspace.yaml` and `docs/pnpm-workspace.yaml`, written for advisories a
+  package hasn't picked up yet. Install via the package manager itself (`dotnet add package` for
+  NuGet, `pnpm add <pkg>` for the frontend) and let it write the version string. NuGet versions are
+  centralized in `Directory.Packages.props`.
 - **Database behavior is verified against a live instance of the backend you are actually configured
-  for, not just the SQLite test suite** — SQLite passing is not evidence of correctness anywhere else.
-  On PostgreSQL (the verified target) run the live-PG check; it is strongly recommended for every
-  DB-behavior change. On any other backend, that backend needs its own equivalent live check — a green
-  PostgreSQL run does not transfer. This is a robustness practice, **not** a CI gate: CI runs the
-  SQLite suite only, deliberately, so that no single engine is privileged over DB replaceability.
-  (`AGENTS.md`'s Verification section has the documented divergences and how to configure a test
-  connection.)
+  for, not just the SQLite test suite.** See `AGENTS.md`, "Verification", for the per-backend rule, the
+  documented divergences, and how to configure a test connection.
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.
 - **When unsure about an architectural decision, stop and ask** rather than guessing.
+- **Comments and docs state the current behavior only.** `StaleNarrativeConventionTests` fails
+  `dotnet test` otherwise; the rule text is `docs/ai/conventions.md`, "Only the current state".
 
 ## The five standing gates
 
-The same checks CI runs on every push/PR: `dotnet build`, `dotnet test`, `pnpm test` and `pnpm build`
-(the latter two from `frontend/`), plus `pnpm build` from `docs/` — the documentation site's build is the
-manual's link gate; it also checks that every chapter rendered with content, which `vitepress build`
-does not, and that no table is wider than the content column. CI's docs job also runs `pnpm test` from
-`docs/` first — the guard scripts' own unit tests — as a CI step, not a sixth gate. Run whichever apply
-to your change; run all five before anything touching more than one of the three.
+Run whichever of the five apply to your change; `AGENTS.md`, "Verification", lists them and says when
+all five are required, along with the CI split and the SQLite/PostgreSQL reasoning.
 
 ## See also
 

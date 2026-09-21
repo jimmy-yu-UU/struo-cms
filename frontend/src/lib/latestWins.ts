@@ -3,7 +3,7 @@
 // Async loaders race: a slow earlier request can resolve after a faster later
 // one and clobber fresh state with stale data. Guard each loader by taking a
 // token on entry and, before every state write after an `await`, bailing out if
-// the token is no longer current.
+// the token is no longer current. narrative-guard:allow: describes the staleness check itself, not history
 //
 //   const t = lw.next()
 //   const res = await api.load()

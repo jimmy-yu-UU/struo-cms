@@ -105,7 +105,7 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
         command: ({ range, props }) => {
           // deleteRange strictly before props.run. `range` describes where the typed "/query" sat
           // when the menu last updated; running the item first inserts a node or transforms the
-          // block under the caret, and those positions then no longer describe that text -- the
+          // block under the caret, and those positions then stop describing that text -- the
           // delete would take out part of what was just inserted.
           editor.chain().focus().deleteRange(range).run()
           props.run(editor, context)
@@ -133,7 +133,7 @@ export const RichTextSlashExtension = Extension.create<RichTextSlashOptions>({
           // A blur does not tear down the suggestion plugin's state -- that is recomputed only
           // inside apply(), and a blur dispatches no transaction -- so leaving the editor by any
           // route other than a click outside would strand the menu on screen, still owned by an
-          // editable that no longer has focus. Safe against the mouse path because the menu's ROOT
+          // editable that has lost focus. Safe against the mouse path because the menu's ROOT
           // carries @mousedown.prevent (RichTextSlashMenu.vue -- the rows themselves do not), so
           // choosing an item, or slipping onto the padding around one, never blurs the editor at all.
           const onEditorBlur = (): void => {

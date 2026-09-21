@@ -11,14 +11,14 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// Core index parity: every [SugarIndex] declared on a core FrameworkEntityTypes entity must be emitted
-/// by CodeFirst (InitTables). There is no longer a separate hand-maintained baseline SQL file to check
-/// for parity against — CodeFirst is the only table/index creator now, in every environment and on every
-/// backend, so asserting against InitTables directly is the whole check. Declared indexes are discovered
+/// by CodeFirst (InitTables). CodeFirst is the only table/index creator, in every environment and on
+/// every backend — there is no separate hand-maintained baseline SQL file to check parity against —
+/// asserting against InitTables directly is the whole check. Declared indexes are discovered
 /// by reflecting [SugarIndex] off FrameworkEntityTypes.All rather than hardcoded, so a new core entity's
 /// index is covered automatically. Sample (Blog) index parity is the sample's own concern and is not
 /// asserted here.
-/// (FileTranslation's redundant plain btree was dropped — its (fileid, locale) lookup is served by
-/// the composite UNIQUE index — so FileTranslation no longer contributes a mapped plain btree here.)
+/// (FileTranslation's (fileid, locale) lookup is served by the composite UNIQUE index, so
+/// FileTranslation contributes no separate mapped plain btree here.)
 /// </summary>
 public sealed class IndexParityTests
 {

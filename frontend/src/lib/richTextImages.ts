@@ -5,7 +5,7 @@ export function fileContentPath(id: string): string {
   return `/api/files/${id}/content`
 }
 
-/** Absolute (or app-relative) URL used to preview a file in the editor. */
+/** Absolute (or app-relative) URL for previewing a file in the editor. */
 export function fileContentDisplayUrl(id: string): string {
   return `${API_BASE}/files/${id}/content`
 }
