@@ -69,6 +69,17 @@ describe('ChangePasswordDialog', () => {
     expect(w.text()).toContain(en.password.current)
   })
 
+  it('associates every password label with its input by id', async () => {
+    const w = mountDialog('self-id')
+    await flushPromises()
+    for (const [id, autocomplete] of [['cpd-current', 'current-password'], ['cpd-new', 'new-password'], ['cpd-confirm', 'new-password']] as const) {
+      const input = w.find(`input#${id}`)
+      expect(input.exists()).toBe(true)
+      expect(input.attributes('autocomplete')).toBe(autocomplete)
+      expect(w.find(`label[for="${id}"]`).exists()).toBe(true)
+    }
+  })
+
   it('asks for the current password when a super-admin opens their own row (isSelf never consults isSuperAdmin)', async () => {
     const auth = useAuthStore()
     auth.user = { id: 'self-id', isSuperAdmin: true, permissions: {} }

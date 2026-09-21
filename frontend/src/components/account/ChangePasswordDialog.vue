@@ -159,9 +159,10 @@ function handleFailure(e: unknown): void {
       </DialogHeader>
 
       <form class="cpd-form" @submit.prevent="onSubmit">
-        <label v-if="isSelf" class="cpd-field">
+        <label v-if="isSelf" class="cpd-field" for="cpd-current">
           <span>{{ t('password.current') }}</span>
           <PasswordInput
+            id="cpd-current"
             v-model="currentPassword"
             autocomplete="current-password"
             :aria-invalid="!!currentError"
@@ -177,9 +178,10 @@ function handleFailure(e: unknown): void {
         -->
         <p v-if="isSelf && currentError" id="cpd-current-error" role="alert" class="cpd-error">{{ currentError }}</p>
 
-        <label class="cpd-field">
+        <label class="cpd-field" for="cpd-new">
           <span>{{ t('password.new') }}</span>
           <PasswordInput
+            id="cpd-new"
             v-model="newPassword"
             autocomplete="new-password"
             :aria-invalid="!!newError"
@@ -187,12 +189,13 @@ function handleFailure(e: unknown): void {
           />
         </label>
 
-        <label class="cpd-field">
+        <label class="cpd-field" for="cpd-confirm">
           <span>{{ t('password.confirm') }}</span>
           <!-- The mismatch error is about the pair, not either field alone, and it lands in
                newError -- so this field points at the same cpd-new-error node the new-password
                field does. -->
           <PasswordInput
+            id="cpd-confirm"
             v-model="confirmPassword"
             autocomplete="new-password"
             :aria-invalid="!!newError"
