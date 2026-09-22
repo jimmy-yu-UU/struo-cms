@@ -123,3 +123,5 @@ already-parenthesised SqlServer/MySQL literals).
 ## Referenced from
 
 - `src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`
+- `AGENTS.md` ("Hard constraints")
+- `docs/ai/conventions.md` ("Column type mapping")
