@@ -12,10 +12,10 @@ using Xunit;
 namespace Struo.Tests.Localization;
 
 // LanguageProvider's per-scope cache must load at most once even under concurrent GraphQL
-// resolvers. The old `_cache ??=` is a non-atomic read-then-write, so racing callers could each run
-// the underlying query (benign but wasteful) and observe different list instances. The fix stores a
-// Lazy<IReadOnlyList<LanguageInfo>> (ExecutionAndPublication), and Invalidate() swaps in a fresh Lazy
-// rather than mutating the old value (immutability rule).
+// resolvers. The cache field is a Lazy<IReadOnlyList<LanguageInfo>> (ExecutionAndPublication), so
+// concurrent callers block on the same load instead of each racing to run the underlying query and
+// observe different list instances. Invalidate() swaps in a fresh Lazy rather than mutating the old
+// value (immutability rule).
 public class LanguageProviderCacheTests : IDisposable
 {
     private readonly SqliteTestDatabase _file = new();
@@ -34,8 +34,6 @@ public class LanguageProviderCacheTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    // Deterministic RED anchor (sanctioned by the task brief): the cache field must be a Lazy<> so the
-    // load is atomic. The old `IReadOnlyList<LanguageInfo>?` field fails this; the Lazy<> field passes.
     [Fact]
     public void Cache_is_backed_by_a_lazy_so_the_load_is_atomic()
     {
@@ -47,9 +45,8 @@ public class LanguageProviderCacheTests : IDisposable
             "the per-scope cache must be a Lazy<IReadOnlyList<LanguageInfo>> so concurrent callers cannot double-load");
     }
 
-    // Regression guard for the observable thread-safety improvement: every concurrent caller sees the
-    // SAME cached list instance. (Under `??=` a lost race can hand different instances to callers; the
-    // race is provider-dependent so this is a guard, with the type assertion above as the RED anchor.)
+    // Every concurrent caller sees the SAME cached list instance: Lazy<T> with
+    // ExecutionAndPublication publishes exactly one result to every racing caller.
     [Fact]
     public async Task Concurrent_Enabled_returns_a_single_shared_instance()
     {

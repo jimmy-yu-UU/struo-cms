@@ -180,8 +180,8 @@ public class GraphQlMutationExecutionTests
         json.Should().Contain("required");
     }
 
-    // No HttpContext in this in-process executor ⇒ unauthenticated ⇒ UNAUTHORIZED
-    // (REST-parity via the shared DomainErrorMap), not the old unconditional FORBIDDEN.
+    // No HttpContext in this in-process executor ⇒ unauthenticated ⇒ UNAUTHORIZED, matching REST via
+    // the shared DomainErrorMap.
     [Fact]
     public async Task Create_permission_denied_without_http_context_maps_to_UNAUTHORIZED()
     {

@@ -29,8 +29,7 @@ describe('SidebarNavItem', () => {
     expect(mountItem({ label: 'A', active: false }).get('button').attributes('data-active')).not.toBe('true')
   })
 
-  // The backend emits semantic icon names ("article"), never CSS classes. The old
-  // implementation bound them as a class, so they rendered nothing.
+  // The backend emits semantic icon names ("article"), never CSS classes.
   it('renders an svg icon for a semantic backend icon name', () => {
     expect(mountItem({ label: 'A', icon: 'article' }).find('svg').exists()).toBe(true)
   })

@@ -28,8 +28,9 @@ public sealed class ItemProjector(IEntityRegistry registry, IPermissionService p
         var dict = new Dictionary<string, object?>();
 
         const string idKey = "id";
-        // d.IdProperty is an exact CLR property name; d.Properties is keyed OrdinalIgnoreCase, so this
-        // resolves the same PropertyInfo the old case-sensitive GetProperty(d.IdProperty) returned.
+        // d.IdProperty is an exact CLR property name; d.Properties is keyed OrdinalIgnoreCase, so an
+        // exact name resolves the same PropertyInfo a case-sensitive lookup would (GetValueOrDefault
+        // yields null when no property matches).
         dict[idKey] = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entity);
 
         // Always expose the concurrency token (like id, independent of field selection) so the client
@@ -49,7 +50,7 @@ public sealed class ItemProjector(IEntityRegistry registry, IPermissionService p
             if (!readable.Contains(field.Name)) continue;
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
             // `prop` is an exact CLR property name (a FieldToProperty value); the OrdinalIgnoreCase
-            // Properties map returns the same PropertyInfo the old case-sensitive GetProperty(prop) did.
+            // Properties map resolves it to the same PropertyInfo a case-sensitive lookup would.
             var value = d.Properties.GetValueOrDefault(prop)?.GetValue(entity);
             // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
             // emits structured JSON, not a quoted string. Null stays null.

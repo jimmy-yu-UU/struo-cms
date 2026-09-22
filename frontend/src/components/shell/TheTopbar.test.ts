@@ -30,9 +30,9 @@ describe('TheTopbar', () => {
     expect(first.attributes('data-sidebar')).toBe('trigger')
   })
 
-  // The vendored SidebarTrigger only ships a hardcoded English "Toggle Sidebar" sr-only
-  // span — restores the localized accessible name the old hamburger carried via
-  // shell.openMenu, for zh-TW screen-reader users.
+  // The vendored SidebarTrigger only ships a hardcoded English "Toggle Sidebar" sr-only span, so
+  // the sidebar trigger needs a localized accessible name via shell.openMenu, for zh-TW
+  // screen-reader users.
   it('carries a localized accessible name on the sidebar trigger', () => {
     const w = mountTopbar()
     const first = w.findAll('button')[0]

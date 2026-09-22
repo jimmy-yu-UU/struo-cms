@@ -147,14 +147,10 @@ describe('shouldShowBubbleMenu', () => {
     }))).toBe(true)
   })
 
-  // The regression this rule replaces the $from.parent-keyed version to fix: Mod-a's AllSelection
-  // resolves $from at depth 0, so a rule asking "what block does $from start in" saw the doc node
-  // itself (spec.marks undefined) and showed the menu no matter what the doc actually contained.
-  // Walking the whole range instead means what the FIRST node happens to be is irrelevant -- only
-  // whether ANY inline node in the range has a mark-allowing parent decides it. This fabricates a
-  // range that touches inline content in a mark-disallowing block and inline content in a markable
-  // one (a code block followed by a paragraph); the old rule hid it (wrongly, since bold still
-  // applies to the paragraph's text), this one shows it.
+  // Walking the whole range means what the FIRST node happens to be is irrelevant -- only whether
+  // ANY inline node in the range has a mark-allowing parent decides it. This fabricates a range that
+  // touches inline content in a mark-disallowing block and inline content in a markable one (a code
+  // block followed by a paragraph); bold applies to the paragraph's text, so the menu must show.
   it('shows when the selected range spans mark-disallowing inline content and markable inline content, regardless of which comes first', () => {
     expect(shouldShowBubbleMenu(args({
       state: {

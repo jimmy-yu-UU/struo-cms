@@ -19,9 +19,8 @@ namespace Struo.Tests.Files;
 
 // FileService.DeleteAsync must delete the row + its translation sidecars through the
 // nesting-safe IItemRepository.InTransactionAsync helper (join-if-active), not raw
-// BeginTran/CommitTran/RollbackTran. When invoked inside an outer transaction, the delete must
-// join it — an outer rollback then undoes the delete. The old raw-transaction code opened (and
-// committed) its own inner transaction, prematurely ending the outer unit-of-work.
+// BeginTran/CommitTran/RollbackTran, so that when invoked inside an outer transaction the delete
+// joins it and an outer rollback undoes the delete.
 public class FileServiceTransactionTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage

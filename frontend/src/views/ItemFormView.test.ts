@@ -262,7 +262,7 @@ describe('ItemFormView', () => {
   it('marks notFound when the server returns code NOT_FOUND', async () => {
     routeParams = { name: 'article', id: '404' }
     setupStores()
-    // CJK message that does NOT match the old /not found/i regex — only the code branch can pass this.
+    // A CJK message that a message-text regex would not match — only the NOT_FOUND code branch can pass this.
     vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(404, '找不到資源', 'NOT_FOUND'))
     const w = mountView()
     await w.vm.init()

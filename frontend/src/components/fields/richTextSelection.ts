@@ -75,12 +75,10 @@ export function shouldShowBubbleMenu(args: BubbleMenuShouldShowArgs): boolean {
   // Walking the whole range this way, rather than asking what block the selection happens to start
   // in, is what Mod-a's AllSelection needs: an AllSelection's $from resolves at depth 0, so
   // $from.parent is the doc node itself, whose spec.marks is undefined ("no restriction") regardless
-  // of what the doc contains -- a $from.parent-keyed rule showed every button, inert, for a
-  // select-all inside a code-block-only field. Walking the range instead makes what the first node
-  // happens to be irrelevant: only whether ANY inline node in the range has a mark-allowing parent
-  // decides it. It also correctly shows a selection that starts in a code block and ends partway
-  // into a following paragraph's own text, where the old $from-keyed rule wrongly hid it (bold still
-  // applies to the paragraph's text).
+  // of what the doc contains. Walking the range instead makes what the first node happens to be
+  // irrelevant: only whether ANY inline node in the range has a mark-allowing parent decides it. It
+  // also correctly shows a selection that starts in a code block and ends partway into a following
+  // paragraph's own text, since bold still applies to the paragraph's text.
   //
   // A code block declares `marks: ""` (no marks allowed at all) on itself -- confirmed directly
   // against a real editor (editor.schema.nodes.codeBlock.spec.marks), and

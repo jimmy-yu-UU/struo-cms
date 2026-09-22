@@ -18,7 +18,7 @@ test('a non-existent item id renders the not-found view (driven by error code)',
 
   // A well-formed but non-existent article id → the API returns a 404
   // `{ success:false, error:{ code:'NOT_FOUND', … } }` envelope. The view must
-  // show "Item not found." via the code branch (not the old message match).
+  // show "Item not found." via the NOT_FOUND code branch, not by matching the error message text.
   await page.goto('/collections/article/00000000-0000-0000-0000-000000000000')
   // en locale's itemForm.itemNotFound has no trailing period ("Item not found").
   await expect(page.getByText('Item not found', { exact: true })).toBeVisible()

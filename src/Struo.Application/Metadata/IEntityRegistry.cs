@@ -19,9 +19,9 @@ public sealed record EntityDescriptor(
 
     private static IReadOnlyDictionary<string, PropertyInfo> BuildProperties(Type entityType)
     {
-        // First-wins on name collisions (e.g. a `new`-shadowed property) mirrors the enumeration
-        // order Type.GetProperties returned; the entities here never shadow, so this matches the
-        // single property the old GetProperty(name) resolved.
+        // TryAdd is first-wins on name collisions (e.g. a `new`-shadowed property), keeping
+        // whichever property Type.GetProperties enumerates first. The entities here never shadow,
+        // so this case never arises in practice.
         var map = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in entityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             map.TryAdd(p.Name, p);

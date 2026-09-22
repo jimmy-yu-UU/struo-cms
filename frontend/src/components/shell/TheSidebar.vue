@@ -113,8 +113,8 @@ watch(() => route.path, () => {
 
       <!-- SidebarContent renders a plain div; aria-label on a role-less element is
            dropped by assistive tech. `contents` keeps this nav out of the flex layout
-           (SidebarContent's flex/gap classes) while still exposing a real navigation
-           landmark, replacing the `complementary` landmark the old <aside> gave. -->
+           (SidebarContent's flex/gap classes) while `<nav>` still exposes a real navigation
+           landmark. -->
       <nav v-else class="contents" :aria-label="t('shell.mainNav')">
         <SidebarGroup>
           <SidebarGroupContent>
