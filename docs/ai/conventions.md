@@ -178,9 +178,10 @@ no per-citation upstream exception. Write upstream citations in the extension-an
 this one. A genuine false positive on ordinary prose (the test's own example is a version range like
 "Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on
 that same physical line — the guard checks line by line, so a marker on an adjacent line does not
-help — and it is not a general-purpose suppression. A bare trailing number
-with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably distinguishable
-from a port or a time and is not covered; a reviewer still has to catch those by hand.
+help — and it is not a general-purpose suppression. Markdown fenced code blocks get no exemption
+from this scan either — a citation written inside a fence is a real citation and stays caught. A
+bare trailing number with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably
+distinguishable from a port or a time and is not covered; a reviewer still has to catch those by hand.
 
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
 records — is excluded from the walk entirely (`CodeCitationConventionTests`'s
