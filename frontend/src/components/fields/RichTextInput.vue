@@ -182,9 +182,9 @@ function withFileIds(html: string): string {
   if (!html) return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
   doc.querySelectorAll('img').forEach((img) => {
-    if (img.getAttribute('data-file-id')) return
+    if (img.dataset.fileId) return
     const m = (img.getAttribute('src') || '').match(/\/files\/([^/]+)\/content/)
-    if (m) img.setAttribute('data-file-id', m[1])
+    if (m) img.dataset.fileId = m[1]
   })
   return doc.body.innerHTML
 }
