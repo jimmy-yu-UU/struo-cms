@@ -85,20 +85,21 @@ public static class SchemaGuard
         ISqlSugarClient db, DbType dbType, string table, string[] requiredColumns,
         bool requireTableExists, string missingMessage, CancellationToken ct)
     {
-        if (!requireTableExists && !await TableExistsAsync(db, dbType, table)) return;
+        if (!requireTableExists && !await TableExistsAsync(db, dbType, table, ct)) return;
 
-        if (!await HasUniqueCoverAsync(db, dbType, table, requiredColumns))
+        if (!await HasUniqueCoverAsync(db, dbType, table, requiredColumns, ct))
             throw new InvalidOperationException("Critical schema constraint missing: " + missingMessage);
     }
 
-    private static async Task<bool> TableExistsAsync(ISqlSugarClient db, DbType dbType, string table)
+    private static async Task<bool> TableExistsAsync(
+        ISqlSugarClient db, DbType dbType, string table, CancellationToken ct)
     {
         // Table name comes from scanned entity metadata or a fixed literal, never request input;
         // scoped to one read-only catalog query.
         var query = dbType == DbType.PostgreSQL
             ? $"SELECT count(*) FROM pg_tables WHERE tablename = '{table}'"
             : $"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '{table}'";
-        var counts = await db.Ado.SqlQueryAsync<int>(query);
+        var counts = await db.Ado.SqlQueryAsync<int>(query, null, ct);
         return counts.FirstOrDefault() > 0;
     }
 
@@ -107,7 +108,7 @@ public static class SchemaGuard
     // catalog query per table; the table name comes from scanned entity metadata or a fixed literal,
     // never from request input.
     private static async Task<bool> HasUniqueCoverAsync(
-        ISqlSugarClient db, DbType dbType, string table, string[] requiredColumns)
+        ISqlSugarClient db, DbType dbType, string table, string[] requiredColumns, CancellationToken ct)
     {
         var query = dbType == DbType.PostgreSQL
             ? $"SELECT indexdef FROM pg_indexes WHERE tablename = '{table}'"
@@ -115,7 +116,7 @@ public static class SchemaGuard
             // (the CodeFirst composite). Auto-indexes (PK / column UNIQUE) have NULL sql and are excluded
             // — correct, since a PK's unique index does not cover the composite columns asserted here.
             : $"SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='{table}' AND sql IS NOT NULL";
-        var defs = await db.Ado.SqlQueryAsync<string>(query);
+        var defs = await db.Ado.SqlQueryAsync<string>(query, null, ct);
         return defs.Any(indexDef => IsUniqueCover(indexDef, requiredColumns));
     }
 
