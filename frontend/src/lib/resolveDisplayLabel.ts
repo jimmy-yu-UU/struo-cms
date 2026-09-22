@@ -1,5 +1,6 @@
 import type { CollectionMeta, RelationMeta } from '../types/schema'
 import { readField, resolveItemTitle, type TitleRow } from './resolveItemTitle'
+import { toDisplayString } from './toDisplayString'
 
 export function resolveDisplayLabel(
   row: TitleRow,
@@ -11,7 +12,7 @@ export function resolveDisplayLabel(
   if (template) {
     const out = template.replace(/\{(\w+)\}/g, (_m, token: string) => {
       const v = readField(row, targetMeta, locale, token)
-      return v == null || v === '' ? '' : String(v)
+      return v == null || v === '' ? '' : toDisplayString(v)
     })
     if (out.trim() !== '') return out
   }

@@ -19,12 +19,16 @@ import KeyValueField from '../../components/fields/KeyValueField.vue'
 import FilesField from '../../components/fields/FilesField.vue'
 import RepeaterField from '../../components/fields/RepeaterField.vue'
 import { formatDateTime } from '../formatDateTime'
+import { toDisplayString } from '../toDisplayString'
 
 type ListColumn = FieldTypeDef['listColumn']
-const asString: ListColumn = { format: (v) => String(v) }
+const asString: ListColumn = { format: (v) => toDisplayString(v) }
 const asYesNo: ListColumn = { format: (v) => (v ? 'Yes' : 'No') }
 const asDate: ListColumn = {
-  format: (v) => { const s = formatDateTime(String(v)); return s === '—' ? String(v) : s },
+  format: (v) => {
+    const s = formatDateTime(toDisplayString(v))
+    return s === '—' ? toDisplayString(v) : s
+  },
 }
 const asOption: ListColumn = {
   format: (v, f) => { const o = f.options?.find((x) => x.value === String(v)); return o ? o.label : String(v) },
@@ -37,15 +41,15 @@ const asJoinedOptions: ListColumn = {
 const asJoinedTags: ListColumn = {
   format: (v) => (Array.isArray(v)
     ? (v as TagItem[]).map((t) => t?.label ?? t?.value ?? '').join(', ')
-    : String(v ?? '')),
+    : toDisplayString(v)),
 }
 const asMinifiedJson: ListColumn = {
   format: (v) => (v === null || v === undefined ? '' : JSON.stringify(v)),
 }
 const asJoinedKeyValue: ListColumn = {
   format: (v) => (v && typeof v === 'object' && !Array.isArray(v)
-    ? Object.entries(v as Record<string, unknown>).map(([k, val]) => `${k}: ${String(val ?? '')}`).join(', ')
-    : String(v ?? '')),
+    ? Object.entries(v as Record<string, unknown>).map(([k, val]) => `${k}: ${toDisplayString(val)}`).join(', ')
+    : toDisplayString(v)),
 }
 
 const arrParse = (raw: unknown): unknown[] => (Array.isArray(raw) ? raw : [])
@@ -139,7 +143,7 @@ const keyValueDef: FieldTypeDef = {
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
       const key = k.trim()
       if (key === '') continue
-      out[key] = String(val ?? '')
+      out[key] = toDisplayString(val)
     }
     return out
   },
@@ -147,7 +151,7 @@ const keyValueDef: FieldTypeDef = {
 }
 
 const asItemCount: ListColumn = {
-  format: (v) => (Array.isArray(v) ? `${v.length} items` : String(v ?? '')),
+  format: (v) => (Array.isArray(v) ? `${v.length} items` : toDisplayString(v)),
 }
 
 function isBlankRow(row: unknown, subFields: FieldMeta[]): boolean {

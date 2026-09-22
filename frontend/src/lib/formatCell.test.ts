@@ -35,4 +35,10 @@ describe('formatCell', () => {
     expect(formatCell('not-a-date', field({ interface: 'dateTime' }))).toBe('not-a-date')
     expect(formatCell('hello', field({ interface: 'text' }))).toBe('hello')
   })
+
+  // A Text-interface column falls back to asString's listColumn, whose value is typed unknown --
+  // an object value must render as JSON, never the default Object.prototype.toString result.
+  it('renders an object value as JSON rather than [object Object]', () => {
+    expect(formatCell({ a: 1 }, field({ interface: 'text' }))).toBe('{"a":1}')
+  })
 })

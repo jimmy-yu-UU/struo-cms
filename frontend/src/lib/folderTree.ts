@@ -2,7 +2,7 @@ export type FolderRow = { id: string; name: string; parentId: string | null; ver
 
 export function toFolderRows(data: Record<string, unknown>[]): FolderRow[] {
   return data.map((r) => ({
-    id: String(r.id ?? ''),
+    id: typeof r.id === 'string' ? r.id : '',
     name: typeof r.name === 'string' ? r.name : '',
     // The items API only projects M2O relation FKs (mediafolder.parentId) under `deep`
     // expansion, nested as `parent: { id, ... }` under the relation's nav-property name --
