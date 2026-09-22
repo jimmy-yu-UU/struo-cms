@@ -161,7 +161,7 @@ When documentation or a comment points **into this repository's own code**, cite
 class, method, branch, or a distinguishing property — rather than a line range, because line ranges
 rot silently the first time someone inserts above them and nothing in CI catches it.
 The deliberate exception is a citation into **pinned upstream SqlSugar source**, as in
-`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`: that source is version-pinned and cannot
+`docs/ai/decisions/column-type-map-per-backend-literals.md`: that source is version-pinned and cannot
 shift underneath us, so a line range there stays valid.
 
 Enforced by `CodeCitationConventionTests`
