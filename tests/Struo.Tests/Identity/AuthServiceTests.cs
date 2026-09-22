@@ -70,7 +70,7 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task Unknown_email_verifies_the_dummy_hash_exactly_once()
+    public async Task Unknown_email_runs_exactly_one_password_verify()
     {
         var store = new FakeCredentialStore(null);
         var hasher = new RecordingHasher();
