@@ -3,12 +3,12 @@ using SqlSugar;
 namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
-/// Resolves a dialect-neutral <see cref="ColumnShape"/> to a per-backend column type literal (the only
-/// other vendor-type site is <see cref="SqlSugarClientFactory"/>'s SQLite identity-column rewrite).
-/// Measured by reading upstream SqlSugar source: neither <c>GetSize</c> nor <c>ConvertCreateColumnInfo</c>
-/// suffixes an already-parenthesised literal — never verified live on SQL Server, MySQL, or Oracle.
-/// Reversing MySQL's <c>longtext</c> risks truncation; reversing a parenthesised literal risks a
-/// malformed double suffix. Full write-up: docs/ai/decisions/column-type-map-per-backend-literals.md
+/// Resolves a dialect-neutral <see cref="ColumnShape"/> to a per-backend column type literal — the only
+/// other site in <c>src/</c> is <see cref="SqlSugarClientFactory"/>'s <c>ApplySqliteIdentityColumnRewrite</c>.
+/// Read in upstream SqlSugar source: neither <c>GetSize</c> nor <c>ConvertCreateColumnInfo</c> suffixes
+/// the two already-parenthesised literals below, ruling out a double-suffixed DDL; not run live on
+/// MySQL, SQL Server, or Oracle. Reversing MySQL's <c>longtext</c> risks truncation; reversing a
+/// parenthesised literal risks the double suffix. Full write-up: docs/ai/decisions/column-type-map-per-backend-literals.md
 /// </summary>
 internal static class ColumnTypeMap
 {
