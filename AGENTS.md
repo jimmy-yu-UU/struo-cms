@@ -75,9 +75,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   (`ApplySqliteIdentityColumnRewrite`), which hardcodes `INTEGER` for a SQLite identity primary
   key — but that mapping itself is unverified against a live MySQL/SqlServer/Oracle instance, and
   so is the query layer: some ORDER-BY and literal-coercion code paths are written against
-  PostgreSQL/SQLite behavior specifically. The per-backend type decisions behind that layer, and
-  what is and is not verified about each, are recorded in `ColumnTypeMap`'s class doc
-  (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`).
+  PostgreSQL/SQLite behavior specifically. The per-backend type decisions behind that layer,
+  and what is and is not verified about each, are recorded in
+  `docs/ai/decisions/column-type-map-per-backend-literals.md`.
 
 ## Invariants
 

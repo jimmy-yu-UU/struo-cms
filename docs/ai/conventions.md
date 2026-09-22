@@ -161,7 +161,7 @@ When documentation or a comment points **into this repository's own code**, cite
 class, method, branch, or a distinguishing property — rather than a line range, because line ranges
 rot silently the first time someone inserts above them and nothing in CI catches it.
 The deliberate exception is a citation into **pinned upstream SqlSugar source**, as in
-`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`: that source is version-pinned and cannot
+`docs/ai/decisions/column-type-map-per-backend-literals.md`: that source is version-pinned and cannot
 shift underneath us, so a line range there stays valid.
 
 Enforced by `CodeCitationConventionTests`
@@ -178,9 +178,10 @@ no per-citation upstream exception. Write upstream citations in the extension-an
 this one. A genuine false positive on ordinary prose (the test's own example is a version range like
 "Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on
 that same physical line — the guard checks line by line, so a marker on an adjacent line does not
-help — and it is not a general-purpose suppression. A bare trailing number
-with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably distinguishable
-from a port or a time and is not covered; a reviewer still has to catch those by hand.
+help — and it is not a general-purpose suppression. Markdown fenced code blocks get no exemption
+from this scan either — a citation written inside a fence is a real citation and stays caught. A
+bare trailing number with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably
+distinguishable from a port or a time and is not covered; a reviewer still has to catch those by hand.
 
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
 records — is excluded from the walk entirely (`CodeCitationConventionTests`'s
@@ -285,10 +286,11 @@ literal inside `SqlSugarClientFactory`'s `EntityService` hook, so the same prope
 work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the PostgreSQL and
 SQLite literals are exercised by a live instance; the MySQL/SQL Server/Oracle literals are chosen to
 be syntactically valid and are not claimed to be verified against a live instance of those three
-(`ColumnTypeMap.cs`'s own class doc has the full evidence trail, including a source-read-only
-conclusion about a parenthesised-literal edge case on SQL Server/MySQL). A fork that only ever runs
-one backend is free to write `[SugarColumn(ColumnDataType = "...")]` directly instead — that
-convention is respected too, just at lower precedence.
+(`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence trail,
+including a source-read-only conclusion about a parenthesised-literal edge case on SQL
+Server/MySQL). A fork that only ever runs one backend is free to write
+`[SugarColumn(ColumnDataType = "...")]` directly instead — that convention is respected too,
+just at lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted
