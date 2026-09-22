@@ -69,6 +69,18 @@ public class AuthServiceTests
         hasher.VerifiedEncodedValues.Should().NotContain("");
     }
 
+    [Fact]
+    public async Task Unknown_email_verifies_the_dummy_hash_exactly_once()
+    {
+        var store = new FakeCredentialStore(null);
+        var hasher = new RecordingHasher();
+        var sut = new AuthService(store, hasher);
+
+        await sut.AuthenticateAsync("missing@corp.com", "anything");
+
+        hasher.VerifiedEncodedValues.Should().HaveCount(1);
+    }
+
     private sealed class FakeCredentialStore(UserCredential? cred) : IUserCredentialStore
     {
         public Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default) => Task.FromResult(cred);
