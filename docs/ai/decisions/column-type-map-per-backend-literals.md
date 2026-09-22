@@ -17,9 +17,13 @@ target (`AGENTS.md`). The MySQL/SqlServer/Oracle literals are chosen to be synta
 CodeFirst table creation succeeds on those backends; they are not claimed to be verified against a
 live instance of any of the three.
 
+`ColumnTypeMap.For` is not the only site in `src/` that writes a vendor type literal directly:
+`SqlSugarClientFactory.ApplySqliteIdentityColumnRewrite` sets `DataType` to `"INTEGER"` on a SQLite
+identity primary key.
+
 ## Why
 
-MySQL's `TEXT` caps at 65,535 bytes — not unbounded, unlike every other mapping here. A full
+MySQL's `TEXT` caps at 65,535 bytes — not unbounded, unlike every other mapping here. A full item
 `Revision.Snapshot` or a realistic RichText/Markdown/Json body can exceed that: error 1406 in strict
 mode, silent truncation otherwise. `LONGTEXT` (up to 4 GiB) is the conventional MySQL choice for
 unbounded text, which is why `LongText` maps to `longtext`, not `text`, on MySQL.
@@ -107,21 +111,20 @@ is covered by the same no-op finding as the shaped properties above.
 
 ## Unknowns
 
-This is a source-reading conclusion, not a result verified against a live SQL Server or MySQL
-instance.
+Whether the parenthesised-literal reasoning in Evidence holds against a live SQL Server or MySQL
+instance is unverified — it rests on reading the source, not on running it.
 
-A dozen-plus untagged stable `SqlSugarCore` NuGet releases sit strictly between the closest published
-tag (`5.1.4.197`) and the pinned version (`5.1.4.220`), with `.212`/`.213` only ever shipped as
-prerelease builds. The relevant methods were byte-identical between the tag and `master` when diffed,
-so the divergence risk for these untagged releases is low but not zero.
+Whether that reasoning holds unchanged across the dozen-plus untagged `SqlSugarCore` releases between
+the closest published tag and the pinned version is unverified; Evidence bounds the risk as low but
+not zero.
 
 The Oracle mapping (`clob` for `LongText`, `timestamp with time zone` for `TimestampWithTimeZone`) is
-chosen to be syntactically valid for CodeFirst but is unverified against a live Oracle instance, and
-was not part of the source-reading investigation above (that investigation covers only the
-already-parenthesised SqlServer/MySQL literals).
+unverified against a live Oracle instance and was not part of the source-reading investigation at all
+(that investigation covers only the already-parenthesised SqlServer/MySQL literals).
 
 ## Referenced from
 
 - `src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`
 - `AGENTS.md` ("Hard constraints")
+- `docs/ai/conventions.md` ("Citing code from docs and comments")
 - `docs/ai/conventions.md` ("Column type mapping")
