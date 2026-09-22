@@ -35,7 +35,8 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
             // (non-camelCase) HttpResponseJsonOptions.
             await context.Response.WriteAsJsonAsync(
                 Envelope.Error(ErrorCodes.Forbidden, $"Missing required '{HeaderName}' header."),
-                EnvelopeJsonOptionsHolder.Instance);
+                EnvelopeJsonOptionsHolder.Instance,
+                context.RequestAborted);
             return;
         }
 

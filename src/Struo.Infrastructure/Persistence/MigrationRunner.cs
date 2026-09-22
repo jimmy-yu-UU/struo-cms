@@ -74,7 +74,7 @@ public static class MigrationRunner
         EnsureTrackingTable(db);
 
         var applied = new HashSet<string>(
-            await db.Queryable<SchemaMigration>().Select(m => m.Filename).ToListAsync(),
+            await db.Queryable<SchemaMigration>().Select(m => m.Filename).ToListAsync(ct),
             StringComparer.Ordinal);
 
         var fileNames = Directory.EnumerateFiles(migrationsDirectory, "*.sql")
@@ -101,13 +101,17 @@ public static class MigrationRunner
 
             try
             {
+                // BeginTranAsync, CommitTranAsync and RollbackTranAsync take no CancellationToken; a
+                // migration's DDL and its ledger row commit or roll back together, because a
+                // cancellation raised by the token-aware calls below is caught like any other failure
+                // and rolls the transaction back.
                 await db.Ado.BeginTranAsync();
-                await db.Ado.ExecuteCommandAsync(sql);
+                await db.Ado.ExecuteCommandAsync(sql, null, ct);
                 await db.Insertable(new SchemaMigration
                 {
                     Filename = fileName,
                     AppliedAt = DateTime.UtcNow,
-                }).ExecuteCommandAsync();
+                }).ExecuteCommandAsync(ct);
                 await db.Ado.CommitTranAsync();
             }
             catch (Exception ex)
