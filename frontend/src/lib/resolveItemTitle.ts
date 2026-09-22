@@ -1,5 +1,6 @@
 import type { CollectionMeta } from '../types/schema'
 import { pickTranslated } from './pickTranslated'
+import { toDisplayString } from './toDisplayString'
 
 export type TitleRow = Record<string, unknown> & {
   id?: unknown
@@ -27,7 +28,7 @@ export function readField(
 export function resolveItemTitle(row: TitleRow, targetMeta: CollectionMeta, locale: string): string {
   if (targetMeta.defaultDisplayField) {
     const v = readField(row, targetMeta, locale, targetMeta.defaultDisplayField)
-    if (v != null && v !== '') return String(v)
+    if (v != null && v !== '') return toDisplayString(v)
   }
-  return row.id != null ? String(row.id) : ''
+  return row.id != null ? toDisplayString(row.id) : ''
 }

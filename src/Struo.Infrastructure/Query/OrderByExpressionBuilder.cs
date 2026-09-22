@@ -44,7 +44,7 @@ public sealed class OrderByExpressionBuilder(
                 && translatableFields.Any(f => string.Equals(f, s.Field, StringComparison.OrdinalIgnoreCase))
                 && collMeta?.Translation is not null)
             {
-                return $"{TranslatableOrderExpr(collection, s.Field, collMeta.Translation, queryLocale, d)} {(s.Descending ? "DESC" : "ASC")}";
+                return $"{TranslatableOrderExpr(s.Field, collMeta.Translation, queryLocale, d)} {(s.Descending ? "DESC" : "ASC")}";
             }
 
             var prop = d.FieldToProperty.TryGetValue(s.Field, out var p) ? p : s.Field;
@@ -77,7 +77,7 @@ public sealed class OrderByExpressionBuilder(
     /// Mirrors the <see cref="RelationOrderExpr"/> form used for cross-relation sort.
     /// </summary>
     private string TranslatableOrderExpr(
-        string collection, string fieldName,
+        string fieldName,
         Domain.Metadata.Models.TranslationMetadata tm,
         string queryLocale,
         EntityDescriptor parentDesc)

@@ -14,8 +14,7 @@ public sealed class AuthService(IUserCredentialStore store, IPasswordHasher hash
         if (cred is null || string.IsNullOrWhiteSpace(cred.PasswordEncoded))
         {
             // No account (or no password set): spend the same verify cost, then fail generically.
-            _dummyHash ??= hasher.Hash("timing-equalizer-not-a-real-password");
-            hasher.Verify(_dummyHash, password);
+            hasher.Verify(DummyHash(hasher), password);
             return AuthResult.Fail(AuthFailure.InvalidCredentials);
         }
 
@@ -25,4 +24,7 @@ public sealed class AuthService(IUserCredentialStore store, IPasswordHasher hash
             return AuthResult.Fail(AuthFailure.Inactive);
         return AuthResult.Ok(cred.Id);
     }
+
+    private static string DummyHash(IPasswordHasher hasher) =>
+        _dummyHash ??= hasher.Hash("timing-equalizer-not-a-real-password");
 }

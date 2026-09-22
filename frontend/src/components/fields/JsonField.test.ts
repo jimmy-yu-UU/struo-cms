@@ -53,6 +53,14 @@ describe('JsonField', () => {
     expect(w.get('textarea').attributes('aria-invalid')).toBe('false')
   })
 
+  // The root element is a wrapper <div>, not the control itself, so ItemForm's <label for>
+  // lands on the wrapper and never reaches the textarea unless the textarea carries its own
+  // accessible name matching the visible FieldLabel text.
+  it('gives the textarea an accessible name matching the field label', () => {
+    const w = mount(JsonField, { props: { field: field({ interface: 'json', label: 'Payload' }), modelValue: null } })
+    expect(w.get('textarea').attributes('aria-label')).toBe('Payload')
+  })
+
   it('renders the vendored textarea data-slot hook', () => {
     const w = mount(JsonField, { props: { field: field({ interface: 'json' }), modelValue: { a: 1 } } })
     expect(w.find('[data-slot="textarea"]').exists()).toBe(true)

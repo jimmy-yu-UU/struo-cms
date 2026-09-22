@@ -13,8 +13,8 @@ export function fileContentDisplayUrl(id: string): string {
 function rewriteImgSrc(html: string, srcFor: (id: string) => string): string {
   if (!html) return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelectorAll('img[data-file-id]').forEach((img) => {
-    const id = img.getAttribute('data-file-id')
+  doc.querySelectorAll('img').forEach((img) => {
+    const id = img.dataset.fileId
     if (id) img.setAttribute('src', srcFor(id))
   })
   return doc.body.innerHTML

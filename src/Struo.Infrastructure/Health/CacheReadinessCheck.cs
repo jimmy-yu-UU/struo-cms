@@ -6,14 +6,14 @@ namespace Struo.Infrastructure.Health;
 public sealed class CacheReadinessCheck(IDistributedCache cache) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context, CancellationToken ct = default)
+        HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try
         {
             const string key = "health:ping";
             await cache.SetStringAsync(key, "1", new DistributedCacheEntryOptions
-            { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5) }, ct);
-            var v = await cache.GetStringAsync(key, ct);
+            { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5) }, cancellationToken);
+            var v = await cache.GetStringAsync(key, cancellationToken);
             return v == "1" ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy("cache round-trip mismatch");
         }
         catch (Exception ex)
