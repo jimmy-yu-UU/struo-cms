@@ -10,13 +10,13 @@ namespace Struo.Api.Http;
 /// </summary>
 public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger) : IExceptionHandler
 {
-    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken ct)
+    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         if (httpContext.Response.HasStarted) return false;
         var authenticated = httpContext.User.Identity?.IsAuthenticated == true;
         var (status, body) = Map(exception, authenticated, logger);
         httpContext.Response.StatusCode = status;
-        await httpContext.Response.WriteAsJsonAsync(Envelope.Error(body.Code, body.Message, body.Details), ct);
+        await httpContext.Response.WriteAsJsonAsync(Envelope.Error(body.Code, body.Message, body.Details), cancellationToken);
         return true;
     }
 

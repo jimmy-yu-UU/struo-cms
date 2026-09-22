@@ -8,16 +8,16 @@ namespace Struo.Application.Security;
 public sealed class ExternalLoginService(IExternalUserStore store) : IExternalLoginService
 {
     public async Task<ExternalLoginResult> ResolveOrProvisionAsync(
-        ExternalIdentity id, ExternalLoginPolicy policy, CancellationToken ct = default)
+        ExternalIdentity identity, ExternalLoginPolicy policy, CancellationToken ct = default)
     {
         if (!string.IsNullOrEmpty(policy.AllowedTenantId) &&
-            !string.Equals(id.TenantId, policy.AllowedTenantId, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(identity.TenantId, policy.AllowedTenantId, StringComparison.OrdinalIgnoreCase))
             return ExternalLoginResult.Fail(ExternalLoginFailure.TenantNotAllowed);
 
-        if (policy.RequireEmailVerified && id.EmailVerified != true)
+        if (policy.RequireEmailVerified && identity.EmailVerified != true)
             return ExternalLoginResult.Fail(ExternalLoginFailure.EmailNotVerified);
 
-        var email = id.Email?.Trim();
+        var email = identity.Email?.Trim();
         if (string.IsNullOrWhiteSpace(email))
             return ExternalLoginResult.Fail(ExternalLoginFailure.NoEmail);
 
@@ -35,7 +35,7 @@ public sealed class ExternalLoginService(IExternalUserStore store) : IExternalLo
                 ? ExternalLoginResult.Ok(match.Id, provisioned: false)
                 : ExternalLoginResult.Fail(ExternalLoginFailure.Inactive);
 
-        var newId = await store.CreateExternalUserAsync(email, id.Name, ct);
+        var newId = await store.CreateExternalUserAsync(email, identity.Name, ct);
         return ExternalLoginResult.Ok(newId, provisioned: true);
     }
 }
