@@ -10,6 +10,12 @@ StruoCMS 把它們變成資料表、API 與後台介面。
 
 [![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
+## 專案狀態
+
+StruoCMS 仍在開發與測試階段，目前版本是 0.7.x。版本之間可能出現 breaking change：設定鍵的預設
+值、資料表或端點的形狀都可能改變。把新版核心合併進你的 fork 之前，先讀[版本紀錄](docs/guide/zh-TW/changelog.md)
+裡的「破壞性變更」條目，逐條核對你的 fork 有沒有碰到。
+
 ## 它包含什麼
 
 - **集合引擎**：宣告一個帶有 attribute 的 C# entity，StruoCMS 便由這單一宣告推導出資料表結構、REST

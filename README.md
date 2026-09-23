@@ -13,6 +13,13 @@ project.
 
 [![CI](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmy-yu-UU/struo-cms/actions/workflows/ci.yml)
 
+## Project status
+
+StruoCMS is in development and testing; the current version is 0.7.x. Breaking changes can land
+between versions: a configuration key can change its default, a table or an endpoint can change
+shape. Before you merge a newer core into your fork, read the Breaking entries in the
+[changelog](docs/guide/en/changelog.md) and check each one against what your fork touches.
+
 ## What it includes
 
 - **Collection engine**: declare a C# entity with a few attributes, and StruoCMS derives the
