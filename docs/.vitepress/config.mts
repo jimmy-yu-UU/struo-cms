@@ -21,12 +21,13 @@ const AVAILABLE_LOCALES = new Set(
 )
 
 // Metadata VitePress needs per locale that cannot be derived from a directory
-// name — label and lang are prose choices, not filesystem facts. Only entries
-// whose directory actually exists (AVAILABLE_LOCALES) make it into `locales`
-// below, so removing a locale directory removes the locale, not the config.
-const LOCALE_METADATA: Record<string, { label: string; lang: string }> = {
-  en: { label: 'English', lang: 'en' },
-  'zh-TW': { label: '繁體中文', lang: 'zh-TW' },
+// name — label, lang and the changelog link's text are prose choices, not
+// filesystem facts. Only entries whose directory actually exists
+// (AVAILABLE_LOCALES) make it into `locales` below, so removing a locale
+// directory removes the locale, not the config.
+const LOCALE_METADATA: Record<string, { label: string; lang: string; changelogLabel: string }> = {
+  en: { label: 'English', lang: 'en', changelogLabel: 'Changelog' },
+  'zh-TW': { label: '繁體中文', lang: 'zh-TW', changelogLabel: '版本紀錄' },
 }
 
 // The link is the sidebar's own first entry, not a hand-copied filename: a
@@ -37,10 +38,14 @@ const LOCALE_METADATA: Record<string, { label: string; lang: string }> = {
 // can change independently.
 function localeConfig(key: string) {
   const sidebar = chapterSidebar(key)
+  const { label, lang, changelogLabel } = LOCALE_METADATA[key]
   return {
-    ...LOCALE_METADATA[key],
+    label,
+    lang,
     link: firstLink(sidebar),
-    themeConfig: { sidebar },
+    // The changelog lives at guide/changelog.<locale>.md, outside the locale
+    // directory, so the sidebar deriver never sees it; the nav is its only entry point.
+    themeConfig: { sidebar, nav: [{ text: changelogLabel, link: `/changelog.${key}` }] },
   }
 }
 
