@@ -44,7 +44,7 @@ function localeConfig(key: string) {
     lang,
     link: firstLink(sidebar),
     // The changelog is guide/<locale>/changelog.md — not an NN- chapter, so the sidebar deriver
-    // skips it; the nav is its only entry point.
+    // skips it; the nav link is its entry point on every page.
     themeConfig: { sidebar, nav: [{ text: changelogLabel, link: `/${key}/changelog` }] },
   }
 }

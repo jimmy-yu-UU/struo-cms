@@ -12,7 +12,7 @@ apply that audience's rules only.
 
 | Surface | Audience | Rules |
 |---|---|---|
-| `docs/guide/` (both locales), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
+| `docs/guide/` (both locales, except the changelog), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
 | `docs/guide/<locale>/changelog.md` | A developer merging a newer core into a fork | "The changelog" below |
 | `AGENTS.md`, `CLAUDE.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
 
@@ -169,10 +169,14 @@ the action — the configuration key to set, the step to run. Point at construct
 configuration key, a chapter), never at line numbers.
 
 Layout: newest version first; an `Unreleased` section at the top collects entries merged to `main`
-and not yet tagged; a version heading carries the version and the date (`## 0.7.0 — 2026-09-23`,
-the date sits inside an inline code span, which the guard skips); subsections in the order
-`Breaking`, `Added`, `Changed`, `Fixed`, only those with content. The Chinese file is the master
-text and the English file follows its structure, as for the chapters.
+and not yet tagged; a version heading carries the version and the date (`## 0.7.0 — 2026-09-23`;
+the example's date is in inline code only because this file is scanned — the changelog itself is
+exempt and writes the heading bare); subsections in the order `Breaking`, `Added`, `Changed`,
+`Fixed`, only those with content. The Chinese file uses `未發佈`, `破壞性變更`, `新增`,
+`變更`, `修正` for the same headings. The Chinese file is the master text and the English file
+follows its structure, as for the chapters. A change that alters behaviour a fork can observe — a
+configuration key, a table or index name, an endpoint's shape, a public method's signature — adds
+its entry under `Unreleased` in both files in the same pull request.
 
 ## Citing code from docs and comments
 

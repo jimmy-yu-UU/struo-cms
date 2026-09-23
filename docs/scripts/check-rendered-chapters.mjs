@@ -80,10 +80,9 @@ const chaptersByLocale = new Map()
 let checkedRoot = 0
 let checkedChapters = 0
 
-// Files directly under guide/ — the bilingual landing page and the changelog
-// files — sit outside every locale directory, so the per-locale loop below
-// never sees them. Same two assertions as a chapter, applied to each, plus
-// the source-side mustache scan.
+// Files directly under guide/ (the bilingual landing page) sit outside every
+// locale directory, so the per-locale loop below never sees them. Same two
+// assertions as a chapter, applied to each, plus the source-side mustache scan.
 const rootSources = readdirSync(GUIDE, { withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
   .map((entry) => entry.name)
@@ -184,5 +183,5 @@ if (failures.length > 0) {
 }
 
 process.stdout.write(
-  `checked ${checkedRoot} rendered root page and ${checkedChapters} rendered chapter pages\n`,
+  `checked ${checkedRoot} rendered root page(s) and ${checkedChapters} rendered locale page(s)\n`,
 )
