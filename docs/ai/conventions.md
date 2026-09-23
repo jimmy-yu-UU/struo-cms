@@ -13,7 +13,7 @@ apply that audience's rules only.
 | Surface | Audience | Rules |
 |---|---|---|
 | `docs/guide/` (both locales), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
-| `docs/guide/changelog.zh-TW.md`, `docs/guide/changelog.en.md` | A developer merging a newer core into a fork | "The changelog" below |
+| `docs/guide/<locale>/changelog.md` | A developer merging a newer core into a fork | "The changelog" below |
 | `AGENTS.md`, `CLAUDE.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
 
 Both audiences share three rules. First, **write only what the reader needs in order to act.** A fact
@@ -129,14 +129,15 @@ sentence that describes it.
 
 **What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any banned word or bare date
 without a marker, and on any PR/issue reference, in a comment or in prose across `AGENTS.md`,
-`CLAUDE.md`, `docs/ai/**`, `docs/guide/<locale>/**`, `src/**`, `tests/**`, `frontend/src/**`, and
-`frontend/e2e/**`. Markdown directly under `docs/guide/` — the bilingual landing page and the two
-changelog files — is outside the scan (`NarrativeScanScope` decides). The guard reads comment bodies and markdown prose only. A quote-parity heuristic
-locates each comment start (`//`, `/*`, `<!--`), and code outside comments — including string
-literals — is skipped by that heuristic; a date in test data normally needs no marker. In markdown,
-fenced code blocks and inline code spans are skipped, so a date inside one of those needs no marker
-either; a date inside comment or prose text does. It also fails on a decision file missing one of its
-six headings or on an orphan decision file nothing references by path.
+`CLAUDE.md`, `docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and
+`frontend/e2e/**`. The two changelog files, `docs/guide/<locale>/changelog.md`, are outside the scan
+(`NarrativeScanScope` decides); everything else under `docs/guide/` is read. The guard reads comment
+bodies and markdown prose only. A quote-parity heuristic locates each comment start (`//`, `/*`,
+`<!--`), and code outside comments — including string literals — is skipped by that heuristic; a
+date in test data normally needs no marker. In markdown, fenced code blocks and inline code spans
+are skipped, so a date inside one of those needs no marker either; a date inside comment or prose
+text does. It also fails on a decision file missing one of its six headings or on an orphan decision
+file nothing references by path.
 
 **The guard is not exhaustive.** It checks the banned words and bare dates listed above, PR
 and issue references, and a decision file's structure and references; anything else phrased
@@ -159,7 +160,7 @@ of code that exists ("never reorders rows client-side") guards a real path and s
 
 ### The changelog
 
-`docs/guide/changelog.zh-TW.md` and `docs/guide/changelog.en.md` are the one place in this
+`docs/guide/zh-TW/changelog.md` and `docs/guide/en/changelog.md` are the one place in this
 repository whose subject is the difference between versions, so the guard above does not scan them.
 Their own rule: an entry tells the reader what this version changed relative to the one before it,
 not what the earlier version was like in detail. Describe the earlier situation in one clause only
@@ -168,9 +169,10 @@ the action — the configuration key to set, the step to run. Point at construct
 configuration key, a chapter), never at line numbers.
 
 Layout: newest version first; an `Unreleased` section at the top collects entries merged to `main`
-and not yet tagged; a version heading carries the version and the date (`## 0.7.0 — 2026-09-23`, the
-date sits inside an inline code span, which the guard skips); subsections in the order `Breaking`, `Added`, `Changed`, `Fixed`, only those with content. The
-Chinese file is the master text and the English file follows its structure, as for the chapters.
+and not yet tagged; a version heading carries the version and the date (`## 0.7.0 — 2026-09-23`,
+the date sits inside an inline code span, which the guard skips); subsections in the order
+`Breaking`, `Added`, `Changed`, `Fixed`, only those with content. The Chinese file is the master
+text and the English file follows its structure, as for the chapters.
 
 ## Citing code from docs and comments
 

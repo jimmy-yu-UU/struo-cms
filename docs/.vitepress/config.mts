@@ -43,9 +43,9 @@ function localeConfig(key: string) {
     label,
     lang,
     link: firstLink(sidebar),
-    // The changelog lives at guide/changelog.<locale>.md, outside the locale
-    // directory, so the sidebar deriver never sees it; the nav is its only entry point.
-    themeConfig: { sidebar, nav: [{ text: changelogLabel, link: `/changelog.${key}` }] },
+    // The changelog is guide/<locale>/changelog.md — not an NN- chapter, so the sidebar deriver
+    // skips it; the nav is its only entry point.
+    themeConfig: { sidebar, nav: [{ text: changelogLabel, link: `/${key}/changelog` }] },
   }
 }
 

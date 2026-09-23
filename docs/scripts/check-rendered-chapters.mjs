@@ -30,8 +30,9 @@ const CHAPTER_SOURCE = /^\d{2}-[^/]+\.md$/
 // Files directly under a locale that are allowed not to be chapters. A file
 // nested in a subdirectory is never exempt by this — it is reported as a
 // stray filename same as a bad top-level name, since it is equally invisible
-// to the sidebar.
-const NON_CHAPTER = new Set(['index.md'])
+// to the sidebar. changelog.md is the per-locale version history, linked
+// from the nav rather than the sidebar.
+const NON_CHAPTER = new Set(['index.md', 'changelog.md'])
 
 const REMEDY =
   'A literal {{ }} in prose or an inline code span is the usual cause; wrap it in <span v-pre>. ' +
@@ -147,7 +148,8 @@ for (const locale of LOCALES) {
     }
   }
 
-  for (const chapter of chapters) {
+  const rendered = [...chapters, ...markdown.filter((name) => NON_CHAPTER.has(name))]
+  for (const chapter of rendered) {
     const page = join(DIST, locale, chapter.replace(/\.md$/, '.html'))
 
     if (!existsSync(page)) {
