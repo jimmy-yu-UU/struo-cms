@@ -16,14 +16,14 @@ namespace Struo.Infrastructure.Identity;
 /// <c>AuditableEntity</c>/<c>IAuditable</c>/<c>ISoftDeletable</c>.
 /// </summary>
 [SugarTable("user_sessions")]
-[SugarIndex("ix_user_sessions_userid", nameof(UserId), OrderByType.Asc)]
+[SugarIndex("ix_{table}_userid", nameof(UserId), OrderByType.Asc)]
+[SugarIndex("ux_{table}_ticketkey", nameof(TicketKey), OrderByType.Asc, true)]
 public sealed class UserSession
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
 
     public Guid UserId { get; set; }
 
-    [SugarColumn(UniqueGroupNameList = ["uq_user_sessions_ticketkey"])]
     public string TicketKey { get; set; } = "";
 
     // Compared against UTC instants (ExpiresAt < nowUtc) and a new framework table, so both get the

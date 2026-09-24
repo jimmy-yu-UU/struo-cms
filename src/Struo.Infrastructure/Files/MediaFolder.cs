@@ -15,7 +15,7 @@ namespace Struo.Infrastructure.Files;
 /// relations (File.Folder, MediaFolder.Parent), no bespoke guard code.
 /// </summary>
 [SugarTable("media_folders")]
-[SugarIndex("ix_media_folders_parentid", nameof(ParentId), OrderByType.Asc)]
+[SugarIndex("ix_{table}_parentid", nameof(ParentId), OrderByType.Asc)]
 [CmsCollection("MediaFolder", Group = "System", DefaultDisplayField = nameof(Name), Hidden = true)]
 public sealed class MediaFolder : AuditableEntity
 {

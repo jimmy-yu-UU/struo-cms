@@ -13,12 +13,13 @@ namespace Struo.Infrastructure.Identity;
 /// the create flow.
 /// </summary>
 [SugarTable("users")]
+[SugarIndex("ux_{table}_email", nameof(Email), OrderByType.Asc, true)]
+[SugarIndex("ux_{table}_accesstoken", nameof(AccessToken), OrderByType.Asc, true)]
 [CmsCollection("User", Group = "System", DefaultDisplayField = nameof(Email), AdminOnly = true)]
 public sealed class User : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
-    [SugarColumn(UniqueGroupNameList = ["uq_users_email"])]
     [CmsField(Label = "Email", Interface = FieldInterface.Email, Required = true, Searchable = true, Sort = 1)]
     public string Email { get; set; } = "";
 
@@ -32,7 +33,7 @@ public sealed class User : AuditableEntity
     [CmsField(Label = "Active", Interface = FieldInterface.Boolean, Sort = 4)]
     public bool IsActive { get; set; } = true;
 
-    [SugarColumn(IsNullable = true, UniqueGroupNameList = ["uq_users_accesstoken"])]
+    [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Access Token", Interface = FieldInterface.Text, Hidden = true, ReadOnly = true, Sort = 5)]
     public string? AccessToken { get; set; }
 

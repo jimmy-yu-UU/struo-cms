@@ -12,6 +12,7 @@ namespace Struo.Infrastructure.Revisions;
 /// soft-delete filter never touches it.
 /// </summary>
 [SugarTable("revisions")]
+[SugarIndex("ux_{table}_item_no", nameof(CollectionName), OrderByType.Asc, nameof(ItemId), OrderByType.Asc, nameof(RevisionNumber), OrderByType.Asc, true)]
 public sealed class Revision
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
@@ -24,11 +25,8 @@ public sealed class Revision
     // (ux_revisions_item_no) — the same mechanism the Identity entities use (see UserRole). CodeFirst
     // creates this index on any backend where the table does not yet exist; it is never retrofitted
     // onto an already-existing table.
-    [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public string CollectionName { get; set; } = "";
-    [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public string ItemId { get; set; } = "";
-    [SugarColumn(UniqueGroupNameList = ["ux_revisions_item_no"])]
     public long RevisionNumber { get; set; }
     public string Operation { get; set; } = "";
 

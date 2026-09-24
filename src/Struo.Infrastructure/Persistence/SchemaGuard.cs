@@ -61,7 +61,7 @@ public static class SchemaGuard
             "revision-number race fail closed. If this is an existing database whose `revisions` table " +
             "predates this guarantee, add a reviewed migration under db/migrations/ to create the index; " +
             "otherwise recreate the dev schema so InitTables re-emits it from Revision's " +
-            "UniqueGroupNameList.", ct);
+            "[SugarIndex(IsUnique)] declaration.", ct);
 
         // Backstop — each caller-supplied translation sidecar's UNIQUE (fk, locale). Skipped when
         // the table is not present in this database (a fork may not use a given sidecar), rather than
