@@ -40,8 +40,20 @@ public static class SqlSugarClientFactory
             ConnectionString = options.ConnectionString,
             DbType = dbType,
             IsAutoCloseConnection = true,
+            // SqlSugar's EntityInfo cache (behind EntityMaintenance.GetTableName) is process-wide and
+            // keyed by ConfigId. Keying it by prefix keeps two clients with different prefixes — the
+            // test suite's case — from reading each other's resolved names.
+            ConfigId = "struo:" + options.TablePrefix,
             ConfigureExternalServices = new ConfigureExternalServices
             {
+                // Runs after [SugarTable] is read, so DbTableName holds the attribute value here. CodeFirst
+                // re-invokes it uncached on every pass, hence TableNaming.Apply is a pure function of
+                // that attribute value.
+                EntityNameService = (type, entity) =>
+                {
+                    if (TableNaming.IsFrameworkTable(type))
+                        entity.DbTableName = TableNaming.Apply(options.TablePrefix, entity.DbTableName);
+                },
                 EntityService = (property, column) => ApplyColumnConventions(property, column, dbType, policy)
             }
         };
