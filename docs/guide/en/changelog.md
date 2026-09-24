@@ -12,6 +12,13 @@
 - Core index and unique-constraint names follow the table name: `ix_<table>_<column>`,
   `ux_<table>_<meaning>`, for example `ux_struo_revisions_item_no`. Update any migration of yours that
   refers to a core index by name.
+- Forks with `Database:MigrationsPath` set: the tracking table is prefixed too (`struo_schema_migrations`)
+  and the new one is empty, so starting without acting re-runs every script in the directory, and the
+  first `ALTER` against an existing table fails and aborts startup. Same remedy as above: set the prefix
+  to the empty string, or rename `schema_migrations` along with the other tables.
+- A migration of yours that names a core table (for example `ALTER TABLE users`) must use the prefixed
+  name (`struo_users`). Renaming tables instead of recreating them keeps the existing index names; they
+  do not become `ux_struo_…` on their own.
 :::
 
 ### Added

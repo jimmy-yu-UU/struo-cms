@@ -68,6 +68,8 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 `schema_migrations`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是不加前
 綴。範例專案與你自己的集合不受影響。對一個已經有框架資料表的資料庫改這個值，啟動時會在新名稱下
 建出一整組空的框架資料表並植入初始資料，舊表不會被讀取；要換前綴，先把既有的表改成新名稱再重開。
+有設定 `MigrationsPath` 時，追蹤表 `struo_schema_migrations` 同樣是新建的空表，migration 會全部重
+跑；換前綴前先把它一併改名。
 
 `MigrationsPath` 只用來套用你自己準備的 migration 指令碼，留空就停用；它在每一種後端都會執
 行，不會檢查指令碼是不是寫給這個後端，寫錯後端會在套用時直接失敗。migration runner 沒有互斥

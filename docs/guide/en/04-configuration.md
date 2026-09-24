@@ -80,7 +80,9 @@ tables are always created automatically and need no configuration.
 first character a letter, at most 16 characters; the empty string means no prefix. Sample and fork
 collections are unaffected. Changing it against a database that already holds framework tables makes
 startup create a fresh, empty set under the new names and seed them; the existing tables are not
-read. To change the prefix, rename the existing tables first, then restart.
+read. To change the prefix, rename the existing tables first, then restart. With `MigrationsPath`
+set, the tracking table `struo_schema_migrations` is likewise a fresh, empty table and every
+migration runs again; rename it together with the other tables before changing the prefix.
 
 `MigrationsPath` is only for applying migration scripts you prepare yourself; leaving it empty
 disables it. It runs on every backend, without checking which backend a script was written for; one

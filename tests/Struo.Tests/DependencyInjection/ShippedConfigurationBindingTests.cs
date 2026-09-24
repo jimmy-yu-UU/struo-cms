@@ -152,6 +152,7 @@ public sealed class ShippedConfigurationBindingTests
         bound.ConnectionString.Should().Be(shipped.GetProperty("ConnectionString").GetString());
         bound.AutoSyncSchema.Should().Be(shipped.GetProperty("AutoSyncSchema").GetBoolean());
         bound.MigrationsPath.Should().Be(shipped.GetProperty("MigrationsPath").GetString());
+        bound.TablePrefix.Should().Be(shipped.GetProperty("TablePrefix").GetString());
     }
 
     [Fact]

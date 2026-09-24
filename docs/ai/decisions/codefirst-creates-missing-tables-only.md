@@ -69,8 +69,8 @@ COLUMN behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`.
 
 `grep -rn --include=*.cs "MoreSettings" src/ tests/` returns no hits in `src/` or `tests/`. Reading
 `SqlSugarClientFactory.Create` directly: the `ConnectionConfig` properties it sets are
-`ConnectionString`, `DbType`, `IsAutoCloseConnection`, and `ConfigureExternalServices` only —
-`MoreSettings` is not among them.
+`ConnectionString`, `DbType`, `IsAutoCloseConnection`, `ConfigId`, and `ConfigureExternalServices`
+only — `MoreSettings` is not among them.
 
 ## Unknowns
 

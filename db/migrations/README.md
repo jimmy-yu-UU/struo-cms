@@ -119,18 +119,19 @@ framework tables are not uniform.** Most `AuditableEntity` `createdat`/`updateda
 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` — `src/Struo.Infrastructure/Files/MediaFolder.cs`),
 and so are `struo_site_settings.updatedat` and the tracking table's `struo_schema_migrations.appliedat`
 (`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`) (names shown for the default
-`Database:TablePrefix`, `struo_`). Read the entity declaration in `src/`, or the live schema, before
-writing the `ALTER`. The existing bare-`timestamp` columns have deliberately **not** been retroactively
-converted: re-anchoring already-stored values against a session time zone is a silent data shift.
+`Database:TablePrefix`, `struo_`). A script that touches a core table must name it under the prefix
+the deployment runs with, so the script is tied to that prefix; a fork's own tables carry no prefix.
+Read the entity declaration in `src/`, or the live schema, before writing the `ALTER`. The existing
+bare-`timestamp` columns have deliberately **not** been retroactively converted: re-anchoring
+already-stored values against a session time zone is a silent data shift.
 
 **Idempotency is not required — portability takes priority over it.** The tracking table
 (`SchemaMigration`, `struo_schema_migrations` under the default `Database:TablePrefix`) already
 guarantees each filename runs at most once, so a script never needs to protect itself
 against being re-run. Given that guarantee, `IF NOT EXISTS` and friends buy nothing while costing real
 portability — they are among the least portable constructs in the table above (SQL Server has no
-equivalent syntax at all). Write the plain, non-defensive form of the statement. (If you are carrying
-forward scripts written against this repository's older guidance, which did ask for idempotent scripts,
-they still apply correctly — the guards are simply redundant now.)
+equivalent syntax at all). Write the plain, non-defensive form of the statement. A script that carries
+`IF NOT EXISTS` guards anyway still works; the guards are redundant, not harmful.
 
 Other rules:
 

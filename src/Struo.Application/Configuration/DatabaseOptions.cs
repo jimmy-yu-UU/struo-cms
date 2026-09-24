@@ -13,9 +13,9 @@ public sealed class DatabaseOptions
     /// <summary>
     /// Prepended to the table name of every framework-owned entity (<c>FrameworkEntityTypes.All</c>
     /// and <c>SchemaMigration</c>); sample and fork entities are unaffected. Lower-case only: PostgreSQL
-    /// folds unquoted identifiers and SQLite does not, and every table-name comparison in this
-    /// assembly lower-cases both sides. Sixteen characters keeps the longest core index name under
-    /// PostgreSQL's 63-byte identifier limit. Empty string means no prefix.
+    /// folds unquoted identifiers and SQLite does not, and every table-name comparison in the
+    /// infrastructure layer is case-insensitive. Sixteen characters keeps the longest core index
+    /// name under PostgreSQL's 63-byte identifier limit. Empty string means no prefix.
     /// </summary>
     [RegularExpression("^(|[a-z][a-z0-9_]{0,15})$",
         ErrorMessage = "Database:TablePrefix must be empty or a lower-case letter followed by up to 15 lower-case letters, digits or underscores.")]
