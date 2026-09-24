@@ -11,7 +11,7 @@ it expires, and how it's revoked. What a caller can do once authenticated is in
 
 ## The first administrator
 
-The moment the `users` table is created and still empty, the first administrator account is
+The moment the `struo_users` table is created and still empty, the first administrator account is
 created along with it: active, its name fixed at `Administrator`, its email and password taken
 from `Auth:BootstrapAdmin`. This happens exactly once — changing the setting and restarting
 does nothing to an existing database.
@@ -135,7 +135,7 @@ unaffected — a request authenticated only by bearer still gets `204` from this
 its token stays alive. A token can only be revoked through the next section's revocation endpoint,
 or by issuing a new one that overwrites the old hash.
 
-`user_sessions` is a key-to-user index table, and the reason it exists is simple: the distributed
+`struo_user_sessions` is a key-to-user index table, and the reason it exists is simple: the distributed
 cache itself has no scan or enumerate operation, so without this index there's no way to answer
 "which sessions does this user currently have alive." It isn't a collection you can browse or edit
 through the item API, and a row is hard-deleted, never soft-deleted; a stale index row is only

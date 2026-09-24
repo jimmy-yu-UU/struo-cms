@@ -62,7 +62,7 @@ covered in [Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
 A StruoCMS install with no collections added yet looks like this:
 
 - The database has exactly eleven framework tables. If you set `Database:MigrationsPath`, startup
-  creates a twelfth table, `schema_migrations`, to track which migrations have run.
+  creates a twelfth table, `struo_schema_migrations`, to track which migrations have run.
 - The admin sidebar has no content groups, only System. For a super-admin, System holds Language,
   Role, and User — nothing else, because the framework collections File, MediaFolder, Permission,
   and UserRole all declare `Hidden = true`. That is a display-layer flag, not a permission.

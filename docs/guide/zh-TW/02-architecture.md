@@ -26,9 +26,11 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 ## 核心與範例的界線
 
 核心是 `src/Struo.*` 底下的所有程式碼，加上框架自己會持久化的 entity。這些 entity 集中列在
-`FrameworkEntityTypes.All`，一共十一筆：
+`FrameworkEntityTypes.All`，一共十一筆。資料表的實際名稱是
+`Database:TablePrefix` 加上基底名，預設前綴 `struo_`，所以 `User` 的表是 `struo_users`；把前綴設成空
+字串就只剩基底名。範例專案與你自己的集合不加前綴。
 
-| Entity | 資料表 |
+| Entity | 基底名 |
 |---|---|
 | `Language` | `languages` |
 | `File` | `files` |

@@ -67,8 +67,10 @@ inherits `AuditableEntity` — a collection like `Language` or `ArticleTag` has 
 A property with no `[CmsField]` and a name other than the four audit names is skipped by the
 scanner entirely, so you can keep ordinary properties of your own on the same entity. The framework
 assigns a new item's primary key itself, as a version-7 GUID — you never generate one yourself.
-Table names follow one convention: lower-case, plural, snake_case, written explicitly on
-`[SugarTable]`. Column names follow SqlSugar's lower-casing of the CLR property name.
+Base table names follow one convention: lower-case, plural, snake_case, written explicitly on
+`[SugarTable]`; the framework's own tables additionally carry `Database:TablePrefix` (see
+[Chapter 4: Configuration Reference](04-configuration.md)), your collections do not. Column names
+follow SqlSugar's lower-casing of the CLR property name.
 
 A nullable property (`DateTime?`, `Guid?`, `int?`, `string?`) maps to a nullable column
 automatically — CodeFirst infers it, so `[SugarColumn(IsNullable = true)]` is redundant. Only the

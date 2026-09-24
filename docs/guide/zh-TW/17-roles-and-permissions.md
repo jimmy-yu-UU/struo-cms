@@ -9,15 +9,15 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 
 | 集合 | 資料表 | 內容 |
 |---|---|---|
-| `user` | `users` | 帳號本體：email、密碼雜湊、啟用狀態、存取權杖雜湊，加上角色 |
-| `role` | `roles` | 角色名稱、`isSuperAdmin` 旗標、描述 |
-| `permission` | `permissions` | 一列代表一個角色對一個集合的授權 |
+| `user` | `struo_users` | 帳號本體：email、密碼雜湊、啟用狀態、存取權杖雜湊，加上角色 |
+| `role` | `struo_roles` | 角色名稱、`isSuperAdmin` 旗標、描述 |
+| `permission` | `struo_permissions` | 一列代表一個角色對一個集合的授權 |
 
 `user` 的欄位裡，`password` 與 `accessToken` 都同時是 `Hidden` 又 `ReadOnly`，密碼雜湊與權杖雜湊
 因此既不會出現在一般的查詢結果，也不能被呼叫端直接寫入。
 
 使用者的角色是一個對 `role` 的 `TagSelect` 多對多，後台表單上就是勾選角色名稱；使用者與角色之間
-的 junction 是第四張表 `userRole`（資料表 `user_roles`），呼叫端看不到它。
+的 junction 是第四張表 `userRole`（資料表 `struo_user_roles`），呼叫端看不到它。
 
 `permission` 這一列除了指向哪個角色、哪個集合之外，只有三個授權旗標：`canRead`、`canWrite`、
 `canDelete`，沒有第四個，也沒有另外存一個「可以讀取未發布內容」的旗標。角色本身另外帶一個
@@ -82,11 +82,11 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 
 ## 公開讀取
 
-`roles` 資料表第一次建立時會一併建立 `admin`、`public` 兩個角色，第一個管理者被加進 `admin`；
+`struo_roles` 資料表第一次建立時會一併建立 `admin`、`public` 兩個角色，第一個管理者被加進 `admin`；
 `public` 的授權是每個呼叫端的下限，怎麼被聯集進去見〈有效權限怎麼算〉。它本身怎麼被授予讀取，由設定
 鍵 `Rbac:PublicReadCollections` 決定。
 
-清單裡的每個集合名稱都變成 `public` 角色上的一筆 `canRead = true` 授權。這個鍵只在 `roles` 資料
+清單裡的每個集合名稱都變成 `public` 角色上的一筆 `canRead = true` 授權。這個鍵只在 `struo_roles` 資料
 表第一次建立時套用，改了再重開對既有資料庫沒有追溯效果，鍵名與這個限制見
 [第 4 章：設定參考](04-configuration.md)。
 

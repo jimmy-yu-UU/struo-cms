@@ -52,6 +52,7 @@
 |---|---|---|
 | `Database:DbType` | 列舉 | `PostgreSQL` |
 | `Database:ConnectionString` | 字串 | 見下文 |
+| `Database:TablePrefix` | 字串（可留空） | `struo_` |
 | `Database:MigrationsPath` | 字串（可留空） | `""` |
 | `Database:AutoSyncSchema` | 布林 | `false` |
 
@@ -62,6 +63,11 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 
 `ConnectionString` 留空或省略會直接讓啟動失敗，不會等到查詢時才出錯。框架自帶的資料表永遠自動
 建立，不需要設定。
+
+`TablePrefix` 接在框架自帶 12 張資料表的基底名前面（`FrameworkEntityTypes.All` 的 11 個 entity 加上
+`schema_migrations`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是不加前
+綴。範例專案與你自己的集合不受影響。對一個已經有框架資料表的資料庫改這個值，啟動時會在新名稱下
+建出一整組空的框架資料表並植入初始資料，舊表不會被讀取；要換前綴，先把既有的表改成新名稱再重開。
 
 `MigrationsPath` 只用來套用你自己準備的 migration 指令碼，留空就停用；它在每一種後端都會執
 行，不會檢查指令碼是不是寫給這個後端，寫錯後端會在套用時直接失敗。migration runner 沒有互斥
@@ -203,7 +209,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 
-這組帳密只在 `users` 資料表第一次建立時套用，不會補到已經存在的資料庫上；但每次啟動都會重新
+這組帳密只在 `struo_users` 資料表第一次建立時套用，不會補到已經存在的資料庫上；但每次啟動都會重新
 讀取——Production 那筆預設密碼警告就是拿它比對出來的。這兩個鍵沒有選項類別，是在 `Program.cs`
 裡直接從設定讀成字串。seeder 不套用密碼原則，這裡填什麼都會被接受——預設的 `admin` 只有五個
 字元，比 `MinLength` 的 8 還短。
@@ -219,7 +225,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 |---|---|---|
 | `Rbac:PublicReadCollections` | 字串陣列 | `[]` |
 
-這個鍵只在 `roles` 資料表第一次建立時套用；改了鍵值再重開，不會回頭幫既有資料庫加上公開讀取權
+這個鍵只在 `struo_roles` 資料表第一次建立時套用；改了鍵值再重開，不會回頭幫既有資料庫加上公開讀取權
 限——要嘛在第一次啟動前先設好，要嘛之後直接在後台或 API 補授權。
 
 ## GraphQl
@@ -279,7 +285,7 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 | `Branding:Name` | 字串 | `"StruoCMS"` |
 | `Branding:LogoUrl` | 字串（可留空） | 無 |
 
-品牌名稱與 Logo 平常在後台改，不是改設定檔。這兩個鍵只是資料庫 `site_settings` 還沒有值時的預
+品牌名稱與 Logo 平常在後台改，不是改設定檔。這兩個鍵只是資料庫 `struo_site_settings` 還沒有值時的預
 設：`GET /api/config` 兩個欄位各自判斷，只有沒存值（或 logo 檔案已下架）時才退回這裡。
 
 ## Redis

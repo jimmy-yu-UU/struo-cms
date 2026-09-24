@@ -108,7 +108,7 @@ pnpm dev
 如果用 Production 環境啟動、密碼還是預設值，log 只會留下一筆警告，指名
 `Auth__BootstrapAdmin__Password`，不會擋下啟動。
 
-這組帳密只在 `users` 資料表第一次建立時植入；要用別的帳號密碼開站，在第一次啟動前先設
+這組帳密只在 `struo_users` 資料表第一次建立時植入；要用別的帳號密碼開站，在第一次啟動前先設
 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`，第一次啟動之後，只能登入
 後台改。
 

@@ -118,7 +118,7 @@ Change the password right after logging in.
 If you start in the Production environment while the password is still the default, the log records
 only a warning naming `Auth__BootstrapAdmin__Password` — it does not block startup.
 
-This account is seeded only the first time the `users` table is created. To start with a different
+This account is seeded only the first time the `struo_users` table is created. To start with a different
 email and password, set `Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` before the
 first start; after that first start, the only way to change them is to log in to the admin UI.
 

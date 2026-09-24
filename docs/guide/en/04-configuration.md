@@ -63,6 +63,7 @@ If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to m
 |---|---|---|
 | `Database:DbType` | enum | `PostgreSQL` |
 | `Database:ConnectionString` | string | see below |
+| `Database:TablePrefix` | string (may be empty) | `struo_` |
 | `Database:MigrationsPath` | string (may be empty) | `""` |
 | `Database:AutoSyncSchema` | bool | `false` |
 
@@ -73,6 +74,13 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 
 Leaving `ConnectionString` empty or omitted fails startup, not the first query. The framework's own
 tables are always created automatically and need no configuration.
+
+`TablePrefix` is prepended to the base name of the framework's 12 tables (the 11 entities in
+`FrameworkEntityTypes.All` plus `schema_migrations`). Lower-case letters, digits and underscores only,
+first character a letter, at most 16 characters; the empty string means no prefix. Sample and fork
+collections are unaffected. Changing it against a database that already holds framework tables makes
+startup create a fresh, empty set under the new names and seed them; the existing tables are not
+read. To change the prefix, rename the existing tables first, then restart.
 
 `MigrationsPath` is only for applying migration scripts you prepare yourself; leaving it empty
 disables it. It runs on every backend, without checking which backend a script was written for; one
@@ -231,7 +239,7 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 
-The pair is applied only when the `users` table is first created and is never backfilled onto an
+The pair is applied only when the `struo_users` table is first created and is never backfilled onto an
 existing database, but it is read again on every start — the Production default-password warning
 compares against it. These two keys have no options class; `Program.cs` reads them straight from
 configuration as strings. The seeder doesn't enforce the password policy, so whatever you put here
@@ -249,7 +257,7 @@ Setting them backwards fails startup. Only `MinLength` is returned to the admin 
 |---|---|---|
 | `Rbac:PublicReadCollections` | string array | `[]` |
 
-This key is applied only when the `roles` table is first created; changing it and restarting won't
+This key is applied only when the `struo_roles` table is first created; changing it and restarting won't
 retroactively grant public read access on an existing database. Either set it before the first
 startup, or grant the access afterward directly through the admin UI or the API.
 
@@ -320,7 +328,7 @@ many other users' passwords in bulk spends their own quota, not the reset users'
 | `Branding:LogoUrl` | string (may be empty) | none |
 
 The brand name and logo are normally changed in the admin UI, not in a settings file. These two keys
-are only the default used when the `site_settings` table has no value yet: `GET /api/config` decides
+are only the default used when the `struo_site_settings` table has no value yet: `GET /api/config` decides
 for each field independently, and only falls back here when nothing has been saved (or the logo file
 has been taken down).
 

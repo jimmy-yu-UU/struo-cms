@@ -58,9 +58,10 @@ Announcement、一組 REST 與 GraphQL 端點，以及一張有四個輸入的�
 只有繼承 `AuditableEntity` 的集合才有，`Language`、`ArticleTag` 這類集合沒有。
 
 沒有 `[CmsField]`、也不叫那四個稽核名稱的屬性，掃描器直接略過。可以在同一個 entity 上放你自
-己要用的一般屬性。新項目的主鍵由框架自己指派，是 version 7 GUID，不用自己產生。資料表名稱統
-一是小寫、複數、snake_case，由 `[SugarTable]` 明寫。欄位名稱則照 SqlSugar 對 CLR 屬性名稱的小
-寫轉換。
+己要用的一般屬性。新項目的主鍵由框架自己指派，是 version 7 GUID，不用自己產生。資料表的基底名
+統一是小寫、複數、snake_case，由 `[SugarTable]` 明寫；框架自帶的表另外套上 `Database:TablePrefix`
+（見[第 4 章：設定參考](04-configuration.md)），你自己的集合不加。欄位名稱則照 SqlSugar 對 CLR
+屬性名稱的小寫轉換。
 
 可為 null 的屬性（`DateTime?`、`Guid?`、`int?`、`string?`）會自動對到可為 null 的欄位，
 CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；要反過來強制不可為 null，
