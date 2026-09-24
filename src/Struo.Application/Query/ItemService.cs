@@ -401,7 +401,7 @@ public sealed class ItemService(
     }
 
     /// <summary>
-    /// Deleting a `user` row (soft-delete or purge) must clear that user's <c>user_sessions</c> rows
+    /// Deleting a `user` row (soft-delete or purge) must clear that user's <c>UserSession</c> rows
     /// proactively: the per-request cookie-liveness check only catches a deleted user's session
     /// reactively, on its next use, so a session that is never presented again would otherwise leave
     /// its row (and cache entry) around until that user's next login — which, for a deleted user,

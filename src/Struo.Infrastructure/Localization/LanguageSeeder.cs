@@ -2,7 +2,7 @@ using SqlSugar;
 
 namespace Struo.Infrastructure.Localization;
 
-/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <c>languages</c> table is
+/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <c>Language</c> table is
 /// created during startup (all environments); seeds default languages when the table is empty.</summary>
 public static class LanguageSeeder
 {

@@ -7,7 +7,7 @@ namespace Struo.Infrastructure.Persistence;
 /// the CLR type/property names to physical table/column names the same way SqlSugar does
 /// (<c>ISqlSugarClient.EntityMaintenance.GetTableName</c>/<c>GetDbColumnName</c>) — so <see cref="SchemaGuard"/>
 /// itself never needs to know about metadata, DI, or any specific collection, and a fork's own
-/// sidecars are covered automatically, the same way core's <c>file_translations</c> is.
+/// sidecars are covered automatically, the same way core's <c>FileTranslation</c> is.
 /// </summary>
 public sealed record TranslationSidecarDescriptor(
     string TableName, string ForeignKeyColumn, string LocaleColumn);

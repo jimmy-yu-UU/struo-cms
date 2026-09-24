@@ -3,7 +3,7 @@ using Struo.Application.Security;
 
 namespace Struo.Infrastructure.Identity;
 
-/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <c>users</c> table is
+/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <c>User</c> table is
 /// created during startup (all environments); seeds an initial admin from config when the table is
 /// empty.</summary>
 public static class AdminUserSeeder

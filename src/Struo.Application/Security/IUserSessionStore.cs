@@ -1,7 +1,7 @@
 namespace Struo.Application.Security;
 
 /// <summary>
-/// CRUD over the <c>user_sessions</c> index — one row per live cookie-session ticket key, keyed by the
+/// CRUD over the <c>UserSession</c> index — one row per live cookie-session ticket key, keyed by the
 /// user it belongs to. Exists because the actual ticket payload store (<c>IDistributedCache</c>) has no
 /// key-scan or set operation: this is the only way to answer "every live session for user X", which
 /// <c>DistributedCacheTicketStore</c> needs to keep in sync as tickets are stored/renewed/removed, and

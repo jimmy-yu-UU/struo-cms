@@ -15,7 +15,7 @@ namespace Struo.Api.Controllers;
 
 public sealed record UpdateBrandingRequest(string? BrandName, Guid? LogoFileId);
 
-/// <summary>Super-admin site settings. Writes go to the singleton <c>site_settings</c> row that
+/// <summary>Super-admin site settings. Writes go to the singleton <c>SiteSettings</c> row that
 /// <see cref="ConfigController"/> then reflects to every SPA. Cookie writes require the
 /// <c>X-Struo-CSRF</c> header (enforced globally by CsrfProtectionMiddleware).</summary>
 [ApiController]

@@ -28,7 +28,7 @@ public sealed class CmsCollectionAttribute(string label) : Attribute
 
     /// <summary>
     /// When true, the collection keeps a revision history: every successful create/update appends a
-    /// complete snapshot of the item's post-write state to the framework `revisions` table, and any past
+    /// complete snapshot of the item's post-write state to the framework `Revision` table, and any past
     /// revision can be re-applied via revert. Opt-in; snapshots live in a shared table, so —
     /// unlike soft delete — nothing is added to the entity, hence an attribute flag rather than an interface.
     /// </summary>

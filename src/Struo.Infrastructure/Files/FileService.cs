@@ -189,11 +189,11 @@ public sealed class FileService(
 
             // SettingsController only validates the logo file is published at SAVE
             // time (TOCTOU) — if this deleted file was the current brand logo, clear the reference
-            // now rather than leaving site_settings.logofileid dangling. Entity-typed SetColumns
+            // now rather than leaving `SiteSettings.LogoFileId` dangling. Entity-typed SetColumns
             // (see SqlSugarSiteSettingsStore.UpdateRowAsync) so the nullable column gets a typed
             // NULL, avoiding the Postgres 42804 error a plain NULL literal triggers via SqlSugar's
             // untyped SetColumns overload. A no-op (0 rows affected) when this file was never the
-            // logo, or when no site_settings row exists yet.
+            // logo, or when no `SiteSettings` row exists yet.
             await db.Updateable<SiteSettings>()
                 .SetColumns(s => new SiteSettings { LogoFileId = null })
                 .Where(s => s.LogoFileId == id)

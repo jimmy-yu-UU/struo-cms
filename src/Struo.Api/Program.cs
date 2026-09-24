@@ -318,7 +318,7 @@ try
 
         // Dev fail-fast: assert correctness-critical constraints exist after schema creation.
         // Translation sidecars are derived from metadata (not hardcoded) so a fork's own sidecars are
-        // covered the same way core's file_translations is: table/column names are resolved the same
+        // covered the same way core's `FileTranslation` is: table/column names are resolved the same
         // way SqlSugar does, via EntityMaintenance, so they always match whatever InitTables/the
         // migrations actually created.
         if (app.Environment.IsDevelopment())
