@@ -199,11 +199,11 @@ missing — it never compares against, or changes, a table that already exists. 
 in core has no way to reach a deployment automatically: a release that changes core's own tables
 gives your fork no mechanism that alters your existing tables to match.
 
-Core's schema changes are written up in release notes; acting on them means writing your own
-`ALTER` script for whichever backend you actually run, going through the migration path described
-earlier. Place the script in the same migration directory and deploy it with the new core version:
-startup creates tables first, then applies your script, in the same order as "Startup order"
-above.
+Core's schema changes are written up in the [changelog](changelog.md); read its Breaking
+entries before merging a newer core. Acting on them means writing your own `ALTER` script for
+whichever backend you actually run, going through the migration path described earlier. Place the
+script in the same migration directory and deploy it with the new core version: startup creates
+tables first, then applies your script, in the same order as "Startup order" above.
 
 Turning on schema sync and running it once against a copy of a production database lets you treat
 the diff it computes as a hint at roughly which columns this upgrade needs to touch — but only as

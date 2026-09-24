@@ -30,8 +30,9 @@ const CHAPTER_SOURCE = /^\d{2}-[^/]+\.md$/
 // Files directly under a locale that are allowed not to be chapters. A file
 // nested in a subdirectory is never exempt by this — it is reported as a
 // stray filename same as a bad top-level name, since it is equally invisible
-// to the sidebar.
-const NON_CHAPTER = new Set(['index.md'])
+// to the sidebar. changelog.md is the per-locale version history, linked
+// from the nav rather than the sidebar.
+const NON_CHAPTER = new Set(['index.md', 'changelog.md'])
 
 const REMEDY =
   'A literal {{ }} in prose or an inline code span is the usual cause; wrap it in <span v-pre>. ' +
@@ -79,23 +80,29 @@ const chaptersByLocale = new Map()
 let checkedRoot = 0
 let checkedChapters = 0
 
-// guide/index.md is the bilingual root landing page and sits outside every
-// locale directory, so the per-locale loop below never sees it. Same two
-// assertions as a chapter, applied once: it rendered, and it is not empty.
-const rootSource = join(GUIDE, 'index.md')
-const rootPage = join(DIST, 'index.html')
-if (!existsSync(rootPage)) {
-  failures.push(`index.md: no rendered page at ${rootPage}`)
-} else {
-  checkedRoot += 1
-  if (!/<h1\b/.test(readFileSync(rootPage, 'utf8'))) {
-    failures.push(`index.md: rendered page has no <h1> — its body is empty. ${REMEDY}`)
-  }
+// Files directly under guide/ (the bilingual landing page) sit outside every
+// locale directory, so the per-locale loop below never sees them. Same two
+// assertions as a chapter, applied to each, plus the source-side mustache scan.
+const rootSources = readdirSync(GUIDE, { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
+  .map((entry) => entry.name)
+  .sort()
+if (!rootSources.includes('index.md')) {
+  failures.push('index.md: missing directly under guide/ — the bilingual landing page must exist')
 }
-if (existsSync(rootSource)) {
-  for (const lineNumber of findBareMustaches(rootSource)) {
+for (const name of rootSources) {
+  const page = join(DIST, name.replace(/\.md$/, '.html'))
+  if (!existsSync(page)) {
+    failures.push(`${name}: no rendered page at ${page}`)
+  } else {
+    checkedRoot += 1
+    if (!/<h1\b/.test(readFileSync(page, 'utf8'))) {
+      failures.push(`${name}: rendered page has no <h1> — its body is empty. ${REMEDY}`)
+    }
+  }
+  for (const lineNumber of findBareMustaches(join(GUIDE, name))) {
     failures.push(
-      `index.md:${lineNumber}: contains "{{" outside a fenced code block and not wrapped in ` +
+      `${name}:${lineNumber}: contains "{{" outside a fenced code block and not wrapped in ` +
         `<span v-pre> — ${MUSTACHE_LOCATION}`,
     )
   }
@@ -140,7 +147,8 @@ for (const locale of LOCALES) {
     }
   }
 
-  for (const chapter of chapters) {
+  const rendered = [...chapters, ...markdown.filter((name) => NON_CHAPTER.has(name))]
+  for (const chapter of rendered) {
     const page = join(DIST, locale, chapter.replace(/\.md$/, '.html'))
 
     if (!existsSync(page)) {
@@ -175,5 +183,5 @@ if (failures.length > 0) {
 }
 
 process.stdout.write(
-  `checked ${checkedRoot} rendered root page and ${checkedChapters} rendered chapter pages\n`,
+  `checked ${checkedRoot} rendered root page(s) and ${checkedChapters} rendered locale page(s)\n`,
 )

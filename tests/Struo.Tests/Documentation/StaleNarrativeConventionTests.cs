@@ -20,7 +20,8 @@ public sealed class StaleNarrativeConventionTests
     public void No_change_narrative_bare_dates_or_pr_references_in_comments_and_prose()
     {
         var repoRoot = RepoRoot.Find();
-        var scanFiles = RepositoryFiles.Enumerate(repoRoot, ScanRootFiles, ScanRootDirs, IsScannable);
+        var scanFiles = RepositoryFiles.Enumerate(
+            repoRoot, ScanRootFiles, ScanRootDirs, NarrativeScanScope.Includes);
         var violations = new List<StaleNarrativeRules.Violation>();
         foreach (var relativePath in scanFiles)
         {
@@ -66,21 +67,6 @@ public sealed class StaleNarrativeConventionTests
         }
 
         violations.Should().BeEmpty(BuildFailureMessage(violations));
-    }
-
-    private static bool IsScannable(string relativePath)
-    {
-        if (relativePath is "AGENTS.md" or "CLAUDE.md")
-            return true;
-
-        var ext = Path.GetExtension(relativePath).ToLowerInvariant();
-        if (ext == ".md" && relativePath.StartsWith("docs/", StringComparison.Ordinal))
-            return true;
-        if (ext == ".cs" && IsUnderAny(relativePath, "src/", "tests/"))
-            return true;
-        if ((ext == ".ts" || ext == ".vue") && relativePath.StartsWith("frontend/", StringComparison.Ordinal))
-            return true;
-        return false;
     }
 
     // Rule 4's corpus: src/**/*.cs, tests/**/*.cs, AGENTS.md, and docs/ai/*.md at the top level only

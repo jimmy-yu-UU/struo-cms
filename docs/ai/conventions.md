@@ -12,7 +12,8 @@ apply that audience's rules only.
 
 | Surface | Audience | Rules |
 |---|---|---|
-| `docs/guide/` (both locales), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
+| `docs/guide/` (both locales, except the changelog), every `README.md` | A developer meeting StruoCMS for the first time | "For the manual" below |
+| `docs/guide/<locale>/changelog.md` | A developer merging a newer core into a fork | "The changelog" below |
 | `AGENTS.md`, `CLAUDE.md`, `docs/ai/`, code and test comments | An AI agent or maintainer working on this codebase | "For the agent reference set" below |
 
 Both audiences share three rules. First, **write only what the reader needs in order to act.** A fact
@@ -129,12 +130,14 @@ sentence that describes it.
 **What breaks.** `StaleNarrativeConventionTests` fails `dotnet test` on any banned word or bare date
 without a marker, and on any PR/issue reference, in a comment or in prose across `AGENTS.md`,
 `CLAUDE.md`, `docs/ai/**`, `docs/guide/**`, `src/**`, `tests/**`, `frontend/src/**`, and
-`frontend/e2e/**`. The guard reads comment bodies and markdown prose only. A quote-parity heuristic
-locates each comment start (`//`, `/*`, `<!--`), and code outside comments — including string
-literals — is skipped by that heuristic; a date in test data normally needs no marker. In markdown,
-fenced code blocks and inline code spans are skipped, so a date inside one of those needs no marker
-either; a date inside comment or prose text does. It also fails on a decision file missing one of its
-six headings or on an orphan decision file nothing references by path.
+`frontend/e2e/**`. The two changelog files, `docs/guide/<locale>/changelog.md`, are outside the scan
+(`NarrativeScanScope` decides); everything else under `docs/guide/` is read. The guard reads comment
+bodies and markdown prose only. A quote-parity heuristic locates each comment start (`//`, `/*`,
+`<!--`), and code outside comments — including string literals — is skipped by that heuristic; a
+date in test data normally needs no marker. In markdown, fenced code blocks and inline code spans
+are skipped, so a date inside one of those needs no marker either; a date inside comment or prose
+text does. It also fails on a decision file missing one of its six headings or on an orphan decision
+file nothing references by path.
 
 **The guard is not exhaustive.** It checks the banned words and bare dates listed above, PR
 and issue references, and a decision file's structure and references; anything else phrased
@@ -154,6 +157,28 @@ the guard and is the reviewer's to catch.
 The same applies to tests: a test asserting the **absence** of unimplemented behavior protects
 nothing and constrains whoever later implements the feature. A test asserting a *negative* behavior
 of code that exists ("never reorders rows client-side") guards a real path and stays.
+
+### The changelog
+
+`docs/guide/zh-TW/changelog.md` and `docs/guide/en/changelog.md` are the one place in this
+repository whose subject is the difference between versions, so the guard above does not scan them.
+Their own rule: an entry tells the reader what this version changed relative to the one before it,
+not what the earlier version was like in detail. Describe the earlier situation in one clause only
+when the reader cannot act without it; otherwise state only what it is now. A `Breaking` entry names
+the action — the configuration key to set, the step to run. Point at constructs (a class, a
+configuration key, a chapter), never at line numbers.
+
+Layout: an H1 and nothing else before the first version heading; newest version first; a version
+heading carries the version and the date (`## 0.7.0 — 2026-09-23`; the example's date is in inline
+code only because this file is scanned — the changelog itself is exempt and writes the heading bare).
+Inside a version, breaking changes come first, as a list inside a `::: danger Breaking` container
+(Chinese: `::: danger 破壞性變更`), which VitePress renders as a red box so they cannot be missed;
+then `### Added`, `### Changed`, `### Fixed` (Chinese: `### 新增`, `### 變更`, `### 修正`), only those
+with content. There is no "unreleased" section: a change that alters behaviour a fork can observe — a
+configuration key, a table or index name, an endpoint's shape, a public method's signature — adds
+its entry, in the same pull request, under the heading of the version it will ship in; that heading's
+date is written when the version is tagged. The Chinese file is the master text and the English file
+follows its structure, as for the chapters.
 
 ## Citing code from docs and comments
 
