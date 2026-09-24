@@ -117,14 +117,15 @@ time zone` on Oracle) are centralized; copy the one for your backend rather than
 framework tables are not uniform.** Most `AuditableEntity` `createdat`/`updatedat` columns are bare
 `timestamp`, but `media_folders.createdat`/`updatedat` are already time-zone-aware (both carry
 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` — `src/Struo.Infrastructure/Files/MediaFolder.cs`),
-and so are `site_settings.updatedat` and the runner's own tracking column `schema_migrations.appliedat`
+and so are `site_settings.updatedat` and the runner's own tracking table's appliedat column
 (`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`). Read the entity declaration in `src/`, or
 the live schema, before writing the `ALTER`. The existing bare-`timestamp` columns have deliberately
 **not** been retroactively converted: re-anchoring already-stored values against a session time zone is
 a silent data shift.
 
-**Idempotency is not required — portability takes priority over it.** The `schema_migrations` tracking
-table already guarantees each filename runs at most once, so a script never needs to protect itself
+**Idempotency is not required — portability takes priority over it.** The tracking table
+(`SchemaMigration`, `struo_schema_migrations` under the default `Database:TablePrefix`) already
+guarantees each filename runs at most once, so a script never needs to protect itself
 against being re-run. Given that guarantee, `IF NOT EXISTS` and friends buy nothing while costing real
 portability — they are among the least portable constructs in the table above (SQL Server has no
 equivalent syntax at all). Write the plain, non-defensive form of the statement. (If you are carrying

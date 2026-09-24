@@ -262,10 +262,14 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
 
 - **C# types and members**: PascalCase, standard .NET convention throughout `src/` and `tests/`.
   Interfaces are prefixed `I` (`IItemRepository`, `IMetadataProvider`, ...).
-- **Database tables and columns**: lower-case, plural, snake_case (`languages`, `file_translations`,
-  `media_folders`, `user_roles`) — every framework and sample entity follows this via `[SugarTable]`
-  (`docs/guide/en/05-collections.md`). Columns follow SqlSugar's default lower-casing of the
-  CLR property name.
+- **Database tables and columns**: base names are lower-case, plural, snake_case (`languages`,
+  `file_translations`, `media_folders`, `user_roles`) — every framework and sample entity declares one
+  via `[SugarTable]` (`docs/guide/en/05-collections.md`). The 12 framework tables (`FrameworkEntityTypes.All`
+  plus `SchemaMigration`) are created under `Database:TablePrefix` + base name, default `struo_`
+  (`struo_users`); `TableNaming` decides the set, `SqlSugarClientFactory`'s `EntityNameService` hook
+  applies it, and any code that needs a physical name resolves it through
+  `EntityMaintenance.GetTableName` — never a literal. Sample and fork tables carry no prefix. Columns
+  follow SqlSugar's default lower-casing of the CLR property name.
 - **Collection/field JSON names**: camelCase on the wire (`fileName`, `createdAt`) — the outbound
   `JsonSerializerOptions` are `JsonSerializerDefaults.Web` throughout (see `EnvelopeJsonOptionsHolder`,
   `src/Struo.Api/Http/EnvelopeJsonOptionsHolder.cs`, and the MVC `JsonOptions` configured in
@@ -557,7 +561,7 @@ none is ever surfaced client-side.
   `Rbac:PublicReadCollections` entry for every collection a public filter or `deep=` traverses, not
   just the root — that key is consulted only at first boot: `DataSeeder.SeedAsync`
   (`src/Struo.Infrastructure/Persistence/DataSeeder.cs`) only invokes `RbacSeeder.SeedAsync` (which
-  reads it) when the `roles` table was just created this run. See
+  reads it) when the `Role` table was just created this run. See
   `docs/guide/en/17-roles-and-permissions.md`, "Public read".
 
 ## Configuration over hardcoding
