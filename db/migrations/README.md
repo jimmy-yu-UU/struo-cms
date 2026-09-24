@@ -115,13 +115,13 @@ time zone` on Oracle) are centralized; copy the one for your backend rather than
 
 **Check the target column's actual current type rather than assuming one — this repository's own
 framework tables are not uniform.** Most `AuditableEntity` `createdat`/`updatedat` columns are bare
-`timestamp`, but `media_folders.createdat`/`updatedat` are already time-zone-aware (both carry
+`timestamp`, but `struo_media_folders.createdat`/`updatedat` are already time-zone-aware (both carry
 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` — `src/Struo.Infrastructure/Files/MediaFolder.cs`),
-and so are `site_settings.updatedat` and the runner's own tracking table's appliedat column
-(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`). Read the entity declaration in `src/`, or
-the live schema, before writing the `ALTER`. The existing bare-`timestamp` columns have deliberately
-**not** been retroactively converted: re-anchoring already-stored values against a session time zone is
-a silent data shift.
+and so are `struo_site_settings.updatedat` and the tracking table's `struo_schema_migrations.appliedat`
+(`src/Struo.Infrastructure/Persistence/SchemaMigration.cs`) (names shown for the default
+`Database:TablePrefix`, `struo_`). Read the entity declaration in `src/`, or the live schema, before
+writing the `ALTER`. The existing bare-`timestamp` columns have deliberately **not** been retroactively
+converted: re-anchoring already-stored values against a session time zone is a silent data shift.
 
 **Idempotency is not required — portability takes priority over it.** The tracking table
 (`SchemaMigration`, `struo_schema_migrations` under the default `Database:TablePrefix`) already
