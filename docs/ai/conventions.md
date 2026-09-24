@@ -168,15 +168,17 @@ when the reader cannot act without it; otherwise state only what it is now. A `B
 the action — the configuration key to set, the step to run. Point at constructs (a class, a
 configuration key, a chapter), never at line numbers.
 
-Layout: newest version first; an `Unreleased` section at the top collects entries merged to `main`
-and not yet tagged; a version heading carries the version and the date (`## 0.7.0 — 2026-09-23`;
-the example's date is in inline code only because this file is scanned — the changelog itself is
-exempt and writes the heading bare); subsections in the order `Breaking`, `Added`, `Changed`,
-`Fixed`, only those with content. The Chinese file uses `未發佈`, `破壞性變更`, `新增`,
-`變更`, `修正` for the same headings. The Chinese file is the master text and the English file
-follows its structure, as for the chapters. A change that alters behaviour a fork can observe — a
+Layout: an H1 and nothing else before the first version heading; newest version first; a version
+heading carries the version and the date (`## 0.7.0 — 2026-09-23`; the example's date is in inline
+code only because this file is scanned — the changelog itself is exempt and writes the heading bare).
+Inside a version, breaking changes come first, as a list inside a `::: danger Breaking` container
+(Chinese: `::: danger 破壞性變更`), which VitePress renders as a red box so they cannot be missed;
+then `### Added`, `### Changed`, `### Fixed` (Chinese: `### 新增`, `### 變更`, `### 修正`), only those
+with content. There is no "unreleased" section: a change that alters behaviour a fork can observe — a
 configuration key, a table or index name, an endpoint's shape, a public method's signature — adds
-its entry under `Unreleased` in both files in the same pull request.
+its entry, in the same pull request, under the heading of the version it will ship in; that heading's
+date is written when the version is tagged. The Chinese file is the master text and the English file
+follows its structure, as for the chapters.
 
 ## Citing code from docs and comments
 
