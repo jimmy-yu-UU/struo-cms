@@ -53,7 +53,7 @@ public sealed class SchemaGuardTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(typeof(Revision)); // UniqueGroupNameList -> composite unique index
+            client.CodeFirst.InitTables(typeof(Revision)); // [SugarIndex(IsUnique)] -> composite unique index
 
             var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [], default);
             await act.Should().NotThrowAsync();

@@ -71,6 +71,36 @@ public sealed class IndexParityTests
     }
 
     [Fact]
+    public void InitTables_is_idempotent_for_core_indexes()
+    {
+        var (db, client) = NewClient();
+        using (db)
+        {
+            var types = CoreIndexedEntities.ToArray();
+
+            client.CodeFirst.InitTables(types);
+            var firstPass = Indexes(client);
+
+            var act = () => client.CodeFirst.InitTables(types);
+            act.Should().NotThrow();
+            var secondPass = Indexes(client);
+
+            // A regression here (e.g. {table} left unresolved on the second pass) would surface as either
+            // a duplicate-name error from SqlSugar's "does the index exist" check or a second, differently
+            // named index — either way the two passes' index sets would stop matching.
+            secondPass.Should().BeEquivalentTo(firstPass,
+                "a second InitTables pass must neither duplicate nor recreate any core index");
+
+            foreach (var (type, attr) in CoreIndexedEntities
+                         .SelectMany(t => t.GetCustomAttributes<SugarIndexAttribute>().Select(a => (t, a))))
+            {
+                var expected = attr.IndexName.Replace("{table}", client.EntityMaintenance.GetTableName(type));
+                secondPass.Select(i => i.Name).Should().Contain(expected);
+            }
+        }
+    }
+
+    [Fact]
     public void Every_declared_core_index_name_carries_the_table_placeholder()
     {
         foreach (var type in CoreIndexedEntities)

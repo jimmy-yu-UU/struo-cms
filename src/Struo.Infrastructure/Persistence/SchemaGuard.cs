@@ -18,9 +18,10 @@ namespace Struo.Infrastructure.Persistence;
 /// resolution SqlSugar itself uses) — so this guard never hardcodes a collection or table name and a
 /// fork's own sidecars are protected automatically, the same way core's <c>file_translations</c> is.
 /// Indexes on core tables are created by CodeFirst (<c>InitTables</c>) from each entity's own
-/// <c>SugarColumn.UniqueGroupNameList</c> — the <c>revisions</c> composite unique still comes from
-/// <c>Revision</c> declaring it this way. Each translation sidecar's <c>(fk, locale)</c> unique is
-/// different: it is derived, not declared — <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook
+/// class-level <c>[SugarIndex(IsUnique)]</c> declarations — the <c>revisions</c> composite unique comes
+/// from <c>Revision</c> declaring <c>[SugarIndex("ux_{table}_item_no", …, true)]</c>, its name resolved
+/// from the prefixed table at <c>InitTables</c> time. Each translation sidecar's <c>(fk, locale)</c>
+/// unique is different: it is derived, not declared — <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook
 /// reads <c>[CmsTranslations]</c> metadata via a <see cref="TranslationSidecarIndexPolicy"/> (supplied
 /// by <c>AddStruoInfrastructure</c>) and stamps the resolved group name onto the sidecar's fk/locale
 /// columns' <c>EntityColumnInfo.UIndexGroupNameList</c> before <c>InitTables</c> reads it, so a fork's
