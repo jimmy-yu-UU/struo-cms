@@ -146,5 +146,6 @@ public class DataSeederTests
 
         (await db.Queryable<Language>().CountAsync()).Should().Be(2);
         (await db.Queryable<User>().CountAsync()).Should().Be(1);
+        (await db.Queryable<Role>().CountAsync()).Should().BeGreaterThan(0);
     }
 }

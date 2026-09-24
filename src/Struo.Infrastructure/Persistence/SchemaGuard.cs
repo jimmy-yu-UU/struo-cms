@@ -17,7 +17,7 @@ namespace Struo.Infrastructure.Persistence;
 /// derives one per collection from <c>IMetadataProvider.GetCollections()</c>'s <c>Translation</c>
 /// metadata, resolving table/column names via <c>ISqlSugarClient.EntityMaintenance</c> (the same
 /// resolution SqlSugar itself uses) — so this guard never hardcodes a collection or table name and a
-/// fork's own sidecars are protected automatically, the same way core's <c>file_translations</c> is.
+/// fork's own sidecars are protected automatically, the same way core's <c>FileTranslation</c> sidecar is.
 /// Indexes on core tables are created by CodeFirst (<c>InitTables</c>) from each entity's own
 /// class-level <c>[SugarIndex(IsUnique)]</c> declarations — the composite unique comes
 /// from <c>Revision</c> declaring <c>[SugarIndex("ux_{table}_item_no", …, true)]</c>, its name resolved
@@ -30,9 +30,7 @@ namespace Struo.Infrastructure.Persistence;
 /// anything on the entity — provided the client was built with the policy in place. An existing
 /// database whose tables predate this guarantee needs a reviewed migration under
 /// <c>db/migrations/</c> to add the missing index. Because the index NAME differs by backend and by
-/// creation path, the guard detects each index by uniqueness + column coverage, never by a fixed name —
-/// the table itself is always <c>Revision</c>'s resolved (prefixed) table, read via
-/// <c>EntityMaintenance</c> like every other framework table. A
+/// creation path, the guard detects each index by uniqueness + column coverage, never by a fixed name. A
 /// sidecar table absent from the connected database is skipped rather than demanded (a fork may not use
 /// every sidecar).
 ///
@@ -64,7 +62,7 @@ public static class SchemaGuard
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
             $"the `{revisionsTable}` table (`Revision`'s resolved table) has no composite UNIQUE index " +
             "over (collectionname, itemid, revisionnumber). This index is the backstop that makes a " +
-            $"concurrent revision-number race fail closed. If this is an existing database whose " +
+            "concurrent revision-number race fail closed. If this is an existing database whose " +
             $"`{revisionsTable}` table predates this guarantee, add a reviewed migration under " +
             "db/migrations/ to create the index; otherwise recreate the dev schema so InitTables " +
             "re-emits it from Revision's [SugarIndex(IsUnique)] declaration.", ct);
