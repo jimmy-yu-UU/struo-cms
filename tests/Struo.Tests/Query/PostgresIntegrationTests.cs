@@ -865,11 +865,12 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         var db = _db;
         try
         {
-            if (db.DbMaintenance.IsAnyTable("file_translations", false))
-                db.DbMaintenance.DropTable("file_translations");
+            var sidecar = db.EntityMaintenance.GetTableName<Struo.Infrastructure.Files.FileTranslation>();
+            if (db.DbMaintenance.IsAnyTable(sidecar, false))
+                db.DbMaintenance.DropTable(sidecar);
             db.CodeFirst.InitTables<Struo.Infrastructure.Files.FileTranslation>();
 
-            var indexDefs = db.Ado.SqlQuery<string>("SELECT indexdef FROM pg_indexes WHERE tablename = 'file_translations'");
+            var indexDefs = db.Ado.SqlQuery<string>($"SELECT indexdef FROM pg_indexes WHERE tablename = '{sidecar}'");
             indexDefs.Should().Contain(d =>
                 d.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
                 && d.Contains("fileid", StringComparison.OrdinalIgnoreCase)

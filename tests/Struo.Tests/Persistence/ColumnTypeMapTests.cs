@@ -117,7 +117,8 @@ public class ColumnTypeMapTests
             // this fails if the hook's [ColumnShape] branch is ever removed or bypassed — unlike a
             // bare column-name-presence check, which would stay green even if every shaped column
             // silently reverted to SqlSugar's default varchar(255)/timestamp mapping.
-            var mediaFolderColumns = client.DbMaintenance.GetColumnInfosByTableName("media_folders", false);
+            var mediaFolderColumns = client.DbMaintenance.GetColumnInfosByTableName(
+                client.EntityMaintenance.GetTableName<MediaFolder>(), false);
             var mediaFolderNames = mediaFolderColumns.Select(c => c.DbColumnName).ToList();
             mediaFolderNames.Should().Contain("Id");
             mediaFolderNames.Should().Contain("Name");
@@ -126,7 +127,8 @@ public class ColumnTypeMapTests
             createdAt.DataType.Should().ContainEquivalentOf("timestamptz");
             mediaUpdatedAt.DataType.Should().ContainEquivalentOf("timestamptz");
 
-            var siteSettingsColumns = client.DbMaintenance.GetColumnInfosByTableName("site_settings", false);
+            var siteSettingsColumns = client.DbMaintenance.GetColumnInfosByTableName(
+                client.EntityMaintenance.GetTableName<SiteSettings>(), false);
             var siteSettingsNames = siteSettingsColumns.Select(c => c.DbColumnName).ToList();
             siteSettingsNames.Should().Contain("Id");
             var brandName = siteSettingsColumns.Single(c => c.DbColumnName.Equals("BrandName", StringComparison.OrdinalIgnoreCase));
@@ -134,7 +136,8 @@ public class ColumnTypeMapTests
             brandName.DataType.Should().ContainEquivalentOf("text");
             siteUpdatedAt.DataType.Should().ContainEquivalentOf("timestamptz");
 
-            var revisionColumns = client.DbMaintenance.GetColumnInfosByTableName("revisions", false);
+            var revisionColumns = client.DbMaintenance.GetColumnInfosByTableName(
+                client.EntityMaintenance.GetTableName<Revision>(), false);
             var revisionNames = revisionColumns.Select(c => c.DbColumnName).ToList();
             revisionNames.Should().Contain("Id");
             var snapshot = revisionColumns.Single(c => c.DbColumnName.Equals("Snapshot", StringComparison.OrdinalIgnoreCase));

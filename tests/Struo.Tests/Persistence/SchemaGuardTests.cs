@@ -68,13 +68,14 @@ public sealed class SchemaGuardTests
         {
             // A revisions table that has a PK (its own unique index on id) but NOT the composite unique
             // over (collectionname, itemid, revisionnumber) — simulating a DB where 010 never ran.
+            var revisions = client.EntityMaintenance.GetTableName<Revision>();
             client.Ado.ExecuteCommand(
-                "CREATE TABLE revisions (id text primary key, collectionname text, " +
+                $"CREATE TABLE {revisions} (id text primary key, collectionname text, " +
                 "itemid text, revisionnumber integer, operation text, snapshot text, createdat text)");
 
             var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [], default);
             (await act.Should().ThrowAsync<InvalidOperationException>())
-                .Which.Message.Should().Contain("revisions");
+                .Which.Message.Should().Contain(revisions);
         }
     }
 

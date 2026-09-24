@@ -99,7 +99,8 @@ public class StructuredColumnMappingTests
         {
             client.CodeFirst.InitTables<Struo.Infrastructure.Revisions.Revision>();
 
-            var columns = client.DbMaintenance.GetColumnInfosByTableName("revisions", false);
+            var columns = client.DbMaintenance.GetColumnInfosByTableName(
+                client.EntityMaintenance.GetTableName<Struo.Infrastructure.Revisions.Revision>(), false);
             var snapshot = columns.Single(c => c.DbColumnName.Equals("Snapshot", StringComparison.OrdinalIgnoreCase));
             snapshot.DataType.Should().ContainEquivalentOf("text");
         }
