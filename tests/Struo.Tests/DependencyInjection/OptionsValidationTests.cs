@@ -183,4 +183,30 @@ public sealed class OptionsValidationTests
         config.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName).Bind(options);
         options.AutoSyncSchema.Should().BeFalse("出貨預設必須是安全側");
     }
+
+    [Fact]
+    public async Task Localization_default_language_outside_the_list_fails_startup()
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            s["Localization:Languages:0:Code"] = "en";
+            s["Localization:Languages:0:Name"] = "English";
+            s["Localization:DefaultLanguage"] = "fr";
+        });
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull("Localization:DefaultLanguage must be one of Localization:Languages");
+        string.Join(" ", ove!.Failures).Should().Contain("DefaultLanguage");
+    }
+
+    [Fact]
+    public async Task Localization_single_language_configuration_starts()
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            s["Localization:Languages:0:Code"] = "ja";
+            s["Localization:Languages:0:Name"] = "日本語";
+            s["Localization:DefaultLanguage"] = "ja";
+        });
+        error.Should().BeNull();
+    }
 }

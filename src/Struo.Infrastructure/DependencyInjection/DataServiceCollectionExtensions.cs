@@ -27,6 +27,12 @@ public static class DataServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
+        // Seed source for the Language table (LanguageSeeder). Validated at boot alongside the other
+        // options so a misconfigured section fails the host, not the first seeding run.
+        services.AddOptions<LocalizationOptions>()
+            .BindConfiguration(LocalizationOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<LocalizationOptions>, LocalizationOptionsValidator>();
         services.AddScoped<IPermissionService, RbacPermissionService>();
         // Expose reader and writer seams for the SAME scoped CurrentPermissions instance (same
         // request scope, same object) — if they resolved to different instances, the middleware
