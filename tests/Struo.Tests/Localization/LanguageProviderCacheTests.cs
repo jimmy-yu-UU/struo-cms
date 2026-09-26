@@ -28,7 +28,7 @@ public class LanguageProviderCacheTests : IDisposable
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Language>();
-        LanguageSeeder.SeedAsync(_db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(_db, TestLocalization.Default).GetAwaiter().GetResult();
         _provider = new LanguageProvider(_db);
     }
 

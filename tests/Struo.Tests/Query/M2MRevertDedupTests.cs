@@ -89,7 +89,7 @@ internal sealed class M2MRevertHarness : IDisposable
         db.CodeFirst.InitTables<Doc>();
         db.CodeFirst.InitTables<Label>();
         db.CodeFirst.InitTables<DocLabel>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(Doc), typeof(Label), typeof(DocLabel) };
         var collections = MetadataScanner.ScanTypes(types);

@@ -57,7 +57,7 @@ public class ItemServiceRepeaterTests : IDisposable
         db.CodeFirst.InitTables<RepeaterThing>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(RepeaterThing) };
         var collections = MetadataScanner.ScanTypes(types);

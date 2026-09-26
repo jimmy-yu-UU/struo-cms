@@ -229,7 +229,7 @@ internal sealed class TrashRevisionHarness : IDisposable
         db.CodeFirst.InitTables<Revision>();
         db.CodeFirst.InitTables<CascadeNode>();
         db.CodeFirst.InitTables<CascadeNodeTranslation>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {

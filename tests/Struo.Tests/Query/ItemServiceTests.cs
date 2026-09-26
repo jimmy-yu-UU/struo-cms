@@ -31,7 +31,7 @@ public class ItemServiceTests : IDisposable
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
             [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
