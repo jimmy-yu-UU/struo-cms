@@ -1,11 +1,11 @@
 import { createI18n } from 'vue-i18n'
-import zhTW from '../locales/zh-TW'
-import en from '../locales/en'
-import { resolveInitialUiLocale } from '../theme/resolveInitialUiLocale'
+import { catalogs, CATALOG_LOCALES } from '../locales'
 
+// Both locale and fallbackLocale start on the first bundled catalog; uiLocaleStore.configure()
+// moves them to the server's AdminUi default before the app mounts.
 export const i18n = createI18n({
   legacy: false,
-  locale: resolveInitialUiLocale(),
-  fallbackLocale: 'en',
-  messages: { 'zh-TW': zhTW, en },
+  locale: CATALOG_LOCALES[0],
+  fallbackLocale: CATALOG_LOCALES[0],
+  messages: catalogs,
 })

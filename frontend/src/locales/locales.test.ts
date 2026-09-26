@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import zhTW from './zh-TW'
 import en from './en'
+import { catalogs, CATALOG_LOCALES } from './index'
 
 function keyPaths(obj: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(obj).flatMap(([k, v]) =>
@@ -11,8 +12,23 @@ function keyPaths(obj: Record<string, unknown>, prefix = ''): string[] {
 }
 
 describe('locale packs', () => {
-  it('zh-TW and en expose symmetric key sets', () => {
-    expect(keyPaths(zhTW).sort()).toEqual(keyPaths(en).sort())
+  it('every bundled catalog exposes the same key set', () => {
+    const [first, ...rest] = CATALOG_LOCALES
+    const reference = keyPaths(catalogs[first] as Record<string, unknown>).sort()
+    for (const locale of rest) {
+      expect(keyPaths(catalogs[locale] as Record<string, unknown>).sort(), `catalog ${locale}`).toEqual(reference)
+    }
+  })
+
+  it('every catalog names every catalog under lang.*', () => {
+    for (const locale of CATALOG_LOCALES) {
+      const lang = (catalogs[locale] as { lang: Record<string, string> }).lang
+      for (const other of CATALOG_LOCALES) expect(lang[other], `${locale}.lang.${other}`).toBeTruthy()
+    }
+  })
+
+  it('ships zh-TW and en', () => {
+    expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
   })
 
   it('carry the seeded common namespace', () => {

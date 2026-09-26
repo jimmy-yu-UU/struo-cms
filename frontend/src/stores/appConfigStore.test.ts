@@ -15,9 +15,28 @@ describe('appConfigStore', () => {
     expect(store.brandLogoUrl).toBeNull()
   })
 
+  it('has every bundled catalog enabled by default, first one default', () => {
+    const store = useAppConfigStore()
+    expect([...store.uiLocales].sort()).toEqual(['en', 'zh-TW'])
+    expect(store.uiLocales).toContain(store.uiDefaultLocale)
+  })
+
+  it('load() applies the server UI locales through the catalog filter', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(api, 'getAppConfig').mockResolvedValue({
+      oidcEnabled: false, brandName: 'B', brandLogoUrl: null, passwordMinLength: 8,
+      uiLocales: ['en', 'ja'], uiDefaultLocale: 'en',
+    })
+    const store = useAppConfigStore()
+    await store.load()
+    expect(store.uiLocales).toEqual(['en'])
+    expect(store.uiDefaultLocale).toBe('en')
+  })
+
   it('load() populates state from the API', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
       oidcEnabled: true, brandName: 'Acme', brandLogoUrl: 'https://x/logo.svg', passwordMinLength: 14,
+      uiLocales: ['zh-TW', 'en'], uiDefaultLocale: 'zh-TW',
     })
     const store = useAppConfigStore()
     await store.load()
@@ -37,6 +56,7 @@ describe('appConfigStore', () => {
   it('loads passwordMinLength from the config endpoint', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
       oidcEnabled: false, brandName: 'B', brandLogoUrl: null, passwordMinLength: 14,
+      uiLocales: ['zh-TW', 'en'], uiDefaultLocale: 'zh-TW',
     })
     const store = useAppConfigStore()
 
