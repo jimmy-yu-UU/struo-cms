@@ -77,7 +77,7 @@ public class SqlSugarClientFactoryTests
         using var db = new SqliteTestDatabase();
         var client = NewClient(db, "struo_");
 
-        client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Identity.Role));
+        client.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
         var tables = client.DbMaintenance.GetTableInfoList(false).Select(t => t.Name.ToLowerInvariant()).ToList();
         Assert.Contains("struo_roles", tables);
         Assert.DoesNotContain("roles", tables);
